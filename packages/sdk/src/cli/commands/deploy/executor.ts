@@ -320,6 +320,61 @@ function areExecutorsEqual(
   );
 }
 
+/**
+ * Resolve a resource's namespace from same-run peer configs, throwing when the
+ * name is claimed by more than one namespace in the deploy run.
+ * @param sameRunNamespaces - Namespaces keyed by resource name across the deploy run
+ * @param resourceName - Resource name to resolve
+ * @param resourceLabel - Resource label used in error messages
+ * @returns The owning namespace, or undefined when the name is unknown
+ */
+export function resolveSameRunNamespace(
+  sameRunNamespaces: ReadonlyMap<string, string | undefined> | undefined,
+  resourceName: string,
+  resourceLabel: string,
+): string | undefined {
+  if (!sameRunNamespaces?.has(resourceName)) {
+    return undefined;
+  }
+  const namespace = sameRunNamespaces.get(resourceName);
+  if (!namespace) {
+    throw new Error(
+      `${resourceLabel} "${resourceName}" is defined in multiple namespaces in this deploy run. ` +
+        `Move the trigger to the application that owns it or use unique names.`,
+    );
+  }
+  return namespace;
+}
+
+/**
+ * Find the local TailorDB namespace that declares the given type.
+ * @param application - Loaded application
+ * @param typeName - TailorDB type name to look up
+ * @returns The declaring namespace, or undefined when no local service has it
+ */
+export function findTailorDBNamespace(
+  application: Readonly<Application>,
+  typeName: string,
+): string | undefined {
+  return application.tailorDBServices.find((service) => Object.hasOwn(service.types, typeName))
+    ?.namespace;
+}
+
+/**
+ * Find the local resolver namespace that declares the given resolver.
+ * @param application - Loaded application
+ * @param resolverName - Resolver name to look up
+ * @returns The declaring namespace, or undefined when no local service has it
+ */
+export function findResolverNamespace(
+  application: Readonly<Application>,
+  resolverName: string,
+): string | undefined {
+  return application.resolverServices.find((service) =>
+    Object.values(service.resolvers).some((resolver) => resolver.name === resolverName),
+  )?.namespace;
+}
+
 function resolveNamespace(params: {
   resourceLabel: string;
   resourceName: string;
@@ -333,14 +388,8 @@ function resolveNamespace(params: {
   if (localNamespace !== undefined) {
     return localNamespace;
   }
-  if (sameRunNamespaces?.has(resourceName)) {
-    const sameRunNamespace = sameRunNamespaces.get(resourceName);
-    if (!sameRunNamespace) {
-      throw new Error(
-        `${resourceLabel} "${resourceName}" is defined in multiple namespaces in this deploy run. ` +
-          `Move the trigger to the application that owns it or use unique names.`,
-      );
-    }
+  const sameRunNamespace = resolveSameRunNamespace(sameRunNamespaces, resourceName, resourceLabel);
+  if (sameRunNamespace !== undefined) {
     return sameRunNamespace;
   }
   const sameRunAvailableNamespaces = sameRunNamespaces
@@ -361,9 +410,7 @@ function resolveTailorDBNamespace(
     resourceLabel: "TailorDB type",
     resourceName: typeName,
     localNamespaces: application.tailorDBServices.map((service) => service.namespace),
-    findLocalNamespace: () =>
-      application.tailorDBServices.find((service) => Object.hasOwn(service.types, typeName))
-        ?.namespace,
+    findLocalNamespace: () => findTailorDBNamespace(application, typeName),
     sameRunNamespaces,
   });
 }
@@ -377,10 +424,7 @@ function resolveResolverNamespace(
     resourceLabel: "Resolver",
     resourceName: resolverName,
     localNamespaces: application.resolverServices.map((service) => service.namespace),
-    findLocalNamespace: () =>
-      application.resolverServices.find((service) =>
-        Object.values(service.resolvers).some((resolver) => resolver.name === resolverName),
-      )?.namespace,
+    findLocalNamespace: () => findResolverNamespace(application, resolverName),
     sameRunNamespaces,
   });
 }

@@ -1,9 +1,10 @@
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createChangeSet } from "./change-set";
 import {
-  assertUniqueGlobalFunctionNames,
+  assertUniqueGlobalResourceNames,
   confirmDeploymentPlans,
   computeRenamedAppDeletions,
   collectExternalAuthIdpConfigNames,
@@ -156,19 +157,6 @@ function plannedDeployment(name: string, results: PlanResults): PlannedDeploymen
   } as unknown as PlannedDeployment;
 }
 
-function muteConfirmLogger(): () => void {
-  const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-  const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
-  const successSpy = vi.spyOn(logger, "success").mockImplementation(() => {});
-  const newlineSpy = vi.spyOn(logger, "newline").mockImplementation(() => {});
-  return () => {
-    warnSpy.mockRestore();
-    logSpy.mockRestore();
-    successSpy.mockRestore();
-    newlineSpy.mockRestore();
-  };
-}
-
 describe("summarizePlanResults", () => {
   test("counts display entries and service actions", () => {
     const displayEntries: GroupedDisplayEntry[] = [
@@ -250,7 +238,7 @@ describe("computeRenamedAppDeletions", () => {
     const result = computeRenamedAppDeletions({
       conflicts: [{ currentOwner: "old-app" }, { currentOwner: "old-app" }],
       resourceOwners: new Set(),
-      targetAppName: "new-app",
+      protectedAppNames: new Set(["new-app"]),
     });
 
     expect(result).toEqual(["old-app"]);
@@ -260,7 +248,7 @@ describe("computeRenamedAppDeletions", () => {
     const result = computeRenamedAppDeletions({
       conflicts: [{ currentOwner: "my-app" }, { currentOwner: "my-app" }],
       resourceOwners: new Set(),
-      targetAppName: "my-app",
+      protectedAppNames: new Set(["my-app"]),
     });
 
     expect(result).toEqual([]);
@@ -270,7 +258,6 @@ describe("computeRenamedAppDeletions", () => {
     const result = computeRenamedAppDeletions({
       conflicts: [{ currentOwner: "supplier" }],
       resourceOwners: new Set(),
-      targetAppName: "buyer",
       protectedAppNames: new Set(["buyer", "supplier"]),
     });
 
@@ -281,7 +268,7 @@ describe("computeRenamedAppDeletions", () => {
     const result = computeRenamedAppDeletions({
       conflicts: [{ currentOwner: "old-app" }],
       resourceOwners: new Set(["old-app"]),
-      targetAppName: "new-app",
+      protectedAppNames: new Set(["new-app"]),
     });
 
     expect(result).toEqual([]);
@@ -291,7 +278,7 @@ describe("computeRenamedAppDeletions", () => {
     const result = computeRenamedAppDeletions({
       conflicts: [],
       resourceOwners: new Set(),
-      targetAppName: "my-app",
+      protectedAppNames: new Set(["my-app"]),
     });
 
     expect(result).toEqual([]);
@@ -596,62 +583,51 @@ describe("dropCrossDeploymentManagedDeletes", () => {
 
 describe("confirmDeploymentPlans", () => {
   test("uses resource owners from all deployments before deleting renamed apps", async () => {
-    const restoreLogger = muteConfirmLogger();
-    try {
-      const renamedTarget = emptyResults();
-      renamedTarget.tailorDB.conflicts.push({
-        resourceType: "TailorDB service",
-        resourceName: "shared",
-        currentOwner: "old-app",
-      });
+    using _logger = silenceLogger("warn", "log", "success", "newline");
+    const renamedTarget = emptyResults();
+    renamedTarget.tailorDB.conflicts.push({
+      resourceType: "TailorDB service",
+      resourceName: "shared",
+      currentOwner: "old-app",
+    });
 
-      const peer = emptyResults();
-      peer.staticWebsite.resourceOwners.add("old-app");
+    const peer = emptyResults();
+    peer.staticWebsite.resourceOwners.add("old-app");
 
-      await confirmDeploymentPlans({
-        deployments: [
-          plannedDeployment("new-app", renamedTarget),
-          plannedDeployment("peer-app", peer),
-        ],
-        yes: true,
-      });
+    await confirmDeploymentPlans({
+      deployments: [
+        plannedDeployment("new-app", renamedTarget),
+        plannedDeployment("peer-app", peer),
+      ],
+      yes: true,
+    });
 
-      expect(renamedTarget.app.deletes).toEqual([]);
-    } finally {
-      restoreLogger();
-    }
+    expect(renamedTarget.app.deletes).toEqual([]);
   });
 
   test("deduplicates renamed app deletions across deployments", async () => {
-    const restoreLogger = muteConfirmLogger();
-    try {
-      const first = emptyResults();
-      first.tailorDB.conflicts.push({
-        resourceType: "TailorDB service",
-        resourceName: "shared",
-        currentOwner: "old-app",
-      });
-      const second = emptyResults();
-      second.pipeline.conflicts.push({
-        resourceType: "Pipeline service",
-        resourceName: "shared-pipeline",
-        currentOwner: "old-app",
-      });
+    using _logger = silenceLogger("warn", "log", "success", "newline");
+    const first = emptyResults();
+    first.tailorDB.conflicts.push({
+      resourceType: "TailorDB service",
+      resourceName: "shared",
+      currentOwner: "old-app",
+    });
+    const second = emptyResults();
+    second.pipeline.conflicts.push({
+      resourceType: "Pipeline service",
+      resourceName: "shared-pipeline",
+      currentOwner: "old-app",
+    });
 
-      await confirmDeploymentPlans({
-        deployments: [
-          plannedDeployment("new-app-a", first),
-          plannedDeployment("new-app-b", second),
-        ],
-        yes: true,
-      });
+    await confirmDeploymentPlans({
+      deployments: [plannedDeployment("new-app-a", first), plannedDeployment("new-app-b", second)],
+      yes: true,
+    });
 
-      expect([...first.app.deletes, ...second.app.deletes].map((item) => item.name)).toEqual([
-        "old-app",
-      ]);
-    } finally {
-      restoreLogger();
-    }
+    expect([...first.app.deletes, ...second.app.deletes].map((item) => item.name)).toEqual([
+      "old-app",
+    ]);
   });
 });
 
@@ -831,7 +807,7 @@ let fakeTargetSequence = 0;
 
 function fakeTarget(
   bundles: FakeBundledScripts,
-): Parameters<typeof assertUniqueGlobalFunctionNames>[0][number] {
+): Parameters<typeof assertUniqueGlobalResourceNames>[0][number] {
   fakeTargetSequence += 1;
   const executorNames = bundles.executorNames ?? Object.keys(bundles.executors ?? {});
   return {
@@ -866,13 +842,13 @@ function fakeTarget(
       workflowJobs: new Map(Object.entries(bundles.workflowJobs ?? {})),
       authHooks: new Map(Object.entries(bundles.authHooks ?? {})),
     },
-  } as unknown as Parameters<typeof assertUniqueGlobalFunctionNames>[0][number];
+  } as unknown as Parameters<typeof assertUniqueGlobalResourceNames>[0][number];
 }
 
-describe("assertUniqueGlobalFunctionNames", () => {
+describe("assertUniqueGlobalResourceNames", () => {
   test("throws when two configs define the same application name", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ appName: "shared-app" }),
         fakeTarget({ appName: "shared-app" }),
       ]),
@@ -883,7 +859,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same executor name", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ executorNames: ["sync-user"] }),
         fakeTarget({ executorNames: ["sync-user"] }),
       ]),
@@ -894,7 +870,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same non-bundled executor name", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
         fakeTarget({ executorNames: ["forward-webhook"], executors: {} }),
       ]),
@@ -905,7 +881,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same workflow job name", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ workflowJobs: { "notify-job": "a" } }),
         fakeTarget({ workflowJobs: { "notify-job": "b" } }),
       ]),
@@ -916,7 +892,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("accepts distinct executor names across configs", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ executorNames: ["sync-user"] }),
         fakeTarget({ executorNames: ["sync-order"] }),
       ]),
@@ -925,13 +901,13 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("is a no-op for a single config", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([fakeTarget({ executorNames: ["sync-user"] })]),
+      assertUniqueGlobalResourceNames([fakeTarget({ executorNames: ["sync-user"] })]),
     ).not.toThrow();
   });
 
   test("accepts the same resolver name in different namespaces", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ resolvers: { get: "buyer" } }),
         fakeTarget({ resolvers: { get: "supplier" } }),
       ]),
@@ -940,7 +916,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("ignores duplicate resolver bundle names across configs", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ resolvers: { get: "a" } }),
         fakeTarget({ resolvers: { get: "b" } }),
       ]),
@@ -949,7 +925,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("ignores duplicate auth hook bundle names across configs", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ authHooks: { "before-login": "a" } }),
         fakeTarget({ authHooks: { "before-login": "b" } }),
       ]),
@@ -958,7 +934,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same StaticWebsite name", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ staticWebsiteNames: ["marketing-site"] }),
         fakeTarget({ staticWebsiteNames: ["marketing-site"] }),
       ]),
@@ -969,7 +945,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same TailorDB namespace", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ tailorDBNamespaces: ["shared-db"] }),
         fakeTarget({ tailorDBNamespaces: ["shared-db"] }),
       ]),
@@ -980,7 +956,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same Auth namespace", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ authNamespace: "shared-auth" }),
         fakeTarget({ authNamespace: "shared-auth" }),
       ]),
@@ -991,7 +967,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same IdP namespace", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ idpNames: ["shared-idp"] }),
         fakeTarget({ idpNames: ["shared-idp"] }),
       ]),
@@ -1002,7 +978,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same Resolver namespace", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ resolverNamespaces: ["shared-pipeline"] }),
         fakeTarget({ resolverNamespaces: ["shared-pipeline"] }),
       ]),
@@ -1013,7 +989,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same AIGateway name", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ aiGatewayNames: ["shared-gateway"] }),
         fakeTarget({ aiGatewayNames: ["shared-gateway"] }),
       ]),
@@ -1024,7 +1000,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same Secret Manager vault name", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ vaultNames: ["shared-vault"] }),
         fakeTarget({ vaultNames: ["shared-vault"] }),
       ]),
@@ -1035,7 +1011,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same workflow name", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ workflowNames: ["order-processing"] }),
         fakeTarget({ workflowNames: ["order-processing"] }),
       ]),
@@ -1046,7 +1022,7 @@ describe("assertUniqueGlobalFunctionNames", () => {
 
   test("throws when two configs define the same Auth connection name", () => {
     expect(() =>
-      assertUniqueGlobalFunctionNames([
+      assertUniqueGlobalResourceNames([
         fakeTarget({ authNamespace: "auth-a", authConnectionNames: ["google-sso"] }),
         fakeTarget({ authNamespace: "auth-b", authConnectionNames: ["google-sso"] }),
       ]),

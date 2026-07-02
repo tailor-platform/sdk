@@ -38,8 +38,11 @@ import {
 import {
   buildPlannedExecutorsByName,
   collectApplicationIdpNames,
+  findResolverNamespace,
+  findTailorDBNamespace,
   formatExecutorChangeEntries,
   planExecutor,
+  resolveSameRunNamespace,
 } from "./executor";
 import {
   collectFunctionEntries,
@@ -116,48 +119,6 @@ function collectDeployIdpUserTriggerTargets(
     }
   }
   return triggerTargets;
-}
-
-function findTailorDBNamespace(
-  application: Readonly<Application>,
-  typeName: string,
-): string | undefined {
-  for (const service of application.tailorDBServices) {
-    if (Object.hasOwn(service.types, typeName)) {
-      return service.namespace;
-    }
-  }
-  return undefined;
-}
-
-function findResolverNamespace(
-  application: Readonly<Application>,
-  resolverName: string,
-): string | undefined {
-  for (const service of application.resolverServices) {
-    if (Object.values(service.resolvers).some((resolver) => resolver.name === resolverName)) {
-      return service.namespace;
-    }
-  }
-  return undefined;
-}
-
-function resolveSameRunNamespace(
-  namespaces: ReadonlyMap<string, string | undefined>,
-  key: string,
-  resourceLabel: string,
-): string | undefined {
-  if (!namespaces.has(key)) {
-    return undefined;
-  }
-  const namespace = namespaces.get(key);
-  if (!namespace) {
-    throw new Error(
-      `${resourceLabel} "${key}" is defined in multiple namespaces in this deploy run. ` +
-        `Move the trigger to the application that owns it or use unique names.`,
-    );
-  }
-  return namespace;
 }
 
 function collectExecutorUsedTailorDBTypes(
@@ -373,42 +334,27 @@ async function shouldForceApplyAll(
 
 /**
  * Decide which renamed-away applications should be deleted. Excludes the
- * target itself: id regeneration alone keeps the name unchanged, so deleting
- * by name would destroy the live app.
+ * deploy targets themselves: id regeneration alone keeps the name unchanged,
+ * so deleting by name would destroy a live app.
  * @param params - Inputs for the computation
  * @param params.conflicts - Detected owner conflicts across all services
  * @param params.resourceOwners - App names that still own resources we don't manage
- * @param params.targetAppName - The application currently being deployed
  * @param params.protectedAppNames - App names that must not be deleted
  * @returns Names of empty old applications that should be deleted
  */
 export function computeRenamedAppDeletions(params: {
   conflicts: ReadonlyArray<Pick<OwnerConflict, "currentOwner">>;
   resourceOwners: ReadonlySet<string>;
-  targetAppName: string;
-  protectedAppNames?: ReadonlySet<string>;
+  protectedAppNames: ReadonlySet<string>;
 }): string[] {
-  const { conflicts, resourceOwners, targetAppName } = params;
-  const protectedAppNames = params.protectedAppNames ?? new Set([targetAppName]);
+  const { conflicts, resourceOwners, protectedAppNames } = params;
   const conflictOwners = new Set(conflicts.map((c) => c.currentOwner));
   return [...conflictOwners].filter(
     (owner) => !resourceOwners.has(owner) && !protectedAppNames.has(owner),
   );
 }
 
-type PlanResults = {
-  functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
-  tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
-  staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
-  aiGateway: Awaited<ReturnType<typeof planAIGateway>>;
-  idp: Awaited<ReturnType<typeof planIdP>>;
-  auth: Awaited<ReturnType<typeof planAuth>>;
-  pipeline: Awaited<ReturnType<typeof planPipeline>>;
-  app: Awaited<ReturnType<typeof planApplication>>;
-  executor: Awaited<ReturnType<typeof planExecutor>>;
-  workflow: Awaited<ReturnType<typeof planWorkflow>>;
-  secretManager: Awaited<ReturnType<typeof planSecretManager>>;
-};
+type PlanResults = Omit<PlannedDeployment, "application">;
 
 type BuildDeploymentTargetParams = {
   configPath: string | undefined;
@@ -427,9 +373,18 @@ type BuiltDeploymentTarget = {
   bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
 };
 
+type DeployRunPlanInputs = Pick<
+  PlanContext,
+  | "idpUserTriggerTargets"
+  | "expectedLocalStaticWebsiteNames"
+  | "externalAuthIdpConfigNames"
+  | "idpNames"
+>;
+
 type PlanDeploymentTargetParams = {
   target: BuiltDeploymentTarget;
   targets: ReadonlyArray<BuiltDeploymentTarget>;
+  runInputs: DeployRunPlanInputs;
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
@@ -957,7 +912,7 @@ const GLOBAL_RESOURCE_CHECKS: ReadonlyArray<GlobalResourceCheck> = [
  * app-qualified and are intentionally excluded.
  * @param targets - Built deployment targets to check
  */
-export function assertUniqueGlobalFunctionNames(
+export function assertUniqueGlobalResourceNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): void {
   for (const check of GLOBAL_RESOURCE_CHECKS) {
@@ -1013,10 +968,22 @@ export function collectExternalAuthIdpConfigNames(
   return idpConfigNames;
 }
 
+function collectDeployRunPlanInputs(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): DeployRunPlanInputs {
+  const applications = targets.map((target) => target.application);
+  return {
+    idpUserTriggerTargets: collectDeployIdpUserTriggerTargets(targets),
+    expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
+    externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
+    idpNames: collectVisibleIdpNames(applications),
+  };
+}
+
 async function planDeploymentTarget(
   params: PlanDeploymentTargetParams,
 ): Promise<PlannedDeployment> {
-  const { target, targets, client, workspaceId, noSchemaCheck } = params;
+  const { target, targets, runInputs, client, workspaceId, noSchemaCheck } = params;
   const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
     target;
 
@@ -1052,14 +1019,11 @@ async function planDeploymentTarget(
       config,
       noSchemaCheck,
       forceApplyAll,
-      idpUserTriggerTargets: collectDeployIdpUserTriggerTargets(targets),
+      ...runInputs,
       executorUsedTailorDBTypes: collectExecutorUsedTailorDBTypes(target, targets),
       executorUsedResolvers: collectExecutorUsedResolvers(target, targets),
-      expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
-      externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
       tailorDBTypeNamespaces,
       resolverNamespaces,
-      idpNames: collectVisibleIdpNames(applications),
     };
     const functionRegistry = await withSpan("plan.functionRegistry", () =>
       planFunctionRegistry(client, workspaceId, application.name, application.id, functionEntries),
@@ -1121,19 +1085,8 @@ async function planDeploymentTarget(
 }
 
 function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
-  return {
-    functionRegistry: deployment.functionRegistry,
-    tailorDB: deployment.tailorDB,
-    staticWebsite: deployment.staticWebsite,
-    aiGateway: deployment.aiGateway,
-    idp: deployment.idp,
-    auth: deployment.auth,
-    pipeline: deployment.pipeline,
-    app: deployment.app,
-    executor: deployment.executor,
-    workflow: deployment.workflow,
-    secretManager: deployment.secretManager,
-  };
+  const { application: _application, ...results } = deployment;
+  return results;
 }
 
 function collectOwnerConflicts(results: PlanResults): OwnerConflict[] {
@@ -1485,8 +1438,11 @@ function managedResourceGroups(results: PlanResults): ManagedResourceGroup[] {
 export function dropCrossDeploymentManagedDeletes(
   deployments: ReadonlyArray<PlannedDeployment>,
 ): void {
-  const claimsByDeployment = deployments.map((deployment) =>
-    managedResourceGroups(deploymentPlanResults(deployment)).reduce((claims, group) => {
+  const groupsByDeployment = deployments.map((deployment) =>
+    managedResourceGroups(deploymentPlanResults(deployment)),
+  );
+  const claimsByDeployment = groupsByDeployment.map((groups) =>
+    groups.reduce((claims, group) => {
       for (const item of [
         ...group.changeSet.creates,
         ...group.changeSet.updates,
@@ -1499,7 +1455,7 @@ export function dropCrossDeploymentManagedDeletes(
     }, new Set<string>()),
   );
 
-  deployments.forEach((deployment, deploymentIndex) => {
+  groupsByDeployment.forEach((groups, deploymentIndex) => {
     const otherClaims = new Set<string>();
     claimsByDeployment.forEach((claims, claimIndex) => {
       if (claimIndex === deploymentIndex) {
@@ -1510,7 +1466,7 @@ export function dropCrossDeploymentManagedDeletes(
       }
     });
 
-    for (const group of managedResourceGroups(deploymentPlanResults(deployment))) {
+    for (const group of groups) {
       retainDeletesNotClaimed(group, otherClaims);
     }
   });
@@ -1548,7 +1504,6 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
     const emptyApps = computeRenamedAppDeletions({
       conflicts,
       resourceOwners,
-      targetAppName: deployment.application.name,
       protectedAppNames: targetAppNames,
     });
     for (const emptyApp of emptyApps) {
@@ -1658,9 +1613,9 @@ export async function deploy(options?: DeployOptions) {
       return { bundledScripts: mergeBundledScripts(targets) };
     }
 
-    // Reject workspace-global function-name collisions across configs before
+    // Reject workspace-global resource-name collisions across configs before
     // planning so the failure surfaces up front instead of mid-apply.
-    assertUniqueGlobalFunctionNames(targets);
+    assertUniqueGlobalResourceNames(targets);
 
     // Note: the normal apply path intentionally skips writing bundle files to
     // .tailor-sdk/. Bundles are kept in memory and uploaded directly to the
@@ -1680,12 +1635,14 @@ export async function deploy(options?: DeployOptions) {
     rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
     rootSpan.setAttribute("workspace.id", workspaceId);
 
+    const runInputs = collectDeployRunPlanInputs(targets);
     const deployments: PlannedDeployment[] = [];
     for (const target of targets) {
       deployments.push(
         await planDeploymentTarget({
           target,
           targets,
+          runInputs,
           client,
           workspaceId,
           noSchemaCheck: options?.noSchemaCheck,

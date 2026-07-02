@@ -12,6 +12,7 @@ import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
+import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { HttpAdapterBundleResult } from "#/cli/services/http-adapter/bundler";
@@ -341,9 +342,7 @@ export async function planApplication(
     appName: application.name,
     appId: application.id,
   });
-  const expectedLocalWebsites =
-    context.expectedLocalStaticWebsiteNames ??
-    new Set(application.staticWebsiteServices.map((website) => website.name));
+  const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,
     workspaceId,

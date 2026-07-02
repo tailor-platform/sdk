@@ -41,6 +41,7 @@ import {
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
+import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { AuthAttributeValue } from "#/configure/services/auth/types";
 import type {
@@ -126,7 +127,7 @@ export async function applyAuth(
     ]);
   };
 
-  const applyCreateUpdateDependents = async (includeMachineUsers = false) => {
+  const applyCreateUpdateDependents = async () => {
     await applyAuthConnections(
       client,
       { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
@@ -171,10 +172,6 @@ export async function applyAuth(
       ...changeSet.tenantConfig.creates.map((create) => client.createTenantConfig(create.request)),
       ...changeSet.tenantConfig.updates.map((update) => client.updateTenantConfig(update.request)),
     ]);
-
-    if (includeMachineUsers) {
-      await applyMachineUsers();
-    }
 
     await Promise.all([
       ...changeSet.authHook.creates.map((create) => client.createAuthHook(create.request)),
@@ -240,15 +237,14 @@ export async function applyAuth(
     ]);
   };
 
-  if (phase === "create-update-prerequisites") {
+  if (phase === "create-update-prerequisites" || phase === "create-update") {
     await applyServices();
     await applyMachineUsers();
-  } else if (phase === "create-update") {
-    await applyServices();
-    await applyCreateUpdateDependents(true);
-  } else if (phase === "create-update-dependents") {
+  }
+  if (phase === "create-update-dependents" || phase === "create-update") {
     await applyCreateUpdateDependents();
-  } else if (phase === "delete-resources") {
+  }
+  if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // SCIMResources
     await Promise.all(
@@ -294,7 +290,7 @@ export async function applyAuth(
       { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
       "delete-resources",
     );
-  } else {
+  } else if (phase === "delete-services") {
     // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) => client.deleteAuthService(del.request)),
@@ -328,9 +324,7 @@ export async function planAuth(context: PlanContext) {
     forceApplyAll,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const expectedLocalWebsites =
-    context.expectedLocalStaticWebsiteNames ??
-    new Set(application.staticWebsiteServices.map((website) => website.name));
+  const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const [
     idpConfigChangeSet,
     userProfileConfigChangeSet,

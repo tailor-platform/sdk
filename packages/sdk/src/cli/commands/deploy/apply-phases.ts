@@ -39,115 +39,69 @@ export async function applyDeploymentPlans(
   workspaceId: string,
   deployments: ReadonlyArray<PlannedDeployment>,
 ): Promise<void> {
+  const forEachDeployment = async (
+    apply: (deployment: PlannedDeployment) => Promise<unknown>,
+  ): Promise<void> => {
+    for (const deployment of deployments) {
+      await apply(deployment);
+    }
+  };
+
   await withSpan("apply.createUpdateServices", async () => {
-    for (const deployment of deployments) {
-      await applySecretManager(
-        client,
-        deployment.secretManager,
-        "create-update",
-        deployment.application,
-      );
-    }
-    for (const deployment of deployments) {
-      await applyFunctionRegistry(
-        client,
-        workspaceId,
-        deployment.functionRegistry,
-        "create-update",
-      );
-    }
-    for (const deployment of deployments) {
-      await applyStaticWebsite(client, deployment.staticWebsite, "create-update");
-    }
-    for (const deployment of deployments) {
-      await applyAIGateway(client, deployment.aiGateway, "create-update");
-    }
-    for (const deployment of deployments) {
-      await applyIdP(client, deployment.idp, "create-update");
-    }
-    for (const deployment of deployments) {
-      await applyAuth(client, deployment.auth, "create-update-prerequisites");
-    }
-    for (const deployment of deployments) {
-      await applyTailorDB(client, deployment.tailorDB, "create-update");
-    }
-    for (const deployment of deployments) {
-      await applyAuth(client, deployment.auth, "create-update-dependents");
-    }
-    for (const deployment of deployments) {
-      await applyPipeline(client, deployment.pipeline, "create-update");
-    }
+    await forEachDeployment((d) =>
+      applySecretManager(client, d.secretManager, "create-update", d.application),
+    );
+    await forEachDeployment((d) =>
+      applyFunctionRegistry(client, workspaceId, d.functionRegistry, "create-update"),
+    );
+    await forEachDeployment((d) => applyStaticWebsite(client, d.staticWebsite, "create-update"));
+    await forEachDeployment((d) => applyAIGateway(client, d.aiGateway, "create-update"));
+    await forEachDeployment((d) => applyIdP(client, d.idp, "create-update"));
+    await forEachDeployment((d) => applyAuth(client, d.auth, "create-update-prerequisites"));
+    await forEachDeployment((d) => applyTailorDB(client, d.tailorDB, "create-update"));
+    await forEachDeployment((d) => applyAuth(client, d.auth, "create-update-dependents"));
+    await forEachDeployment((d) => applyPipeline(client, d.pipeline, "create-update"));
   });
 
   await withSpan("apply.deleteSubgraphResources", async () => {
-    for (const deployment of deployments) {
-      await applyPipeline(client, deployment.pipeline, "delete-resources");
-    }
-    for (const deployment of deployments) {
-      await applyAuth(client, deployment.auth, "delete-resources");
-    }
-    for (const deployment of deployments) {
-      await applyIdP(client, deployment.idp, "delete-resources");
-    }
+    await forEachDeployment((d) => applyPipeline(client, d.pipeline, "delete-resources"));
+    await forEachDeployment((d) => applyAuth(client, d.auth, "delete-resources"));
+    await forEachDeployment((d) => applyIdP(client, d.idp, "delete-resources"));
   });
 
   await withSpan("apply.createUpdateApplication", async () => {
-    for (const deployment of deployments) {
-      await applyApplication(client, deployment.app, "create-update");
-    }
+    await forEachDeployment((d) => applyApplication(client, d.app, "create-update"));
   });
 
   await withSpan("apply.createUpdateDependentServices", async () => {
-    for (const deployment of deployments) {
-      await applyExecutor(client, deployment.executor, "create-update");
-    }
-    for (const deployment of deployments) {
-      await applyWorkflow(client, deployment.workflow, "create-update");
-    }
+    await forEachDeployment((d) => applyExecutor(client, d.executor, "create-update"));
+    await forEachDeployment((d) => applyWorkflow(client, d.workflow, "create-update"));
   });
 
   await withSpan("apply.deleteDependentServices", async () => {
-    for (const deployment of deployments) {
-      await applyWorkflow(client, deployment.workflow, "delete");
-    }
-    for (const deployment of deployments) {
-      await applyExecutor(client, deployment.executor, "delete");
-    }
-    for (const deployment of deployments) {
-      await applyStaticWebsite(client, deployment.staticWebsite, "delete");
-    }
-    for (const deployment of deployments) {
-      await applyAIGateway(client, deployment.aiGateway, "delete");
-    }
-    for (const deployment of deployments) {
-      await applySecretManager(client, deployment.secretManager, "delete", deployment.application);
-    }
+    await forEachDeployment((d) => applyWorkflow(client, d.workflow, "delete"));
+    await forEachDeployment((d) => applyExecutor(client, d.executor, "delete"));
+    await forEachDeployment((d) => applyStaticWebsite(client, d.staticWebsite, "delete"));
+    await forEachDeployment((d) => applyAIGateway(client, d.aiGateway, "delete"));
+    await forEachDeployment((d) =>
+      applySecretManager(client, d.secretManager, "delete", d.application),
+    );
   });
 
   await withSpan("apply.deleteApplication", async () => {
-    for (const deployment of deployments) {
-      await applyApplication(client, deployment.app, "delete");
-    }
+    await forEachDeployment((d) => applyApplication(client, d.app, "delete"));
   });
 
   await withSpan("apply.deleteSubgraphServices", async () => {
-    for (const deployment of deployments) {
-      await applyPipeline(client, deployment.pipeline, "delete-services");
-    }
-    for (const deployment of deployments) {
-      await applyAuth(client, deployment.auth, "delete-services");
-    }
-    for (const deployment of deployments) {
-      await applyIdP(client, deployment.idp, "delete-services");
-    }
-    for (const deployment of deployments) {
-      await applyTailorDB(client, deployment.tailorDB, "delete-services");
-    }
+    await forEachDeployment((d) => applyPipeline(client, d.pipeline, "delete-services"));
+    await forEachDeployment((d) => applyAuth(client, d.auth, "delete-services"));
+    await forEachDeployment((d) => applyIdP(client, d.idp, "delete-services"));
+    await forEachDeployment((d) => applyTailorDB(client, d.tailorDB, "delete-services"));
   });
 
   await withSpan("apply.cleanup", async () => {
-    for (const deployment of deployments) {
-      await applyFunctionRegistry(client, workspaceId, deployment.functionRegistry, "delete");
-    }
+    await forEachDeployment((d) =>
+      applyFunctionRegistry(client, workspaceId, d.functionRegistry, "delete"),
+    );
   });
 }

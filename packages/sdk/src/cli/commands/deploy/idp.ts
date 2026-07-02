@@ -32,6 +32,7 @@ import {
   sdkNameLabelKey,
   type WithLabel,
 } from "./label";
+import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type {
   IdPPermissionOperand,
@@ -213,9 +214,7 @@ export async function planIdP(context: PlanContext) {
     idpUserTriggerTargets,
   } = context;
   const idps = forRemoval ? [] : application.idpServices;
-  const expectedLocalWebsites =
-    context.expectedLocalStaticWebsiteNames ??
-    new Set(application.staticWebsiteServices.map((website) => website.name));
+  const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const {
     changeSet: serviceChangeSet,
     conflicts,
