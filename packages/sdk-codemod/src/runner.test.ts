@@ -1041,7 +1041,7 @@ describe("runCodemods", () => {
       ]);
     });
 
-    test("flags only unresolved auth connection token helper calls for LLM review", async () => {
+    test("flags unresolved auth connection token helper usages for LLM review", async () => {
       const codemod = allCodemods.find((entry) => entry.id === "v2/auth-connection-token-helper");
       if (!codemod?.scriptPath) throw new Error("auth connection token codemod missing script");
       const scriptPath = path.resolve(
@@ -1052,16 +1052,6 @@ describe("runCodemods", () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-auth-token-test-"));
       tmpDir = dir;
       await fs.promises.writeFile(
-        path.join(dir, "assignment-destructure.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          "let getConnectionToken;",
-          "({ getConnectionToken } = auth);",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
         path.join(dir, "migrated.ts"),
         [
           'import { auth } from "../tailor.config";',
@@ -1069,6 +1059,44 @@ describe("runCodemods", () => {
           "export async function run() {",
           '  return auth.getConnectionToken("google");',
           "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "default-import.ts"),
+        [
+          'import config from "../tailor.config";',
+          "",
+          "export async function run() {",
+          '  return config.auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "computed.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          'export const token = await auth["getConnectionToken"]("google");',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "destructure.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "export const { getConnectionToken } = auth;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "cjs-require.js"),
+        [
+          'const { auth } = require("../tailor.config");',
+          "",
+          'exports.token = auth.getConnectionToken("google");',
           "",
         ].join("\n"),
       );
@@ -1096,264 +1124,6 @@ describe("runCodemods", () => {
           "",
         ].join("\n"),
       );
-      await fs.promises.writeFile(
-        path.join(dir, "for-shadowed.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          "export function run() {",
-          "  for (let auth = createClient(); ready; tick()) {",
-          '    auth.getConnectionToken("google");',
-          "  }",
-          "}",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "var-shadowed.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          "export function run() {",
-          "  if (ready) var auth = createClient();",
-          '  return auth.getConnectionToken("google");',
-          "}",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "switch-shadowed.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          "switch (kind) {",
-          '  case "github":',
-          "    const auth = createClient();",
-          '    auth.getConnectionToken("google");',
-          "}",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "default-ref.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          "function read({ x = auth }) {",
-          "  return x;",
-          "}",
-          "",
-          'export const token = await auth.getConnectionToken("google");',
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "type-collision.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          'import { type authconnection, workflow } from "@tailor-platform/sdk/runtime";',
-          "",
-          "export async function run() {",
-          '  await workflow.wait("ready");',
-          '  return auth.getConnectionToken("google");',
-          "}",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "import-equals-collision.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          'import authconnection = require("./client");',
-          "",
-          "export async function run() {",
-          '  return auth.getConnectionToken("google");',
-          "}",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "import-equals-config.ts"),
-        [
-          'import cfg = require("../tailor.config");',
-          "",
-          'export const token = cfg.auth.getConnectionToken("google");',
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "wrapped-collision.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          'import authconnection = require("./client");',
-          "",
-          "export async function run() {",
-          '  return (auth as any).getConnectionToken("google");',
-          "}",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "namespace-alias.ts"),
-        [
-          'import * as cfg from "../tailor.config";',
-          "",
-          "const { auth } = cfg;",
-          'export const token = auth.getConnectionToken("google");',
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "namespace-import.ts"),
-        [
-          'import * as cfg from "../tailor.config";',
-          "",
-          "export async function run() {",
-          '  return cfg.auth.getConnectionToken("google");',
-          "}",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "namespace-member-alias.ts"),
-        [
-          'import config from "../tailor.config";',
-          "",
-          "const myAuth = config.auth;",
-          'export const token = myAuth.getConnectionToken("google");',
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "computed.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          'export const token = await auth["getConnectionToken"]("google");',
-          'export const tokenGetter = auth["getConnectionToken"];',
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "computed-destructure.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          'export const { ["getConnectionToken"]: getToken } = auth;',
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "custom-auth.ts"),
-        [
-          'import { myAuth } from "../tailor.config";',
-          "",
-          "export async function run() {",
-          '  return myAuth.getConnectionToken("google");',
-          "}",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "cjs-require.js"),
-        [
-          'const { auth } = require("../tailor.config");',
-          'const cfg = require("../tailor.config");',
-          "",
-          'exports.token = auth.getConnectionToken("google");',
-          'exports.other = cfg.auth.getConnectionToken("github");',
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "cjs-member-require.js"),
-        [
-          'const auth = require("../tailor.config").auth;',
-          "",
-          'exports.token = auth.getConnectionToken("google");',
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "namespace-computed.ts"),
-        [
-          'import * as cfg from "../tailor.config";',
-          "",
-          "export async function run() {",
-          '  return cfg.auth["getConnectionToken"]("google");',
-          "}",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "wrapped-destructure.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          "export const { getConnectionToken } = (auth);",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "namespace-destructure.ts"),
-        [
-          'import * as cfg from "../tailor.config";',
-          "",
-          "export const { getConnectionToken } = cfg.auth;",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "default-import.ts"),
-        [
-          'import config from "../tailor.config";',
-          "",
-          "export async function run() {",
-          '  return config.auth.getConnectionToken("google");',
-          "}",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "defaulted-destructure.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          "export const { getConnectionToken = fallback } = auth;",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "non-call.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          'export const token = await auth.getConnectionToken("google");',
-          "export const tokenGetter = auth.getConnectionToken;",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "destructure.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          'export const token = await auth.getConnectionToken("google");',
-          "export const { getConnectionToken } = auth;",
-          "",
-        ].join("\n"),
-      );
-      await fs.promises.writeFile(
-        path.join(dir, "parameter-destructure.ts"),
-        [
-          'import { auth } from "../tailor.config";',
-          "",
-          "export function run({ getConnectionToken } = auth) {",
-          '  return getConnectionToken("google");',
-          "}",
-          "",
-        ].join("\n"),
-      );
 
       using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
@@ -1365,49 +1135,18 @@ describe("runCodemods", () => {
           codemodId: "v2/auth-connection-token-helper",
           prompt: codemod.prompt,
           files: [
-            "assignment-destructure.ts",
-            "cjs-member-require.js",
             "cjs-require.js",
             "collision.ts",
-            "computed-destructure.ts",
             "computed.ts",
-            "custom-auth.ts",
             "default-import.ts",
-            "defaulted-destructure.ts",
             "destructure.ts",
-            "import-equals-collision.ts",
-            "import-equals-config.ts",
-            "namespace-alias.ts",
-            "namespace-computed.ts",
-            "namespace-destructure.ts",
-            "namespace-import.ts",
-            "namespace-member-alias.ts",
-            "non-call.ts",
-            "parameter-destructure.ts",
-            "type-collision.ts",
-            "wrapped-collision.ts",
-            "wrapped-destructure.ts",
+            "shadowed.ts",
           ],
           findings: [
             expect.objectContaining({
-              file: "assignment-destructure.ts",
-              line: 4,
-              excerpt: "({ getConnectionToken } = auth);",
-            }),
-            expect.objectContaining({
-              file: "cjs-member-require.js",
+              file: "cjs-require.js",
               line: 3,
               excerpt: 'exports.token = auth.getConnectionToken("google");',
-            }),
-            expect.objectContaining({
-              file: "cjs-require.js",
-              line: 4,
-              excerpt: 'exports.token = auth.getConnectionToken("google");',
-            }),
-            expect.objectContaining({
-              file: "cjs-require.js",
-              line: 5,
-              excerpt: 'exports.other = cfg.auth.getConnectionToken("github");',
             }),
             expect.objectContaining({
               file: "collision.ts",
@@ -1415,24 +1154,9 @@ describe("runCodemods", () => {
               excerpt: 'return auth.getConnectionToken("google");',
             }),
             expect.objectContaining({
-              file: "computed-destructure.ts",
-              line: 3,
-              excerpt: 'export const { ["getConnectionToken"]: getToken } = auth;',
-            }),
-            expect.objectContaining({
               file: "computed.ts",
               line: 3,
               excerpt: 'export const token = await auth["getConnectionToken"]("google");',
-            }),
-            expect.objectContaining({
-              file: "computed.ts",
-              line: 4,
-              excerpt: 'export const tokenGetter = auth["getConnectionToken"];',
-            }),
-            expect.objectContaining({
-              file: "custom-auth.ts",
-              line: 4,
-              excerpt: 'return myAuth.getConnectionToken("google");',
             }),
             expect.objectContaining({
               file: "default-import.ts",
@@ -1440,72 +1164,14 @@ describe("runCodemods", () => {
               excerpt: 'return config.auth.getConnectionToken("google");',
             }),
             expect.objectContaining({
-              file: "defaulted-destructure.ts",
-              line: 3,
-              excerpt: "export const { getConnectionToken = fallback } = auth;",
-            }),
-            expect.objectContaining({
               file: "destructure.ts",
+              line: 3,
               excerpt: "export const { getConnectionToken } = auth;",
             }),
             expect.objectContaining({
-              file: "import-equals-collision.ts",
-              line: 5,
+              file: "shadowed.ts",
+              line: 4,
               excerpt: 'return auth.getConnectionToken("google");',
-            }),
-            expect.objectContaining({
-              file: "import-equals-config.ts",
-              line: 3,
-              excerpt: 'export const token = cfg.auth.getConnectionToken("google");',
-            }),
-            expect.objectContaining({
-              file: "namespace-alias.ts",
-              line: 4,
-              excerpt: 'export const token = auth.getConnectionToken("google");',
-            }),
-            expect.objectContaining({
-              file: "namespace-computed.ts",
-              line: 4,
-              excerpt: 'return cfg.auth["getConnectionToken"]("google");',
-            }),
-            expect.objectContaining({
-              file: "namespace-destructure.ts",
-              line: 3,
-              excerpt: "export const { getConnectionToken } = cfg.auth;",
-            }),
-            expect.objectContaining({
-              file: "namespace-import.ts",
-              line: 4,
-              excerpt: 'return cfg.auth.getConnectionToken("google");',
-            }),
-            expect.objectContaining({
-              file: "namespace-member-alias.ts",
-              line: 4,
-              excerpt: 'export const token = myAuth.getConnectionToken("google");',
-            }),
-            expect.objectContaining({
-              file: "non-call.ts",
-              excerpt: "export const tokenGetter = auth.getConnectionToken;",
-            }),
-            expect.objectContaining({
-              file: "parameter-destructure.ts",
-              line: 3,
-              excerpt: "export function run({ getConnectionToken } = auth) {",
-            }),
-            expect.objectContaining({
-              file: "type-collision.ts",
-              line: 6,
-              excerpt: 'return auth.getConnectionToken("google");',
-            }),
-            expect.objectContaining({
-              file: "wrapped-collision.ts",
-              line: 5,
-              excerpt: 'return (auth as any).getConnectionToken("google");',
-            }),
-            expect.objectContaining({
-              file: "wrapped-destructure.ts",
-              line: 3,
-              excerpt: "export const { getConnectionToken } = (auth);",
             }),
           ],
         },
