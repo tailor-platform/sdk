@@ -114,15 +114,15 @@ function parseTailorDBType(
             `Use the "as" option in .relation({ toward: { as: ... } }) to specify a unique name.`,
         );
       }
-      if (
-        relationInfo.forwardName !== fieldName &&
-        Object.hasOwn(type.fields, relationInfo.forwardName)
-      ) {
-        throw new Error(
-          `Forward relation name "${relationInfo.forwardName}" from field "${fieldName}" on type "${type.name}" ` +
-            `conflicts with existing field "${relationInfo.forwardName}". ` +
-            `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`,
-        );
+      if (Object.hasOwn(type.fields, relationInfo.forwardName)) {
+        const message =
+          relationInfo.forwardName === fieldName
+            ? `Forward relation name "${relationInfo.forwardName}" on type "${type.name}" is the same as its own relation field "${fieldName}". ` +
+              `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`
+            : `Forward relation name "${relationInfo.forwardName}" from field "${fieldName}" on type "${type.name}" ` +
+              `conflicts with existing field "${relationInfo.forwardName}". ` +
+              `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`;
+        throw new Error(message);
       }
       if (Object.hasOwn(metadata.files, relationInfo.forwardName)) {
         throw new Error(

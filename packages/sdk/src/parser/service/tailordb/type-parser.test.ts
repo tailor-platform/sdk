@@ -402,12 +402,13 @@ describe("parseTypes", () => {
       ).toThrow(/Forward relation name "user".*conflicts with existing field/s);
     });
 
-    test("should not throw error when forward name equals its own field name", () => {
+    test("should throw error when forward name equals its own relation field name", () => {
       const user = db.type("User", {
         name: db.string(),
       });
 
-      // "as" is set to the same name as the relation field itself; not a real conflict
+      // "as" is set to the same name as the relation field itself: the manifest
+      // would end up with both a scalar field and a relationship named "authorID"
       const post = db.type("Post", {
         authorID: db.uuid().relation({
           type: "n-1",
@@ -415,9 +416,9 @@ describe("parseTypes", () => {
         }),
       });
 
-      const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
-
-      expect(result.Post!.forwardRelationships).toHaveProperty("authorID");
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name "authorID".*is the same as its own relation field/s);
     });
 
     test("should throw error when forward name conflicts with files field", () => {
