@@ -1698,7 +1698,7 @@ describe("TailorDBField runtime validation tests", () => {
       'Expected to match "yyyy-MM-dd" format: received 2025/01/01',
     );
 
-    const invalidDate = field.parse({ value: "2025-02-30", data, user });
+    const invalidDate = field.parse({ value: "2025-02-30", data, invoker });
     expect(invalidDate.issues?.[0]?.message).toBe(
       'Expected to match "yyyy-MM-dd" format: received 2025-02-30',
     );
@@ -1712,7 +1712,7 @@ describe("TailorDBField runtime validation tests", () => {
       "2025-01-01T10:11:12+09:00",
       "2025-01-01t10:11:12-08:00",
     ]) {
-      const ok = field.parse({ value, data, user });
+      const ok = field.parse({ value, data, invoker });
       expect(ok.issues).toBeUndefined();
       if (ok.issues) {
         throw new Error("Unexpected issues");
@@ -1720,17 +1720,29 @@ describe("TailorDBField runtime validation tests", () => {
       expect(ok.value).toBe(value);
     }
 
-    const bad = field.parse({ value: "2025-01-01T10:11:12+0900", data, user });
+    const bad = field.parse({
+      value: "2025-01-01T10:11:12+0900",
+      data,
+      invoker,
+    });
     expect(bad.issues?.[0]?.message).toBe(
       "Expected to match ISO format: received 2025-01-01T10:11:12+0900",
     );
 
-    const invalidTime = field.parse({ value: "2025-01-01T25:11:12Z", data, user });
+    const invalidTime = field.parse({
+      value: "2025-01-01T25:11:12Z",
+      data,
+      invoker,
+    });
     expect(invalidTime.issues?.[0]?.message).toBe(
       "Expected to match ISO format: received 2025-01-01T25:11:12Z",
     );
 
-    const invalidOffset = field.parse({ value: "2025-01-01T10:11:12+24:00", data, user });
+    const invalidOffset = field.parse({
+      value: "2025-01-01T10:11:12+24:00",
+      data,
+      invoker,
+    });
     expect(invalidOffset.issues?.[0]?.message).toBe(
       "Expected to match ISO format: received 2025-01-01T10:11:12+24:00",
     );
