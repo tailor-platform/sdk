@@ -176,18 +176,24 @@ function findTailorConfigNamedValueLocalNames(imports: SgNode[]): Set<string> {
 }
 
 function findTailorConfigNamespaceAuthLocalNames(imports: SgNode[]): Set<string> {
-  return new Set(
-    imports.flatMap((importStmt) =>
-      importBindings(importStmt)
-        .filter(
-          (binding) =>
-            (binding.namespace || binding.importedName == null) &&
-            !binding.typeOnly &&
-            isTailorConfigSource(binding.source),
-        )
-        .map((binding) => binding.localName),
-    ),
+  const localNames = imports.flatMap((importStmt) =>
+    importBindings(importStmt)
+      .filter(
+        (binding) =>
+          (binding.namespace || binding.importedName == null) &&
+          !binding.typeOnly &&
+          isTailorConfigSource(binding.source),
+      )
+      .map((binding) => binding.localName),
   );
+
+  for (const importStmt of imports) {
+    const localName = importEqualsLocalName(importStmt);
+    const source = importSource(importStmt);
+    if (localName && source && isTailorConfigSource(source)) localNames.push(localName);
+  }
+
+  return new Set(localNames);
 }
 
 function initializerChild(decl: SgNode): SgNode | null {
@@ -290,6 +296,20 @@ function bindingScopeLocalNames(scopes: BindingScopeMap): Set<string> {
   return new Set(scopes.keys());
 }
 
+function mergeBindingScopeMaps(...maps: BindingScopeMap[]): BindingScopeMap {
+  const merged: BindingScopeMap = new Map();
+  for (const map of maps) {
+    for (const [localName, scopeKeys] of map.entries()) {
+      const existing = merged.get(localName) ?? new Set<string>();
+      for (const scopeKey of scopeKeys) {
+        existing.add(scopeKey);
+      }
+      merged.set(localName, existing);
+    }
+  }
+  return merged;
+}
+
 function findTailorConfigRequireAuthBindingScopes(root: SgNode): BindingScopeMap {
   const scopes: BindingScopeMap = new Map();
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
@@ -319,6 +339,45 @@ function findTailorConfigRequireNamespaceAuthBindingScopes(root: SgNode): Bindin
     if (binding?.kind() !== "identifier") continue;
     const source = requireCallSource(initializerChild(decl));
     if (source && isTailorConfigSource(source)) addBindingScope(scopes, binding.text(), binding);
+  }
+  return scopes;
+}
+
+function findTailorConfigNamespaceDerivedAuthBindingScopes(
+  root: SgNode,
+  namespaceAuthLocalNames: Set<string>,
+  namespaceAllowedBindingScopes: BindingScopeMap,
+): BindingScopeMap {
+  const scopes: BindingScopeMap = new Map();
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const binding = firstDeclaratorChild(decl);
+    const initializer = initializerChild(decl);
+
+    const directReceiver = authReceiverIdentifier(initializer);
+    if (
+      binding?.kind() === "object_pattern" &&
+      directReceiver &&
+      namespaceAuthLocalNames.has(directReceiver.text()) &&
+      !isReferenceShadowed(directReceiver, directReceiver.text(), namespaceAllowedBindingScopes)
+    ) {
+      for (const localName of objectPatternLocalNames(binding, "auth")) {
+        addBindingScope(scopes, localName, binding);
+      }
+      continue;
+    }
+
+    const namespaceReceiver = namespaceAuthReceiverIdentifier(initializer, namespaceAuthLocalNames);
+    if (
+      binding?.kind() === "identifier" &&
+      namespaceReceiver &&
+      !isReferenceShadowed(
+        namespaceReceiver,
+        namespaceReceiver.text(),
+        namespaceAllowedBindingScopes,
+      )
+    ) {
+      addBindingScope(scopes, binding.text(), binding);
+    }
   }
   return scopes;
 }
@@ -1116,6 +1175,14 @@ function skipBackwardImportTrivia(source: string, index: number): number {
   while (pos > 0) {
     while (pos > 0 && /\s/.test(source[pos - 1]!)) pos--;
 
+    const lineStart = source.lastIndexOf("\n", pos - 1) + 1;
+    const line = source.slice(lineStart, pos);
+    const lineCommentIndex = line.lastIndexOf("//");
+    if (lineCommentIndex !== -1) {
+      pos = lineStart + lineCommentIndex;
+      continue;
+    }
+
     if (source.slice(pos - 2, pos) === "*/") {
       const start = source.lastIndexOf("/*", pos - 2);
       if (start === -1) return pos;
@@ -1390,23 +1457,32 @@ export function reviewFindings(
   const authBindings = findTailorConfigAuthBindings(imports);
   const requireAuthBindingScopes = findTailorConfigRequireAuthBindingScopes(root);
   const requireNamespaceAuthBindingScopes = findTailorConfigRequireNamespaceAuthBindingScopes(root);
-  const authLocalNames = new Set([
-    ...findTailorConfigNamedValueLocalNames(imports),
-    ...authBindings.map((binding) => binding.localName),
-    ...bindingScopeLocalNames(requireAuthBindingScopes),
-  ]);
   const namespaceAuthLocalNames = new Set([
     ...findTailorConfigNamespaceAuthLocalNames(imports),
     ...bindingScopeLocalNames(requireNamespaceAuthBindingScopes),
   ]);
+  const derivedAuthBindingScopes = findTailorConfigNamespaceDerivedAuthBindingScopes(
+    root,
+    namespaceAuthLocalNames,
+    requireNamespaceAuthBindingScopes,
+  );
+  const authAllowedBindingScopes = mergeBindingScopeMaps(
+    requireAuthBindingScopes,
+    derivedAuthBindingScopes,
+  );
+  const authLocalNames = new Set([
+    ...findTailorConfigNamedValueLocalNames(imports),
+    ...authBindings.map((binding) => binding.localName),
+    ...bindingScopeLocalNames(authAllowedBindingScopes),
+  ]);
   const references = [
-    ...findAuthConnectionTokenReferences(root, authLocalNames, requireAuthBindingScopes),
+    ...findAuthConnectionTokenReferences(root, authLocalNames, authAllowedBindingScopes),
     ...findAuthConnectionTokenNamespaceReferences(
       root,
       namespaceAuthLocalNames,
       requireNamespaceAuthBindingScopes,
     ),
-    ...findAuthConnectionTokenSubscriptReferences(root, authLocalNames, requireAuthBindingScopes),
+    ...findAuthConnectionTokenSubscriptReferences(root, authLocalNames, authAllowedBindingScopes),
     ...findAuthConnectionTokenNamespaceSubscriptReferences(
       root,
       namespaceAuthLocalNames,
@@ -1416,7 +1492,7 @@ export function reviewFindings(
       root,
       authLocalNames,
       namespaceAuthLocalNames,
-      requireAuthBindingScopes,
+      authAllowedBindingScopes,
       requireNamespaceAuthBindingScopes,
     ),
   ].toSorted((a, b) => a.range[0] - b.range[0]);

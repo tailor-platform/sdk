@@ -1173,6 +1173,15 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "import-equals-config.ts"),
+        [
+          'import cfg = require("../tailor.config");',
+          "",
+          'export const token = cfg.auth.getConnectionToken("google");',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "wrapped-collision.ts"),
         [
           'import { auth } from "../tailor.config";',
@@ -1185,6 +1194,16 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "namespace-alias.ts"),
+        [
+          'import * as cfg from "../tailor.config";',
+          "",
+          "const { auth } = cfg;",
+          'export const token = auth.getConnectionToken("google");',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "namespace-import.ts"),
         [
           'import * as cfg from "../tailor.config";',
@@ -1192,6 +1211,16 @@ describe("runCodemods", () => {
           "export async function run() {",
           '  return cfg.auth.getConnectionToken("google");',
           "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "namespace-member-alias.ts"),
+        [
+          'import config from "../tailor.config";',
+          "",
+          "const myAuth = config.auth;",
+          'export const token = myAuth.getConnectionToken("google");',
           "",
         ].join("\n"),
       );
@@ -1336,9 +1365,12 @@ describe("runCodemods", () => {
             "defaulted-destructure.ts",
             "destructure.ts",
             "import-equals-collision.ts",
+            "import-equals-config.ts",
+            "namespace-alias.ts",
             "namespace-computed.ts",
             "namespace-destructure.ts",
             "namespace-import.ts",
+            "namespace-member-alias.ts",
             "non-call.ts",
             "type-collision.ts",
             "wrapped-collision.ts",
@@ -1410,6 +1442,16 @@ describe("runCodemods", () => {
               excerpt: 'return auth.getConnectionToken("google");',
             }),
             expect.objectContaining({
+              file: "import-equals-config.ts",
+              line: 3,
+              excerpt: 'export const token = cfg.auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "namespace-alias.ts",
+              line: 4,
+              excerpt: 'export const token = auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
               file: "namespace-computed.ts",
               line: 4,
               excerpt: 'return cfg.auth["getConnectionToken"]("google");',
@@ -1423,6 +1465,11 @@ describe("runCodemods", () => {
               file: "namespace-import.ts",
               line: 4,
               excerpt: 'return cfg.auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "namespace-member-alias.ts",
+              line: 4,
+              excerpt: 'export const token = myAuth.getConnectionToken("google");',
             }),
             expect.objectContaining({
               file: "non-call.ts",
