@@ -302,11 +302,12 @@ export default {
             }
           },
           VariableDeclarator(node) {
-            if (
-              node.id.type === "Identifier" &&
-              expressionContainsPositionalArg(node.init, positionalArgVariables)
-            ) {
+            if (node.id.type !== "Identifier") return;
+            if (expressionContainsPositionalArg(node.init, positionalArgVariables)) {
               positionalArgVariables.add(node.id.name);
+            }
+            if (expressionContainsIdentifier(node.init, importedArgVariables)) {
+              importedArgVariables.add(node.id.name);
             }
           },
           CallExpression(node) {
