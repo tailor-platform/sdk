@@ -1,5 +1,12 @@
 # @tailor-platform/sdk
 
+## 1.73.2
+### Patch Changes
+
+
+
+- [#1637](https://github.com/tailor-platform/sdk/pull/1637) [`e608b6d`](https://github.com/tailor-platform/sdk/commit/e608b6d55e4afa8a8a92c1a947411ec4367ab818) Thanks [@toiroakr](https://github.com/toiroakr)! - Bump the generated tailor-platform/actions reference pin to v1.5.1. The previous pin referenced a commit that could be orphaned by an upstream rebase; v1.5.1 fixes that issue.
+
 ## 1.73.1
 ### Patch Changes
 
