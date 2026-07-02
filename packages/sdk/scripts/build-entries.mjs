@@ -23,4 +23,5 @@ export const entry = [
   "src/runtime/workflow.ts",
   "src/runtime/context.ts",
   "src/runtime/file.ts",
+  "src/runtime/aigateway.ts",
 ];

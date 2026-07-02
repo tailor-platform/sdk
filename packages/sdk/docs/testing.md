@@ -23,7 +23,7 @@ Platform API mocks under `@tailor-platform/sdk/vitest` (for use with the [`tailo
 
 - `mockTailordb` — TailorDB query stubs and call recording
 - `mockWorkflow` — `tailor.workflow` job / wait / resolve mocks
-- `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv` — corresponding platform API mocks
+- `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway` — corresponding platform API mocks
 
 For tighter alignment with the production runtime — Node.js module blocking, Web-only globals, and platform API mocks — pair the resolver helpers with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below.
 
@@ -60,7 +60,7 @@ export default defineConfig({
 
 ### Acquiring mocks with `using`
 
-Each mock controller (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`) is a **factory function**. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — its state is reset automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
+Each mock controller (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway`) is a **factory function**. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — its state is reset automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
 
 ```typescript
 import { mockTailordb } from "@tailor-platform/sdk/vitest";
@@ -301,6 +301,23 @@ test("mock encoding conversion", () => {
   expect(iconv.calls).toMatchObject([{ method: "decode" }]);
 });
 ```
+
+### AI Gateway Mock
+
+```typescript
+import { mockAigateway } from "@tailor-platform/sdk/vitest";
+
+test("resolves an AI Gateway URL", async () => {
+  using aigateway = mockAigateway();
+  aigateway.setUrls({ "my-aigateway": "https://my-aigateway.example.com" });
+
+  const { url } = await tailor.aigateway.get("my-aigateway");
+  expect(url).toBe("https://my-aigateway.example.com");
+  expect(aigateway.calls).toEqual([{ name: "my-aigateway" }]);
+});
+```
+
+Calling `get` for a name that hasn't been registered via `setUrls` throws.
 
 ### Loading Secrets from Config
 
