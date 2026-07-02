@@ -1,5 +1,37 @@
 # @tailor-platform/sdk
 
+## 1.72.0
+### Minor Changes
+
+
+
+- [#1576](https://github.com/tailor-platform/sdk/pull/1576) [`e01a5bd`](https://github.com/tailor-platform/sdk/commit/e01a5bdea6e4c75a5e3c6ed0c29880426806436e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `tailor-install`, `tailor-notify`, and `tailor-drift-check` steps to generated branch/tag workflow templates. Generated workflows now pin to a SHA-addressed version of `tailor-platform/actions`.
+  
+  Add `setup check --ci` flag: WORKSPACE_ID check is skipped in CI (handled by the runtime) and enforced only in local environments.
+  
+  Add `setup check` Slack partial-config detection: errors when exactly one of `TAILOR_SLACK_BOT_TOKEN` / `TAILOR_SLACK_CHANNEL_ID` is set.
+  
+  Add drift checks: `migration-drift`, `seed-validate`, and `static-websites` rules detect when config changes require re-running setup. Slack partial-config (exactly one of `TAILOR_SLACK_BOT_TOKEN` / `TAILOR_SLACK_CHANNEL_ID` set) is a preflight error, not a drift finding.
+  
+  Add `setup action` subcommand: generates a per-app composite action under `.github/actions/tailor-<name>/action.yml` that wraps `tailor-platform/actions/deploy`. Includes `user-mapping` input for Slack notifications and an optional `build-site` user-owned slot for static website asset builds.
+  
+  Add `setup coordinate` subcommand: generates a coordinator workflow that orchestrates multiple per-app composite actions in a single branch or tag deploy pipeline.
+  
+  **Breaking change (beta)**: Tag workflow files are now named `tailor-<name>-tag.yml` instead of `tailor-<name>.yml`. Re-run `tailor-sdk setup tag` to generate the new file, then manually delete the old `tailor-<name>.yml` workflow.
+
+## 1.71.0
+### Minor Changes
+
+
+
+- [#1605](https://github.com/tailor-platform/sdk/pull/1605) [`6eda76b`](https://github.com/tailor-platform/sdk/commit/6eda76b1ca59d39c0a7fe093dcb39b7e2427f006) Thanks [@toiroakr](https://github.com/toiroakr)! - Narrow auth connection names when calling `getConnectionToken()` outside of `defineAuth()`. When you call `tailor.authconnection.getConnectionToken(...)` or `authconnection.getConnectionToken(...)` (imported from `@tailor-platform/sdk/runtime`), the connection name is now type-checked and autocompleted against the connections defined in `defineAuth()`'s `connections` field, and the resolved token is typed instead of `any`. Run `tailor-sdk generate` (or `deploy`) to refresh `tailor.d.ts` after defining new connections.
+  
+  Deprecate `auth.getConnectionToken()` (the method on `defineAuth()`'s return value). Prefer `authconnection.getConnectionToken(...)` from `@tailor-platform/sdk/runtime` — it does not require importing `auth` from `tailor.config.ts` into runtime files, avoiding bundling config-layer (Node-only) dependencies, the same reasoning behind the existing `auth.invoker()` deprecation.
+  
+  Fix the resolved token type to match what the platform actually returns: only `access_token`. The previous type also listed `refresh_token`, `token_type`, and `expiry`, none of which are ever present in the response.
+  
+  Fix connection name narrowing to also apply when only `@tailor-platform/sdk/runtime` is imported (without ever importing from the main `@tailor-platform/sdk` entry). `mockAuthconnection()` (from `@tailor-platform/sdk/vitest`) is now typed the same way, replacing its previous `any`-typed token payload.
+
 ## 1.70.1
 ### Patch Changes
 

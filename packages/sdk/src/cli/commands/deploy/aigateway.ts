@@ -127,7 +127,6 @@ export async function planAIGateway(context: PlanContext) {
 
   const existingGateways = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, pageSize) => {
       const { aigateways, nextPageToken } = await client.listAIGateways({
         workspaceId,
@@ -137,7 +136,7 @@ export async function planAIGateway(context: PlanContext) {
       return [aigateways, nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "aigateway", name),
+    getTrn: (name) => resourceTrn(workspaceId, "aigateway", name),
   });
 
   const aiGatewayServices = forRemoval ? [] : application.aiGatewayServices;

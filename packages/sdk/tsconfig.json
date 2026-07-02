@@ -5,13 +5,17 @@
     "rootDir": "./",
     "noUncheckedIndexedAccess": true,
     "incremental": true,
-    "tsBuildInfoFile": "./.tsbuildinfo"
+    "tsBuildInfoFile": "./.tsbuildinfo",
+    "paths": {
+      "@tailor-platform/sdk": ["./src/configure/index.ts"]
+    }
   },
   "include": [
     "./src/**/*.ts",
     "./scripts/**/*.ts",
     "./eslint-rules/**/*.ts",
     "./e2e/**/*.ts",
+    "./knip.ts",
     "./tsdown.config.ts",
     "./vitest.config.ts",
     "./zinfer.config.ts"

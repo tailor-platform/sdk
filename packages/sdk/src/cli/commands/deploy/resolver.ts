@@ -29,14 +29,8 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
+import { fetchExistingResourcesWithLabels } from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
@@ -184,37 +178,19 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingServices = await fetchExistingResourcesWithLabels({
+    client,
+    fetchPage: async (pageToken, maxPageSize) => {
       const { pipelineServices, nextPageToken } = await client.listPipelineServices({
         workspaceId,
         pageToken,
         pageSize: maxPageSize,
       });
       return [pipelineServices, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.namespace?.name,
+    getTrn: (name) => resourceTrn(workspaceId, "pipeline", name),
   });
-  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      if (!resource.namespace?.name) {
-        return;
-      }
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "pipeline", resource.namespace.name),
-      });
-      existingServices[resource.namespace.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   for (const pipeline of pipelines) {
     const existing = existingServices[pipeline.namespace];

@@ -363,7 +363,6 @@ export async function planWorkflow(
 
   const existingWorkflows = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, pageSize) => {
       const response = await client.listWorkflows({
         workspaceId,
@@ -373,7 +372,7 @@ export async function planWorkflow(
       return [response.workflows, response.nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "workflow", name),
+    getTrn: (name) => resourceTrn(workspaceId, "workflow", name),
   });
 
   for (const workflow of Object.values(workflows)) {

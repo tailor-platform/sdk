@@ -8,6 +8,7 @@ import {
   concurrencyLimitInterceptor,
   createTransport,
   fetchAll,
+  fetchMachineUserToken,
   fetchPaged,
   formatRequestParams,
   getConsoleBaseUrl,
@@ -706,5 +707,55 @@ describe("resolveStaticWebsiteUrls", () => {
     expect(warnSpy).toHaveBeenCalledWith(
       'Static website "my-site" not found for CORS configuration. Excluding from CORS.',
     );
+  });
+});
+
+describe("fetchMachineUserToken", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test("returns the parsed token on success", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 }),
+    });
+
+    const result = await fetchMachineUserToken("https://example.com", "client-id", "client-secret");
+
+    expect(result).toEqual({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 });
+  });
+
+  test("includes status, statusText, and response body in the error on failure", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      text: () => Promise.resolve("access denied"),
+    });
+
+    await expect(
+      fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
+    ).rejects.toThrow("Failed to fetch machine user token: 403 Forbidden access denied");
+  });
+
+  test("falls back to an empty body when reading the response body fails", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      text: () => Promise.reject(new Error("stream already read")),
+    });
+
+    await expect(
+      fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
+    ).rejects.toThrow("Failed to fetch machine user token: 500 Internal Server Error");
   });
 });
