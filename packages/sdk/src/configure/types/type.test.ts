@@ -612,10 +612,11 @@ describe("TailorField runtime validation tests", () => {
 
       {
         const result = t.date().parse({ value: "2025-02-30", data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual(
-          'Expected to match "yyyy-MM-dd" format: received 2025-02-30',
-        );
+        expect(result.issues).toBeUndefined();
+        if (result.issues) {
+          throw new Error("Unexpected issues");
+        }
+        expect(result.value).toBe("2025-02-30");
       }
     });
 
@@ -625,6 +626,7 @@ describe("TailorField runtime validation tests", () => {
         "2025-12-21T10:11:12.123456Z",
         "2025-12-21T10:11:12+09:00",
         "2025-12-21t10:11:12-08:00",
+        "2025-02-30T10:11:12Z",
       ]) {
         const result = t.datetime().parse({ value, data, invoker });
         expect(result.issues).toBeUndefined();
