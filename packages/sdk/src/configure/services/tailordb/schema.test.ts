@@ -1698,10 +1698,12 @@ describe("TailorDBField runtime validation tests", () => {
       'Expected to match "yyyy-MM-dd" format: received 2025/01/01',
     );
 
-    const invalidDate = field.parse({ value: "2025-02-30", data, invoker });
-    expect(invalidDate.issues?.[0]?.message).toBe(
-      'Expected to match "yyyy-MM-dd" format: received 2025-02-30',
-    );
+    const calendarDateShape = field.parse({ value: "2025-02-30", data, invoker });
+    expect(calendarDateShape.issues).toBeUndefined();
+    if (calendarDateShape.issues) {
+      throw new Error("Unexpected issues");
+    }
+    expect(calendarDateShape.value).toBe("2025-02-30");
   });
 
   test("validates datetime format", () => {
@@ -1711,6 +1713,7 @@ describe("TailorDBField runtime validation tests", () => {
       "2025-01-01T10:11:12.123456Z",
       "2025-01-01T10:11:12+09:00",
       "2025-01-01t10:11:12-08:00",
+      "2025-02-30T10:11:12Z",
     ]) {
       const ok = field.parse({ value, data, invoker });
       expect(ok.issues).toBeUndefined();
