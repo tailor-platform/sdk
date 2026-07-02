@@ -114,7 +114,10 @@ function parseTailorDBType(
             `Use the "as" option in .relation({ toward: { as: ... } }) to specify a unique name.`,
         );
       }
-      if (Object.hasOwn(fields, relationInfo.forwardName)) {
+      if (
+        relationInfo.forwardName !== fieldName &&
+        Object.hasOwn(type.fields, relationInfo.forwardName)
+      ) {
         throw new Error(
           `Forward relation name "${relationInfo.forwardName}" from field "${fieldName}" on type "${type.name}" ` +
             `conflicts with existing field "${relationInfo.forwardName}". ` +

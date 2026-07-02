@@ -382,6 +382,43 @@ describe("parseTypes", () => {
         parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
       ).toThrow(/Forward relation name "user".*conflicts with existing field/s);
     });
+
+    test("should throw error when conflicting field is defined after the relation field", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      // The conflicting "user" field is defined after authorID in the object
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+        }),
+        user: db.string(),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name "user".*conflicts with existing field/s);
+    });
+
+    test("should not throw error when forward name equals its own field name", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      // "as" is set to the same name as the relation field itself; not a real conflict
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user, as: "authorID" },
+        }),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
+
+      expect(result.Post!.forwardRelationships).toHaveProperty("authorID");
+    });
   });
 
   describe("validateRelationType", () => {
