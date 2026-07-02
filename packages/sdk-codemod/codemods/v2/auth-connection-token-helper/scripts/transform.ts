@@ -50,7 +50,7 @@ function sourceLang(filePath: string, source: string): Lang {
 }
 
 function hasJsxSyntax(source: string): boolean {
-  return /<\/[A-Za-z][\w.$:-]*\s*>|<[A-Za-z][\w.$:-]*(?:\s[^<>]*)?\/>/.test(source);
+  return /<>|<\/>|<\/[A-Za-z][\w.$:-]*\s*>|<[A-Za-z][\w.$:-]*(?:\s[^<>]*)?\/>/.test(source);
 }
 
 function stringValue(node: SgNode | null): string | null {
@@ -1097,6 +1097,21 @@ function findAuthConnectionTokenDestructures(
       assignment,
       firstDeclaratorChild(assignment),
       initializerChild(assignment),
+      authLocalNames,
+      namespaceAuthLocalNames,
+      allowedBindingScopes,
+      namespaceAllowedBindingScopes,
+    );
+    if (reference) references.push(reference);
+  }
+
+  for (const parameter of root.findAll({
+    rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
+  })) {
+    const reference = authConnectionTokenDestructureReference(
+      parameter,
+      firstDeclaratorChild(parameter),
+      initializerChild(parameter),
       authLocalNames,
       namespaceAuthLocalNames,
       allowedBindingScopes,
