@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
-import { parseYAML, stringifyYAML, parseTOML } from "confbox";
+import { parseYAML, stringifyYAML } from "confbox";
 import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 import { lt as semverLt } from "semver";
@@ -395,21 +394,22 @@ async function warnIfNewerConfigAvailable(config: {
 }
 
 /**
- * Read Tailor Platform CLI configuration, migrating from tailorctl or v1 if necessary.
+ * Read Tailor Platform CLI configuration, migrating from v1 if necessary.
  * @returns Parsed platform configuration
  */
 export async function readPlatformConfig(): Promise<PfConfig> {
   const configPath = platformConfigPath();
 
-  // If platform config doesn't exist, try to read tailorctl config and migrate
   if (!fs.existsSync(configPath)) {
-    logger.warn(`Config not found at ${configPath}, migrating from tailorctl config...`);
-    const tcConfig = readTailorctlConfig();
-    const v1Config = tcConfig
-      ? fromTailorctlConfig(tcConfig)
-      : ({ version: 1, users: {}, profiles: {}, current_user: null } as const);
-    writePlatformConfig(v1Config);
-    return migrateV1ToV3(v1Config);
+    const config: PfConfig = {
+      version: LATEST_CONFIG_VERSION,
+      min_sdk_version: V3_MIN_SDK_VERSION,
+      users: {},
+      profiles: {},
+      current_user: null,
+    };
+    writePlatformConfig(config);
+    return config;
   }
 
   const rawConfig = parseYAML(fs.readFileSync(configPath, "utf-8"));
@@ -544,78 +544,6 @@ export function writePlatformConfig(config: PfConfig | PfConfigV2 | PfConfigV1) 
         ? toV1ForDisk(config)
         : config;
   writeSecretFile(configPath, stringifyYAML(diskConfig));
-}
-
-// strip unknown keys
-const tcContextConfigSchema = z.object({
-  username: z.string().optional(),
-  controlplaneaccesstoken: z.string().optional(),
-  controlplanerefreshtoken: z.string().optional(),
-  controlplanetokenexpiresat: z.string().optional(),
-  workspaceid: z.string().optional(),
-});
-
-// strip unknown keys
-const tcConfigSchema = z
-  .object({
-    // strip unknown keys
-    global: z
-      .object({
-        context: z.string().optional(),
-      })
-      .optional(),
-  })
-  .catchall(tcContextConfigSchema.optional());
-
-type TcConfig = z.output<typeof tcConfigSchema>;
-type TcContextConfig = z.output<typeof tcContextConfigSchema>;
-
-function readTailorctlConfig(): TcConfig | undefined {
-  const configPath = path.join(os.homedir(), ".tailorctl", "config");
-  if (!fs.existsSync(configPath)) {
-    return;
-  }
-  const rawConfig = parseTOML(fs.readFileSync(configPath, "utf-8"));
-  return tcConfigSchema.parse(rawConfig);
-}
-
-function fromTailorctlConfig(config: TcConfig): PfConfigV1 {
-  const users: PfConfigV1["users"] = {};
-  const profiles: PfConfigV1["profiles"] = {};
-  let currentUser: PfConfigV1["current_user"] = null;
-
-  const currentContext = config.global?.context || "default";
-  for (const [key, val] of Object.entries(config)) {
-    if (key === "global") {
-      continue;
-    }
-    const context = val as TcContextConfig;
-    if (
-      !context.username ||
-      !context.controlplaneaccesstoken ||
-      !context.controlplanerefreshtoken ||
-      !context.controlplanetokenexpiresat ||
-      !context.workspaceid
-    ) {
-      continue;
-    }
-    if (key === currentContext) {
-      currentUser = context.username;
-    }
-    profiles[key] = {
-      user: context.username,
-      workspace_id: context.workspaceid,
-    };
-    const user = users[context.username];
-    if (!user || new Date(user.token_expires_at) < new Date(context.controlplanetokenexpiresat)) {
-      users[context.username] = {
-        access_token: context.controlplaneaccesstoken,
-        refresh_token: context.controlplanerefreshtoken,
-        token_expires_at: context.controlplanetokenexpiresat,
-      };
-    }
-  }
-  return { version: 1, users, profiles, current_user: currentUser };
 }
 
 function validateUUID(value: string, source: string): string {
