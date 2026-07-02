@@ -58,6 +58,7 @@ export const stringifyFunction = (fn: Function): string => {
   if (
     property?.type === "Property" &&
     property.method &&
+    !property.computed &&
     property.key.type === "Identifier" &&
     property.value.type === "FunctionExpression"
   ) {

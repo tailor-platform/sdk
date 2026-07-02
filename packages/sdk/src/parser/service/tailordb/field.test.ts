@@ -64,6 +64,17 @@ describe("stringifyFunction", () => {
     expectValidIife(result, "{}");
   });
 
+  test("leaves computed-key method shorthand unchanged (no misnamed function)", () => {
+    const key = "create";
+    const obj = {
+      [key]() {
+        return 1;
+      },
+    };
+    const result = stringifyFunction(obj[key]);
+    expect(result.startsWith("[key](")).toBe(true);
+  });
+
   test("leaves function expressions unchanged", () => {
     const obj = {
       create: function () {
