@@ -200,26 +200,65 @@ function addPossiblyAmbiguousNamespace(
   namespaces.set(key, namespace);
 }
 
+type VisibleResource = {
+  visibilityKey: string;
+  resourceKey: string;
+};
+
+type CollectVisibleResourcesParams<TResult> = {
+  application: Readonly<Application>;
+  applications: ReadonlyArray<Readonly<Application>>;
+  visibleKeysOf: (application: Readonly<Application>) => ReadonlySet<string>;
+  resourcesOf: (application: Readonly<Application>) => Iterable<VisibleResource>;
+  createResult: () => TResult;
+  addResource: (result: TResult, resourceKey: string, visibilityKey: string) => void;
+};
+
+function collectVisibleResources<TResult>(params: CollectVisibleResourcesParams<TResult>): TResult {
+  const { application, applications, visibleKeysOf, resourcesOf, createResult, addResource } =
+    params;
+  const visibleKeys = visibleKeysOf(application);
+  const result = createResult();
+  for (const candidate of applications) {
+    for (const resource of resourcesOf(candidate)) {
+      if (!visibleKeys.has(resource.visibilityKey)) {
+        continue;
+      }
+      addResource(result, resource.resourceKey, resource.visibilityKey);
+    }
+  }
+  return result;
+}
+
+function collectApplicationTailorDBNamespaces(
+  application: Readonly<Application>,
+): ReadonlySet<string> {
+  return new Set([
+    ...application.tailorDBServices.map((service) => service.namespace),
+    ...application.externalTailorDBNamespaces,
+  ]);
+}
+
+function* tailorDBTypeResources(application: Readonly<Application>): Iterable<VisibleResource> {
+  for (const service of application.tailorDBServices) {
+    for (const typeName of Object.keys(service.types)) {
+      yield { visibilityKey: service.namespace, resourceKey: typeName };
+    }
+  }
+}
+
 export function collectVisibleTailorDBTypeNamespaces(
   application: Readonly<Application>,
   applications: ReadonlyArray<Readonly<Application>>,
 ): ReadonlyMap<string, string | undefined> {
-  const namespaces = new Map<string, string | undefined>();
-  const visibleNamespaces = new Set([
-    ...application.tailorDBServices.map((service) => service.namespace),
-    ...application.externalTailorDBNamespaces,
-  ]);
-  for (const candidate of applications) {
-    for (const service of candidate.tailorDBServices) {
-      if (!visibleNamespaces.has(service.namespace)) {
-        continue;
-      }
-      for (const typeName of Object.keys(service.types)) {
-        addPossiblyAmbiguousNamespace(namespaces, typeName, service.namespace);
-      }
-    }
-  }
-  return namespaces;
+  return collectVisibleResources({
+    application,
+    applications,
+    visibleKeysOf: collectApplicationTailorDBNamespaces,
+    resourcesOf: tailorDBTypeResources,
+    createResult: () => new Map<string, string | undefined>(),
+    addResource: addPossiblyAmbiguousNamespace,
+  });
 }
 
 function collectApplicationResolverNamespaces(
@@ -232,35 +271,48 @@ function collectApplicationResolverNamespaces(
   );
 }
 
+function* idpNameResources(application: Readonly<Application>): Iterable<VisibleResource> {
+  for (const name of collectApplicationIdpNames(application)) {
+    yield { visibilityKey: name, resourceKey: name };
+  }
+}
+
 export function collectVisibleIdpNames(
+  application: Readonly<Application>,
   applications: ReadonlyArray<Readonly<Application>>,
 ): ReadonlySet<string> {
-  const names = new Set<string>();
-  for (const candidate of applications) {
-    for (const name of collectApplicationIdpNames(candidate)) {
+  return collectVisibleResources({
+    application,
+    applications,
+    visibleKeysOf: collectApplicationIdpNames,
+    resourcesOf: idpNameResources,
+    createResult: () => new Set<string>(),
+    addResource: (names, name) => {
       names.add(name);
+    },
+  });
+}
+
+function* resolverResources(application: Readonly<Application>): Iterable<VisibleResource> {
+  for (const service of application.resolverServices) {
+    for (const resolver of Object.values(service.resolvers)) {
+      yield { visibilityKey: service.namespace, resourceKey: resolver.name };
     }
   }
-  return names;
 }
 
 export function collectVisibleResolverNamespaces(
   application: Readonly<Application>,
   applications: ReadonlyArray<Readonly<Application>>,
 ): ReadonlyMap<string, string | undefined> {
-  const namespaces = new Map<string, string | undefined>();
-  const visibleNamespaces = collectApplicationResolverNamespaces(application);
-  for (const candidate of applications) {
-    for (const service of candidate.resolverServices) {
-      if (!visibleNamespaces.has(service.namespace)) {
-        continue;
-      }
-      for (const resolver of Object.values(service.resolvers)) {
-        addPossiblyAmbiguousNamespace(namespaces, resolver.name, service.namespace);
-      }
-    }
-  }
-  return namespaces;
+  return collectVisibleResources({
+    application,
+    applications,
+    visibleKeysOf: collectApplicationResolverNamespaces,
+    resourcesOf: resolverResources,
+    createResult: () => new Map<string, string | undefined>(),
+    addResource: addPossiblyAmbiguousNamespace,
+  });
 }
 
 async function shouldForceApplyAll(
@@ -373,12 +425,14 @@ type BuiltDeploymentTarget = {
   bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
 };
 
+type BuildDeploymentTargetsParams = Omit<BuildDeploymentTargetParams, "configPath"> & {
+  configPaths: ReadonlyArray<string | undefined>;
+  buildTarget?: (params: BuildDeploymentTargetParams) => Promise<BuiltDeploymentTarget>;
+};
+
 type DeployRunPlanInputs = Pick<
   PlanContext,
-  | "idpUserTriggerTargets"
-  | "expectedLocalStaticWebsiteNames"
-  | "externalAuthIdpConfigNames"
-  | "idpNames"
+  "idpUserTriggerTargets" | "expectedLocalStaticWebsiteNames" | "externalAuthIdpConfigNames"
 >;
 
 type PlanDeploymentTargetParams = {
@@ -393,6 +447,15 @@ type PlanDeploymentTargetParams = {
 type ConfirmDeploymentPlansParams = {
   deployments: PlannedDeployment[];
   yes: boolean;
+};
+
+type PlanDeploymentTargetsParams = {
+  targets: ReadonlyArray<BuiltDeploymentTarget>;
+  runInputs: DeployRunPlanInputs;
+  client: OperatorClient;
+  workspaceId: string;
+  noSchemaCheck: boolean | undefined;
+  planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
 };
 
 type PrintPlanOptions = {
@@ -795,6 +858,20 @@ async function buildDeploymentTarget(
   };
 }
 
+export async function buildDeploymentTargets(
+  params: BuildDeploymentTargetsParams,
+): Promise<BuiltDeploymentTarget[]> {
+  const { configPaths, buildTarget = buildDeploymentTarget, ...targetParams } = params;
+  return Promise.all(
+    configPaths.map((configPath) =>
+      buildTarget({
+        ...targetParams,
+        configPath,
+      }),
+    ),
+  );
+}
+
 function addBundledScripts(
   target: Map<string, string>,
   source: ReadonlyMap<string, string>,
@@ -808,15 +885,18 @@ function addBundledScripts(
   }
 }
 
+function setBundledScripts(target: Map<string, string>, source: ReadonlyMap<string, string>): void {
+  for (const [name, code] of source) {
+    target.set(name, code);
+  }
+}
+
 /**
- * Merge per-config bundled scripts into one set, throwing when two configs
- * share a bundle name. Bundle names map to workspace-global function-registry
- * entries, so a collision would make one config's apply overwrite or fail on
- * the other's function; running this before apply surfaces it up front.
+ * Merge per-config bundled scripts into one build-only result.
  * @param targets - Built deployment targets to merge
  * @returns Combined bundled scripts across all targets
  */
-function mergeBundledScripts(
+export function mergeBundledScripts(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): BuiltDeploymentTarget["bundledScripts"] {
   const bundledScripts: BuiltDeploymentTarget["bundledScripts"] = {
@@ -827,81 +907,18 @@ function mergeBundledScripts(
   };
 
   for (const target of targets) {
-    addBundledScripts(bundledScripts.resolvers, target.bundledScripts.resolvers, "resolver");
+    setBundledScripts(bundledScripts.resolvers, target.bundledScripts.resolvers);
     addBundledScripts(bundledScripts.executors, target.bundledScripts.executors, "executor");
     addBundledScripts(
       bundledScripts.workflowJobs,
       target.bundledScripts.workflowJobs,
       "workflow job",
     );
-    addBundledScripts(bundledScripts.authHooks, target.bundledScripts.authHooks, "auth hook");
+    setBundledScripts(bundledScripts.authHooks, target.bundledScripts.authHooks);
   }
 
   return bundledScripts;
 }
-
-type GlobalResourceCheck = {
-  resourceLabel: string;
-  namesOf: (target: BuiltDeploymentTarget) => Iterable<string>;
-};
-
-const GLOBAL_RESOURCE_CHECKS: ReadonlyArray<GlobalResourceCheck> = [
-  { resourceLabel: "Application", namesOf: (target) => [target.application.name] },
-  {
-    resourceLabel: "Executor",
-    // Executor names come from the loaded executors rather than the bundle:
-    // non-function operations (webhook, graphql, workflow) are not bundled
-    // yet still create a global executor resource, so a bundle-only check
-    // would miss them.
-    namesOf: (target) =>
-      Object.values(target.application.executorService?.executors ?? {}).map(
-        (executor) => executor.name,
-      ),
-  },
-  { resourceLabel: "Workflow job", namesOf: (target) => target.bundledScripts.workflowJobs.keys() },
-  {
-    resourceLabel: "Workflow",
-    namesOf: (target) =>
-      Object.values(target.application.workflowService?.workflows ?? {}).map(
-        (workflow) => workflow.name,
-      ),
-  },
-  {
-    resourceLabel: "Auth connection",
-    namesOf: (target) => Object.keys(target.application.authService?.connections ?? {}),
-  },
-  {
-    resourceLabel: "StaticWebsite",
-    namesOf: (target) => target.application.staticWebsiteServices.map((service) => service.name),
-  },
-  {
-    resourceLabel: "TailorDB namespace",
-    namesOf: (target) => target.application.tailorDBServices.map((service) => service.namespace),
-  },
-  {
-    resourceLabel: "Auth namespace",
-    namesOf: (target) => {
-      const name = target.application.authService?.config.name;
-      return name === undefined ? [] : [name];
-    },
-  },
-  {
-    resourceLabel: "IdP namespace",
-    namesOf: (target) => target.application.idpServices.map((idp) => idp.name),
-  },
-  {
-    resourceLabel: "Resolver namespace",
-    namesOf: (target) => target.application.resolverServices.map((service) => service.namespace),
-  },
-  {
-    resourceLabel: "AIGateway",
-    namesOf: (target) => target.application.aiGatewayServices.map((service) => service.name),
-  },
-  {
-    resourceLabel: "Secret Manager vault",
-    namesOf: (target) => target.application.secrets.map((vault) => vault.vaultName),
-  },
-];
 
 /**
  * Reject resource names that collide across configs. Each checked resource
@@ -915,7 +932,7 @@ const GLOBAL_RESOURCE_CHECKS: ReadonlyArray<GlobalResourceCheck> = [
 export function assertUniqueGlobalResourceNames(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): void {
-  for (const check of GLOBAL_RESOURCE_CHECKS) {
+  for (const check of DEPLOY_MANAGED_RESOURCE_DEFINITIONS) {
     const seen = new Set<string>();
     for (const target of targets) {
       for (const name of check.namesOf(target)) {
@@ -971,12 +988,10 @@ export function collectExternalAuthIdpConfigNames(
 function collectDeployRunPlanInputs(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): DeployRunPlanInputs {
-  const applications = targets.map((target) => target.application);
   return {
     idpUserTriggerTargets: collectDeployIdpUserTriggerTargets(targets),
     expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
     externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
-    idpNames: collectVisibleIdpNames(applications),
   };
 }
 
@@ -1011,6 +1026,7 @@ async function planDeploymentTarget(
     const applications = targets.map((target) => target.application);
     const tailorDBTypeNamespaces = collectVisibleTailorDBTypeNamespaces(application, applications);
     const resolverNamespaces = collectVisibleResolverNamespaces(application, applications);
+    const idpNames = collectVisibleIdpNames(application, applications);
     const ctx: PlanContext = {
       client,
       workspaceId,
@@ -1024,6 +1040,7 @@ async function planDeploymentTarget(
       executorUsedResolvers: collectExecutorUsedResolvers(target, targets),
       tailorDBTypeNamespaces,
       resolverNamespaces,
+      idpNames,
     };
     const functionRegistry = await withSpan("plan.functionRegistry", () =>
       planFunctionRegistry(client, workspaceId, application.name, application.id, functionEntries),
@@ -1082,6 +1099,21 @@ async function planDeploymentTarget(
       secretManager,
     };
   });
+}
+
+export async function planDeploymentTargets(
+  params: PlanDeploymentTargetsParams,
+): Promise<PlannedDeployment[]> {
+  const { targets, planTarget = planDeploymentTarget, ...planParams } = params;
+  return Promise.all(
+    targets.map((target) =>
+      planTarget({
+        ...planParams,
+        target,
+        targets,
+      }),
+    ),
+  );
 }
 
 function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
@@ -1322,114 +1354,205 @@ function workflowJobFunctionResourceGroup(results: PlanResults): ManagedResource
   };
 }
 
+const MANAGED_RESOURCE_NAMESPACE_FIELDS = [
+  "namespaceName",
+  "authNamespace",
+  "vaultName",
+  "staticWebsiteName",
+] as const;
+
+type DeployManagedResourceDefinition = Omit<ManagedResourceGroup, "changeSet"> & {
+  resourceLabel: string;
+  namesOf: (target: BuiltDeploymentTarget) => Iterable<string>;
+  changeSetOf: (results: PlanResults) => ManagedResourceChangeSet;
+};
+
+const DEPLOY_MANAGED_RESOURCE_DEFINITIONS: ReadonlyArray<DeployManagedResourceDefinition> = [
+  {
+    resourceLabel: "Application",
+    resourceType: "application",
+    namesOf: (target) => [target.application.name],
+    changeSetOf: (results) => results.app,
+  },
+  {
+    resourceLabel: "Executor",
+    resourceType: "executor",
+    namesOf: (target) =>
+      Object.values(target.application.executorService?.executors ?? {}).map(
+        (executor) => executor.name,
+      ),
+    changeSetOf: (results) => results.executor.changeSet,
+  },
+  {
+    resourceLabel: "Workflow job",
+    resourceType: "workflow_job_function",
+    namesOf: (target) => target.bundledScripts.workflowJobs.keys(),
+    changeSetOf: (results) => workflowJobFunctionResourceGroup(results).changeSet,
+    getName: (item) => ("jobFunctionName" in item ? item.jobFunctionName : item.name),
+  },
+  {
+    resourceLabel: "Workflow",
+    resourceType: "workflow",
+    namesOf: (target) =>
+      Object.values(target.application.workflowService?.workflows ?? {}).map(
+        (workflow) => workflow.name,
+      ),
+    changeSetOf: (results) => results.workflow.changeSet,
+  },
+  {
+    resourceLabel: "Auth connection",
+    resourceType: "auth.connection",
+    namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
+    namespaceOwnerResourceType: "auth.service",
+    namesOf: (target) => Object.keys(target.application.authService?.connections ?? {}),
+    changeSetOf: (results) => results.auth.changeSet.connection,
+  },
+  {
+    resourceLabel: "StaticWebsite",
+    resourceType: "staticwebsite",
+    namesOf: (target) => target.application.staticWebsiteServices.map((service) => service.name),
+    changeSetOf: (results) => results.staticWebsite.changeSet,
+  },
+  {
+    resourceLabel: "TailorDB namespace",
+    resourceType: "tailordb.service",
+    namesOf: (target) => target.application.tailorDBServices.map((service) => service.namespace),
+    changeSetOf: (results) => results.tailorDB.changeSet.service,
+  },
+  {
+    resourceLabel: "Auth namespace",
+    resourceType: "auth.service",
+    namesOf: (target) => {
+      const name = target.application.authService?.config.name;
+      return name === undefined ? [] : [name];
+    },
+    changeSetOf: (results) => results.auth.changeSet.service,
+  },
+  {
+    resourceLabel: "IdP namespace",
+    resourceType: "idp.service",
+    namesOf: (target) => target.application.idpServices.map((idp) => idp.name),
+    changeSetOf: (results) => results.idp.changeSet.service,
+  },
+  {
+    resourceLabel: "Resolver namespace",
+    resourceType: "pipeline.service",
+    namesOf: (target) => target.application.resolverServices.map((service) => service.namespace),
+    changeSetOf: (results) => results.pipeline.changeSet.service,
+  },
+  {
+    resourceLabel: "AIGateway",
+    resourceType: "aigateway",
+    namesOf: (target) => target.application.aiGatewayServices.map((service) => service.name),
+    changeSetOf: (results) => results.aiGateway.changeSet,
+  },
+  {
+    resourceLabel: "Secret Manager vault",
+    resourceType: "secret.vault",
+    namesOf: (target) => target.application.secrets.map((vault) => vault.vaultName),
+    changeSetOf: (results) => results.secretManager.vaultChangeSet,
+  },
+];
+
+function managedResourceGroupFromDefinition(
+  definition: DeployManagedResourceDefinition,
+  results: PlanResults,
+): ManagedResourceGroup {
+  const { changeSetOf, namesOf: _namesOf, resourceLabel: _resourceLabel, ...group } = definition;
+  return {
+    ...group,
+    changeSet: changeSetOf(results),
+  };
+}
+
 function managedResourceGroups(results: PlanResults): ManagedResourceGroup[] {
-  const namespaceFields = [
-    "namespaceName",
-    "authNamespace",
-    "vaultName",
-    "staticWebsiteName",
-  ] as const;
   return [
     { changeSet: results.functionRegistry.changeSet, resourceType: "function_registry" },
-    { changeSet: results.tailorDB.changeSet.service, resourceType: "tailordb.service" },
+    ...DEPLOY_MANAGED_RESOURCE_DEFINITIONS.map((definition) =>
+      managedResourceGroupFromDefinition(definition, results),
+    ),
     {
       changeSet: results.tailorDB.changeSet.type,
       resourceType: "tailordb.type",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "tailordb.service",
     },
     {
       changeSet: results.tailorDB.changeSet.gqlPermission,
       resourceType: "tailordb.gql_permission",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "tailordb.service",
     },
-    { changeSet: results.staticWebsite.changeSet, resourceType: "staticwebsite" },
     {
       changeSet: results.staticWebsite.customDomainChangeSet,
       resourceType: "staticwebsite.custom_domain",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "staticwebsite",
     },
-    { changeSet: results.aiGateway.changeSet, resourceType: "aigateway" },
-    { changeSet: results.idp.changeSet.service, resourceType: "idp.service" },
     {
       changeSet: results.idp.changeSet.client,
       resourceType: "idp.client",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "idp.service",
     },
-    { changeSet: results.auth.changeSet.service, resourceType: "auth.service" },
     {
       changeSet: results.auth.changeSet.idpConfig,
       resourceType: "auth.idp_config",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.userProfileConfig,
       resourceType: "auth.user_profile_config",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.tenantConfig,
       resourceType: "auth.tenant_config",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.machineUser,
       resourceType: "auth.machine_user",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.oauth2Client,
       resourceType: "auth.oauth2_client",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.authHook,
       resourceType: "auth.hook",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.scim,
       resourceType: "auth.scim",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "auth.service",
     },
     {
       changeSet: results.auth.changeSet.scimResource,
       resourceType: "auth.scim_resource",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "auth.service",
     },
-    {
-      changeSet: results.auth.changeSet.connection,
-      resourceType: "auth.connection",
-      namespaceFields,
-      namespaceOwnerResourceType: "auth.service",
-    },
-    { changeSet: results.pipeline.changeSet.service, resourceType: "pipeline.service" },
     {
       changeSet: results.pipeline.changeSet.resolver,
       resourceType: "pipeline.resolver",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "pipeline.service",
     },
-    { changeSet: results.executor.changeSet, resourceType: "executor" },
-    { changeSet: results.workflow.changeSet, resourceType: "workflow" },
-    { changeSet: results.app, resourceType: "application" },
-    workflowJobFunctionResourceGroup(results),
-    { changeSet: results.secretManager.vaultChangeSet, resourceType: "secret.vault" },
     {
       changeSet: results.secretManager.secretChangeSet,
       resourceType: "secret.secret",
-      namespaceFields,
+      namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
       namespaceOwnerResourceType: "secret.vault",
     },
   ];
@@ -1590,19 +1713,14 @@ export async function deploy(options?: DeployOptions) {
         logger.info("Bundle cache cleaned");
       }
 
-      const targets: BuiltDeploymentTarget[] = [];
-      for (const configPath of configPaths) {
-        targets.push(
-          await buildDeploymentTarget({
-            configPath,
-            dryRun,
-            buildOnly,
-            noCache,
-            packageVersion: packageJson.version ?? "unknown",
-            cacheDir,
-          }),
-        );
-      }
+      const targets = await buildDeploymentTargets({
+        configPaths,
+        dryRun,
+        buildOnly,
+        noCache,
+        packageVersion: packageJson.version ?? "unknown",
+        cacheDir,
+      });
 
       return {
         targets,
@@ -1613,8 +1731,6 @@ export async function deploy(options?: DeployOptions) {
       return { bundledScripts: mergeBundledScripts(targets) };
     }
 
-    // Reject workspace-global resource-name collisions across configs before
-    // planning so the failure surfaces up front instead of mid-apply.
     assertUniqueGlobalResourceNames(targets);
 
     // Note: the normal apply path intentionally skips writing bundle files to
@@ -1636,19 +1752,13 @@ export async function deploy(options?: DeployOptions) {
     rootSpan.setAttribute("workspace.id", workspaceId);
 
     const runInputs = collectDeployRunPlanInputs(targets);
-    const deployments: PlannedDeployment[] = [];
-    for (const target of targets) {
-      deployments.push(
-        await planDeploymentTarget({
-          target,
-          targets,
-          runInputs,
-          client,
-          workspaceId,
-          noSchemaCheck: options?.noSchemaCheck,
-        }),
-      );
-    }
+    const deployments = await planDeploymentTargets({
+      targets,
+      runInputs,
+      client,
+      workspaceId,
+      noSchemaCheck: options?.noSchemaCheck,
+    });
 
     const dryRun = options?.dryRun ?? false;
     const yes = options?.yes ?? false;

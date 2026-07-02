@@ -5,6 +5,7 @@ import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createChangeSet } from "./change-set";
 import {
   assertUniqueGlobalResourceNames,
+  buildDeploymentTargets,
   confirmDeploymentPlans,
   computeRenamedAppDeletions,
   collectExternalAuthIdpConfigNames,
@@ -12,7 +13,9 @@ import {
   collectVisibleResolverNamespaces,
   collectVisibleTailorDBTypeNamespaces,
   dropCrossDeploymentManagedDeletes,
+  mergeBundledScripts,
   parseDeployConfigPaths,
+  planDeploymentTargets,
   printDeploymentPlans,
   printPlanResults,
   summarizePlanResults,
@@ -357,7 +360,22 @@ describe("visible same-run namespaces", () => {
     expect(result.get("findUser")).toBe("shared-pipeline");
   });
 
-  test("collects IdP names declared by peer configs in the same deploy", () => {
+  test("collects IdP names declared by peer configs when the current app references them", () => {
+    const current = {
+      idpServices: [],
+      subgraphs: [{ Type: "idp", Name: "peer-idp" }],
+    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+    const peer = {
+      idpServices: [{ name: "peer-idp" }],
+      subgraphs: [],
+    } as unknown as PlanResults["tailorDB"]["context"]["application"];
+
+    const result = collectVisibleIdpNames(current, [current, peer]);
+
+    expect(result.has("peer-idp")).toBe(true);
+  });
+
+  test("ignores same-run IdPs that the current app does not reference", () => {
     const current = {
       idpServices: [],
       subgraphs: [],
@@ -367,9 +385,9 @@ describe("visible same-run namespaces", () => {
       subgraphs: [],
     } as unknown as PlanResults["tailorDB"]["context"]["application"];
 
-    const result = collectVisibleIdpNames([current, peer]);
+    const result = collectVisibleIdpNames(current, [current, peer]);
 
-    expect(result.has("peer-idp")).toBe(true);
+    expect(result.has("peer-idp")).toBe(false);
   });
 });
 
@@ -844,6 +862,89 @@ function fakeTarget(
     },
   } as unknown as Parameters<typeof assertUniqueGlobalResourceNames>[0][number];
 }
+
+describe("multi-config deployment orchestration", () => {
+  test("starts every config build before awaiting a build result", async () => {
+    const started: Array<string | undefined> = [];
+    const releases: Array<() => void> = [];
+
+    const buildPromise = buildDeploymentTargets({
+      configPaths: ["buyer/tailor.config.ts", "supplier/tailor.config.ts"],
+      dryRun: false,
+      buildOnly: false,
+      noCache: false,
+      packageVersion: "test",
+      cacheDir: "cache",
+      buildTarget: async (params) => {
+        started.push(params.configPath);
+        await new Promise<void>((resolve) => {
+          releases.push(resolve);
+        });
+        return fakeTarget({ appName: params.configPath }) as never;
+      },
+    });
+
+    await vi.waitFor(() =>
+      expect(started).toEqual(["buyer/tailor.config.ts", "supplier/tailor.config.ts"]),
+    );
+    releases.forEach((release) => release());
+
+    await expect(buildPromise).resolves.toHaveLength(2);
+  });
+
+  test("starts every config plan before awaiting a plan result", async () => {
+    const targets = [fakeTarget({ appName: "buyer" }), fakeTarget({ appName: "supplier" })];
+    const started: string[] = [];
+    const releases: Array<() => void> = [];
+
+    const planPromise = planDeploymentTargets({
+      targets: targets as never,
+      runInputs: {} as never,
+      client: {} as never,
+      workspaceId: "workspace-id",
+      noSchemaCheck: false,
+      planTarget: async (params) => {
+        started.push(params.target.application.name);
+        await new Promise<void>((resolve) => {
+          releases.push(resolve);
+        });
+        return plannedDeployment(params.target.application.name, emptyResults());
+      },
+    });
+
+    await vi.waitFor(() => expect(started).toEqual(["buyer", "supplier"]));
+    releases.forEach((release) => release());
+
+    await expect(planPromise).resolves.toHaveLength(2);
+  });
+});
+
+describe("mergeBundledScripts", () => {
+  test("allows duplicate resolver and auth hook bundle names across configs", () => {
+    expect(() =>
+      mergeBundledScripts([
+        fakeTarget({ resolvers: { get: "buyer" }, authHooks: { "before-login": "buyer" } }),
+        fakeTarget({ resolvers: { get: "supplier" }, authHooks: { "before-login": "supplier" } }),
+      ]),
+    ).not.toThrow();
+  });
+
+  test("rejects duplicate executor and workflow job bundle names across configs", () => {
+    expect(() =>
+      mergeBundledScripts([
+        fakeTarget({ executors: { sync: "buyer" } }),
+        fakeTarget({ executors: { sync: "supplier" } }),
+      ]),
+    ).toThrow('Duplicate executor bundle name "sync" across config files.');
+
+    expect(() =>
+      mergeBundledScripts([
+        fakeTarget({ workflowJobs: { notify: "buyer" } }),
+        fakeTarget({ workflowJobs: { notify: "supplier" } }),
+      ]),
+    ).toThrow('Duplicate workflow job bundle name "notify" across config files.');
+  });
+});
 
 describe("assertUniqueGlobalResourceNames", () => {
   test("throws when two configs define the same application name", () => {
