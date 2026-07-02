@@ -1052,6 +1052,16 @@ describe("runCodemods", () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-auth-token-test-"));
       tmpDir = dir;
       await fs.promises.writeFile(
+        path.join(dir, "assignment-destructure.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "let getConnectionToken;",
+          "({ getConnectionToken } = auth);",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "migrated.ts"),
         [
           'import { auth } from "../tailor.config";',
@@ -1196,6 +1206,15 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "computed-destructure.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          'export const { ["getConnectionToken"]: getToken } = auth;',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "cjs-require.js"),
         [
           'const { auth } = require("../tailor.config");',
@@ -1286,9 +1305,11 @@ describe("runCodemods", () => {
           codemodId: "v2/auth-connection-token-helper",
           prompt: codemod.prompt,
           files: [
+            "assignment-destructure.ts",
             "cjs-member-require.js",
             "cjs-require.js",
             "collision.ts",
+            "computed-destructure.ts",
             "computed.ts",
             "default-import.ts",
             "destructure.ts",
@@ -1302,6 +1323,11 @@ describe("runCodemods", () => {
             "wrapped-destructure.ts",
           ],
           findings: [
+            expect.objectContaining({
+              file: "assignment-destructure.ts",
+              line: 4,
+              excerpt: "({ getConnectionToken } = auth);",
+            }),
             expect.objectContaining({
               file: "cjs-member-require.js",
               line: 3,
@@ -1321,6 +1347,11 @@ describe("runCodemods", () => {
               file: "collision.ts",
               line: 6,
               excerpt: 'return auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "computed-destructure.ts",
+              line: 3,
+              excerpt: 'export const { ["getConnectionToken"]: getToken } = auth;',
             }),
             expect.objectContaining({
               file: "computed.ts",

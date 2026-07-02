@@ -42,9 +42,10 @@ function quickFilter(source: string): boolean {
 
 function sourceLang(filePath: string, source: string): Lang {
   const lower = filePath.toLowerCase();
-  return SOURCE_FILE_EXTENSIONS.has(lower.slice(lower.lastIndexOf("."))) || source.includes("</")
-    ? Lang.Tsx
-    : Lang.TypeScript;
+  const extension = lower.slice(lower.lastIndexOf("."));
+  if (SOURCE_FILE_EXTENSIONS.has(extension)) return Lang.Tsx;
+  if ([".js", ".mjs", ".cjs"].includes(extension) && source.includes("</")) return Lang.Tsx;
+  return Lang.TypeScript;
 }
 
 function stringValue(node: SgNode | null): string | null {
@@ -931,13 +932,51 @@ function objectPatternHasGetConnectionToken(pattern: SgNode): boolean {
     }
 
     if (child.kind() !== "pair_pattern") return false;
-    return child
-      .children()
-      .some(
-        (grandchild) =>
-          grandchild.kind() === "property_identifier" && grandchild.text() === GET_CONNECTION_TOKEN,
-      );
+    return pairPatternKeyName(child) === GET_CONNECTION_TOKEN;
   });
+}
+
+function pairPatternKeyName(pair: SgNode): string | null {
+  for (const child of pair.children()) {
+    if (child.kind() === ":") return null;
+    if (child.kind() === "property_identifier") return child.text();
+    if (child.kind() === "computed_property_name") {
+      return stringValue(
+        child.children().find((grandchild) => grandchild.kind() === "string") ?? null,
+      );
+    }
+  }
+  return null;
+}
+
+function authConnectionTokenDestructureReference(
+  node: SgNode,
+  binding: SgNode | null,
+  initializer: SgNode | null,
+  authLocalNames: Set<string>,
+  namespaceAuthLocalNames: Set<string>,
+  allowedBindingScopes: BindingScopeMap,
+  namespaceAllowedBindingScopes: BindingScopeMap,
+): TokenCall | null {
+  if (binding?.kind() !== "object_pattern" || !objectPatternHasGetConnectionToken(binding)) {
+    return null;
+  }
+
+  const authReceiver = authReceiverIdentifier(initializer);
+  const namespaceReceiver = namespaceAuthReceiverIdentifier(initializer, namespaceAuthLocalNames);
+  const receiver =
+    authReceiver && authLocalNames.has(authReceiver.text()) ? authReceiver : namespaceReceiver;
+  const receiverAllowedScopes =
+    receiver === authReceiver ? allowedBindingScopes : namespaceAllowedBindingScopes;
+  if (!receiver) return null;
+  if (isReferenceShadowed(receiver, receiver.text(), receiverAllowedScopes)) return null;
+
+  const range = node.range();
+  return {
+    objectNode: initializer ?? receiver,
+    localName: receiver.text(),
+    range: [range.start.index, range.end.index],
+  };
 }
 
 function findAuthConnectionTokenDestructures(
@@ -949,27 +988,29 @@ function findAuthConnectionTokenDestructures(
 ): TokenCall[] {
   const references: TokenCall[] = [];
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
-    const binding = firstDeclaratorChild(decl);
-    if (binding?.kind() !== "object_pattern" || !objectPatternHasGetConnectionToken(binding)) {
-      continue;
-    }
+    const reference = authConnectionTokenDestructureReference(
+      decl,
+      firstDeclaratorChild(decl),
+      initializerChild(decl),
+      authLocalNames,
+      namespaceAuthLocalNames,
+      allowedBindingScopes,
+      namespaceAllowedBindingScopes,
+    );
+    if (reference) references.push(reference);
+  }
 
-    const initializer = initializerChild(decl);
-    const authReceiver = authReceiverIdentifier(initializer);
-    const namespaceReceiver = namespaceAuthReceiverIdentifier(initializer, namespaceAuthLocalNames);
-    const receiver =
-      authReceiver && authLocalNames.has(authReceiver.text()) ? authReceiver : namespaceReceiver;
-    const receiverAllowedScopes =
-      receiver === authReceiver ? allowedBindingScopes : namespaceAllowedBindingScopes;
-    if (!receiver) continue;
-    if (isReferenceShadowed(receiver, receiver.text(), receiverAllowedScopes)) continue;
-
-    const range = decl.range();
-    references.push({
-      objectNode: initializer ?? receiver,
-      localName: receiver.text(),
-      range: [range.start.index, range.end.index],
-    });
+  for (const assignment of root.findAll({ rule: { kind: "assignment_expression" } })) {
+    const reference = authConnectionTokenDestructureReference(
+      assignment,
+      firstDeclaratorChild(assignment),
+      initializerChild(assignment),
+      authLocalNames,
+      namespaceAuthLocalNames,
+      allowedBindingScopes,
+      namespaceAllowedBindingScopes,
+    );
+    if (reference) references.push(reference);
   }
   return references;
 }
