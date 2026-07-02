@@ -3,6 +3,11 @@ import { describe, expect, test, expectTypeOf } from "vitest";
 import { createWorkflowJob, type WorkflowJob } from "./job";
 import { createWorkflow } from "./workflow";
 import type { TailorInvoker } from "#/runtime/types";
+import type { TypeLevelError } from "#/types/helpers";
+
+type WorkflowJobConfig<Name extends string, I, O> = Parameters<
+  typeof createWorkflowJob<Name, I, O>
+>[0];
 
 describe("WorkflowJob type inference", () => {
   test("preserves literal types in output when using as const", () => {
@@ -62,6 +67,26 @@ describe("WorkflowJob type inference", () => {
 });
 
 describe("WorkflowJob type constraints", () => {
+  test("invalid job bodies expose TypeLevelError messages", () => {
+    expectTypeOf<WorkflowJobConfig<"test", null, { result: string }>["body"]>().toEqualTypeOf<
+      TypeLevelError<"Input cannot be null at the top level">
+    >();
+
+    expectTypeOf<
+      WorkflowJobConfig<"test", { id: string } | undefined, { result: string }>["body"]
+    >().toEqualTypeOf<TypeLevelError<"Input cannot include undefined at the top level">>();
+
+    expectTypeOf<
+      WorkflowJobConfig<"test", { date: Date }, { result: string }>["body"]
+    >().toEqualTypeOf<
+      TypeLevelError<"Input must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">
+    >();
+
+    expectTypeOf<WorkflowJobConfig<"test", undefined, { timestamp: Date }>["body"]>().toEqualTypeOf<
+      TypeLevelError<"Output must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">
+    >();
+  });
+
   describe("input constraints", () => {
     test("allows JsonValue compatible input", () => {
       const job = createWorkflowJob({

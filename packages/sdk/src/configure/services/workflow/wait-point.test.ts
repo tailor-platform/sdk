@@ -3,12 +3,39 @@ import { afterEach, describe, expect, test, expectTypeOf } from "vitest";
 import { setupWaitPointMock, setupWorkflowMock } from "#/utils/test/mock";
 import { defineWaitPoint, defineWaitPoints } from "./wait-point";
 import type { TailorRuntime } from "#/runtime/index";
+import type { TypeLevelError } from "#/types/helpers";
 
 const TailorGlobal = globalThis as { tailor?: TailorRuntime };
 
 describe("defineWaitPoints", () => {
   afterEach(() => {
     delete TailorGlobal.tailor;
+  });
+
+  test("invalid definitions expose TypeLevelError messages", () => {
+    expectTypeOf<ReturnType<typeof defineWaitPoint<null, { ok: boolean }>>>().toEqualTypeOf<
+      TypeLevelError<"Payload cannot be null at the top level">
+    >();
+
+    expectTypeOf<ReturnType<typeof defineWaitPoint<undefined, undefined>>>().toEqualTypeOf<
+      TypeLevelError<"Result cannot be (or include) undefined (resolve callback must return a value)">
+    >();
+
+    expectTypeOf<
+      ReturnType<typeof defineWaitPoint<undefined, { timestamp: Date }>>
+    >().toEqualTypeOf<
+      TypeLevelError<"Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">
+    >();
+
+    expectTypeOf<
+      ReturnType<typeof defineWaitPoint<{ id: string } | undefined, { ok: boolean }>>
+    >().toEqualTypeOf<TypeLevelError<"Payload cannot include undefined at the top level">>();
+
+    expectTypeOf<
+      ReturnType<typeof defineWaitPoint<{ when: Date }, { ok: boolean }>>
+    >().toEqualTypeOf<
+      TypeLevelError<"Payload must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">
+    >();
   });
 
   test("creates instances with typed wait/resolve", () => {
