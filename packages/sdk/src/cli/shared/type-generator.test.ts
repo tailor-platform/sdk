@@ -131,6 +131,28 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain('"google-oauth": true;');
     expect(result).toContain('"ms365-oauth": true;');
   });
+
+  test("should generate empty AIGatewayNameRegistry when no AI Gateways provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface AIGatewayNameRegistry {}");
+  });
+
+  test("should generate AIGatewayNameRegistry with AI Gateway names", () => {
+    const result = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ["my-aigateway", "second-gateway"],
+    );
+
+    expect(result).toContain("interface AIGatewayNameRegistry");
+    expect(result).toContain('"my-aigateway": true;');
+    expect(result).toContain('"second-gateway": true;');
+  });
 });
 
 describe("resolveTypeDefinitionPath", () => {
@@ -287,5 +309,42 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).toContain("interface ConnectionNameRegistry");
     expect(content).toContain('"google-oauth": true;');
     expect(content).toContain('"ms365-oauth": true;');
+  });
+
+  test("extracts AI Gateway names into AIGatewayNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      aiGateways: [{ name: "my-aigateway" } as never, { name: "second-gateway" } as never],
+    };
+
+    const { aiGatewayNames } = extractAttributesFromConfig(config);
+    expect(aiGatewayNames).toEqual(["my-aigateway", "second-gateway"]);
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      aiGatewayNames,
+    );
+    expect(content).toContain("interface AIGatewayNameRegistry");
+    expect(content).toContain('"my-aigateway": true;');
+    expect(content).toContain('"second-gateway": true;');
+  });
+
+  test("de-duplicates AI Gateway names so the registry has unique keys", () => {
+    const config = {
+      name: "test-app",
+      aiGateways: [
+        { name: "my-aigateway" } as never,
+        { name: "second-gateway" } as never,
+        { name: "my-aigateway" } as never,
+      ],
+    };
+
+    const { aiGatewayNames } = extractAttributesFromConfig(config);
+    expect(aiGatewayNames).toEqual(["my-aigateway", "second-gateway"]);
   });
 });

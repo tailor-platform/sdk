@@ -6,7 +6,10 @@ import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migra
 import { sdkNameLabelKey } from "../label";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
 import type { FieldDiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
-import type { SnapshotFieldConfig } from "#/cli/commands/tailordb/migrate/snapshot";
+import type {
+  SnapshotFieldConfig,
+  TailorDBSnapshotType,
+} from "#/cli/commands/tailordb/migrate/snapshot";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -909,7 +912,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     }
   });
 
-  function makePlanResult(noSchemaCheck: boolean): Awaited<ReturnType<typeof planTailorDB>> {
+  function makePlanResult(noSchemaCheck = false): Awaited<ReturnType<typeof planTailorDB>> {
     const mockTailorDBService = {
       namespace: "test-tailordb",
       loadTypes: vi.fn().mockResolvedValue({}),
@@ -1021,6 +1024,87 @@ describe("applyTailorDB migration label reconciliation", () => {
     );
   });
 
+  function userSnapshotType(): TailorDBSnapshotType {
+    return {
+      name: "User",
+      pluralForm: "Users",
+      fields: {
+        id: { type: "uuid", required: true },
+      },
+    };
+  }
+
+  function writeUserSchemaSnapshot(userType: TailorDBSnapshotType): void {
+    fs.writeFileSync(
+      path.join(tmpDir, "0000", "schema.json"),
+      JSON.stringify({
+        version: 1,
+        namespace: "test-tailordb",
+        createdAt: new Date().toISOString(),
+        types: { User: userType },
+      }),
+    );
+  }
+
+  function schemaVerificationClient(remoteSettings: unknown): OperatorClient {
+    const getMetadata = vi.fn().mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0000" } },
+    });
+    return {
+      getMetadata,
+      setMetadata: vi.fn().mockResolvedValue({}),
+      listTailorDBTypes: vi.fn().mockResolvedValue({
+        tailordbTypes: [
+          {
+            name: "User",
+            schema: {
+              fields: {
+                id: {
+                  type: "uuid",
+                  required: true,
+                  allowedValues: [],
+                  validate: [],
+                  fields: {},
+                },
+              },
+              settings: remoteSettings,
+              relationships: {},
+              indexes: {},
+              files: {},
+            },
+          },
+        ],
+        nextPageToken: "",
+      }),
+      listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
+        permissions: [],
+        nextPageToken: "",
+      }),
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBType: vi.fn().mockResolvedValue({}),
+      updateTailorDBType: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+  }
+
+  function planWithDeployDerivedSettings(
+    userType: TailorDBSnapshotType,
+  ): Awaited<ReturnType<typeof planTailorDB>> {
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [], gqlOperations: { create: false } },
+        types: { User: userType },
+      },
+    ];
+    planResult.context.executorUsedTypes = new Set(["User"]);
+    return planResult;
+  }
+
   test("sets the migration label to 0000 on the first apply (no prior label, schema check enabled)", async () => {
     // Fresh project: `migration generate` created 0000/schema.json, the remote
     // namespace has no `sdk-migration` label yet. A single `apply` should
@@ -1035,5 +1119,140 @@ describe("applyTailorDB migration label reconciliation", () => {
         labels: expect.objectContaining({ "sdk-migration": "m0000" }),
       }),
     );
+  });
+
+  test("accepts deploy-derived remote settings during schema verification", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+
+    const client = schemaVerificationClient({
+      pluralForm: "users",
+      aggregation: false,
+      bulkUpsert: false,
+      publishRecordEvents: true,
+      disableGqlOperations: {
+        create: true,
+        update: false,
+        delete: false,
+        read: false,
+      },
+    });
+
+    const planResult = planWithDeployDerivedSettings(userType);
+
+    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+  });
+
+  test("uses db config gqlOperations when the migration namespace has no deploy input", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+
+    const client = schemaVerificationClient({
+      pluralForm: "users",
+      aggregation: false,
+      bulkUpsert: false,
+      publishRecordEvents: false,
+      disableGqlOperations: {
+        create: true,
+        update: false,
+        delete: false,
+        read: false,
+      },
+    });
+
+    const planResult = makePlanResult();
+    planResult.context.config.db = {
+      "test-tailordb": {
+        files: [],
+        migration: { directory: "." },
+        gqlOperations: { create: false },
+      },
+    };
+
+    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+  });
+
+  test("does not require unapplied deploy-derived settings during schema verification", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+
+    const client = schemaVerificationClient({
+      pluralForm: "users",
+      aggregation: false,
+      bulkUpsert: false,
+      publishRecordEvents: false,
+      disableGqlOperations: {
+        create: false,
+        update: false,
+        delete: false,
+        read: false,
+      },
+    });
+
+    const planResult = planWithDeployDerivedSettings(userType);
+
+    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+  });
+
+  test("rejects remote-only deploy settings during schema verification", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+
+    const client = schemaVerificationClient({
+      pluralForm: "users",
+      aggregation: false,
+      bulkUpsert: false,
+      publishRecordEvents: false,
+      disableGqlOperations: {
+        create: true,
+        update: false,
+        delete: false,
+        read: false,
+      },
+    });
+
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [] },
+        types: { User: userType },
+      },
+    ];
+    planResult.context.executorUsedTypes = new Set();
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "Remote schema verification failed",
+    );
+  });
+
+  test("accepts previously derived publish events after executor removal", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+
+    const client = schemaVerificationClient({
+      pluralForm: "users",
+      aggregation: false,
+      bulkUpsert: false,
+      publishRecordEvents: true,
+      disableGqlOperations: {
+        create: false,
+        update: false,
+        delete: false,
+        read: false,
+      },
+    });
+
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [] },
+        types: { User: userType },
+      },
+    ];
+    planResult.context.executorUsedTypes = new Set();
+
+    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
   });
 });

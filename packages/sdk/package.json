@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.72.0",
+  "version": "1.73.2",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -136,6 +136,11 @@
       "types": "./dist/runtime/file.d.mts",
       "import": "./dist/runtime/file.mjs",
       "default": "./dist/runtime/file.mjs"
+    },
+    "./runtime/aigateway": {
+      "types": "./dist/runtime/aigateway.d.mts",
+      "import": "./dist/runtime/aigateway.mjs",
+      "default": "./dist/runtime/aigateway.mjs"
     }
   },
   "scripts": {

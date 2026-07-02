@@ -16,6 +16,8 @@ import type {
   TypeAddedChange,
   TypeRemovedChange,
   TypeModifiedChange,
+  TypeSettingsModifiedChange,
+  SnapshotTypeSettingsState,
   FieldAddedChange,
   FieldRemovedChange,
   FieldModifiedChange,
@@ -276,6 +278,26 @@ const typeSettingsPatchSchema: z.ZodType<TypeSettingsPatch> = z.looseObject({
   files: snapshotRecordSchema(z.string()).optional(),
 });
 
+const snapshotTypeSettingsStateSchema: z.ZodType<SnapshotTypeSettingsState> = z.looseObject({
+  description: z.string().optional(),
+  pluralForm: z.string(),
+  settings: z
+    .looseObject({
+      aggregation: z.boolean().optional(),
+      bulkUpsert: z.boolean().optional(),
+      gqlOperations: z
+        .looseObject({
+          create: z.boolean().optional(),
+          update: z.boolean().optional(),
+          delete: z.boolean().optional(),
+          read: z.boolean().optional(),
+        })
+        .optional(),
+      publishEvents: z.boolean().optional(),
+    })
+    .optional(),
+});
+
 const snapshotPermissionStateSchema: z.ZodType<SnapshotPermissionState> = z.looseObject({
   recordPermission: snapshotRecordPermissionSchema.optional(),
   gqlPermission: snapshotGqlPermissionSchema.optional(),
@@ -304,6 +326,14 @@ const typeModifiedChangeSchema = z.looseObject({
   before: typeSettingsPatchSchema.optional(),
   after: typeSettingsPatchSchema.optional(),
 }) as unknown as z.ZodType<TypeModifiedChange>;
+
+const typeSettingsModifiedChangeSchema = z.looseObject({
+  kind: z.literal("type_settings_modified"),
+  typeName: z.string(),
+  reason: z.string().optional(),
+  before: snapshotTypeSettingsStateSchema,
+  after: snapshotTypeSettingsStateSchema,
+}) as unknown as z.ZodType<TypeSettingsModifiedChange>;
 
 const fieldAddedChangeSchema = z.looseObject({
   kind: z.literal("field_added"),
@@ -422,6 +452,7 @@ export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kin
   typeAddedChangeSchema as unknown as DiscriminableSchema,
   typeRemovedChangeSchema as unknown as DiscriminableSchema,
   typeModifiedChangeSchema as unknown as DiscriminableSchema,
+  typeSettingsModifiedChangeSchema as unknown as DiscriminableSchema,
   fieldAddedChangeSchema as unknown as DiscriminableSchema,
   fieldRemovedChangeSchema as unknown as DiscriminableSchema,
   fieldModifiedChangeSchema as unknown as DiscriminableSchema,
