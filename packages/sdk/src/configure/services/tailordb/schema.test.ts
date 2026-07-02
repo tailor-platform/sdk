@@ -7,6 +7,14 @@ import type { TailorPrincipal } from "#/runtime/types";
 import type { output, TypeLevelError } from "#/types/helpers";
 import type { Hook } from "./types";
 
+type DateString = `${number}-${number}-${number}`;
+type TimeString = `${number}:${number}`;
+type TimeZoneOffsetString = "Z" | "z" | `${"+" | "-"}${TimeString}`;
+type DateTimeString =
+  `${DateString}${"T" | "t"}${TimeString}:${number}${"" | `.${number}`}${TimeZoneOffsetString}`;
+type UUIDString = `${string}-${string}-${string}-${string}-${string}`;
+type DecimalString = `${number}`;
+
 describe("TailorDBField basic field type tests", () => {
   test("string field outputs string type correctly", () => {
     const _stringType = db.type("Test", {
@@ -48,43 +56,57 @@ describe("TailorDBField basic field type tests", () => {
     }>();
   });
 
-  test("uuid field outputs string type correctly", () => {
+  test("uuid field outputs UUID string type correctly", () => {
     const _uuidType = db.type("Test", {
       uuid: db.uuid(),
     });
     expectTypeOf<output<typeof _uuidType>>().toEqualTypeOf<{
       id: string;
-      uuid: string;
+      uuid: UUIDString;
     }>();
   });
 
-  test("date field outputs string type correctly", () => {
+  test("date field outputs date string type correctly", () => {
     const _dateType = db.type("Test", {
       birthDate: db.date(),
     });
     expectTypeOf<output<typeof _dateType>>().toEqualTypeOf<{
       id: string;
-      birthDate: string;
+      birthDate: DateString;
     }>();
   });
 
-  test("datetime field outputs string | Date type correctly", () => {
+  test("datetime field outputs datetime string | Date type correctly", () => {
     const _datetimeType = db.type("Test", {
       timestamp: db.datetime(),
     });
     expectTypeOf<output<typeof _datetimeType>>().toMatchObjectType<{
       id: string;
-      timestamp: string | Date;
+      timestamp: DateTimeString | Date;
     }>();
   });
 
-  test("time field outputs string type correctly", () => {
+  test("time field outputs time string type correctly", () => {
     const _timeType = db.type("Test", {
       openingTime: db.time(),
     });
     expectTypeOf<output<typeof _timeType>>().toEqualTypeOf<{
       id: string;
-      openingTime: string;
+      openingTime: TimeString;
+    }>();
+  });
+
+  test("pickFields preserves the generated id string type", () => {
+    const _schemaType = t.object({
+      ...db
+        .type("Test", {
+          name: db.string(),
+        })
+        .pickFields(["id"], { optional: true }),
+    });
+
+    expectTypeOf<output<typeof _schemaType>>().toEqualTypeOf<{
+      id?: string | null;
     }>();
   });
 });
@@ -478,7 +500,7 @@ describe("TailorDBField relation modifier tests", () => {
     expectTypeOf<output<typeof _postType>>().toEqualTypeOf<{
       id: string;
       title: string;
-      authorId: string;
+      authorId: UUIDString;
     }>();
   });
 
@@ -686,8 +708,8 @@ describe("TailorDBType withTimestamps option tests", () => {
     expectTypeOf<output<typeof _timestampType>>().toEqualTypeOf<{
       id: string;
       name: string;
-      createdAt: string | Date;
-      updatedAt: string | Date;
+      createdAt: DateTimeString | Date;
+      updatedAt: DateTimeString | Date;
     }>();
   });
 
@@ -776,9 +798,9 @@ describe("TailorDBType composite type tests", () => {
       tags: string[];
       role: "admin" | "user" | "guest";
       score: number;
-      birthDate: string;
-      lastLogin?: string | Date | null;
-      closingTime: string;
+      birthDate: DateString;
+      lastLogin?: DateTimeString | Date | null;
+      closingTime: TimeString;
     }>();
   });
 });
@@ -951,8 +973,8 @@ describe("TailorDBType plural form tests", () => {
       id: string;
       title: string;
       content?: string | null;
-      createdAt: string | Date;
-      updatedAt: string | Date;
+      createdAt: DateTimeString | Date;
+      updatedAt: DateTimeString | Date;
     }>();
 
     expect(_postType.name).toBe("Post");
@@ -1447,7 +1469,7 @@ describe("TailorDBField fluent API type preservation", () => {
       .uuid()
       .description("User reference")
       .relation({ type: "n-1", toward: { type: User } });
-    expectTypeOf<output<typeof _field>>().toEqualTypeOf<string>();
+    expectTypeOf<output<typeof _field>>().toEqualTypeOf<UUIDString>();
   });
 });
 
@@ -1625,6 +1647,43 @@ describe("TailorDBField runtime validation tests", () => {
     const bad = field.parse({ value: "2025/01/01", data, invoker });
     expect(bad.issues?.[0]?.message).toBe(
       'Expected to match "yyyy-MM-dd" format: received 2025/01/01',
+    );
+
+    const invalidDate = field.parse({ value: "2025-02-30", data, user });
+    expect(invalidDate.issues?.[0]?.message).toBe(
+      'Expected to match "yyyy-MM-dd" format: received 2025-02-30',
+    );
+  });
+
+  test("validates datetime format", () => {
+    const field = db.datetime();
+    for (const value of [
+      "2025-01-01T10:11:12Z",
+      "2025-01-01T10:11:12.123456Z",
+      "2025-01-01T10:11:12+09:00",
+      "2025-01-01t10:11:12-08:00",
+    ]) {
+      const ok = field.parse({ value, data, user });
+      expect(ok.issues).toBeUndefined();
+      if (ok.issues) {
+        throw new Error("Unexpected issues");
+      }
+      expect(ok.value).toBe(value);
+    }
+
+    const bad = field.parse({ value: "2025-01-01T10:11:12+0900", data, user });
+    expect(bad.issues?.[0]?.message).toBe(
+      "Expected to match ISO format: received 2025-01-01T10:11:12+0900",
+    );
+
+    const invalidTime = field.parse({ value: "2025-01-01T25:11:12Z", data, user });
+    expect(invalidTime.issues?.[0]?.message).toBe(
+      "Expected to match ISO format: received 2025-01-01T25:11:12Z",
+    );
+
+    const invalidOffset = field.parse({ value: "2025-01-01T10:11:12+24:00", data, user });
+    expect(invalidOffset.issues?.[0]?.message).toBe(
+      "Expected to match ISO format: received 2025-01-01T10:11:12+24:00",
     );
   });
 
@@ -2053,23 +2112,23 @@ describe("TailorDBField clone tests", () => {
 });
 
 describe("TailorDBField decimal type tests", () => {
-  test("decimal field outputs string type correctly", () => {
+  test("decimal field outputs decimal string type correctly", () => {
     const _decimalType = db.type("Test", {
       price: db.decimal(),
     });
     expectTypeOf<output<typeof _decimalType>>().toEqualTypeOf<{
       id: string;
-      price: string;
+      price: DecimalString;
     }>();
   });
 
-  test("optional decimal field outputs string | null type correctly", () => {
+  test("optional decimal field outputs decimal string | null type correctly", () => {
     const _decimalType = db.type("Test", {
       discount: db.decimal({ optional: true }),
     });
     expectTypeOf<output<typeof _decimalType>>().toEqualTypeOf<{
       id: string;
-      discount?: string | null;
+      discount?: DecimalString | null;
     }>();
   });
 

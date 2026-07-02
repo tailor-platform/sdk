@@ -285,10 +285,7 @@ export interface TailorDBField<
    */
   clone<const NewOpt extends FieldOptions>(
     options?: NewOpt,
-  ): TailorDBField<
-    WithDBFieldCloneOptions<Defined, NewOpt>,
-    FieldOutput<TailorToTs[Defined["type"]], NewOpt>
-  >;
+  ): TailorDBField<WithDBFieldCloneOptions<Defined, NewOpt>, FieldOutput<Output, NewOpt>>;
 }
 
 /**
@@ -335,7 +332,7 @@ export interface TailorDBType<
           Omit<D, "array"> & {
             array: Opt extends { array: true } ? true : D["array"];
           },
-          FieldOutput<TailorToTs[D["type"]], Opt>
+          FieldOutput<_O, Opt>
         >
       : never;
   };
@@ -383,9 +380,42 @@ const regex = {
   date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
   time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
   datetime:
-    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
+    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})[Tt](?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d):(?<second>[0-5]\d|60)(\.(?<fraction>\d+))?(?<offset>[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/,
   decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
 } as const;
+
+function isValidDateString(value: string): boolean {
+  const match = regex.date.exec(value);
+  return match?.groups !== undefined && isValidDateParts(match.groups);
+}
+
+function isValidDateTimeString(value: string): boolean {
+  const match = regex.datetime.exec(value);
+  return match?.groups !== undefined && isValidDateParts(match.groups);
+}
+
+function isValidDateParts(groups: Record<string, string | undefined>): boolean {
+  const { year: yearValue, month: monthValue, day: dayValue } = groups;
+  if (yearValue === undefined || monthValue === undefined || dayValue === undefined) {
+    return false;
+  }
+
+  const year = Number(yearValue);
+  const month = Number(monthValue);
+  const day = Number(dayValue);
+  if (month < 1 || month > 12 || day < 1) {
+    return false;
+  }
+
+  const daysInMonth = [31, isLeapYear(year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][
+    month - 1
+  ];
+  return daysInMonth !== undefined && day <= daysInMonth;
+}
+
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
 
 type FieldParseArgs = {
   value: unknown;
@@ -561,7 +591,7 @@ function createTailorDBFieldRuntime<
         }
         break;
       case "date":
-        if (typeof value !== "string" || !regex.date.test(value)) {
+        if (typeof value !== "string" || !isValidDateString(value)) {
           issues.push({
             message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -569,7 +599,7 @@ function createTailorDBFieldRuntime<
         }
         break;
       case "datetime":
-        if (typeof value !== "string" || !regex.datetime.test(value)) {
+        if (typeof value !== "string" || !isValidDateTimeString(value)) {
           issues.push({
             message: `Expected to match ISO format: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -947,7 +977,8 @@ function date<const Opt extends FieldOptions>(options?: Opt) {
 
 /**
  * Create a datetime field (date and time).
- * Format: ISO 8601 "yyyy-MM-ddTHH:mm:ssZ"
+ * Format: RFC 3339 date-time, such as "yyyy-MM-ddTHH:mm:ssZ" or
+ * "yyyy-MM-ddTHH:mm:ss+09:00".
  * @param options - Field configuration options
  * @returns A datetime field
  * @example db.datetime()
@@ -1192,7 +1223,7 @@ function createTailorDBType<
   return brandValue(dbType, "tailordb-type");
 }
 
-const idField = uuid();
+const idField = createField<"uuid", Record<never, never>, string>("uuid");
 type idField = typeof idField;
 type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = TailorDBInstance<
   { id: idField } & F

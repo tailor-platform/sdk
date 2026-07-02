@@ -6,6 +6,8 @@ import type { AuthServiceInput } from "#/configure/services/auth/types";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
 
+type UUIDString = `${string}-${string}-${string}-${string}-${string}`;
+
 // Define userType for type inference
 const userType = db.type("User", {
   email: db.string().unique(),
@@ -90,11 +92,11 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
       role: string;
       isActive: boolean;
       tags: string[];
-      externalId: string;
+      externalId: UUIDString;
     }>();
 
     expectTypeOf<MachineUserConfig>().toMatchObjectType<{
-      attributeList: [string];
+      attributeList: [UUIDString];
     }>();
   });
 

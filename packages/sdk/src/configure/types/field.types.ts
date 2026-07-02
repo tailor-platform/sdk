@@ -21,16 +21,24 @@ export type TailorFieldType =
   | "time"
   | "nested";
 
+type DateString = `${number}-${number}-${number}`;
+type TimeString = `${number}:${number}`;
+type TimeZoneOffsetString = "Z" | "z" | `${"+" | "-"}${TimeString}`;
+type DateTimeString =
+  `${DateString}${"T" | "t"}${TimeString}:${number}${"" | `.${number}`}${TimeZoneOffsetString}`;
+type UUIDString = `${string}-${string}-${string}-${string}-${string}`;
+type DecimalString = `${number}`;
+
 export type TailorToTs = {
   string: string;
   integer: number;
   float: number;
-  decimal: string;
+  decimal: DecimalString;
   boolean: boolean;
-  uuid: string;
-  date: string;
-  datetime: string | Date;
-  time: string;
+  uuid: UUIDString;
+  date: DateString;
+  datetime: DateTimeString | Date;
+  time: TimeString;
   enum: string;
   object: Record<string, unknown>;
   nested: Record<string, unknown>;
