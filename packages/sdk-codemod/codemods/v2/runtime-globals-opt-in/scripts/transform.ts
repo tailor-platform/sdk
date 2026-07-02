@@ -1,4 +1,12 @@
 import { parse, Lang } from "@ast-grep/napi";
+import {
+  findImportStatements,
+  importSource,
+  importSpecNames,
+  isTypeOnlyImport,
+  localDeclarationNames,
+  namedImportsNode,
+} from "../../../../src/ast-grep-helpers";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
@@ -20,35 +28,6 @@ function sourceLang(filePath: string, source: string): Lang {
   return filePath.endsWith(".tsx") || filePath.endsWith(".jsx") || source.includes("</")
     ? Lang.Tsx
     : Lang.TypeScript;
-}
-
-function stringValue(node: SgNode | null): string | null {
-  return node?.text().replace(/^['"]|['"]$/g, "") ?? null;
-}
-
-function isTypeOnlyImport(stmt: SgNode): boolean {
-  return stmt.children().some((child) => child.kind() === "type");
-}
-
-function importSource(stmt: SgNode): string | null {
-  const source = stmt.find({ rule: { kind: "string" } });
-  return stringValue(source ?? null);
-}
-
-function namedImportsNode(importStmt: SgNode): SgNode | null {
-  return importStmt.find({ rule: { kind: "named_imports" } }) ?? null;
-}
-
-function importSpecNames(
-  spec: SgNode,
-): { importedName: string; localName: string; typeOnly: boolean } | null {
-  const ids = spec.children().filter((child) => child.kind() === "identifier");
-  if (ids.length === 0) return null;
-  return {
-    importedName: ids[0]!.text(),
-    localName: ids[1]?.text() ?? ids[0]!.text(),
-    typeOnly: spec.children().some((child) => child.kind() === "type"),
-  };
 }
 
 function importBindings(importStmt: SgNode): ImportBinding[] {
@@ -89,105 +68,6 @@ function importBindings(importStmt: SgNode): ImportBinding[] {
   }
 
   return bindings;
-}
-
-function collectBindingNames(node: SgNode, out: Set<string>): void {
-  const kind = node.kind();
-  if (
-    kind === "identifier" ||
-    kind === "type_identifier" ||
-    kind === "shorthand_property_identifier_pattern"
-  ) {
-    out.add(node.text());
-    return;
-  }
-
-  for (const child of node.children()) {
-    if (child.kind() === "property_identifier") continue;
-    collectBindingNames(child, out);
-  }
-}
-
-function firstDeclaratorChild(node: SgNode): SgNode | null {
-  return node.children().find((child) => child.kind() !== "=") ?? null;
-}
-
-function localDeclarationNames(root: SgNode): Set<string> {
-  const names = new Set<string>();
-
-  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
-    const binding = firstDeclaratorChild(decl);
-    if (binding) collectBindingNames(binding, names);
-  }
-
-  for (const param of root.findAll({
-    rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
-  })) {
-    const binding = param
-      .children()
-      .find((child) =>
-        ["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind()),
-      );
-    if (binding) collectBindingNames(binding, names);
-  }
-
-  for (const decl of root.findAll({
-    rule: {
-      any: [
-        { kind: "function_declaration" },
-        { kind: "function_expression" },
-        { kind: "class_declaration" },
-        { kind: "class" },
-        { kind: "interface_declaration" },
-        { kind: "type_alias_declaration" },
-        { kind: "enum_declaration" },
-        { kind: "internal_module" },
-        { kind: "import_alias" },
-      ],
-    },
-  })) {
-    const name = decl
-      .children()
-      .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
-    if (name) names.add(name.text());
-  }
-
-  for (const catchClause of root.findAll({ rule: { kind: "catch_clause" } })) {
-    for (const child of catchClause.children()) {
-      if (["identifier", "object_pattern", "array_pattern"].includes(child.kind())) {
-        collectBindingNames(child, names);
-      }
-    }
-  }
-
-  for (const arrow of root.findAll({ rule: { kind: "arrow_function" } })) {
-    const children = arrow.children();
-    const arrowIndex = children.findIndex((child) => child.kind() === "=>");
-    if (arrowIndex === -1) continue;
-    for (const child of children.slice(0, arrowIndex)) {
-      collectBindingNames(child, names);
-    }
-  }
-
-  for (const loop of root.findAll({ rule: { kind: "for_in_statement" } })) {
-    const children = loop.children();
-    const keywordIndex = children.findIndex(
-      (child) => child.kind() === "in" || child.kind() === "of",
-    );
-    if (keywordIndex === -1) continue;
-    for (const child of children.slice(0, keywordIndex)) {
-      collectBindingNames(child, names);
-    }
-  }
-
-  return names;
-}
-
-function findImportStatements(root: SgNode): SgNode[] {
-  return root
-    .findAll({ rule: { kind: "import_statement" } })
-    .filter((stmt) => stmt.parent()?.kind() === "program")
-    .toSorted((a, b) => a.range().start.index - b.range().start.index);
 }
 
 function runtimeIdpLocalName(imports: SgNode[]): string | null {

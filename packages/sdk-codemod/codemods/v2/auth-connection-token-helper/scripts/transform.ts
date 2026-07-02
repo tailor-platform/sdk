@@ -1,4 +1,12 @@
 import { parse, Lang } from "@ast-grep/napi";
+import {
+  findImportStatements,
+  importSource,
+  importSpecNames,
+  isTypeOnlyImport,
+  localDeclarationNames,
+  namedImportsNode,
+} from "../../../../src/ast-grep-helpers";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
@@ -43,41 +51,8 @@ function parseRoot(source: string, filePath: string): SgNode | null {
   }
 }
 
-function stringValue(node: SgNode | null): string | null {
-  return node?.text().replace(/^['"]|['"]$/g, "") ?? null;
-}
-
-function importSource(importStmt: SgNode): string | null {
-  return stringValue(importStmt.find({ rule: { kind: "string" } }) ?? null);
-}
-
 function isTailorConfigSource(source: string): boolean {
   return /(^|\/)tailor\.config(?:\.(?:ts|tsx|js|jsx|mts|cts|mjs|cjs))?$/.test(source);
-}
-
-function isTypeOnlyImport(importStmt: SgNode): boolean {
-  return importStmt.children().some((child) => child.kind() === "type");
-}
-
-function namedImportsNode(importStmt: SgNode): SgNode | null {
-  return importStmt.find({ rule: { kind: "named_imports" } }) ?? null;
-}
-
-function importSpecNames(spec: SgNode): { importedName: string; localName: string } | null {
-  if (spec.children().some((child) => child.kind() === "type")) return null;
-  const ids = spec.children().filter((child) => child.kind() === "identifier");
-  if (ids.length === 0) return null;
-  return {
-    importedName: ids[0]!.text(),
-    localName: ids[1]?.text() ?? ids[0]!.text(),
-  };
-}
-
-function findImportStatements(root: SgNode): SgNode[] {
-  return root
-    .findAll({ rule: { kind: "import_statement" } })
-    .filter((stmt) => stmt.parent()?.kind() === "program")
-    .toSorted((a, b) => a.range().start.index - b.range().start.index);
 }
 
 function findAuthImports(imports: SgNode[]): AuthImport[] {
@@ -88,7 +63,7 @@ function findAuthImports(imports: SgNode[]): AuthImport[] {
 
     for (const spec of importStmt.findAll({ rule: { kind: "import_specifier" } })) {
       const names = importSpecNames(spec);
-      if (names?.importedName !== "auth") continue;
+      if (names?.importedName !== "auth" || names.typeOnly) continue;
       authImports.push({ importStmt, localName: names.localName, spec });
     }
   }
@@ -113,7 +88,7 @@ function importLocalNames(importStmt: SgNode): Set<string> {
     if (child.kind() !== "named_imports") continue;
     for (const spec of child.findAll({ rule: { kind: "import_specifier" } })) {
       const specNames = importSpecNames(spec);
-      if (specNames) names.add(specNames.localName);
+      if (specNames && !specNames.typeOnly) names.add(specNames.localName);
     }
   }
   return names;
@@ -144,89 +119,6 @@ function runtimeNamedValueImport(imports: SgNode[]): SgNode | null {
         namedImportsNode(importStmt),
     ) ?? null
   );
-}
-
-function collectBindingNames(node: SgNode, names: Set<string>): void {
-  const kind = node.kind();
-  if (
-    kind === "identifier" ||
-    kind === "type_identifier" ||
-    kind === "shorthand_property_identifier_pattern"
-  ) {
-    names.add(node.text());
-    return;
-  }
-
-  for (const child of node.children()) {
-    if (child.kind() === "property_identifier") continue;
-    if (child.kind() === "=") break;
-    collectBindingNames(child, names);
-  }
-}
-
-function firstDeclaratorChild(node: SgNode): SgNode | null {
-  return node.children().find((child) => child.kind() !== "=") ?? null;
-}
-
-function collectDirectBindingChildren(node: SgNode, names: Set<string>): void {
-  for (const child of node.children()) {
-    if (["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind())) {
-      collectBindingNames(child, names);
-    }
-  }
-}
-
-function localDeclarationNames(root: SgNode): Set<string> {
-  const names = new Set<string>();
-  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
-    const binding = firstDeclaratorChild(decl);
-    if (binding) collectBindingNames(binding, names);
-  }
-  for (const param of root.findAll({
-    rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
-  })) {
-    const binding = param
-      .children()
-      .find((child) =>
-        ["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind()),
-      );
-    if (binding) collectBindingNames(binding, names);
-  }
-  for (const decl of root.findAll({
-    rule: {
-      any: [
-        { kind: "function_declaration" },
-        { kind: "class_declaration" },
-        { kind: "class" },
-        { kind: "enum_declaration" },
-        { kind: "interface_declaration" },
-        { kind: "type_alias_declaration" },
-        { kind: "import_alias" },
-      ],
-    },
-  })) {
-    const name = decl
-      .children()
-      .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
-    if (name) names.add(name.text());
-  }
-  for (const catchClause of root.findAll({ rule: { kind: "catch_clause" } })) {
-    collectDirectBindingChildren(catchClause, names);
-  }
-  for (const arrow of root.findAll({ rule: { kind: "arrow_function" } })) {
-    const children = arrow.children();
-    const arrowIndex = children.findIndex((child) => child.kind() === "=>");
-    if (arrowIndex === -1) continue;
-    for (const child of children.slice(0, arrowIndex)) {
-      if (child.kind() === "=") break;
-      if (
-        ["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind())
-      ) {
-        collectBindingNames(child, names);
-      }
-    }
-  }
-  return names;
 }
 
 function hasRuntimeImportCollision(root: SgNode, imports: SgNode[]): boolean {
