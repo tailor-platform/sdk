@@ -113,3 +113,29 @@ re-exported by `plugin/types.ts`).
 - Types derived from schemas are generated into `src/types/*.generated.ts` by zinfer — no runtime dependency on zod
 - Hand-written shared types live in pure type modules, whose import closure contains no runtime modules at all, so even a bundler that resolves the full module graph finds nothing to include
 - See the `schema-types` rule for details
+
+## Code Generation and Derived-Data Safety
+
+The SDK generates JavaScript (script expressions, rewritten sources) and derives
+data (names, snapshots, caches) from user code. Failures in these paths must
+surface at build time with a clear message, never as silently wrong output.
+
+- Do not classify or transform function forms by matching regexes against
+  `Function.prototype.toString()` output; parse the source with `oxc-parser`
+  and decide from the AST.
+- Validate generated code at the generation boundary: parse every generated
+  script expression and every transformed source, and fail with the offending
+  generated code and parse errors when it does not parse. A construct that must
+  be rewritten during bundling must be detected when the rewrite could not be
+  applied — do not rely on a runtime stub that throws after deploy.
+- Enforce utility preconditions instead of assuming them (e.g. range-based
+  source editing must reject overlapping ranges rather than corrupt output).
+- When inserting a name derived from user configuration into a keyed record,
+  reject duplicates with a descriptive error; never rely on last-write-wins.
+  When adding a validation to one side of a symmetric pair (forward/backward
+  relationships, diff/drift comparison), add or verify the mirrored side.
+- When two code paths compare the same attribute set, derive both comparators
+  from a single attribute list and declare intentional exclusions explicitly,
+  so a newly added attribute cannot be silently skipped by one of them.
+- If a stored artifact records an integrity hash, verify the hash when reading
+  the artifact back; otherwise do not record it.
