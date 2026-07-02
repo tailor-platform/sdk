@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test, beforeEach, afterEach } from "vitest";
-import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "./diff-calculator";
+import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import {
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
@@ -17,6 +17,7 @@ import {
   migrationScriptExists,
   getMigrationScriptPath,
 } from "./template-generator";
+import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 
 describe("template-generator", () => {
   let tempDir: string;
@@ -38,21 +39,6 @@ describe("template-generator", () => {
       namespace,
       createdAt: new Date().toISOString(),
       types,
-    };
-  }
-
-  function createTestDiff(overrides: Partial<MigrationDiff> = {}): MigrationDiff {
-    return {
-      version: SCHEMA_SNAPSHOT_VERSION,
-      namespace: "tailordb",
-      createdAt: new Date().toISOString(),
-      changes: [],
-      hasBreakingChanges: false,
-      breakingChanges: [],
-      hasWarnings: false,
-      warnings: [],
-      requiresMigrationScript: false,
-      ...overrides,
     };
   }
 
@@ -140,7 +126,7 @@ describe("template-generator", () => {
     });
 
     test("should generate diff file without migration script for non-breaking changes", async () => {
-      const diff = createTestDiff({
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_added",
@@ -165,7 +151,7 @@ describe("template-generator", () => {
     });
 
     test("should generate diff file with migration script and db types for breaking changes", async () => {
-      const diff = createTestDiff({
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_added",
@@ -195,7 +181,7 @@ describe("template-generator", () => {
     });
 
     test("should include description in diff file if provided", async () => {
-      const diff = createTestDiff();
+      const diff = createMockMigrationDiff();
 
       const result = await generateDiffFiles(
         diff,
@@ -222,7 +208,7 @@ describe("template-generator", () => {
         },
       });
 
-      const diff = createTestDiff({
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_removed",
@@ -254,7 +240,7 @@ describe("template-generator", () => {
         },
       });
 
-      const diff = createTestDiff({
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_modified",
@@ -297,7 +283,7 @@ describe("template-generator", () => {
         },
       });
 
-      const diff = createTestDiff({
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_modified",
@@ -329,7 +315,7 @@ describe("template-generator", () => {
     });
 
     test("should throw error if diff file already exists", async () => {
-      const diff = createTestDiff();
+      const diff = createMockMigrationDiff();
 
       await generateDiffFiles(diff, tempDir, 1, previousSnapshot);
 
@@ -339,7 +325,7 @@ describe("template-generator", () => {
     });
 
     test("should throw error if migrate file already exists for breaking changes", async () => {
-      const diff = createTestDiff({
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_added",

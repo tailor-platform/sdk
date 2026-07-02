@@ -128,7 +128,7 @@ describe("planStaticWebsite", () => {
         label: appName,
       },
       updates: 0,
-      unchanged: 1,
+      unchangedNames: ["site-a"],
       unmanaged: 0,
       conflicts: 0,
     },
@@ -141,7 +141,7 @@ describe("planStaticWebsite", () => {
         label: appName,
       },
       updates: 1,
-      unchanged: 0,
+      unchangedNames: [],
       unmanaged: 0,
       conflicts: 0,
     },
@@ -153,7 +153,7 @@ describe("planStaticWebsite", () => {
         allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
       },
       updates: 1,
-      unchanged: 0,
+      unchangedNames: [],
       unmanaged: 1,
       conflicts: 0,
     },
@@ -166,18 +166,17 @@ describe("planStaticWebsite", () => {
         label: "other-app",
       },
       updates: 1,
-      unchanged: 0,
+      unchangedNames: [],
       unmanaged: 0,
       conflicts: 1,
     },
-  ])("$name", async ({ website, updates, unchanged, unmanaged, conflicts }) => {
+  ])("$name", async ({ website, updates, unchangedNames, unmanaged, conflicts }) => {
     const client = createMockClient([website]);
 
     const result = await planStaticWebsite(createContext(client));
 
     expect(result.changeSet.updates).toHaveLength(updates);
-    expect(result.changeSet.unchanged).toHaveLength(unchanged);
-    expect(result.changeSet.unchanged.at(0)?.name).toBe(unchanged > 0 ? "site-a" : undefined);
+    expect(result.changeSet.unchanged.map(({ name }) => name)).toEqual(unchangedNames);
     expect(result.unmanaged).toHaveLength(unmanaged);
     expect(result.conflicts).toHaveLength(conflicts);
   });

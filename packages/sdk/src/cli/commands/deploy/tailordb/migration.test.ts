@@ -10,6 +10,7 @@ import {
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
 } from "#/cli/commands/tailordb/migrate/snapshot";
+import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
 import { MIGRATION_LABEL_KEY } from "#/cli/commands/tailordb/migrate/types";
 import {
   detectPendingMigrations,
@@ -68,21 +69,6 @@ vi.mock("#/cli/shared/script-executor", () => ({
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_migrations_service__");
 
-function createMockDiff(options: Partial<MigrationDiff> = {}): MigrationDiff {
-  return {
-    version: SCHEMA_SNAPSHOT_VERSION,
-    namespace: "tailordb",
-    createdAt: new Date().toISOString(),
-    changes: [],
-    hasBreakingChanges: false,
-    breakingChanges: [],
-    hasWarnings: false,
-    warnings: [],
-    requiresMigrationScript: false,
-    ...options,
-  };
-}
-
 function createMockMigration(overrides: Partial<PendingMigration> = {}): PendingMigration {
   return {
     number: 1,
@@ -91,7 +77,7 @@ function createMockMigration(overrides: Partial<PendingMigration> = {}): Pending
     diffPath: "/path/0001/diff.json",
     namespace: "tailordb",
     migrationsDir: "/path",
-    diff: createMockDiff(),
+    diff: createMockMigrationDiff(),
     ...overrides,
   };
 }
@@ -256,7 +242,7 @@ describe("migration", () => {
 
     test("returns empty array when no pending migrations", async () => {
       const client = createMockClient({ tailordb: 1 });
-      writeDiffFile(testDir, 1, createMockDiff());
+      writeDiffFile(testDir, 1, createMockMigrationDiff());
 
       const namespacesWithMigrations: NamespaceWithMigrations[] = [
         { namespace: "tailordb", migrationsDir: testDir },
@@ -268,7 +254,7 @@ describe("migration", () => {
 
     test("detects single pending migration", async () => {
       const client = createMockClient({ tailordb: 0 });
-      writeDiffFile(testDir, 1, createMockDiff());
+      writeDiffFile(testDir, 1, createMockMigrationDiff());
 
       const namespacesWithMigrations: NamespaceWithMigrations[] = [
         { namespace: "tailordb", migrationsDir: testDir },
@@ -283,8 +269,8 @@ describe("migration", () => {
 
     test("detects multiple pending migrations", async () => {
       const client = createMockClient({ tailordb: 1 });
-      writeDiffFile(testDir, 2, createMockDiff());
-      writeDiffFile(testDir, 3, createMockDiff());
+      writeDiffFile(testDir, 2, createMockMigrationDiff());
+      writeDiffFile(testDir, 3, createMockMigrationDiff());
 
       const namespacesWithMigrations: NamespaceWithMigrations[] = [
         { namespace: "tailordb", migrationsDir: testDir },
@@ -322,7 +308,7 @@ describe("migration", () => {
       writeDiffFile(
         testDir,
         1,
-        createMockDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
       );
 
       const namespacesWithMigrations: NamespaceWithMigrations[] = [
@@ -343,7 +329,7 @@ describe("migration", () => {
       writeDiffFile(
         testDir,
         1,
-        createMockDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
       );
       writeMigrateFile(testDir, 1, "export async function main() {}");
 
@@ -362,10 +348,10 @@ describe("migration", () => {
       const client = createMockClient({ "namespace-a": 0, "namespace-b": 0 });
 
       // Create migrations in different order
-      writeDiffFile(testDir2, 2, createMockDiff({ namespace: "namespace-b" }));
-      writeDiffFile(testDir, 1, createMockDiff({ namespace: "namespace-a" }));
-      writeDiffFile(testDir2, 1, createMockDiff({ namespace: "namespace-b" }));
-      writeDiffFile(testDir, 2, createMockDiff({ namespace: "namespace-a" }));
+      writeDiffFile(testDir2, 2, createMockMigrationDiff({ namespace: "namespace-b" }));
+      writeDiffFile(testDir, 1, createMockMigrationDiff({ namespace: "namespace-a" }));
+      writeDiffFile(testDir2, 1, createMockMigrationDiff({ namespace: "namespace-b" }));
+      writeDiffFile(testDir, 2, createMockMigrationDiff({ namespace: "namespace-a" }));
 
       const namespacesWithMigrations: NamespaceWithMigrations[] = [
         { namespace: "namespace-b", migrationsDir: testDir2 },
@@ -489,12 +475,12 @@ describe("migration", () => {
         createMockMigration({
           number: 1,
           hasScript: true,
-          diff: createMockDiff({ hasWarnings: true, requiresMigrationScript: false }),
+          diff: createMockMigrationDiff({ hasWarnings: true, requiresMigrationScript: false }),
         }),
         createMockMigration({
           number: 2,
           hasScript: false,
-          diff: createMockDiff({ hasWarnings: true, requiresMigrationScript: false }),
+          diff: createMockMigrationDiff({ hasWarnings: true, requiresMigrationScript: false }),
         }),
       ];
 
@@ -512,17 +498,20 @@ describe("migration", () => {
         createMockMigration({
           number: 1,
           hasScript: true,
-          diff: createMockDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+          diff: createMockMigrationDiff({
+            hasBreakingChanges: true,
+            requiresMigrationScript: true,
+          }),
         }),
         createMockMigration({
           number: 2,
           hasScript: false,
-          diff: createMockDiff({ hasWarnings: true, requiresMigrationScript: false }),
+          diff: createMockMigrationDiff({ hasWarnings: true, requiresMigrationScript: false }),
         }),
         createMockMigration({
           number: 3,
           hasScript: true,
-          diff: createMockDiff({ hasWarnings: true, requiresMigrationScript: false }),
+          diff: createMockMigrationDiff({ hasWarnings: true, requiresMigrationScript: false }),
         }),
       ];
 

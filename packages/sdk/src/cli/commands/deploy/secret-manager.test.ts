@@ -677,13 +677,32 @@ describe("planSecretManager ignoreNullishValues", () => {
   });
 
   test.each([
-    ["undefined value on a secret missing from the platform", undefined, []],
-    ["undefined value on an existing secret", undefined, ["existing-secret"]],
-    ["null value on an existing secret", null, ["existing-secret"]],
-  ] satisfies Array<[string, string | null | undefined, string[]]>)(
-    "nullish secret (%s) is skipped, not created/updated/deleted",
-    async (_desc, value, existingSecrets) => {
-      const secretName = existingSecrets.length > 0 ? "existing-secret" : "missing-secret";
+    {
+      name: "undefined value on a secret missing from the platform",
+      value: undefined,
+      existingSecrets: [],
+      secretName: "missing-secret",
+    },
+    {
+      name: "undefined value on an existing secret",
+      value: undefined,
+      existingSecrets: ["existing-secret"],
+      secretName: "existing-secret",
+    },
+    {
+      name: "null value on an existing secret",
+      value: null,
+      existingSecrets: ["existing-secret"],
+      secretName: "existing-secret",
+    },
+  ] satisfies Array<{
+    name: string;
+    value: string | null | undefined;
+    existingSecrets: string[];
+    secretName: string;
+  }>)(
+    "nullish secret ($name) is skipped, not created/updated/deleted",
+    async ({ value, existingSecrets, secretName }) => {
       const client = createMockPlanClient(existingSecrets);
       const ctx = createPlanContext(client, [
         { vaultName: "my-vault", secrets: [{ name: secretName, value }] },

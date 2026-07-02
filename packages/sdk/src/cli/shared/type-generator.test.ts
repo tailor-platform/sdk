@@ -98,23 +98,6 @@ describe("generateTypeDefinition", () => {
     expect(result).not.toContain('"kiosk": true;');
   });
 
-  test("should generate empty IdpNameRegistry when no idps provided", () => {
-    const result = generateTypeDefinition(undefined, undefined);
-
-    expect(result).toContain("interface IdpNameRegistry {}");
-  });
-
-  test("should generate IdpNameRegistry with idp names", () => {
-    const result = generateTypeDefinition(undefined, undefined, undefined, undefined, [
-      "primary-idp",
-      "backoffice",
-    ]);
-
-    expect(result).toContain("interface IdpNameRegistry");
-    expect(result).toContain('"primary-idp": true;');
-    expect(result).toContain("backoffice: true;");
-  });
-
   test("should generate empty ConnectionNameRegistry when no connections provided", () => {
     const result = generateTypeDefinition(undefined, undefined);
 

@@ -1,47 +1,38 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import { ensureSecretDir, tightenSecretFilePermissions, writeSecretFile } from "./secret-file";
+import { tempCwd } from "./test-helpers/temp-cwd";
 
 const isWindows = process.platform === "win32";
 
-function useTempDir(prefix: string): { current: string } {
-  const holder = { current: "" };
-  beforeEach(() => {
-    holder.current = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-  });
-  afterEach(() => {
-    fs.rmSync(holder.current, { recursive: true, force: true });
-  });
-  return holder;
-}
-
 describe("writeSecretFile", () => {
-  const tempDir = useTempDir("tailor-secret-file-");
-
   test("writes content to the target path", () => {
-    const target = path.join(tempDir.current, "nested", "config.yaml");
+    using tempDir = tempCwd("tailor-secret-file-");
+    const target = path.join(tempDir.dir, "nested", "config.yaml");
     writeSecretFile(target, "token: abc");
     expect(fs.readFileSync(target, "utf-8")).toBe("token: abc");
   });
 
   test.skipIf(isWindows)("creates the parent directory with mode 0700", () => {
-    const target = path.join(tempDir.current, "child", "config.yaml");
+    using tempDir = tempCwd("tailor-secret-file-");
+    const target = path.join(tempDir.dir, "child", "config.yaml");
     writeSecretFile(target, "token: abc");
     const mode = fs.statSync(path.dirname(target)).mode & 0o777;
     expect(mode).toBe(0o700);
   });
 
   test.skipIf(isWindows)("creates the file with mode 0600", () => {
-    const target = path.join(tempDir.current, "config.yaml");
+    using tempDir = tempCwd("tailor-secret-file-");
+    const target = path.join(tempDir.dir, "config.yaml");
     writeSecretFile(target, "token: abc");
     const mode = fs.statSync(target).mode & 0o777;
     expect(mode).toBe(0o600);
   });
 
   test.skipIf(isWindows)("tightens permissions on existing world-readable files", () => {
-    const target = path.join(tempDir.current, "config.yaml");
+    using tempDir = tempCwd("tailor-secret-file-");
+    const target = path.join(tempDir.dir, "config.yaml");
     fs.writeFileSync(target, "old", { mode: 0o644 });
     fs.chmodSync(target, 0o644);
 
@@ -53,7 +44,8 @@ describe("writeSecretFile", () => {
   });
 
   test.skipIf(isWindows)("tightens permissions on existing world-readable directories", () => {
-    const dir = path.join(tempDir.current, "loose");
+    using tempDir = tempCwd("tailor-secret-file-");
+    const dir = path.join(tempDir.dir, "loose");
     fs.mkdirSync(dir, { mode: 0o755 });
     fs.chmodSync(dir, 0o755);
 
@@ -65,17 +57,17 @@ describe("writeSecretFile", () => {
 });
 
 describe("ensureSecretDir", () => {
-  const tempDir = useTempDir("tailor-secret-dir-");
-
   test.skipIf(isWindows)("creates a new directory with mode 0700", () => {
-    const dir = path.join(tempDir.current, "fresh");
+    using tempDir = tempCwd("tailor-secret-dir-");
+    const dir = path.join(tempDir.dir, "fresh");
     ensureSecretDir(dir);
     const mode = fs.statSync(dir).mode & 0o777;
     expect(mode).toBe(0o700);
   });
 
   test.skipIf(isWindows)("tightens permissions on existing directories", () => {
-    const dir = path.join(tempDir.current, "loose");
+    using tempDir = tempCwd("tailor-secret-dir-");
+    const dir = path.join(tempDir.dir, "loose");
     fs.mkdirSync(dir, { mode: 0o755 });
     fs.chmodSync(dir, 0o755);
 
@@ -86,17 +78,17 @@ describe("ensureSecretDir", () => {
   });
 
   test("is idempotent when the directory already has the correct mode", () => {
-    const dir = path.join(tempDir.current, "ok");
+    using tempDir = tempCwd("tailor-secret-dir-");
+    const dir = path.join(tempDir.dir, "ok");
     ensureSecretDir(dir);
     expect(() => ensureSecretDir(dir)).not.toThrow();
   });
 });
 
 describe("tightenSecretFilePermissions", () => {
-  const tempDir = useTempDir("tailor-tighten-");
-
   test.skipIf(isWindows)("tightens a world-readable file to 0600", () => {
-    const target = path.join(tempDir.current, "config.yaml");
+    using tempDir = tempCwd("tailor-tighten-");
+    const target = path.join(tempDir.dir, "config.yaml");
     fs.writeFileSync(target, "x", { mode: 0o644 });
     fs.chmodSync(target, 0o644);
 
@@ -106,7 +98,8 @@ describe("tightenSecretFilePermissions", () => {
   });
 
   test.skipIf(isWindows)("tightens the parent directory to 0700", () => {
-    const dir = path.join(tempDir.current, "loose");
+    using tempDir = tempCwd("tailor-tighten-");
+    const dir = path.join(tempDir.dir, "loose");
     fs.mkdirSync(dir, { mode: 0o755 });
     fs.chmodSync(dir, 0o755);
     const target = path.join(dir, "config.yaml");
@@ -118,13 +111,15 @@ describe("tightenSecretFilePermissions", () => {
   });
 
   test("does not throw when the file is missing", () => {
+    using tempDir = tempCwd("tailor-tighten-");
     expect(() =>
-      tightenSecretFilePermissions(path.join(tempDir.current, "does-not-exist.yaml")),
+      tightenSecretFilePermissions(path.join(tempDir.dir, "does-not-exist.yaml")),
     ).not.toThrow();
   });
 
   test.skipIf(isWindows)("is a no-op when the modes already match", () => {
-    const target = path.join(tempDir.current, "ok", "config.yaml");
+    using tempDir = tempCwd("tailor-tighten-");
+    const target = path.join(tempDir.dir, "ok", "config.yaml");
     fs.mkdirSync(path.dirname(target), { mode: 0o700 });
     fs.writeFileSync(target, "x", { mode: 0o600 });
     fs.chmodSync(target, 0o600);

@@ -9,6 +9,7 @@ import {
   type SchemaSnapshot,
   type SnapshotFieldConfig,
 } from "./snapshot";
+import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_db_types__");
 
@@ -48,23 +49,6 @@ function createMockSnapshot(
     namespace,
     createdAt: new Date().toISOString(),
     types: snapshotTypes,
-  };
-}
-
-function createMockDiff(
-  changes: MigrationDiff["changes"],
-  options: Partial<Pick<MigrationDiff, "hasBreakingChanges" | "requiresMigrationScript">> = {},
-): MigrationDiff {
-  return {
-    version: SCHEMA_SNAPSHOT_VERSION,
-    namespace: "tailordb",
-    createdAt: new Date().toISOString(),
-    changes,
-    hasBreakingChanges: options.hasBreakingChanges ?? false,
-    breakingChanges: [],
-    hasWarnings: false,
-    warnings: [],
-    requiresMigrationScript: options.requiresMigrationScript ?? false,
   };
 }
 
@@ -298,8 +282,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      const diff = createMockDiff(
-        [
+      const diff = createMockMigrationDiff({
+        changes: [
           {
             kind: "field_modified",
             typeName: "User",
@@ -308,8 +292,9 @@ describe("db-types-generator", () => {
             after: { type: "string", required: true },
           },
         ],
-        { hasBreakingChanges: true, requiresMigrationScript: true },
-      );
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
 
       const { content } = await generateContent(snapshot, 1, diff);
 
@@ -327,8 +312,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      const diff = createMockDiff(
-        [
+      const diff = createMockMigrationDiff({
+        changes: [
           {
             kind: "field_added",
             typeName: "User",
@@ -336,8 +321,9 @@ describe("db-types-generator", () => {
             after: { type: "string", required: true },
           },
         ],
-        { hasBreakingChanges: true, requiresMigrationScript: true },
-      );
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
 
       const { content } = await generateContent(snapshot, 1, diff);
 
@@ -357,8 +343,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      const diff = createMockDiff(
-        [
+      const diff = createMockMigrationDiff({
+        changes: [
           {
             kind: "field_modified",
             typeName: "User",
@@ -375,8 +361,9 @@ describe("db-types-generator", () => {
             },
           },
         ],
-        { hasBreakingChanges: true, requiresMigrationScript: true },
-      );
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
 
       const { content } = await generateContent(snapshot, 1, diff);
 
@@ -398,8 +385,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      const diff = createMockDiff(
-        [
+      const diff = createMockMigrationDiff({
+        changes: [
           {
             kind: "field_modified",
             typeName: "User",
@@ -416,8 +403,9 @@ describe("db-types-generator", () => {
             },
           },
         ],
-        { hasBreakingChanges: true, requiresMigrationScript: true },
-      );
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
 
       const { content } = await generateContent(snapshot, 1, diff);
 
@@ -438,8 +426,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      const diff = createMockDiff(
-        [
+      const diff = createMockMigrationDiff({
+        changes: [
           {
             kind: "field_modified",
             typeName: "User",
@@ -458,8 +446,9 @@ describe("db-types-generator", () => {
             },
           },
         ],
-        { hasBreakingChanges: true, requiresMigrationScript: true },
-      );
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
 
       const { content } = await generateContent(snapshot, 1, diff);
 

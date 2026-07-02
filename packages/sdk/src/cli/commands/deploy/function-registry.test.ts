@@ -254,19 +254,23 @@ describe("planFunctionRegistry", () => {
 
   describe("label ownership scenarios", () => {
     test.each([
-      ["function without label", [{ name: "resolver/ns/unmanaged", contentHash: "hash" }], false],
-      [
-        "function owned by different app",
-        [{ name: "resolver/ns/other", contentHash: "hash", label: "other-app" }],
-        true,
-      ],
-    ] as const)("%s is NOT deleted", async (_desc, existingFunctions, expectOwnerTracked) => {
+      {
+        name: "function without label",
+        existingFunctions: [{ name: "resolver/ns/unmanaged", contentHash: "hash" }],
+        resourceOwners: [],
+      },
+      {
+        name: "function owned by different app",
+        existingFunctions: [{ name: "resolver/ns/other", contentHash: "hash", label: "other-app" }],
+        resourceOwners: ["other-app"],
+      },
+    ] as const)("$name is NOT deleted", async ({ existingFunctions, resourceOwners }) => {
       const client = createMockClient([...existingFunctions]);
 
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
 
       expect(result.changeSet.deletes).toHaveLength(0);
-      expect(result.resourceOwners.has("other-app")).toBe(expectOwnerTracked);
+      expect([...result.resourceOwners]).toEqual(resourceOwners);
     });
 
     test("mixed ownership - only delete own functions", async () => {
