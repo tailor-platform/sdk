@@ -73,6 +73,10 @@ describe("WorkflowJob type constraints", () => {
     >();
 
     expectTypeOf<
+      WorkflowJobConfig<"test", { id: string } | null, { result: string }>["body"]
+    >().toEqualTypeOf<TypeLevelError<"Input cannot be null at the top level">>();
+
+    expectTypeOf<
       WorkflowJobConfig<"test", { id: string } | undefined, { result: string }>["body"]
     >().toEqualTypeOf<TypeLevelError<"Input cannot include undefined at the top level">>();
 

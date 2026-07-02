@@ -17,7 +17,17 @@ describe("defineWaitPoints", () => {
       TypeLevelError<"Payload cannot be null at the top level">
     >();
 
+    expectTypeOf<
+      ReturnType<typeof defineWaitPoint<{ id: string } | null, { ok: boolean }>>
+    >().toEqualTypeOf<TypeLevelError<"Payload cannot be null at the top level">>();
+
     expectTypeOf<ReturnType<typeof defineWaitPoint<undefined, undefined>>>().toEqualTypeOf<
+      TypeLevelError<"Result cannot be (or include) undefined (resolve callback must return a value)">
+    >();
+
+    expectTypeOf<
+      ReturnType<typeof defineWaitPoint<undefined, { ok: boolean } | undefined>>
+    >().toEqualTypeOf<
       TypeLevelError<"Result cannot be (or include) undefined (resolve callback must return a value)">
     >();
 
