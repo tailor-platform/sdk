@@ -419,4 +419,34 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
     }
     expect(JSON.stringify(result.error.issues)).toContain("unknownOption");
   });
+
+  test("rejects invalid TailorDB fields in userProfile.type", () => {
+    const typeWithInvalidField = brandValue(
+      {
+        ...userType,
+        fields: {
+          ...userType.fields,
+          unsupported: {
+            type: "unsupported",
+            metadata: {},
+          },
+        },
+      },
+      "tailordb-type",
+    );
+
+    const result = AuthConfigSchema.safeParse({
+      name: "my-auth",
+      userProfile: {
+        type: typeWithInvalidField,
+        usernameField: "email",
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("Expected AuthConfigSchema parsing to fail");
+    }
+    expect(JSON.stringify(result.error.issues)).toContain("unsupported");
+  });
 });
