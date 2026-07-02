@@ -109,7 +109,7 @@ describe("repository ERD preview workflow", () => {
     expect(content).toContain("Base ERD namespace '$NAMESPACE' not found");
     expect(content).toContain('diff_args=(--namespace "$NAMESPACE"');
     expect(content).toContain('diff_args+=(--base-html "$base_html")');
-    expect(content).toContain("pnpm exec tailor-sdk tailordb erd diff");
+    expect(content).toContain("pnpm exec tailor tailordb erd diff");
   });
 
   test("uploads artifacts with names matched by the sticky comment", () => {
