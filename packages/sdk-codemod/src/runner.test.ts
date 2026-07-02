@@ -1074,6 +1074,17 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "reexported-config.ts"),
+        [
+          'import { auth } from "../app-config";',
+          "",
+          "export async function run() {",
+          '  return auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "computed.ts"),
         [
           'import { auth } from "../tailor.config";',
@@ -1140,6 +1151,7 @@ describe("runCodemods", () => {
             "computed.ts",
             "default-import.ts",
             "destructure.ts",
+            "reexported-config.ts",
             "shadowed.ts",
           ],
           findings: [
@@ -1167,6 +1179,11 @@ describe("runCodemods", () => {
               file: "destructure.ts",
               line: 3,
               excerpt: "export const { getConnectionToken } = auth;",
+            }),
+            expect.objectContaining({
+              file: "reexported-config.ts",
+              line: 4,
+              excerpt: 'return auth.getConnectionToken("google");',
             }),
             expect.objectContaining({
               file: "shadowed.ts",

@@ -21,7 +21,7 @@ interface TokenCall {
 }
 
 function quickFilter(source: string): boolean {
-  return source.includes(GET_CONNECTION_TOKEN) && source.includes("tailor.config");
+  return source.includes(GET_CONNECTION_TOKEN);
 }
 
 function sourceLang(filePath: string, source: string): Lang {
@@ -168,6 +168,14 @@ function firstDeclaratorChild(node: SgNode): SgNode | null {
   return node.children().find((child) => child.kind() !== "=") ?? null;
 }
 
+function collectDirectBindingChildren(node: SgNode, names: Set<string>): void {
+  for (const child of node.children()) {
+    if (["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind())) {
+      collectBindingNames(child, names);
+    }
+  }
+}
+
 function localDeclarationNames(root: SgNode): Set<string> {
   const names = new Set<string>();
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
@@ -201,6 +209,22 @@ function localDeclarationNames(root: SgNode): Set<string> {
       .children()
       .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
     if (name) names.add(name.text());
+  }
+  for (const catchClause of root.findAll({ rule: { kind: "catch_clause" } })) {
+    collectDirectBindingChildren(catchClause, names);
+  }
+  for (const arrow of root.findAll({ rule: { kind: "arrow_function" } })) {
+    const children = arrow.children();
+    const arrowIndex = children.findIndex((child) => child.kind() === "=>");
+    if (arrowIndex === -1) continue;
+    for (const child of children.slice(0, arrowIndex)) {
+      if (child.kind() === "=") break;
+      if (
+        ["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind())
+      ) {
+        collectBindingNames(child, names);
+      }
+    }
   }
   return names;
 }
@@ -306,6 +330,25 @@ function buildAddRuntimeImportEdit(root: SgNode, source: string, imports: SgNode
   return { startPos: pos, endPos: pos, insertedText };
 }
 
+function lineStartIndex(source: string, index: number): number {
+  let pos = index;
+  while (pos > 0 && source[pos - 1] !== "\n" && source[pos - 1] !== "\r") pos--;
+  return pos;
+}
+
+function consumeLineBreak(source: string, index: number): number {
+  if (source[index] === "\r") return source[index + 1] === "\n" ? index + 2 : index + 1;
+  if (source[index] === "\n") return index + 1;
+  return index;
+}
+
+function isHorizontalWhitespace(source: string, start: number, end: number): boolean {
+  for (let index = start; index < end; index++) {
+    if (source[index] !== " " && source[index] !== "\t") return false;
+  }
+  return true;
+}
+
 function buildImportRemovalEdit(source: string, binding: AuthImport): Edit | null {
   const allSpecs = binding.importStmt.findAll({ rule: { kind: "import_specifier" } });
   if (allSpecs.length === 1) {
@@ -318,16 +361,28 @@ function buildImportRemovalEdit(source: string, binding: AuthImport): Edit | nul
   const range = binding.spec.range();
   let start = range.start.index;
   let end = range.end.index;
+  const specEnd = end;
   while (end < source.length && /[ \t]/.test(source[end]!)) end++;
   if (source[end] === ",") {
     end++;
     while (end < source.length && /[ \t]/.test(source[end]!)) end++;
+    const nextLine = consumeLineBreak(source, end);
+    const lineStart = lineStartIndex(source, start);
+    if (nextLine !== end && isHorizontalWhitespace(source, lineStart, start)) {
+      return { startPos: lineStart, endPos: nextLine, insertedText: "" };
+    }
     return { startPos: start, endPos: end, insertedText: "" };
+  }
+
+  const nextLine = consumeLineBreak(source, end);
+  const lineStart = lineStartIndex(source, start);
+  if (nextLine !== end && isHorizontalWhitespace(source, lineStart, start)) {
+    return { startPos: lineStart, endPos: nextLine, insertedText: "" };
   }
 
   while (start > 0 && /[ \t]/.test(source[start - 1]!)) start--;
   if (source[start - 1] === ",") start--;
-  return { startPos: start, endPos, insertedText: "" };
+  return { startPos: start, endPos: specEnd, insertedText: "" };
 }
 
 function applyEdits(source: string, edits: Edit[]): string {
