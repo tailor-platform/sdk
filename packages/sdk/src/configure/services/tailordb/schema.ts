@@ -95,8 +95,16 @@ type WithDBFieldCloneOptions<
   Defined extends DefinedDBFieldMetadata,
   NewOpt extends FieldOptions,
 > = Omit<Defined, "array"> & {
-  array: NewOpt extends { array: infer NewArray extends boolean } ? NewArray : Defined["array"];
+  array: DBFieldCloneArrayOption<Defined, NewOpt>;
 };
+type DBFieldCloneArrayOption<
+  Defined extends DefinedDBFieldMetadata,
+  NewOpt extends FieldOptions,
+> = NewOpt extends { array: false }
+  ? false
+  : NewOpt extends { array: true }
+    ? true
+    : Defined["array"];
 type DBFieldCloneFieldOptions<
   Defined extends DefinedDBFieldMetadata,
   Output,
@@ -107,7 +115,7 @@ type DBFieldCloneFieldOptions<
     : null extends Output
       ? true
       : false;
-  array: NewOpt extends { array: infer NewArray extends boolean } ? NewArray : Defined["array"];
+  array: DBFieldCloneArrayOption<Defined, NewOpt>;
 };
 type DBFieldCloneOutput<
   Defined extends DefinedDBFieldMetadata,

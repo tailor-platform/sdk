@@ -2200,6 +2200,21 @@ describe("TailorDBField clone tests", () => {
 
     const _indexed = clonedScalar.index();
   });
+
+  test("clone preserves array guards for dynamic array overrides", () => {
+    const maybeArray = true as boolean;
+    const clonedExistingArray = db.string({ array: true }).clone({ array: maybeArray });
+    const clonedExistingScalar = db.string().clone({ array: maybeArray });
+
+    expectTypeOf<output<typeof clonedExistingArray>>().toEqualTypeOf<string[]>();
+    expectTypeOf(clonedExistingArray.index).toEqualTypeOf<
+      TypeLevelError<"index cannot be set on array fields">
+    >();
+    expectTypeOf(clonedExistingArray.unique).toEqualTypeOf<
+      TypeLevelError<"unique cannot be set on array fields">
+    >();
+    expectTypeOf<output<typeof clonedExistingScalar>>().toEqualTypeOf<string>();
+  });
 });
 
 describe("TailorDBField decimal type tests", () => {
