@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { AuthConnectionConfigSchema } from "#/parser/service/auth-connection/index";
 import { TailorFieldSchema } from "#/parser/service/field/schema";
+import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
+import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import type { ValueOperand } from "#/configure/services/auth/types";
 
 export const AuthInvokerObjectSchema = z.strictObject({
@@ -197,21 +199,7 @@ export const TenantProviderSchema = z.strictObject({
 
 const UserProfileSchema = z.strictObject({
   namespace: z.string().optional().describe("TailorDB namespace where the user type is defined"),
-  // FIXME: improve TailorDBInstance schema validation
-  // strip unknown keys
-  type: z.object({
-    name: z.string(),
-    fields: z.any(),
-    metadata: z.any(),
-    hooks: z.any(),
-    validate: z.any(),
-    features: z.any(),
-    indexes: z.any(),
-    files: z.any(),
-    permission: z.any(),
-    gqlPermission: z.any(),
-    _output: z.any(),
-  }),
+  type: z.preprocess(stripTailorDBTypeBuilderHelpers, TailorDBTypeSchema),
   usernameField: z.string(),
   attributes: z.record(z.string(), z.literal(true)).optional(),
   attributeList: z.array(z.string()).optional(),

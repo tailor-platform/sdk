@@ -1,6 +1,7 @@
 import { describe, expectTypeOf, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/type";
+import { brandValue } from "#/utils/brand";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
 import type { AuthServiceInput } from "#/configure/services/auth/types";
 import type { OptionalKeysOf } from "type-fest";
@@ -376,5 +377,46 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
 
     const result = AuthConfigSchema.parse(config);
     expect(result.userProfile?.namespace).toBe("external-ns");
+  });
+
+  test("strips TailorDB type builder helpers from userProfile.type", () => {
+    const result = AuthConfigSchema.parse({
+      name: "my-auth",
+      userProfile: {
+        type: userType,
+        usernameField: "email",
+      },
+    });
+
+    expect(result.userProfile?.type).toMatchObject({
+      name: "User",
+      fields: expect.any(Object),
+    });
+    expect(result.userProfile?.type).not.toHaveProperty("hooks");
+    expect(result.userProfile?.type).not.toHaveProperty("_output");
+  });
+
+  test("rejects unknown userProfile.type keys after stripping TailorDB builder helpers", () => {
+    const typeWithUnknownKey = brandValue(
+      {
+        ...userType,
+        unknownOption: true,
+      },
+      "tailordb-type",
+    );
+
+    const result = AuthConfigSchema.safeParse({
+      name: "my-auth",
+      userProfile: {
+        type: typeWithUnknownKey,
+        usernameField: "email",
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("Expected AuthConfigSchema parsing to fail");
+    }
+    expect(JSON.stringify(result.error.issues)).toContain("unknownOption");
   });
 });
