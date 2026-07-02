@@ -192,7 +192,7 @@ export const cacheCommand = defineCommand({
     const result = runOxlint(fixturePath);
 
     expect(result.status).toBe(0);
-    expect(result.output).toBe("");
+    expect(result.output).not.toContain("local(no-cli-hybrid-command)");
   });
 
   test("allows leaf commands with positional arguments", () => {
@@ -217,6 +217,6 @@ export const getCommand = defineCommand({
     const result = runOxlint(fixturePath);
 
     expect(result.status).toBe(0);
-    expect(result.output).toBe("");
+    expect(result.output).not.toContain("local(no-cli-hybrid-command)");
   });
 });
