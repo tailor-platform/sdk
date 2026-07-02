@@ -5,6 +5,13 @@ import type { TailorPrincipal } from "#/runtime/types";
 import type { output } from "#/types/helpers";
 import type { AllowedValues } from "./field";
 
+type DateString = `${number}-${number}-${number}`;
+type TimeString = `${number}:${number}`;
+type TimeZoneOffsetString = "Z" | "z" | `${"+" | "-"}${TimeString}`;
+type DateTimeString =
+  `${DateString}${"T" | "t"}${TimeString}:${number}${"" | `.${number}`}${TimeZoneOffsetString}`;
+type UUIDString = `${string}-${string}-${string}-${string}-${string}`;
+
 describe("TailorType basic field type tests", () => {
   test("string field outputs string type correctly", () => {
     const _stringType = t.object({
@@ -42,39 +49,39 @@ describe("TailorType basic field type tests", () => {
     }>();
   });
 
-  test("uuid field outputs string type correctly", () => {
+  test("uuid field outputs UUID string type correctly", () => {
     const _uuidType = t.object({
       id: t.uuid(),
     });
     expectTypeOf<output<typeof _uuidType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
     }>();
   });
 
-  test("date field outputs string type correctly", () => {
+  test("date field outputs date string type correctly", () => {
     const _dateType = t.object({
       birthDate: t.date(),
     });
     expectTypeOf<output<typeof _dateType>>().toEqualTypeOf<{
-      birthDate: string;
+      birthDate: DateString;
     }>();
   });
 
-  test("datetime field outputs string | Date type correctly", () => {
+  test("datetime field outputs datetime string | Date type correctly", () => {
     const _datetimeType = t.object({
       createdAt: t.datetime(),
     });
     expectTypeOf<output<typeof _datetimeType>>().toEqualTypeOf<{
-      createdAt: string | Date;
+      createdAt: DateTimeString | Date;
     }>();
   });
 
-  test("time field outputs string type correctly", () => {
+  test("time field outputs time string type correctly", () => {
     const _timeType = t.object({
       openingTime: t.time(),
     });
     expectTypeOf<output<typeof _timeType>>().toEqualTypeOf<{
-      openingTime: string;
+      openingTime: TimeString;
     }>();
   });
 });
@@ -227,7 +234,7 @@ describe("TailorType composite type tests", () => {
       role: t.enum(["admin", "user", "guest"]),
     });
     expectTypeOf<output<typeof _complexType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       name: string;
       email: string;
       age?: number | null;
@@ -403,7 +410,7 @@ describe("t.object tests", () => {
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
       items: {
-        id: string;
+        id: UUIDString;
         name: string;
       }[];
     }>();
@@ -422,7 +429,7 @@ describe("t.object tests", () => {
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
       optionalItems?:
         | {
-            id: string;
+            id: UUIDString;
             value?: string | null;
           }[]
         | null;
@@ -602,27 +609,60 @@ describe("TailorField runtime validation tests", () => {
           'Expected to match "yyyy-MM-dd" format: received 2025/12/21',
         );
       }
+
+      {
+        const result = t.date().parse({ value: "2025-02-30", data, user });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          'Expected to match "yyyy-MM-dd" format: received 2025-02-30',
+        );
+      }
     });
 
     test("validates datetime format", () => {
-      {
-        const result = t.datetime().parse({
-          value: "2025-12-21T10:11:12.123Z",
-          data,
-          invoker,
-        });
+      for (const value of [
+        "2025-12-21T10:11:12Z",
+        "2025-12-21T10:11:12.123456Z",
+        "2025-12-21T10:11:12+09:00",
+        "2025-12-21t10:11:12-08:00",
+      ]) {
+        const result = t.datetime().parse({ value, data, invoker });
         expect(result.issues).toBeUndefined();
         if (result.issues) {
           throw new Error("Unexpected issues");
         }
-        expect(result.value).toBe("2025-12-21T10:11:12.123Z");
+        expect(result.value).toBe(value);
       }
 
       {
-        const result = t.datetime().parse({ value: "2025-12-21 10:11:12", data, invoker });
+        const result = t.datetime().parse({
+          value: "2025-12-21T10:11:12+0900",
+          data,
+          invoker,
+        });
         expect(result.issues).toBeDefined();
         expect(result.issues?.[0]?.message).toEqual(
-          "Expected to match ISO format: received 2025-12-21 10:11:12",
+          "Expected to match ISO format: received 2025-12-21T10:11:12+0900",
+        );
+      }
+
+      {
+        const result = t.datetime().parse({ value: "2025-12-21T25:11:12Z", data, invoker });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Expected to match ISO format: received 2025-12-21T25:11:12Z",
+        );
+      }
+
+      {
+        const result = t.datetime().parse({
+          value: "2025-12-21T10:11:12+24:00",
+          data,
+          invoker,
+        });
+        expect(result.issues).toBeDefined();
+        expect(result.issues?.[0]?.message).toEqual(
+          "Expected to match ISO format: received 2025-12-21T10:11:12+24:00",
         );
       }
     });
