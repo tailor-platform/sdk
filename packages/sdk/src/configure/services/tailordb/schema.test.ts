@@ -127,6 +127,22 @@ describe("TailorDBField basic field type tests", () => {
     }>();
   });
 
+  test("pickFields recomputes enum and nested object output from the base field type", () => {
+    const _schemaType = t.object({
+      ...db
+        .type("Test", {
+          status: db.enum(["active", "inactive"], { array: true }),
+          profile: db.object({ name: db.string() }, { array: true }),
+        })
+        .pickFields(["status", "profile"], { array: false }),
+    });
+
+    expectTypeOf<output<typeof _schemaType>>().toEqualTypeOf<{
+      status: "active" | "inactive";
+      profile: { name: string };
+    }>();
+  });
+
   test("pickFields preserves existing options that are not overridden", () => {
     const _schemaType = t.object({
       ...db
@@ -2152,6 +2168,14 @@ describe("TailorDBField clone tests", () => {
     const clonedRequiredArray = db
       .string({ optional: true, array: true })
       .clone({ optional: false });
+    const clonedEnumArray = db.enum(["active", "inactive"], { array: true }).clone();
+    const clonedEnumScalar = db.enum(["active", "inactive"], { array: true }).clone({
+      array: false,
+    });
+    const clonedObjectArray = db.object({ name: db.string() }, { array: true }).clone();
+    const clonedObjectScalar = db.object({ name: db.string() }, { array: true }).clone({
+      array: false,
+    });
 
     expectTypeOf<output<typeof clonedArray>>().not.toBeAny();
     expectTypeOf<output<typeof clonedScalar>>().not.toBeAny();
@@ -2159,12 +2183,20 @@ describe("TailorDBField clone tests", () => {
     expectTypeOf<output<typeof clonedUnchanged>>().not.toBeAny();
     expectTypeOf<output<typeof clonedOptionalArray>>().not.toBeAny();
     expectTypeOf<output<typeof clonedRequiredArray>>().not.toBeAny();
+    expectTypeOf<output<typeof clonedEnumArray>>().not.toBeAny();
+    expectTypeOf<output<typeof clonedEnumScalar>>().not.toBeAny();
+    expectTypeOf<output<typeof clonedObjectArray>>().not.toBeAny();
+    expectTypeOf<output<typeof clonedObjectScalar>>().not.toBeAny();
     expectTypeOf<output<typeof clonedArray>>().toEqualTypeOf<string[]>();
     expectTypeOf<output<typeof clonedScalar>>().toEqualTypeOf<string>();
     expectTypeOf<output<typeof clonedRequired>>().toEqualTypeOf<string>();
     expectTypeOf<output<typeof clonedUnchanged>>().toEqualTypeOf<string[] | null>();
     expectTypeOf<output<typeof clonedOptionalArray>>().toEqualTypeOf<string[] | null>();
     expectTypeOf<output<typeof clonedRequiredArray>>().toEqualTypeOf<string[]>();
+    expectTypeOf<output<typeof clonedEnumArray>>().toEqualTypeOf<("active" | "inactive")[]>();
+    expectTypeOf<output<typeof clonedEnumScalar>>().toEqualTypeOf<"active" | "inactive">();
+    expectTypeOf<output<typeof clonedObjectArray>>().toEqualTypeOf<{ name: string }[]>();
+    expectTypeOf<output<typeof clonedObjectScalar>>().toEqualTypeOf<{ name: string }>();
 
     const _indexed = clonedScalar.index();
   });

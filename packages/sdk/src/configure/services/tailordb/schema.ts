@@ -998,7 +998,8 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   options?: Opt,
 ): TailorDBField<
   { type: "enum"; array: Opt extends { array: true } ? true : false },
-  FieldOutput<AllowedValuesOutput<V>, Opt>
+  FieldOutput<AllowedValuesOutput<V>, Opt>,
+  AllowedValuesOutput<V>
 > {
   return createField<"enum", Opt, AllowedValuesOutput<V>>("enum", options, undefined, values);
 }
@@ -1017,7 +1018,8 @@ function object<
 >(fields: F, options?: Opt) {
   return createField("nested", options, fields) as unknown as TailorDBField<
     { type: "nested"; array: Opt extends { array: true } ? true : false },
-    FieldOutput<InferFieldsOutput<F>, Opt>
+    FieldOutput<InferFieldsOutput<F>, Opt>,
+    InferFieldsOutput<F>
   >;
 }
 
