@@ -1,5 +1,32 @@
 # @tailor-platform/sdk
 
+## 1.73.0
+### Minor Changes
+
+
+
+- [#1625](https://github.com/tailor-platform/sdk/pull/1625) [`0f23f78`](https://github.com/tailor-platform/sdk/commit/0f23f78c1bef92f2b72436c75da677795b61165d) Thanks [@toiroakr](https://github.com/toiroakr)! - Add a runtime wrapper for AI Gateway. Resolvers, executors, and workflow jobs can now resolve an AI Gateway's platform-assigned URL by name via `aigateway.get(name)` (imported from `@tailor-platform/sdk/runtime`), instead of using the raw `tailor.aigateway.get(...)` global. Use `mockAigateway()` from `@tailor-platform/sdk/vitest` to mock it in unit tests.
+  
+  The gateway name is type-checked and autocompleted against the AI Gateways defined via `defineAIGateway()`, once `tailor.d.ts` has been generated (via `tailor-sdk deploy`/`generate`), mirroring the existing `MachineUserNameRegistry`/`IdpNameRegistry`/`ConnectionNameRegistry` pattern.
+
+
+- [#1608](https://github.com/tailor-platform/sdk/pull/1608) [`89a29a2`](https://github.com/tailor-platform/sdk/commit/89a29a2700f69d27cc27816a02cb7abcc6c731d4) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `workflow.resumeWorkflow(executionId)` to `@tailor-platform/sdk/runtime` for resuming a failed or pending-retry workflow execution from user code. `mockWorkflow()` in `@tailor-platform/sdk/vitest` gains a matching `resumeWorkflow` `vi.fn` and `setResumeHandler` helper for tests.
+
+
+### Patch Changes
+
+
+
+- [#1613](https://github.com/tailor-platform/sdk/pull/1613) [`4b3d7c6`](https://github.com/tailor-platform/sdk/commit/4b3d7c613641aef694a9a11794a153434244a90a) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: deduplicate existing-resource fetching in the deploy command. No user-facing behavior change.
+
+
+
+- [#1615](https://github.com/tailor-platform/sdk/pull/1615) [`5e1023c`](https://github.com/tailor-platform/sdk/commit/5e1023c4fca7e2b5b2251b7f44aa3de5d42da716) Thanks [@dqn](https://github.com/dqn)! - Include the HTTP status, status text, and response body when a machine user token request fails, instead of a fixed generic message.
+
+
+
+- [#1611](https://github.com/tailor-platform/sdk/pull/1611) [`ce51a97`](https://github.com/tailor-platform/sdk/commit/ce51a970ac3887ffd379005459fa6ad21ff9fe53) Thanks [@dqn](https://github.com/dqn)! - Ship unbundled type declarations so each `.d.mts` mirrors the source layout with real identifier names, instead of hashed chunks with minified aliases. JavaScript output stays bundled and the public API is unchanged.
+
 ## 1.72.0
 ### Minor Changes
 
