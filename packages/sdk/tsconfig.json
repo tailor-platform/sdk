@@ -15,6 +15,7 @@
     "./scripts/**/*.ts",
     "./eslint-rules/**/*.ts",
     "./e2e/**/*.ts",
+    "./knip.ts",
     "./tsdown.config.ts",
     "./vitest.config.ts",
     "./zinfer.config.ts"

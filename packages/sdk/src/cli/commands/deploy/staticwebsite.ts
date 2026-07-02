@@ -152,7 +152,6 @@ export async function planStaticWebsite(context: PlanContext) {
 
   const existingWebsites = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, pageSize) => {
       const { staticwebsites, nextPageToken } = await client.listStaticWebsites({
         workspaceId,
@@ -162,7 +161,7 @@ export async function planStaticWebsite(context: PlanContext) {
       return [staticwebsites, nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "staticwebsite", name),
+    getTrn: (name) => resourceTrn(workspaceId, "staticwebsite", name),
   });
 
   // Track owned website names to plan custom domains afterward

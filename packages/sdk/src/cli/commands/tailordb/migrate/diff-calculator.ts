@@ -46,6 +46,13 @@ export interface TypeSettingsPatch {
   files?: Record<string, string>;
 }
 
+/** Type-level settings and metadata state used by current diffs. */
+export interface SnapshotTypeSettingsState {
+  description?: string;
+  pluralForm: string;
+  settings?: TailorDBSnapshotType["settings"];
+}
+
 /**
  * Permission state carried by `permission_modified` changes.
  */
@@ -75,6 +82,13 @@ export interface TypeModifiedChange extends DiffChangeBase {
   kind: "type_modified";
   before?: TypeSettingsPatch;
   after?: TypeSettingsPatch;
+}
+
+/** Type-level settings or metadata changed. */
+export interface TypeSettingsModifiedChange extends DiffChangeBase {
+  kind: "type_settings_modified";
+  before: SnapshotTypeSettingsState;
+  after: SnapshotTypeSettingsState;
 }
 
 /** A field was added to a type. */
@@ -191,6 +205,7 @@ export type DiffChange =
   | TypeAddedChange
   | TypeRemovedChange
   | TypeModifiedChange
+  | TypeSettingsModifiedChange
   | FieldAddedChange
   | FieldRemovedChange
   | FieldModifiedChange
@@ -313,6 +328,8 @@ function formatDiffChange(change: DiffChange): string {
       return `  - [Type] ${change.typeName} (removed)`;
     case "type_modified":
       return `  ~ [Type] ${change.typeName}: ${change.reason}`;
+    case "type_settings_modified":
+      return `  ~ [Type Settings] ${change.typeName}: ${change.reason ?? "settings changed"}`;
     case "field_added": {
       const typeStr = formatFieldType(change.after);
       return `  + ${change.fieldName}: ${typeStr}`;
@@ -471,6 +488,7 @@ const DIFF_CHANGE_LABELS: Record<DiffChangeKind, string> = {
   type_added: "type(s) added",
   type_removed: "type(s) removed",
   type_modified: "type(s) modified",
+  type_settings_modified: "type setting(s) modified",
   field_added: "field(s) added",
   field_removed: "field(s) removed",
   field_modified: "field(s) modified",
