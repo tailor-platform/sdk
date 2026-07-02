@@ -4,6 +4,7 @@ import { t } from "#/configure/types/type";
 import { brandValue } from "#/utils/brand";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
 import type { AuthServiceInput } from "#/configure/services/auth/types";
+import type { TailorDBInstance } from "#/configure/services/tailordb/types";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
 
@@ -29,6 +30,7 @@ type AuthInput = AuthServiceInput<typeof userType, Attributes, AttributeList, "a
 
 type MachineUserConfig = NonNullable<AuthInput["machineUsers"]>["admin"];
 type AuthSchemaInput = Omit<z.input<typeof AuthConfigSchema>, "name">;
+type IsUnknown<T> = unknown extends T ? ([keyof T] extends [never] ? true : false) : false;
 
 describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
   test("aligns top-level keys and optionality with the schema", () => {
@@ -61,6 +63,8 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     type AlignedSchemaAttributes = Pick<SchemaAttributes, keyof ServiceAttributes>;
 
     expectTypeOf<ServiceAttributes>().toMatchObjectType<AlignedSchemaAttributes>();
+    expectTypeOf<IsUnknown<SchemaUserProfile["type"]>>().toEqualTypeOf<false>();
+    expectTypeOf<SchemaUserProfile["type"]>().toExtend<TailorDBInstance>();
     expectTypeOf<ServiceUserProfile["type"]>().toExtend<SchemaUserProfile["type"]>();
     expectTypeOf<ServiceUserProfile["usernameField"]>().toExtend<
       SchemaUserProfile["usernameField"]
@@ -396,7 +400,24 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
     expect(result.userProfile?.type).not.toHaveProperty("_output");
   });
 
-  test("rejects unknown userProfile.type keys after stripping TailorDB builder helpers", () => {
+  test("strips TailorDB type builder helpers from unbranded userProfile.type copies", () => {
+    const result = AuthConfigSchema.parse({
+      name: "my-auth",
+      userProfile: {
+        type: { ...userType },
+        usernameField: "email",
+      },
+    });
+
+    expect(result.userProfile?.type).toMatchObject({
+      name: "User",
+      fields: expect.any(Object),
+    });
+    expect(result.userProfile?.type).not.toHaveProperty("hooks");
+    expect(result.userProfile?.type).not.toHaveProperty("_output");
+  });
+
+  test("omits unknown outer userProfile.type keys with TailorDB builder helpers", () => {
     const typeWithUnknownKey = brandValue(
       {
         ...userType,
@@ -405,7 +426,7 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
       "tailordb-type",
     );
 
-    const result = AuthConfigSchema.safeParse({
+    const result = AuthConfigSchema.parse({
       name: "my-auth",
       userProfile: {
         type: typeWithUnknownKey,
@@ -413,11 +434,7 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
       },
     });
 
-    expect(result.success).toBe(false);
-    if (result.success) {
-      throw new Error("Expected AuthConfigSchema parsing to fail");
-    }
-    expect(JSON.stringify(result.error.issues)).toContain("unknownOption");
+    expect(result.userProfile?.type).not.toHaveProperty("unknownOption");
   });
 
   test("rejects invalid TailorDB fields in userProfile.type", () => {
