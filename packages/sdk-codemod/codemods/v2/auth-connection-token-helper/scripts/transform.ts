@@ -6,6 +6,7 @@ const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const AUTHCONNECTION = "authconnection";
 const GET_CONNECTION_TOKEN = "getConnectionToken";
 const SOURCE_FILE_EXTENSIONS = new Set([".tsx", ".jsx"]);
+const JS_FILE_EXTENSIONS = new Set([".js", ".mjs", ".cjs"]);
 const REFERENCE_KINDS = new Set([
   "identifier",
   "shorthand_property_identifier",
@@ -44,8 +45,12 @@ function sourceLang(filePath: string, source: string): Lang {
   const lower = filePath.toLowerCase();
   const extension = lower.slice(lower.lastIndexOf("."));
   if (SOURCE_FILE_EXTENSIONS.has(extension)) return Lang.Tsx;
-  if ([".js", ".mjs", ".cjs"].includes(extension) && source.includes("</")) return Lang.Tsx;
+  if (JS_FILE_EXTENSIONS.has(extension) && hasJsxSyntax(source)) return Lang.Tsx;
   return Lang.TypeScript;
+}
+
+function hasJsxSyntax(source: string): boolean {
+  return /<\/[A-Za-z][\w.$:-]*\s*>|<[A-Za-z][\w.$:-]*(?:\s[^<>]*)?\/>/.test(source);
 }
 
 function stringValue(node: SgNode | null): string | null {
