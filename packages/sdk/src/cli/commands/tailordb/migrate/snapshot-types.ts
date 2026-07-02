@@ -220,6 +220,9 @@ export interface TailorDBSnapshotType {
   };
 }
 
+export type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;
+export type SnapshotGqlOperations = NonNullable<SnapshotSettings["gqlOperations"]>;
+
 /**
  * Schema snapshot - full schema state at a point in time.
  * Stored as XXXX/schema.json. Defined here (leaf module) so that
