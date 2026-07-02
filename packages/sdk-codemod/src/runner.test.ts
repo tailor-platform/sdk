@@ -1343,6 +1343,17 @@ describe("runCodemods", () => {
           "",
         ].join("\n"),
       );
+      await fs.promises.writeFile(
+        path.join(dir, "parameter-destructure.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "export function run({ getConnectionToken } = auth) {",
+          '  return getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
 
       using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
@@ -1372,6 +1383,7 @@ describe("runCodemods", () => {
             "namespace-import.ts",
             "namespace-member-alias.ts",
             "non-call.ts",
+            "parameter-destructure.ts",
             "type-collision.ts",
             "wrapped-collision.ts",
             "wrapped-destructure.ts",
@@ -1474,6 +1486,11 @@ describe("runCodemods", () => {
             expect.objectContaining({
               file: "non-call.ts",
               excerpt: "export const tokenGetter = auth.getConnectionToken;",
+            }),
+            expect.objectContaining({
+              file: "parameter-destructure.ts",
+              line: 3,
+              excerpt: "export function run({ getConnectionToken } = auth) {",
             }),
             expect.objectContaining({
               file: "type-collision.ts",
