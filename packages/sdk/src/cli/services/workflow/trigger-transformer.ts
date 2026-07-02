@@ -46,6 +46,19 @@ function buildNormalizerHelperSource(authNamespace: string): string {
 }
 
 /**
+ * Extract the source text of a call argument, if present.
+ * @param arg - Argument node, possibly absent
+ * @param sourceText - Source code text
+ * @returns Source text of the argument, or undefined when absent
+ */
+function argumentSourceText(arg: unknown, sourceText: string): string | undefined {
+  if (arg && typeof arg === "object" && "start" in arg && "end" in arg) {
+    return sourceText.slice(arg.start as number, arg.end as number);
+  }
+  return undefined;
+}
+
+/**
  * Check if an AST binding pattern (parameter, catch clause, etc.) contains an Identifier with the given name.
  * @param node - AST node to inspect
  * @param name - Identifier name to look for
@@ -257,31 +270,10 @@ function detectExtendedTriggerCalls(
           const isWorkflow = workflowNames.has(identifierName);
           const isJob = jobNames.has(identifierName);
           if (isWorkflow || isJob) {
-            const argCount = callExpr.arguments.length;
-
-            let argsText = "";
-            if (argCount > 0) {
-              const firstArg = callExpr.arguments[0];
-              // callee may be a ComputedMemberExpression at runtime
-              // oxlint-disable-next-line typescript/no-unnecessary-condition
-              if (firstArg && "start" in firstArg && "end" in firstArg) {
-                argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
-              }
-            }
+            const argsText = argumentSourceText(callExpr.arguments[0], sourceText) ?? "";
 
             if (isWorkflow) {
-              let optionsText: string | undefined;
-              if (argCount >= 2) {
-                const secondArg = callExpr.arguments[1];
-                // callee may be a ComputedMemberExpression at runtime
-                // oxlint-disable-next-line typescript/no-unnecessary-condition
-                if (secondArg && "start" in secondArg && "end" in secondArg) {
-                  optionsText = sourceText.slice(
-                    secondArg.start as number,
-                    secondArg.end as number,
-                  );
-                }
-              }
+              const optionsText = argumentSourceText(callExpr.arguments[1], sourceText);
               calls.push({
                 kind: "workflow",
                 identifierName,
