@@ -1275,6 +1275,15 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "defaulted-destructure.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "export const { getConnectionToken = fallback } = auth;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "non-call.ts"),
         [
           'import { auth } from "../tailor.config";',
@@ -1312,6 +1321,7 @@ describe("runCodemods", () => {
             "computed-destructure.ts",
             "computed.ts",
             "default-import.ts",
+            "defaulted-destructure.ts",
             "destructure.ts",
             "import-equals-collision.ts",
             "namespace-computed.ts",
@@ -1367,6 +1377,11 @@ describe("runCodemods", () => {
               file: "default-import.ts",
               line: 4,
               excerpt: 'return config.auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "defaulted-destructure.ts",
+              line: 3,
+              excerpt: "export const { getConnectionToken = fallback } = auth;",
             }),
             expect.objectContaining({
               file: "destructure.ts",

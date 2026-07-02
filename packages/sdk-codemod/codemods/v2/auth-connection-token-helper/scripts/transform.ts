@@ -931,9 +931,21 @@ function objectPatternHasGetConnectionToken(pattern: SgNode): boolean {
       return true;
     }
 
+    if (child.kind() === "object_assignment_pattern") {
+      return objectAssignmentPatternKeyName(child) === GET_CONNECTION_TOKEN;
+    }
+
     if (child.kind() !== "pair_pattern") return false;
     return pairPatternKeyName(child) === GET_CONNECTION_TOKEN;
   });
+}
+
+function objectAssignmentPatternKeyName(pattern: SgNode): string | null {
+  for (const child of pattern.children()) {
+    if (child.kind() === "=") return null;
+    if (child.kind() === "shorthand_property_identifier_pattern") return child.text();
+  }
+  return null;
 }
 
 function pairPatternKeyName(pair: SgNode): string | null {
