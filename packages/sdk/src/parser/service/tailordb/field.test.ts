@@ -9,14 +9,14 @@ const expectValidIife = (normalized: string, args: string) => {
 };
 
 describe("stringifyFunction", () => {
-  test("converts method shorthand to a function expression", () => {
+  test("converts method shorthand to an anonymous function expression", () => {
     const obj = {
       create() {
         return 1;
       },
     };
     const result = stringifyFunction(obj.create);
-    expect(result.startsWith("function create(")).toBe(true);
+    expect(result.startsWith("function (")).toBe(true);
     expectValidIife(result, "{}");
   });
 
@@ -27,7 +27,7 @@ describe("stringifyFunction", () => {
       },
     };
     const result = stringifyFunction(obj.create);
-    expect(result.startsWith("function create(")).toBe(true);
+    expect(result.startsWith("function (")).toBe(true);
     expectValidIife(result, "{}");
   });
 
@@ -38,7 +38,7 @@ describe("stringifyFunction", () => {
       },
     };
     const result = stringifyFunction(obj.create);
-    expect(result.startsWith("async function create(")).toBe(true);
+    expect(result.startsWith("async function (")).toBe(true);
     expectValidIife(result, "{}");
   });
 
@@ -49,7 +49,7 @@ describe("stringifyFunction", () => {
       },
     };
     const result = stringifyFunction(obj.create);
-    expect(result.startsWith("async function create(")).toBe(true);
+    expect(result.startsWith("async function (")).toBe(true);
     expectValidIife(result, "{}");
   });
 
@@ -60,8 +60,25 @@ describe("stringifyFunction", () => {
       },
     };
     const result = stringifyFunction(obj.create);
-    expect(result.startsWith("function* create(")).toBe(true);
+    expect(result.startsWith("function* (")).toBe(true);
     expectValidIife(result, "{}");
+  });
+
+  test("does not shadow an outer variable that shares the method's name", () => {
+    const create = (v: number) => v * 100;
+    const obj = {
+      // `new Function("create", ...)` below re-supplies `create` as a free
+      // variable at call time; this local `create` only satisfies the type
+      // checker for the reference inside the method body.
+      create({ value }: { value: number }) {
+        return [value].map((v) => create(v))[0];
+      },
+    };
+    const result = stringifyFunction(obj.create);
+    const fn = new Function("create", `return (${result})`)(create) as (args: {
+      value: number;
+    }) => number;
+    expect(fn({ value: 1 })).toBe(100);
   });
 
   test("leaves computed-key method shorthand unchanged (no misnamed function)", () => {

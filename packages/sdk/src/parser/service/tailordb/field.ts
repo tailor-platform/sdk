@@ -35,9 +35,11 @@ const firstObjectProperty = (wrapped: string) => {
 /**
  * Convert a function to a string representation.
  * Handles method shorthand syntax (e.g., `create() { ... }`) by converting it to
- * a function expression (e.g., `function create() { ... }`), including `async`
- * and generator variants and shorthand bodies that themselves contain arrow
- * functions.
+ * an anonymous function expression (e.g., `function () { ... }`), including
+ * `async` and generator variants and shorthand bodies that themselves contain
+ * arrow functions. The result is anonymous (rather than reusing the method
+ * name) so a body that references an outer variable of the same name is not
+ * shadowed by the generated function's own binding.
  * @param fn - Function to stringify
  * @returns Stringified function source
  */
@@ -59,12 +61,11 @@ export const stringifyFunction = (fn: Function): string => {
     property?.type === "Property" &&
     property.method &&
     !property.computed &&
-    property.key.type === "Identifier" &&
     property.value.type === "FunctionExpression"
   ) {
     const { async, generator } = property.value;
     const body = wrapped.slice(property.value.start, property.value.end);
-    return `${async ? "async " : ""}function${generator ? "*" : ""} ${property.key.name}${body}`;
+    return `${async ? "async " : ""}function${generator ? "*" : ""} ${body}`;
   }
   return src;
 };
