@@ -166,6 +166,52 @@ export const cacheCommand = defineCommand({
     expect(result.output).toContain("local(no-cli-hybrid-command)");
   });
 
+  test("reports commands when positional args are imported from args modules", () => {
+    writeFixture(
+      "args.ts",
+      `
+import { arg } from "politty";
+import { z } from "zod";
+
+export const nameArgs = {
+  name: arg(z.string(), { positional: true }),
+};
+`,
+    );
+    const fixturePath = writeFixture(
+      "imported-args.ts",
+      `
+import { defineCommand } from "politty";
+import { z } from "zod";
+import { nameArgs } from "./args";
+
+const listCommand = defineCommand({
+  name: "list",
+  run() {},
+});
+
+export const cacheCommand = defineCommand({
+  name: "cache",
+  subCommands: {
+    list: listCommand,
+  },
+  args: z.object({
+    ...nameArgs,
+  }).strict(),
+  run(args) {
+    return args.name;
+  },
+});
+`,
+    );
+
+    const result = runOxlint(fixturePath);
+
+    expect(result.status).not.toBe(0);
+    expect(result.output).toContain("local(no-cli-hybrid-command)");
+    expect(result.output).toContain("Inline imported command-level args");
+  });
+
   test("allows parent commands that only forward to a subcommand", () => {
     const fixturePath = writeFixture(
       "forwarding-parent.ts",
