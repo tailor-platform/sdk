@@ -159,6 +159,22 @@ function findTailorConfigAuthBindings(imports: SgNode[]): AuthBinding[] {
   );
 }
 
+function findTailorConfigNamedValueLocalNames(imports: SgNode[]): Set<string> {
+  return new Set(
+    imports.flatMap((importStmt) =>
+      importBindings(importStmt)
+        .filter(
+          (binding) =>
+            binding.spec != null &&
+            binding.importedName != null &&
+            !binding.typeOnly &&
+            isTailorConfigSource(binding.source),
+        )
+        .map((binding) => binding.localName),
+    ),
+  );
+}
+
 function findTailorConfigNamespaceAuthLocalNames(imports: SgNode[]): Set<string> {
   return new Set(
     imports.flatMap((importStmt) =>
@@ -1375,6 +1391,7 @@ export function reviewFindings(
   const requireAuthBindingScopes = findTailorConfigRequireAuthBindingScopes(root);
   const requireNamespaceAuthBindingScopes = findTailorConfigRequireNamespaceAuthBindingScopes(root);
   const authLocalNames = new Set([
+    ...findTailorConfigNamedValueLocalNames(imports),
     ...authBindings.map((binding) => binding.localName),
     ...bindingScopeLocalNames(requireAuthBindingScopes),
   ]);

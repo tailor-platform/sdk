@@ -1215,6 +1215,17 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "custom-auth.ts"),
+        [
+          'import { myAuth } from "../tailor.config";',
+          "",
+          "export async function run() {",
+          '  return myAuth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "cjs-require.js"),
         [
           'const { auth } = require("../tailor.config");',
@@ -1320,6 +1331,7 @@ describe("runCodemods", () => {
             "collision.ts",
             "computed-destructure.ts",
             "computed.ts",
+            "custom-auth.ts",
             "default-import.ts",
             "defaulted-destructure.ts",
             "destructure.ts",
@@ -1372,6 +1384,11 @@ describe("runCodemods", () => {
               file: "computed.ts",
               line: 4,
               excerpt: 'export const tokenGetter = auth["getConnectionToken"];',
+            }),
+            expect.objectContaining({
+              file: "custom-auth.ts",
+              line: 4,
+              excerpt: 'return myAuth.getConnectionToken("google");',
             }),
             expect.objectContaining({
               file: "default-import.ts",
