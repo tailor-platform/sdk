@@ -136,6 +136,11 @@
       "types": "./dist/runtime/file.d.mts",
       "import": "./dist/runtime/file.mjs",
       "default": "./dist/runtime/file.mjs"
+    },
+    "./runtime/aigateway": {
+      "types": "./dist/runtime/aigateway.d.mts",
+      "import": "./dist/runtime/aigateway.mjs",
+      "default": "./dist/runtime/aigateway.mjs"
     }
   },
   "scripts": {

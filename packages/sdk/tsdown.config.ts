@@ -85,6 +85,7 @@ export default defineConfig({
     "src/runtime/workflow.ts",
     "src/runtime/context.ts",
     "src/runtime/file.ts",
+    "src/runtime/aigateway.ts",
   ],
   format: ["esm"],
   target: "node22",
