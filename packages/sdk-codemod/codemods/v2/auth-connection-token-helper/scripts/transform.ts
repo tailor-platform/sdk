@@ -194,6 +194,15 @@ function requireCallSource(call: SgNode | null): string | null {
   return stringValue(source);
 }
 
+function requireAuthMemberSource(member: SgNode | null): string | null {
+  if (member?.kind() !== "member_expression") return null;
+
+  const property = member.field("property");
+  if (property?.text() !== "auth") return null;
+
+  return requireCallSource(unwrapReceiverExpression(member.field("object")));
+}
+
 function objectPatternLocalNames(pattern: SgNode, importedName: string): string[] {
   const names: string[] = [];
   for (const child of pattern.children()) {
@@ -268,11 +277,19 @@ function findTailorConfigRequireAuthBindingScopes(root: SgNode): BindingScopeMap
   const scopes: BindingScopeMap = new Map();
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
     const binding = firstDeclaratorChild(decl);
-    if (binding?.kind() !== "object_pattern") continue;
-    const source = requireCallSource(initializerChild(decl));
-    if (!source || !isTailorConfigSource(source)) continue;
-    for (const localName of objectPatternLocalNames(binding, "auth")) {
-      addBindingScope(scopes, localName, binding);
+    const initializer = initializerChild(decl);
+    if (binding?.kind() === "object_pattern") {
+      const source = requireCallSource(initializer);
+      if (!source || !isTailorConfigSource(source)) continue;
+      for (const localName of objectPatternLocalNames(binding, "auth")) {
+        addBindingScope(scopes, localName, binding);
+      }
+      continue;
+    }
+
+    if (binding?.kind() === "identifier") {
+      const source = requireAuthMemberSource(initializer);
+      if (source && isTailorConfigSource(source)) addBindingScope(scopes, binding.text(), binding);
     }
   }
   return scopes;
@@ -338,6 +355,10 @@ function localDeclarationNames(root: SgNode): Set<string> {
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
     const binding = firstDeclaratorChild(decl);
     if (binding) collectBindingNames(binding, names);
+  }
+
+  for (const stmt of root.findAll({ rule: { kind: "expression_statement" } })) {
+    collectUsingDeclarationNames(stmt, names);
   }
 
   for (const param of root.findAll({
@@ -518,17 +539,27 @@ function collectDeclarationName(node: SgNode, names: Set<string>): void {
 }
 
 function collectUsingDeclarationNames(scope: SgNode, names: Set<string>): void {
-  const assignment = scope.children().find((child) => child.kind() === "assignment_expression");
-  if (!assignment) return;
+  const assignments = scope.children().flatMap((child) => {
+    if (child.kind() === "assignment_expression") return [child];
+    if (child.kind() !== "await_expression") return [];
+    const assignment = child
+      .children()
+      .find((grandchild) => grandchild.kind() === "assignment_expression");
+    return assignment ? [assignment] : [];
+  });
 
-  const children = assignment.children();
-  const usingIndex = children.findIndex((child) => child.kind() === "using");
-  const end = children.findIndex((child, index) => index > usingIndex && child.kind() === "=");
-  if (usingIndex === -1 || end === -1) return;
+  for (const assignment of assignments) {
+    const children = assignment.children();
+    const usingIndex = children.findIndex((child) => child.kind() === "using");
+    const end = children.findIndex((child, index) => index > usingIndex && child.kind() === "=");
+    if (usingIndex === -1 || end === -1) continue;
 
-  for (const child of children.slice(usingIndex + 1, end)) {
-    if (["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind())) {
-      collectBindingNames(child, names);
+    for (const child of children.slice(usingIndex + 1, end)) {
+      if (
+        ["identifier", "object_pattern", "array_pattern", "rest_pattern"].includes(child.kind())
+      ) {
+        collectBindingNames(child, names);
+      }
     }
   }
 }

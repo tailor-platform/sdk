@@ -1207,6 +1207,15 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "cjs-member-require.js"),
+        [
+          'const auth = require("../tailor.config").auth;',
+          "",
+          'exports.token = auth.getConnectionToken("google");',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "namespace-computed.ts"),
         [
           'import * as cfg from "../tailor.config";',
@@ -1277,6 +1286,7 @@ describe("runCodemods", () => {
           codemodId: "v2/auth-connection-token-helper",
           prompt: codemod.prompt,
           files: [
+            "cjs-member-require.js",
             "cjs-require.js",
             "collision.ts",
             "computed.ts",
@@ -1292,6 +1302,11 @@ describe("runCodemods", () => {
             "wrapped-destructure.ts",
           ],
           findings: [
+            expect.objectContaining({
+              file: "cjs-member-require.js",
+              line: 3,
+              excerpt: 'exports.token = auth.getConnectionToken("google");',
+            }),
             expect.objectContaining({
               file: "cjs-require.js",
               line: 4,
