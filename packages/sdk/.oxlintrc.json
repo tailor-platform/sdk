@@ -88,7 +88,6 @@
     "typescript/no-require-imports": "error",
     "typescript/no-unnecessary-type-constraint": "error",
     "typescript/no-unsafe-function-type": "error",
-    "local/no-cli-hybrid-command": "error",
     "local/no-deprecated-type-matcher": "error",
     "local/require-param-strict": "error"
   },
@@ -413,6 +412,7 @@
             ]
           }
         ],
+        "local/no-cli-hybrid-command": "error",
         "no-console": "error"
       }
     },

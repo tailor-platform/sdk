@@ -133,6 +133,39 @@ export const cacheCommand = defineCommand({
     expect(result.output).toContain("local(no-cli-hybrid-command)");
   });
 
+  test("reports commands when positional args are inside chained schemas", () => {
+    const fixturePath = writeFixture(
+      "chained-args.ts",
+      `
+import { arg, defineCommand } from "politty";
+import { z } from "zod";
+
+const listCommand = defineCommand({
+  name: "list",
+  run() {},
+});
+
+export const cacheCommand = defineCommand({
+  name: "cache",
+  subCommands: {
+    list: listCommand,
+  },
+  args: z.object({
+    key: arg(z.string(), { positional: true }),
+  }).strict(),
+  run(args) {
+    return args.key;
+  },
+});
+`,
+    );
+
+    const result = runOxlint(fixturePath);
+
+    expect(result.status).not.toBe(0);
+    expect(result.output).toContain("local(no-cli-hybrid-command)");
+  });
+
   test("allows parent commands that only forward to a subcommand", () => {
     const fixturePath = writeFixture(
       "forwarding-parent.ts",

@@ -130,8 +130,16 @@ function expressionContainsPositionalArg(node, positionalArgVariables = new Set(
   switch (node.type) {
     case "CallExpression":
     case "NewExpression":
-      return node.arguments.some((argNode) =>
-        expressionContainsPositionalArg(argNode, positionalArgVariables),
+      return (
+        expressionContainsPositionalArg(node.callee, positionalArgVariables) ||
+        node.arguments.some((argNode) =>
+          expressionContainsPositionalArg(argNode, positionalArgVariables),
+        )
+      );
+    case "MemberExpression":
+      return (
+        expressionContainsPositionalArg(node.object, positionalArgVariables) ||
+        (node.computed && expressionContainsPositionalArg(node.property, positionalArgVariables))
       );
     case "ObjectExpression":
       return node.properties.some((prop) => {
