@@ -620,8 +620,6 @@ function date<const Opt extends FieldOptions>(options?: Opt) {
 
 /**
  * Create a datetime field for resolver input/output.
- * Format: RFC 3339 date-time, such as "yyyy-MM-ddTHH:mm:ssZ" or
- * "yyyy-MM-ddTHH:mm:ss+09:00".
  * @param options - Field configuration options
  * @returns A datetime field
  * @example t.datetime()

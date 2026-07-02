@@ -109,6 +109,39 @@ describe("TailorDBField basic field type tests", () => {
       id?: string | null;
     }>();
   });
+
+  test("pickFields recomputes output from the base field type", () => {
+    const _schemaType = t.object({
+      ...db
+        .type("Test", {
+          names: db.string({ array: true }),
+          nickname: db.string({ optional: true }),
+        })
+        .pickFields(["id", "names", "nickname"], { array: false, optional: false }),
+    });
+
+    expectTypeOf<output<typeof _schemaType>>().toEqualTypeOf<{
+      id: string;
+      names: string;
+      nickname: string;
+    }>();
+  });
+
+  test("pickFields preserves existing options that are not overridden", () => {
+    const _schemaType = t.object({
+      ...db
+        .type("Test", {
+          names: db.string({ array: true }),
+          nickname: db.string({ optional: true }),
+        })
+        .pickFields(["names", "nickname"], { array: true }),
+    });
+
+    expectTypeOf<output<typeof _schemaType>>().toEqualTypeOf<{
+      names: string[];
+      nickname?: string[] | null;
+    }>();
+  });
 });
 
 describe("TailorDBField optional option tests", () => {
@@ -2108,6 +2141,32 @@ describe("TailorDBField clone tests", () => {
     expect(cloned.fields).not.toBe(original.fields);
     expect(cloned.fields.name).not.toBe(original.fields.name);
     expect(cloned.fields.age).not.toBe(original.fields.age);
+  });
+
+  test("clone recomputes output from the base field type", () => {
+    const clonedArray = db.string({ array: true }).clone({ array: true });
+    const clonedScalar = db.string({ array: true }).clone({ array: false });
+    const clonedRequired = db.string({ optional: true }).clone({ optional: false });
+    const clonedUnchanged = db.string({ optional: true, array: true }).clone();
+    const clonedOptionalArray = db.string({ optional: true }).clone({ array: true });
+    const clonedRequiredArray = db
+      .string({ optional: true, array: true })
+      .clone({ optional: false });
+
+    expectTypeOf<output<typeof clonedArray>>().not.toBeAny();
+    expectTypeOf<output<typeof clonedScalar>>().not.toBeAny();
+    expectTypeOf<output<typeof clonedRequired>>().not.toBeAny();
+    expectTypeOf<output<typeof clonedUnchanged>>().not.toBeAny();
+    expectTypeOf<output<typeof clonedOptionalArray>>().not.toBeAny();
+    expectTypeOf<output<typeof clonedRequiredArray>>().not.toBeAny();
+    expectTypeOf<output<typeof clonedArray>>().toEqualTypeOf<string[]>();
+    expectTypeOf<output<typeof clonedScalar>>().toEqualTypeOf<string>();
+    expectTypeOf<output<typeof clonedRequired>>().toEqualTypeOf<string>();
+    expectTypeOf<output<typeof clonedUnchanged>>().toEqualTypeOf<string[] | null>();
+    expectTypeOf<output<typeof clonedOptionalArray>>().toEqualTypeOf<string[] | null>();
+    expectTypeOf<output<typeof clonedRequiredArray>>().toEqualTypeOf<string[]>();
+
+    const _indexed = clonedScalar.index();
   });
 });
 
