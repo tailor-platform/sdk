@@ -34,6 +34,8 @@ interface TokenCall {
   range: [number, number];
 }
 
+type BindingScopeMap = Map<string, Set<string>>;
+
 function quickFilter(source: string): boolean {
   return source.includes(GET_CONNECTION_TOKEN) && source.includes("tailor.config");
 }
@@ -167,6 +169,122 @@ function findTailorConfigNamespaceAuthLocalNames(imports: SgNode[]): Set<string>
         .map((binding) => binding.localName),
     ),
   );
+}
+
+function initializerChild(decl: SgNode): SgNode | null {
+  const children = decl.children();
+  const equalIndex = children.findIndex((child) => child.kind() === "=");
+  if (equalIndex === -1) return null;
+  return (
+    children.slice(equalIndex + 1).find((child) => child.kind() !== "," && child.kind() !== ";") ??
+    null
+  );
+}
+
+function requireCallSource(call: SgNode | null): string | null {
+  if (call?.kind() !== "call_expression") return null;
+
+  const callee = call.field("function");
+  if (callee?.kind() !== "identifier" || callee.text() !== "require") return null;
+
+  const args = call.children().find((child) => child.kind() === "arguments");
+  const source = args?.children().find((child) => child.kind() === "string") ?? null;
+  return stringValue(source);
+}
+
+function objectPatternLocalNames(pattern: SgNode, importedName: string): string[] {
+  const names: string[] = [];
+  for (const child of pattern.children()) {
+    if (child.kind() === "shorthand_property_identifier_pattern" && child.text() === importedName) {
+      names.push(child.text());
+      continue;
+    }
+
+    if (child.kind() !== "pair_pattern") continue;
+    const property = child
+      .children()
+      .find((grandchild) => grandchild.kind() === "property_identifier");
+    if (property?.text() !== importedName) continue;
+
+    const binding = child.children().find((grandchild) => grandchild.kind() === "identifier");
+    if (binding) names.push(binding.text());
+  }
+  return names;
+}
+
+function rangeKey(node: SgNode): string {
+  const range = node.range();
+  return `${range.start.index}:${range.end.index}`;
+}
+
+function addBindingScope(scopes: BindingScopeMap, localName: string, binding: SgNode): void {
+  const scope = declarationScope(binding);
+  if (!scope) return;
+  const existing = scopes.get(localName) ?? new Set<string>();
+  existing.add(rangeKey(scope));
+  scopes.set(localName, existing);
+}
+
+function declarationScope(binding: SgNode): SgNode | null {
+  let current = binding.parent();
+  let variableDeclaration: SgNode | null = null;
+  while (current) {
+    if (current.kind() === "variable_declaration") {
+      variableDeclaration = current;
+      break;
+    }
+    current = current.parent();
+  }
+
+  const isVar = variableDeclaration?.children().some((child) => child.kind() === "var") ?? false;
+  current = binding.parent();
+  while (current) {
+    if (
+      isVar &&
+      (current.kind() === "program" ||
+        current.children().some((child) => child.kind() === "formal_parameters"))
+    ) {
+      return current;
+    }
+
+    if (
+      !isVar &&
+      ["program", "statement_block", "switch_case", "switch_default"].includes(current.kind())
+    ) {
+      return current;
+    }
+    current = current.parent();
+  }
+  return null;
+}
+
+function bindingScopeLocalNames(scopes: BindingScopeMap): Set<string> {
+  return new Set(scopes.keys());
+}
+
+function findTailorConfigRequireAuthBindingScopes(root: SgNode): BindingScopeMap {
+  const scopes: BindingScopeMap = new Map();
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const binding = firstDeclaratorChild(decl);
+    if (binding?.kind() !== "object_pattern") continue;
+    const source = requireCallSource(initializerChild(decl));
+    if (!source || !isTailorConfigSource(source)) continue;
+    for (const localName of objectPatternLocalNames(binding, "auth")) {
+      addBindingScope(scopes, localName, binding);
+    }
+  }
+  return scopes;
+}
+
+function findTailorConfigRequireNamespaceAuthBindingScopes(root: SgNode): BindingScopeMap {
+  const scopes: BindingScopeMap = new Map();
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const binding = firstDeclaratorChild(decl);
+    if (binding?.kind() !== "identifier") continue;
+    const source = requireCallSource(initializerChild(decl));
+    if (source && isTailorConfigSource(source)) addBindingScope(scopes, binding.text(), binding);
+  }
+  return scopes;
 }
 
 function runtimeAuthconnectionReference(imports: SgNode[]): string | null {
@@ -536,10 +654,20 @@ function directlyDeclaredNames(scope: SgNode, reference: SgNode): Set<string> {
   return names;
 }
 
-function isReferenceShadowed(node: SgNode, localName: string): boolean {
+function isReferenceShadowed(
+  node: SgNode,
+  localName: string,
+  allowedBindingScopes: BindingScopeMap = new Map(),
+): boolean {
   let current = node.parent();
   while (current) {
-    if (directlyDeclaredNames(current, node).has(localName)) return true;
+    if (directlyDeclaredNames(current, node).has(localName)) {
+      if (allowedBindingScopes.get(localName)?.has(rangeKey(current))) {
+        current = current.parent();
+        continue;
+      }
+      return true;
+    }
     current = current.parent();
   }
   return false;
@@ -548,6 +676,7 @@ function isReferenceShadowed(node: SgNode, localName: string): boolean {
 function authConnectionTokenReferenceFromMember(
   member: SgNode,
   authLocalNames: Set<string>,
+  allowedBindingScopes: BindingScopeMap = new Map(),
 ): TokenCall | null {
   const property = member.field("property");
   const object = member.field("object");
@@ -561,7 +690,7 @@ function authConnectionTokenReferenceFromMember(
     return null;
   }
 
-  if (isReferenceShadowed(receiver, receiver.text())) return null;
+  if (isReferenceShadowed(receiver, receiver.text(), allowedBindingScopes)) return null;
 
   const range = object.range();
   return {
@@ -610,10 +739,18 @@ function unwrapReceiverExpression(node: SgNode | null): SgNode | null {
   return null;
 }
 
-function findAuthConnectionTokenReferences(root: SgNode, authLocalNames: Set<string>): TokenCall[] {
+function findAuthConnectionTokenReferences(
+  root: SgNode,
+  authLocalNames: Set<string>,
+  allowedBindingScopes: BindingScopeMap = new Map(),
+): TokenCall[] {
   const references: TokenCall[] = [];
   for (const member of root.findAll({ rule: { kind: "member_expression" } })) {
-    const reference = authConnectionTokenReferenceFromMember(member, authLocalNames);
+    const reference = authConnectionTokenReferenceFromMember(
+      member,
+      authLocalNames,
+      allowedBindingScopes,
+    );
     if (reference) references.push(reference);
   }
   return references;
@@ -622,12 +759,13 @@ function findAuthConnectionTokenReferences(root: SgNode, authLocalNames: Set<str
 function authConnectionTokenNamespaceReferenceFromMember(
   member: SgNode,
   namespaceAuthLocalNames: Set<string>,
+  allowedBindingScopes: BindingScopeMap = new Map(),
 ): TokenCall | null {
   const property = member.field("property");
   const object = member.field("object");
   const receiver = namespaceAuthReceiverIdentifier(object, namespaceAuthLocalNames);
   if (property?.text() !== GET_CONNECTION_TOKEN || !object || !receiver) return null;
-  if (isReferenceShadowed(receiver, receiver.text())) return null;
+  if (isReferenceShadowed(receiver, receiver.text(), allowedBindingScopes)) return null;
 
   const range = object.range();
   return {
@@ -659,12 +797,14 @@ function namespaceAuthReceiverIdentifier(
 function findAuthConnectionTokenNamespaceReferences(
   root: SgNode,
   namespaceAuthLocalNames: Set<string>,
+  allowedBindingScopes: BindingScopeMap = new Map(),
 ): TokenCall[] {
   const references: TokenCall[] = [];
   for (const member of root.findAll({ rule: { kind: "member_expression" } })) {
     const reference = authConnectionTokenNamespaceReferenceFromMember(
       member,
       namespaceAuthLocalNames,
+      allowedBindingScopes,
     );
     if (reference) references.push(reference);
   }
@@ -678,12 +818,13 @@ function isGetConnectionTokenSubscript(subscript: SgNode): boolean {
 function authConnectionTokenSubscriptReferenceFromSubscript(
   subscript: SgNode,
   authLocalNames: Set<string>,
+  allowedBindingScopes: BindingScopeMap = new Map(),
 ): TokenCall | null {
   const object = subscript.field("object");
   const receiver = authReceiverIdentifier(object);
   if (!isGetConnectionTokenSubscript(subscript) || !object || !receiver) return null;
   if (!authLocalNames.has(receiver.text())) return null;
-  if (isReferenceShadowed(receiver, receiver.text())) return null;
+  if (isReferenceShadowed(receiver, receiver.text(), allowedBindingScopes)) return null;
 
   const range = subscript.range();
   return {
@@ -696,10 +837,15 @@ function authConnectionTokenSubscriptReferenceFromSubscript(
 function findAuthConnectionTokenSubscriptReferences(
   root: SgNode,
   authLocalNames: Set<string>,
+  allowedBindingScopes: BindingScopeMap = new Map(),
 ): TokenCall[] {
   const references: TokenCall[] = [];
   for (const subscript of root.findAll({ rule: { kind: "subscript_expression" } })) {
-    const reference = authConnectionTokenSubscriptReferenceFromSubscript(subscript, authLocalNames);
+    const reference = authConnectionTokenSubscriptReferenceFromSubscript(
+      subscript,
+      authLocalNames,
+      allowedBindingScopes,
+    );
     if (reference) references.push(reference);
   }
   return references;
@@ -708,11 +854,12 @@ function findAuthConnectionTokenSubscriptReferences(
 function authConnectionTokenNamespaceSubscriptReferenceFromSubscript(
   subscript: SgNode,
   namespaceAuthLocalNames: Set<string>,
+  allowedBindingScopes: BindingScopeMap = new Map(),
 ): TokenCall | null {
   const object = subscript.field("object");
   const receiver = namespaceAuthReceiverIdentifier(object, namespaceAuthLocalNames);
   if (!isGetConnectionTokenSubscript(subscript) || !object || !receiver) return null;
-  if (isReferenceShadowed(receiver, receiver.text())) return null;
+  if (isReferenceShadowed(receiver, receiver.text(), allowedBindingScopes)) return null;
 
   const range = subscript.range();
   return {
@@ -725,12 +872,14 @@ function authConnectionTokenNamespaceSubscriptReferenceFromSubscript(
 function findAuthConnectionTokenNamespaceSubscriptReferences(
   root: SgNode,
   namespaceAuthLocalNames: Set<string>,
+  allowedBindingScopes: BindingScopeMap = new Map(),
 ): TokenCall[] {
   const references: TokenCall[] = [];
   for (const subscript of root.findAll({ rule: { kind: "subscript_expression" } })) {
     const reference = authConnectionTokenNamespaceSubscriptReferenceFromSubscript(
       subscript,
       namespaceAuthLocalNames,
+      allowedBindingScopes,
     );
     if (reference) references.push(reference);
   }
@@ -759,31 +908,31 @@ function objectPatternHasGetConnectionToken(pattern: SgNode): boolean {
 function findAuthConnectionTokenDestructures(
   root: SgNode,
   authLocalNames: Set<string>,
+  namespaceAuthLocalNames: Set<string>,
+  allowedBindingScopes: BindingScopeMap = new Map(),
+  namespaceAllowedBindingScopes: BindingScopeMap = new Map(),
 ): TokenCall[] {
   const references: TokenCall[] = [];
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
-    const children = decl.children();
-    const equalIndex = children.findIndex((child) => child.kind() === "=");
     const binding = firstDeclaratorChild(decl);
-    const initializer = children
-      .slice(equalIndex + 1)
-      .find((child) => child.kind() === "identifier");
-    if (
-      equalIndex === -1 ||
-      binding?.kind() !== "object_pattern" ||
-      !objectPatternHasGetConnectionToken(binding) ||
-      initializer?.kind() !== "identifier" ||
-      !authLocalNames.has(initializer.text())
-    ) {
+    if (binding?.kind() !== "object_pattern" || !objectPatternHasGetConnectionToken(binding)) {
       continue;
     }
 
-    if (isReferenceShadowed(initializer, initializer.text())) continue;
+    const initializer = initializerChild(decl);
+    const authReceiver = authReceiverIdentifier(initializer);
+    const namespaceReceiver = namespaceAuthReceiverIdentifier(initializer, namespaceAuthLocalNames);
+    const receiver =
+      authReceiver && authLocalNames.has(authReceiver.text()) ? authReceiver : namespaceReceiver;
+    const receiverAllowedScopes =
+      receiver === authReceiver ? allowedBindingScopes : namespaceAllowedBindingScopes;
+    if (!receiver) continue;
+    if (isReferenceShadowed(receiver, receiver.text(), receiverAllowedScopes)) continue;
 
     const range = decl.range();
     references.push({
-      objectNode: initializer,
-      localName: initializer.text(),
+      objectNode: initializer ?? receiver,
+      localName: receiver.text(),
       range: [range.start.index, range.end.index],
     });
   }
@@ -1135,14 +1284,36 @@ export function reviewFindings(
 
   const imports = findImportStatements(root);
   const authBindings = findTailorConfigAuthBindings(imports);
-  const authLocalNames = new Set(authBindings.map((binding) => binding.localName));
-  const namespaceAuthLocalNames = findTailorConfigNamespaceAuthLocalNames(imports);
+  const requireAuthBindingScopes = findTailorConfigRequireAuthBindingScopes(root);
+  const requireNamespaceAuthBindingScopes = findTailorConfigRequireNamespaceAuthBindingScopes(root);
+  const authLocalNames = new Set([
+    ...authBindings.map((binding) => binding.localName),
+    ...bindingScopeLocalNames(requireAuthBindingScopes),
+  ]);
+  const namespaceAuthLocalNames = new Set([
+    ...findTailorConfigNamespaceAuthLocalNames(imports),
+    ...bindingScopeLocalNames(requireNamespaceAuthBindingScopes),
+  ]);
   const references = [
-    ...findAuthConnectionTokenReferences(root, authLocalNames),
-    ...findAuthConnectionTokenNamespaceReferences(root, namespaceAuthLocalNames),
-    ...findAuthConnectionTokenSubscriptReferences(root, authLocalNames),
-    ...findAuthConnectionTokenNamespaceSubscriptReferences(root, namespaceAuthLocalNames),
-    ...findAuthConnectionTokenDestructures(root, authLocalNames),
+    ...findAuthConnectionTokenReferences(root, authLocalNames, requireAuthBindingScopes),
+    ...findAuthConnectionTokenNamespaceReferences(
+      root,
+      namespaceAuthLocalNames,
+      requireNamespaceAuthBindingScopes,
+    ),
+    ...findAuthConnectionTokenSubscriptReferences(root, authLocalNames, requireAuthBindingScopes),
+    ...findAuthConnectionTokenNamespaceSubscriptReferences(
+      root,
+      namespaceAuthLocalNames,
+      requireNamespaceAuthBindingScopes,
+    ),
+    ...findAuthConnectionTokenDestructures(
+      root,
+      authLocalNames,
+      namespaceAuthLocalNames,
+      requireAuthBindingScopes,
+      requireNamespaceAuthBindingScopes,
+    ),
   ].toSorted((a, b) => a.range[0] - b.range[0]);
 
   return references.map((reference) => ({
