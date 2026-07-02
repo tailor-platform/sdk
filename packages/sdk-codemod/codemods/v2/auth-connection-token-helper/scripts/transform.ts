@@ -99,7 +99,7 @@ function runtimeAuthconnectionReference(imports: SgNode[]): string | null {
     if (importSource(importStmt) !== RUNTIME_MODULE || isTypeOnlyImport(importStmt)) continue;
     for (const spec of importStmt.findAll({ rule: { kind: "import_specifier" } })) {
       const names = importSpecNames(spec);
-      if (names?.importedName === AUTHCONNECTION) return names.localName;
+      if (names?.importedName === AUTHCONNECTION && !names.typeOnly) return names.localName;
     }
 
     const clause = importStmt.children().find((child) => child.kind() === "import_clause");
@@ -208,10 +208,16 @@ function buildAddRuntimeImportEdit(root: SgNode, source: string, imports: SgNode
   const existingRuntimeImport = runtimeNamedValueImport(imports);
   const namedImports = existingRuntimeImport ? namedImportsNode(existingRuntimeImport) : null;
   if (namedImports) {
-    const specTexts = namedImports
-      .findAll({ rule: { kind: "import_specifier" } })
-      .map((spec) => spec.text());
-    return namedImports.replace(`{ ${[...specTexts, AUTHCONNECTION].join(", ")} }`);
+    const specTexts = namedImports.findAll({ rule: { kind: "import_specifier" } }).map((spec) => {
+      const names = importSpecNames(spec);
+      return names?.importedName === AUTHCONNECTION && names.localName === AUTHCONNECTION
+        ? AUTHCONNECTION
+        : spec.text();
+    });
+    const nextSpecTexts = specTexts.includes(AUTHCONNECTION)
+      ? specTexts
+      : [...specTexts, AUTHCONNECTION];
+    return namedImports.replace(`{ ${nextSpecTexts.join(", ")} }`);
   }
 
   const pos = importInsertionIndex(root, imports, source);

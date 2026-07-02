@@ -153,10 +153,12 @@ function buildAddRuntimeImportEdit(root: SgNode, source: string, imports: SgNode
   const existingRuntimeImport = runtimeNamedValueImport(imports);
   const namedImports = existingRuntimeImport ? namedImportsNode(existingRuntimeImport) : null;
   if (namedImports) {
-    const specTexts = namedImports
-      .findAll({ rule: { kind: "import_specifier" } })
-      .map((spec) => spec.text());
-    return namedImports.replace(`{ ${[...specTexts, "idp"].join(", ")} }`);
+    const specTexts = namedImports.findAll({ rule: { kind: "import_specifier" } }).map((spec) => {
+      const names = importSpecNames(spec);
+      return names?.importedName === "idp" && names.localName === "idp" ? "idp" : spec.text();
+    });
+    const nextSpecTexts = specTexts.includes("idp") ? specTexts : [...specTexts, "idp"];
+    return namedImports.replace(`{ ${nextSpecTexts.join(", ")} }`);
   }
 
   const pos = importInsertionIndex(root, imports, source);
