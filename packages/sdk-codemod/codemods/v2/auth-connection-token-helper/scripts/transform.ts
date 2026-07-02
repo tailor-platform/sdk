@@ -164,7 +164,9 @@ function findTailorConfigNamespaceAuthLocalNames(imports: SgNode[]): Set<string>
       importBindings(importStmt)
         .filter(
           (binding) =>
-            binding.namespace && !binding.typeOnly && isTailorConfigSource(binding.source),
+            (binding.namespace || binding.importedName == null) &&
+            !binding.typeOnly &&
+            isTailorConfigSource(binding.source),
         )
         .map((binding) => binding.localName),
     ),
@@ -357,6 +359,8 @@ function localDeclarationNames(root: SgNode): Set<string> {
         { kind: "class_declaration" },
         { kind: "class" },
         { kind: "enum_declaration" },
+        { kind: "interface_declaration" },
+        { kind: "type_alias_declaration" },
         { kind: "internal_module" },
         { kind: "import_alias" },
       ],
