@@ -419,6 +419,28 @@ describe("parseTypes", () => {
 
       expect(result.Post!.forwardRelationships).toHaveProperty("authorID");
     });
+
+    test("should throw error when forward name conflicts with files field", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      // Post has a files field named "avatar"
+      const post = db
+        .type("Post", {
+          authorID: db.uuid().relation({
+            type: "n-1",
+            toward: { type: user, as: "avatar" },
+          }),
+        })
+        .files({
+          avatar: "post avatar file",
+        });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name "avatar".*conflicts with files field/s);
+    });
   });
 
   describe("validateRelationType", () => {

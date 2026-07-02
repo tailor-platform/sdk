@@ -124,6 +124,13 @@ function parseTailorDBType(
             `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`,
         );
       }
+      if (Object.hasOwn(metadata.files, relationInfo.forwardName)) {
+        throw new Error(
+          `Forward relation name "${relationInfo.forwardName}" from field "${fieldName}" on type "${type.name}" ` +
+            `conflicts with files field "${relationInfo.forwardName}". ` +
+            `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`,
+        );
+      }
 
       const targetType = rawTypes[relationInfo.targetType];
       forwardRelationships[relationInfo.forwardName] = {
