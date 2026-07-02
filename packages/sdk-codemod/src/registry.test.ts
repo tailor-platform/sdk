@@ -309,5 +309,7 @@ describe("getApplicableCodemods", () => {
     expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}");
     expect(pattern).toBeUndefined();
     expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime");
+    expect(codemod?.prompt).toContain("non-call");
+    expect(codemod?.prompt).toContain("destructuring");
   });
 });
