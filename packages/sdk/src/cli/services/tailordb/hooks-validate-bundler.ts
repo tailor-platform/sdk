@@ -7,6 +7,7 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { stringifyFunction, tailorUserMap } from "#/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import { assertDefined } from "#/utils/assert";
+import { assertParsableExpression } from "#/utils/script-expr";
 import { ES_BUILTINS } from "./es-builtins";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 import type {
@@ -439,7 +440,10 @@ async function bundleScriptTarget(args: {
 }): Promise<string> {
   const { fn, kind, sourceFilePath, sourceBindings, tempDir, targetIndex, tsconfig } = args;
   const fnSource = stringifyFunction(fn);
-  const inlineExpr = `(${fnSource})({ value: _value, data: _data, user: ${tailorUserMap} })`;
+  const inlineExpr = assertParsableExpression(
+    `(${fnSource})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+    `${kind} in ${sourceFilePath}`,
+  );
 
   // Check if the function has free variables that need bundling
   const freeVars = findUndefinedReferences(`const __fn = ${fnSource};`);
@@ -487,7 +491,10 @@ async function bundleScriptTarget(args: {
   } as rolldown.BuildOptions);
 
   const bundledCode = buildResult.output[0].code;
-  return buildPrecompiledExpr(bundledCode);
+  return assertParsableExpression(
+    buildPrecompiledExpr(bundledCode),
+    `${kind} in ${sourceFilePath}`,
+  );
 }
 
 /**

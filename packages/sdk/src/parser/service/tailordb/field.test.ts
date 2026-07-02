@@ -141,3 +141,38 @@ describe("parseFieldConfig validator expressions", () => {
     expect(result.errors).toEqual([]);
   });
 });
+
+describe("parseFieldConfig script expression validation", () => {
+  test("throws a clear error when a hook cannot be converted to valid JavaScript", () => {
+    const key = "create";
+    const hooks = {
+      [key]({ value }: { value: string | null }) {
+        return value ?? "generated";
+      },
+    };
+    const type = db.type("User", {
+      email: db.string().hooks({ create: hooks[key] }),
+    });
+
+    const schema = toSchemaOutputs({ User: type });
+
+    expect(() => parseFieldConfig(schema.User!.fields.email!)).toThrow(
+      /Generated hooks script is not valid JavaScript/,
+    );
+  });
+
+  test("throws a clear error when a validator cannot be converted to valid JavaScript", () => {
+    const check = function check({ value }: { value: string }) {
+      return value.length > 0;
+    }.bind(null);
+    const type = db.type("User", {
+      email: db.string().validate(check),
+    });
+
+    const schema = toSchemaOutputs({ User: type });
+
+    expect(() => parseFieldConfig(schema.User!.fields.email!)).toThrow(
+      /Generated validate script is not valid JavaScript/,
+    );
+  });
+});

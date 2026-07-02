@@ -1,4 +1,5 @@
 import { parseSync } from "oxc-parser";
+import { assertParsableExpression } from "#/utils/script-expr";
 import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
@@ -73,16 +74,20 @@ export const stringifyFunction = (fn: Function): string => {
 /**
  * Convert a hook or validator function to a script expression.
  * @param fn - Hook or validator function
+ * @param kind - Label naming the source of the expression in conversion errors
  * @returns JavaScript expression calling the function
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-const convertToScriptExpr = (fn: Function): string => {
+const convertToScriptExpr = (fn: Function, kind: "hooks" | "validate"): string => {
   const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
   if (precompiledExpr) {
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
-  return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
+  return assertParsableExpression(
+    `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+    kind,
+  );
 };
 
 /**
@@ -123,7 +128,7 @@ export function parseFieldConfig(
 
       return {
         script: {
-          expr: convertToScriptExpr(fn),
+          expr: convertToScriptExpr(fn, "validate"),
         },
         errorMessage: message,
       };
@@ -132,12 +137,12 @@ export function parseFieldConfig(
       ? {
           create: metadata.hooks.create
             ? {
-                expr: convertToScriptExpr(metadata.hooks.create),
+                expr: convertToScriptExpr(metadata.hooks.create, "hooks"),
               }
             : undefined,
           update: metadata.hooks.update
             ? {
-                expr: convertToScriptExpr(metadata.hooks.update),
+                expr: convertToScriptExpr(metadata.hooks.update, "hooks"),
               }
             : undefined,
         }
