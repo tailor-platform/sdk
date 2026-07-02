@@ -1,20 +1,15 @@
 import { parseSync } from "oxc-parser";
+import { logger } from "#/cli/shared/logger";
 import {
   type ASTNode,
   type Replacement,
   applyReplacements,
   findStatementEnd,
+  getTriggerCallInfo,
   resolvePath,
 } from "./ast-utils";
 import { detectDefaultImports } from "./workflow-detector";
-import type {
-  Program,
-  CallExpression,
-  StaticMemberExpression,
-  IdentifierReference,
-  ImportDeclaration,
-  ImportDefaultSpecifier,
-} from "@oxc-project/types";
+import type { Program, ImportDeclaration, ImportDefaultSpecifier } from "@oxc-project/types";
 
 interface ExtendedTriggerCall {
   kind: "job" | "workflow";
@@ -43,19 +38,6 @@ const NORMALIZER_IDENTIFIER = "__tailor_normalizeTriggerOptions";
  */
 function buildNormalizerHelperSource(authNamespace: string): string {
   return `const ${NORMALIZER_IDENTIFIER} = (o) => o && typeof o.authInvoker === "string" ? { ...o, authInvoker: { namespace: ${JSON.stringify(authNamespace)}, machineUserName: o.authInvoker } } : o;\n`;
-}
-
-/**
- * Extract the source text of a call argument, if present.
- * @param arg - Argument node, possibly absent
- * @param sourceText - Source code text
- * @returns Source text of the argument, or undefined when absent
- */
-function argumentSourceText(arg: unknown, sourceText: string): string | undefined {
-  if (arg && typeof arg === "object" && "start" in arg && "end" in arg) {
-    return sourceText.slice(arg.start as number, arg.end as number);
-  }
-  return undefined;
 }
 
 /**
@@ -249,48 +231,25 @@ function detectExtendedTriggerCalls(
   function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object") return;
 
-    // Detect pattern: identifier.trigger(args) or identifier.trigger(args, config)
-    if (node.type === "CallExpression") {
-      const callExpr = node as unknown as CallExpression;
-      const callee = callExpr.callee;
-
-      if (callee.type === "MemberExpression") {
-        const memberExpr = callee as unknown as StaticMemberExpression;
-
-        // callee may be a ComputedMemberExpression at runtime
-        // oxlint-disable typescript/no-unnecessary-condition
-        const identifierName =
-          !memberExpr.computed && memberExpr.object.type === "Identifier"
-            ? (memberExpr.object as IdentifierReference).name
-            : null;
-        const propertyName = !memberExpr.computed ? memberExpr.property.name : null;
-        // oxlint-enable typescript/no-unnecessary-condition
-
-        if (identifierName && propertyName === "trigger") {
-          const isWorkflow = workflowNames.has(identifierName);
-          const isJob = jobNames.has(identifierName);
-          if (isWorkflow || isJob) {
-            const argsText = argumentSourceText(callExpr.arguments[0], sourceText) ?? "";
-
-            if (isWorkflow) {
-              const optionsText = argumentSourceText(callExpr.arguments[1], sourceText);
-              calls.push({
-                kind: "workflow",
-                identifierName,
-                callRange: { start: callExpr.start, end: callExpr.end },
-                argsText,
-                optionsText,
-              });
-            } else if (isJob) {
-              calls.push({
-                kind: "job",
-                identifierName,
-                callRange: { start: callExpr.start, end: callExpr.end },
-                argsText,
-              });
-            }
-          }
-        }
+    const triggerCall = getTriggerCallInfo(node, sourceText);
+    if (triggerCall) {
+      const isWorkflow = workflowNames.has(triggerCall.identifierName);
+      const isJob = jobNames.has(triggerCall.identifierName);
+      if (isWorkflow) {
+        calls.push({
+          kind: "workflow",
+          identifierName: triggerCall.identifierName,
+          callRange: triggerCall.callRange,
+          argsText: triggerCall.argsText,
+          optionsText: triggerCall.optionsText,
+        });
+      } else if (isJob) {
+        calls.push({
+          kind: "job",
+          identifierName: triggerCall.identifierName,
+          callRange: triggerCall.callRange,
+          argsText: triggerCall.argsText,
+        });
       }
     }
 
@@ -369,15 +328,26 @@ export function transformFunctionTriggers(
   // replacement text is built from the original source, so applying an inner
   // replacement as well would corrupt the output.
   const allTriggerCalls = detectExtendedTriggerCalls(program, source, workflowNames, jobNames);
-  const triggerCalls = allTriggerCalls.filter(
-    (call) =>
-      !allTriggerCalls.some(
-        (other) =>
-          other !== call &&
-          other.callRange.start <= call.callRange.start &&
-          call.callRange.end <= other.callRange.end,
-      ),
-  );
+  const nestedTriggerCalls: Array<{ call: ExtendedTriggerCall; parent: ExtendedTriggerCall }> = [];
+  const triggerCalls = allTriggerCalls.filter((call) => {
+    const parent = allTriggerCalls.find(
+      (other) =>
+        other !== call &&
+        other.callRange.start <= call.callRange.start &&
+        call.callRange.end <= other.callRange.end,
+    );
+    if (parent) {
+      nestedTriggerCalls.push({ call, parent });
+      return false;
+    }
+    return true;
+  });
+
+  for (const { call, parent } of nestedTriggerCalls) {
+    logger.warn(
+      `Nested trigger call "${call.identifierName}.trigger(...)" inside "${parent.identifierName}.trigger(...)" cannot be converted. Move it to a separate statement and pass the result instead.`,
+    );
+  }
 
   const replacements: Replacement[] = [];
   // Whether any workflow trigger authInvoker was wrapped with the runtime

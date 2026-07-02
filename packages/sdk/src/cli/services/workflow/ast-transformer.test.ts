@@ -1,6 +1,7 @@
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { findAllJobs, detectTriggerCalls, buildJobNameMap } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
@@ -1196,11 +1197,15 @@ await myWorkflow.trigger(fetchCustomer.trigger({ customerId: "123" }));
 `;
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
         'await tailor.workflow.triggerWorkflow("my-workflow", fetchCustomer.trigger({ customerId: "123" }));',
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Nested trigger call "fetchCustomer.trigger(...)" inside "myWorkflow.trigger(...)" cannot be converted. Move it to a separate statement and pass the result instead.',
       );
     });
 
