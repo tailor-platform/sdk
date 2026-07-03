@@ -9,31 +9,20 @@ function wrap(
 }
 
 describe("SecretsSchema validation", () => {
-  test("accepts valid vault and secret names", () => {
-    const valid = wrap({
-      "my-vault": {
-        "my-secret": "secret-value",
+  test.each([
+    ["valid vault and secret names", { "my-vault": { "my-secret": "secret-value" } }],
+    ["empty secret value", { "my-vault": { "my-secret": "" } }],
+    ["names with only digits", { "123": { "456": "value" } }],
+    ["names at minimum length (3 characters)", { abc: { def: "value" } }],
+    [
+      "multiple vaults with multiple secrets",
+      {
+        "vault-1": { "secret-a": "value-a", "secret-b": "value-b" },
+        "vault-2": { "secret-c": "value-c" },
       },
-    });
-    expect(() => SecretsSchema.parse(valid)).not.toThrow();
-  });
-
-  test("accepts empty secret value", () => {
-    const valid = wrap({
-      "my-vault": {
-        "my-secret": "",
-      },
-    });
-    expect(() => SecretsSchema.parse(valid)).not.toThrow();
-  });
-
-  test("accepts names with only digits", () => {
-    const valid = wrap({
-      "123": {
-        "456": "value",
-      },
-    });
-    expect(() => SecretsSchema.parse(valid)).not.toThrow();
+    ],
+  ] as const)("accepts %s", (_description, vaults) => {
+    expect(() => SecretsSchema.parse(wrap(vaults))).not.toThrow();
   });
 
   test("accepts names at maximum length (63 characters)", () => {
@@ -43,34 +32,15 @@ describe("SecretsSchema validation", () => {
     expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
-  test("accepts names at minimum length (3 characters)", () => {
-    const valid = wrap({ abc: { def: "value" } });
-    expect(() => SecretsSchema.parse(valid)).not.toThrow();
-  });
-
-  test("rejects vault name with uppercase letters", () => {
-    const invalid = wrap({ "My-Vault": { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
-  });
-
-  test("rejects secret name with uppercase letters", () => {
-    const invalid = wrap({ "my-vault": { "My-Secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
-  });
-
-  test("rejects name starting with hyphen", () => {
-    const invalid = wrap({ "-my-vault": { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
-  });
-
-  test("rejects name ending with hyphen", () => {
-    const invalid = wrap({ "my-vault-": { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
-  });
-
-  test("rejects name shorter than 3 characters", () => {
-    const invalid = wrap({ ab: { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
+  test.each([
+    ["vault name with uppercase letters", { "My-Vault": { "my-secret": "value" } }],
+    ["secret name with uppercase letters", { "my-vault": { "My-Secret": "value" } }],
+    ["name starting with hyphen", { "-my-vault": { "my-secret": "value" } }],
+    ["name ending with hyphen", { "my-vault-": { "my-secret": "value" } }],
+    ["name shorter than 3 characters", { ab: { "my-secret": "value" } }],
+    ["name with underscores", { my_vault: { "my-secret": "value" } }],
+  ] as const)("rejects %s", (_description, vaults) => {
+    expect(() => SecretsSchema.parse(wrap(vaults))).toThrow(/Invalid string/);
   });
 
   test("rejects name longer than 63 characters", () => {
@@ -78,24 +48,6 @@ describe("SecretsSchema validation", () => {
     expect(name).toHaveLength(64);
     const invalid = wrap({ [name]: { "my-secret": "value" } });
     expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
-  });
-
-  test("rejects name with underscores", () => {
-    const invalid = wrap({ my_vault: { "my-secret": "value" } });
-    expect(() => SecretsSchema.parse(invalid)).toThrow(/Invalid string/);
-  });
-
-  test("accepts multiple vaults with multiple secrets", () => {
-    const valid = wrap({
-      "vault-1": {
-        "secret-a": "value-a",
-        "secret-b": "value-b",
-      },
-      "vault-2": {
-        "secret-c": "value-c",
-      },
-    });
-    expect(() => SecretsSchema.parse(valid)).not.toThrow();
   });
 
   test("accepts nullish secret values", () => {

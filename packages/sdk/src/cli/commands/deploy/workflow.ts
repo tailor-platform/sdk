@@ -173,7 +173,7 @@ function filterJobFunctionVersions(
  * @param client - Operator client instance
  * @param changeSet - Workflow change set
  * @param appName - Application name
- * @param appId
+ * @param appId - Application ID used for job function metadata when available
  * @param unchangedWorkflowJobNames - Job function names used by unchanged workflows
  * @returns Map of job function names to versions
  */
@@ -339,7 +339,7 @@ export function buildWorkflowValidationShape(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param appName - Application name
- * @param appId
+ * @param appId - Application ID used for workflow metadata when available
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
  * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan

@@ -81,38 +81,20 @@ describe("format", () => {
   });
 
   describe("formatValue", () => {
-    test("returns empty string for null", () => {
-      expect(formatValue(null)).toBe("");
-    });
-
-    test("returns empty string for undefined", () => {
-      expect(formatValue(undefined)).toBe("");
-    });
-
-    test("converts string as-is", () => {
-      expect(formatValue("hello")).toBe("hello");
-    });
-
-    test("converts number to string", () => {
-      expect(formatValue(42)).toBe("42");
-      expect(formatValue(3.14)).toBe("3.14");
-    });
-
-    test("converts boolean to string", () => {
-      expect(formatValue(true)).toBe("true");
-      expect(formatValue(false)).toBe("false");
-    });
-
-    test("formats array with newline-separated values", () => {
-      expect(formatValue(["a", "b", "c"])).toBe("a\nb\nc");
-    });
-
-    test("formats array of numbers", () => {
-      expect(formatValue([1, 2, 3])).toBe("1\n2\n3");
-    });
-
-    test("formats empty array", () => {
-      expect(formatValue([])).toBe("");
+    test.each`
+      label                             | input              | expected
+      ${"null"}                         | ${null}            | ${""}
+      ${"undefined"}                    | ${undefined}       | ${""}
+      ${"string as-is"}                 | ${"hello"}         | ${"hello"}
+      ${"integer to string"}            | ${42}              | ${"42"}
+      ${"float to string"}              | ${3.14}            | ${"3.14"}
+      ${"true to string"}               | ${true}            | ${"true"}
+      ${"false to string"}              | ${false}           | ${"false"}
+      ${"array with newline-separated"} | ${["a", "b", "c"]} | ${"a\nb\nc"}
+      ${"array of numbers"}             | ${[1, 2, 3]}       | ${"1\n2\n3"}
+      ${"empty array"}                  | ${[]}              | ${""}
+    `("converts $label", ({ input, expected }) => {
+      expect(formatValue(input)).toBe(expected);
     });
 
     test("formats object as indented JSON", () => {

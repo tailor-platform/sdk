@@ -144,9 +144,20 @@ export function handleOptionalToRequiredError(error: unknown, messages: string[]
 export type SchemaDriftKind =
   | "type_missing_remote"
   | "type_missing_local"
+  | "type_settings_mismatch"
   | "field_missing_remote"
   | "field_missing_local"
-  | "field_mismatch";
+  | "field_mismatch"
+  | "index_missing_remote"
+  | "index_missing_local"
+  | "index_mismatch"
+  | "file_missing_remote"
+  | "file_missing_local"
+  | "file_mismatch"
+  | "relationship_missing_remote"
+  | "relationship_missing_local"
+  | "relationship_mismatch"
+  | "permission_mismatch";
 
 /**
  * Single schema drift item
@@ -155,6 +166,10 @@ export interface SchemaDrift {
   typeName: string;
   kind: SchemaDriftKind;
   fieldName?: string;
+  indexName?: string;
+  fileName?: string;
+  relationshipName?: string;
+  relationshipType?: "forward" | "backward";
   details: string;
 }
 

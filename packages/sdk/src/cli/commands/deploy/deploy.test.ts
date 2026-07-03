@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
@@ -25,35 +25,23 @@ import type { GroupedDisplayEntry, NamespaceAction } from "./grouped-display";
 
 type PlanResults = Parameters<typeof summarizePlanResults>[0];
 
+function emptyFunctionChanges() {
+  return { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] };
+}
+
+function emptyOwnership() {
+  return { conflicts: [], unmanaged: [], resourceOwners: new Set<string>() };
+}
+
 function emptyResults(): PlanResults {
   return {
     functionRegistry: {
       changeSet: createChangeSet("Function registry"),
-      workflowJobChanges: { creates: [], updates: [], deletes: [], replaces: [], unchanged: [] },
-      resolverFunctionChanges: {
-        creates: [],
-        updates: [],
-        deletes: [],
-        replaces: [],
-        unchanged: [],
-      },
-      executorFunctionChanges: {
-        creates: [],
-        updates: [],
-        deletes: [],
-        replaces: [],
-        unchanged: [],
-      },
-      authHookFunctionChanges: {
-        creates: [],
-        updates: [],
-        deletes: [],
-        replaces: [],
-        unchanged: [],
-      },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      workflowJobChanges: emptyFunctionChanges(),
+      resolverFunctionChanges: emptyFunctionChanges(),
+      executorFunctionChanges: emptyFunctionChanges(),
+      authHookFunctionChanges: emptyFunctionChanges(),
+      ...emptyOwnership(),
     },
     tailorDB: {
       changeSet: {
@@ -61,9 +49,7 @@ function emptyResults(): PlanResults {
         type: createChangeSet("TailorDB types"),
         gqlPermission: createChangeSet("TailorDB gqlPermissions"),
       },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      ...emptyOwnership(),
       context: {
         workspaceId: "ws",
         application: {} as PlanResults["tailorDB"]["context"]["application"],
@@ -76,24 +62,18 @@ function emptyResults(): PlanResults {
     staticWebsite: {
       changeSet: createChangeSet("StaticWebsites"),
       customDomainChangeSet: createChangeSet("CustomDomains"),
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      ...emptyOwnership(),
     },
     aiGateway: {
       changeSet: createChangeSet("AIGateways"),
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      ...emptyOwnership(),
     },
     idp: {
       changeSet: {
         service: createChangeSet("IdP services"),
         client: createChangeSet("IdP clients"),
       },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      ...emptyOwnership(),
     },
     auth: {
       changeSet: {
@@ -108,33 +88,25 @@ function emptyResults(): PlanResults {
         scimResource: createChangeSet("Auth scimResources"),
         connection: createChangeSet("Auth connections"),
       },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      ...emptyOwnership(),
     },
     pipeline: {
       changeSet: {
         service: createChangeSet("Pipeline services"),
         resolver: createChangeSet("Pipeline resolvers"),
       },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      ...emptyOwnership(),
     },
     app: createChangeSet("Applications"),
     executor: {
       changeSet: createChangeSet("Executors"),
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      ...emptyOwnership(),
     },
     workflow: {
       changeSet: createChangeSet("Workflows"),
       unchangedWorkflowJobNames: new Set<string>(),
       jobFunctionDeletes: [],
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      ...emptyOwnership(),
       appName: "my-app",
       appId: undefined,
     },
@@ -142,9 +114,7 @@ function emptyResults(): PlanResults {
       vaultChangeSet: createChangeSet("Vaults"),
       secretChangeSet: createChangeSet("Secrets"),
       skippedSecrets: [],
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
+      ...emptyOwnership(),
     },
   } satisfies PlanResults;
 }
@@ -237,54 +207,55 @@ describe("summarizePlanResults", () => {
 });
 
 describe("computeRenamedAppDeletions", () => {
-  test("returns renamed-away apps whose resources have all moved", () => {
-    const result = computeRenamedAppDeletions({
+  test.each<{
+    name: string;
+    conflicts: Array<{ currentOwner: string }>;
+    resourceOwners: Set<string>;
+    protectedAppNames: Set<string>;
+    expected: string[];
+  }>([
+    {
+      name: "returns renamed-away apps whose resources have all moved",
       conflicts: [{ currentOwner: "old-app" }, { currentOwner: "old-app" }],
       resourceOwners: new Set(),
       protectedAppNames: new Set(["new-app"]),
-    });
-
-    expect(result).toEqual(["old-app"]);
-  });
-
-  test("skips the target app itself even if its id was regenerated", () => {
-    const result = computeRenamedAppDeletions({
+      expected: ["old-app"],
+    },
+    {
+      name: "skips the target app itself even if its id was regenerated",
       conflicts: [{ currentOwner: "my-app" }, { currentOwner: "my-app" }],
       resourceOwners: new Set(),
       protectedAppNames: new Set(["my-app"]),
-    });
-
-    expect(result).toEqual([]);
-  });
-
-  test("skips peer target apps in the same multi-config deploy", () => {
-    const result = computeRenamedAppDeletions({
+      expected: [],
+    },
+    {
+      name: "skips peer target apps in the same multi-config deploy",
       conflicts: [{ currentOwner: "supplier" }],
       resourceOwners: new Set(),
       protectedAppNames: new Set(["buyer", "supplier"]),
-    });
-
-    expect(result).toEqual([]);
-  });
-
-  test("keeps the old app when some of its resources still remain unmanaged", () => {
-    const result = computeRenamedAppDeletions({
+      expected: [],
+    },
+    {
+      name: "keeps the old app when some of its resources still remain unmanaged",
       conflicts: [{ currentOwner: "old-app" }],
       resourceOwners: new Set(["old-app"]),
       protectedAppNames: new Set(["new-app"]),
-    });
-
-    expect(result).toEqual([]);
-  });
-
-  test("returns empty when there are no conflicts", () => {
-    const result = computeRenamedAppDeletions({
+      expected: [],
+    },
+    {
+      name: "returns empty when there are no conflicts",
       conflicts: [],
       resourceOwners: new Set(),
       protectedAppNames: new Set(["my-app"]),
+      expected: [],
+    },
+  ])("$name", ({ conflicts, resourceOwners, protectedAppNames, expected }) => {
+    const result = computeRenamedAppDeletions({
+      conflicts,
+      resourceOwners,
+      protectedAppNames,
     });
-
-    expect(result).toEqual([]);
+    expect(result).toEqual(expected);
   });
 });
 
@@ -650,35 +621,35 @@ describe("confirmDeploymentPlans", () => {
 });
 
 describe("printPlanResults", () => {
-  test("routes dry-run output to stdout via logger.out", () => {
-    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
-    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+  let outSpy: ReturnType<typeof vi.spyOn>;
+  let logSpy: ReturnType<typeof vi.spyOn>;
 
+  beforeEach(() => {
+    outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
+    logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    outSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  test("routes dry-run output to stdout via logger.out", () => {
     printPlanResults(emptyResults(), { dryRun: true });
 
     expect(outSpy).toHaveBeenCalled();
     expect(logSpy).not.toHaveBeenCalled();
-
-    outSpy.mockRestore();
-    logSpy.mockRestore();
   });
 
   test("routes apply output to stderr via logger.log", () => {
-    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
-    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
-
     printPlanResults(emptyResults(), { dryRun: false });
 
     expect(logSpy).toHaveBeenCalled();
     expect(outSpy).not.toHaveBeenCalled();
-
-    outSpy.mockRestore();
-    logSpy.mockRestore();
   });
 
   test("emits JSON with summary, changes, warnings, and conflicts for dry-run --json", () => {
     using _json = jsonMode();
-    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
 
     const summary = printPlanResults(emptyResults(), { dryRun: true });
 
@@ -697,13 +668,10 @@ describe("printPlanResults", () => {
     expect(Array.isArray(payload.warnings)).toBe(true);
     expect(Array.isArray(payload.conflicts)).toBe(true);
     expect(summary.create).toBe(0);
-
-    outSpy.mockRestore();
   });
 
   test("includes unmanaged resources and skipped secrets in warnings", () => {
     using _json = jsonMode();
-    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
 
     const results = emptyResults();
     results.tailorDB.unmanaged = [{ resourceType: "tailorDB", resourceName: "OldType" }];
@@ -724,13 +692,10 @@ describe("printPlanResults", () => {
       resourceType: "secret",
       name: "DB_PASSWORD",
     });
-
-    outSpy.mockRestore();
   });
 
   test("includes owner conflicts in conflicts", () => {
     using _json = jsonMode();
-    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
 
     const results = emptyResults();
     results.tailorDB.conflicts = [
@@ -747,22 +712,15 @@ describe("printPlanResults", () => {
       name: "User",
       currentOwner: "other-app",
     });
-
-    outSpy.mockRestore();
   });
 
   test("does not emit JSON for apply --json; still prints plan to stderr", () => {
     using _json = jsonMode();
-    const outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
-    const logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
 
     printPlanResults(emptyResults(), { dryRun: false });
 
     expect(outSpy).not.toHaveBeenCalled();
     expect(logSpy).toHaveBeenCalled();
-
-    outSpy.mockRestore();
-    logSpy.mockRestore();
   });
 });
 

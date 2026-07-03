@@ -24,12 +24,11 @@ describe("bundleWorkflowJobs", () => {
       }
     });
 
-    test("transforms workflow.trigger() from cross-file default import", async () => {
+    const buildBundleFixture = ({ ext, importPath }: { ext: string; importPath: string }) => {
       // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
       tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
 
-      // simple.ts: exports a workflow as default export
-      const simpleFile = path.join(tmpDir, "simple.ts");
+      const simpleFile = path.join(tmpDir, `simple.${ext}`);
       fs.writeFileSync(
         simpleFile,
         `
@@ -49,13 +48,12 @@ export default createWorkflow({
 `,
       );
 
-      // caller.ts: imports the workflow via default export and calls .trigger()
-      const callerFile = path.join(tmpDir, "caller.ts");
+      const callerFile = path.join(tmpDir, `caller.${ext}`);
       fs.writeFileSync(
         callerFile,
         `
 import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
-import simpleWorkflow from "./simple";
+import simpleWorkflow from "${importPath}";
 
 export const callerJob = createWorkflowJob({
   name: "caller-job",
@@ -78,7 +76,6 @@ export default createWorkflow({
       ];
       const mainJobNames = ["caller-job"];
 
-      // Build trigger context to enable trigger transformation
       const workflowFileMap = new Map<string, string>([
         [normalizeFilePath(simpleFile), "simple-workflow"],
       ]);
@@ -92,7 +89,14 @@ export default createWorkflow({
         authNamespace: "default",
       };
 
-      const result = await bundleWorkflowJobs(allJobs, mainJobNames, {}, triggerContext);
+      return bundleWorkflowJobs(allJobs, mainJobNames, {}, triggerContext);
+    };
+
+    test.each([
+      { label: "cross-file default import", ext: "ts", importPath: "./simple" },
+      { label: ".mts dependency files", ext: "mts", importPath: "./simple.mjs" },
+    ])("transforms workflow.trigger() from $label", async ({ ext, importPath }) => {
+      const result = await buildBundleFixture({ ext, importPath });
 
       expect(result.bundledCode.has("caller-job")).toBe(true);
       const callerCode = result.bundledCode.get("caller-job")!;
@@ -101,6 +105,10 @@ export default createWorkflow({
       expect(callerCode).toContain("triggerWorkflow");
       // The raw simpleWorkflow.trigger() should NOT remain in the bundle
       expect(callerCode).not.toContain("simpleWorkflow.trigger");
+    });
+
+    test("strips platform-bundle-only symbols from cross-file default import", async () => {
+      const result = await buildBundleFixture({ ext: "ts", importPath: "./simple" });
 
       // The platform bundle must fold away the TAILOR_PLATFORM_BUNDLE gate and
       // tree-shake every test-only symbol; otherwise an unsubstituted process.env.*
@@ -111,81 +119,6 @@ export default createWorkflow({
         expect(code).not.toContain("registerJob");
         expect(code).not.toContain("platformSerialize");
       }
-    });
-
-    test("transforms workflow.trigger() in .mts dependency files", async () => {
-      tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
-
-      // simple.mts: exports a workflow as default export with .mts extension
-      const simpleFile = path.join(tmpDir, "simple.mts");
-      fs.writeFileSync(
-        simpleFile,
-        `
-import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
-
-export const step1 = createWorkflowJob({
-  name: "step1",
-  body: (args: { input: number }) => {
-    return { result: args.input + 1 };
-  },
-});
-
-export default createWorkflow({
-  name: "simple-workflow",
-  mainJob: step1,
-});
-`,
-      );
-
-      // caller.mts: imports the workflow via default export and calls .trigger()
-      const callerFile = path.join(tmpDir, "caller.mts");
-      fs.writeFileSync(
-        callerFile,
-        `
-import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
-import simpleWorkflow from "./simple.mjs";
-
-export const callerJob = createWorkflowJob({
-  name: "caller-job",
-  body: async () => {
-    const executionId = await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
-    return { executionId };
-  },
-});
-
-export default createWorkflow({
-  name: "caller-workflow",
-  mainJob: callerJob,
-});
-`,
-      );
-
-      const allJobs = [
-        { name: "step1", exportName: "step1", sourceFile: simpleFile },
-        { name: "caller-job", exportName: "callerJob", sourceFile: callerFile },
-      ];
-      const mainJobNames = ["caller-job"];
-
-      const workflowFileMap = new Map<string, string>([
-        [normalizeFilePath(simpleFile), "simple-workflow"],
-      ]);
-      const triggerContext = {
-        workflowNameMap: new Map<string, string>(),
-        jobNameMap: new Map<string, string>([
-          ["step1", "step1"],
-          ["callerJob", "caller-job"],
-        ]),
-        workflowFileMap,
-        authNamespace: "default",
-      };
-
-      const result = await bundleWorkflowJobs(allJobs, mainJobNames, {}, triggerContext);
-
-      expect(result.bundledCode.has("caller-job")).toBe(true);
-      const callerCode = result.bundledCode.get("caller-job")!;
-
-      expect(callerCode).toContain("triggerWorkflow");
-      expect(callerCode).not.toContain("simpleWorkflow.trigger");
     });
   });
 });

@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
 import { describe, expect, test, beforeEach, afterEach } from "vitest";
-import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "./diff-calculator";
+import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import {
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
@@ -17,6 +17,7 @@ import {
   migrationScriptExists,
   getMigrationScriptPath,
 } from "./template-generator";
+import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 
 describe("template-generator", () => {
   let tempDir: string;
@@ -41,6 +42,15 @@ describe("template-generator", () => {
     };
   }
 
+  async function writeExistingMigrateFile(migrationNumber: number) {
+    const migrationDir = getMigrationDirPath(tempDir, migrationNumber);
+    await fs.mkdir(migrationDir, { recursive: true });
+    await fs.writeFile(
+      path.join(migrationDir, MIGRATE_FILE_NAME),
+      "export async function main() {}",
+    );
+  }
+
   describe("generateSchemaFile", () => {
     test("should generate initial schema snapshot file in directory structure", async () => {
       const snapshot = createTestSnapshot({
@@ -56,11 +66,9 @@ describe("template-generator", () => {
 
       const result = await generateSchemaFile(snapshot, tempDir, 0);
 
-      // Check result
       expect(result.migrationNumber).toBe(0);
       expect(result.filePath).toBe(path.join(tempDir, "0000", SCHEMA_FILE_NAME));
 
-      // Check file was created
       const content = await fs.readFile(result.filePath, "utf-8");
       const parsed = JSON.parse(content);
       expect(parsed.version).toBe(SCHEMA_SNAPSHOT_VERSION);
@@ -82,29 +90,24 @@ describe("template-generator", () => {
       expect(exists).toBe(true);
     });
 
-    test("should use correct directory structure", async () => {
+    test.each([
+      [0, "0000"],
+      [1, "0001"],
+      [10, "0010"],
+      [100, "0100"],
+    ])("should use correct directory structure for migration %i", async (migrationNumber, dir) => {
       const snapshot = createTestSnapshot();
 
-      const result0 = await generateSchemaFile(snapshot, tempDir, 0);
-      expect(result0.filePath).toBe(path.join(tempDir, "0000", SCHEMA_FILE_NAME));
+      const result = await generateSchemaFile(snapshot, tempDir, migrationNumber);
 
-      const result1 = await generateSchemaFile(snapshot, tempDir, 1);
-      expect(result1.filePath).toBe(path.join(tempDir, "0001", SCHEMA_FILE_NAME));
-
-      const result10 = await generateSchemaFile(snapshot, tempDir, 10);
-      expect(result10.filePath).toBe(path.join(tempDir, "0010", SCHEMA_FILE_NAME));
-
-      const result100 = await generateSchemaFile(snapshot, tempDir, 100);
-      expect(result100.filePath).toBe(path.join(tempDir, "0100", SCHEMA_FILE_NAME));
+      expect(result.filePath).toBe(path.join(tempDir, dir, SCHEMA_FILE_NAME));
     });
 
     test("should throw error if schema file already exists", async () => {
       const snapshot = createTestSnapshot();
 
-      // Create the file first
       await generateSchemaFile(snapshot, tempDir, 0);
 
-      // Attempt to create again should throw
       await expect(generateSchemaFile(snapshot, tempDir, 0)).rejects.toThrow(
         /Migration file already exists/,
       );
@@ -123,10 +126,7 @@ describe("template-generator", () => {
     });
 
     test("should generate diff file without migration script for non-breaking changes", async () => {
-      const diff: MigrationDiff = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace: "tailordb",
-        createdAt: new Date().toISOString(),
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_added",
@@ -135,12 +135,7 @@ describe("template-generator", () => {
             after: { type: "string", required: false },
           },
         ],
-        hasBreakingChanges: false,
-        breakingChanges: [],
-        hasWarnings: false,
-        warnings: [],
-        requiresMigrationScript: false,
-      };
+      });
 
       const result = await generateDiffFiles(diff, tempDir, 1, previousSnapshot);
 
@@ -149,7 +144,6 @@ describe("template-generator", () => {
       expect(result.migrateFilePath).toBeUndefined();
       expect(result.dbTypesFilePath).toBeUndefined();
 
-      // Check diff file content
       const content = await fs.readFile(result.diffFilePath, "utf-8");
       const parsed = JSON.parse(content);
       expect(parsed.changes).toHaveLength(1);
@@ -157,10 +151,7 @@ describe("template-generator", () => {
     });
 
     test("should generate diff file with migration script and db types for breaking changes", async () => {
-      const diff: MigrationDiff = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace: "tailordb",
-        createdAt: new Date().toISOString(),
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_added",
@@ -170,47 +161,27 @@ describe("template-generator", () => {
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [
-          {
-            typeName: "User",
-            fieldName: "email",
-            reason: "Required field added",
-          },
-        ],
-        hasWarnings: false,
-        warnings: [],
+        breakingChanges: [{ typeName: "User", fieldName: "email", reason: "Required field added" }],
         requiresMigrationScript: true,
-      };
+      });
 
       const result = await generateDiffFiles(diff, tempDir, 1, previousSnapshot);
 
       expect(result.migrateFilePath).toBe(path.join(tempDir, "0001", MIGRATE_FILE_NAME));
       expect(result.dbTypesFilePath).toBe(path.join(tempDir, "0001", DB_TYPES_FILE_NAME));
 
-      // Check migration script content
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
       expect(scriptContent).toContain("export async function main");
       expect(scriptContent).toContain("Transaction");
       expect(scriptContent).toContain("email");
 
-      // Check db types content
       const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
       expect(dbTypesContent).toContain("Transaction");
       expect(dbTypesContent).toContain("User");
     });
 
     test("should include description in diff file if provided", async () => {
-      const diff: MigrationDiff = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace: "tailordb",
-        createdAt: new Date().toISOString(),
-        changes: [],
-        hasBreakingChanges: false,
-        breakingChanges: [],
-        hasWarnings: false,
-        warnings: [],
-        requiresMigrationScript: false,
-      };
+      const diff = createMockMigrationDiff();
 
       const result = await generateDiffFiles(
         diff,
@@ -237,10 +208,7 @@ describe("template-generator", () => {
         },
       });
 
-      const diff: MigrationDiff = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace: "tailordb",
-        createdAt: new Date().toISOString(),
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_removed",
@@ -249,12 +217,7 @@ describe("template-generator", () => {
             before: { type: "string", required: false },
           },
         ],
-        hasBreakingChanges: false,
-        breakingChanges: [],
-        hasWarnings: false,
-        warnings: [],
-        requiresMigrationScript: false,
-      };
+      });
 
       const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithOldField);
 
@@ -263,11 +226,8 @@ describe("template-generator", () => {
       expect(result.dbTypesFilePath).toBeUndefined();
     });
 
-    // Note: Type change is rejected as unsupported in generate.ts before reaching generateDiffFiles
-    // No test needed here as the migration file will never be generated for this case
-
-    // Note: Array to single value change is rejected as unsupported in generate.ts before reaching generateDiffFiles
-    // No test needed here as the migration file will never be generated for this case
+    // Note: Type change and array-to-single-value change are rejected as unsupported in
+    // generate.ts before reaching generateDiffFiles, so no test is needed for those cases here.
 
     test("should generate migration script for unique constraint addition", async () => {
       const snapshotWithoutUnique = createTestSnapshot({
@@ -280,10 +240,7 @@ describe("template-generator", () => {
         },
       });
 
-      const diff: MigrationDiff = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace: "tailordb",
-        createdAt: new Date().toISOString(),
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_modified",
@@ -295,16 +252,10 @@ describe("template-generator", () => {
         ],
         hasBreakingChanges: true,
         breakingChanges: [
-          {
-            typeName: "User",
-            fieldName: "email",
-            reason: "Unique constraint added to field",
-          },
+          { typeName: "User", fieldName: "email", reason: "Unique constraint added to field" },
         ],
-        hasWarnings: false,
-        warnings: [],
         requiresMigrationScript: true,
-      };
+      });
 
       const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithoutUnique);
 
@@ -316,63 +267,42 @@ describe("template-generator", () => {
     });
 
     test("should generate migration script for enum values removal", async () => {
+      const allEnumValues = [
+        { value: "PENDING" },
+        { value: "IN_PROGRESS" },
+        { value: "DONE" },
+        { value: "CANCELLED" },
+      ];
       const snapshotWithAllEnumValues = createTestSnapshot({
         Task: {
           name: "Task",
           pluralForm: "Tasks",
           fields: {
-            status: {
-              type: "enum",
-              required: true,
-              allowedValues: [
-                { value: "PENDING" },
-                { value: "IN_PROGRESS" },
-                { value: "DONE" },
-                { value: "CANCELLED" },
-              ],
-            },
+            status: { type: "enum", required: true, allowedValues: allEnumValues },
           },
         },
       });
 
-      const diff: MigrationDiff = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace: "tailordb",
-        createdAt: new Date().toISOString(),
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_modified",
             typeName: "Task",
             fieldName: "status",
-            before: {
-              type: "enum",
-              required: true,
-              allowedValues: [
-                { value: "PENDING" },
-                { value: "IN_PROGRESS" },
-                { value: "DONE" },
-                { value: "CANCELLED" },
-              ],
-            },
+            before: { type: "enum", required: true, allowedValues: allEnumValues },
             after: {
               type: "enum",
               required: true,
-              allowedValues: [{ value: "PENDING" }, { value: "IN_PROGRESS" }, { value: "DONE" }],
+              allowedValues: allEnumValues.slice(0, 3),
             },
           },
         ],
         hasBreakingChanges: true,
         breakingChanges: [
-          {
-            typeName: "Task",
-            fieldName: "status",
-            reason: "Enum values removed: CANCELLED",
-          },
+          { typeName: "Task", fieldName: "status", reason: "Enum values removed: CANCELLED" },
         ],
-        hasWarnings: false,
-        warnings: [],
         requiresMigrationScript: true,
-      };
+      });
 
       const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithAllEnumValues);
 
@@ -385,32 +315,17 @@ describe("template-generator", () => {
     });
 
     test("should throw error if diff file already exists", async () => {
-      const diff: MigrationDiff = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace: "tailordb",
-        createdAt: new Date().toISOString(),
-        changes: [],
-        hasBreakingChanges: false,
-        breakingChanges: [],
-        hasWarnings: false,
-        warnings: [],
-        requiresMigrationScript: false,
-      };
+      const diff = createMockMigrationDiff();
 
-      // Create the file first
       await generateDiffFiles(diff, tempDir, 1, previousSnapshot);
 
-      // Attempt to create again should throw
       await expect(generateDiffFiles(diff, tempDir, 1, previousSnapshot)).rejects.toThrow(
         /Migration file already exists/,
       );
     });
 
     test("should throw error if migrate file already exists for breaking changes", async () => {
-      const diff: MigrationDiff = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace: "tailordb",
-        createdAt: new Date().toISOString(),
+      const diff = createMockMigrationDiff({
         changes: [
           {
             kind: "field_added",
@@ -420,27 +335,12 @@ describe("template-generator", () => {
           },
         ],
         hasBreakingChanges: true,
-        breakingChanges: [
-          {
-            typeName: "User",
-            fieldName: "email",
-            reason: "Required field added",
-          },
-        ],
-        hasWarnings: false,
-        warnings: [],
+        breakingChanges: [{ typeName: "User", fieldName: "email", reason: "Required field added" }],
         requiresMigrationScript: true,
-      };
+      });
 
-      // Create the migrate file manually in directory structure
-      const migrationDir = getMigrationDirPath(tempDir, 1);
-      await fs.mkdir(migrationDir, { recursive: true });
-      await fs.writeFile(
-        path.join(migrationDir, MIGRATE_FILE_NAME),
-        "export async function main() {}",
-      );
+      await writeExistingMigrateFile(1);
 
-      // Attempt to create should throw because migrate file exists
       await expect(generateDiffFiles(diff, tempDir, 1, previousSnapshot)).rejects.toThrow(
         /Migration file already exists/,
       );
@@ -449,13 +349,7 @@ describe("template-generator", () => {
 
   describe("migrationScriptExists", () => {
     test("should return true if migration script exists in directory", async () => {
-      // Create a migrate file in directory structure
-      const migrationDir = getMigrationDirPath(tempDir, 2);
-      await fs.mkdir(migrationDir, { recursive: true });
-      await fs.writeFile(
-        path.join(migrationDir, MIGRATE_FILE_NAME),
-        "export async function main() {}",
-      );
+      await writeExistingMigrateFile(2);
 
       const exists = await migrationScriptExists(tempDir, 2);
       expect(exists).toBe(true);
@@ -468,21 +362,14 @@ describe("template-generator", () => {
   });
 
   describe("getMigrationScriptPath", () => {
-    test("should return correct path for migration script in directory structure", () => {
-      const result = getMigrationScriptPath(tempDir, 2);
-      expect(result).toBe(path.join(tempDir, "0002", MIGRATE_FILE_NAME));
-    });
-
-    test("should handle different migration numbers", () => {
-      expect(getMigrationScriptPath(tempDir, 1)).toBe(
-        path.join(tempDir, "0001", MIGRATE_FILE_NAME),
-      );
-      expect(getMigrationScriptPath(tempDir, 10)).toBe(
-        path.join(tempDir, "0010", MIGRATE_FILE_NAME),
-      );
-      expect(getMigrationScriptPath(tempDir, 100)).toBe(
-        path.join(tempDir, "0100", MIGRATE_FILE_NAME),
-      );
+    test.each([
+      [1, "0001"],
+      [2, "0002"],
+      [10, "0010"],
+      [100, "0100"],
+    ])("should return correct path for migration number %i", (migrationNumber, dir) => {
+      const result = getMigrationScriptPath(tempDir, migrationNumber);
+      expect(result).toBe(path.join(tempDir, dir, MIGRATE_FILE_NAME));
     });
   });
 });

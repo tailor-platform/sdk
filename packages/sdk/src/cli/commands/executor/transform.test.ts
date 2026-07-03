@@ -19,18 +19,27 @@ import type {
   ExecutorJobAttempt,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
 
+const TIMESTAMP = create(TimestampSchema, { seconds: BigInt(1700000000), nanos: 0 });
+const TIMESTAMP_ISO = "2023-11-14T22:13:20.000Z";
+
+function baseExecutor(overrides: Record<string, unknown>): ExecutorExecutor {
+  return {
+    name: "executor",
+    description: "",
+    targetType: ExecutorTargetType.FUNCTION,
+    disabled: false,
+    ...overrides,
+  } as ExecutorExecutor;
+}
+
 describe("transform", () => {
   describe("toExecutorJobListInfo", () => {
     test("transforms ExecutorJob to list info", () => {
-      const timestamp = create(TimestampSchema, {
-        seconds: BigInt(1700000000),
-        nanos: 0,
-      });
       const job = {
         id: "job-123",
         executorName: "test-executor",
         status: ExecutorJobStatus.RUNNING,
-        createdAt: timestamp,
+        createdAt: TIMESTAMP,
       } as ExecutorJob;
 
       const result = toExecutorJobListInfo(job);
@@ -38,7 +47,7 @@ describe("transform", () => {
       expect(result.id).toBe("job-123");
       expect(result.executorName).toBe("test-executor");
       expect(result.status).toBe("RUNNING");
-      expect(result.createdAt).toBe("2023-11-14T22:13:20.000Z");
+      expect(result.createdAt).toBe(TIMESTAMP_ISO);
     });
 
     test("handles missing createdAt", () => {
@@ -57,17 +66,13 @@ describe("transform", () => {
 
   describe("toExecutorJobInfo", () => {
     test("transforms ExecutorJob to detailed info", () => {
-      const timestamp = create(TimestampSchema, {
-        seconds: BigInt(1700000000),
-        nanos: 0,
-      });
       const job = {
         id: "job-123",
         executorName: "test-executor",
         status: ExecutorJobStatus.SUCCESS,
-        scheduledAt: timestamp,
-        createdAt: timestamp,
-        updatedAt: timestamp,
+        scheduledAt: TIMESTAMP,
+        createdAt: TIMESTAMP,
+        updatedAt: TIMESTAMP,
       } as ExecutorJob;
 
       const result = toExecutorJobInfo(job);
@@ -75,47 +80,36 @@ describe("transform", () => {
       expect(result.id).toBe("job-123");
       expect(result.executorName).toBe("test-executor");
       expect(result.status).toBe("SUCCESS");
-      expect(result.scheduledAt).toBe("2023-11-14T22:13:20.000Z");
-      expect(result.createdAt).toBe("2023-11-14T22:13:20.000Z");
-      expect(result.updatedAt).toBe("2023-11-14T22:13:20.000Z");
+      expect(result.scheduledAt).toBe(TIMESTAMP_ISO);
+      expect(result.createdAt).toBe(TIMESTAMP_ISO);
+      expect(result.updatedAt).toBe(TIMESTAMP_ISO);
     });
 
-    test("handles all status values", () => {
-      const statusCases = [
-        { status: ExecutorJobStatus.PENDING, expected: "PENDING" },
-        { status: ExecutorJobStatus.RUNNING, expected: "RUNNING" },
-        { status: ExecutorJobStatus.SUCCESS, expected: "SUCCESS" },
-        { status: ExecutorJobStatus.FAILED, expected: "FAILED" },
-        { status: ExecutorJobStatus.CANCELED, expected: "CANCELED" },
-        { status: ExecutorJobStatus.UNSPECIFIED, expected: "UNSPECIFIED" },
-      ];
+    test.each([
+      [ExecutorJobStatus.PENDING, "PENDING"],
+      [ExecutorJobStatus.RUNNING, "RUNNING"],
+      [ExecutorJobStatus.SUCCESS, "SUCCESS"],
+      [ExecutorJobStatus.FAILED, "FAILED"],
+      [ExecutorJobStatus.CANCELED, "CANCELED"],
+      [ExecutorJobStatus.UNSPECIFIED, "UNSPECIFIED"],
+    ])("handles status value %s -> %s", (status, expected) => {
+      const job = { id: "job-123", executorName: "test-executor", status } as ExecutorJob;
 
-      for (const { status, expected } of statusCases) {
-        const job = {
-          id: "job-123",
-          executorName: "test-executor",
-          status,
-        } as ExecutorJob;
+      const result = toExecutorJobInfo(job);
 
-        const result = toExecutorJobInfo(job);
-        expect(result.status).toBe(expected);
-      }
+      expect(result.status).toBe(expected);
     });
   });
 
   describe("toExecutorJobAttemptInfo", () => {
     test("transforms ExecutorJobAttempt to info", () => {
-      const timestamp = create(TimestampSchema, {
-        seconds: BigInt(1700000000),
-        nanos: 0,
-      });
       const attempt = {
         id: "attempt-123",
         jobId: "job-123",
         status: ExecutorJobStatus.SUCCESS,
         error: "",
-        startedAt: timestamp,
-        finishedAt: timestamp,
+        startedAt: TIMESTAMP,
+        finishedAt: TIMESTAMP,
         operationReference: "op-ref-123",
       } as ExecutorJobAttempt;
 
@@ -125,8 +119,8 @@ describe("transform", () => {
       expect(result.jobId).toBe("job-123");
       expect(result.status).toBe("SUCCESS");
       expect(result.error).toBe("");
-      expect(result.startedAt).toBe("2023-11-14T22:13:20.000Z");
-      expect(result.finishedAt).toBe("2023-11-14T22:13:20.000Z");
+      expect(result.startedAt).toBe(TIMESTAMP_ISO);
+      expect(result.finishedAt).toBe(TIMESTAMP_ISO);
       expect(result.operationReference).toBe("op-ref-123");
     });
 
@@ -149,98 +143,161 @@ describe("transform", () => {
   });
 
   describe("toExecutorListInfo", () => {
-    test("extracts typeName from condition for tailordb event", () => {
-      const executor = {
-        name: "test-executor",
-        description: "Test executor",
-        triggerType: ExecutorTriggerType.EVENT,
-        triggerConfig: {
-          config: {
-            case: "event" as const,
-            value: {
-              eventType: "tailordb.type_record.created",
-              typedConfig: { case: undefined },
-              condition: {
-                expr: 'args.typeName === "User" && someOtherCondition',
+    test.each([
+      [
+        "extracts typeName from condition for tailordb event",
+        {
+          triggerType: ExecutorTriggerType.EVENT,
+          triggerConfig: {
+            config: {
+              case: "event" as const,
+              value: {
+                eventType: "tailordb.type_record.created",
+                typedConfig: { case: undefined },
+                condition: { expr: 'args.typeName === "User" && someOtherCondition' },
               },
             },
           },
         },
-        targetType: ExecutorTargetType.FUNCTION,
-        disabled: false,
-      } as ExecutorExecutor;
-
-      const result = toExecutorListInfo(executor);
-
-      expect(result.name).toBe("test-executor");
-      expect(result.triggerType).toBe("event: User created");
-      expect(result.targetType).toBe("FUNCTION");
-      expect(result.disabled).toBe(false);
-    });
-
-    test("extracts resolverName from condition for pipeline event", () => {
-      const executor = {
-        name: "resolver-executor",
-        triggerType: ExecutorTriggerType.EVENT,
-        triggerConfig: {
-          config: {
-            case: "event" as const,
-            value: {
-              eventType: "pipeline.resolver.executed",
-              typedConfig: { case: undefined },
-              condition: {
-                expr: 'args.resolverName === "myResolver"',
+        "event: User created",
+      ],
+      [
+        "extracts resolverName from condition for pipeline event",
+        {
+          triggerType: ExecutorTriggerType.EVENT,
+          triggerConfig: {
+            config: {
+              case: "event" as const,
+              value: {
+                eventType: "pipeline.resolver.executed",
+                typedConfig: { case: undefined },
+                condition: { expr: 'args.resolverName === "myResolver"' },
               },
             },
           },
         },
-        targetType: ExecutorTargetType.FUNCTION,
-        disabled: false,
-      } as ExecutorExecutor;
-
-      const result = toExecutorListInfo(executor);
-
-      expect(result.triggerType).toBe("event: myResolver executed");
-    });
-
-    test("falls back to service name when condition has no name", () => {
-      const executor = {
-        name: "fallback-executor",
-        triggerType: ExecutorTriggerType.EVENT,
-        triggerConfig: {
-          config: {
-            case: "event" as const,
-            value: {
-              eventType: "tailordb.type_record.created",
-              typedConfig: { case: undefined },
+        "event: myResolver executed",
+      ],
+      [
+        "falls back to service name when condition has no name",
+        {
+          triggerType: ExecutorTriggerType.EVENT,
+          triggerConfig: {
+            config: {
+              case: "event" as const,
+              value: {
+                eventType: "tailordb.type_record.created",
+                typedConfig: { case: undefined },
+              },
             },
           },
         },
-        targetType: ExecutorTargetType.FUNCTION,
-        disabled: false,
-      } as ExecutorExecutor;
+        "event: tailordb type_record created",
+      ],
+      [
+        "falls back to basic trigger type when config is missing",
+        { triggerType: ExecutorTriggerType.EVENT, triggerConfig: undefined },
+        "EVENT",
+      ],
+      [
+        "formats idp user event trigger",
+        {
+          triggerType: ExecutorTriggerType.EVENT,
+          triggerConfig: {
+            config: {
+              case: "event" as const,
+              value: { eventType: "idp.user.created", typedConfig: { case: undefined } },
+            },
+          },
+        },
+        "event: idp user created",
+      ],
+      [
+        "formats auth access token event trigger",
+        {
+          triggerType: ExecutorTriggerType.EVENT,
+          triggerConfig: {
+            config: {
+              case: "event" as const,
+              value: {
+                eventType: "auth.access_token.issued",
+                typedConfig: { case: undefined },
+              },
+            },
+          },
+        },
+        "event: auth access_token issued",
+      ],
+      [
+        "formats typed event trigger when legacy eventType is empty",
+        {
+          triggerType: ExecutorTriggerType.EVENT,
+          triggerConfig: {
+            config: {
+              case: "event" as const,
+              value: {
+                eventType: "",
+                typedConfig: {
+                  case: "tailordb" as const,
+                  value: {
+                    eventTypes: ["tailordb.type_record.created"],
+                    namespaceName: "sales",
+                    typeName: "SalesOrder",
+                  },
+                },
+              },
+            },
+          },
+        },
+        "event: SalesOrder created",
+      ],
+      [
+        "formats multi-event typed auth trigger",
+        {
+          triggerType: ExecutorTriggerType.EVENT,
+          triggerConfig: {
+            config: {
+              case: "event" as const,
+              value: {
+                eventType: "",
+                typedConfig: {
+                  case: "auth" as const,
+                  value: {
+                    eventTypes: [
+                      "auth.access_token.issued",
+                      "auth.access_token.refreshed",
+                      "auth.access_token.revoked",
+                    ],
+                    namespaceName: "erp-auth",
+                  },
+                },
+              },
+            },
+          },
+        },
+        "event: auth access_token issued, refreshed, revoked",
+      ],
+    ])("%s", (_name, overrides, expectedTriggerType) => {
+      const executor = baseExecutor(overrides);
 
       const result = toExecutorListInfo(executor);
 
-      expect(result.triggerType).toBe("event: tailordb type_record created");
+      expect(result.triggerType).toBe(expectedTriggerType);
     });
 
     test("formats schedule trigger with frequency and timezone", () => {
-      const executor = {
+      const executor = baseExecutor({
         name: "scheduled-executor",
         triggerType: ExecutorTriggerType.SCHEDULE,
         triggerConfig: {
           config: {
             case: "schedule" as const,
-            value: {
-              timezone: "UTC",
-              frequency: "0 12 * * *",
-            },
+            value: { timezone: "UTC", frequency: "0 12 * * *" },
           },
         },
         targetType: ExecutorTargetType.WEBHOOK,
         disabled: true,
-      } as ExecutorExecutor;
+      });
 
       const result = toExecutorListInfo(executor);
 
@@ -250,20 +307,14 @@ describe("transform", () => {
     });
 
     test("formats incomingWebhook as 'webhook'", () => {
-      const executor = {
+      const executor = baseExecutor({
         name: "webhook-executor",
         triggerType: ExecutorTriggerType.INCOMING_WEBHOOK,
         triggerConfig: {
-          config: {
-            case: "incomingWebhook" as const,
-            value: {
-              secret: "my-secret",
-            },
-          },
+          config: { case: "incomingWebhook" as const, value: { secret: "my-secret" } },
         },
         targetType: ExecutorTargetType.TAILOR_GRAPHQL,
-        disabled: false,
-      } as ExecutorExecutor;
+      });
 
       const result = toExecutorListInfo(executor);
 
@@ -271,152 +322,48 @@ describe("transform", () => {
       expect(result.targetType).toBe("GRAPHQL");
     });
 
-    test("falls back to basic trigger type when config is missing", () => {
-      const executor = {
-        name: "no-config-executor",
-        triggerType: ExecutorTriggerType.EVENT,
-        triggerConfig: undefined,
-        targetType: ExecutorTargetType.FUNCTION,
-        disabled: false,
-      } as ExecutorExecutor;
-
-      const result = toExecutorListInfo(executor);
-
-      expect(result.triggerType).toBe("EVENT");
-    });
-
-    test("formats idp user event trigger", () => {
-      const executor = {
-        name: "idp-executor",
+    test("extracts name from condition and reports name/targetType/disabled", () => {
+      const executor = baseExecutor({
+        name: "test-executor",
+        description: "Test executor",
         triggerType: ExecutorTriggerType.EVENT,
         triggerConfig: {
           config: {
             case: "event" as const,
             value: {
-              eventType: "idp.user.created",
+              eventType: "tailordb.type_record.created",
               typedConfig: { case: undefined },
+              condition: { expr: 'args.typeName === "User" && someOtherCondition' },
             },
           },
         },
-        targetType: ExecutorTargetType.FUNCTION,
-        disabled: false,
-      } as ExecutorExecutor;
+      });
 
       const result = toExecutorListInfo(executor);
 
-      expect(result.triggerType).toBe("event: idp user created");
-    });
-
-    test("formats auth access token event trigger", () => {
-      const executor = {
-        name: "auth-executor",
-        triggerType: ExecutorTriggerType.EVENT,
-        triggerConfig: {
-          config: {
-            case: "event" as const,
-            value: {
-              eventType: "auth.access_token.issued",
-              typedConfig: { case: undefined },
-            },
-          },
-        },
-        targetType: ExecutorTargetType.FUNCTION,
-        disabled: false,
-      } as ExecutorExecutor;
-
-      const result = toExecutorListInfo(executor);
-
-      expect(result.triggerType).toBe("event: auth access_token issued");
-    });
-
-    test("formats typed event trigger when legacy eventType is empty", () => {
-      const executor = {
-        name: "typed-tailordb-executor",
-        triggerType: ExecutorTriggerType.EVENT,
-        triggerConfig: {
-          config: {
-            case: "event" as const,
-            value: {
-              eventType: "",
-              typedConfig: {
-                case: "tailordb" as const,
-                value: {
-                  eventTypes: ["tailordb.type_record.created"],
-                  namespaceName: "sales",
-                  typeName: "SalesOrder",
-                },
-              },
-            },
-          },
-        },
-        targetType: ExecutorTargetType.FUNCTION,
-        disabled: false,
-      } as ExecutorExecutor;
-
-      const result = toExecutorListInfo(executor);
-
-      expect(result.triggerType).toBe("event: SalesOrder created");
-    });
-
-    test("formats multi-event typed auth trigger", () => {
-      const executor = {
-        name: "typed-auth-executor",
-        triggerType: ExecutorTriggerType.EVENT,
-        triggerConfig: {
-          config: {
-            case: "event" as const,
-            value: {
-              eventType: "",
-              typedConfig: {
-                case: "auth" as const,
-                value: {
-                  eventTypes: [
-                    "auth.access_token.issued",
-                    "auth.access_token.refreshed",
-                    "auth.access_token.revoked",
-                  ],
-                  namespaceName: "erp-auth",
-                },
-              },
-            },
-          },
-        },
-        targetType: ExecutorTargetType.FUNCTION,
-        disabled: false,
-      } as ExecutorExecutor;
-
-      const result = toExecutorListInfo(executor);
-
-      expect(result.triggerType).toBe("event: auth access_token issued, refreshed, revoked");
+      expect(result.name).toBe("test-executor");
+      expect(result.triggerType).toBe("event: User created");
+      expect(result.targetType).toBe("FUNCTION");
+      expect(result.disabled).toBe(false);
     });
   });
 
   describe("toExecutorInfo", () => {
     test("transforms ExecutorExecutor with schedule trigger to detailed info", () => {
-      const executor = {
+      const executor = baseExecutor({
         name: "scheduled-executor",
         description: "A scheduled executor",
         triggerType: ExecutorTriggerType.SCHEDULE,
         triggerConfig: {
           config: {
             case: "schedule" as const,
-            value: {
-              timezone: "UTC",
-              frequency: "0 * * * *",
-            },
+            value: { timezone: "UTC", frequency: "0 * * * *" },
           },
         },
-        targetType: ExecutorTargetType.FUNCTION,
         targetConfig: {
-          config: {
-            case: "function" as const,
-            value: {
-              name: "my-function",
-            },
-          },
+          config: { case: "function" as const, value: { name: "my-function" } },
         },
-        disabled: false,
-      } as ExecutorExecutor;
+      });
 
       const result = toExecutorInfo(executor);
 
@@ -430,7 +377,7 @@ describe("transform", () => {
     });
 
     test("transforms ExecutorExecutor with event trigger", () => {
-      const executor = {
+      const executor = baseExecutor({
         name: "event-executor",
         description: "An event executor",
         triggerType: ExecutorTriggerType.EVENT,
@@ -440,9 +387,7 @@ describe("transform", () => {
             value: {
               eventType: "user.created",
               typedConfig: { case: undefined },
-              condition: {
-                expr: "true",
-              },
+              condition: { expr: "true" },
             },
           },
         },
@@ -450,14 +395,10 @@ describe("transform", () => {
         targetConfig: {
           config: {
             case: "tailorGraphql" as const,
-            value: {
-              appName: "my-app",
-              query: "mutation { doSomething }",
-            },
+            value: { appName: "my-app", query: "mutation { doSomething }" },
           },
         },
-        disabled: false,
-      } as ExecutorExecutor;
+      });
 
       const result = toExecutorInfo(executor);
 
@@ -469,7 +410,7 @@ describe("transform", () => {
     });
 
     test("transforms typed TailorDB event trigger details when legacy eventType is empty", () => {
-      const executor = {
+      const executor = baseExecutor({
         name: "order-created-audit",
         description: "Audit order creation",
         triggerType: ExecutorTriggerType.EVENT,
@@ -484,17 +425,13 @@ describe("transform", () => {
                   eventTypes: ["tailordb.type_record.created"],
                   namespaceName: "sales",
                   typeName: "SalesOrder",
-                  condition: {
-                    expr: "args.newRecord.total > 0",
-                  },
+                  condition: { expr: "args.newRecord.total > 0" },
                 },
               },
             },
           },
         },
-        targetType: ExecutorTargetType.FUNCTION,
-        disabled: false,
-      } as ExecutorExecutor;
+      });
 
       const result = toExecutorInfo(executor);
 
@@ -509,7 +446,7 @@ describe("transform", () => {
     });
 
     test("transforms typed IdP event trigger details", () => {
-      const executor = {
+      const executor = baseExecutor({
         name: "idp-user-lifecycle",
         description: "Audit IdP user lifecycle",
         triggerType: ExecutorTriggerType.EVENT,
@@ -528,9 +465,7 @@ describe("transform", () => {
             },
           },
         },
-        targetType: ExecutorTargetType.FUNCTION,
-        disabled: false,
-      } as ExecutorExecutor;
+      });
 
       const result = toExecutorInfo(executor);
 
@@ -544,7 +479,7 @@ describe("transform", () => {
     });
 
     test("transforms typed auth access token event trigger details", () => {
-      const executor = {
+      const executor = baseExecutor({
         name: "auth-token-lifecycle",
         description: "Audit auth token lifecycle",
         triggerType: ExecutorTriggerType.EVENT,
@@ -567,9 +502,7 @@ describe("transform", () => {
             },
           },
         },
-        targetType: ExecutorTargetType.FUNCTION,
-        disabled: false,
-      } as ExecutorExecutor;
+      });
 
       const result = toExecutorInfo(executor);
 
@@ -587,32 +520,24 @@ describe("transform", () => {
     });
 
     test("transforms ExecutorExecutor with incoming webhook trigger", () => {
-      const executor = {
+      const executor = baseExecutor({
         name: "webhook-executor",
         description: "A webhook executor",
         triggerType: ExecutorTriggerType.INCOMING_WEBHOOK,
         triggerConfig: {
-          config: {
-            case: "incomingWebhook" as const,
-            value: {
-              secret: "my-secret",
-            },
-          },
+          config: { case: "incomingWebhook" as const, value: { secret: "my-secret" } },
         },
         targetType: ExecutorTargetType.WEBHOOK,
         targetConfig: {
           config: {
             case: "webhook" as const,
             value: {
-              url: {
-                expr: '"https://example.com/webhook"',
-              },
+              url: { expr: '"https://example.com/webhook"' },
               headers: [{ key: "X-Custom", value: { case: "rawValue", value: "test" } }],
             },
           },
         },
-        disabled: false,
-      } as ExecutorExecutor;
+      });
 
       const result = toExecutorInfo(executor);
 
@@ -621,30 +546,21 @@ describe("transform", () => {
     });
 
     test("transforms ExecutorExecutor with workflow target", () => {
-      const executor = {
+      const executor = baseExecutor({
         name: "workflow-executor",
         description: "A workflow executor",
         triggerType: ExecutorTriggerType.EVENT,
         triggerConfig: {
           config: {
             case: "event" as const,
-            value: {
-              eventType: "order.created",
-              typedConfig: { case: undefined },
-            },
+            value: { eventType: "order.created", typedConfig: { case: undefined } },
           },
         },
         targetType: ExecutorTargetType.WORKFLOW,
         targetConfig: {
-          config: {
-            case: "workflow" as const,
-            value: {
-              workflowName: "order-processing",
-            },
-          },
+          config: { case: "workflow" as const, value: { workflowName: "order-processing" } },
         },
-        disabled: false,
-      } as ExecutorExecutor;
+      });
 
       const result = toExecutorInfo(executor);
 
@@ -652,15 +568,13 @@ describe("transform", () => {
     });
 
     test("handles missing trigger config", () => {
-      const executor = {
+      const executor = baseExecutor({
         name: "minimal-executor",
-        description: "",
         triggerType: ExecutorTriggerType.UNSPECIFIED,
         triggerConfig: undefined,
         targetType: ExecutorTargetType.UNSPECIFIED,
         targetConfig: undefined,
-        disabled: false,
-      } as ExecutorExecutor;
+      });
 
       const result = toExecutorInfo(executor);
 
@@ -669,25 +583,12 @@ describe("transform", () => {
     });
 
     test("handles undefined config case", () => {
-      const executor = {
+      const executor = baseExecutor({
         name: "edge-case-executor",
-        description: "",
         triggerType: ExecutorTriggerType.SCHEDULE,
-        triggerConfig: {
-          config: {
-            case: undefined,
-            value: undefined,
-          },
-        },
-        targetType: ExecutorTargetType.FUNCTION,
-        targetConfig: {
-          config: {
-            case: undefined,
-            value: undefined,
-          },
-        },
-        disabled: false,
-      } as ExecutorExecutor;
+        triggerConfig: { config: { case: undefined, value: undefined } },
+        targetConfig: { config: { case: undefined, value: undefined } },
+      });
 
       const result = toExecutorInfo(executor);
 

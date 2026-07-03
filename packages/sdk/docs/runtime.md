@@ -19,6 +19,7 @@ import {
   workflow,
   context,
   file,
+  aigateway,
 } from "@tailor-platform/sdk/runtime";
 
 const utf8 = iconv.convert(sjisBuffer, "Shift_JIS", "UTF-8");
@@ -35,6 +36,8 @@ const executionId = await workflow.triggerWorkflow("approval", { reportId });
 const invoker = context.getInvoker();
 
 const { metadata } = await file.upload("my-namespace", "Document", "attachment", recordId, bytes);
+
+const { url } = await aigateway.get("my-aigateway");
 ```
 
 ## Subpath imports
@@ -79,6 +82,7 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 - `workflow` — workflow & job control (`triggerWorkflow`, `resumeWorkflow`, `triggerJobFunction`, `wait`, `resolve`)
 - `context` — execution context (`getInvoker`)
 - `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `downloadStream`, `uploadStream`, `openDownloadStream` _(deprecated)_)
+- `aigateway` — AI Gateway URL resolution (`get`)
 
 ## Testing
 

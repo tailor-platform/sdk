@@ -18,13 +18,20 @@ vi.mock("politty", async (importOriginal) => ({
   runMain: vi.fn(),
 }));
 
+async function complete(args: string[]) {
+  const ctx = parseCompletionContext(args, mainCommand);
+  return generateCandidates(ctx, { shell: "bash" });
+}
+
+async function completeValues(args: string[]) {
+  const result = await complete(args);
+  return result.candidates.map((c) => c.value);
+}
+
 describe("shell completion", () => {
   describe("subcommand completion", () => {
     test("completes root subcommands", async () => {
-      const ctx = parseCompletionContext([""], mainCommand);
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      const values = result.candidates.map((c) => c.value);
+      const values = await completeValues([""]);
       expect(values).toContain("deploy");
       expect(values).toContain("generate");
       expect(values).toContain("tailordb");
@@ -33,10 +40,7 @@ describe("shell completion", () => {
     });
 
     test("completes nested subcommands for tailordb", async () => {
-      const ctx = parseCompletionContext(["tailordb", ""], mainCommand);
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      const values = result.candidates.map((c) => c.value);
+      const values = await completeValues(["tailordb", ""]);
       expect(values).toContain("erd");
       expect(values).toContain("migration");
       expect(values).toContain("truncate");
@@ -45,10 +49,7 @@ describe("shell completion", () => {
 
   describe("option name completion", () => {
     test("completes option names for deploy command", async () => {
-      const ctx = parseCompletionContext(["deploy", "--"], mainCommand);
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      const values = result.candidates.map((c) => c.value);
+      const values = await completeValues(["deploy", "--"]);
       expect(values).toContain("--config");
       expect(values).toContain("--workspace-id");
       expect(values).toContain("--profile");
@@ -56,10 +57,7 @@ describe("shell completion", () => {
     });
 
     test("completes option names for workspace create command", async () => {
-      const ctx = parseCompletionContext(["workspace", "create", "--"], mainCommand);
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      const values = result.candidates.map((c) => c.value);
+      const values = await completeValues(["workspace", "create", "--"]);
       expect(values).toContain("--name");
       expect(values).toContain("--region");
       expect(values).toContain("--delete-protection");
@@ -68,8 +66,7 @@ describe("shell completion", () => {
 
   describe("file completion", () => {
     test("triggers file completion with extension filter for --config", async () => {
-      const ctx = parseCompletionContext(["deploy", "--config", ""], mainCommand);
-      const result = await generateCandidates(ctx, { shell: "bash" });
+      const result = await complete(["deploy", "--config", ""]);
 
       // With extensions set, politty uses @ext: metadata instead of FileCompletion directive
       expect(result.fileExtensions).toEqual(["ts"]);
@@ -80,48 +77,28 @@ describe("shell completion", () => {
   });
 
   describe("directory completion", () => {
-    test("triggers directory completion for staticwebsite deploy --dir", async () => {
-      const ctx = parseCompletionContext(["staticwebsite", "deploy", "--dir", ""], mainCommand);
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      expect(result.directive & CompletionDirective.DirectoryCompletion).toBeTruthy();
-    });
-
-    test("triggers directory completion for tailordb erd export --output", async () => {
-      const ctx = parseCompletionContext(
-        ["tailordb", "erd", "export", "--output", ""],
-        mainCommand,
-      );
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
+    test.each([
+      ["staticwebsite deploy --dir", ["staticwebsite", "deploy", "--dir", ""]],
+      ["tailordb erd export --output", ["tailordb", "erd", "export", "--output", ""]],
+    ])("triggers directory completion for %s", async (_label, args) => {
+      const result = await complete(args);
       expect(result.directive & CompletionDirective.DirectoryCompletion).toBeTruthy();
     });
   });
 
   describe("no file completion", () => {
-    test("suppresses file completion for --workspace-id", async () => {
-      const ctx = parseCompletionContext(["deploy", "--workspace-id", ""], mainCommand);
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      expect(result.directive & CompletionDirective.NoFileCompletion).toBeTruthy();
-    });
-
-    test("suppresses file completion for --profile", async () => {
-      const ctx = parseCompletionContext(["deploy", "--profile", ""], mainCommand);
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
-      expect(result.directive & CompletionDirective.NoFileCompletion).toBeTruthy();
-    });
+    test.each([["--workspace-id"], ["--profile"]])(
+      "suppresses file completion for %s",
+      async (flag) => {
+        const result = await complete(["deploy", flag, ""]);
+        expect(result.directive & CompletionDirective.NoFileCompletion).toBeTruthy();
+      },
+    );
   });
 
   describe("enum completion", () => {
     test("completes role values for workspace user invite", async () => {
-      const ctx = parseCompletionContext(
-        ["workspace", "user", "invite", "--role", ""],
-        mainCommand,
-      );
-      const result = await generateCandidates(ctx, { shell: "bash" });
-
+      const result = await complete(["workspace", "user", "invite", "--role", ""]);
       const values = result.candidates.map((c) => c.value);
       expect(values).toContain("admin");
       expect(values).toContain("editor");
