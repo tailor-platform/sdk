@@ -9,6 +9,15 @@ import type {
 import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
+type FieldScriptContext = {
+  typeName: string;
+  fieldPath: readonly string[];
+};
+
+type ScriptFunction = (...args: never[]) => unknown;
+
+type ScriptContextKind = "hooks.create" | "hooks.update" | "validate";
+
 // Since there's naming difference between platform and sdk,
 // use this mapping in all scripts to provide variables that match sdk types.
 export const tailorUserMap = /* js */ `{ id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes }`;
@@ -58,10 +67,15 @@ export const stringifyFunction = (fn: Function): string => {
   const wrapped = `({${src}})`;
   const property = firstObjectProperty(wrapped);
 
+  if (property?.type === "Property" && property.method && property.computed) {
+    throw new Error(
+      "Computed-key method shorthand cannot be converted to a TailorDB script expression. " +
+        "Use an arrow function or function expression instead.",
+    );
+  }
   if (
     property?.type === "Property" &&
     property.method &&
-    !property.computed &&
     property.value.type === "FunctionExpression"
   ) {
     const { async, generator } = property.value;
@@ -71,22 +85,33 @@ export const stringifyFunction = (fn: Function): string => {
   return src;
 };
 
+function formatScriptContext(kind: ScriptContextKind, context: FieldScriptContext | undefined) {
+  if (!context) {
+    return kind === "validate" ? kind : "hooks";
+  }
+  return `${kind} for ${context.typeName}.${context.fieldPath.join(".")}`;
+}
+
 /**
  * Convert a hook or validator function to a script expression.
  * @param fn - Hook or validator function
  * @param kind - Label naming the source of the expression in conversion errors
+ * @param context - Optional field context for conversion errors
  * @returns JavaScript expression calling the function
  */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-const convertToScriptExpr = (fn: Function, kind: "hooks" | "validate"): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+const convertToScriptExpr = (
+  fn: ScriptFunction,
+  kind: ScriptContextKind,
+  context: FieldScriptContext | undefined,
+): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn);
   if (precompiledExpr) {
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
   return assertParsableExpression(
     `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`,
-    kind,
+    formatScriptContext(kind, context),
   );
 };
 
@@ -94,10 +119,12 @@ const convertToScriptExpr = (fn: Function, kind: "hooks" | "validate"): string =
  * Parse TailorDBField into OperatorFieldConfig.
  * This transforms user-defined functions into script expressions.
  * @param field - TailorDB field definition
+ * @param context - Optional field context for conversion errors
  * @returns Parsed operator field configuration
  */
 export function parseFieldConfig(
   field: TailorDBTypeSchemaOutput["fields"][string],
+  context?: FieldScriptContext,
 ): OperatorFieldConfig {
   const metadata = field.metadata as DBFieldMetadata;
   const fieldType = field.type;
@@ -113,7 +140,13 @@ export function parseFieldConfig(
       ? {
           fields: Object.entries(nestedFields).reduce(
             (acc, [key, nestedField]) => {
-              acc[key] = parseFieldConfig(nestedField);
+              acc[key] = parseFieldConfig(
+                nestedField,
+                context && {
+                  ...context,
+                  fieldPath: [...context.fieldPath, key],
+                },
+              );
               return acc;
             },
             {} as Record<string, OperatorFieldConfig>,
@@ -128,7 +161,7 @@ export function parseFieldConfig(
 
       return {
         script: {
-          expr: convertToScriptExpr(fn, "validate"),
+          expr: convertToScriptExpr(fn, "validate", context),
         },
         errorMessage: message,
       };
@@ -137,12 +170,20 @@ export function parseFieldConfig(
       ? {
           create: metadata.hooks.create
             ? {
-                expr: convertToScriptExpr(metadata.hooks.create, "hooks"),
+                expr: convertToScriptExpr(
+                  metadata.hooks.create as ScriptFunction,
+                  "hooks.create",
+                  context,
+                ),
               }
             : undefined,
           update: metadata.hooks.update
             ? {
-                expr: convertToScriptExpr(metadata.hooks.update, "hooks"),
+                expr: convertToScriptExpr(
+                  metadata.hooks.update as ScriptFunction,
+                  "hooks.update",
+                  context,
+                ),
               }
             : undefined,
         }

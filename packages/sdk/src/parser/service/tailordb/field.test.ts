@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { toSchemaOutputs } from "#/utils/test/internal";
 import { parseFieldConfig, stringifyFunction } from "./field";
+import { parseTypes } from "./type-parser";
 
 // Mirrors how consumers embed the result, e.g. `(${normalized})({ value, data, user })`.
 const expectValidIife = (normalized: string, args: string) => {
@@ -83,15 +84,14 @@ describe("stringifyFunction", () => {
     expect(fn({ value: 1 })).toBe(100);
   });
 
-  test("leaves computed-key method shorthand unchanged (no misnamed function)", () => {
+  test("rejects computed-key method shorthand with a specific error", () => {
     const key = "create";
     const obj = {
       [key]() {
         return 1;
       },
     };
-    const result = stringifyFunction(obj[key]);
-    expect(result.startsWith("[key](")).toBe(true);
+    expect(() => stringifyFunction(obj[key])).toThrow(/Computed-key method shorthand/);
   });
 
   test("leaves function expressions unchanged", () => {
@@ -157,7 +157,7 @@ describe("parseFieldConfig script expression validation", () => {
     const schema = toSchemaOutputs({ User: type });
 
     expect(() => parseFieldConfig(schema.User!.fields.email!)).toThrow(
-      /Generated hooks script is not valid JavaScript/,
+      /Computed-key method shorthand/,
     );
   });
 
@@ -173,6 +173,21 @@ describe("parseFieldConfig script expression validation", () => {
 
     expect(() => parseFieldConfig(schema.User!.fields.email!)).toThrow(
       /Generated validate script is not valid JavaScript/,
+    );
+  });
+
+  test("includes the type and field path in conversion errors from type parsing", () => {
+    const check = function check({ value }: { value: string }) {
+      return value.length > 0;
+    }.bind(null);
+    const type = db.type("User", {
+      email: db.string().validate(check),
+    });
+
+    const schema = toSchemaOutputs({ User: type });
+
+    expect(() => parseTypes(schema, "default")).toThrow(
+      /Generated validate for User\.email script is not valid JavaScript/,
     );
   });
 });

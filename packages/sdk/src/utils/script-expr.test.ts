@@ -26,4 +26,12 @@ describe("assertParsableExpression", () => {
   test("rejects statement sequences that are not a single expression", () => {
     expect(() => assertParsableExpression("a; b", "validate")).toThrow(/not valid JavaScript/);
   });
+
+  test("truncates long generated code in parse errors", () => {
+    const longSegment = "x".repeat(5_000);
+    const expr = `${longSegment}(`;
+
+    expect(() => assertParsableExpression(expr, "hooks")).toThrow(/Generated code \(truncated/);
+    expect(() => assertParsableExpression(expr, "hooks")).not.toThrow(longSegment);
+  });
 });

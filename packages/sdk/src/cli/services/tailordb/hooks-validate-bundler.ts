@@ -439,10 +439,11 @@ async function bundleScriptTarget(args: {
   tsconfig: string | undefined;
 }): Promise<string> {
   const { fn, kind, sourceFilePath, sourceBindings, tempDir, targetIndex, tsconfig } = args;
+  const context = `${kind} in ${sourceFilePath}`;
   const fnSource = stringifyFunction(fn);
   const inlineExpr = assertParsableExpression(
     `(${fnSource})({ value: _value, data: _data, user: ${tailorUserMap} })`,
-    `${kind} in ${sourceFilePath}`,
+    context,
   );
 
   // Check if the function has free variables that need bundling
@@ -455,7 +456,7 @@ async function bundleScriptTarget(args: {
   const { imports, declarations, unresolved } = resolveNeededBindings(freeVars, sourceBindings);
   if (unresolved.length > 0) {
     throw new Error(
-      `${kind} in ${sourceFilePath} captures unresolvable variables (${unresolved.join(", ")}). ` +
+      `${context} captures unresolvable variables (${unresolved.join(", ")}). ` +
         "Hooks and validators must not reference variables that cannot be resolved from the source file.\n" +
         `  ${kind}: ${fnSource}`,
     );
@@ -491,10 +492,7 @@ async function bundleScriptTarget(args: {
   } as rolldown.BuildOptions);
 
   const bundledCode = buildResult.output[0].code;
-  return assertParsableExpression(
-    buildPrecompiledExpr(bundledCode),
-    `${kind} in ${sourceFilePath}`,
-  );
+  return assertParsableExpression(buildPrecompiledExpr(bundledCode), context);
 }
 
 /**
