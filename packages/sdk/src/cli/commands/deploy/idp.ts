@@ -26,6 +26,7 @@ import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
 import { fetchExistingResourcesWithLabels } from "./owned-resource";
+import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type {
   IdPPermissionOperand,
@@ -207,9 +208,7 @@ export async function planIdP(context: PlanContext) {
     idpUserTriggerTargets,
   } = context;
   const idps = forRemoval ? [] : application.idpServices;
-  const expectedLocalWebsites = new Set(
-    application.staticWebsiteServices.map((website) => website.name),
-  );
+  const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const {
     changeSet: serviceChangeSet,
     conflicts,

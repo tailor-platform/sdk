@@ -91,6 +91,7 @@ function createMockClient(
       idpConfigs: [],
       nextPageToken: "",
     }),
+    getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
     getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
       const name = trn.split(":").pop();
       const application = applications.find((app) => app.name === name);
@@ -185,6 +186,68 @@ describe("planApplication", () => {
     expect(result.updates).toHaveLength(1);
     expect(result.updates[0]!.name).toBe(appName);
     expect(result.unchanged).toHaveLength(0);
+  });
+
+  test("uses planned external Auth IDP config names before remote lookup", async () => {
+    const client = createMockClient([]);
+    const baseApplication = createMockApplication();
+    const application = {
+      ...baseApplication,
+      authService: undefined,
+      config: {
+        ...baseApplication.config,
+        auth: { name: "peer-auth", external: true },
+      },
+      subgraphs: [{ Type: "auth", Name: "peer-auth" }],
+    } as unknown as Application;
+
+    const result = await planApplication({
+      ...createContext(client, application),
+      externalAuthIdpConfigNames: new Map([["peer-auth", "peer-idp"]]),
+    });
+
+    expect(client.listAuthIDPConfigs).not.toHaveBeenCalled();
+    expect(result.creates[0]?.request.authIdpConfigName).toBe("peer-idp");
+  });
+
+  test("does not fall back to remote Auth IDP configs when peer Auth has no IDP config", async () => {
+    const client = createMockClient([]);
+    const baseApplication = createMockApplication();
+    const application = {
+      ...baseApplication,
+      authService: undefined,
+      config: {
+        ...baseApplication.config,
+        auth: { name: "peer-auth", external: true },
+      },
+      subgraphs: [{ Type: "auth", Name: "peer-auth" }],
+    } as unknown as Application;
+
+    const result = await planApplication({
+      ...createContext(client, application),
+      externalAuthIdpConfigNames: new Map([["peer-auth", undefined]]),
+    });
+
+    expect(client.listAuthIDPConfigs).not.toHaveBeenCalled();
+    expect(result.creates[0]?.request.authIdpConfigName).toBeUndefined();
+  });
+
+  test("keeps peer static website URL patterns when the site is planned in the same deploy", async () => {
+    const client = createMockClient([]);
+    const application = createMockApplication({
+      cors: ["peer-site:url/oauth/callback"],
+    });
+
+    const result = await planApplication({
+      ...createContext(client, application),
+      expectedLocalStaticWebsiteNames: new Set(["peer-site"]),
+    });
+
+    expect(client.getStaticWebsite).toHaveBeenCalledWith({
+      workspaceId,
+      name: "peer-site",
+    });
+    expect(result.creates[0]?.request.cors).toEqual(["peer-site:url/oauth/callback"]);
   });
 
   test("marks application updated when sdk version differs", async () => {

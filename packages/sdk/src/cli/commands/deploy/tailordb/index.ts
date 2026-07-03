@@ -1312,7 +1312,7 @@ export async function planTailorDB(context: PlanContext) {
   const executors = forRemoval
     ? []
     : Object.values((await application.executorService?.loadExecutors()) ?? {});
-  const executorUsedTypes = new Set<string>();
+  const executorUsedTypes = new Set(context.executorUsedTailorDBTypes ?? []);
   for (const executor of executors) {
     if (executor.trigger.kind === "tailordb") {
       executorUsedTypes.add(executor.trigger.typeName);
