@@ -254,6 +254,29 @@ type User {
 - `toward.as` - Customizes the field name for accessing the related type from this type
 - `backward` - Customizes the field name for accessing this type from the related type
 
+Relation names share the same GraphQL field namespace as fields, files, and other relations on
+the type. The SDK rejects duplicate or empty relation names. Use `toward.as` when multiple fields
+on the same type point to the same target type, because their default forward names are derived
+from the target type name:
+
+```typescript
+const post = db.type("Post", {
+  authorID: db.uuid().relation({
+    type: "n-1",
+    toward: { type: user, as: "author" },
+    backward: "authoredPosts",
+  }),
+  reviewerID: db.uuid().relation({
+    type: "n-1",
+    toward: { type: user, as: "reviewer" },
+    backward: "reviewedPosts",
+  }),
+});
+```
+
+Use `toward.as` or `backward` when a generated relation name would conflict with an existing
+field, files entry, or relation on the same type.
+
 ### Hooks
 
 Add hooks to execute functions during data creation or update. Hooks receive three arguments:

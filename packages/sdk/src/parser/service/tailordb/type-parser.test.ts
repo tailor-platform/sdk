@@ -275,6 +275,215 @@ describe("parseTypes", () => {
     );
   });
 
+  describe("forwardRelationships", () => {
+    test("should throw error when forward relation names are duplicated", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      // Two fields referencing the same type without explicit forward names ("as")
+      // Both will generate "user" as the forward name
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "authoredPosts",
+        }),
+        reviewerID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "reviewedPosts",
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name "user".*duplicated.*authorID.*reviewerID/s);
+    });
+
+    test("should not throw error when forward names are explicitly set to be unique", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user, as: "author" },
+          backward: "authoredPosts",
+        }),
+        reviewerID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user, as: "reviewer" },
+          backward: "reviewedPosts",
+        }),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace");
+
+      expect(result.Post!.forwardRelationships).toHaveProperty("author");
+      expect(result.Post!.forwardRelationships).toHaveProperty("reviewer");
+      expect(result.Post!.forwardRelationships.author).toMatchObject({
+        name: "author",
+        targetType: "User",
+        targetField: "authorID",
+      });
+      expect(result.Post!.forwardRelationships.reviewer).toMatchObject({
+        name: "reviewer",
+        targetType: "User",
+        targetField: "reviewerID",
+      });
+    });
+
+    test("should throw error when forward name conflicts with existing field", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      // Post has a field named "user"
+      const post = db.type("Post", {
+        user: db.string(),
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name "user".*conflicts with existing field/s);
+    });
+
+    test("should throw error when conflicting field is defined after the relation field", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      // The conflicting "user" field is defined after authorID in the object
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+        }),
+        user: db.string(),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name "user".*conflicts with existing field/s);
+    });
+
+    test("should throw error when forward name equals its own relation field name", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      // "as" is set to the same name as the relation field itself: the manifest
+      // would end up with both a scalar field and a relationship named "authorID"
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user, as: "authorID" },
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name "authorID".*is the same as its own relation field/s);
+    });
+
+    test("should throw error when forward name conflicts with files field", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      // Post has a files field named "avatar"
+      const post = db
+        .type("Post", {
+          authorID: db.uuid().relation({
+            type: "n-1",
+            toward: { type: user, as: "avatar" },
+          }),
+        })
+        .files({
+          avatar: "post avatar file",
+        });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name "avatar".*conflicts with files field/s);
+    });
+
+    test("should throw error when forward name conflicts with backward name", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "authoredPosts",
+        }),
+      });
+
+      const comment = db.type("Comment", {
+        postID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: post, as: "post" },
+          backward: "user",
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post, Comment: comment }), "test-namespace"),
+      ).toThrow(/Relation name "user" on type "Post".*forward.*backward/s);
+    });
+
+    test("should include source file information in forward conflict error message", () => {
+      const user = db.type("User", {
+        name: db.string(),
+      });
+
+      const post = db.type("Post", {
+        authorID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "authoredPosts",
+        }),
+        reviewerID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "reviewedPosts",
+        }),
+      });
+
+      const typeSourceInfo = {
+        Post: {
+          filePath: "/path/to/post.ts",
+          exportName: "post",
+        },
+      };
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace", typeSourceInfo),
+      ).toThrow(/Forward relation name "user".*\/path\/to\/post\.ts/s);
+    });
+
+    test("should throw error when self relation forward name is empty", () => {
+      const node = db.type("Node", {
+        ID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: "self" },
+        }),
+      });
+
+      expect(() => parseTypes(toSchemaOutputs({ Node: node }), "test-namespace")).toThrow(
+        /Forward relation name for field "ID" on type "Node" cannot be empty/s,
+      );
+    });
+  });
+
   describe("validateRelationType", () => {
     test("should throw error when relation type is missing", () => {
       const user = db.type("User", {

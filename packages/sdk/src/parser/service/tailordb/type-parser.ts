@@ -34,7 +34,7 @@ export function parseTypes(
   const allTypeNames = new Set(Object.keys(rawTypes));
 
   for (const [typeName, type] of Object.entries(rawTypes)) {
-    types[typeName] = parseTailorDBType(type, allTypeNames, rawTypes);
+    types[typeName] = parseTailorDBType(type, allTypeNames, rawTypes, typeSourceInfo);
   }
 
   buildBackwardRelationships(types, namespace, typeSourceInfo);
@@ -48,15 +48,18 @@ export function parseTypes(
  * @param type - TailorDB type to parse
  * @param allTypeNames - Set of all TailorDB type names
  * @param rawTypes - All raw TailorDB types keyed by name
+ * @param typeSourceInfo - Optional type source information
  * @returns Parsed TailorDB type
  */
 function parseTailorDBType(
   type: TailorDBTypeSchemaOutput,
   allTypeNames: Set<string>,
   rawTypes: Record<string, TailorDBTypeSchemaOutput>,
+  typeSourceInfo?: TypeSourceInfo,
 ): TailorDBType {
   const metadata = type.metadata;
   const pluralForm = metadata.settings?.pluralForm || inflection.pluralize(type.name);
+  const typeLocation = formatTypeSourceLocation(getTypeSourceInfo(typeSourceInfo, type.name));
 
   const fields = createRecord<ParsedField>();
   const forwardRelationships = createRecord<ParsedRelationship>();
@@ -105,10 +108,44 @@ function parseTailorDBType(
     const relationInfo = rawRelation ? buildRelationInfo(rawRelation, context) : undefined;
     if (relationInfo) {
       parsedField.relation = { ...relationInfo };
+      const forwardName = relationInfo.forwardName;
+
+      if (forwardName.length === 0) {
+        throw new Error(
+          `Forward relation name for field "${fieldName}" on type "${type.name}"${typeLocation} cannot be empty. ` +
+            `Use the "as" option in .relation({ toward: { as: ... } }) to specify a non-empty name.`,
+        );
+      }
+
+      const existingForward = forwardRelationships[forwardName];
+      if (existingForward) {
+        throw new Error(
+          `Forward relation name "${forwardName}" on type "${type.name}"${typeLocation} is duplicated ` +
+            `between fields "${existingForward.targetField}" and "${fieldName}". ` +
+            `Use the "as" option in .relation({ toward: { as: ... } }) to specify a unique name.`,
+        );
+      }
+      if (Object.hasOwn(type.fields, forwardName)) {
+        const message =
+          forwardName === fieldName
+            ? `Forward relation name "${forwardName}" on type "${type.name}"${typeLocation} is the same as its own relation field "${fieldName}". ` +
+              `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`
+            : `Forward relation name "${forwardName}" from field "${fieldName}" on type "${type.name}"${typeLocation} ` +
+              `conflicts with existing field "${forwardName}". ` +
+              `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`;
+        throw new Error(message);
+      }
+      if (Object.hasOwn(metadata.files, forwardName)) {
+        throw new Error(
+          `Forward relation name "${forwardName}" from field "${fieldName}" on type "${type.name}"${typeLocation} ` +
+            `conflicts with files field "${forwardName}". ` +
+            `Use the "as" option in .relation({ toward: { as: ... } }) to specify a different name.`,
+        );
+      }
 
       const targetType = rawTypes[relationInfo.targetType];
-      forwardRelationships[relationInfo.forwardName] = {
-        name: relationInfo.forwardName,
+      forwardRelationships[forwardName] = {
+        name: forwardName,
         targetType: relationInfo.targetType,
         targetField: fieldName,
         sourceField: relationInfo.key,
@@ -214,11 +251,7 @@ function buildBackwardRelationships(
       throw new Error(`type not found: ${targetTypeName}`);
     }
     const targetTypeSourceInfo = getTypeSourceInfo(typeSourceInfo, targetTypeName);
-    const targetLocation = targetTypeSourceInfo
-      ? isPluginGeneratedType(targetTypeSourceInfo)
-        ? ` (plugin: ${targetTypeSourceInfo.pluginId})`
-        : ` (${targetTypeSourceInfo.filePath})`
-      : "";
+    const targetLocation = formatTypeSourceLocation(targetTypeSourceInfo);
 
     for (const [backwardName, sources] of Object.entries(backwardNames)) {
       // Check for duplicate backward relation names
@@ -226,11 +259,7 @@ function buildBackwardRelationships(
         const sourceList = sources
           .map((s) => {
             const sourceInfo = getTypeSourceInfo(typeSourceInfo, s.sourceType);
-            const location = sourceInfo
-              ? isPluginGeneratedType(sourceInfo)
-                ? ` (plugin: ${sourceInfo.pluginId})`
-                : ` (${sourceInfo.filePath})`
-              : "";
+            const location = formatTypeSourceLocation(sourceInfo);
             return `${s.sourceType}.${s.fieldName}${location}`;
           })
           .join(", ");
@@ -247,11 +276,7 @@ function buildBackwardRelationships(
           throw new Error(`no source found for backward name: ${backwardName}`);
         }
         const sourceInfo = getTypeSourceInfo(typeSourceInfo, source.sourceType);
-        const sourceLocation = sourceInfo
-          ? isPluginGeneratedType(sourceInfo)
-            ? ` (plugin: ${sourceInfo.pluginId})`
-            : ` (${sourceInfo.filePath})`
-          : "";
+        const sourceLocation = formatTypeSourceLocation(sourceInfo);
         errors.push(
           `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
             `conflicts with existing field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
@@ -266,15 +291,25 @@ function buildBackwardRelationships(
           throw new Error(`no source found for backward name: ${backwardName}`);
         }
         const sourceInfo = getTypeSourceInfo(typeSourceInfo, source.sourceType);
-        const sourceLocation = sourceInfo
-          ? isPluginGeneratedType(sourceInfo)
-            ? ` (plugin: ${sourceInfo.pluginId})`
-            : ` (${sourceInfo.filePath})`
-          : "";
+        const sourceLocation = formatTypeSourceLocation(sourceInfo);
         errors.push(
           `Backward relation name "${backwardName}" from ${source.sourceType}.${source.fieldName}${sourceLocation} ` +
             `conflicts with files field "${backwardName}" on type "${targetTypeName}"${targetLocation}. ` +
             `Use the "backward" option in .relation() to specify a different name.`,
+        );
+      }
+
+      if (Object.hasOwn(targetType.forwardRelationships, backwardName)) {
+        const source = sources[0];
+        if (source === undefined) {
+          throw new Error(`no source found for backward name: ${backwardName}`);
+        }
+        const sourceInfo = getTypeSourceInfo(typeSourceInfo, source.sourceType);
+        const sourceLocation = formatTypeSourceLocation(sourceInfo);
+        errors.push(
+          `Relation name "${backwardName}" on type "${targetTypeName}"${targetLocation} is used by both ` +
+            `a forward relationship and a backward relationship from ${source.sourceType}.${source.fieldName}${sourceLocation}. ` +
+            `Use the "as" option in .relation({ toward: { as: ... } }) or the "backward" option in .relation() to specify unique names.`,
         );
       }
     }
@@ -311,11 +346,7 @@ function validatePluralFormUniqueness(
 
     if (singularQuery === pluralQuery) {
       const sourceInfo = getTypeSourceInfo(typeSourceInfo, parsedType.name);
-      const location = sourceInfo
-        ? isPluginGeneratedType(sourceInfo)
-          ? ` (plugin: ${sourceInfo.pluginId})`
-          : ` (${sourceInfo.filePath})`
-        : "";
+      const location = formatTypeSourceLocation(sourceInfo);
       errors.push(
         `Type "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
           `Use db.type(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
@@ -353,11 +384,7 @@ function validatePluralFormUniqueness(
     const sourceList = sources
       .map((s) => {
         const sourceInfo = getTypeSourceInfo(typeSourceInfo, s.typeName);
-        const location = sourceInfo
-          ? isPluginGeneratedType(sourceInfo)
-            ? ` (plugin: ${sourceInfo.pluginId})`
-            : ` (${sourceInfo.filePath})`
-          : "";
+        const location = formatTypeSourceLocation(sourceInfo);
         return `"${s.typeName}"${location} (${s.kind})`;
       })
       .join(", ");
@@ -379,6 +406,15 @@ function getTypeSourceInfo(
   return typeSourceInfo && Object.hasOwn(typeSourceInfo, typeName)
     ? typeSourceInfo[typeName]
     : undefined;
+}
+
+function formatTypeSourceLocation(sourceInfo: TypeSourceInfo[string] | undefined): string {
+  if (!sourceInfo) {
+    return "";
+  }
+  return isPluginGeneratedType(sourceInfo)
+    ? ` (plugin: ${sourceInfo.pluginId})`
+    : ` (${sourceInfo.filePath})`;
 }
 
 function createRecord<T>(): Record<string, T> {
