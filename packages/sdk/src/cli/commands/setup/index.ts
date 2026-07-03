@@ -1,7 +1,9 @@
 import { arg, defineCommand } from "politty";
 import { z } from "zod";
+import { confirmationArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { checkGitHub } from "./check";
+import { setupDelete } from "./delete";
 import { setupCoordinate, setupTarget } from "./generate";
 
 const checkCommand = defineAppCommand({
@@ -226,6 +228,24 @@ const previewCommand = defineAppCommand({
   },
 });
 
+const deleteCommand = defineAppCommand({
+  name: "delete",
+  description: "Delete a managed workflow/action file and its .github/tailor-sdk.lock entry.",
+  args: z
+    .object({
+      ...confirmationArgs,
+      files: arg(z.string().array().min(1), {
+        positional: true,
+        description:
+          "Workflow/action file(s) to delete, as generated under .github/workflows or .github/actions",
+      }),
+    })
+    .strict(),
+  run: async (args) => {
+    await setupDelete({ files: args.files, yes: args.yes, outputDir: process.cwd() });
+  },
+});
+
 export const setupCommand = defineCommand({
   name: "setup",
   description: "Generate CI deploy workflows for your project. (beta)",
@@ -236,5 +256,6 @@ export const setupCommand = defineCommand({
     action: actionCommand,
     coordinate: coordinateCommand,
     check: checkCommand,
+    delete: deleteCommand,
   },
 });
