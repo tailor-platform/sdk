@@ -134,7 +134,7 @@ describe("bundled execution tests", () => {
           },
         },
         user: {
-          id: "test-user-id",
+          id: "123e4567-e89b-12d3-a456-426614174000",
           type: "user",
           workspaceId: "test-workspace-id",
         },
@@ -167,15 +167,18 @@ describe("bundled execution tests", () => {
       });
 
       const main = await importActualMain("executors/user-created.js");
-      const payload = { newRecord: { id: "user-1" } };
+      const payload = { newRecord: { id: "11111111-1111-4111-8111-111111111111" } };
       const result = await main(payload);
 
       expect(result).toBeUndefined();
       expect(db.executedQueries).toEqual([
-        { query: 'select * from "User" where "id" = $1', params: ["user-1"] },
+        {
+          query: 'select * from "User" where "id" = $1',
+          params: ["11111111-1111-4111-8111-111111111111"],
+        },
         {
           query: 'insert into "UserLog" ("userID", "message") values ($1, $2)',
-          params: ["user-1", "User created: undefined (undefined)"],
+          params: ["11111111-1111-4111-8111-111111111111", "User created: undefined (undefined)"],
         },
       ]);
       expect(db.createdClients).toMatchObject([{ namespace: "tailordb" }]);
@@ -199,19 +202,22 @@ describe("bundled execution tests", () => {
       const main = await importActualMain("workflow-jobs/process-order.js");
       const result = await main({
         orderId: "order-123",
-        customerId: "customer-456",
+        customerId: "123e4567-e89b-12d3-a456-426614174000",
       });
 
       expect(result).toEqual({
         orderId: "order-123",
-        customerId: "customer-456",
+        customerId: "123e4567-e89b-12d3-a456-426614174000",
         customerEmail: "customer@example.com",
         notificationSent: true,
         processedAt: "2025-01-01 12:00:00",
       });
 
       expect(wf.triggeredJobs).toEqual([
-        { jobName: "fetch-customer", args: { customerId: "customer-456" } },
+        {
+          jobName: "fetch-customer",
+          args: { customerId: "123e4567-e89b-12d3-a456-426614174000" },
+        },
         {
           jobName: "send-notification",
           args: {
@@ -231,9 +237,9 @@ describe("bundled execution tests", () => {
       await expect(
         main({
           orderId: "order-123",
-          customerId: "non-existent",
+          customerId: "00000000-0000-0000-0000-000000000000",
         }),
-      ).rejects.toThrow("Customer non-existent not found");
+      ).rejects.toThrow("Customer 00000000-0000-0000-0000-000000000000 not found");
     });
 
     test("workflow-jobs/send-notification.js executes correctly", async () => {

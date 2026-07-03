@@ -1,6 +1,7 @@
 import type { ResolverConfig } from "#/configure/services/resolver/resolver";
 import type { TailorDBType } from "#/configure/services/tailordb/schema";
 import type { IdpName } from "#/configure/types/idp-name";
+import type { UUIDString } from "#/configure/types/scalar.types";
 import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
 import type {
   TailorDBTrigger as ParserTailorDBTrigger,
@@ -76,21 +77,21 @@ export interface IdpUserCreatedArgs extends EventArgs {
   event: "created";
   rawEvent: "idp.user.created";
   namespaceName: string;
-  userId: string;
+  userId: UUIDString;
 }
 
 export interface IdpUserUpdatedArgs extends EventArgs {
   event: "updated";
   rawEvent: "idp.user.updated";
   namespaceName: string;
-  userId: string;
+  userId: UUIDString;
 }
 
 export interface IdpUserDeletedArgs extends EventArgs {
   event: "deleted";
   rawEvent: "idp.user.deleted";
   namespaceName: string;
-  userId: string;
+  userId: UUIDString;
 }
 
 export type IdpUserArgs = IdpUserCreatedArgs | IdpUserUpdatedArgs | IdpUserDeletedArgs;
@@ -100,21 +101,21 @@ export interface AuthAccessTokenIssuedArgs extends EventArgs {
   event: "issued";
   rawEvent: "auth.access_token.issued";
   namespaceName: string;
-  userId: string;
+  userId: UUIDString;
 }
 
 export interface AuthAccessTokenRefreshedArgs extends EventArgs {
   event: "refreshed";
   rawEvent: "auth.access_token.refreshed";
   namespaceName: string;
-  userId: string;
+  userId: UUIDString;
 }
 
 export interface AuthAccessTokenRevokedArgs extends EventArgs {
   event: "revoked";
   rawEvent: "auth.access_token.revoked";
   namespaceName: string;
-  userId: string;
+  userId: UUIDString;
 }
 
 export type AuthAccessTokenArgs =

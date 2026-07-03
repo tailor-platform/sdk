@@ -63,7 +63,7 @@ describe("Kysely TypeProcessor", () => {
           cancelledAt: db.datetime({ optional: true }),
         }),
         expected: [
-          "startDate: Timestamp;",
+          "startDate: DateString;",
           "endDate: Timestamp;",
           "cancelledAt: Timestamp | null;",
         ],
@@ -74,7 +74,7 @@ describe("Kysely TypeProcessor", () => {
           userId: db.uuid(),
           deviceId: db.uuid({ optional: true }),
         }),
-        expected: ["userId: string;", "deviceId: string | null;"],
+        expected: ["userId: UUIDString;", "deviceId: UUIDString | null;"],
       },
     ])("should handle $name", async ({ type, expected }) => {
       const typeDef = await getTypeDef(type);
@@ -104,7 +104,7 @@ describe("Kysely TypeProcessor", () => {
       );
 
       expect(typeDef).toContain("eventDates: ArrayColumnType<Timestamp>;");
-      expect(typeDef).toContain("optionalDates: ArrayColumnType<Timestamp> | null;");
+      expect(typeDef).toContain("optionalDates: DateString[] | null;");
     });
   });
 
@@ -184,7 +184,7 @@ describe("Kysely TypeProcessor", () => {
       expect(typeDef).toContain("phone?: string | null");
     });
 
-    test("should use Date | string instead of Timestamp for date fields inside nested objects", async () => {
+    test("should use DateString for date fields inside nested objects", async () => {
       const type = db.type("Receipt", {
         receiptDate: db.date(),
         dueSchedule: db.object({
@@ -195,10 +195,10 @@ describe("Kysely TypeProcessor", () => {
 
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
 
-      expect(result.typeDef).toContain("receiptDate: Timestamp;");
+      expect(result.typeDef).toContain("receiptDate: DateString;");
       // Nested object with datetime is wrapped in ObjectColumnType
       expect(result.typeDef).toContain("ObjectColumnType<");
-      expect(result.typeDef).toContain("dueDate: Timestamp");
+      expect(result.typeDef).toContain("dueDate: DateString");
       expect(result.typeDef).toContain("reminderAt?: Timestamp | null");
       expect(result.usedUtilityTypes.Timestamp).toBe(true);
     });
@@ -290,14 +290,14 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("updatedAt: Generated<Timestamp>;");
     });
 
-    test("should always include Generated<string> for id field", async () => {
+    test("should always include Generated<UUIDString> for id field", async () => {
       const typeDef = await getTypeDef(
         db.type("User", {
           name: db.string(),
         }),
       );
 
-      expect(typeDef).toContain("id: Generated<string>;");
+      expect(typeDef).toContain("id: Generated<UUIDString>;");
     });
 
     test.each([

@@ -4,6 +4,8 @@
 // not reference zod or schema modules, so every layer can import it type-only
 // without pulling any runtime dependency.
 
+import type { UUIDString } from "#/configure/types/scalar.types";
+
 // Interfaces for module augmentation
 // Users can extend these via: declare module "@tailor-platform/sdk" { interface Attributes { ... } }
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
@@ -23,7 +25,7 @@ export type InferredAttributeList = AttributeList["__tuple"] extends []
 /** Represents a user or machine user principal in the Tailor Platform. */
 export type TailorPrincipal = {
   /** The ID of the principal. */
-  id: string;
+  id: UUIDString;
   /** The type of the principal. */
   type: "user" | "machine_user";
   /** The ID of the workspace the principal belongs to. */

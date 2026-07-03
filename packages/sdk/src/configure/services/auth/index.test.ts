@@ -1,5 +1,4 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
-import { randomUUID } from "node:crypto";
 import { describe, expect, test, expectTypeOf } from "vitest";
 import { t } from "#/configure/types/type";
 import { db } from "../tailordb/schema";
@@ -36,7 +35,9 @@ const attributeMapConfig: Attributes = {
 };
 
 const attributeListConfig: AttributeList = ["externalId"];
-const machineUserAttributeList: [string] = [randomUUID()];
+const adminExternalId = "00000000-0000-4000-8000-000000000001";
+const workerExternalId = "00000000-0000-4000-8000-000000000002";
+const machineUserAttributeList: [typeof adminExternalId] = [adminExternalId];
 const basicUserProfile = { type: userType, usernameField: "email" } as const;
 
 describe("defineAuth", () => {
@@ -54,7 +55,7 @@ describe("defineAuth", () => {
             role: "ADMIN",
             isActive: true,
             tags: ["root"],
-            externalId: "admin-external-id",
+            externalId: adminExternalId,
           },
           attributeList: machineUserAttributeList,
         },
@@ -93,7 +94,7 @@ describe("defineAuth", () => {
             role: "ADMIN",
             isActive: true,
             tags: ["root"],
-            externalId: "admin-external-id",
+            externalId: adminExternalId,
           },
           attributeList: machineUserAttributeList,
         },
@@ -102,7 +103,7 @@ describe("defineAuth", () => {
             role: "WORKER",
             isActive: false,
             tags: [],
-            externalId: "worker-external-id",
+            externalId: workerExternalId,
           },
         },
       },

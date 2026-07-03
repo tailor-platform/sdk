@@ -498,7 +498,7 @@ describe("dataplane", () => {
       const customerIdInput = triggerResolver?.inputs?.find((i) => i.name === "customerId");
       expect(customerIdInput?.description).toBe("Customer ID for the order");
       expect(customerIdInput?.type?.kind).toBe("ScalarType");
-      expect(customerIdInput?.type?.name).toBe("String");
+      expect(customerIdInput?.type?.name).toBe("ID");
 
       // Verify response
       const responseFields = triggerResolver?.response?.type?.fields ?? [];

@@ -7,7 +7,7 @@ describe("getProduct resolver", () => {
     using db = mockTailordb();
     // Select product
     db.enqueueResult({
-      id: "product-1",
+      id: "00000000-0000-4000-8000-000000000001",
       name: "Widget",
       price: 9.99,
       status: "ACTIVE",
@@ -20,7 +20,7 @@ describe("getProduct resolver", () => {
     db.enqueueResult({ name: "Gadgets" });
 
     const result = await resolver.body({
-      input: { productId: "product-1" },
+      input: { productId: "00000000-0000-4000-8000-000000000001" },
       caller: null,
       invoker: null,
       env: {},
@@ -39,7 +39,7 @@ describe("getProduct resolver", () => {
     using db = mockTailordb();
     // Select product (no categoryId)
     db.enqueueResult({
-      id: "product-2",
+      id: "00000000-0000-4000-8000-000000000002",
       name: "Standalone Item",
       price: 19.99,
       status: "DRAFT",
@@ -50,7 +50,7 @@ describe("getProduct resolver", () => {
     });
 
     const result = await resolver.body({
-      input: { productId: "product-2" },
+      input: { productId: "00000000-0000-4000-8000-000000000002" },
       caller: null,
       invoker: null,
       env: {},

@@ -1,12 +1,13 @@
 import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 import { fetchCustomer } from "./jobs/fetch-customer";
 import { sendNotification } from "./jobs/send-notification";
+import type { UUIDString } from "@tailor-platform/sdk";
 // Note: We're NOT importing generateReport and archiveData
 // Those jobs should be completely excluded from the bundle
 
 export const processOrder = createWorkflowJob({
   name: "process-order",
-  body: (input: { orderId: string; customerId: string }, { env }) => {
+  body: (input: { orderId: string; customerId: UUIDString }, { env }) => {
     // Log env for demonstration
     console.log("Environment:", env);
 

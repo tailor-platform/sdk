@@ -16,6 +16,31 @@ export namespace t {
 }
 
 export { type TailorField } from "#/configure/types/type";
+export type {
+  DateString,
+  DateTimeString,
+  DecimalString,
+  TimeString,
+  TimeZoneOffsetString,
+  UUIDString,
+} from "#/configure/types/scalar.types";
+export {
+  assertDateString,
+  assertDateTimeString,
+  assertDecimalString,
+  assertTimeString,
+  assertUUIDString,
+  isDateString,
+  isDateTimeString,
+  isDecimalString,
+  isTimeString,
+  isUUIDString,
+  parseDateString,
+  parseDateTimeString,
+  parseDecimalString,
+  parseTimeString,
+  parseUUIDString,
+} from "#/configure/types/scalar";
 export {
   type TailorPrincipal,
   type Attributes,

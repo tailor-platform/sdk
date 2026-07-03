@@ -8,7 +8,9 @@ export const adminNote = db
   .type("AdminNote", {
     title: db.string(),
     content: db.string(),
-    authorId: db.uuid().hooks({ create: ({ invoker }) => invoker?.id ?? crypto.randomUUID() }),
+    authorId: db.uuid().hooks({
+      create: ({ invoker }) => invoker?.id ?? crypto.randomUUID(),
+    }),
     ...db.fields.timestamps(),
   })
   // NOTE: This permits all operations for simplicity.

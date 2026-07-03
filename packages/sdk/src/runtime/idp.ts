@@ -11,6 +11,8 @@
  * const { users } = await client.users({ first: 10 });
  */
 
+import type { UUIDString } from "#/configure/types/scalar.types";
+
 /** Configuration object for {@link Client}. */
 export interface ClientConfig {
   namespace: string;
@@ -18,7 +20,7 @@ export interface ClientConfig {
 
 /** User record returned by IDP operations. */
 export interface User {
-  id: string;
+  id: UUIDString;
   name: string;
   disabled: boolean;
   createdAt?: string;
@@ -37,7 +39,7 @@ export interface User {
 /** Filter options for {@link Client.users}. */
 export interface UserQuery {
   /** Filter by user IDs */
-  ids?: string[];
+  ids?: UUIDString[];
   /** Filter by user names */
   names?: string[];
 }
@@ -72,7 +74,7 @@ export interface CreateUserInput {
 /** Input for {@link Client.updateUser}. */
 export interface UpdateUserInput {
   /** The user's ID */
-  id: string;
+  id: UUIDString;
   /** New name for the user */
   name?: string;
   /** New password for the user. Cannot be used with clearPassword. */
@@ -86,7 +88,7 @@ export interface UpdateUserInput {
 /** Input for {@link Client.sendPasswordResetEmail}. */
 export interface SendPasswordResetEmailInput {
   /** The ID of the user */
-  userId: string;
+  userId: UUIDString;
   /** The URI to redirect to after password reset */
   redirectUri: string;
   /** The sender display name. Defaults to 'Tailor Platform IdP'. */
@@ -98,7 +100,7 @@ export interface SendPasswordResetEmailInput {
 /** Input for {@link Client.unenrollMfa}. */
 export interface UnenrollMfaInput {
   /** The ID of the user whose factor will be unenrolled. */
-  userId: string;
+  userId: UUIDString;
   /**
    * The ID of the factor to unenroll. Factor IDs are exposed on the user
    * record (see {@link User.mfaFactorIds}).
@@ -109,11 +111,11 @@ export interface UnenrollMfaInput {
 /** Instance methods exposed by `tailor.idp.Client`. */
 export interface IdpClientInstance {
   users(options?: ListUsersOptions): Promise<ListUsersResponse>;
-  user(userId: string): Promise<User>;
+  user(userId: UUIDString): Promise<User>;
   userByName(name: string): Promise<User>;
   createUser(input: CreateUserInput): Promise<User>;
   updateUser(input: UpdateUserInput): Promise<User>;
-  deleteUser(userId: string): Promise<boolean>;
+  deleteUser(userId: UUIDString): Promise<boolean>;
   sendPasswordResetEmail(input: SendPasswordResetEmailInput): Promise<boolean>;
   unenrollMfa(input: UnenrollMfaInput): Promise<boolean>;
 }
@@ -161,7 +163,7 @@ export class Client {
    * @param userId - IDP user ID
    * @returns The matching user
    */
-  user(userId: string): Promise<User> {
+  user(userId: UUIDString): Promise<User> {
     return this.#impl.user(userId);
   }
 
@@ -197,7 +199,7 @@ export class Client {
    * @param userId - IDP user ID
    * @returns `true` when the user was deleted
    */
-  deleteUser(userId: string): Promise<boolean> {
+  deleteUser(userId: UUIDString): Promise<boolean> {
     return this.#impl.deleteUser(userId);
   }
 

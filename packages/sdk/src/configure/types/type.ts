@@ -1,4 +1,11 @@
 import { type AllowedValues, type AllowedValuesOutput, mapAllowedValues } from "./field";
+import {
+  isValidDateString,
+  isValidDateTimeString,
+  isValidDecimalString,
+  isValidTimeString,
+  isValidUUIDString,
+} from "./field-format";
 import type {
   DefinedFieldMetadata,
   TailorFieldType,
@@ -127,15 +134,6 @@ export interface TailorField<
  * a `clone()` at runtime, so the internal cast in `clone()` is safe.
  */
 type CloneableField = { clone(): TailorAnyField };
-
-const regex = {
-  uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
-  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
-  datetime:
-    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
-  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
-} as const;
 
 type FieldParseArgs = {
   value: unknown;
@@ -292,7 +290,7 @@ function createTailorField<
         break;
 
       case "uuid":
-        if (typeof value !== "string" || !regex.uuid.test(value)) {
+        if (typeof value !== "string" || !isValidUUIDString(value)) {
           issues.push({
             message: `Expected a valid UUID: received ${String(value)}`,
             path,
@@ -300,7 +298,7 @@ function createTailorField<
         }
         break;
       case "date":
-        if (typeof value !== "string" || !regex.date.test(value)) {
+        if (typeof value !== "string" || !isValidDateString(value)) {
           issues.push({
             message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
             path,
@@ -308,7 +306,7 @@ function createTailorField<
         }
         break;
       case "datetime":
-        if (typeof value !== "string" || !regex.datetime.test(value)) {
+        if (typeof value !== "string" || !isValidDateTimeString(value)) {
           issues.push({
             message: `Expected to match ISO format: received ${String(value)}`,
             path,
@@ -316,7 +314,7 @@ function createTailorField<
         }
         break;
       case "time":
-        if (typeof value !== "string" || !regex.time.test(value)) {
+        if (typeof value !== "string" || !isValidTimeString(value)) {
           issues.push({
             message: `Expected to match "HH:mm" format: received ${String(value)}`,
             path,
@@ -324,7 +322,7 @@ function createTailorField<
         }
         break;
       case "decimal":
-        if (typeof value !== "string" || !regex.decimal.test(value)) {
+        if (typeof value !== "string" || !isValidDecimalString(value)) {
           issues.push({
             message: `Expected a decimal string: received ${String(value)}`,
             path,
