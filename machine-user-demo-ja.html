@@ -474,19 +474,13 @@
           <br /><br />
           初回セットアップ（Platform インスタンスごとに 1 回のみ）：
           <div class="cmd" style="margin-top: 0.5rem">
-            <pre><code>export TAILOR_PLATFORM_URL=https://api.dev.tailor.tech
-export TAILOR_PLATFORM_OAUTH2_CLIENT_ID=&lt;oauth2-client-id&gt;
-export TAILOR_PLATFORM_CONSOLE_URL=https://console.dev.tailor.tech
-
-tailor-sdk login
+            <pre><code>tailor-sdk login
 tailor-sdk profile create staging \
   -u you@example.com \
   -w &lt;staging-workspace-id&gt; \
-  --platform-url "$TAILOR_PLATFORM_URL" \
-  --oauth2-client-id "$TAILOR_PLATFORM_OAUTH2_CLIENT_ID" \
-  --console-url "$TAILOR_PLATFORM_CONSOLE_URL"
-
-unset TAILOR_PLATFORM_URL TAILOR_PLATFORM_OAUTH2_CLIENT_ID TAILOR_PLATFORM_CONSOLE_URL</code></pre>
+  --platform-url https://api.dev.tailor.tech \
+  --oauth2-client-id &lt;oauth2-client-id&gt; \
+  --console-url https://console.dev.tailor.tech</code></pre>
           </div>
           以降は環境変数なしで使えます：
           <div class="cmd" style="margin-top: 0.5rem">
