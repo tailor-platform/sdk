@@ -45,6 +45,16 @@ jobs:
         run: pnpm add -g npm@latest
         shell: bash
 
+      # `pnpm changeset publish` creates annotated tags (`git tag -m`), which
+      # require a git identity. Without one, tag creation fails, but
+      # @changesets/cli doesn't check the exec result, so it still reports
+      # "Created git tags." — leaving no tag to push and no release to create.
+      - name: Configure git identity for tag creation
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        shell: bash
+
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
@@ -64,6 +74,14 @@ jobs:
           GH_TOKEN: ${{ steps.get_access_token.outputs.token }}
         shell: bash
         run: bash ./.github/scripts/sync-published-tags.sh
+
+      # Regression guard: fail loudly if a package's checked-out version has
+      # no matching GitHub release, instead of the gap going unnoticed.
+      - name: Verify GitHub releases exist for published packages
+        env:
+          GH_TOKEN: ${{ steps.get_access_token.outputs.token }}
+        shell: bash
+        run: bash ./.github/scripts/verify-github-releases.sh
 
       - name: Notify Slack on failure
         if: failure()
