@@ -1,12 +1,12 @@
 # AI Gateway
 
-AI Gateway provides a unified endpoint for accessing multiple LLM providers (Azure OpenAI, Google Vertex AI Gemini, Anthropic via Vertex AI) through a single OpenAI-compatible API, with platform-managed credentials and workspace-scoped authentication.
+AI Gateway provides a unified endpoint for accessing a range of large language models through a single OpenAI-compatible API, with platform-managed credentials and workspace-scoped authentication.
 
 ## Overview
 
 AI Gateway provides:
 
-- A unified, OpenAI-compatible endpoint for multiple LLM providers
+- A unified, OpenAI-compatible endpoint for multiple LLM models
 - Mandatory authentication via your workspace's auth (request tokens are resolved against the configured auth namespace)
 - Per-workspace isolation: each gateway is provisioned with its own platform-assigned URL
 - Optional CORS allow-list for browser-based clients
@@ -31,6 +31,7 @@ const aiGateway = defineAIGateway("my-aigateway", {
 });
 
 export default defineConfig({
+  name: "my-app",
   aiGateways: [aiGateway],
 });
 ```
@@ -80,6 +81,7 @@ const website = defineStaticWebSite("my-frontend", {
 });
 
 const aiGateway = defineAIGateway("my-aigateway", {
+  // Name of an auth namespace in your workspace; request tokens are resolved against it.
   authNamespace: "default",
   cors: [website.url],
 });
@@ -95,3 +97,17 @@ export default defineConfig({
   aiGateways: [aiGateway],
 });
 ```
+
+## Runtime Usage
+
+Resolvers, executors, and workflow jobs can resolve a gateway's platform-assigned URL by name via `aigateway.get()`. The name is type-checked and autocompleted against the AI Gateways defined in `aiGateways`:
+
+```typescript
+import { aigateway } from "@tailor-platform/sdk/runtime";
+
+const { url } = await aigateway.get("my-aigateway");
+
+// await aigateway.get("unknown"); // Type error — only "my-aigateway" is allowed
+```
+
+Type narrowing is provided by the generated `tailor.d.ts` (the `AIGatewayNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new AI Gateways to refresh it. Before the first generate run, `get()` accepts any string.

@@ -14,13 +14,8 @@ describe("bundleAuthHooks", () => {
     }
   });
 
-  function writeConfig(): string {
-    // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
-    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "auth-bundler-test-")));
-    const configFile = path.join(tmpDir, "tailor.config.ts");
-    fs.writeFileSync(
-      configFile,
-      `
+  function writeConfig(
+    source = `
 const handler = async ({ claims, idpConfigName, env }) => {
   return { claims, idpConfigName, environment: env.ENVIRONMENT };
 };
@@ -29,7 +24,11 @@ export default {
   auth: { hooks: { beforeLogin: { handler } } },
 };
 `,
-    );
+  ): string {
+    // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "auth-bundler-test-")));
+    const configFile = path.join(tmpDir, "tailor.config.ts");
+    fs.writeFileSync(configFile, source);
     return configFile;
   }
 
@@ -66,19 +65,14 @@ export default {
   });
 
   test("inlines TAILOR_APP_LOG_LEVEL references from config during bundling", async () => {
-    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "auth-bundler-test-")));
-    const configFile = path.join(tmpDir, "tailor.config.ts");
-    fs.writeFileSync(
-      configFile,
-      `
+    const configFile = writeConfig(`
 const handler = async () => ({ ok: true });
 
 export default {
   logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
   auth: { hooks: { beforeLogin: { handler } } },
 };
-`,
-    );
+`);
 
     const bundled = await bundleAuthHooks({
       configPath: configFile,

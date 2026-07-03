@@ -173,7 +173,7 @@ function filterJobFunctionVersions(
  * @param client - Operator client instance
  * @param changeSet - Workflow change set
  * @param appName - Application name
- * @param appId
+ * @param appId - Application ID used for job function metadata when available
  * @param unchangedWorkflowJobNames - Job function names used by unchanged workflows
  * @returns Map of job function names to versions
  */
@@ -203,11 +203,11 @@ async function registerJobFunctions(
     }
   }
   // Fetch existing job functions with their names
-  const existingJobFunctions = await fetchAll(async (pageToken, maxPageSize) => {
+  const existingJobFunctions = await fetchAll(async (pageToken, _maxPageSize) => {
     const response = await client.listWorkflowJobFunctions({
       workspaceId,
       pageToken,
-      pageSize: maxPageSize,
+      pageSize: 100, // FIXME: Temporarily limited to 100 items due to platform constraints.
     });
     return [response.jobFunctions.map((j) => j.name), response.nextPageToken];
   });
@@ -339,7 +339,7 @@ export function buildWorkflowValidationShape(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param appName - Application name
- * @param appId
+ * @param appId - Application ID used for workflow metadata when available
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
  * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
@@ -363,7 +363,6 @@ export async function planWorkflow(
 
   const existingWorkflows = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, pageSize) => {
       const response = await client.listWorkflows({
         workspaceId,
@@ -373,7 +372,7 @@ export async function planWorkflow(
       return [response.workflows, response.nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "workflow", name),
+    getTrn: (name) => resourceTrn(workspaceId, "workflow", name),
   });
 
   for (const workflow of Object.values(workflows)) {
@@ -512,11 +511,11 @@ async function planWorkflowJobFunctionDeletes(
   params: PlanWorkflowJobFunctionDeletesParams,
 ): Promise<DeleteWorkflowJobFunction[]> {
   const { client, workspaceId, appName, appId, retainedWorkflowJobNames } = params;
-  const existingJobFunctions = await fetchAll(async (pageToken, maxPageSize) => {
+  const existingJobFunctions = await fetchAll(async (pageToken, _maxPageSize) => {
     const response = await client.listWorkflowJobFunctions({
       workspaceId,
       pageToken,
-      pageSize: maxPageSize,
+      pageSize: 100, // FIXME: Temporarily limited to 100 items due to platform constraints.
     });
     return [response.jobFunctions.map((jobFunction) => jobFunction.name), response.nextPageToken];
   });

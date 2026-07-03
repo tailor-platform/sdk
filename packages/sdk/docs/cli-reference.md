@@ -73,10 +73,11 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                                         |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                                     |
 | `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run`, `machineuser token`            |
+| `TAILOR_PLATFORM_URL`                        | Platform API base URL. Saved into profiles created with `profile create --platform-url`                      |
+| `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`           | OAuth2 client ID for user login. Saved into profiles created with `profile create --oauth2-client-id`        |
+| `TAILOR_PLATFORM_CONSOLE_URL`                | Console base URL. Saved into profiles created with `profile create --console-url`                            |
 | `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count            |
 | `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent unary platform RPCs during `apply`/`deploy` (streaming uploads are not gated). Defaults to 16 |
-| `TAILOR_PLATFORM_URL`                        | Tailor Platform API endpoint override                                                                        |
-| `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`           | OAuth2 client ID override for Tailor Platform login                                                          |
 | `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                                  |
 | `TAILOR_CRASH_REPORTS_LOCAL`                 | Local crash log writing: `on` (default) or `off`                                                             |
 | `TAILOR_CRASH_REPORTS_REMOTE`                | Automatic crash report submission: `off` (default) or `on`                                                   |
@@ -89,6 +90,8 @@ Token resolution follows this priority order:
 2. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
 3. Current user from platform config (`~/.config/tailor-platform/config.yaml`)
 
+Config-backed login tokens are scoped to the Platform API URL. Profiles with `--platform-url` use the token saved for that URL, so switching profiles can also switch between Platform API environments.
+
 ### Workspace ID Priority
 
 Workspace ID resolution follows this priority order:
@@ -98,6 +101,10 @@ Workspace ID resolution follows this priority order:
 3. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
 
 ## CLI Plugins
+
+> [!WARNING]
+> CLI plugins are a **beta** feature. The dispatch behavior and the set of injected environment
+> variables may change in a future release.
 
 You can extend the CLI with external plugins, similar to `gh` extensions. When you run a command that
 is not a built-in, the CLI looks for an executable named `tailor-<name>` and runs it, forwarding the
@@ -189,6 +196,7 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | [tailordb migration sync](./cli/tailordb.md#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                     |
 | [tailordb erd](./cli/tailordb.md#tailordb-erd)                               | Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)                                                 |
 | [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export TailorDB ERD static viewer from local TailorDB schema.                                                             |
+| [tailordb erd diff](./cli/tailordb.md#tailordb-erd-diff)                     | Render TailorDB ERD schema diff HTML from exported ERD viewers.                                                           |
 | [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve TailorDB ERD locally with watch reload. (beta)                                                         |
 | [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
 
@@ -367,10 +375,15 @@ Commands for managing crash reports.
 
 Commands for setting up project infrastructure.
 
-| Command                                   | Description                                                                      |
-| ----------------------------------------- | -------------------------------------------------------------------------------- |
-| [setup](./cli/setup.md#setup)             | Generate a CI deploy workflow for your project. (beta)                           |
-| [setup check](./cli/setup.md#setup-check) | Audit generated workflows for drift against the current config/repo (read-only). |
+| Command                                             | Description                                                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| [setup](./cli/setup.md#setup)                       | Generate CI deploy workflows for your project. (beta)                                            |
+| [setup action](./cli/setup.md#setup-action)         | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).  |
+| [setup branch](./cli/setup.md#setup-branch)         | Generate a branch-target deploy workflow (push to branch triggers deploy).                       |
+| [setup check](./cli/setup.md#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
+| [setup coordinate](./cli/setup.md#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
+| [setup preview](./cli/setup.md#setup-preview)       | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
+| [setup tag](./cli/setup.md#setup-tag)               | Generate a tag-target deploy workflow (tag push triggers deploy).                                |
 
 ### [Upgrade Commands](./cli/upgrade.md)
 
@@ -395,7 +408,7 @@ Discover and inspect CLI plugins (external `tailor-<name>` executables).
 
 | Command                                    | Description                                                                              |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| [plugin](./cli/plugin.md#plugin)           | Manage and inspect CLI plugins.                                                          |
+| [plugin](./cli/plugin.md#plugin)           | Manage and inspect CLI plugins (beta).                                                   |
 | [plugin list](./cli/plugin.md#plugin-list) | List discovered plugins (executables named `<cli>-<name>` on PATH or node_modules/.bin). |
 
 ### [Completion](./cli/completion.md)

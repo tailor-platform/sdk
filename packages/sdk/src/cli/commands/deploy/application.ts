@@ -12,6 +12,7 @@ import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
+import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { HttpAdapterBundleResult } from "#/cli/services/http-adapter/bundler";
@@ -304,31 +305,35 @@ export async function planApplication(
       authIdpConfigName = idProvider.name;
     }
   } else if (application.config.auth) {
-    // Retrieve idpConfig from remote when auth references an external namespace
+    // Prefer peer plans for same-run multi-config deploys; otherwise read remote state.
     authNamespace = application.config.auth.name;
-    const idpConfigs = await fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
-          workspaceId,
-          namespaceName: assertDefined(
-            authNamespace,
-            "authNamespace must be set before listing IDP configs",
-          ),
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [idpConfigs, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
+    if (context.externalAuthIdpConfigNames?.has(authNamespace)) {
+      authIdpConfigName = context.externalAuthIdpConfigNames.get(authNamespace);
+    } else {
+      const idpConfigs = await fetchAll(async (pageToken, maxPageSize) => {
+        try {
+          const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
+            workspaceId,
+            namespaceName: assertDefined(
+              authNamespace,
+              "authNamespace must be set before listing IDP configs",
+            ),
+            pageToken,
+            pageSize: maxPageSize,
+          });
+          return [idpConfigs, nextPageToken];
+        } catch (error) {
+          if (error instanceof ConnectError && error.code === Code.NotFound) {
+            return [[], ""];
+          }
+          throw error;
         }
-        throw error;
-      }
-    });
-    if (idpConfigs.length > 0) {
-      const [firstConfig] = idpConfigs;
-      if (firstConfig) {
-        authIdpConfigName = firstConfig.name;
+      });
+      if (idpConfigs.length > 0) {
+        const [firstConfig] = idpConfigs;
+        if (firstConfig) {
+          authIdpConfigName = firstConfig.name;
+        }
       }
     }
   }
@@ -337,9 +342,7 @@ export async function planApplication(
     appName: application.name,
     appId: application.id,
   });
-  const expectedLocalWebsites = new Set(
-    application.staticWebsiteServices.map((website) => website.name),
-  );
+  const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,
     workspaceId,

@@ -3,10 +3,8 @@ import { applyAuth, type planAuth } from "./auth";
 import type { OperatorClient } from "#/cli/shared/client";
 
 describe("applyAuth phase separation", () => {
-  // Helper to create mock client with spies for delete operations
   function createMockClientWithSpies() {
     return {
-      // Delete methods
       deleteAuthSCIMResource: vi.fn().mockResolvedValue({}),
       deleteAuthSCIMConfig: vi.fn().mockResolvedValue({}),
       deleteAuthOAuth2Client: vi.fn().mockResolvedValue({}),
@@ -16,7 +14,6 @@ describe("applyAuth phase separation", () => {
       deleteUserProfileConfig: vi.fn().mockResolvedValue({}),
       deleteAuthIDPConfig: vi.fn().mockResolvedValue({}),
       deleteAuthService: vi.fn().mockResolvedValue({}),
-      // Create/update methods for completeness
       createAuthService: vi.fn().mockResolvedValue({}),
       createAuthIDPConfig: vi.fn().mockResolvedValue({}),
       createUserProfileConfig: vi.fn().mockResolvedValue({}),
@@ -44,149 +41,75 @@ describe("applyAuth phase separation", () => {
     createRequest: Record<string, unknown>;
   };
 
-  // Helper to create a mock plan result with deletes
-  function createMockPlanResult(opts?: { oauth2ClientReplaces?: OAuth2ClientReplace[] }) {
-    const mockChangeSet = {
+  function deletableChangeSet(title: string, name: string, request: Record<string, unknown>) {
+    return {
       creates: [],
       updates: [],
-      deletes: [] as { name: string; request: Record<string, string> }[],
+      deletes: [{ name, request }],
       replaces: [] as OAuth2ClientReplace[],
-      title: "",
+      title,
       isEmpty: () => false,
-      print: () => {},
+      lines: () => [],
     };
+  }
 
+  function createMockPlanResult(opts?: { oauth2ClientReplaces?: OAuth2ClientReplace[] }) {
     return {
       changeSet: {
-        service: {
-          ...mockChangeSet,
-          title: "Auth Services",
-          deletes: [
-            {
-              name: "test-auth",
-              request: {
-                workspaceId: "test-workspace",
-                namespaceName: "test-auth",
-              },
-            },
-          ],
-        },
-        idpConfig: {
-          ...mockChangeSet,
-          title: "Auth IdP Configs",
-          deletes: [
-            {
-              name: "test-idp-config",
-              request: {
-                workspaceId: "test-workspace",
-                namespaceName: "test-auth",
-                name: "test-idp-config",
-              },
-            },
-          ],
-        },
-        userProfileConfig: {
-          ...mockChangeSet,
-          title: "Auth User Profile Configs",
-          deletes: [
-            {
-              name: "test-user-profile-config",
-              request: {
-                workspaceId: "test-workspace",
-                namespaceName: "test-auth",
-                name: "test-user-profile-config",
-              },
-            },
-          ],
-        },
-        tenantConfig: {
-          ...mockChangeSet,
-          title: "Auth Tenant Configs",
-          deletes: [
-            {
-              name: "test-tenant-config",
-              request: {
-                workspaceId: "test-workspace",
-                namespaceName: "test-auth",
-                name: "test-tenant-config",
-              },
-            },
-          ],
-        },
-        machineUser: {
-          ...mockChangeSet,
-          title: "Auth Machine Users",
-          deletes: [
-            {
-              name: "test-machine-user",
-              request: {
-                workspaceId: "test-workspace",
-                namespaceName: "test-auth",
-                name: "test-machine-user",
-              },
-            },
-          ],
-        },
-        authHook: {
-          ...mockChangeSet,
-          title: "Auth Hooks",
-          deletes: [
-            {
-              name: "test-auth/before-login",
-              request: {
-                workspaceId: "test-workspace",
-                namespaceName: "test-auth",
-                hookPoint: 1,
-              },
-            },
-          ],
-        },
+        service: deletableChangeSet("Auth Services", "test-auth", {
+          workspaceId: "test-workspace",
+          namespaceName: "test-auth",
+        }),
+        idpConfig: deletableChangeSet("Auth IdP Configs", "test-idp-config", {
+          workspaceId: "test-workspace",
+          namespaceName: "test-auth",
+          name: "test-idp-config",
+        }),
+        userProfileConfig: deletableChangeSet(
+          "Auth User Profile Configs",
+          "test-user-profile-config",
+          {
+            workspaceId: "test-workspace",
+            namespaceName: "test-auth",
+            name: "test-user-profile-config",
+          },
+        ),
+        tenantConfig: deletableChangeSet("Auth Tenant Configs", "test-tenant-config", {
+          workspaceId: "test-workspace",
+          namespaceName: "test-auth",
+          name: "test-tenant-config",
+        }),
+        machineUser: deletableChangeSet("Auth Machine Users", "test-machine-user", {
+          workspaceId: "test-workspace",
+          namespaceName: "test-auth",
+          name: "test-machine-user",
+        }),
+        authHook: deletableChangeSet("Auth Hooks", "test-auth/before-login", {
+          workspaceId: "test-workspace",
+          namespaceName: "test-auth",
+          hookPoint: 1,
+        }),
         oauth2Client: {
-          ...mockChangeSet,
-          title: "Auth OAuth2 Clients",
-          deletes: [
-            {
-              name: "test-oauth2-client",
-              request: {
-                workspaceId: "test-workspace",
-                namespaceName: "test-auth",
-                name: "test-oauth2-client",
-              },
-            },
-          ],
+          ...deletableChangeSet("Auth OAuth2 Clients", "test-oauth2-client", {
+            workspaceId: "test-workspace",
+            namespaceName: "test-auth",
+            name: "test-oauth2-client",
+          }),
           replaces: opts?.oauth2ClientReplaces ?? [],
         },
-        scim: {
-          ...mockChangeSet,
-          title: "Auth SCIM Configs",
-          deletes: [
-            {
-              name: "test-scim-config",
-              request: {
-                workspaceId: "test-workspace",
-                namespaceName: "test-auth",
-                name: "test-scim-config",
-              },
-            },
-          ],
-        },
-        scimResource: {
-          ...mockChangeSet,
-          title: "Auth SCIM Resources",
-          deletes: [
-            {
-              name: "test-scim-resource",
-              request: {
-                workspaceId: "test-workspace",
-                namespaceName: "test-auth",
-                name: "test-scim-resource",
-              },
-            },
-          ],
-        },
+        scim: deletableChangeSet("Auth SCIM Configs", "test-scim-config", {
+          workspaceId: "test-workspace",
+          namespaceName: "test-auth",
+          name: "test-scim-config",
+        }),
+        scimResource: deletableChangeSet("Auth SCIM Resources", "test-scim-resource", {
+          workspaceId: "test-workspace",
+          namespaceName: "test-auth",
+          name: "test-scim-resource",
+        }),
         connection: {
-          ...mockChangeSet,
-          title: "Auth Connections",
+          ...deletableChangeSet("Auth Connections", "", {}),
+          deletes: [],
         },
       },
       conflicts: [],
@@ -195,62 +118,38 @@ describe("applyAuth phase separation", () => {
     } as unknown as Awaited<ReturnType<typeof planAuth>>;
   }
 
+  const resourceDeleteMethods = [
+    "deleteAuthSCIMResource",
+    "deleteAuthSCIMConfig",
+    "deleteAuthOAuth2Client",
+    "deleteAuthMachineUser",
+    "deleteTenantConfig",
+    "deleteUserProfileConfig",
+    "deleteAuthIDPConfig",
+  ] as const;
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  test("delete-resources phase deletes all resources, but NOT services", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
+  test.each([
+    { phase: "delete-resources", resourcesCalled: 1, servicesCalled: 0 },
+    { phase: "delete-services", resourcesCalled: 0, servicesCalled: 1 },
+    { phase: "create-update", resourcesCalled: 0, servicesCalled: 0 },
+  ] as const)(
+    "$phase phase calls resource deletes $resourcesCalled time(s) and service delete $servicesCalled time(s)",
+    async ({ phase, resourcesCalled, servicesCalled }) => {
+      const client = createMockClientWithSpies();
+      const planResult = createMockPlanResult();
 
-    await applyAuth(client, planResult, "delete-resources");
+      await applyAuth(client, planResult, phase);
 
-    // All resources should be deleted
-    expect(client.deleteAuthSCIMResource).toHaveBeenCalledTimes(1);
-    expect(client.deleteAuthSCIMConfig).toHaveBeenCalledTimes(1);
-    expect(client.deleteAuthOAuth2Client).toHaveBeenCalledTimes(1);
-    expect(client.deleteAuthMachineUser).toHaveBeenCalledTimes(1);
-    expect(client.deleteTenantConfig).toHaveBeenCalledTimes(1);
-    expect(client.deleteUserProfileConfig).toHaveBeenCalledTimes(1);
-    expect(client.deleteAuthIDPConfig).toHaveBeenCalledTimes(1);
-    // Services should NOT be deleted
-    expect(client.deleteAuthService).not.toHaveBeenCalled();
-  });
-
-  test("delete-services phase deletes ONLY services", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
-
-    await applyAuth(client, planResult, "delete-services");
-
-    // Resources should NOT be deleted
-    expect(client.deleteAuthSCIMResource).not.toHaveBeenCalled();
-    expect(client.deleteAuthSCIMConfig).not.toHaveBeenCalled();
-    expect(client.deleteAuthOAuth2Client).not.toHaveBeenCalled();
-    expect(client.deleteAuthMachineUser).not.toHaveBeenCalled();
-    expect(client.deleteTenantConfig).not.toHaveBeenCalled();
-    expect(client.deleteUserProfileConfig).not.toHaveBeenCalled();
-    expect(client.deleteAuthIDPConfig).not.toHaveBeenCalled();
-    // Services should be deleted
-    expect(client.deleteAuthService).toHaveBeenCalledTimes(1);
-  });
-
-  test("create-update phase does not delete anything (except replaces)", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
-
-    await applyAuth(client, planResult, "create-update");
-
-    // No deletes should happen in create-update phase (except OAuth2 client replaces)
-    expect(client.deleteAuthSCIMResource).not.toHaveBeenCalled();
-    expect(client.deleteAuthSCIMConfig).not.toHaveBeenCalled();
-    expect(client.deleteAuthOAuth2Client).not.toHaveBeenCalled();
-    expect(client.deleteAuthMachineUser).not.toHaveBeenCalled();
-    expect(client.deleteTenantConfig).not.toHaveBeenCalled();
-    expect(client.deleteUserProfileConfig).not.toHaveBeenCalled();
-    expect(client.deleteAuthIDPConfig).not.toHaveBeenCalled();
-    expect(client.deleteAuthService).not.toHaveBeenCalled();
-  });
+      for (const method of resourceDeleteMethods) {
+        expect(client[method]).toHaveBeenCalledTimes(resourcesCalled);
+      }
+      expect(client.deleteAuthService).toHaveBeenCalledTimes(servicesCalled);
+    },
+  );
 
   test("create-update phase handles OAuth2 client replaces (delete then create)", async () => {
     const client = createMockClientWithSpies();

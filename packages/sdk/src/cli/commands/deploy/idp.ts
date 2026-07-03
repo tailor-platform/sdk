@@ -24,14 +24,9 @@ import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
+import { fetchExistingResourcesWithLabels } from "./owned-resource";
+import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type {
   IdPPermissionOperand,
@@ -213,9 +208,7 @@ export async function planIdP(context: PlanContext) {
     idpUserTriggerTargets,
   } = context;
   const idps = forRemoval ? [] : application.idpServices;
-  const expectedLocalWebsites = new Set(
-    application.staticWebsiteServices.map((website) => website.name),
-  );
+  const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const {
     changeSet: serviceChangeSet,
     conflicts,
@@ -309,6 +302,8 @@ function normalizeComparableDisableGqlOperations(
     delete: value?.delete ?? false,
     read: value?.read ?? false,
     sendPasswordResetEmail: value?.sendPasswordResetEmail ?? false,
+    requestMfaSettingsUrl: value?.requestMfaSettingsUrl ?? false,
+    unenrollMfa: value?.unenrollMfa ?? false,
   };
 }
 
@@ -409,37 +404,19 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingServices = await fetchExistingResourcesWithLabels({
+    client,
+    fetchPage: async (pageToken, maxPageSize) => {
       const { idpServices, nextPageToken } = await client.listIdPServices({
         workspaceId,
         pageToken,
         pageSize: maxPageSize,
       });
       return [idpServices, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.namespace?.name,
+    getTrn: (name) => resourceTrn(workspaceId, "idp", name),
   });
-  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      if (!resource.namespace?.name) {
-        return;
-      }
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "idp", resource.namespace.name),
-      });
-      existingServices[resource.namespace.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   for (const idp of idps) {
     const namespaceName = idp.name;
@@ -722,6 +699,8 @@ function convertGqlOperationsToDisable(
     delete: gqlOperations.delete === false,
     read: gqlOperations.read === false,
     sendPasswordResetEmail: gqlOperations.sendPasswordResetEmail === false,
+    requestMfaSettingsUrl: gqlOperations.requestMfaSettingsUrl === false,
+    unenrollMfa: gqlOperations.unenrollMfa === false,
   };
 }
 

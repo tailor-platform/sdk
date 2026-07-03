@@ -8,10 +8,17 @@ import {
   concurrencyLimitInterceptor,
   createTransport,
   fetchAll,
+  fetchMachineUserToken,
   fetchPaged,
   formatRequestParams,
+  getConsoleBaseUrl,
+  getEffectivePlatformConfig,
+  getOAuth2ClientId,
+  getPlatformBaseUrl,
+  initOperatorClient,
   MAX_PAGE_SIZE,
   parseMethodName,
+  rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
   RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
@@ -37,7 +44,7 @@ describe("client environment configuration", () => {
     vi.resetModules();
     vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.staging.tailor.test");
     const client = await import("./client");
-    expect(client.platformBaseUrl).toBe("https://api.staging.tailor.test");
+    expect(client.getPlatformBaseUrl()).toBe("https://api.staging.tailor.test");
   });
 });
 
@@ -55,6 +62,82 @@ describe("createTransport", () => {
       interceptors: [],
     });
     expect(transport).toEqual({ type: "node-transport" });
+  });
+});
+
+describe("initOperatorClient", () => {
+  afterEach(() => {
+    rememberPlatformConfigForToken("token-a");
+    vi.clearAllMocks();
+  });
+
+  test("uses the platform config remembered for the access token", async () => {
+    rememberPlatformConfigForToken("token-a", {
+      platformUrl: "https://api.dev.tailor.tech",
+    });
+
+    await initOperatorClient("token-a");
+    const connectNode = await import("@connectrpc/connect-node");
+
+    expect(connectNode.createConnectTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: "https://api.dev.tailor.tech",
+      }),
+    );
+  });
+});
+
+describe("getConsoleBaseUrl", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("infers the Console URL from profile platform URL before using env console URL", () => {
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.other.tailor.tech");
+
+    expect(getConsoleBaseUrl({ platformUrl: "https://api.dev.tailor.tech" })).toBe(
+      "https://console.dev.tailor.tech",
+    );
+  });
+
+  test("uses env console URL when profile platform URL cannot infer a custom Console URL", () => {
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.other.tailor.tech");
+
+    expect(getConsoleBaseUrl({ platformUrl: "https://platform.dev.tailor.tech" })).toBe(
+      "https://console.other.tailor.tech",
+    );
+  });
+});
+
+describe("platform environment variables", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("uses legacy platform env vars when renamed vars are absent", () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+
+    expect(getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
+    expect(getOAuth2ClientId()).toBe("legacy-client");
+    expect(getEffectivePlatformConfig()).toEqual({
+      platformUrl: "https://api.legacy.tailor.tech",
+      oauth2ClientId: "legacy-client",
+    });
+  });
+
+  test("prefers renamed platform env vars over legacy env vars", () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "dev-client");
+
+    expect(getPlatformBaseUrl()).toBe("https://api.dev.tailor.tech");
+    expect(getOAuth2ClientId()).toBe("dev-client");
+    expect(getEffectivePlatformConfig()).toEqual({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+    });
   });
 });
 
@@ -409,77 +492,22 @@ describe("concurrencyLimitInterceptor", () => {
 });
 
 describe("parseMethodName", () => {
-  test("parses Create methods", () => {
-    expect(parseMethodName("CreateWorkflow")).toEqual({
-      operation: "create",
-      resourceType: "Workflow",
-    });
-    expect(parseMethodName("CreateTailorDBService")).toEqual({
-      operation: "create",
-      resourceType: "TailorDBService",
-    });
-    expect(parseMethodName("CreateTailorDBType")).toEqual({
-      operation: "create",
-      resourceType: "TailorDBType",
-    });
-  });
-
-  test("parses Update methods", () => {
-    expect(parseMethodName("UpdateWorkflow")).toEqual({
-      operation: "update",
-      resourceType: "Workflow",
-    });
-    expect(parseMethodName("UpdateTailorDBType")).toEqual({
-      operation: "update",
-      resourceType: "TailorDBType",
-    });
-  });
-
-  test("parses Delete methods", () => {
-    expect(parseMethodName("DeleteWorkflow")).toEqual({
-      operation: "delete",
-      resourceType: "Workflow",
-    });
-    expect(parseMethodName("DeleteExecutorExecutor")).toEqual({
-      operation: "delete",
-      resourceType: "ExecutorExecutor",
-    });
-  });
-
-  test("parses Set methods", () => {
-    expect(parseMethodName("SetMetadata")).toEqual({
-      operation: "set",
-      resourceType: "Metadata",
-    });
-  });
-
-  test("parses List methods", () => {
-    expect(parseMethodName("ListWorkflows")).toEqual({
-      operation: "list",
-      resourceType: "Workflows",
-    });
-    expect(parseMethodName("ListWorkflowJobFunctions")).toEqual({
-      operation: "list",
-      resourceType: "WorkflowJobFunctions",
-    });
-  });
-
-  test("parses Get methods", () => {
-    expect(parseMethodName("GetStaticWebsite")).toEqual({
-      operation: "get",
-      resourceType: "StaticWebsite",
-    });
-  });
-
-  test("returns default for unknown method patterns", () => {
-    expect(parseMethodName("UnknownMethod")).toEqual({
-      operation: "perform",
-      resourceType: "resource",
-    });
-    expect(parseMethodName("")).toEqual({
-      operation: "perform",
-      resourceType: "resource",
-    });
+  test.each([
+    ["CreateWorkflow", "create", "Workflow"],
+    ["CreateTailorDBService", "create", "TailorDBService"],
+    ["CreateTailorDBType", "create", "TailorDBType"],
+    ["UpdateWorkflow", "update", "Workflow"],
+    ["UpdateTailorDBType", "update", "TailorDBType"],
+    ["DeleteWorkflow", "delete", "Workflow"],
+    ["DeleteExecutorExecutor", "delete", "ExecutorExecutor"],
+    ["SetMetadata", "set", "Metadata"],
+    ["ListWorkflows", "list", "Workflows"],
+    ["ListWorkflowJobFunctions", "list", "WorkflowJobFunctions"],
+    ["GetStaticWebsite", "get", "StaticWebsite"],
+    ["UnknownMethod", "perform", "resource"],
+    ["", "perform", "resource"],
+  ])("parses %s as { operation: %s, resourceType: %s }", (methodName, operation, resourceType) => {
+    expect(parseMethodName(methodName)).toEqual({ operation, resourceType });
   });
 });
 
@@ -638,5 +666,55 @@ describe("resolveStaticWebsiteUrls", () => {
     expect(warnSpy).toHaveBeenCalledWith(
       'Static website "my-site" not found for CORS configuration. Excluding from CORS.',
     );
+  });
+});
+
+describe("fetchMachineUserToken", () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  test("returns the parsed token on success", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 }),
+    });
+
+    const result = await fetchMachineUserToken("https://example.com", "client-id", "client-secret");
+
+    expect(result).toEqual({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 });
+  });
+
+  test("includes status, statusText, and response body in the error on failure", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      text: () => Promise.resolve("access denied"),
+    });
+
+    await expect(
+      fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
+    ).rejects.toThrow("Failed to fetch machine user token: 403 Forbidden access denied");
+  });
+
+  test("falls back to an empty body when reading the response body fails", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      text: () => Promise.reject(new Error("stream already read")),
+    });
+
+    await expect(
+      fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
+    ).rejects.toThrow("Failed to fetch machine user token: 500 Internal Server Error");
   });
 });

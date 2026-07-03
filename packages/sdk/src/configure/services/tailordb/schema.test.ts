@@ -1,11 +1,12 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, expectTypeOf, expect, test } from "vitest";
 import { t } from "#/configure/types/index";
-import { db } from "./schema";
+import { db, type TailorAnyDBField } from "./schema";
 import type { FieldValidateInput, ValidateConfig } from "#/configure/types/field.types";
 import type { TailorPrincipal } from "#/runtime/types";
-import type { output } from "#/types/helpers";
+import type { output, TypeLevelError } from "#/types/helpers";
 import type { Hook } from "./types";
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 describe("TailorDBField basic field type tests", () => {
   test("string field outputs string type correctly", () => {
@@ -377,6 +378,91 @@ describe("TailorDBField modifier chain tests", () => {
   });
 });
 
+describe("TailorDBField type error message tests", () => {
+  test("invalid field modifiers expose type-level error messages", () => {
+    const dbField = db.string();
+    expectTypeOf(dbField.typeName).toEqualTypeOf<
+      TypeLevelError<"typeName cannot be used on TailorDB fields">
+    >();
+
+    const erasedDBField: TailorAnyDBField = db.string();
+    // @ts-expect-error typeName cannot be used on TailorDB fields
+    erasedDBField.typeName("InvalidTypeName");
+
+    const described = db.string().description("Name");
+    expectTypeOf(described.description).toEqualTypeOf<
+      TypeLevelError<".description() has already been set">
+    >();
+
+    const _userType = db.type("User", {
+      name: db.string(),
+    });
+    const related = db.uuid().relation({
+      type: "oneToOne",
+      toward: { type: _userType },
+    });
+    expectTypeOf(related.relation).toEqualTypeOf<
+      TypeLevelError<".relation() has already been set">
+    >();
+
+    const indexed = db.string().index();
+    expectTypeOf(indexed.index).toEqualTypeOf<TypeLevelError<".index() has already been set">>();
+
+    const arrayString = db.string({ array: true });
+    expectTypeOf(arrayString.index).toEqualTypeOf<
+      TypeLevelError<"index cannot be set on array fields">
+    >();
+
+    const unique = db.string().unique();
+    expectTypeOf(unique.unique).toEqualTypeOf<TypeLevelError<".unique() has already been set">>();
+
+    const uniqueArray = db.string({ array: true });
+    expectTypeOf(uniqueArray.unique).toEqualTypeOf<
+      TypeLevelError<"unique cannot be set on array fields">
+    >();
+
+    const vector = db.string().vector();
+    expectTypeOf(vector.vector).toEqualTypeOf<TypeLevelError<".vector() has already been set">>();
+
+    const nonString = db.int();
+    expectTypeOf(nonString.vector).toEqualTypeOf<
+      TypeLevelError<"vector can only be set on non-array string fields">
+    >();
+
+    const hooked = db.string().hooks({ create: () => "created" });
+    expectTypeOf(hooked.hooks).toEqualTypeOf<TypeLevelError<".hooks() has already been set">>();
+    expectTypeOf(hooked.serial).toEqualTypeOf<TypeLevelError<"serial cannot be set after hooks">>();
+
+    const emptyHooked = db.string().hooks({});
+    expectTypeOf(emptyHooked.hooks).toEqualTypeOf<
+      TypeLevelError<".hooks() has already been set">
+    >();
+
+    const nested = db.object({ name: db.string() });
+    expectTypeOf(nested.hooks).toEqualTypeOf<
+      TypeLevelError<"hooks cannot be set on nested type fields">
+    >();
+
+    const validated = db.string().validate(() => true);
+    expectTypeOf(validated.validate).toEqualTypeOf<
+      TypeLevelError<".validate() has already been set">
+    >();
+
+    const serial = db.string().serial({ start: 0 });
+    expectTypeOf(serial.serial).toEqualTypeOf<TypeLevelError<".serial() has already been set">>();
+    expectTypeOf(serial.hooks).toEqualTypeOf<TypeLevelError<"hooks cannot be set after serial">>();
+
+    const nonSerial = db.bool();
+    expectTypeOf(nonSerial.serial).toEqualTypeOf<
+      TypeLevelError<"serial can only be set on non-array integer or string fields">
+    >();
+
+    expectTypeOf(db.string({ optional: true }).serial).toEqualTypeOf<
+      TypeLevelError<"serial can only be set on non-array integer or string fields">
+    >();
+  });
+});
+
 describe("TailorDBField relation modifier tests", () => {
   test("relation does not create reference type", () => {
     const _userType = db.type("User", {
@@ -402,16 +488,15 @@ describe("TailorDBField relation modifier tests", () => {
       name: db.string(),
     });
 
+    const related = db.uuid().relation({
+      type: "oneToOne",
+      toward: { type: _userType },
+    });
     // @ts-expect-error relation() cannot be called after relation() has already been called
-    db.uuid()
-      .relation({
-        type: "oneToOne",
-        toward: { type: _userType },
-      })
-      .relation({
-        type: "oneToOne",
-        toward: { type: _userType },
-      });
+    related.relation({
+      type: "oneToOne",
+      toward: { type: _userType },
+    });
   });
 });
 
@@ -430,11 +515,12 @@ describe("TailorDBField hooks modifier tests", () => {
   });
 
   test("setting hooks on nested field causes type error", () => {
-    // @ts-expect-error hooks() cannot be called on nested fields
-    db.object({
+    const nested = db.object({
       first: db.string(),
       last: db.string(),
-    }).hooks({ create: () => ({ first: "A", last: "B" }) });
+    });
+    // @ts-expect-error hooks() cannot be called on nested fields
+    nested.hooks({ create: () => ({ first: "A", last: "B" }) });
   });
 
   test("hooks modifier on string field receives string", () => {
@@ -495,10 +581,9 @@ describe("TailorDBField validate modifier tests", () => {
   });
 
   test("calling validate modifier more than once causes type error", () => {
+    const validated = db.string().validate(() => true);
     // @ts-expect-error validate() cannot be called after validate() has already been called
-    db.string()
-      .validate(() => true)
-      .validate(() => true);
+    validated.validate(() => true);
   });
 
   test("validate modifier on string field receives string", () => {
@@ -833,15 +918,6 @@ describe("TailorDBType plural form tests", () => {
     expect(_personType.metadata.settings?.pluralForm).toBe("People");
   });
 
-  test("when plural form is explicitly specified, default pluralization is not used", () => {
-    const _childType = db.type(["Child", "Children"], {
-      name: db.string(),
-      age: db.int(),
-    });
-
-    expect(_childType.metadata.settings?.pluralForm).toBe("Children");
-  });
-
   test("when plural form is empty string, it is not set in configure (inflection is executed at parser layer)", () => {
     const _dataType = db.type(["Datum", ""], {
       value: db.string(),
@@ -854,6 +930,19 @@ describe("TailorDBType plural form tests", () => {
     expect(() => db.type(["Data", "Data"], {})).toThrowError(
       "The name and the plural form must be different. name=Data",
     );
+  });
+
+  test.each([
+    ["Child", "Children"],
+    ["Device", "Device's"],
+    ["Item", "100Items"],
+    ["Data", "DataSet"],
+  ])("plural form %s/%s can be set via tuple format", (name, pluralForm) => {
+    const _type = db.type([name, pluralForm], {
+      value: db.string(),
+    });
+
+    expect(_type.metadata.settings?.pluralForm).toBe(pluralForm);
   });
 
   test("all existing features work correctly with tuple format", () => {
@@ -873,24 +962,6 @@ describe("TailorDBType plural form tests", () => {
 
     expect(_postType.name).toBe("Post");
     expect(_postType.metadata.settings?.pluralForm).toBe("Posts");
-  });
-
-  test("plural form with special characters can also be set", () => {
-    const _deviceType = db.type(["Device", "Device's"], {
-      name: db.string(),
-      status: db.enum(["active", "inactive"]),
-    });
-
-    expect(_deviceType.metadata.settings?.pluralForm).toBe("Device's");
-  });
-
-  test("plural form with numbers can also be set", () => {
-    const _itemType = db.type(["Item", "100Items"], {
-      name: db.string(),
-      quantity: db.int(),
-    });
-
-    expect(_itemType.metadata.settings?.pluralForm).toBe("100Items");
   });
 
   test("validation and plural form coexist in tuple format", () => {
@@ -928,14 +999,6 @@ describe("TailorDBType plural form tests", () => {
 
     expect(_categoryType.metadata.settings?.pluralForm).toBe("Categories");
     expect(_productType.metadata.settings?.pluralForm).toBe("Products");
-  });
-
-  test("plural form with mixed case can also be set", () => {
-    const _dataType = db.type(["Data", "DataSet"], {
-      value: db.string(),
-    });
-
-    expect(_dataType.metadata.settings?.pluralForm).toBe("DataSet");
   });
 });
 
@@ -1390,11 +1453,16 @@ describe("TailorDBType files method tests", () => {
       avatar: db.string(), // existing field
     });
 
-    // This should be a type error - files field name conflicts with existing field
     type FilesParam = Parameters<typeof _userType.files>[0];
-    // "avatar" key should be `never` due to Partial<Record<keyof output<this>, never>>
-    expectTypeOf<FilesParam>().toExtend<{ avatar?: never }>();
-    expectTypeOf<FilesParam>().not.toExtend<{ nonExists?: never }>();
+    expectTypeOf<FilesParam>().toExtend<{
+      avatar?: TypeLevelError<"file keys cannot use existing field names">;
+    }>();
+    expectTypeOf<FilesParam>().not.toExtend<{
+      nonExists?: TypeLevelError<"file keys cannot use existing field names">;
+    }>();
+
+    // @ts-expect-error file keys cannot use existing field names
+    _userType.files({ avatar: "profile image" });
   });
 
   test("files field names that do not conflict are allowed", () => {
@@ -1419,14 +1487,17 @@ describe("TailorDBField runtime validation tests", () => {
   };
   const data = {};
 
-  test("validates string field values", () => {
-    const field = db.string();
-    const result = field.parse({ value: "hello", data, invoker });
+  function expectParsedValue<T>(result: StandardSchemaV1.Result<T>, expected: T) {
     expect(result.issues).toBeUndefined();
     if (result.issues) {
       throw new Error("Unexpected issues");
     }
-    expect(result.value).toBe("hello");
+    expect(result.value).toEqual(expected);
+  }
+
+  test("validates string field values", () => {
+    const field = db.string();
+    expectParsedValue(field.parse({ value: "hello", data, invoker }), "hello");
 
     const bad = field.parse({ value: 123, data, invoker });
     expect(bad.issues?.[0]?.message).toBe("Expected a string: received 123");
@@ -1434,12 +1505,7 @@ describe("TailorDBField runtime validation tests", () => {
 
   test("validates enum values", () => {
     const field = db.enum(["active", "inactive"]);
-    const result = field.parse({ value: "active", data, invoker });
-    expect(result.issues).toBeUndefined();
-    if (result.issues) {
-      throw new Error("Unexpected issues");
-    }
-    expect(result.value).toBe("active");
+    expectParsedValue(field.parse({ value: "active", data, invoker }), "active");
 
     const bad = field.parse({ value: "unknown", data, invoker });
     expect(bad.issues?.[0]?.message).toBe("Must be one of [active, inactive]: received unknown");
@@ -1447,12 +1513,7 @@ describe("TailorDBField runtime validation tests", () => {
 
   test("validates integer values", () => {
     const field = db.int();
-    const ok = field.parse({ value: 42, data, invoker });
-    expect(ok.issues).toBeUndefined();
-    if (ok.issues) {
-      throw new Error("Unexpected issues");
-    }
-    expect(ok.value).toBe(42);
+    expectParsedValue(field.parse({ value: 42, data, invoker }), 42);
 
     const bad = field.parse({ value: "not-a-number", data, invoker });
     expect(bad.issues?.[0]?.message).toBe("Expected an integer: received not-a-number");
@@ -1460,12 +1521,7 @@ describe("TailorDBField runtime validation tests", () => {
 
   test("validates float values", () => {
     const field = db.float();
-    const ok = field.parse({ value: 3.14, data, invoker });
-    expect(ok.issues).toBeUndefined();
-    if (ok.issues) {
-      throw new Error("Unexpected issues");
-    }
-    expect(ok.value).toBe(3.14);
+    expectParsedValue(field.parse({ value: 3.14, data, invoker }), 3.14);
 
     const bad = field.parse({ value: "not-a-number", data, invoker });
     expect(bad.issues?.[0]?.message).toBe("Expected a number: received not-a-number");
@@ -1473,12 +1529,7 @@ describe("TailorDBField runtime validation tests", () => {
 
   test("validates boolean values", () => {
     const field = db.bool();
-    const ok = field.parse({ value: true, data, invoker });
-    expect(ok.issues).toBeUndefined();
-    if (ok.issues) {
-      throw new Error("Unexpected issues");
-    }
-    expect(ok.value).toBe(true);
+    expectParsedValue(field.parse({ value: true, data, invoker }), true);
 
     const bad = field.parse({ value: "true", data, invoker });
     expect(bad.issues?.[0]?.message).toBe("Expected a boolean: received true");
@@ -1489,12 +1540,10 @@ describe("TailorDBField runtime validation tests", () => {
       name: db.string(),
       age: db.int({ optional: true }),
     });
-    const ok = field.parse({ value: { name: "test", age: 30 }, data, invoker });
-    expect(ok.issues).toBeUndefined();
-    if (ok.issues) {
-      throw new Error("Unexpected issues");
-    }
-    expect(ok.value).toEqual({ name: "test", age: 30 });
+    expectParsedValue(field.parse({ value: { name: "test", age: 30 }, data, invoker }), {
+      name: "test",
+      age: 30,
+    });
 
     const bad = field.parse({ value: { name: 123 }, data, invoker });
     expect(bad.issues?.[0]?.path).toEqual(["name"]);
@@ -1503,22 +1552,15 @@ describe("TailorDBField runtime validation tests", () => {
 
   test("validates array values", () => {
     const field = db.int({ array: true });
-    const ok = field.parse({ value: [1, 2, 3], data, invoker });
-    expect(ok.issues).toBeUndefined();
-    if (ok.issues) {
-      throw new Error("Unexpected issues");
-    }
-    expect(ok.value).toEqual([1, 2, 3]);
+    expectParsedValue(field.parse({ value: [1, 2, 3], data, invoker }), [1, 2, 3]);
   });
 
   test("validates UUID format", () => {
     const field = db.uuid();
-    const ok = field.parse({ value: "123e4567-e89b-12d3-a456-426614174000", data, invoker });
-    expect(ok.issues).toBeUndefined();
-    if (ok.issues) {
-      throw new Error("Unexpected issues");
-    }
-    expect(ok.value).toBe("123e4567-e89b-12d3-a456-426614174000");
+    expectParsedValue(
+      field.parse({ value: "123e4567-e89b-12d3-a456-426614174000", data, invoker }),
+      "123e4567-e89b-12d3-a456-426614174000",
+    );
 
     const bad = field.parse({ value: "not-a-uuid", data, invoker });
     expect(bad.issues?.[0]?.message).toBe("Expected a valid UUID: received not-a-uuid");
@@ -1526,12 +1568,7 @@ describe("TailorDBField runtime validation tests", () => {
 
   test("validates date format", () => {
     const field = db.date();
-    const ok = field.parse({ value: "2025-01-01", data, invoker });
-    expect(ok.issues).toBeUndefined();
-    if (ok.issues) {
-      throw new Error("Unexpected issues");
-    }
-    expect(ok.value).toBe("2025-01-01");
+    expectParsedValue(field.parse({ value: "2025-01-01", data, invoker }), "2025-01-01");
 
     const bad = field.parse({ value: "2025/01/01", data, invoker });
     expect(bad.issues?.[0]?.message).toBe(
@@ -1541,12 +1578,7 @@ describe("TailorDBField runtime validation tests", () => {
 
   test("validates time format", () => {
     const field = db.time();
-    const ok = field.parse({ value: "10:11", data, invoker });
-    expect(ok.issues).toBeUndefined();
-    if (ok.issues) {
-      throw new Error("Unexpected issues");
-    }
-    expect(ok.value).toBe("10:11");
+    expectParsedValue(field.parse({ value: "10:11", data, invoker }), "10:11");
 
     const bad = field.parse({ value: "10:11:12", data, invoker });
     expect(bad.issues?.[0]?.message).toBe('Expected to match "HH:mm" format: received 10:11:12');
@@ -1558,12 +1590,7 @@ describe("TailorDBField runtime validation tests", () => {
     expect(requiredMissing.issues?.[0]?.message).toBe("Required field is missing");
 
     const optionalField = db.string({ optional: true });
-    const optionalNull = optionalField.parse({ value: undefined, data, invoker });
-    expect(optionalNull.issues).toBeUndefined();
-    if (optionalNull.issues) {
-      throw new Error("Unexpected issues");
-    }
-    expect(optionalNull.value).toBeNull();
+    expectParsedValue(optionalField.parse({ value: undefined, data, invoker }), null);
   });
 });
 
@@ -2005,7 +2032,18 @@ describe("TailorDBField decimal type tests", () => {
     expect(() => db.decimal({ scale: 1.5 })).toThrow("scale must be an integer between 0 and 12");
   });
 
-  test("decimal parse validates valid decimal strings", () => {
+  test.each([
+    "123.45",
+    "0",
+    "-99.99",
+    "1000",
+    ".5",
+    "5.",
+    "4.321e+4",
+    "1E-5",
+    "2.41E-3",
+    "-1.5e10",
+  ])("decimal parse validates valid decimal string %s", (value) => {
     const field = db.decimal();
     const invoker: TailorPrincipal = {
       id: "test",
@@ -2014,49 +2052,21 @@ describe("TailorDBField decimal type tests", () => {
       attributes: {},
       attributeList: [],
     };
-    expect(field.parse({ value: "123.45", data: {}, invoker })).toEqual({ value: "123.45" });
-    expect(field.parse({ value: "0", data: {}, invoker })).toEqual({ value: "0" });
-    expect(field.parse({ value: "-99.99", data: {}, invoker })).toEqual({ value: "-99.99" });
-    expect(field.parse({ value: "1000", data: {}, invoker })).toEqual({ value: "1000" });
-    expect(field.parse({ value: ".5", data: {}, invoker })).toEqual({ value: ".5" });
-    expect(field.parse({ value: "5.", data: {}, invoker })).toEqual({ value: "5." });
-    expect(field.parse({ value: "4.321e+4", data: {}, invoker })).toEqual({ value: "4.321e+4" });
-    expect(field.parse({ value: "1E-5", data: {}, invoker })).toEqual({ value: "1E-5" });
-    expect(field.parse({ value: "2.41E-3", data: {}, invoker })).toEqual({ value: "2.41E-3" });
-    expect(field.parse({ value: "-1.5e10", data: {}, invoker })).toEqual({ value: "-1.5e10" });
+    expect(field.parse({ value, data: {}, invoker })).toEqual({ value });
   });
 
-  test("decimal parse rejects invalid decimal strings", () => {
-    const field = db.decimal();
-    const invoker: TailorPrincipal = {
-      id: "test",
-      type: "user",
-      workspaceId: "workspace-test",
-      attributes: {},
-      attributeList: [],
-    };
-    const result1 = field.parse({ value: "abc", data: {}, invoker });
-    expect(result1).toHaveProperty("issues");
-
-    const result2 = field.parse({ value: 123, data: {}, invoker });
-    expect(result2).toHaveProperty("issues");
-
-    const result3 = field.parse({ value: "", data: {}, invoker });
-    expect(result3).toHaveProperty("issues");
-
-    const result4 = field.parse({ value: "1_000_000", data: {}, invoker });
-    expect(result4).toHaveProperty("issues");
-
-    const result5 = field.parse({ value: "0b1.1p-5", data: {}, invoker });
-    expect(result5).toHaveProperty("issues");
-
-    const result6 = field.parse({ value: "1e", data: {}, invoker });
-    expect(result6).toHaveProperty("issues");
-
-    const result7 = field.parse({ value: "e5", data: {}, invoker });
-    expect(result7).toHaveProperty("issues");
-
-    const result8 = field.parse({ value: ".", data: {}, invoker });
-    expect(result8).toHaveProperty("issues");
-  });
+  test.each(["abc", 123, "", "1_000_000", "0b1.1p-5", "1e", "e5", "."])(
+    "decimal parse rejects invalid decimal string %s",
+    (value) => {
+      const field = db.decimal();
+      const invoker: TailorPrincipal = {
+        id: "test",
+        type: "user",
+        workspaceId: "workspace-test",
+        attributes: {},
+        attributeList: [],
+      };
+      expect(field.parse({ value, data: {}, invoker })).toHaveProperty("issues");
+    },
+  );
 });

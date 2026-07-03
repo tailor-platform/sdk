@@ -1,12 +1,13 @@
 import { runCommand } from "politty";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
-import { apiCommand } from "./api";
+import { apiCall, apiCommand } from "./api";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
+  loadPlatformClientConfig: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
 
@@ -20,6 +21,23 @@ vi.mock("#/cli/shared/readonly-guard", () => ({
 
 const fetchMock = vi.fn();
 
+function getRawRequestBody(): string {
+  const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+  return options.body as string;
+}
+
+function getRequestBody(): Record<string, unknown> {
+  return JSON.parse(getRawRequestBody());
+}
+
+function mockConfigWith(config: Record<string, unknown>): void {
+  vi.mocked(loadConfig).mockResolvedValue({
+    config: { name: "my-app", path: "/fake", ...config },
+    generators: [],
+    plugins: [],
+  } as never);
+}
+
 describe("api command body auto-injection", () => {
   beforeAll(() => {
     vi.stubGlobal("fetch", fetchMock);
@@ -31,10 +49,52 @@ describe("api command body auto-injection", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(loadPlatformClientConfig).mockResolvedValue(undefined);
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     fetchMock.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ result: "ok" }),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  describe("profile config precedence", () => {
+    test("uses env access tokens even when the selected profile config cannot be loaded", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", "env-token");
+      vi.mocked(loadAccessToken).mockResolvedValue("env-token");
+      vi.mocked(loadPlatformClientConfig).mockRejectedValue(
+        new Error('Profile "missing" not found'),
+      );
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ result: "ok" }),
+      });
+
+      const result = await apiCall({ profile: "missing", endpoint: "Ping" });
+
+      expect(result).toEqual({ status: 200, data: { result: "ok" } });
+      expect(loadAccessToken).toHaveBeenCalledWith({ profile: "missing" });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, options] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe("https://api.tailor.tech/tailor.v1.OperatorService/Ping");
+      expect((options.headers as Record<string, string>).Authorization).toBe("Bearer env-token");
+    });
+
+    test("does not suppress profile config errors for empty env access tokens", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", "");
+      vi.mocked(loadAccessToken).mockResolvedValue("profile-token");
+      vi.mocked(loadPlatformClientConfig).mockRejectedValue(
+        new Error('Profile "missing" not found'),
+      );
+
+      await expect(apiCall({ profile: "missing", endpoint: "Ping" })).rejects.toThrow(
+        'Profile "missing" not found',
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 
@@ -44,8 +104,7 @@ describe("api command body auto-injection", () => {
 
       await runCommand(apiCommand, ["GetFunctionExecution", "-b", '{"executionId":"exec-1"}']);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
+      const body = getRequestBody();
       expect(body.workspaceId).toBe("resolved-workspace-id");
       expect(body.executionId).toBe("exec-1");
     });
@@ -59,9 +118,7 @@ describe("api command body auto-injection", () => {
         '{"workspaceId":"user-specified","executionId":"exec-1"}',
       ]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
-      expect(body.workspaceId).toBe("user-specified");
+      expect(getRequestBody().workspaceId).toBe("user-specified");
     });
 
     test("should skip injection when workspaceId cannot be resolved", async () => {
@@ -69,8 +126,7 @@ describe("api command body auto-injection", () => {
 
       await runCommand(apiCommand, ["GetFunctionExecution", "-b", '{"executionId":"exec-1"}']);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
+      const body = getRequestBody();
       expect(body.workspaceId).toBeUndefined();
       expect(body.executionId).toBe("exec-1");
     });
@@ -80,9 +136,7 @@ describe("api command body auto-injection", () => {
 
       await runCommand(apiCommand, ["Ping"]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
-      expect(body.workspaceId).toBeUndefined();
+      expect(getRequestBody().workspaceId).toBeUndefined();
       expect(loadWorkspaceId).not.toHaveBeenCalled();
     });
   });
@@ -90,111 +144,58 @@ describe("api command body auto-injection", () => {
   describe("namespaceName injection", () => {
     test("should inject namespaceName for Auth endpoint from config", async () => {
       vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
-      vi.mocked(loadConfig).mockResolvedValue({
-        config: {
-          name: "my-app",
-          auth: { name: "my-auth" },
-          path: "/fake",
-        },
-        plugins: [],
-      } as never);
+      mockConfigWith({ auth: { name: "my-auth" } });
 
       await runCommand(apiCommand, ["GetAuthService"]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
+      const body = getRequestBody();
       expect(body.namespaceName).toBe("my-auth");
       expect(body.workspaceId).toBe("ws-1");
     });
 
     test("should inject namespaceName for TailorDB endpoint when single namespace", async () => {
       vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
-      vi.mocked(loadConfig).mockResolvedValue({
-        config: {
-          name: "my-app",
-          db: { "my-db": { files: [] } },
-          path: "/fake",
-        },
-        plugins: [],
-      } as never);
+      mockConfigWith({ db: { "my-db": { files: [] } } });
 
       await runCommand(apiCommand, ["ListTailorDBTypes"]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
-      expect(body.namespaceName).toBe("my-db");
+      expect(getRequestBody().namespaceName).toBe("my-db");
     });
 
     test("should not inject namespaceName for TailorDB when multiple namespaces", async () => {
       vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
-      vi.mocked(loadConfig).mockResolvedValue({
-        config: {
-          name: "my-app",
-          db: { "db-1": { files: [] }, "db-2": { files: [] } },
-          path: "/fake",
-        },
-        plugins: [],
-      } as never);
+      mockConfigWith({ db: { "db-1": { files: [] }, "db-2": { files: [] } } });
 
       await runCommand(apiCommand, ["ListTailorDBTypes"]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
-      expect(body.namespaceName).toBeUndefined();
+      expect(getRequestBody().namespaceName).toBeUndefined();
     });
 
     test("should inject namespaceName for IdP endpoint when single IdP", async () => {
       vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
-      vi.mocked(loadConfig).mockResolvedValue({
-        config: {
-          name: "my-app",
-          idp: [{ name: "my-idp" }],
-          path: "/fake",
-        },
-        plugins: [],
-      } as never);
+      mockConfigWith({ idp: [{ name: "my-idp" }] });
 
       await runCommand(apiCommand, ["GetIdPService"]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
-      expect(body.namespaceName).toBe("my-idp");
+      expect(getRequestBody().namespaceName).toBe("my-idp");
     });
 
     test("should inject namespaceName for Pipeline endpoint when single resolver namespace", async () => {
       vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
-      vi.mocked(loadConfig).mockResolvedValue({
-        config: {
-          name: "my-app",
-          resolver: { "my-pipeline": { files: [] } },
-          path: "/fake",
-        },
-        plugins: [],
-      } as never);
+      mockConfigWith({ resolver: { "my-pipeline": { files: [] } } });
 
       await runCommand(apiCommand, ["GetPipelineService"]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
-      expect(body.namespaceName).toBe("my-pipeline");
+      expect(getRequestBody().namespaceName).toBe("my-pipeline");
     });
 
     test("should not override namespaceName when already present in body", async () => {
       vi.mocked(loadWorkspaceId).mockResolvedValue("ws-1");
-      vi.mocked(loadConfig).mockResolvedValue({
-        config: {
-          name: "my-app",
-          auth: { name: "my-auth" },
-          path: "/fake",
-        },
-        plugins: [],
-      } as never);
+      mockConfigWith({ auth: { name: "my-auth" } });
 
       await runCommand(apiCommand, ["GetAuthService", "-b", '{"namespaceName":"custom-ns"}']);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
-      expect(body.namespaceName).toBe("custom-ns");
+      expect(getRequestBody().namespaceName).toBe("custom-ns");
     });
 
     test("should skip namespaceName injection when config loading fails", async () => {
@@ -203,8 +204,7 @@ describe("api command body auto-injection", () => {
 
       await runCommand(apiCommand, ["GetAuthService"]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
+      const body = getRequestBody();
       expect(body.namespaceName).toBeUndefined();
       expect(body.workspaceId).toBe("ws-1");
     });
@@ -254,16 +254,14 @@ describe("api command body auto-injection", () => {
     test("should pass through non-object JSON body without attempting injection", async () => {
       await runCommand(apiCommand, ["GetFunctionExecution", "-b", '"just-a-string"']);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      expect(options.body).toBe('"just-a-string"');
+      expect(getRawRequestBody()).toBe('"just-a-string"');
       expect(loadWorkspaceId).not.toHaveBeenCalled();
     });
 
     test("should pass through invalid JSON body without attempting injection", async () => {
       await runCommand(apiCommand, ["GetFunctionExecution", "-b", "not-json"]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      expect(options.body).toBe("not-json");
+      expect(getRawRequestBody()).toBe("not-json");
       expect(loadWorkspaceId).not.toHaveBeenCalled();
     });
 
@@ -284,8 +282,7 @@ describe("api command body auto-injection", () => {
 
       await runCommand(apiCommand, ["GetFunctionExecution", "-f", "executionId=exec-1"]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
+      const body = getRequestBody();
       expect(body.executionId).toBe("exec-1");
       expect(body.workspaceId).toBe("ws-1");
     });
@@ -299,9 +296,7 @@ describe("api command body auto-injection", () => {
         "a.b.d=world",
       ]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
-      expect(body.a).toEqual({ b: { c: "hello", d: "world" } });
+      expect(getRequestBody().a).toEqual({ b: { c: "hello", d: "world" } });
     });
 
     test("should let --field override matching keys in --body", async () => {
@@ -313,17 +308,13 @@ describe("api command body auto-injection", () => {
         "executionId=from-field",
       ]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
-      expect(body.executionId).toBe("from-field");
+      expect(getRequestBody().executionId).toBe("from-field");
     });
 
     test("should destructively overwrite a non-object body value with a nested --field", async () => {
       await runCommand(apiCommand, ["GetFunctionExecution", "-b", '{"a":"str"}', "-f", "a.b=baz"]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
-      expect(body.a).toEqual({ b: "baz" });
+      expect(getRequestBody().a).toEqual({ b: "baz" });
     });
 
     test("should skip workspaceId auto-injection when supplied via --field", async () => {
@@ -336,33 +327,18 @@ describe("api command body auto-injection", () => {
       ]);
 
       expect(loadWorkspaceId).not.toHaveBeenCalled();
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
-      expect(body.workspaceId).toBe("ws-x");
+      expect(getRequestBody().workspaceId).toBe("ws-x");
     });
 
-    test("should error when --field is combined with a non-object --body", async () => {
-      const result = await runCommand(apiCommand, [
-        "GetFunctionExecution",
-        "-b",
-        '"just-a-string"',
-        "-f",
-        "executionId=exec-1",
-      ]);
-
-      expect(result.success).toBe(false);
-      expect(fetchMock).not.toHaveBeenCalled();
-    });
-
-    test("should reject malformed --field values", async () => {
-      const result = await runCommand(apiCommand, ["GetFunctionExecution", "-f", "no-equals"]);
-
-      expect(result.success).toBe(false);
-      expect(fetchMock).not.toHaveBeenCalled();
-    });
-
-    test("should reject empty dotted segments in --field key", async () => {
-      const result = await runCommand(apiCommand, ["GetFunctionExecution", "-f", "a..b=x"]);
+    test.each([
+      [
+        "should error when --field is combined with a non-object --body",
+        ["-b", '"just-a-string"', "-f", "executionId=exec-1"],
+      ],
+      ["should reject malformed --field values", ["-f", "no-equals"]],
+      ["should reject empty dotted segments in --field key", ["-f", "a..b=x"]],
+    ] as const)("%s", async (_name, args) => {
+      const result = await runCommand(apiCommand, ["GetFunctionExecution", ...args]);
 
       expect(result.success).toBe(false);
       expect(fetchMock).not.toHaveBeenCalled();
@@ -379,8 +355,7 @@ describe("api command body auto-injection", () => {
         "deleteProtection=true",
       ]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
+      const body = getRequestBody();
       expect(body.deleteProtection).toBe(true);
       expect(typeof body.deleteProtection).toBe("boolean");
     });
@@ -405,8 +380,7 @@ describe("api command body auto-injection", () => {
 
       await runCommand(apiCommand, ["GetFunctionExecution", "-f", "executionId=exec-1"]);
 
-      const [, options] = fetchMock.mock.calls[0] as [string, RequestInit];
-      const body = JSON.parse(options.body as string);
+      const body = getRequestBody();
       expect(body.executionId).toBe("exec-1");
       expect(typeof body.executionId).toBe("string");
     });

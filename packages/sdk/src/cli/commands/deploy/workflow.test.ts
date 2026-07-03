@@ -30,7 +30,7 @@ vi.mock("./change-set", async (importOriginal) => {
     ...original,
     createChangeSet: (title: string) => ({
       ...original.createChangeSet(title),
-      print: () => {},
+      lines: () => [],
     }),
   };
 });
@@ -39,7 +39,6 @@ describe("planWorkflow", () => {
   const workspaceId = "test-workspace";
   const appName = "test-app";
 
-  // Helper to create mock workflow job
   function createMockJob(name: string): WorkflowJob {
     return {
       name,
@@ -48,7 +47,6 @@ describe("planWorkflow", () => {
     };
   }
 
-  // Helper to create mock workflow
   function createMockWorkflow(name: string, mainJobName: string): Workflow {
     return {
       name,
@@ -56,7 +54,6 @@ describe("planWorkflow", () => {
     };
   }
 
-  // Helper to create mock client
   function createMockClient(
     existingWorkflows: Array<{
       id: string;
@@ -139,10 +136,8 @@ describe("planWorkflow", () => {
 
   describe("rename scenarios", () => {
     test("old workflow is deleted when renamed", async () => {
-      // Existing workflow: "old-workflow" with app label
       const client = createMockClient([{ id: "1", name: "old-workflow", label: appName }]);
 
-      // New config has "new-workflow" (renamed)
       const workflows = {
         "new-workflow": createMockWorkflow("new-workflow", "main-job"),
       };
@@ -160,11 +155,9 @@ describe("planWorkflow", () => {
         mainJobDeps,
       );
 
-      // "new-workflow" should be created
       expect(result.changeSet.creates).toHaveLength(1);
       expect(result.changeSet.creates[0]!.name).toBe("new-workflow");
 
-      // "old-workflow" should be deleted
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("old-workflow");
     });
@@ -177,7 +170,6 @@ describe("planWorkflow", () => {
         { id: "2", name: "workflow-b", label: appName },
       ]);
 
-      // Only workflow-a in config
       const workflows = {
         "workflow-a": createMockWorkflow("workflow-a", "job-a"),
       };
@@ -195,11 +187,9 @@ describe("planWorkflow", () => {
         mainJobDeps,
       );
 
-      // "workflow-a" should be updated
       expect(result.changeSet.updates).toHaveLength(1);
       expect(result.changeSet.updates[0]!.name).toBe("workflow-a");
 
-      // "workflow-b" should be deleted
       expect(result.changeSet.deletes).toHaveLength(1);
       expect(result.changeSet.deletes[0]!.name).toBe("workflow-b");
     });
@@ -386,23 +376,20 @@ describe("planWorkflow", () => {
   });
 
   describe("label ownership scenarios", () => {
-    test("workflow without label is NOT deleted", async () => {
-      const client = createMockClient([
-        { id: "1", name: "unmanaged-workflow" }, // No label
-      ]);
+    test.each([
+      ["workflow without label is NOT deleted", { name: "unmanaged-workflow" }, false],
+      [
+        "workflow owned by different app is NOT deleted",
+        { name: "other-workflow", label: "other-app" },
+        true,
+      ],
+    ])("%s", async (_name, workflow, expectOtherAppOwner) => {
+      const client = createMockClient([{ id: "1", ...workflow }]);
 
       const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
 
       expect(result.changeSet.deletes).toHaveLength(0);
-    });
-
-    test("workflow owned by different app is NOT deleted", async () => {
-      const client = createMockClient([{ id: "1", name: "other-workflow", label: "other-app" }]);
-
-      const result = await planWorkflow(client, workspaceId, appName, undefined, {}, {});
-
-      expect(result.changeSet.deletes).toHaveLength(0);
-      expect(result.resourceOwners.has("other-app")).toBe(true);
+      expect(result.resourceOwners.has("other-app")).toBe(expectOtherAppOwner);
     });
 
     test("mixed ownership - only delete own workflows", async () => {
@@ -523,99 +510,63 @@ describe("planWorkflow", () => {
       expect(result.changeSet.updates).toHaveLength(0);
     });
 
-    test("workflow with concurrencyPolicy is unchanged when remote maxConcurrentExecutions matches local value", async () => {
-      const client = createMockClient([
-        {
-          id: "1",
-          name: "batch-processing",
-          label: appName,
-          resource: {
+    test.each([
+      ["matches local value", "is unchanged", 5, ["batch-processing"], []],
+      ["differs", "is updated", 10, [], ["batch-processing"]],
+    ])(
+      "workflow with concurrencyPolicy %s when remote maxConcurrentExecutions %s",
+      async (
+        _label,
+        _outcome,
+        localMaxConcurrentExecutions,
+        expectedUnchanged,
+        expectedUpdates,
+      ) => {
+        const client = createMockClient([
+          {
             id: "1",
             name: "batch-processing",
-            mainJobFunctionName: "run-batch",
-            jobFunctions: {
-              "run-batch": "5",
-            },
-            concurrencyPolicy: {
-              maxConcurrentExecutions: 5,
-            },
-          },
-        },
-      ]);
-
-      const workflow = createMockWorkflow("batch-processing", "run-batch");
-      workflow.concurrencyPolicy = {
-        maxConcurrentExecutions: 5,
-      };
-
-      const workflows = {
-        "batch-processing": workflow,
-      };
-      const mainJobDeps = {
-        "run-batch": ["run-batch"],
-      };
-
-      const result = await planWorkflow(
-        client,
-        workspaceId,
-        appName,
-        undefined,
-        workflows,
-        mainJobDeps,
-        new Set(["run-batch"]),
-      );
-
-      expect(result.changeSet.unchanged).toHaveLength(1);
-      expect(result.changeSet.unchanged[0]!.name).toBe("batch-processing");
-      expect(result.changeSet.updates).toHaveLength(0);
-    });
-
-    test("workflow with concurrencyPolicy is updated when maxConcurrentExecutions differs", async () => {
-      const client = createMockClient([
-        {
-          id: "1",
-          name: "batch-processing",
-          label: appName,
-          resource: {
-            id: "1",
-            name: "batch-processing",
-            mainJobFunctionName: "run-batch",
-            jobFunctions: {
-              "run-batch": "5",
-            },
-            concurrencyPolicy: {
-              maxConcurrentExecutions: 5,
+            label: appName,
+            resource: {
+              id: "1",
+              name: "batch-processing",
+              mainJobFunctionName: "run-batch",
+              jobFunctions: {
+                "run-batch": "5",
+              },
+              concurrencyPolicy: {
+                maxConcurrentExecutions: 5,
+              },
             },
           },
-        },
-      ]);
+        ]);
 
-      const workflow = createMockWorkflow("batch-processing", "run-batch");
-      workflow.concurrencyPolicy = {
-        maxConcurrentExecutions: 10,
-      };
+        const workflow = createMockWorkflow("batch-processing", "run-batch");
+        workflow.concurrencyPolicy = {
+          maxConcurrentExecutions: localMaxConcurrentExecutions,
+        };
 
-      const workflows = {
-        "batch-processing": workflow,
-      };
-      const mainJobDeps = {
-        "run-batch": ["run-batch"],
-      };
+        const workflows = {
+          "batch-processing": workflow,
+        };
+        const mainJobDeps = {
+          "run-batch": ["run-batch"],
+        };
 
-      const result = await planWorkflow(
-        client,
-        workspaceId,
-        appName,
-        undefined,
-        workflows,
-        mainJobDeps,
-        new Set(["run-batch"]),
-      );
+        const result = await planWorkflow(
+          client,
+          workspaceId,
+          appName,
+          undefined,
+          workflows,
+          mainJobDeps,
+          new Set(["run-batch"]),
+        );
 
-      expect(result.changeSet.unchanged).toHaveLength(0);
-      expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.updates[0]!.name).toBe("batch-processing");
-    });
+        expect(result.changeSet.unchanged.map((u) => u.name)).toEqual(expectedUnchanged);
+        expect(result.changeSet.updates.map((u) => u.name)).toEqual(expectedUpdates);
+      },
+    );
 
     test("plans owned orphaned job functions for deletion even when remaining workflows are unchanged", async () => {
       const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
@@ -669,7 +620,7 @@ describe("planWorkflow", () => {
       expect(listWorkflowJobFunctions).toHaveBeenCalledWith({
         workspaceId,
         pageToken: "",
-        pageSize: 1000,
+        pageSize: 100,
       });
       expect(result.jobFunctionDeletes).toEqual([{ workspaceId, jobFunctionName: "orphaned-job" }]);
     });
@@ -703,7 +654,7 @@ describe("planWorkflow", () => {
             replaces: [],
             unchanged: [],
             isEmpty: () => false,
-            print: () => {},
+            lines: () => [],
           },
           jobFunctionDeletes: [{ workspaceId, jobFunctionName: "removed-job" }],
           conflicts: [],
@@ -772,7 +723,7 @@ describe("planWorkflow", () => {
             replaces: [],
             unchanged: [],
             isEmpty: () => false,
-            print: () => {},
+            lines: () => [],
           },
           jobFunctionDeletes: [
             { workspaceId, jobFunctionName: "job-a" },

@@ -15,25 +15,12 @@ describe("migration CLI commands", () => {
       expect(migrationCommand.description).toContain("migration");
     });
 
-    test("should have generate subcommand", () => {
-      expect(migrationCommand.subCommands).toHaveProperty("generate");
-    });
-
-    test("should have script subcommand", () => {
-      expect(migrationCommand.subCommands).toHaveProperty("script");
-    });
-
-    test("should have set subcommand", () => {
-      expect(migrationCommand.subCommands).toHaveProperty("set");
-    });
-
-    test("should have status subcommand", () => {
-      expect(migrationCommand.subCommands).toHaveProperty("status");
-    });
-
-    test("should have sync subcommand", () => {
-      expect(migrationCommand.subCommands).toHaveProperty("sync");
-    });
+    test.each(["generate", "script", "set", "status", "sync"])(
+      "should have %s subcommand",
+      (subCommand) => {
+        expect(migrationCommand.subCommands).toHaveProperty(subCommand);
+      },
+    );
   });
 
   describe("generateCommand", () => {

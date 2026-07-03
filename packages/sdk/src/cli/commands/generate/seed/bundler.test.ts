@@ -34,11 +34,18 @@ describe("seed-bundler", () => {
       expect(typeof result.bundledCode).toBe("string");
     });
 
-    test("generates code with exported main function", async () => {
-      const result = await bundleSeedScript("tailordb", ["User"]);
+    test.each([
+      ["exported main function", "tailordb", ["User"], ["export", "main"]],
+      ["Kysely and TailordbDialect", "tailordb", ["User"], ["Kysely", "TailordbDialect"]],
+      ["batch insert logic", "tailordb", ["User"], ["insertInto", "BATCH_SIZE"]],
+      ["error handling", "tailordb", ["User"], ["errors", "success"]],
+      ["self-referencing FK handling", "tailordb", ["Category"], ["selfRefTypes", "one-by-one"]],
+    ] as const)("generates code with %s", async (_label, namespace, types, snippets) => {
+      const result = await bundleSeedScript(namespace, [...types]);
 
-      expect(result.bundledCode).toContain("export");
-      expect(result.bundledCode).toContain("main");
+      for (const snippet of snippets) {
+        expect(result.bundledCode).toContain(snippet);
+      }
     });
 
     test("generates code with getDB using the correct namespace", async () => {
@@ -46,34 +53,6 @@ describe("seed-bundler", () => {
 
       expect(result.bundledCode).toContain("getDB");
       expect(result.bundledCode).toContain('"custom-namespace"');
-    });
-
-    test("generates code with Kysely and TailordbDialect", async () => {
-      const result = await bundleSeedScript("tailordb", ["User"]);
-
-      expect(result.bundledCode).toContain("Kysely");
-      expect(result.bundledCode).toContain("TailordbDialect");
-    });
-
-    test("generates code with batch insert logic", async () => {
-      const result = await bundleSeedScript("tailordb", ["User"]);
-
-      expect(result.bundledCode).toContain("insertInto");
-      expect(result.bundledCode).toContain("BATCH_SIZE");
-    });
-
-    test("generates code with error handling", async () => {
-      const result = await bundleSeedScript("tailordb", ["User"]);
-
-      expect(result.bundledCode).toContain("errors");
-      expect(result.bundledCode).toContain("success");
-    });
-
-    test("generates code with self-referencing FK handling", async () => {
-      const result = await bundleSeedScript("tailordb", ["Category"]);
-
-      expect(result.bundledCode).toContain("selfRefTypes");
-      expect(result.bundledCode).toContain("one-by-one");
     });
   });
 });

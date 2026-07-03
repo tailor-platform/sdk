@@ -36,7 +36,7 @@ vi.mock("../change-set", async (importOriginal) => {
     ...original,
     createChangeSet: (title: string) => ({
       ...original.createChangeSet(title),
-      print: () => {},
+      lines: () => [],
     }),
   };
 });
@@ -68,9 +68,16 @@ const snapshotFixtures = vi.hoisted(() => {
   const buildUser = (
     fields: Record<string, { type: string; required: boolean; array?: boolean }>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): any => buildType("User", "users", fields);
+
+  const buildType = (
+    name: string,
+    pluralForm: string,
+    fields: Record<string, { type: string; required: boolean; array?: boolean }>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): any => ({
-    name: "User",
-    pluralForm: "users",
+    name,
+    pluralForm,
     fields,
   });
 
@@ -78,6 +85,11 @@ const snapshotFixtures = vi.hoisted(() => {
     name: { type: "string", required: true },
     permissions: { type: "string", required: false, array: true },
     roles: { type: "string", required: true, array: true },
+  });
+
+  const salesOrderAfterMigration1 = buildType("SalesOrder", "salesOrders", {
+    status: { type: "string", required: false },
+    reference: { type: "string", required: false },
   });
 
   const userAfterMigration5 = buildUser({
@@ -103,7 +115,7 @@ const snapshotFixtures = vi.hoisted(() => {
 
   return {
     reconstructSnapshotFromMigrations: baseSnapshot({
-      1: { User: userAfterMigration1 },
+      1: { SalesOrder: salesOrderAfterMigration1, User: userAfterMigration1 },
       5: { User: userAfterMigration5 },
     }),
   };
@@ -169,7 +181,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
           deletes: [],
           title: "TailorDB Services",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
         type: {
           creates: [],
@@ -182,7 +194,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
           deletes: [],
           title: "TailorDB Types",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
         gqlPermission: {
           creates: [],
@@ -190,7 +202,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
           deletes: [],
           title: "TailorDB GQL Permissions",
           isEmpty: () => true,
-          print: () => {},
+          lines: () => [],
         },
       },
       conflicts: [],
@@ -212,42 +224,18 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     } as any;
   }
 
-  function mkAddFieldMigration(
+  function mkFieldMigration(
+    kind: "field_added" | "field_removed",
     number: number,
     typeName: string,
     fieldName: string,
   ): PendingMigration {
-    return {
-      number,
-      scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
-      diffPath: `/test/migrations/${String(number).padStart(4, "0")}/diff.json`,
-      namespace: "test-ns",
-      migrationsDir: "/test/migrations",
-      diff: {
-        version: 1,
-        namespace: "test-ns",
-        createdAt: new Date().toISOString(),
-        changes: [
-          {
-            kind: "field_added",
-            typeName,
-            fieldName,
-            after: { type: "string", required: false, array: true },
-          },
-        ],
-        hasBreakingChanges: false,
-        breakingChanges: [],
-        requiresMigrationScript: false,
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
-  }
+    const fieldSpec = { type: "string", array: true };
+    const change =
+      kind === "field_added"
+        ? { kind, typeName, fieldName, after: { ...fieldSpec, required: false } }
+        : { kind, typeName, fieldName, before: { ...fieldSpec, required: true } };
 
-  function mkRemoveFieldMigration(
-    number: number,
-    typeName: string,
-    fieldName: string,
-  ): PendingMigration {
     return {
       number,
       scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
@@ -258,14 +246,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
         version: 1,
         namespace: "test-ns",
         createdAt: new Date().toISOString(),
-        changes: [
-          {
-            kind: "field_removed",
-            typeName,
-            fieldName,
-            before: { type: "string", required: true, array: true },
-          },
-        ],
+        changes: [change],
         hasBreakingChanges: false,
         breakingChanges: [],
         requiresMigrationScript: false,
@@ -283,8 +264,8 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     const planResult = createMockPlanResult();
 
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddFieldMigration(1, "User", "permissions"),
-      mkRemoveFieldMigration(5, "User", "roles"),
+      mkFieldMigration("field_added", 1, "User", "permissions"),
+      mkFieldMigration("field_removed", 5, "User", "roles"),
     ]);
 
     await applyTailorDB(client, planResult, "create-update");
@@ -311,7 +292,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     const planResult = createMockPlanResult();
 
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddFieldMigration(1, "SomeOtherType", "foo"),
+      mkFieldMigration("field_added", 1, "SomeOtherType", "foo"),
     ]);
 
     await applyTailorDB(client, planResult, "create-update");
@@ -322,5 +303,76 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
       (c) => (c[0] as any)?.tailordbType?.name === "User",
     );
     expect(userUpdates).toHaveLength(0);
+  });
+
+  test("creates migration prePhase types sequentially", async () => {
+    const createStarts: string[] = [];
+    let firstCreateStarted!: () => void;
+    let releaseFirstCreate!: () => void;
+    const firstCreateStartedPromise = new Promise<void>((resolve) => {
+      firstCreateStarted = resolve;
+    });
+    const firstCreateReleasePromise = new Promise<void>((resolve) => {
+      releaseFirstCreate = resolve;
+    });
+
+    const client = createMockClient();
+    vi.mocked(client.createTailorDBType).mockImplementation(async (request) => {
+      const typeName = request.tailordbType?.name ?? "unknown";
+      createStarts.push(typeName);
+      if (typeName === "SalesOrder") {
+        firstCreateStarted();
+        await firstCreateReleasePromise;
+      }
+      return {} as Awaited<ReturnType<typeof client.createTailorDBType>>;
+    });
+
+    const planResult = createMockPlanResult();
+    planResult.changeSet.type.creates = [
+      {
+        name: "SalesOrder",
+        request: {
+          workspaceId: "test-workspace",
+          namespaceName: "test-ns",
+          tailordbType: { name: "SalesOrder", schema: { fields: {} } },
+        },
+      },
+      {
+        name: "User",
+        request: {
+          workspaceId: "test-workspace",
+          namespaceName: "test-ns",
+          tailordbType: { name: "User", schema: { fields: {} } },
+        },
+      },
+    ];
+    planResult.changeSet.type.updates = [];
+
+    const migration = mkFieldMigration("field_added", 1, "SalesOrder", "reference");
+    migration.diff.changes = [
+      {
+        kind: "field_added",
+        typeName: "SalesOrder",
+        fieldName: "reference",
+        after: { type: "string", required: false },
+      },
+      {
+        kind: "field_added",
+        typeName: "User",
+        fieldName: "permissions",
+        after: { type: "string", required: false, array: true },
+      },
+    ];
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([migration]);
+
+    const applyPromise = applyTailorDB(client, planResult, "create-update");
+    await firstCreateStartedPromise;
+    await Promise.resolve();
+
+    expect(createStarts).toEqual(["SalesOrder"]);
+
+    releaseFirstCreate();
+    await applyPromise;
+    expect(createStarts).toEqual(["SalesOrder", "User"]);
   });
 });

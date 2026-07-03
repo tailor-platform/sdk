@@ -4,13 +4,20 @@
  * Thin typed wrapper around the platform-provided `tailor.authconnection` runtime API.
  * At runtime this delegates to `globalThis.tailor.authconnection`. Use
  * `mockAuthconnection` from `@tailor-platform/sdk/vitest` to mock in unit tests.
+ *
+ * `connectionName` is narrowed to the connection names defined in `defineAuth()`'s
+ * `connections` once `tailor.d.ts` has been generated (via `tailor deploy`/`generate`).
  * @example
  * import { authconnection } from "@tailor-platform/sdk/runtime";
  *
  * const token = await authconnection.getConnectionToken("my-connection");
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+import type { AuthConnectionTokenResult } from "#/configure/services/auth/types";
+// Import from the public entry (not `#/configure/types/connection-name`) so this d.ts
+// references `@tailor-platform/sdk` externally instead of inlining the registry — a single
+// generated `declare module "@tailor-platform/sdk"` then narrows this entry too.
+import type { ConnectionName } from "@tailor-platform/sdk";
 
 /**
  * Platform API surface for `tailor.authconnection`. Describes the shape the
@@ -24,9 +31,9 @@ export interface TailorAuthconnectionAPI {
   /**
    * Returns the access token for the given auth connection.
    * @param connectionName - Auth connection name as defined in tailor.config
-   * @returns Token payload (provider-specific shape)
+   * @returns Token payload
    */
-  getConnectionToken(connectionName: string): Promise<any>;
+  getConnectionToken(connectionName: ConnectionName): Promise<AuthConnectionTokenResult>;
 }
 
 const api = (): TailorAuthconnectionAPI =>
@@ -35,7 +42,7 @@ const api = (): TailorAuthconnectionAPI =>
 /**
  * See {@link TailorAuthconnectionAPI.getConnectionToken}.
  * @param args - Forwarded to {@link TailorAuthconnectionAPI.getConnectionToken}
- * @returns Token payload (provider-specific shape)
+ * @returns Token payload
  */
 export const getConnectionToken: TailorAuthconnectionAPI["getConnectionToken"] = (...args) =>
   api().getConnectionToken(...args);

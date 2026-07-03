@@ -56,7 +56,7 @@ export const mainCommand = withCompletionCommand(
     name: cliName,
     description:
       packageJson.description || "Tailor CLI for managing Tailor Platform SDK applications",
-    notes: `An unknown subcommand is dispatched to an external plugin executable named \`${cliName}-<name>\` (found on your PATH or in node_modules/.bin), similar to \`gh\` extensions.
+    notes: `CLI plugins (beta): an unknown subcommand is dispatched to an external plugin executable named \`${cliName}-<name>\` (found on your PATH or in node_modules/.bin), similar to \`gh\` extensions.
 Run \`${cliName} plugin list\` to see which plugins are installed and where they resolve from.`,
     subCommands: {
       api: apiCommand,

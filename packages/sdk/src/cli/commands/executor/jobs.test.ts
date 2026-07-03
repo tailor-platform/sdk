@@ -34,6 +34,22 @@ function executorJob(status: ExecutorJobStatus): ExecutorJob {
   } as ExecutorJob;
 }
 
+type OperatorClientMockOverrides = {
+  [K in keyof Awaited<ReturnType<typeof initOperatorClient>>]?: ReturnType<typeof vi.fn>;
+} & {
+  targetType?: ExecutorTargetType;
+};
+
+function mockOperatorClient(overrides: OperatorClientMockOverrides = {}) {
+  const { targetType = ExecutorTargetType.WEBHOOK, ...rest } = overrides;
+  vi.mocked(initOperatorClient).mockResolvedValue({
+    getExecutorExecutor: vi.fn().mockResolvedValue({ executor: { targetType } }),
+    getExecutorJob: vi.fn().mockResolvedValue({ job: executorJob(ExecutorJobStatus.SUCCESS) }),
+    listExecutorJobAttempts: vi.fn().mockResolvedValue({ attempts: [], nextPageToken: "" }),
+    ...rest,
+  } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+}
+
 describe("watchExecutorJob", () => {
   let getExecutorJobMock: ReturnType<typeof vi.fn>;
 
@@ -50,18 +66,7 @@ describe("watchExecutorJob", () => {
         job: executorJob(ExecutorJobStatus.SUCCESS),
       });
 
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getExecutorExecutor: vi.fn().mockResolvedValue({
-        executor: {
-          targetType: ExecutorTargetType.WEBHOOK,
-        },
-      }),
-      getExecutorJob: getExecutorJobMock,
-      listExecutorJobAttempts: vi.fn().mockResolvedValue({
-        attempts: [],
-        nextPageToken: "",
-      }),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    mockOperatorClient({ getExecutorJob: getExecutorJobMock });
   });
 
   test("retries retryable job polling failures", async () => {
@@ -125,15 +130,8 @@ describe("watchExecutorJob", () => {
       })
       .mockRejectedValueOnce(new Error("logs unavailable"));
 
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getExecutorExecutor: vi.fn().mockResolvedValue({
-        executor: {
-          targetType: ExecutorTargetType.WORKFLOW,
-        },
-      }),
-      getExecutorJob: vi.fn().mockResolvedValue({
-        job: executorJob(ExecutorJobStatus.SUCCESS),
-      }),
+    mockOperatorClient({
+      targetType: ExecutorTargetType.WORKFLOW,
       listExecutorJobAttempts: vi.fn().mockResolvedValue({
         attempts: [
           {
@@ -146,7 +144,7 @@ describe("watchExecutorJob", () => {
         nextPageToken: "",
       }),
       getWorkflowExecution: getWorkflowExecutionMock,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    });
 
     const result = await watchExecutorJob({
       executorName: "my-executor",

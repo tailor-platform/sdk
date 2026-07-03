@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { confirmOwnerConflict, type OwnerConflict } from "./confirm";
+import type { prompt as promptModule } from "#/cli/shared/prompt";
 
 vi.mock("#/cli/shared/logger", () => ({
   logger: {
@@ -27,8 +28,11 @@ vi.mock("#/cli/shared/prompt", () => ({
 }));
 
 describe("confirmOwnerConflict", () => {
-  beforeEach(() => {
+  let prompt: typeof promptModule;
+
+  beforeEach(async () => {
     vi.clearAllMocks();
+    ({ prompt } = await import("#/cli/shared/prompt"));
   });
 
   afterEach(() => {
@@ -36,13 +40,11 @@ describe("confirmOwnerConflict", () => {
   });
 
   test("returns immediately when conflicts is empty", async () => {
-    const { prompt } = await import("#/cli/shared/prompt");
     await confirmOwnerConflict([], "my-app", false);
     expect(prompt.confirm).not.toHaveBeenCalled();
   });
 
   test("uses the id-regeneration prompt when currentOwner equals appName", async () => {
-    const { prompt } = await import("#/cli/shared/prompt");
     const conflicts: OwnerConflict[] = [
       { resourceType: "Executor", resourceName: "ex-1", currentOwner: "my-app" },
     ];
@@ -56,7 +58,6 @@ describe("confirmOwnerConflict", () => {
   });
 
   test("uses the name-mismatch prompt when currentOwner differs from appName", async () => {
-    const { prompt } = await import("#/cli/shared/prompt");
     const conflicts: OwnerConflict[] = [
       { resourceType: "Executor", resourceName: "ex-1", currentOwner: "old-app" },
     ];
@@ -70,7 +71,6 @@ describe("confirmOwnerConflict", () => {
   });
 
   test("prompts twice when both scenarios are present", async () => {
-    const { prompt } = await import("#/cli/shared/prompt");
     const conflicts: OwnerConflict[] = [
       { resourceType: "Executor", resourceName: "regenerated", currentOwner: "my-app" },
       { resourceType: "Resolver", resourceName: "renamed", currentOwner: "old-app" },
@@ -82,26 +82,18 @@ describe("confirmOwnerConflict", () => {
     expect(vi.mocked(prompt.confirm).mock.calls[1]![0]!.message).toContain("Update");
   });
 
-  test("does not prompt when yes is true (id regeneration)", async () => {
-    const { prompt } = await import("#/cli/shared/prompt");
+  test.each([
+    ["id regeneration", "my-app", "my-app"],
+    ["name mismatch", "old-app", "new-app"],
+  ])("does not prompt when yes is true (%s)", async (_label, currentOwner, appName) => {
     const conflicts: OwnerConflict[] = [
-      { resourceType: "Executor", resourceName: "ex-1", currentOwner: "my-app" },
+      { resourceType: "Executor", resourceName: "ex-1", currentOwner },
     ];
-    await confirmOwnerConflict(conflicts, "my-app", true);
-    expect(prompt.confirm).not.toHaveBeenCalled();
-  });
-
-  test("does not prompt when yes is true (name mismatch)", async () => {
-    const { prompt } = await import("#/cli/shared/prompt");
-    const conflicts: OwnerConflict[] = [
-      { resourceType: "Executor", resourceName: "ex-1", currentOwner: "old-app" },
-    ];
-    await confirmOwnerConflict(conflicts, "new-app", true);
+    await confirmOwnerConflict(conflicts, appName, true);
     expect(prompt.confirm).not.toHaveBeenCalled();
   });
 
   test("throws when the id-regeneration prompt is declined", async () => {
-    const { prompt } = await import("#/cli/shared/prompt");
     vi.mocked(prompt.confirm).mockResolvedValueOnce(false);
     const conflicts: OwnerConflict[] = [
       { resourceType: "Executor", resourceName: "ex-1", currentOwner: "my-app" },
@@ -112,7 +104,6 @@ describe("confirmOwnerConflict", () => {
   });
 
   test("throws when the name-mismatch prompt is declined", async () => {
-    const { prompt } = await import("#/cli/shared/prompt");
     vi.mocked(prompt.confirm).mockResolvedValueOnce(false);
     const conflicts: OwnerConflict[] = [
       { resourceType: "Executor", resourceName: "ex-1", currentOwner: "old-app" },

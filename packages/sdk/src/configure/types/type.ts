@@ -10,12 +10,59 @@ import type {
   FieldValidateInput,
 } from "#/configure/types/field.types";
 import type { TailorPrincipal } from "#/runtime/types";
-import type { InferFieldsOutput, Prettify } from "#/types/helpers";
+import type { InferFieldsOutput, TypeLevelError } from "#/types/helpers";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
-// This helper type intentionally uses `any` as a placeholder for unknown field output.
+// Erased fields stay assignable across builder method-state changes.
 // oxlint-disable-next-line no-explicit-any
-export type TailorAnyField = TailorField<any>;
+type AnyBuilderMethod = any;
+
+export type TailorAnyField = Omit<
+  TailorFieldBase<AnyBuilderMethod, AnyBuilderMethod, FieldMetadata, TailorFieldType>,
+  "fields"
+> & {
+  readonly fields: Record<string, AnyBuilderMethod>;
+  _metadata: FieldMetadata;
+  description: AnyBuilderMethod;
+  typeName: AnyBuilderMethod;
+  validate: AnyBuilderMethod;
+  parse: AnyBuilderMethod;
+  _parseInternal: AnyBuilderMethod;
+};
+
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type WithFieldDescription<Defined> = Defined & { description: true };
+type WithFieldTypeName<Defined> = Defined & { typeName: true };
+type WithFieldValidate<Defined> = Defined & { validate: true };
+type FieldDescriptionFn<Defined extends DefinedFieldMetadata, Output> = (
+  description: string,
+) => TailorField<WithFieldDescription<Defined>, Output>;
+type FieldTypeNameFn<Defined extends DefinedFieldMetadata, Output> = (
+  typeName: string,
+) => TailorField<WithFieldTypeName<Defined>, Output>;
+type FieldValidateFn<Defined extends DefinedFieldMetadata, Output> = (
+  ...validate: FieldValidateInput<Output>[]
+) => TailorField<WithFieldValidate<Defined>, Output>;
+type FieldDescriptionMethod<Defined extends DefinedFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? FieldDescriptionFn<Defined, Output>
+    : Defined extends { description: unknown }
+      ? TypeLevelError<".description() has already been set">
+      : FieldDescriptionFn<Defined, Output>;
+type FieldTypeNameMethod<Defined extends DefinedFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? TypeLevelError<string>
+    : Defined extends { typeName: unknown }
+      ? TypeLevelError<".typeName() has already been set">
+      : Defined extends { type: "enum" | "nested" }
+        ? FieldTypeNameFn<Defined, Output>
+        : TypeLevelError<"typeName can only be set on enum or object fields">;
+type FieldValidateMethod<Defined extends DefinedFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? FieldValidateFn<Defined, Output>
+    : Defined extends { validate: unknown }
+      ? TypeLevelError<".validate() has already been set">
+      : FieldValidateFn<Defined, Output>;
 
 /**
  * Full TailorField interface with builder methods.
@@ -37,38 +84,21 @@ export interface TailorField<
    * @param description - The description text
    * @returns The field with updated metadata
    */
-  description<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { description: unknown }
-      ? never
-      : TailorField<CurrentDefined, Output>,
-    description: string,
-  ): TailorField<Prettify<CurrentDefined & { description: true }>, Output>;
+  description: FieldDescriptionMethod<Defined, Output>;
 
   /**
    * Set a custom type name for enum or nested types
    * @param typeName - The custom type name
    * @returns The field with updated metadata
    */
-  typeName<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { typeName: unknown }
-      ? never
-      : CurrentDefined extends { type: "enum" | "nested" }
-        ? TailorField<CurrentDefined, Output>
-        : never,
-    typeName: string,
-  ): TailorField<Prettify<CurrentDefined & { typeName: true }>, Output>;
+  typeName: FieldTypeNameMethod<Defined, Output>;
 
   /**
    * Add validation functions to the field
    * @param validate - One or more validation functions
    * @returns The field with updated metadata
    */
-  validate<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { validate: unknown }
-      ? never
-      : TailorField<CurrentDefined, Output>,
-    ...validate: FieldValidateInput<Output>[]
-  ): TailorField<Prettify<CurrentDefined & { validate: true }>, Output>;
+  validate: FieldValidateMethod<Defined, Output>;
 
   /**
    * Parse and validate a value against this field's validation rules
@@ -129,6 +159,22 @@ type FieldParseInternalArgs = {
   pathArray: string[];
 };
 
+type TailorFieldRuntime<
+  Defined extends DefinedFieldMetadata,
+  Output,
+  M extends FieldMetadata = FieldMetadata,
+  T extends TailorFieldType = TailorFieldType,
+> = TailorFieldBase<Defined, Output, M, T> & {
+  readonly fields: Record<string, TailorAnyField>;
+  _metadata: M;
+  description(description: string): object;
+  typeName(typeName: string): object;
+  validate(...validate: FieldValidateInput<Output>[]): object;
+  parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
+  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
+  clone(): TailorAnyField;
+};
+
 /**
  * Creates a new TailorField instance.
  * @param type - Field type
@@ -153,7 +199,20 @@ function createTailorField<
 ): TailorField<
   { type: T; array: TOptions extends { array: true } ? true : false },
   FieldOutput<OutputBase, TOptions>
-> {
+>;
+function createTailorField<
+  const T extends TailorFieldType,
+  const TOptions extends FieldOptions,
+  const OutputBase = TailorToTs[T],
+>(
+  type: T,
+  options?: TOptions,
+  fields?: Record<string, TailorAnyField>,
+  values?: AllowedValues,
+  metadata?: FieldMetadata,
+): object {
+  type FieldValue = FieldOutput<OutputBase, TOptions>;
+
   // When cloning, take ownership of the source metadata and deep-copy its mutable
   // containers (enum value objects and `[fn, message]` validator tuples; validator
   // functions are kept by reference) so no two instances share mutable state.
@@ -422,11 +481,10 @@ function createTailorField<
     return cloned;
   }
 
-  const field: TailorField<
+  const field: TailorFieldRuntime<
     { type: T; array: TOptions extends { array: true } ? true : false },
-    FieldOutput<OutputBase, TOptions>
-  > &
-    CloneableField = {
+    FieldValue
+  > = {
     type,
     fields: fields ?? {},
     _defined: undefined as unknown as {
@@ -442,20 +500,17 @@ function createTailorField<
 
     description(description: string) {
       // Clone-on-write so a shared field instance never leaks metadata.
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ description }) as any;
+      return cloneWith({ description });
     },
 
     typeName(typeName: string) {
       // Clone-on-write so a shared field instance never leaks metadata.
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ typeName }) as any;
+      return cloneWith({ typeName });
     },
 
-    validate(...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) {
+    validate(...validateInputs: FieldValidateInput<FieldValue>[]) {
       // Clone-on-write so a shared field instance never leaks metadata.
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ validate: validateInputs }) as any;
+      return cloneWith({ validate: validateInputs });
     },
 
     parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {

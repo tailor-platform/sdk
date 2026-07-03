@@ -111,6 +111,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   // TailorDB (read-only / local ops)
   "tailordb/index.ts",
   "tailordb/erd/index.ts",
+  "tailordb/erd/diff-command.ts",
   "tailordb/erd/export.ts",
   "tailordb/erd/serve.ts",
   "tailordb/migrate/index.ts",
@@ -232,51 +233,39 @@ describe("assertWritable", () => {
     vi.unstubAllEnvs();
   });
 
-  test("resolves when no profile is in scope", async () => {
-    await expect(assertWritable()).resolves.toBeUndefined();
+  test.each`
+    description                                                            | envProfile   | optsProfile
+    ${"no profile is in scope"}                                            | ${undefined} | ${undefined}
+    ${"explicit profile has readonly undefined"}                           | ${undefined} | ${"rw"}
+    ${"explicit profile has readonly false"}                               | ${undefined} | ${"ro_false"}
+    ${"profile not found (deferring error to caller)"}                     | ${undefined} | ${"missing"}
+    ${"opts.profile takes precedence over env (rw opts wins over ro env)"} | ${"ro"}      | ${"rw"}
+  `("resolves when $description", async ({ envProfile, optsProfile }) => {
+    if (envProfile !== undefined) vi.stubEnv("TAILOR_PLATFORM_PROFILE", envProfile);
+    const promise = assertWritable(
+      optsProfile === undefined ? undefined : { profile: optsProfile },
+    );
+    await expect(promise).resolves.toBeUndefined();
   });
 
-  test("resolves when explicit profile has readonly undefined", async () => {
-    await expect(assertWritable({ profile: "rw" })).resolves.toBeUndefined();
-  });
-
-  test("resolves when explicit profile has readonly false", async () => {
-    await expect(assertWritable({ profile: "ro_false" })).resolves.toBeUndefined();
-  });
-
-  test("resolves silently when profile not found (deferring error to caller)", async () => {
-    await expect(assertWritable({ profile: "missing" })).resolves.toBeUndefined();
-  });
-
-  test("throws CLIError with PROFILE_READONLY when profile is readonly via opts", async () => {
-    const promise = assertWritable({ profile: "ro" });
+  test.each`
+    description                                                            | envProfile   | optsProfile
+    ${"profile is readonly via opts"}                                      | ${undefined} | ${"ro"}
+    ${"readonly profile is selected via TAILOR_PLATFORM_PROFILE env"}      | ${"ro"}      | ${undefined}
+    ${"opts.profile takes precedence over env (ro opts wins over rw env)"} | ${"rw"}      | ${"ro"}
+    ${"empty opts.profile falls through to env to match loader semantics"} | ${"ro"}      | ${""}
+  `("rejects when $description", async ({ envProfile, optsProfile }) => {
+    if (envProfile !== undefined) vi.stubEnv("TAILOR_PLATFORM_PROFILE", envProfile);
+    const promise = assertWritable(
+      optsProfile === undefined ? undefined : { profile: optsProfile },
+    );
     await expect(promise).rejects.toThrow('Profile "ro" is read-only.');
-    await expect(promise).rejects.toMatchObject({
+  });
+
+  test("throws CLIError with PROFILE_READONLY code when profile is readonly", async () => {
+    await expect(assertWritable({ profile: "ro" })).rejects.toMatchObject({
       code: "PROFILE_READONLY",
     });
-  });
-
-  test("throws when readonly profile is selected via TAILOR_PLATFORM_PROFILE env", async () => {
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "ro");
-    await expect(assertWritable()).rejects.toThrow('Profile "ro" is read-only.');
-  });
-
-  test("opts.profile takes precedence over env (rw opts wins over ro env)", async () => {
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "ro");
-    await expect(assertWritable({ profile: "rw" })).resolves.toBeUndefined();
-  });
-
-  test("opts.profile takes precedence over env (ro opts wins over rw env, throws)", async () => {
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "rw");
-    await expect(assertWritable({ profile: "ro" })).rejects.toThrow('Profile "ro" is read-only.');
-  });
-
-  test("empty opts.profile falls through to env to match loader semantics", async () => {
-    // loadAccessToken / loadWorkspaceId use truthy fallback (||), so an empty
-    // --profile "" flag still ends up resolving to TAILOR_PLATFORM_PROFILE.
-    // The guard must mirror that or it leaves a bypass.
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "ro");
-    await expect(assertWritable({ profile: "" })).rejects.toThrow('Profile "ro" is read-only.');
   });
 });
 

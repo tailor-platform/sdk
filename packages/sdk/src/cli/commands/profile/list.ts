@@ -39,6 +39,9 @@ export const listCommand = defineAppCommand({
               machineUserOverride: p.machine_user_override ?? "allow",
             }
           : {}),
+        ...(p.platform_url ? { platformUrl: p.platform_url } : {}),
+        ...(p.oauth2_client_id ? { oauth2ClientId: p.oauth2_client_id } : {}),
+        ...(p.console_url ? { consoleUrl: p.console_url } : {}),
       };
     });
     logger.out(profileInfos);

@@ -554,11 +554,11 @@ describe("mock", () => {
     test("setTokens provides map-based responses", async () => {
       using ac = mockAuthconnection();
       ac.setTokens({
-        google: { access_token: "ya29.xxx", expires_in: 3600 },
+        google: { access_token: "ya29.xxx" },
       });
 
       const result = await (globalThis as any).tailor.authconnection.getConnectionToken("google");
-      expect(result).toEqual({ access_token: "ya29.xxx", expires_in: 3600 });
+      expect(result).toEqual({ access_token: "ya29.xxx" });
     });
 
     test("returns default token for unknown connection", async () => {
@@ -724,23 +724,20 @@ describe("mock", () => {
       expect(iconv.calls).toHaveLength(0);
     });
 
-    test("default convert returns string for UTF-8 target, Uint8Array otherwise", () => {
-      using _iconv = mockIconv();
-      const utf8Result = (globalThis as any).tailor.iconv.convert("hi", "Shift_JIS", "UTF-8");
-      expect(utf8Result).toBe("");
-      const binResult = (globalThis as any).tailor.iconv.convert("hi", "UTF-8", "Shift_JIS");
-      expect(binResult).toBeInstanceOf(Uint8Array);
-      expect(binResult).toHaveLength(0);
-    });
-
-    test("default encode returns string for UTF-8 target, Uint8Array otherwise", () => {
-      using _iconv = mockIconv();
-      const utf8Result = (globalThis as any).tailor.iconv.encode("hi", "UTF-8");
-      expect(utf8Result).toBe("");
-      const binResult = (globalThis as any).tailor.iconv.encode("hi", "Shift_JIS");
-      expect(binResult).toBeInstanceOf(Uint8Array);
-      expect(binResult).toHaveLength(0);
-    });
+    test.each([
+      ["convert", ["hi", "Shift_JIS", "UTF-8"], ["hi", "UTF-8", "Shift_JIS"]],
+      ["encode", ["hi", "UTF-8"], ["hi", "Shift_JIS"]],
+    ] as const)(
+      "default %s returns string for UTF-8 target, Uint8Array otherwise",
+      (method, utf8Args, binArgs) => {
+        using _iconv = mockIconv();
+        const utf8Result = (globalThis as any).tailor.iconv[method](...utf8Args);
+        expect(utf8Result).toBe("");
+        const binResult = (globalThis as any).tailor.iconv[method](...binArgs);
+        expect(binResult).toBeInstanceOf(Uint8Array);
+        expect(binResult).toHaveLength(0);
+      },
+    );
 
     test("resolver returning undefined falls back to default", () => {
       using iconv = mockIconv();
@@ -794,6 +791,32 @@ describe("mock", () => {
           options: { authInvoker: { namespace: "ns", machineUserName: "mu" } },
         },
       ]);
+    });
+
+    test("resumeWorkflow echoes the executionId by default", async () => {
+      using wf = mockWorkflow();
+      const result = await (globalThis as any).tailor.workflow.resumeWorkflow("exec-42");
+      expect(result).toBe("exec-42");
+      expect(wf.resumeWorkflow.mock.calls).toEqual([["exec-42"]]);
+    });
+
+    test("setResumeHandler with string controls resumeWorkflow response", async () => {
+      using wf = mockWorkflow();
+      wf.setResumeHandler("exec-resumed");
+      const result = await (globalThis as any).tailor.workflow.resumeWorkflow("exec-original");
+      expect(result).toBe("exec-resumed");
+    });
+
+    test("setResumeHandler with function receives executionId", async () => {
+      using wf = mockWorkflow();
+      const seen: unknown[] = [];
+      wf.setResumeHandler((executionId) => {
+        seen.push(executionId);
+        return `resumed:${executionId}`;
+      });
+      const result = await (globalThis as any).tailor.workflow.resumeWorkflow("exec-1");
+      expect(result).toBe("resumed:exec-1");
+      expect(seen).toEqual(["exec-1"]);
     });
 
     test("records wait calls", () => {
