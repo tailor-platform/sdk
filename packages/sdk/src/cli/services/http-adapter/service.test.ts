@@ -118,8 +118,6 @@ export default createHttpAdapter({
       "missing-default.ts",
       `
 import { createHttpAdapter } from "@tailor-platform/sdk";
-// User forgot to default-export the adapter. Without this guard the adapter
-// would be silently dropped from the deployment.
 export const adapter = createHttpAdapter({
   name: "missing-default",
   pathPattern: "/x",

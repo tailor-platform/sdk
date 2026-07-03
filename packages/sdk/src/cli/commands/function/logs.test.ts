@@ -296,62 +296,36 @@ describe("downloadScriptForMapping", () => {
       });
     });
 
-    test("returns code when registry updatedAt is not newer than executionStartedAt", async () => {
-      const client = makeDownloadClient([new TextEncoder().encode("code")], {
+    test.each([
+      {
+        label: "registry updatedAt is not newer than executionStartedAt",
         updatedAt: new Date("2024-01-01T00:00:00Z"),
-      });
-
-      const result = await downloadScriptForMapping({
-        client,
-        workspaceId: "ws-1",
-        scriptName: "my-resolver.throwError.body.js",
-        executionType: FunctionExecution_Type.STANDARD,
-        executionContentHash: "",
         executionStartedAt: new Date("2024-02-01T00:00:00Z"),
-      });
-
-      expect(result).toBe("code");
-    });
-
-    test("returns null when registry updatedAt is strictly newer than executionStartedAt", async () => {
-      // Registry was redeployed at 2024-03-01, but the execution we are
-      // viewing started at 2024-02-01. Mapping the old stack trace
-      // against the new bundle would show misleading source locations.
-      const client = makeDownloadClient([new TextEncoder().encode("new-code")], {
+        expected: "code",
+      },
+      {
+        label: "registry updatedAt is strictly newer than executionStartedAt",
         updatedAt: new Date("2024-03-01T00:00:00Z"),
-      });
-
-      const result = await downloadScriptForMapping({
-        client,
-        workspaceId: "ws-1",
-        scriptName: "my-resolver.throwError.body.js",
-        executionType: FunctionExecution_Type.STANDARD,
-        executionContentHash: "",
         executionStartedAt: new Date("2024-02-01T00:00:00Z"),
-      });
-
-      expect(result).toBeNull();
-    });
-
-    test("returns code when executionStartedAt is null (no staleness check possible)", async () => {
-      const client = makeDownloadClient([new TextEncoder().encode("code")], {
+        expected: null,
+      },
+      {
+        label: "executionStartedAt is null (no staleness check possible)",
         updatedAt: new Date("2024-03-01T00:00:00Z"),
-      });
-
-      const result = await downloadScriptForMapping({
-        client,
-        workspaceId: "ws-1",
-        scriptName: "my-resolver.throwError.body.js",
-        executionType: FunctionExecution_Type.STANDARD,
-        executionContentHash: "",
         executionStartedAt: null,
-      });
-
-      expect(result).toBe("code");
-    });
-
-    test("returns code when registry metadata omits updatedAt", async () => {
-      const client = makeDownloadClient([new TextEncoder().encode("code")]);
+        expected: "code",
+      },
+      {
+        label: "registry metadata omits updatedAt",
+        updatedAt: undefined,
+        executionStartedAt: new Date("2024-02-01T00:00:00Z"),
+        expected: "code",
+      },
+    ])("when $label", async ({ updatedAt, executionStartedAt, expected }) => {
+      const client = makeDownloadClient(
+        [new TextEncoder().encode("code")],
+        updatedAt ? { updatedAt } : undefined,
+      );
 
       const result = await downloadScriptForMapping({
         client,
@@ -359,10 +333,10 @@ describe("downloadScriptForMapping", () => {
         scriptName: "my-resolver.throwError.body.js",
         executionType: FunctionExecution_Type.STANDARD,
         executionContentHash: "",
-        executionStartedAt: new Date("2024-02-01T00:00:00Z"),
+        executionStartedAt,
       });
 
-      expect(result).toBe("code");
+      expect(result).toBe(expected);
     });
 
     test("returns null when download yields no chunks", async () => {

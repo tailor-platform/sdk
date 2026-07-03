@@ -37,43 +37,57 @@ function simulateServiceLoad<T>(
   return result.data;
 }
 
+/**
+ * Registers the three tests shared by every service loader: a branded value
+ * with a valid schema loads, a branded value with an invalid schema throws,
+ * and a non-branded value with an invalid schema is skipped.
+ * @param schema - Zod schema with safeParse method
+ * @param schema.safeParse - Safely parses a value and returns a discriminated union result
+ * @param kind - The expected brand kind for this service loader
+ * @param validValue - A value that satisfies the schema once branded
+ * @param invalidValue - A value that fails the schema once branded
+ * @param validName - Expected `name` property on the successfully parsed value
+ * @param randomExport - An unrelated, non-branded value that also fails the schema
+ */
+function itLoadsBrandedValues<T>(
+  schema: SafeParseSchema<T>,
+  kind: SdkBrandKind,
+  validValue: Record<string, unknown>,
+  invalidValue: Record<string, unknown>,
+  validName: string,
+  randomExport: unknown,
+) {
+  test("branded value with valid schema loads successfully", () => {
+    const branded = brandValue({ ...validValue }, kind);
+    const result = simulateServiceLoad(schema, branded, kind);
+    expect(result).not.toBe("skipped");
+    expect(result).toHaveProperty("name", validName);
+  });
+
+  test("branded value with invalid schema throws ZodError", () => {
+    const invalid = brandValue(invalidValue, kind);
+    expect(() => simulateServiceLoad(schema, invalid, kind)).toThrow(ZodError);
+  });
+
+  test("non-branded value with invalid schema is skipped", () => {
+    expect(simulateServiceLoad(schema, randomExport, kind)).toBe("skipped");
+  });
+}
+
 describe("service brand-based error categorization", () => {
   describe("TailorDBTypeSchema", () => {
-    const validType = {
-      name: "TestType",
-      fields: {
-        title: {
-          type: "string",
-          metadata: {},
-        },
-      },
-      metadata: {
+    itLoadsBrandedValues(
+      TailorDBTypeSchema,
+      "tailordb-type",
+      {
         name: "TestType",
-        permissions: {},
-        files: {},
+        fields: { title: { type: "string", metadata: {} } },
+        metadata: { name: "TestType", permissions: {}, files: {} },
       },
-    };
-
-    test("branded value with valid schema loads successfully", () => {
-      const branded = brandValue({ ...validType }, "tailordb-type");
-      const result = simulateServiceLoad(TailorDBTypeSchema, branded, "tailordb-type");
-      expect(result).not.toBe("skipped");
-      expect(result).toHaveProperty("name", "TestType");
-    });
-
-    test("branded value with invalid schema throws ZodError", () => {
-      const invalidType = brandValue({ name: "Test", invalidField: true }, "tailordb-type");
-      expect(() => simulateServiceLoad(TailorDBTypeSchema, invalidType, "tailordb-type")).toThrow(
-        ZodError,
-      );
-    });
-
-    test("non-branded value with invalid schema is skipped", () => {
-      const randomExport = { foo: "bar" };
-      expect(simulateServiceLoad(TailorDBTypeSchema, randomExport, "tailordb-type")).toBe(
-        "skipped",
-      );
-    });
+      { name: "Test", invalidField: true },
+      "TestType",
+      { foo: "bar" },
+    );
 
     test("executor-branded value is skipped by type loader", () => {
       const executor = brandValue(
@@ -96,128 +110,62 @@ describe("service brand-based error categorization", () => {
   });
 
   describe("ResolverSchema", () => {
-    const validResolver = {
-      operation: "query",
-      name: "getUser",
-      body: () => {},
-      output: {
-        type: "string",
-        fields: {},
-        metadata: {},
+    itLoadsBrandedValues(
+      ResolverSchema,
+      "resolver",
+      {
+        operation: "query",
+        name: "getUser",
+        body: () => {},
+        output: { type: "string", fields: {}, metadata: {} },
       },
-    };
-
-    test("branded value with valid schema loads successfully", () => {
-      const branded = brandValue({ ...validResolver }, "resolver");
-      const result = simulateServiceLoad(ResolverSchema, branded, "resolver");
-      expect(result).not.toBe("skipped");
-      expect(result).toHaveProperty("name", "getUser");
-    });
-
-    test("branded value with invalid schema throws ZodError", () => {
-      const invalidResolver = brandValue({ name: "getUser", missingOperation: true }, "resolver");
-      expect(() => simulateServiceLoad(ResolverSchema, invalidResolver, "resolver")).toThrow(
-        ZodError,
-      );
-    });
-
-    test("non-branded value with invalid schema is skipped", () => {
-      const randomExport = { someHelper: () => {} };
-      expect(simulateServiceLoad(ResolverSchema, randomExport, "resolver")).toBe("skipped");
-    });
+      { name: "getUser", missingOperation: true },
+      "getUser",
+      { someHelper: () => {} },
+    );
   });
 
   describe("ExecutorSchema", () => {
-    const validExecutor = {
-      name: "onUserCreated",
-      trigger: {
-        kind: "tailordb",
-        events: ["tailordb.type_record.created"],
-        typeName: "User",
+    itLoadsBrandedValues(
+      ExecutorSchema,
+      "executor",
+      {
+        name: "onUserCreated",
+        trigger: {
+          kind: "tailordb",
+          events: ["tailordb.type_record.created"],
+          typeName: "User",
+        },
+        operation: { kind: "function", body: () => {} },
       },
-      operation: {
-        kind: "function",
-        body: () => {},
-      },
-    };
-
-    test("branded value with valid schema loads successfully", () => {
-      const branded = brandValue({ ...validExecutor }, "executor");
-      const result = simulateServiceLoad(ExecutorSchema, branded, "executor");
-      expect(result).not.toBe("skipped");
-      expect(result).toHaveProperty("name", "onUserCreated");
-    });
-
-    test("branded value with invalid schema throws ZodError", () => {
-      const invalidExecutor = brandValue({ name: "onUserCreated", trigger: "invalid" }, "executor");
-      expect(() => simulateServiceLoad(ExecutorSchema, invalidExecutor, "executor")).toThrow(
-        ZodError,
-      );
-    });
-
-    test("non-branded value with invalid schema is skipped", () => {
-      const randomExport = "some constant";
-      expect(simulateServiceLoad(ExecutorSchema, randomExport, "executor")).toBe("skipped");
-    });
+      { name: "onUserCreated", trigger: "invalid" },
+      "onUserCreated",
+      "some constant",
+    );
   });
 
   describe("WorkflowSchema", () => {
-    const validWorkflow = {
-      name: "approvalFlow",
-      mainJob: {
-        name: "startApproval",
-        trigger: () => {},
-        body: () => {},
+    itLoadsBrandedValues(
+      WorkflowSchema,
+      "workflow",
+      {
+        name: "approvalFlow",
+        mainJob: { name: "startApproval", trigger: () => {}, body: () => {} },
       },
-    };
-
-    test("branded value with valid schema loads successfully", () => {
-      const branded = brandValue({ ...validWorkflow }, "workflow");
-      const result = simulateServiceLoad(WorkflowSchema, branded, "workflow");
-      expect(result).not.toBe("skipped");
-      expect(result).toHaveProperty("name", "approvalFlow");
-    });
-
-    test("branded value with invalid schema throws ZodError", () => {
-      const invalidWorkflow = brandValue({ name: "approvalFlow" }, "workflow");
-      expect(() => simulateServiceLoad(WorkflowSchema, invalidWorkflow, "workflow")).toThrow(
-        ZodError,
-      );
-    });
-
-    test("non-branded value with invalid schema is skipped", () => {
-      const randomExport = [1, 2, 3];
-      expect(simulateServiceLoad(WorkflowSchema, randomExport, "workflow")).toBe("skipped");
-    });
+      { name: "approvalFlow" },
+      "approvalFlow",
+      [1, 2, 3],
+    );
   });
 
   describe("WorkflowJobSchema", () => {
-    const validJob = {
-      name: "processOrder",
-      trigger: () => {},
-      body: () => {},
-    };
-
-    test("branded value with valid schema loads successfully", () => {
-      const branded = brandValue({ ...validJob }, "workflow-job");
-      const result = simulateServiceLoad(WorkflowJobSchema, branded, "workflow-job");
-      expect(result).not.toBe("skipped");
-      expect(result).toHaveProperty("name", "processOrder");
-    });
-
-    test("branded value with invalid schema throws ZodError", () => {
-      const invalidJob = brandValue(
-        { name: "processOrder", body: "not a function" },
-        "workflow-job",
-      );
-      expect(() => simulateServiceLoad(WorkflowJobSchema, invalidJob, "workflow-job")).toThrow(
-        ZodError,
-      );
-    });
-
-    test("non-branded value with invalid schema is skipped", () => {
-      const randomExport = { helperFn: () => {} };
-      expect(simulateServiceLoad(WorkflowJobSchema, randomExport, "workflow-job")).toBe("skipped");
-    });
+    itLoadsBrandedValues(
+      WorkflowJobSchema,
+      "workflow-job",
+      { name: "processOrder", trigger: () => {}, body: () => {} },
+      { name: "processOrder", body: "not a function" },
+      "processOrder",
+      { helperFn: () => {} },
+    );
   });
 });

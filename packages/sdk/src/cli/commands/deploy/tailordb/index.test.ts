@@ -122,6 +122,63 @@ describe("planTailorDB (service level)", () => {
     } as unknown as Application;
   }
 
+  function createRemoteTypeClient(
+    namespace: string,
+    remoteType: {
+      name: string;
+      description: string;
+      pluralForm: string;
+      fields: Record<string, unknown>;
+    },
+  ): OperatorClient {
+    return {
+      listTailorDBServices: vi.fn().mockResolvedValue({
+        tailordbServices: [{ namespace: { name: namespace } }],
+        nextPageToken: "",
+      }),
+      listTailorDBTypes: vi.fn().mockResolvedValue({
+        tailordbTypes: [
+          {
+            name: remoteType.name,
+            schema: {
+              description: remoteType.description,
+              fields: remoteType.fields,
+              relationships: {},
+              settings: {
+                aggregation: false,
+                bulkUpsert: false,
+                draft: false,
+                defaultQueryLimitSize: "100",
+                maxBulkUpsertSize: "1000",
+                pluralForm: remoteType.pluralForm,
+                publishRecordEvents: false,
+                disableGqlOperations: {
+                  create: false,
+                  update: false,
+                  delete: false,
+                  read: false,
+                },
+              },
+              extends: false,
+              directives: [],
+              indexes: {},
+              files: {},
+              permission: { create: [], read: [], update: [], delete: [] },
+            },
+          },
+        ],
+        nextPageToken: "",
+      }),
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" } },
+      }),
+      listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
+        permissions: [],
+        nextPageToken: "",
+      }),
+    } as unknown as OperatorClient;
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -393,90 +450,40 @@ describe("planTailorDB (service level)", () => {
         value: { [tailordbType.name]: tailordbType },
       });
 
-      const client = {
-        listTailorDBServices: vi.fn().mockResolvedValue({
-          tailordbServices: [{ namespace: { name: "test-tailordb" } }],
-          nextPageToken: "",
-        }),
-        listTailorDBTypes: vi.fn().mockResolvedValue({
-          tailordbTypes: [
-            {
-              name: "Invoice",
-              schema: {
-                description: "Invoice type",
-                fields: {
-                  code: {
-                    type: "string",
-                    required: true,
-                    allowedValues: [],
-                    description: "",
-                    validate: [],
-                    array: false,
-                    index: false,
-                    unique: false,
-                    foreignKey: false,
-                    vector: false,
-                    fields: {},
-                  },
-                  serialNumber: {
-                    type: "integer",
-                    required: true,
-                    allowedValues: [],
-                    description: "",
-                    validate: [],
-                    array: false,
-                    index: false,
-                    unique: false,
-                    foreignKey: false,
-                    vector: false,
-                    fields: {},
-                    serial: {
-                      start: "1",
-                      maxValue: "999",
-                    },
-                  },
-                },
-                relationships: {},
-                settings: {
-                  aggregation: false,
-                  bulkUpsert: false,
-                  draft: false,
-                  defaultQueryLimitSize: "100",
-                  maxBulkUpsertSize: "1000",
-                  pluralForm: "invoices",
-                  publishRecordEvents: false,
-                  disableGqlOperations: {
-                    create: false,
-                    update: false,
-                    delete: false,
-                    read: false,
-                  },
-                },
-                extends: false,
-                directives: [],
-                indexes: {},
-                files: {},
-                permission: {
-                  create: [],
-                  read: [],
-                  update: [],
-                  delete: [],
-                },
-              },
-            },
-          ],
-          nextPageToken: "",
-        }),
-        getMetadata: vi.fn().mockResolvedValue({
-          metadata: {
-            labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" },
+      const client = createRemoteTypeClient("test-tailordb", {
+        name: "Invoice",
+        description: "Invoice type",
+        pluralForm: "invoices",
+        fields: {
+          code: {
+            type: "string",
+            required: true,
+            allowedValues: [],
+            description: "",
+            validate: [],
+            array: false,
+            index: false,
+            unique: false,
+            foreignKey: false,
+            vector: false,
+            fields: {},
           },
-        }),
-        listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
-          permissions: [],
-          nextPageToken: "",
-        }),
-      } as unknown as OperatorClient;
+          serialNumber: {
+            type: "integer",
+            required: true,
+            allowedValues: [],
+            description: "",
+            validate: [],
+            array: false,
+            index: false,
+            unique: false,
+            foreignKey: false,
+            vector: false,
+            fields: {},
+            serial: { start: "1", maxValue: "999" },
+          },
+        },
+      });
 
       const application = createMockApplication([tailorDBService]);
       const ctx: PlanContext = {
@@ -520,73 +527,26 @@ describe("planTailorDB (service level)", () => {
         value: { [tailordbType.name]: tailordbType },
       });
 
-      const client = {
-        listTailorDBServices: vi.fn().mockResolvedValue({
-          tailordbServices: [{ namespace: { name: "test-tailordb" } }],
-          nextPageToken: "",
-        }),
-        listTailorDBTypes: vi.fn().mockResolvedValue({
-          tailordbTypes: [
-            {
-              name: "Invoice",
-              schema: {
-                description: "Invoice type",
-                fields: {
-                  code: {
-                    type: "string",
-                    required: true,
-                    allowedValues: [],
-                    description: "",
-                    validate: [],
-                    array: false,
-                    index: false,
-                    unique: false,
-                    foreignKey: false,
-                    vector: false,
-                    fields: {},
-                  },
-                },
-                relationships: {},
-                settings: {
-                  aggregation: false,
-                  bulkUpsert: false,
-                  draft: false,
-                  defaultQueryLimitSize: "100",
-                  maxBulkUpsertSize: "1000",
-                  pluralForm: "invoices",
-                  publishRecordEvents: false,
-                  disableGqlOperations: {
-                    create: false,
-                    update: false,
-                    delete: false,
-                    read: false,
-                  },
-                },
-                extends: false,
-                directives: [],
-                indexes: {},
-                files: {},
-                permission: {
-                  create: [],
-                  read: [],
-                  update: [],
-                  delete: [],
-                },
-              },
-            },
-          ],
-          nextPageToken: "",
-        }),
-        getMetadata: vi.fn().mockResolvedValue({
-          metadata: {
-            labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" },
+      const client = createRemoteTypeClient("test-tailordb", {
+        name: "Invoice",
+        description: "Invoice type",
+        pluralForm: "invoices",
+        fields: {
+          code: {
+            type: "string",
+            required: true,
+            allowedValues: [],
+            description: "",
+            validate: [],
+            array: false,
+            index: false,
+            unique: false,
+            foreignKey: false,
+            vector: false,
+            fields: {},
           },
-        }),
-        listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
-          permissions: [],
-          nextPageToken: "",
-        }),
-      } as unknown as OperatorClient;
+        },
+      });
 
       const application = createMockApplication([tailorDBService]);
       const ctx: PlanContext = {
@@ -631,75 +591,28 @@ describe("planTailorDB (service level)", () => {
         value: { [tailordbType.name]: tailordbType },
       });
 
-      const client = {
-        listTailorDBServices: vi.fn().mockResolvedValue({
-          tailordbServices: [{ namespace: { name: "test-tailordb" } }],
-          nextPageToken: "",
-        }),
-        listTailorDBTypes: vi.fn().mockResolvedValue({
-          tailordbTypes: [
-            {
-              name: "Event",
-              schema: {
-                description: "Event type",
-                fields: {
-                  name: {
-                    type: "string",
-                    required: false,
-                    allowedValues: [],
-                    // Platform omits `description` for fields without one, while the
-                    // local manifest always emits `description: ""` (generateTailorDBTypeManifest).
-                    // These must compare as equal.
-                    validate: [],
-                    array: false,
-                    index: false,
-                    unique: false,
-                    foreignKey: false,
-                    vector: false,
-                    fields: {},
-                  },
-                },
-                relationships: {},
-                settings: {
-                  aggregation: false,
-                  bulkUpsert: false,
-                  draft: false,
-                  defaultQueryLimitSize: "100",
-                  maxBulkUpsertSize: "1000",
-                  pluralForm: "events",
-                  publishRecordEvents: false,
-                  disableGqlOperations: {
-                    create: false,
-                    update: false,
-                    delete: false,
-                    read: false,
-                  },
-                },
-                extends: false,
-                directives: [],
-                indexes: {},
-                files: {},
-                permission: {
-                  create: [],
-                  read: [],
-                  update: [],
-                  delete: [],
-                },
-              },
-            },
-          ],
-          nextPageToken: "",
-        }),
-        getMetadata: vi.fn().mockResolvedValue({
-          metadata: {
-            labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" },
+      // Platform omits `description` for fields without one, while the local
+      // manifest always emits `description: ""` (generateTailorDBTypeManifest).
+      // These must compare as equal.
+      const client = createRemoteTypeClient("test-tailordb", {
+        name: "Event",
+        description: "Event type",
+        pluralForm: "events",
+        fields: {
+          name: {
+            type: "string",
+            required: false,
+            allowedValues: [],
+            validate: [],
+            array: false,
+            index: false,
+            unique: false,
+            foreignKey: false,
+            vector: false,
+            fields: {},
           },
-        }),
-        listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
-          permissions: [],
-          nextPageToken: "",
-        }),
-      } as unknown as OperatorClient;
+        },
+      });
 
       const application = createMockApplication([tailorDBService]);
       const ctx: PlanContext = {
@@ -720,88 +633,49 @@ describe("planTailorDB (service level)", () => {
 });
 
 describe("formatTailorDBResourceChangeEntries", () => {
-  test("groups type and gqlPermission changes for the same type name", () => {
-    const entries = formatTailorDBResourceChangeEntries(
-      {
+  test.each([
+    {
+      name: "groups type and gqlPermission changes for the same type name",
+      typeChanges: { creates: [{ name: "Project" }], updates: [], deletes: [], replaces: [] },
+      gqlPermissionChanges: {
         creates: [{ name: "Project" }],
         updates: [],
         deletes: [],
         replaces: [],
       },
-      {
-        creates: [{ name: "Project" }],
-        updates: [],
-        deletes: [],
-        replaces: [],
-      },
-    );
-
-    expect(entries).toEqual([
-      {
-        action: "create",
-        symbol: "+",
-        name: "Project",
-        labels: ["type", "gqlPermission"],
-      },
-    ]);
-  });
-
-  test("shows separate entries when type and gqlPermission have different actions for the same name", () => {
-    const entries = formatTailorDBResourceChangeEntries(
-      {
-        creates: [{ name: "Project" }],
-        updates: [],
-        deletes: [],
-        replaces: [],
-      },
-      {
+      expected: [
+        { action: "create", symbol: "+", name: "Project", labels: ["type", "gqlPermission"] },
+      ],
+    },
+    {
+      name: "shows separate entries when type and gqlPermission have different actions for the same name",
+      typeChanges: { creates: [{ name: "Project" }], updates: [], deletes: [], replaces: [] },
+      gqlPermissionChanges: {
         creates: [],
         updates: [{ name: "Project" }],
         deletes: [],
         replaces: [],
       },
-    );
-
-    expect(entries).toEqual([
-      {
-        action: "create",
-        symbol: "+",
-        name: "Project",
-        labels: ["type"],
-      },
-      {
-        action: "update",
-        symbol: "~",
-        name: "Project",
-        labels: ["gqlPermission"],
-      },
-    ]);
-  });
-
-  test("keeps standalone gqlPermission changes visible", () => {
-    const entries = formatTailorDBResourceChangeEntries(
-      {
-        creates: [],
-        updates: [],
-        deletes: [],
-        replaces: [],
-      },
-      {
+      expected: [
+        { action: "create", symbol: "+", name: "Project", labels: ["type"] },
+        { action: "update", symbol: "~", name: "Project", labels: ["gqlPermission"] },
+      ],
+    },
+    {
+      name: "keeps standalone gqlPermission changes visible",
+      typeChanges: { creates: [], updates: [], deletes: [], replaces: [] },
+      gqlPermissionChanges: {
         creates: [{ name: "Project" }],
         updates: [],
         deletes: [],
         replaces: [],
       },
-    );
+      expected: [{ action: "create", symbol: "+", name: "Project", labels: ["gqlPermission"] }],
+    },
+  ])("$name", ({ typeChanges, gqlPermissionChanges, expected }) => {
+    const entries = formatTailorDBResourceChangeEntries(typeChanges, gqlPermissionChanges);
 
-    expect(entries).toEqual([
-      {
-        action: "create",
-        symbol: "+",
-        name: "Project",
-        labels: ["gqlPermission"],
-      },
-    ]);
+    expect(entries).toEqual(expected);
   });
 });
 
@@ -903,46 +777,38 @@ describe("applyTailorDB phase separation", () => {
     vi.clearAllMocks();
   });
 
-  test("delete-resources phase deletes GQLPermissions and Types but not Services", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
+  test.each([
+    {
+      phase: "delete-resources" as const,
+      gqlPermissionCalls: 1,
+      typeCalls: 1,
+      serviceCalls: 0,
+    },
+    {
+      phase: "delete-services" as const,
+      gqlPermissionCalls: 0,
+      typeCalls: 0,
+      serviceCalls: 1,
+    },
+    {
+      phase: "create-update" as const,
+      gqlPermissionCalls: 1,
+      typeCalls: 1,
+      serviceCalls: 0,
+    },
+  ])(
+    "$phase phase deletes the expected resource kinds",
+    async ({ phase, gqlPermissionCalls, typeCalls, serviceCalls }) => {
+      const client = createMockClientWithSpies();
+      const planResult = createMockPlanResult();
 
-    await applyTailorDB(client, planResult, "delete-resources");
+      await applyTailorDB(client, planResult, phase);
 
-    // GQLPermissions should be deleted
-    expect(client.deleteTailorDBGQLPermission).toHaveBeenCalledTimes(1);
-    // Types should be deleted
-    expect(client.deleteTailorDBType).toHaveBeenCalledTimes(1);
-    // Services should NOT be deleted
-    expect(client.deleteTailorDBService).not.toHaveBeenCalled();
-  });
-
-  test("delete-services phase deletes ONLY services", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
-
-    await applyTailorDB(client, planResult, "delete-services");
-
-    // GQLPermissions should NOT be deleted
-    expect(client.deleteTailorDBGQLPermission).not.toHaveBeenCalled();
-    // Types should NOT be deleted
-    expect(client.deleteTailorDBType).not.toHaveBeenCalled();
-    // Services should be deleted
-    expect(client.deleteTailorDBService).toHaveBeenCalledTimes(1);
-  });
-
-  test("create-update phase deletes GQLPermissions and Types but not Services", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
-
-    await applyTailorDB(client, planResult, "create-update");
-
-    // GQLPermissions and Types should be deleted in create-update phase (when no migrations)
-    expect(client.deleteTailorDBGQLPermission).toHaveBeenCalledTimes(1);
-    expect(client.deleteTailorDBType).toHaveBeenCalledTimes(1);
-    // Services should NOT be deleted in create-update phase
-    expect(client.deleteTailorDBService).not.toHaveBeenCalled();
-  });
+      expect(client.deleteTailorDBGQLPermission).toHaveBeenCalledTimes(gqlPermissionCalls);
+      expect(client.deleteTailorDBType).toHaveBeenCalledTimes(typeCalls);
+      expect(client.deleteTailorDBService).toHaveBeenCalledTimes(serviceCalls);
+    },
+  );
 });
 
 describe("applyPreMigrationFieldAdjustments", () => {
@@ -1017,12 +883,12 @@ describe("applyPreMigrationFieldAdjustments", () => {
   });
 });
 
-describe("applyTailorDB migration label reconciliation (--no-schema-check)", () => {
+describe("applyTailorDB migration label reconciliation", () => {
   let tmpDir: string;
   let configPath: string;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "applyTailorDB-reconcile-"));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "applyTailorDB-migration-"));
     configPath = path.join(tmpDir, "tailor.config.ts");
     // Working tree latest migration = 0 (only baseline schema.json under 0000/)
     const baselineDir = path.join(tmpDir, "0000");
@@ -1046,7 +912,7 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
     }
   });
 
-  function makePlanResult(): Awaited<ReturnType<typeof planTailorDB>> {
+  function makePlanResult(noSchemaCheck = false): Awaited<ReturnType<typeof planTailorDB>> {
     const mockTailorDBService = {
       namespace: "test-tailordb",
       loadTypes: vi.fn().mockResolvedValue({}),
@@ -1102,18 +968,16 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
         } as unknown as Application,
         tailorDBInputs: [],
         config,
-        noSchemaCheck: true,
+        noSchemaCheck,
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
 
-  test("forces migration label to working_tree_max when label is ahead of working tree", async () => {
-    // Remote label is m0002 but the working tree only has migration 0000.
-    // Without reconciliation, the next deploy would reconstruct a snapshot at
-    // m0002 (which does not exist) and trigger a false drift error.
-    const getMetadata = vi.fn().mockResolvedValue({
-      metadata: { labels: { "sdk-migration": "m0002" } },
-    });
+  function createMigrationClient(
+    remoteLabels: Record<string, string>,
+    { includeListTailorDBTypes = false }: { includeListTailorDBTypes?: boolean } = {},
+  ) {
+    const getMetadata = vi.fn().mockResolvedValue({ metadata: { labels: remoteLabels } });
     const setMetadata = vi.fn().mockResolvedValue({});
     const client = {
       getMetadata,
@@ -1125,9 +989,20 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
       updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
       deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
       deleteTailorDBType: vi.fn().mockResolvedValue({}),
+      ...(includeListTailorDBTypes
+        ? { listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }) }
+        : {}),
     } as unknown as OperatorClient;
+    return { client, setMetadata };
+  }
 
-    await applyTailorDB(client, makePlanResult(), "create-update");
+  test("forces migration label to working_tree_max when label is ahead of working tree (--no-schema-check)", async () => {
+    // Remote label is m0002 but the working tree only has migration 0000.
+    // Without reconciliation, the next deploy would reconstruct a snapshot at
+    // m0002 (which does not exist) and trigger a false drift error.
+    const { client, setMetadata } = createMigrationClient({ "sdk-migration": "m0002" });
+
+    await applyTailorDB(client, makePlanResult(true), "create-update");
 
     expect(setMetadata).toHaveBeenCalledTimes(1);
     expect(setMetadata).toHaveBeenCalledWith(
@@ -1137,22 +1012,10 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
     );
   });
 
-  test("forces migration label even when remote has no prior label", async () => {
-    const getMetadata = vi.fn().mockResolvedValue({ metadata: { labels: {} } });
-    const setMetadata = vi.fn().mockResolvedValue({});
-    const client = {
-      getMetadata,
-      setMetadata,
-      createTailorDBService: vi.fn().mockResolvedValue({}),
-      createTailorDBType: vi.fn().mockResolvedValue({}),
-      updateTailorDBType: vi.fn().mockResolvedValue({}),
-      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBType: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
+  test("forces migration label even when remote has no prior label (--no-schema-check)", async () => {
+    const { client, setMetadata } = createMigrationClient({});
 
-    await applyTailorDB(client, makePlanResult(), "create-update");
+    await applyTailorDB(client, makePlanResult(true), "create-update");
 
     expect(setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1160,97 +1023,6 @@ describe("applyTailorDB migration label reconciliation (--no-schema-check)", () 
       }),
     );
   });
-});
-
-describe("applyTailorDB initial migration baseline (schema check enabled)", () => {
-  let tmpDir: string;
-  let configPath: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "applyTailorDB-baseline-"));
-    configPath = path.join(tmpDir, "tailor.config.ts");
-    // Working tree latest migration = 0 (only baseline schema.json under 0000/)
-    const baselineDir = path.join(tmpDir, "0000");
-    fs.mkdirSync(baselineDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(baselineDir, "schema.json"),
-      JSON.stringify({
-        version: 1,
-        namespace: "test-tailordb",
-        createdAt: new Date().toISOString(),
-        types: {},
-      }),
-    );
-  });
-
-  afterEach(() => {
-    try {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    } catch {
-      // ignore
-    }
-  });
-
-  function makePlanResult(): Awaited<ReturnType<typeof planTailorDB>> {
-    const mockTailorDBService = {
-      namespace: "test-tailordb",
-      loadTypes: vi.fn().mockResolvedValue({}),
-      types: {},
-    } as unknown as TailorDBService;
-
-    const config = {
-      path: configPath,
-      name: "test-app",
-      db: {
-        "test-tailordb": {
-          files: [],
-          migration: { directory: "." },
-        },
-      },
-    } as unknown as LoadedConfig;
-
-    return {
-      changeSet: {
-        service: {
-          creates: [],
-          updates: [],
-          deletes: [],
-          title: "TailorDB Services",
-          isEmpty: () => true,
-          lines: () => [],
-        },
-        type: {
-          creates: [],
-          updates: [],
-          deletes: [],
-          title: "TailorDB Types",
-          isEmpty: () => true,
-          lines: () => [],
-        },
-        gqlPermission: {
-          creates: [],
-          updates: [],
-          deletes: [],
-          title: "TailorDB GQL Permissions",
-          isEmpty: () => true,
-          lines: () => [],
-        },
-      },
-      conflicts: [],
-      unmanaged: [],
-      resourceOwners: new Set<string>(),
-      context: {
-        workspaceId: "test-workspace",
-        application: {
-          name: "test-app",
-          tailorDBServices: [mockTailorDBService],
-        } as unknown as Application,
-        tailorDBInputs: [],
-        config,
-        noSchemaCheck: false,
-      },
-    } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
-  }
 
   function userSnapshotType(): TailorDBSnapshotType {
     return {
@@ -1333,27 +1105,14 @@ describe("applyTailorDB initial migration baseline (schema check enabled)", () =
     return planResult;
   }
 
-  test("sets the migration label to 0000 on the first apply (no prior label)", async () => {
+  test("sets the migration label to 0000 on the first apply (no prior label, schema check enabled)", async () => {
     // Fresh project: `migration generate` created 0000/schema.json, the remote
     // namespace has no `sdk-migration` label yet. A single `apply` should
     // establish the baseline by setting the label to 0000 — without requiring
     // the redundant apply/generate/apply dance.
-    const getMetadata = vi.fn().mockResolvedValue({ metadata: { labels: {} } });
-    const setMetadata = vi.fn().mockResolvedValue({});
-    const client = {
-      getMetadata,
-      setMetadata,
-      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }),
-      createTailorDBService: vi.fn().mockResolvedValue({}),
-      createTailorDBType: vi.fn().mockResolvedValue({}),
-      updateTailorDBType: vi.fn().mockResolvedValue({}),
-      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
-      deleteTailorDBType: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
+    const { client, setMetadata } = createMigrationClient({}, { includeListTailorDBTypes: true });
 
-    await applyTailorDB(client, makePlanResult(), "create-update");
+    await applyTailorDB(client, makePlanResult(false), "create-update");
 
     expect(setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -85,44 +85,35 @@ describe("workspace create --permission", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    // Clean up the on-disk config between tests so prior writes don't leak.
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
-  test("persists readonly: true when --permission read is combined with --profile-name", async () => {
+  async function runCreate(...extraArgs: string[]) {
     using _logger = silenceLogger("out", "success", "warn");
-    await runCommand(createCommand, [
-      "--name",
-      "test-ws",
-      "--region",
-      "us-west",
+    await runCommand(createCommand, ["--name", "test-ws", "--region", "us-west", ...extraArgs]);
+    return readPlatformConfig();
+  }
+
+  test("persists readonly: true when --permission read is combined with --profile-name", async () => {
+    const config = await runCreate(
       "--profile-name",
       "bootstrap",
       "--profile-user",
       "u@example.com",
       "--permission",
       "read",
-    ]);
-
-    const config = await readPlatformConfig();
+    );
     expect(config.profiles.bootstrap?.readonly).toBe(true);
   });
 
   test("omits the readonly key when --profile-name is given without --permission read", async () => {
-    using _logger = silenceLogger("out", "success", "warn");
-    await runCommand(createCommand, [
-      "--name",
-      "test-ws",
-      "--region",
-      "us-west",
+    const config = await runCreate(
       "--profile-name",
       "bootstrap",
       "--profile-user",
       "u@example.com",
-    ]);
-
-    const config = await readPlatformConfig();
+    );
     expect(config.profiles.bootstrap).toBeDefined();
     // We do not store readonly: false; the field should be absent so the
     // YAML output stays compatible with existing v2 configs.
@@ -209,5 +200,13 @@ describe("workspace create --permission", () => {
       workspace_id: validUUID,
       platform_url: "https://api.dev.tailor.tech",
     });
+  });
+
+  test("creates no profile when --permission read is passed without --profile-name", async () => {
+    // Matches the existing --profile-user behavior: profile-only flags are
+    // silently inert when --profile-name is absent. We don't store the flag
+    // anywhere because no profile was created to attach it to.
+    const config = await runCreate("--permission", "read");
+    expect(Object.keys(config.profiles)).toHaveLength(0);
   });
 });

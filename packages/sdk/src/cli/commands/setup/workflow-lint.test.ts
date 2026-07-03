@@ -22,10 +22,6 @@ import {
   type PackageManager,
 } from "./templates";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function isActionlintAvailable(): boolean {
   const result = spawnSync("actionlint", ["--version"], {
     encoding: "utf-8",
@@ -45,10 +41,6 @@ function runActionlint(workflowPath: string): LintResult {
   return { ok: result.status === 0, output };
 }
 
-// ---------------------------------------------------------------------------
-// Fixture: temp directory for generated files
-// ---------------------------------------------------------------------------
-
 let tmpDir: string;
 
 beforeAll(() => {
@@ -59,10 +51,6 @@ beforeAll(() => {
 afterAll(() => {
   if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
 });
-
-// ---------------------------------------------------------------------------
-// Common params
-// ---------------------------------------------------------------------------
 
 const COMMON = {
   workspaceName: "my-app",
@@ -75,10 +63,6 @@ const ERD_PREVIEW_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-viewer-
 
 // Suites are skipped entirely when actionlint is not on PATH (run `aqua i` first).
 const actionlintAvailable = isActionlintAvailable();
-
-// ---------------------------------------------------------------------------
-// Utility: write + lint a workflow
-// ---------------------------------------------------------------------------
 
 function writeAndLint(name: string, content: string): LintResult {
   const filePath = path.join(tmpDir, ".github", "workflows", `${name}.yml`);
@@ -201,52 +185,38 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
 });
 
 describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflow", () => {
-  // All four package managers, no guard
-  for (const pm of ALL_PM) {
-    test(`tag / ${pm} / no guard / minimal`, () => {
-      const { content } = renderTagWorkflow({ ...COMMON, tagPattern: "v*", packageManager: pm });
-      const { ok, output } = writeAndLint(`tag-${pm}-noguard`, content);
-      expect(ok, `actionlint errors for tag/${pm}/no-guard:\n${output}`).toBe(true);
-    });
-  }
-
-  // All four package managers, with branch guard
-  for (const pm of ALL_PM) {
-    test(`tag / ${pm} / with branch guard`, () => {
-      const { content } = renderTagWorkflow({
-        ...COMMON,
-        tagPattern: "v*",
-        packageManager: pm,
+  const cases = [
+    ...ALL_PM.map((pm) => ({
+      name: `tag / ${pm} / no guard / minimal`,
+      fileName: `tag-${pm}-noguard`,
+      params: { tagPattern: "v*", packageManager: pm },
+    })),
+    ...ALL_PM.map((pm) => ({
+      name: `tag / ${pm} / with branch guard`,
+      fileName: `tag-${pm}-guard`,
+      params: { tagPattern: "v*", packageManager: pm, branch: "main" },
+    })),
+    {
+      name: "tag / pnpm / with guard + workingDirectory + environment",
+      fileName: "tag-pnpm-guard-dir-env",
+      params: {
+        tagPattern: "release-*",
+        packageManager: "pnpm" as const,
         branch: "main",
-      });
-      const { ok, output } = writeAndLint(`tag-${pm}-guard`, content);
-      expect(ok, `actionlint errors for tag/${pm}/guard:\n${output}`).toBe(true);
-    });
-  }
+        workingDirectory: "apps/backend",
+        environment: "production",
+      },
+    },
+    {
+      name: "tag / bun / no guard / with explicit environment",
+      fileName: "tag-bun-noguard-env",
+      params: { tagPattern: "v*", packageManager: "bun" as const, environment: "production" },
+    },
+  ];
 
-  // Custom tag pattern + workingDirectory + environment
-  test("tag / pnpm / with guard + workingDirectory + environment", () => {
-    const { content } = renderTagWorkflow({
-      ...COMMON,
-      tagPattern: "release-*",
-      packageManager: "pnpm",
-      branch: "main",
-      workingDirectory: "apps/backend",
-      environment: "production",
-    });
-    const { ok, output } = writeAndLint("tag-pnpm-guard-dir-env", content);
-    expect(ok, `actionlint errors:\n${output}`).toBe(true);
-  });
-
-  // explicit environment, no guard
-  test("tag / bun / no guard / with explicit environment", () => {
-    const { content } = renderTagWorkflow({
-      ...COMMON,
-      tagPattern: "v*",
-      packageManager: "bun",
-      environment: "production",
-    });
-    const { ok, output } = writeAndLint("tag-bun-noguard-env", content);
+  test.each(cases)("$name", ({ fileName, params }) => {
+    const { content } = renderTagWorkflow({ ...COMMON, ...params });
+    const { ok, output } = writeAndLint(fileName, content);
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 });

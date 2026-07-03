@@ -129,12 +129,12 @@ function authsWith(names: string[]): ReadonlyArray<Readonly<AuthService>> {
   return [{ name: "auth-a", connections } as unknown as AuthService];
 }
 
-describe("planAuthConnections", () => {
-  beforeEach(() => {
-    mockLoadSecretsState.mockReset();
-    mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
-  });
+beforeEach(() => {
+  mockLoadSecretsState.mockReset();
+  mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
+});
 
+describe("planAuthConnections", () => {
   test("uses label ownership: deletes app-owned connections and keeps others", async () => {
     const client = createMockClient({
       connections: [
@@ -240,8 +240,6 @@ describe("planAuthConnections", () => {
 
 describe("applyAuthConnections", () => {
   beforeEach(() => {
-    mockLoadSecretsState.mockReset();
-    mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
     mockSaveSecretsState.mockReset();
     mockLoggerWarn.mockReset();
     mockLoggerInfo.mockReset();

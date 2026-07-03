@@ -3,6 +3,8 @@ import { db } from "#/configure/services/tailordb/index";
 import { PluginManager } from "#/plugin/manager";
 import type { Plugin } from "#/plugin/types";
 
+const orderType = () => db.type("Order", { name: db.string() });
+
 describe("PluginManager", () => {
   test("collects namespace plugin-generated types", async () => {
     const plugin: Plugin = {
@@ -94,9 +96,7 @@ describe("PluginManager", () => {
 
     const manager = new PluginManager([plugin]);
     const result = await manager.processAttachment({
-      type: db.type("Order", {
-        name: db.string(),
-      }),
+      type: orderType(),
       typeConfig: undefined,
       namespace: "main",
       pluginId: "requires-config",
@@ -126,7 +126,7 @@ describe("PluginManager", () => {
 
     const manager = new PluginManager([plugin]);
     const result = await manager.processAttachment({
-      type: db.type("Order", { name: db.string() }),
+      type: orderType(),
       typeConfig: { anyArbitraryValue: 42, nested: { deep: true } },
       namespace: "main",
       pluginId: "schema-less-plugin",

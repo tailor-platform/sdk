@@ -138,42 +138,27 @@ describe("durationArg", () => {
     expect(durationArg.parse("1m")).toBe("1m");
   });
 
-  test("rejects invalid format", () => {
-    expect(() => durationArg.parse("3")).toThrow(
-      /Invalid duration format|Cannot read properties of null/,
-    );
-    expect(() => durationArg.parse("3x")).toThrow(
-      /Invalid duration format|Cannot read properties of null/,
-    );
-    expect(() => durationArg.parse("abc")).toThrow(
-      /Invalid duration format|Cannot read properties of null/,
-    );
-    expect(() => durationArg.parse("")).toThrow(
+  test.each(["3", "3x", "abc", ""])("rejects invalid format: %s", (value) => {
+    expect(() => durationArg.parse(value)).toThrow(
       /Invalid duration format|Cannot read properties of null/,
     );
   });
 
-  test("rejects zero duration", () => {
-    expect(() => durationArg.parse("0ms")).toThrow(/Duration must be greater than 0/);
-    expect(() => durationArg.parse("0s")).toThrow(/Duration must be greater than 0/);
-    expect(() => durationArg.parse("0m")).toThrow(/Duration must be greater than 0/);
+  test.each(["0ms", "0s", "0m"])("rejects zero duration: %s", (value) => {
+    expect(() => durationArg.parse(value)).toThrow(/Duration must be greater than 0/);
   });
 });
 
 describe("parseDuration", () => {
-  test("converts seconds to milliseconds", () => {
-    expect(parseDuration("3s")).toBe(3000);
-    expect(parseDuration("1s")).toBe(1000);
-  });
-
-  test("returns milliseconds as-is", () => {
-    expect(parseDuration("500ms")).toBe(500);
-    expect(parseDuration("1ms")).toBe(1);
-  });
-
-  test("converts minutes to milliseconds", () => {
-    expect(parseDuration("1m")).toBe(60000);
-    expect(parseDuration("2m")).toBe(120000);
+  test.each([
+    ["3s", 3000],
+    ["1s", 1000],
+    ["500ms", 500],
+    ["1ms", 1],
+    ["1m", 60000],
+    ["2m", 120000],
+  ])("parses %s to %d ms", (input, expected) => {
+    expect(parseDuration(input)).toBe(expected);
   });
 });
 
