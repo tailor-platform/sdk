@@ -55,7 +55,7 @@ runs:
         true
     # __STATIC_WEBSITE_BUILD_END__
     - id: tailor-apply
-      uses: tailor-platform/actions/deploy@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
+      uses: tailor-platform/actions@d3040e3b5da92f72696d89db24bc9da62e0993d8 # v1.6.0
       with:
         workspace-id: ${{ inputs.workspace-id }}
         working-directory: ${{ inputs.working-directory }}
@@ -64,7 +64,7 @@ runs:
         platform-client-secret: ${{ inputs.platform-client-secret }}
     - id: tailor-notify
       if: failure() && inputs.slack-token != '' && inputs.slack-channel-id != ''
-      uses: tailor-platform/actions/notify@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
+      uses: tailor-platform/actions@d3040e3b5da92f72696d89db24bc9da62e0993d8 # v1.6.0
       with:
         provider: slack
         status: failure
