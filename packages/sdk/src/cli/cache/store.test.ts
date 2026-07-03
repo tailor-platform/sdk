@@ -149,6 +149,18 @@ describe("createCacheStore", () => {
     });
   });
 
+  describe("storeBundleContent / restoreBundleContent", () => {
+    test("keeps bundle content separate when cache keys share an underscore form", () => {
+      const store = createCacheStore({ cacheDir });
+
+      store.storeBundleContent("resolver:foo_bar:baz", "first bundle");
+      store.storeBundleContent("resolver:foo:bar_baz", "second bundle");
+
+      expect(store.restoreBundleContent("resolver:foo_bar:baz")).toBe("first bundle");
+      expect(store.restoreBundleContent("resolver:foo:bar_baz")).toBe("second bundle");
+    });
+  });
+
   describe("clean", () => {
     test("removes entire cache directory", () => {
       const store = createCacheStore({ cacheDir });

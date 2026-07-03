@@ -190,10 +190,7 @@ describe("createBundleCache", () => {
       expect(entry?.outputFiles).toHaveLength(1);
       expect(entry?.outputFiles[0]?.contentHash).toMatch(/^[0-9a-f]{64}$/);
 
-      // Cache filename replaces the ":" in "kind:name" with "_"
-      const cachedBundlePath = path.join(cacheDir, "bundles", "executor_myExecutor.js");
-      expect(fs.existsSync(cachedBundlePath)).toBe(true);
-      expect(fs.readFileSync(cachedBundlePath, "utf-8")).toBe("bundled executor");
+      expect(store.restoreBundleContent("executor:myExecutor")).toBe("bundled executor");
     });
 
     test("updates existing cache entry on re-save", () => {
