@@ -119,6 +119,7 @@ describe("login --profile", () => {
     });
     expect(pfConfig.users["https://api.dev.tailor.tech|machine-client"]).toMatchObject({
       storage: "keyring",
+      token_expires_at: "2099-01-01T00:00:00.000Z",
     });
   });
 });

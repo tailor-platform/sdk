@@ -5,9 +5,9 @@ import * as path from "pathe";
 import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
 import {
   fetchLatestToken,
+  loadConsoleBaseUrl,
   loadAccessToken,
   loadConfigPath,
-  loadConsoleBaseUrl,
   loadMachineUserName,
   loadWorkspaceId,
   platformConfigFromProfile,
@@ -63,13 +63,6 @@ vi.mock("./client", async (importOriginal) => {
   };
 });
 
-beforeEach(() => {
-  clientMocks.fetchUserInfo.mockReset();
-  clientMocks.refreshToken.mockReset();
-  keyringPasswords.clear();
-  keyringSetPasswordFailure.error = undefined;
-});
-
 function writeFuturePlatformConfig() {
   const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
   fs.mkdirSync(path.dirname(configPath), { recursive: true });
@@ -78,6 +71,13 @@ function writeFuturePlatformConfig() {
     "version: 999\nmin_sdk_version: 999.0.0\nusers: {}\nprofiles: {}\ncurrent_user: null\n",
   );
 }
+
+beforeEach(() => {
+  clientMocks.fetchUserInfo.mockReset();
+  clientMocks.refreshToken.mockReset();
+  keyringPasswords.clear();
+  keyringSetPasswordFailure.error = undefined;
+});
 
 describe("loadConfigPath", () => {
   const originalEnv = process.env;
@@ -601,11 +601,10 @@ describe("loadAccessToken", () => {
   });
 
   describe("env.TAILOR_TOKEN", () => {
-    test("falls back to the deprecated TAILOR_TOKEN with a warning", async () => {
+    test("uses the deprecated TAILOR_TOKEN fallback", async () => {
       vi.stubEnv("TAILOR_TOKEN", validToken);
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-      const result = await loadAccessToken();
-      expect(result).toBe(validToken);
+      await expect(loadAccessToken()).resolves.toBe(validToken);
       expect(warnSpy).toHaveBeenCalledWith(
         "TAILOR_TOKEN is deprecated. Please use TAILOR_PLATFORM_TOKEN instead.",
       );
@@ -697,7 +696,7 @@ describe("loadAccessToken", () => {
           refreshToken: "refresh",
         },
         futureDate,
-        { platformUrl: "https://api.dev.tailor.tech" },
+        { platformConfig: { platformUrl: "https://api.dev.tailor.tech" } },
       );
       writePlatformConfig(config);
 
@@ -796,6 +795,9 @@ describe("loadAccessToken", () => {
         storage: "keyring",
         token_expires_at: new Date(refreshedExpiresAt).toISOString(),
       });
+      expect(keyringPasswords.get("tailor-platform-cli:https://api.dev.tailor.tech|testuser")).toBe(
+        JSON.stringify({ accessToken: "refreshed-token", refreshToken: "refreshed-refresh" }),
+      );
     });
   });
 
@@ -1129,6 +1131,62 @@ describe("profile readonly field", () => {
   });
 });
 
+describe("initial platform config", () => {
+  const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+  const legacyHomeDir = path.join(xdgTempDir, "legacy-home");
+  const legacyConfigPath = path.join(legacyHomeDir, ".tailorctl", "config");
+
+  beforeEach(() => {
+    vi.resetModules();
+    resetKeyringState();
+    vi.stubEnv("HOME", legacyHomeDir);
+    fs.rmSync(configPath, { force: true });
+    fs.rmSync(legacyHomeDir, { recursive: true, force: true });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("creates an empty latest-version config when the platform config is missing", async () => {
+    const config = await readPlatformConfig();
+
+    expect(config).toEqual({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+    expect(parseYAML(fs.readFileSync(configPath, "utf-8"))).toEqual(config);
+  });
+
+  test("ignores legacy tailorctl config when the platform config is missing", async () => {
+    fs.mkdirSync(path.dirname(legacyConfigPath), { recursive: true });
+    fs.writeFileSync(
+      legacyConfigPath,
+      [
+        "[global]",
+        'context = "default"',
+        "",
+        "[default]",
+        'username = "user@example.com"',
+        'workspaceid = "12345678-1234-4abc-8def-123456789012"',
+        'controlplaneaccesstoken = "legacy-access-token"',
+        'controlplanerefreshtoken = "legacy-refresh-token"',
+        'controlplanetokenexpiresat = "2099-01-01T00:00:00.000Z"',
+        "",
+      ].join("\n"),
+    );
+
+    const config = await readPlatformConfig();
+
+    expect(config.users).toEqual({});
+    expect(config.profiles).toEqual({});
+    expect(config.current_user).toBeNull();
+  });
+});
+
 describe("saveUserTokens", () => {
   const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
   const originalEnv = process.env;
@@ -1162,7 +1220,6 @@ describe("saveUserTokens", () => {
       "platform-user-sub",
       { accessToken: "access-token", refreshToken: "refresh-token" },
       futureDate,
-      undefined,
       { email: "user@example.com" },
     );
 

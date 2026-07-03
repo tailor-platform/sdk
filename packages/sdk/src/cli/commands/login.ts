@@ -37,8 +37,17 @@ function randomState() {
   return crypto.randomBytes(32).toString("base64url");
 }
 
-function assertProfileLoginUser(args: ProfileLoginOptions, authenticatedUser: string) {
-  if (args.profile && args.profileUser && authenticatedUser !== args.profileUser) {
+function assertProfileLoginUser(
+  args: ProfileLoginOptions,
+  authenticatedUser: string,
+  authenticatedSubject?: string,
+) {
+  if (
+    args.profile &&
+    args.profileUser &&
+    authenticatedUser !== args.profileUser &&
+    authenticatedSubject !== args.profileUser
+  ) {
     throw new Error(
       `Profile "${args.profile}" is configured for "${args.profileUser}", but login authenticated "${authenticatedUser}".`,
     );
@@ -73,7 +82,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
           },
         );
         const userInfo = await fetchUserInfo(tokens.accessToken, args.platformConfig);
-        assertProfileLoginUser(args, userInfo.email);
+        assertProfileLoginUser(args, userInfo.email, userInfo.sub);
 
         const pfConfig = await readPlatformConfig();
         await saveUserTokens(
@@ -86,13 +95,12 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
           new Date(
             assertDefined(tokens.expiresAt, "token response missing expiresAt"),
           ).toISOString(),
-          args.platformConfig,
-          { email: userInfo.email },
+          { platformConfig: args.platformConfig, email: userInfo.email },
         );
-        await removeLegacyUserAlias(pfConfig, userInfo.email, userInfo.sub, args.platformConfig);
         if (args.updateCurrentUser ?? true) {
           pfConfig.current_user = userInfo.sub;
         }
+        await removeLegacyUserAlias(pfConfig, userInfo.email, userInfo.sub, args.platformConfig);
         writePlatformConfig(pfConfig);
 
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -163,7 +171,7 @@ async function loginAsMachineUser(
     args.clientId,
     { accessToken: tokens.accessToken },
     new Date(assertDefined(tokens.expiresAt, "token response missing expiresAt")).toISOString(),
-    args.platformConfig,
+    { platformConfig: args.platformConfig },
   );
   if (args.updateCurrentUser ?? true) {
     pfConfig.current_user = args.clientId;

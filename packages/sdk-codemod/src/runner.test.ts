@@ -1041,6 +1041,160 @@ describe("runCodemods", () => {
       ]);
     });
 
+    test("flags unresolved auth connection token helper usages for LLM review", async () => {
+      const codemod = allCodemods.find((entry) => entry.id === "v2/auth-connection-token-helper");
+      if (!codemod?.scriptPath) throw new Error("auth connection token codemod missing script");
+      const scriptPath = path.resolve(
+        __dirname,
+        "../codemods",
+        codemod.scriptPath.replace(/\.js$/, ".ts"),
+      );
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-auth-token-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "migrated.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "export async function run() {",
+          '  return auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "default-import.ts"),
+        [
+          'import config from "../tailor.config";',
+          "",
+          "export async function run() {",
+          '  return config.auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "reexported-config.ts"),
+        [
+          'import { auth } from "../app-config";',
+          "",
+          "export async function run() {",
+          '  return auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "computed.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          'export const token = await auth["getConnectionToken"]("google");',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "destructure.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "export const { getConnectionToken } = auth;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "cjs-require.js"),
+        [
+          'const { auth } = require("../tailor.config");',
+          "",
+          'exports.token = auth.getConnectionToken("google");',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "collision.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "const authconnection = createClient();",
+          "",
+          "export async function run() {",
+          '  return auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "shadowed.ts"),
+        [
+          'import { auth } from "../tailor.config";',
+          "",
+          "export async function run(auth: { getConnectionToken(name: string): Promise<string> }) {",
+          '  return auth.getConnectionToken("google");',
+          "}",
+          "",
+        ].join("\n"),
+      );
+
+      using _stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+
+      const result = await runCodemods([{ codemod, scriptPath }], dir, true);
+
+      expect(result.changed).toBe(true);
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "v2/auth-connection-token-helper",
+          prompt: codemod.prompt,
+          files: [
+            "cjs-require.js",
+            "collision.ts",
+            "computed.ts",
+            "default-import.ts",
+            "destructure.ts",
+            "reexported-config.ts",
+            "shadowed.ts",
+          ],
+          findings: [
+            expect.objectContaining({
+              file: "cjs-require.js",
+              line: 3,
+              excerpt: 'exports.token = auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "collision.ts",
+              line: 6,
+              excerpt: 'return auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "computed.ts",
+              line: 3,
+              excerpt: 'export const token = await auth["getConnectionToken"]("google");',
+            }),
+            expect.objectContaining({
+              file: "default-import.ts",
+              line: 4,
+              excerpt: 'return config.auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "destructure.ts",
+              line: 3,
+              excerpt: "export const { getConnectionToken } = auth;",
+            }),
+            expect.objectContaining({
+              file: "reexported-config.ts",
+              line: 4,
+              excerpt: 'return auth.getConnectionToken("google");',
+            }),
+            expect.objectContaining({
+              file: "shadowed.ts",
+              line: 4,
+              excerpt: 'return auth.getConnectionToken("google");',
+            }),
+          ],
+        },
+      ]);
+    });
+
     test("suppresses LLM review when a superseding codemod is selected", async () => {
       const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-llm-superseded-"));
       tmpDir = dir;

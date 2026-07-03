@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as path from "pathe";
 import picomatch from "picomatch";
 import { describe, expect, test } from "vitest";
 import { allCodemods, getApplicableCodemods } from "./registry";
@@ -13,6 +15,16 @@ describe("getApplicableCodemods", () => {
     expect(getApplicableCodemods("1.67.1", "2.0.0").map((codemod) => codemod.id)).toEqual(
       allCodemods.map((codemod) => codemod.id),
     );
+  });
+
+  test("bundles every registered transform script", () => {
+    const tsdownConfig = fs.readFileSync(path.resolve(__dirname, "../tsdown.config.ts"), "utf-8");
+    const missing = allCodemods
+      .flatMap((codemod) => (codemod.scriptPath ? [codemod.scriptPath] : []))
+      .map((scriptPath) => `codemods/${scriptPath.replace(/\.js$/, ".ts")}`)
+      .filter((scriptPath) => !tsdownConfig.includes(scriptPath));
+
+    expect(missing).toEqual([]);
   });
 
   test("returns codemods when upgrading to a prerelease at their version boundary", () => {
@@ -285,5 +297,19 @@ describe("getApplicableCodemods", () => {
     expect(openDownloadStream?.suspiciousPatterns).toEqual(
       expect.arrayContaining(["openDownloadStream", "openFileDownloadStream"]),
     );
+  });
+
+  test("auth connection token helper review is scoped to deprecated helper calls", () => {
+    const codemod = getApplicableCodemods("1.67.1", "2.0.0-next.2").find(
+      (entry) => entry.id === "v2/auth-connection-token-helper",
+    );
+    const pattern = codemod?.suspiciousPatterns?.[0];
+
+    expect(codemod?.scriptPath).toBe("v2/auth-connection-token-helper/scripts/transform.js");
+    expect(codemod?.filePatterns).toContain("**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}");
+    expect(pattern).toBeUndefined();
+    expect(codemod?.prompt).toContain("@tailor-platform/sdk/runtime");
+    expect(codemod?.prompt).toContain("non-call");
+    expect(codemod?.prompt).toContain("destructuring");
   });
 });
