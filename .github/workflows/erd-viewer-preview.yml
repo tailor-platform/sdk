@@ -4,9 +4,9 @@ on:
   pull_request:
     paths:
       - packages/sdk/src/cli/commands/tailordb/erd/**
-      - example/tailordb/**
-      - example/tailor.config.ts
+      - example/**
       - .github/workflows/erd-viewer-preview.yml
+      - .github/workflows/erd-schema-export.yml
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -21,6 +21,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read # checkout the repository
+      actions: read # look up and download erd-schema-export.yml's artifacts
     strategy:
       fail-fast: false
       matrix:
@@ -38,79 +39,106 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Checkout base branch
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-        with:
-          repository: ${{ github.event.pull_request.base.repo.full_name }}
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: .erd-base
-          persist-credentials: false
-
-      - name: Install base deps
-        working-directory: .erd-base
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm --filter @tailor-platform/sdk run build
-
-      # `erd export` is fully local (no platform login/network needed) and emits
-      # a single self-contained index.html per namespace. The base checkout is
-      # built with this PR's SDK so the diff reflects schema changes, not viewer
-      # implementation changes.
+      # Renders the head schema, then reuses the schema erd-schema-export.yml
+      # recorded for this PR's actual fork point on main (not just main's
+      # current tip, which moves forward and would mix in unrelated schema
+      # changes), instead of rebuilding the base side here.
       - name: Build ERD viewers and diff
         id: build-erd
         env:
+          GH_TOKEN: ${{ github.token }}
           NAMESPACE: ${{ matrix.namespace }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
 
-          mkdir -p "$RUNNER_TEMP/erd-preview" "$RUNNER_TEMP/erd-dts"
+          mkdir -p "$RUNNER_TEMP/erd-preview" "$RUNNER_TEMP/erd-base"
 
           head_output="$RUNNER_TEMP/erd-head"
-          base_output="$RUNNER_TEMP/erd-base"
           head_html="$head_output/$NAMESPACE/dist/index.html"
-          base_html="$base_output/$NAMESPACE/dist/index.html"
+          base_html="$RUNNER_TEMP/erd-base/index.html"
           preview_html="$RUNNER_TEMP/erd-preview/$NAMESPACE.html"
           head_log="$RUNNER_TEMP/erd-head-$NAMESPACE.log"
-          base_log="$RUNNER_TEMP/erd-base-$NAMESPACE.log"
 
           head_missing="false"
           if ! (
             cd example
-            TAILOR_PLATFORM_SDK_DTS_PATH="$RUNNER_TEMP/erd-dts/head-$NAMESPACE.d.ts" \
-              pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$head_output"
+            pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$head_output"
           ) >"$head_log" 2>&1; then
+            cat "$head_log"
             if grep -q 'not found in local config.db' "$head_log"; then
-              cat "$head_log"
               echo "Head ERD namespace '$NAMESPACE' not found; rendering base objects as removed."
               head_missing="true"
             else
-              cat "$head_log"
               exit 1
             fi
           elif [ -s "$head_log" ]; then
             cat "$head_log"
           fi
 
-          base_missing="false"
-          if ! (
-            cd .erd-base/example
-            TAILOR_PLATFORM_SDK_DTS_PATH="$RUNNER_TEMP/erd-dts/base-$NAMESPACE.d.ts" \
-              "$GITHUB_WORKSPACE/node_modules/.bin/tailor-sdk" tailordb erd export --namespace "$NAMESPACE" --output "$base_output"
-          ) >"$base_log" 2>&1; then
-            if grep -q 'not found in local config.db' "$base_log"; then
-              cat "$base_log"
-              echo "Base ERD namespace '$NAMESPACE' not found; rendering current objects as added."
-              base_missing="true"
-            else
-              cat "$base_log"
-              exit 1
+          compare_json="$RUNNER_TEMP/compare-$NAMESPACE.json"
+          gh api "repos/$REPO/compare/$BASE_SHA...$HEAD_SHA" >"$compare_json"
+          fork_sha=$(jq -r '.merge_base_commit.sha' "$compare_json")
+          pr_changed_files=$(jq -r '.files[]?.filename' "$compare_json")
+
+          # Skip this namespace entirely when the PR touched neither the type
+          # files this export actually loaded, tailor.config.ts, nor the erd
+          # viewer implementation. Using the export's own resolved files
+          # (rather than a copy of tailor.config.ts's `files` globs) means
+          # this always matches the live config.
+          if [ "$head_missing" = "false" ] &&
+            ! echo "$pr_changed_files" | grep -qE '^(example/tailor\.config\.ts|packages/sdk/src/cli/commands/tailordb/erd/)'; then
+            namespace_dirs=$(grep -oP 'loaded from \K[^/]+(?=/)' "$head_log" | sort -u)
+            relevant="false"
+            if [ -n "$namespace_dirs" ]; then
+              while IFS= read -r dir; do
+                if echo "$pr_changed_files" | grep -qF "example/$dir/"; then
+                  relevant="true"
+                  break
+                fi
+              done <<<"$namespace_dirs"
             fi
-          elif [ -s "$base_log" ]; then
-            cat "$base_log"
+            if [ "$relevant" = "false" ]; then
+              echo "This PR does not touch namespace '$NAMESPACE'; skipping preview."
+              exit 0
+            fi
+          fi
+
+          # Walk erd-schema-export.yml's main-branch runs newest-first and use
+          # the first one at or before the fork point (schema-export runs
+          # after the fork point may include changes unrelated to this PR).
+          run_id=""
+          for candidate_sha in $(gh api "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
+            -f branch=main -f status=success -f per_page=100 --jq '.workflow_runs[].head_sha'); do
+            status=$(gh api "repos/$REPO/compare/$candidate_sha...$fork_sha" --jq '.status' 2>/dev/null || echo "diverged")
+            if [ "$status" = "ahead" ] || [ "$status" = "identical" ]; then
+              run_id=$(gh api "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
+                -f head_sha="$candidate_sha" -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')
+              break
+            fi
+          done
+
+          if [ -z "$run_id" ]; then
+            echo "No ERD schema export found at or before fork point $fork_sha; falling back to the latest export on main."
+            run_id=$(gh api "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
+              -f branch=main -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')
+          fi
+
+          base_missing="true"
+          if [ -n "$run_id" ]; then
+            if gh run download "$run_id" --repo "$REPO" --name "erd-schema-$NAMESPACE" --dir "$RUNNER_TEMP/erd-base"; then
+              base_missing="false"
+            else
+              echo "ERD schema export run $run_id has no artifact for namespace '$NAMESPACE'; rendering current objects as added."
+            fi
+          else
+            echo "No successful ERD schema export runs found; rendering current objects as added."
           fi
 
           if [ "$head_missing" = "true" ] && [ "$base_missing" = "true" ]; then
-            echo "::error::ERD namespace '$NAMESPACE' was not found in head or base."
+            echo "::error::ERD namespace '$NAMESPACE' was not found in head or the base export."
             exit 1
           fi
 
@@ -133,7 +161,7 @@ jobs:
         with:
           name: ${{ matrix.namespace }}.html
           path: ${{ runner.temp }}/erd-preview/${{ matrix.namespace }}.html
-          if-no-files-found: error
+          if-no-files-found: ignore
           archive: false
           retention-days: 7
 
@@ -162,6 +190,24 @@ jobs:
         run: |
           set -euo pipefail
 
+          artifacts=$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
+            --jq '.artifacts[] | select(.name | endswith(".html")) | [.name, (.id|tostring)] | @tsv' | sort)
+
+          existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+            --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')
+
+          # Every namespace can be skipped as irrelevant to this PR (see
+          # erd-viewer-preview.yml's "Build ERD viewers and diff" step); drop
+          # any stale sticky comment instead of posting an empty one.
+          if [ -z "$artifacts" ]; then
+            echo "No ERD preview artifacts in this run; nothing to post."
+            if [ -n "$existing" ]; then
+              gh api --method DELETE "repos/$REPO/issues/comments/$existing" >/dev/null
+              echo "Removed stale sticky comment $existing"
+            fi
+            exit 0
+          fi
+
           # Build the comment body from this run's ERD preview artifacts.
           body="$MARKER"$'\n'"### 🗺️ ERD viewer preview"$'\n\n'
           body+="Self-contained ERD viewer HTML built for this run. Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`:"$'\n'
@@ -171,12 +217,9 @@ jobs:
             ns=${name%.html}
             label="$ns viewer"
             body+=$'\n'"- **$label**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
-          done < <(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
-            --jq '.artifacts[] | select(.name | endswith(".html")) | [.name, (.id|tostring)] | @tsv' | sort)
+          done <<<"$artifacts"
 
           # Upsert: update the existing sticky comment if present, else create one.
-          existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
-            --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')
           if [ -n "$existing" ]; then
             gh api --method PATCH "repos/$REPO/issues/comments/$existing" -f body="$body" >/dev/null
             echo "Updated sticky comment $existing"

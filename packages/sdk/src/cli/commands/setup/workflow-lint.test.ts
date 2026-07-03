@@ -60,6 +60,7 @@ const COMMON = {
 const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
 const REPO_ROOT = path.resolve(process.cwd(), "../..");
 const ERD_PREVIEW_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-viewer-preview.yml");
+const ERD_SCHEMA_EXPORT_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-schema-export.yml");
 
 // Suites are skipped entirely when actionlint is not on PATH (run `aqua i` first).
 const actionlintAvailable = isActionlintAvailable();
@@ -71,29 +72,48 @@ function writeAndLint(name: string, content: string): LintResult {
 }
 
 describe("repository ERD preview workflow", () => {
-  test("installs base dependencies before exporting the base schema", () => {
+  test("reuses the base commit's schema from erd-schema-export.yml instead of rebuilding it", () => {
     const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
-    const checkoutBase = content.indexOf("name: Checkout base branch");
-    const installBase = content.indexOf("name: Install base deps");
-    const baseExport = content.indexOf("cd .erd-base/example");
 
-    expect(checkoutBase).toBeGreaterThanOrEqual(0);
-    expect(installBase).toBeGreaterThan(checkoutBase);
-    expect(installBase).toBeLessThan(baseExport);
-    expect(content).toContain("working-directory: .erd-base");
-    expect(content).toContain("pnpm install --frozen-lockfile");
-    expect(content).toContain("pnpm --filter @tailor-platform/sdk run build");
+    expect(content).not.toContain("name: Checkout base branch");
+    expect(content).not.toContain("name: Install base deps");
+    expect(content).not.toContain("pnpm install --frozen-lockfile");
+    expect(content).toContain("actions/workflows/erd-schema-export.yml/runs");
+    expect(content).toContain("gh run download");
+    expect(content).toContain(
+      "actions: read # look up and download erd-schema-export.yml's artifacts",
+    );
   });
 
-  test("renders a diff when the base namespace is missing", () => {
+  test("looks up the schema at the PR's actual fork point, not just base's moving tip", () => {
     const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
 
-    expect(content).toContain('base_missing="false"');
-    expect(content).toContain("grep -q 'not found in local config.db'");
-    expect(content).toContain("Base ERD namespace '$NAMESPACE' not found");
+    expect(content).toContain("repos/$REPO/compare/$BASE_SHA...$HEAD_SHA");
+    expect(content).toContain(".merge_base_commit.sha");
+    expect(content).toContain('status" = "ahead" ] || [ "$status" = "identical"');
+  });
+
+  test("renders a diff even when no base schema export can be found", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+
+    expect(content).toContain('base_missing="true"');
+    expect(content).toContain("falling back to the latest export on main");
+    expect(content).toContain("rendering current objects as added");
     expect(content).toContain('diff_args=(--namespace "$NAMESPACE"');
     expect(content).toContain('diff_args+=(--base-html "$base_html")');
     expect(content).toContain("pnpm exec tailor-sdk tailordb erd diff");
+  });
+
+  test("triggers broadly on example/** and filters relevance dynamically after checkout", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+
+    expect(content).toContain("- example/**");
+    expect(content).not.toContain("- example/tailordb/**");
+    expect(content).not.toContain("- example/tailor.config.ts");
+    expect(content).toContain('repos/$REPO/compare/$BASE_SHA...$HEAD_SHA" >"$compare_json"');
+    expect(content).toContain("grep -oP 'loaded from \\K[^/]+(?=/)'");
+    expect(content).toContain("This PR does not touch namespace '$NAMESPACE'; skipping preview.");
+    expect(content).toContain("if-no-files-found: ignore");
   });
 
   test("uploads artifacts with names matched by the sticky comment", () => {
@@ -110,6 +130,47 @@ describe("repository ERD preview workflow", () => {
   test.skipIf(!actionlintAvailable)("passes actionlint", () => {
     const { ok, output } = runActionlint(ERD_PREVIEW_WORKFLOW);
     expect(ok, `actionlint errors for ${ERD_PREVIEW_WORKFLOW}:\n${output}`).toBe(true);
+  });
+
+  test("removes a stale sticky comment instead of posting an empty one", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+
+    expect(content).toContain('if [ -z "$artifacts" ]; then');
+    expect(content).toContain('gh api --method DELETE "repos/$REPO/issues/comments/$existing"');
+  });
+});
+
+describe("repository ERD schema export workflow", () => {
+  test("uploads a per-namespace schema artifact on pushes to main", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_EXPORT_WORKFLOW, "utf-8");
+
+    expect(content).toContain("branches: [main]");
+    expect(content).toContain("name: erd-schema-${{ matrix.namespace }}");
+    expect(content).toContain("tailordb erd export --namespace");
+    expect(content).toContain("if-no-files-found: ignore");
+  });
+
+  test("triggers broadly on example/** and skips uploads irrelevant to the namespace", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_EXPORT_WORKFLOW, "utf-8");
+
+    expect(content).toContain("- example/**");
+    expect(content).not.toContain("- example/tailordb/**");
+    expect(content).not.toContain("- example/tailor.config.ts");
+    expect(content).toContain("repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA");
+    expect(content).toContain("grep -oP 'loaded from \\K[^/]+(?=/)'");
+    expect(content).toContain("This push did not touch namespace '$NAMESPACE'; skipping upload.");
+  });
+
+  test("groups concurrency per commit so a fast-follow push cannot cancel a run", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_EXPORT_WORKFLOW, "utf-8");
+
+    expect(content).toContain("group: ${{ github.workflow }}-${{ github.sha }}");
+    expect(content).toContain("cancel-in-progress: false");
+  });
+
+  test.skipIf(!actionlintAvailable)("passes actionlint", () => {
+    const { ok, output } = runActionlint(ERD_SCHEMA_EXPORT_WORKFLOW);
+    expect(ok, `actionlint errors for ${ERD_SCHEMA_EXPORT_WORKFLOW}:\n${output}`).toBe(true);
   });
 });
 
