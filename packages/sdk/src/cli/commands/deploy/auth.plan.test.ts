@@ -36,6 +36,36 @@ const workspaceId = "test-workspace";
 const appName = "test-app";
 const sdkVersion = "v1-0-0";
 
+function remoteOAuth2Client(overrides: {
+  description?: string;
+  redirectUris: string[];
+  accessTokenLifetime: { seconds: bigint };
+  refreshTokenLifetime: { seconds: bigint };
+}) {
+  return {
+    name: "sample",
+    description: overrides.description ?? "Sample client",
+    grantTypes: [
+      AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
+      AuthOAuth2Client_GrantType.REFRESH_TOKEN,
+    ],
+    redirectUris: overrides.redirectUris,
+    clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
+    accessTokenLifetime: overrides.accessTokenLifetime,
+    refreshTokenLifetime: overrides.refreshTokenLifetime,
+    requireDpop: false,
+  };
+}
+
+const managerMachineUserRemote = {
+  name: "manager-machine-user",
+  attributes: ["role", "department"],
+  attributeMap: {
+    department: fromJson(ValueSchema, "sales"),
+    role: fromJson(ValueSchema, "manager"),
+  },
+};
+
 function createMockApplication(): Application {
   return {
     name: appName,
@@ -224,31 +254,14 @@ function createMockClient(opts?: {
   } as unknown as OperatorClient;
 }
 
-function createContext(client: OperatorClient): PlanContext {
+function createContext(
+  client: OperatorClient,
+  application: Application = createMockApplication(),
+): PlanContext {
   return {
     client,
     workspaceId,
-    application: createMockApplication(),
-    forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
-  };
-}
-
-function createBuiltInIdPContext(client: OperatorClient): PlanContext {
-  return {
-    client,
-    workspaceId,
-    application: createMockApplicationWithBuiltInIdP(),
-    forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
-  };
-}
-
-function createCustomOAuth2LifetimeContext(client: OperatorClient): PlanContext {
-  return {
-    client,
-    workspaceId,
-    application: createMockApplicationWithCustomOAuth2Lifetimes(),
+    application,
     forRemoval: false,
     config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
   };
@@ -258,30 +271,13 @@ describe("planAuth", () => {
   test("marks auth service, machine user, and oauth2 client unchanged when remote matches", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
-      machineUsers: [
-        {
-          name: "manager-machine-user",
-          attributes: ["role", "department"],
-          attributeMap: {
-            department: fromJson(ValueSchema, "sales"),
-            role: fromJson(ValueSchema, "manager"),
-          },
-        },
-      ],
+      machineUsers: [managerMachineUserRemote],
       oauth2Clients: [
-        {
-          name: "sample",
-          description: "Sample client",
-          grantTypes: [
-            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
-            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
-          ],
+        remoteOAuth2Client({
           redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
-          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
           accessTokenLifetime: { seconds: 86400n },
           refreshTokenLifetime: { seconds: 604800n },
-          requireDpop: false,
-        },
+        }),
       ],
     });
 
@@ -355,30 +351,13 @@ describe("planAuth", () => {
   test("marks auth child resources updated when forceApplyAll is enabled", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
-      machineUsers: [
-        {
-          name: "manager-machine-user",
-          attributes: ["role", "department"],
-          attributeMap: {
-            department: fromJson(ValueSchema, "sales"),
-            role: fromJson(ValueSchema, "manager"),
-          },
-        },
-      ],
+      machineUsers: [managerMachineUserRemote],
       oauth2Clients: [
-        {
-          name: "sample",
-          description: "Sample client",
-          grantTypes: [
-            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
-            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
-          ],
+        remoteOAuth2Client({
           redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
-          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
           accessTokenLifetime: { seconds: 86400n },
           refreshTokenLifetime: { seconds: 604800n },
-          requireDpop: false,
-        },
+        }),
       ],
     });
 
@@ -399,23 +378,17 @@ describe("planAuth", () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
       oauth2Clients: [
-        {
-          name: "sample",
-          description: "Sample client",
-          grantTypes: [
-            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
-            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
-          ],
+        remoteOAuth2Client({
           redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
-          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
           accessTokenLifetime: { seconds: 3600n },
           refreshTokenLifetime: { seconds: 7200n },
-          requireDpop: false,
-        },
+        }),
       ],
     });
 
-    const result = await planAuth(createCustomOAuth2LifetimeContext(client));
+    const result = await planAuth(
+      createContext(client, createMockApplicationWithCustomOAuth2Lifetimes()),
+    );
 
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.oauth2Client.unchanged[0]?.name).toBe("sample");
@@ -451,19 +424,11 @@ describe("planAuth", () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
       oauth2Clients: [
-        {
-          name: "sample",
-          description: "Sample client",
-          grantTypes: [
-            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
-            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
-          ],
+        remoteOAuth2Client({
           redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
-          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
           accessTokenLifetime: { seconds: 3600n },
           refreshTokenLifetime: { seconds: 7200n },
-          requireDpop: false,
-        },
+        }),
       ],
     });
 
@@ -504,27 +469,17 @@ describe("planAuth", () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
       oauth2Clients: [
-        {
-          name: "sample",
+        remoteOAuth2Client({
           // Platform returns the proto default empty string when no description was set
           description: "",
-          grantTypes: [
-            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
-            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
-          ],
           redirectUris: ["https://a.example.com/callback"],
-          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
           accessTokenLifetime: { seconds: 86400n },
           refreshTokenLifetime: { seconds: 604800n },
-          requireDpop: false,
-        },
+        }),
       ],
     });
 
-    const result = await planAuth({
-      ...createContext(client),
-      application: app,
-    });
+    const result = await planAuth(createContext(client, app));
 
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
@@ -570,7 +525,7 @@ describe("planAuth", () => {
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
     });
 
-    const result = await planAuth(createBuiltInIdPContext(client));
+    const result = await planAuth(createContext(client, createMockApplicationWithBuiltInIdP()));
 
     expect(result.changeSet.idpConfig.creates).toHaveLength(1);
     expect(result.changeSet.idpConfig.creates[0]?.name).toBe("default");
@@ -584,7 +539,7 @@ describe("planAuth", () => {
       authIdPConfigs: [{ name: "default" }],
     });
 
-    const result = await planAuth(createBuiltInIdPContext(client));
+    const result = await planAuth(createContext(client, createMockApplicationWithBuiltInIdP()));
 
     expect(result.changeSet.idpConfig.creates).toHaveLength(0);
     expect(result.changeSet.idpConfig.updates).toHaveLength(1);
@@ -624,15 +579,10 @@ describe("planAuth", () => {
         ...baseClient,
         getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
       } as unknown as OperatorClient;
-      const context: PlanContext = {
-        client,
-        workspaceId,
-        application: createApplicationWithStaticWebsiteRedirectURI(),
-        forRemoval: false,
-        config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
-      };
 
-      const result = await planAuth(context);
+      const result = await planAuth(
+        createContext(client, createApplicationWithStaticWebsiteRedirectURI()),
+      );
 
       expect(result.changeSet.oauth2Client.creates).toHaveLength(1);
       expect(warnSpy).not.toHaveBeenCalled();
@@ -641,72 +591,60 @@ describe("planAuth", () => {
 });
 
 describe("formatAuthHookChangeEntries", () => {
-  test("groups auth hook updates with related function registry updates", () => {
-    const entries = formatAuthHookChangeEntries(
-      {
-        creates: [],
-        updates: [
-          {
-            name: "my-auth/before-login",
-          },
-        ],
-        deletes: [],
-        replaces: [],
-      },
-      {
+  const authHookChanges = {
+    creates: [],
+    updates: [{ name: "my-auth/before-login" }],
+    deletes: [],
+    replaces: [],
+  };
+
+  test.each([
+    {
+      name: "groups auth hook updates with related function registry updates",
+      functionChanges: {
         creates: [],
         updates: [{ name: "auth-hook--my-auth--before-login" }],
         deletes: [],
         replaces: [],
       },
-    );
-
-    expect(entries).toEqual([
-      {
-        action: "update",
-        symbol: "~",
-        name: "before-login",
-        labels: ["authHook", "function"],
-        namespace: "my-auth",
-      },
-    ]);
-  });
-
-  test("keeps cross-action function registry changes separate from auth hook updates", () => {
-    const entries = formatAuthHookChangeEntries(
-      {
-        creates: [],
-        updates: [
-          {
-            name: "my-auth/before-login",
-          },
-        ],
-        deletes: [],
-        replaces: [],
-      },
-      {
+      expected: [
+        {
+          action: "update",
+          symbol: "~",
+          name: "before-login",
+          labels: ["authHook", "function"],
+          namespace: "my-auth",
+        },
+      ],
+    },
+    {
+      name: "keeps cross-action function registry changes separate from auth hook updates",
+      functionChanges: {
         creates: [{ name: "auth-hook--my-auth--before-login" }],
         updates: [],
         deletes: [],
         replaces: [],
       },
-    );
+      expected: [
+        {
+          action: "update",
+          symbol: "~",
+          name: "before-login",
+          labels: ["authHook"],
+          namespace: "my-auth",
+        },
+        {
+          action: "create",
+          symbol: "+",
+          name: "before-login",
+          labels: ["function"],
+          namespace: "my-auth",
+        },
+      ],
+    },
+  ])("$name", ({ functionChanges, expected }) => {
+    const entries = formatAuthHookChangeEntries(authHookChanges, functionChanges);
 
-    expect(entries).toEqual([
-      {
-        action: "update",
-        symbol: "~",
-        name: "before-login",
-        labels: ["authHook"],
-        namespace: "my-auth",
-      },
-      {
-        action: "create",
-        symbol: "+",
-        name: "before-login",
-        labels: ["function"],
-        namespace: "my-auth",
-      },
-    ]);
+    expect(entries).toEqual(expected);
   });
 });

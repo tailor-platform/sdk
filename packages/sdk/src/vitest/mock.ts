@@ -36,7 +36,11 @@ import type { User as IdpUser } from "../runtime/idp";
 // `@tailor-platform/sdk` externally instead of inlining the registry — the same
 // generated `declare module "@tailor-platform/sdk"` that narrows
 // `authconnection.getConnectionToken` then also narrows this mock's API.
-import type { AuthConnectionTokenResult, ConnectionName } from "@tailor-platform/sdk";
+import type {
+  AIGatewayName,
+  AuthConnectionTokenResult,
+  ConnectionName,
+} from "@tailor-platform/sdk";
 
 export { RUNTIME_FLAG_KEY } from "./globals";
 
@@ -66,6 +70,7 @@ type TriggerHandlerFn = (
   args: unknown,
   options?: TriggerWorkflowOptions,
 ) => string;
+type ResumeHandlerFn = (executionId: string) => string;
 type WaitHandlerFn = (key: string, payload: unknown) => unknown;
 type ResolveHandler = (
   executionId: string,
@@ -106,6 +111,10 @@ interface SecretCall {
 
 interface AuthConnectionCall {
   connectionName: ConnectionName;
+}
+
+interface AigatewayCall {
+  name: AIGatewayName;
 }
 
 interface IdpCall {
@@ -349,11 +358,13 @@ export function mockWorkflow() {
   ): Promise<string> => {
     return TRIGGER_DEFAULT;
   };
+  const defaultResumeWorkflow = async (executionId: string): Promise<string> => executionId;
 
   // Inner vi.fns hold the overridable behavior + call recording; the installed
   // shims below cross the platform JSON boundary (serialize args + results) once.
   const triggerJobFunction = vi.fn(defaultTriggerJob);
   const triggerWorkflow = vi.fn(defaultTriggerWorkflow);
+  const resumeWorkflow = vi.fn(defaultResumeWorkflow);
   const wait = vi.fn((_key: string, _payload?: unknown): unknown => null);
   const resolve = vi.fn(
     async (
@@ -376,6 +387,7 @@ export function mockWorkflow() {
       call.length >= 3
         ? triggerWorkflow(call[0], platformSerialize(call[1]), call[2])
         : triggerWorkflow(call[0], platformSerialize(call[1])),
+    resumeWorkflow: (executionId: string) => resumeWorkflow(executionId),
     wait: (key: string, payload?: unknown) => wait(key, platformSerialize(payload)),
     resolve: (executionId: string, key: string, callback: (payload: unknown) => unknown) =>
       resolve(executionId, key, (payload: unknown) => {
@@ -391,6 +403,8 @@ export function mockWorkflow() {
     triggerJobFunction,
     /** The `triggerWorkflow` `vi.fn`. */
     triggerWorkflow,
+    /** The `resumeWorkflow` `vi.fn`. */
+    resumeWorkflow,
     /** The `wait` `vi.fn`. */
     wait,
     /** The `resolve` `vi.fn`. */
@@ -443,6 +457,19 @@ export function mockWorkflow() {
       triggerWorkflow.mockImplementation(
         typeof handler === "function"
           ? async (name, args, options) => handler(name, args, options)
+          : async () => handler,
+      );
+    },
+
+    /**
+     * Configure what `resumeWorkflow` returns. Pass a string (same id every
+     * call) or `(executionId) => string`. Default: echoes the input executionId.
+     * @param handler - Static execution ID or a function returning one
+     */
+    setResumeHandler(handler: string | ResumeHandlerFn): void {
+      resumeWorkflow.mockImplementation(
+        typeof handler === "function"
+          ? async (executionId) => handler(executionId)
           : async () => handler,
       );
     },
@@ -505,6 +532,8 @@ export function mockWorkflow() {
       triggerJobFunction.mockImplementation(defaultTriggerJob);
       triggerWorkflow.mockReset();
       triggerWorkflow.mockImplementation(defaultTriggerWorkflow);
+      resumeWorkflow.mockReset();
+      resumeWorkflow.mockImplementation(defaultResumeWorkflow);
       wait.mockReset();
       wait.mockImplementation(() => null);
       resolve.mockReset();
@@ -1054,5 +1083,63 @@ export function mockFile() {
 
   return withDispose(facade, () => {
     root.file = prev;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// AI Gateway Mock
+// ---------------------------------------------------------------------------
+
+/**
+ * Acquire a disposable mock for `tailor.aigateway`. Restored on dispose.
+ * @returns Disposable AI Gateway mock control object
+ * @example
+ * ```typescript
+ * import { mockAigateway } from "@tailor-platform/sdk/vitest";
+ *
+ * test("resolves an AI Gateway URL", async () => {
+ *   using aigateway = mockAigateway();
+ *   aigateway.setUrls({ "my-aigateway": "https://my-aigateway.example.com" });
+ *   // …
+ * });
+ * ```
+ */
+export function mockAigateway() {
+  const root = tailorRoot();
+  const prev = root.aigateway;
+
+  let urls: Partial<Record<AIGatewayName, string>> = {};
+  const get = vi.fn(async (name: AIGatewayName): Promise<{ url: string }> => {
+    const url = urls[name];
+    if (url === undefined) {
+      throw new Error(
+        `No AI Gateway registered for "${name}". Acquire mockAigateway() and call setUrls(...).`,
+      );
+    }
+    return { url };
+  });
+
+  root.aigateway = { get };
+
+  const facade = {
+    /** The `get` `vi.fn`. */
+    get,
+
+    setUrls(value: Partial<Record<AIGatewayName, string>>): void {
+      urls = value;
+    },
+
+    get calls(): AigatewayCall[] {
+      return get.mock.calls.map(([name]) => ({ name }));
+    },
+
+    reset(): void {
+      urls = {};
+      get.mockClear();
+    },
+  };
+
+  return withDispose(facade, () => {
+    root.aigateway = prev;
   });
 }

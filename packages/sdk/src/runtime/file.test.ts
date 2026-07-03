@@ -5,6 +5,15 @@ import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import * as file from "#/runtime/file";
 import { cleanupMocks, mockFile, injectMocks } from "#/vitest/mock";
 
+const args = ["ns", "Doc", "blob", "rec-1"] as const;
+const expectedCall = (method: string) => ({
+  method,
+  namespace: "ns",
+  typeName: "Doc",
+  fieldName: "blob",
+  recordId: "rec-1",
+});
+
 describe("@tailor-platform/sdk/runtime/file", () => {
   beforeEach(() => {
     injectMocks(globalThis);
@@ -18,18 +27,10 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     using fileM = mockFile();
     fileM.enqueueResult({ metadata: { fileSize: 4, sha256sum: "abc" } });
 
-    const result = await file.upload("ns", "Doc", "blob", "rec-1", new Uint8Array([1, 2, 3, 4]));
+    const result = await file.upload(...args, new Uint8Array([1, 2, 3, 4]));
 
     expect(result).toEqual({ metadata: { fileSize: 4, sha256sum: "abc" } });
-    expect(fileM.calls).toEqual([
-      {
-        method: "upload",
-        namespace: "ns",
-        typeName: "Doc",
-        fieldName: "blob",
-        recordId: "rec-1",
-      },
-    ]);
+    expect(fileM.calls).toEqual([expectedCall("upload")]);
   });
 
   test("download forwards and returns the queued payload", async () => {
@@ -44,7 +45,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
       },
     });
 
-    const result = await file.download("ns", "Doc", "blob", "rec-1");
+    const result = await file.download(...args);
 
     expect(result.data).toEqual(new Uint8Array([9, 9]));
     expect(fileM.calls[0]?.method).toBe("download");
@@ -62,7 +63,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
       },
     });
 
-    const result = await file.downloadAsBase64("ns", "Doc", "blob", "rec-1");
+    const result = await file.downloadAsBase64(...args);
 
     expect(result.data).toBe("AQID");
     expect(fileM.calls[0]?.method).toBe("downloadAsBase64");
@@ -77,7 +78,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
       urlPath: "/url",
     });
 
-    const meta = await file.getMetadata("ns", "Doc", "blob", "rec-1");
+    const meta = await file.getMetadata(...args);
 
     expect(meta.contentType).toBe("image/png");
     expect(fileM.calls[0]?.method).toBe("getMetadata");
@@ -85,17 +86,9 @@ describe("@tailor-platform/sdk/runtime/file", () => {
 
   test("delete forwards (re-exported from deleteFile)", async () => {
     using fileM = mockFile();
-    await file.delete("ns", "Doc", "blob", "rec-1");
+    await file.delete(...args);
 
-    expect(fileM.calls).toEqual([
-      {
-        method: "delete",
-        namespace: "ns",
-        typeName: "Doc",
-        fieldName: "blob",
-        recordId: "rec-1",
-      },
-    ]);
+    expect(fileM.calls).toEqual([expectedCall("delete")]);
   });
 
   test("does not export the removed openDownloadStream wrapper", () => {
@@ -120,7 +113,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
       },
     });
 
-    const result = await file.downloadStream("ns", "Doc", "blob", "rec-1");
+    const result = await file.downloadStream(...args);
 
     expect(result.body).toBe(body);
     expect(result.metadata.fileSize).toBe(3);
@@ -137,18 +130,10 @@ describe("@tailor-platform/sdk/runtime/file", () => {
         controller.close();
       },
     });
-    const result = await file.uploadStream("ns", "Doc", "blob", "rec-1", stream);
+    const result = await file.uploadStream(...args, stream);
 
     expect(result).toEqual({ metadata: { fileSize: 10, sha256sum: "xyz" } });
-    expect(fileM.calls).toEqual([
-      {
-        method: "uploadStream",
-        namespace: "ns",
-        typeName: "Doc",
-        fieldName: "blob",
-        recordId: "rec-1",
-      },
-    ]);
+    expect(fileM.calls).toEqual([expectedCall("uploadStream")]);
   });
 
   test("TailorDBFileError structurally matches globalThis class", () => {

@@ -6,7 +6,7 @@ export interface ConnectionNameRegistry {}
 /**
  * Auth connection name.
  *
- * When `tailor.d.ts` is generated (via `tailor-sdk deploy`/`generate`), this is narrowed
+ * When `tailor.d.ts` is generated (via `tailor deploy`/`generate`), this is narrowed
  * to the union of connection names defined in `defineAuth()`'s `connections`. Falls back
  * to `string` before the first generate run.
  */

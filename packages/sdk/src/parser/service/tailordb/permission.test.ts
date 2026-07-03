@@ -58,71 +58,54 @@ describe("normalizeActionPermission", () => {
   });
 
   describe("Single condition array format", () => {
-    test("should normalize single condition without permit (defaults to true)", () => {
-      const permission = ["user.id", "=", "123"] as Permission;
+    test.each<[string, Permission, unknown[], string]>([
+      [
+        "without permit (defaults to true)",
+        ["user.id", "=", "123"] as Permission,
+        ["user.id", "eq", "123"],
+        "allow",
+      ],
+      [
+        "with permit=true",
+        ["user.id", "=", "123", true] as Permission,
+        ["user.id", "eq", "123"],
+        "allow",
+      ],
+      [
+        "with permit=false",
+        ["user.id", "!=", "123", false] as Permission,
+        ["user.id", "ne", "123"],
+        "deny",
+      ],
+      [
+        "with array values in conditions",
+        ["user.role", "in", ["admin", "manager"] as string[]] as Permission,
+        ["user.role", "in", ["admin", "manager"]],
+        "allow",
+      ],
+      [
+        "with user operand",
+        [{ user: "role" }, "=", "admin"] as unknown as Permission,
+        [{ user: "role" }, "eq", "admin"],
+        "allow",
+      ],
+      [
+        "with record operand",
+        [{ record: "status" }, "=", "active"] as unknown as Permission,
+        [{ record: "status" }, "eq", "active"],
+        "allow",
+      ],
+      [
+        "with oldRecord/newRecord operands for update",
+        [{ oldRecord: "status" }, "!=", { newRecord: "status" }] as unknown as Permission,
+        [{ oldRecord: "status" }, "ne", { newRecord: "status" }],
+        "allow",
+      ],
+    ])("should normalize single condition %s", (_name, permission, expectedCondition, permit) => {
       const result = normalizeActionPermission(permission);
       expect(result).toEqual({
-        conditions: [["user.id", "eq", "123"]],
-        permit: "allow",
-      });
-    });
-
-    test("should normalize single condition with permit=true", () => {
-      const permission = ["user.id", "=", "123", true] as Permission;
-      const result = normalizeActionPermission(permission);
-      expect(result).toEqual({
-        conditions: [["user.id", "eq", "123"]],
-        permit: "allow",
-      });
-    });
-
-    test("should normalize single condition with permit=false", () => {
-      const permission = ["user.id", "!=", "123", false] as Permission;
-      const result = normalizeActionPermission(permission);
-      expect(result).toEqual({
-        conditions: [["user.id", "ne", "123"]],
-        permit: "deny",
-      });
-    });
-
-    test("should handle array values in conditions", () => {
-      const permission = ["user.role", "in", ["admin", "manager"] as string[]] as Permission;
-      const result = normalizeActionPermission(permission);
-      expect(result).toEqual({
-        conditions: [["user.role", "in", ["admin", "manager"]]],
-        permit: "allow",
-      });
-    });
-
-    test("should handle user operand", () => {
-      const permission = [{ user: "role" }, "=", "admin"] as unknown as Permission;
-      const result = normalizeActionPermission(permission);
-      expect(result).toEqual({
-        conditions: [[{ user: "role" }, "eq", "admin"]],
-        permit: "allow",
-      });
-    });
-
-    test("should handle record operand", () => {
-      const permission = [{ record: "status" }, "=", "active"] as unknown as Permission;
-      const result = normalizeActionPermission(permission);
-      expect(result).toEqual({
-        conditions: [[{ record: "status" }, "eq", "active"]],
-        permit: "allow",
-      });
-    });
-
-    test("should handle oldRecord/newRecord operands for update", () => {
-      const permission = [
-        { oldRecord: "status" },
-        "!=",
-        { newRecord: "status" },
-      ] as unknown as Permission;
-      // Must specify Update=true for oldRecord/newRecord
-      const result = normalizeActionPermission(permission);
-      expect(result).toEqual({
-        conditions: [[{ oldRecord: "status" }, "ne", { newRecord: "status" }]],
-        permit: "allow",
+        conditions: [expectedCondition],
+        permit,
       });
     });
   });
@@ -190,208 +173,271 @@ describe("normalizeActionPermission", () => {
   });
 
   describe("Operator variations", () => {
-    test("should handle 'not in' operator", () => {
-      const permission = ["user.status", "not in", ["suspended", "banned"] as string[]] as const;
+    test.each([
+      [
+        "'not in'",
+        ["user.status", "not in", ["suspended", "banned"] as string[]] as const,
+        ["user.status", "nin", ["suspended", "banned"]],
+      ],
+      [
+        "'hasAny'",
+        [{ user: "roles" }, "hasAny", ["admin", "manager"]],
+        [{ user: "roles" }, "hasAny", ["admin", "manager"]],
+      ],
+      [
+        "'not hasAny'",
+        [{ user: "roles" }, "not hasAny", ["blocked"]],
+        [{ user: "roles" }, "nhasAny", ["blocked"]],
+      ],
+    ])("should handle %s operator", (_name, permission, expectedCondition) => {
       const result = normalizeActionPermission(permission);
-      expect(result.conditions).toEqual([["user.status", "nin", ["suspended", "banned"]]]);
-    });
-
-    test("should handle 'hasAny' operator", () => {
-      const permission = [{ user: "roles" }, "hasAny", ["admin", "manager"]];
-      const result = normalizeActionPermission(permission);
-      expect(result.conditions).toEqual([[{ user: "roles" }, "hasAny", ["admin", "manager"]]]);
-    });
-
-    test("should handle 'not hasAny' operator", () => {
-      const permission = [{ user: "roles" }, "not hasAny", ["blocked"]];
-      const result = normalizeActionPermission(permission);
-      expect(result.conditions).toEqual([[{ user: "roles" }, "nhasAny", ["blocked"]]]);
+      expect(result.conditions).toEqual([expectedCondition]);
     });
   });
 });
 
 describe("normalizeGqlPermission", () => {
-  test("should normalize basic GQL permission with single policy", () => {
-    const permission = [
-      {
-        conditions: [["user.role", "=", "admin"]],
-        actions: ["read", "create"],
-        permit: true,
-      },
-    ] as const;
+  test.each([
+    [
+      "basic GQL permission with single policy",
+      [
+        {
+          conditions: [["user.role", "=", "admin"]],
+          actions: ["read", "create"],
+          permit: true,
+        },
+      ] as const,
+      [
+        {
+          conditions: [["user.role", "eq", "admin"]],
+          actions: ["read", "create"],
+          permit: "allow",
+          description: undefined,
+        },
+      ],
+    ],
+    [
+      "GQL permission with 'all' actions",
+      [
+        {
+          conditions: [["user.isAdmin", "=", true]],
+          actions: "all",
+          permit: true,
+        },
+      ] as const,
+      [
+        {
+          conditions: [["user.isAdmin", "eq", true]],
+          actions: ["all"],
+          permit: "allow",
+          description: undefined,
+        },
+      ],
+    ],
+    [
+      "GQL permission with deny policy",
+      [
+        {
+          conditions: [["user.status", "=", "suspended"]],
+          actions: ["delete", "update"],
+          permit: false,
+        },
+      ] as const,
+      [
+        {
+          conditions: [["user.status", "eq", "suspended"]],
+          actions: ["delete", "update"],
+          permit: "deny",
+          description: undefined,
+        },
+      ],
+    ],
+    [
+      "description field",
+      [
+        {
+          conditions: [["user.role", "in", ["admin", "moderator"] as string[]]],
+          actions: ["read", "update"],
+          permit: true,
+          description: "Admin and moderator read/update access",
+        },
+      ] as const,
+      [
+        {
+          conditions: [["user.role", "in", ["admin", "moderator"]]],
+          actions: ["read", "update"],
+          permit: "allow",
+          description: "Admin and moderator read/update access",
+        },
+      ],
+    ],
+    [
+      "multiple policies",
+      [
+        {
+          conditions: [["user.role", "=", "admin"]],
+          actions: "all",
+          permit: true,
+        },
+        {
+          conditions: [["user.role", "=", "viewer"]],
+          actions: ["read"],
+          permit: true,
+        },
+        {
+          conditions: [["user.status", "=", "banned"]],
+          actions: "all",
+          permit: false,
+        },
+      ] as const,
+      [
+        {
+          conditions: [["user.role", "eq", "admin"]],
+          actions: ["all"],
+          permit: "allow",
+          description: undefined,
+        },
+        {
+          conditions: [["user.role", "eq", "viewer"]],
+          actions: ["read"],
+          permit: "allow",
+          description: undefined,
+        },
+        {
+          conditions: [["user.status", "eq", "banned"]],
+          actions: ["all"],
+          permit: "deny",
+          description: undefined,
+        },
+      ],
+    ],
+    [
+      "empty conditions array",
+      [
+        {
+          conditions: [],
+          actions: ["read"],
+          permit: true,
+        },
+      ] as const,
+      [
+        {
+          conditions: [],
+          actions: ["read"],
+          permit: "allow",
+          description: undefined,
+        },
+      ],
+    ],
+    [
+      "multiple conditions in a single policy",
+      [
+        {
+          conditions: [
+            ["user.department", "=", "sales"],
+            ["user.role", "in", ["manager", "lead"] as string[]],
+            ["user.active", "=", true],
+          ],
+          actions: ["read", "create", "update"],
+          permit: true,
+        },
+      ] as const,
+      [
+        {
+          conditions: [
+            ["user.department", "eq", "sales"],
+            ["user.role", "in", ["manager", "lead"]],
+            ["user.active", "eq", true],
+          ],
+          actions: ["read", "create", "update"],
+          permit: "allow",
+          description: undefined,
+        },
+      ],
+    ],
+    [
+      "all GQL permission actions",
+      [
+        {
+          conditions: [["user.role", "=", "superadmin"]],
+          actions: ["read", "create", "update", "delete", "aggregate", "bulkUpsert"],
+          permit: true,
+        },
+      ] as const,
+      [
+        {
+          conditions: [["user.role", "eq", "superadmin"]],
+          actions: ["read", "create", "update", "delete", "aggregate", "bulkUpsert"],
+          permit: "allow",
+          description: undefined,
+        },
+      ],
+    ],
+    [
+      "operator transformations",
+      [
+        {
+          conditions: [
+            ["user.status", "=", "active"],
+            ["user.country", "!=", "restricted"],
+            ["user.roles", "not in", ["blocked", "suspended"] as string[]],
+          ],
+          actions: ["read"],
+          permit: true,
+        },
+      ] as const,
+      [
+        {
+          conditions: [
+            ["user.status", "eq", "active"],
+            ["user.country", "ne", "restricted"],
+            ["user.roles", "nin", ["blocked", "suspended"]],
+          ],
+          actions: ["read"],
+          permit: "allow",
+          description: undefined,
+        },
+      ],
+    ],
+    [
+      "hasAny operator in GQL permission",
+      [
+        {
+          conditions: [[{ user: "roles" }, "hasAny", ["admin", "manager"] as string[]]],
+          actions: ["read", "update"],
+          permit: true,
+        },
+      ] as const,
+      [
+        {
+          conditions: [[{ user: "roles" }, "hasAny", ["admin", "manager"]]],
+          actions: ["read", "update"],
+          permit: "allow",
+          description: undefined,
+        },
+      ],
+    ],
+    [
+      "nhasAny operator in GQL permission",
+      [
+        {
+          conditions: [[{ user: "roles" }, "not hasAny", ["blocked"] as string[]]],
+          actions: ["read"],
+          permit: true,
+        },
+      ] as const,
+      [
+        {
+          conditions: [[{ user: "roles" }, "nhasAny", ["blocked"]]],
+          actions: ["read"],
+          permit: "allow",
+          description: undefined,
+        },
+      ],
+    ],
+  ])("should normalize %s", (_name, permission, expected) => {
     const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [["user.role", "eq", "admin"]],
-        actions: ["read", "create"],
-        permit: "allow",
-        description: undefined,
-      },
-    ]);
-  });
-
-  test("should normalize GQL permission with 'all' actions", () => {
-    const permission = [
-      {
-        conditions: [["user.isAdmin", "=", true]],
-        actions: "all",
-        permit: true,
-      },
-    ] as const;
-    const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [["user.isAdmin", "eq", true]],
-        actions: ["all"],
-        permit: "allow",
-        description: undefined,
-      },
-    ]);
-  });
-
-  test("should normalize GQL permission with deny policy", () => {
-    const permission = [
-      {
-        conditions: [["user.status", "=", "suspended"]],
-        actions: ["delete", "update"],
-        permit: false,
-      },
-    ] as const;
-    const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [["user.status", "eq", "suspended"]],
-        actions: ["delete", "update"],
-        permit: "deny",
-        description: undefined,
-      },
-    ]);
-  });
-
-  test("should preserve description field", () => {
-    const permission = [
-      {
-        conditions: [["user.role", "in", ["admin", "moderator"] as string[]]],
-        actions: ["read", "update"],
-        permit: true,
-        description: "Admin and moderator read/update access",
-      },
-    ] as const;
-    const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [["user.role", "in", ["admin", "moderator"]]],
-        actions: ["read", "update"],
-        permit: "allow",
-        description: "Admin and moderator read/update access",
-      },
-    ]);
-  });
-
-  test("should handle multiple policies", () => {
-    const permission = [
-      {
-        conditions: [["user.role", "=", "admin"]],
-        actions: "all",
-        permit: true,
-      },
-      {
-        conditions: [["user.role", "=", "viewer"]],
-        actions: ["read"],
-        permit: true,
-      },
-      {
-        conditions: [["user.status", "=", "banned"]],
-        actions: "all",
-        permit: false,
-      },
-    ] as const;
-    const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [["user.role", "eq", "admin"]],
-        actions: ["all"],
-        permit: "allow",
-        description: undefined,
-      },
-      {
-        conditions: [["user.role", "eq", "viewer"]],
-        actions: ["read"],
-        permit: "allow",
-        description: undefined,
-      },
-      {
-        conditions: [["user.status", "eq", "banned"]],
-        actions: ["all"],
-        permit: "deny",
-        description: undefined,
-      },
-    ]);
-  });
-
-  test("should handle empty conditions array", () => {
-    const permission = [
-      {
-        conditions: [],
-        actions: ["read"],
-        permit: true,
-      },
-    ] as const;
-    const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [],
-        actions: ["read"],
-        permit: "allow",
-        description: undefined,
-      },
-    ]);
-  });
-
-  test("should handle multiple conditions in a single policy", () => {
-    const permission = [
-      {
-        conditions: [
-          ["user.department", "=", "sales"],
-          ["user.role", "in", ["manager", "lead"] as string[]],
-          ["user.active", "=", true],
-        ],
-        actions: ["read", "create", "update"],
-        permit: true,
-      },
-    ] as const;
-    const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [
-          ["user.department", "eq", "sales"],
-          ["user.role", "in", ["manager", "lead"]],
-          ["user.active", "eq", true],
-        ],
-        actions: ["read", "create", "update"],
-        permit: "allow",
-        description: undefined,
-      },
-    ]);
-  });
-
-  test("should handle all GQL permission actions", () => {
-    const permission = [
-      {
-        conditions: [["user.role", "=", "superadmin"]],
-        actions: ["read", "create", "update", "delete", "aggregate", "bulkUpsert"],
-        permit: true,
-      },
-    ] as const;
-    const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [["user.role", "eq", "superadmin"]],
-        actions: ["read", "create", "update", "delete", "aggregate", "bulkUpsert"],
-        permit: "allow",
-        description: undefined,
-      },
-    ]);
+    expect(result).toEqual(expected);
   });
 
   test("should handle user and record operands in conditions", () => {
@@ -413,71 +459,6 @@ describe("normalizeGqlPermission", () => {
           [{ record: "ownerId" }, "eq", { user: "_id" }],
         ],
         actions: ["update", "delete"],
-        permit: "allow",
-        description: undefined,
-      },
-    ]);
-  });
-
-  test("should handle operator transformations", () => {
-    const permission = [
-      {
-        conditions: [
-          ["user.status", "=", "active"],
-          ["user.country", "!=", "restricted"],
-          ["user.roles", "not in", ["blocked", "suspended"] as string[]],
-        ],
-        actions: ["read"],
-        permit: true,
-      },
-    ] as const;
-    const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [
-          ["user.status", "eq", "active"],
-          ["user.country", "ne", "restricted"],
-          ["user.roles", "nin", ["blocked", "suspended"]],
-        ],
-        actions: ["read"],
-        permit: "allow",
-        description: undefined,
-      },
-    ]);
-  });
-
-  test("should handle hasAny operator in GQL permission", () => {
-    const permission = [
-      {
-        conditions: [[{ user: "roles" }, "hasAny", ["admin", "manager"] as string[]]],
-        actions: ["read", "update"],
-        permit: true,
-      },
-    ] as const;
-    const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [[{ user: "roles" }, "hasAny", ["admin", "manager"]]],
-        actions: ["read", "update"],
-        permit: "allow",
-        description: undefined,
-      },
-    ]);
-  });
-
-  test("should handle nhasAny operator in GQL permission", () => {
-    const permission = [
-      {
-        conditions: [[{ user: "roles" }, "not hasAny", ["blocked"] as string[]]],
-        actions: ["read"],
-        permit: true,
-      },
-    ] as const;
-    const result = normalizeGqlPermission(permission);
-    expect(result).toEqual([
-      {
-        conditions: [[{ user: "roles" }, "nhasAny", ["blocked"]]],
-        actions: ["read"],
         permit: "allow",
         description: undefined,
       },

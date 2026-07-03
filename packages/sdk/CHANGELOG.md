@@ -150,6 +150,74 @@
 
 - [#1421](https://github.com/tailor-platform/sdk/pull/1421) [`b933f47`](https://github.com/tailor-platform/sdk/commit/b933f474d65f8dfed56f3991aae3a52589368b10) Thanks [@dqn](https://github.com/dqn)! - Corrupted or hand-edited TailorDB migration snapshot/diff files now fail with a clear validation error when loaded, instead of causing undefined behavior later.
 
+## 1.73.2
+### Patch Changes
+
+
+
+- [#1637](https://github.com/tailor-platform/sdk/pull/1637) [`e608b6d`](https://github.com/tailor-platform/sdk/commit/e608b6d55e4afa8a8a92c1a947411ec4367ab818) Thanks [@toiroakr](https://github.com/toiroakr)! - Bump the generated tailor-platform/actions reference pin to v1.5.1. The previous pin referenced a commit that could be orphaned by an upstream rebase; v1.5.1 fixes that issue.
+
+## 1.73.1
+### Patch Changes
+
+
+
+- [#1634](https://github.com/tailor-platform/sdk/pull/1634) [`bab3cb0`](https://github.com/tailor-platform/sdk/commit/bab3cb0c65ae2cb874e33f94b45e0f897b6d6315) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB hooks and validators defined with method shorthand syntax (e.g. `hooks: { create() { ... } }`) failing at deploy time when the body contained an arrow function or the method was `async`
+
+
+
+- [#1614](https://github.com/tailor-platform/sdk/pull/1614) [`8c6aff4`](https://github.com/tailor-platform/sdk/commit/8c6aff4094dcc764a08355d7610348a77482181c) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB schema drift detection during deploy to compare type settings, indexes, files, relationships, and permissions while normalizing SDK-derived deploy settings.
+
+
+
+- [#1628](https://github.com/tailor-platform/sdk/pull/1628) [`ee21fd6`](https://github.com/tailor-platform/sdk/commit/ee21fd6d115b9f51508f1409b334ddbafb81d683) Thanks [@dqn](https://github.com/dqn)! - Improve workflow type errors for invalid job and wait point definitions.
+
+## 1.73.0
+### Minor Changes
+
+
+
+- [#1625](https://github.com/tailor-platform/sdk/pull/1625) [`0f23f78`](https://github.com/tailor-platform/sdk/commit/0f23f78c1bef92f2b72436c75da677795b61165d) Thanks [@toiroakr](https://github.com/toiroakr)! - Add a runtime wrapper for AI Gateway. Resolvers, executors, and workflow jobs can now resolve an AI Gateway's platform-assigned URL by name via `aigateway.get(name)` (imported from `@tailor-platform/sdk/runtime`), instead of using the raw `tailor.aigateway.get(...)` global. Use `mockAigateway()` from `@tailor-platform/sdk/vitest` to mock it in unit tests.
+  
+  The gateway name is type-checked and autocompleted against the AI Gateways defined via `defineAIGateway()`, once `tailor.d.ts` has been generated (via `tailor-sdk deploy`/`generate`), mirroring the existing `MachineUserNameRegistry`/`IdpNameRegistry`/`ConnectionNameRegistry` pattern.
+
+
+- [#1608](https://github.com/tailor-platform/sdk/pull/1608) [`89a29a2`](https://github.com/tailor-platform/sdk/commit/89a29a2700f69d27cc27816a02cb7abcc6c731d4) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `workflow.resumeWorkflow(executionId)` to `@tailor-platform/sdk/runtime` for resuming a failed or pending-retry workflow execution from user code. `mockWorkflow()` in `@tailor-platform/sdk/vitest` gains a matching `resumeWorkflow` `vi.fn` and `setResumeHandler` helper for tests.
+
+
+### Patch Changes
+
+
+
+- [#1613](https://github.com/tailor-platform/sdk/pull/1613) [`4b3d7c6`](https://github.com/tailor-platform/sdk/commit/4b3d7c613641aef694a9a11794a153434244a90a) Thanks [@dqn](https://github.com/dqn)! - Internal refactoring: deduplicate existing-resource fetching in the deploy command. No user-facing behavior change.
+
+
+
+- [#1615](https://github.com/tailor-platform/sdk/pull/1615) [`5e1023c`](https://github.com/tailor-platform/sdk/commit/5e1023c4fca7e2b5b2251b7f44aa3de5d42da716) Thanks [@dqn](https://github.com/dqn)! - Include the HTTP status, status text, and response body when a machine user token request fails, instead of a fixed generic message.
+
+
+
+- [#1611](https://github.com/tailor-platform/sdk/pull/1611) [`ce51a97`](https://github.com/tailor-platform/sdk/commit/ce51a970ac3887ffd379005459fa6ad21ff9fe53) Thanks [@dqn](https://github.com/dqn)! - Ship unbundled type declarations so each `.d.mts` mirrors the source layout with real identifier names, instead of hashed chunks with minified aliases. JavaScript output stays bundled and the public API is unchanged.
+
+## 1.72.0
+### Minor Changes
+
+
+
+- [#1576](https://github.com/tailor-platform/sdk/pull/1576) [`e01a5bd`](https://github.com/tailor-platform/sdk/commit/e01a5bdea6e4c75a5e3c6ed0c29880426806436e) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `tailor-install`, `tailor-notify`, and `tailor-drift-check` steps to generated branch/tag workflow templates. Generated workflows now pin to a SHA-addressed version of `tailor-platform/actions`.
+  
+  Add `setup check --ci` flag: WORKSPACE_ID check is skipped in CI (handled by the runtime) and enforced only in local environments.
+  
+  Add `setup check` Slack partial-config detection: errors when exactly one of `TAILOR_SLACK_BOT_TOKEN` / `TAILOR_SLACK_CHANNEL_ID` is set.
+  
+  Add drift checks: `migration-drift`, `seed-validate`, and `static-websites` rules detect when config changes require re-running setup. Slack partial-config (exactly one of `TAILOR_SLACK_BOT_TOKEN` / `TAILOR_SLACK_CHANNEL_ID` set) is a preflight error, not a drift finding.
+  
+  Add `setup action` subcommand: generates a per-app composite action under `.github/actions/tailor-<name>/action.yml` that wraps `tailor-platform/actions/deploy`. Includes `user-mapping` input for Slack notifications and an optional `build-site` user-owned slot for static website asset builds.
+  
+  Add `setup coordinate` subcommand: generates a coordinator workflow that orchestrates multiple per-app composite actions in a single branch or tag deploy pipeline.
+  
+  **Breaking change (beta)**: Tag workflow files are now named `tailor-<name>-tag.yml` instead of `tailor-<name>.yml`. Re-run `tailor-sdk setup tag` to generate the new file, then manually delete the old `tailor-<name>.yml` workflow.
+
 ## 1.71.0
 ### Minor Changes
 

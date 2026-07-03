@@ -102,7 +102,6 @@ export async function planExecutor(context: PlanContext) {
 
   const existingExecutors = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, pageSize) => {
       const { executors, nextPageToken } = await client.listExecutorExecutors({
         workspaceId,
@@ -112,7 +111,7 @@ export async function planExecutor(context: PlanContext) {
       return [executors, nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "executor", name),
+    getTrn: (name) => resourceTrn(workspaceId, "executor", name),
   });
 
   const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});

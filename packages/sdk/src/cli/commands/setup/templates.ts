@@ -1,12 +1,15 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import actionTemplate from "./action.yml";
 import branchTemplate from "./branch.workflow.yml";
+import coordinateTemplate from "./coordinate.workflow.yml";
+import previewTemplate from "./preview.workflow.yml";
 import tagTemplate from "./tag.workflow.yml";
 
 // Bump on material template-structure changes (managed step ids, placeholders)
 // so old/new generations stay distinguishable in the lock.
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 5;
+export const TEMPLATE_VERSION = 6;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -27,7 +30,10 @@ export type RenderBranchParams = {
   /** GitHub Environment for the plan/deploy jobs; defaults to the workspace name. */
   environment: string;
   packageManager: PackageManager;
-  plan: boolean;
+  /** Include the seed-validate step in the plan job (default: false). */
+  seedValidate?: boolean;
+  /** Include the migration-drift-check step in the plan job (default: false). */
+  migrationDriftCheck?: boolean;
   erdPreview: { namespaces: string[] } | null;
 };
 
@@ -38,6 +44,52 @@ export type RenderTagParams = {
   branch?: string;
   workingDirectory?: string;
   /** GitHub Environment for the plan/deploy jobs; defaults to the workspace name. */
+  environment: string;
+  packageManager: PackageManager;
+  /** Include the seed-validate step in the plan job (default: false). */
+  seedValidate?: boolean;
+  /** Include the migration-drift-check step in the plan job (default: false). */
+  migrationDriftCheck?: boolean;
+};
+
+export type RenderPreviewParams = {
+  workspaceName: string;
+  branch: string;
+  workingDirectory?: string;
+  /** GitHub Environment for the preview jobs; defaults to the workspace name. */
+  environment: string;
+  packageManager: PackageManager;
+  /** Workspace region passed to `workspace create` on first PR push. */
+  region: string;
+  /**
+   * When true, deploy preview only for PRs labeled `tailor:preview` (label-triggered mode).
+   * Default false: preview deploys on every PR (open, sync, reopen).
+   */
+  requirePreviewLabel?: boolean;
+};
+
+export type RenderActionParams = {
+  workspaceName: string;
+  workingDirectory?: string;
+  /** Include the build-site slot (user-owned step for building static website assets). */
+  hasStaticWebsites?: boolean;
+};
+
+export type CoordinateApp = {
+  /** App workspace name (same as the --action argument, e.g. "ims"). */
+  name: string;
+  /** App directory relative to repo root (e.g. "apps/ims"). */
+  dir: string;
+};
+
+export type CoordinateKind = "branch" | "tag";
+
+export type RenderCoordinateParams = {
+  coordinatorName: string;
+  kind: CoordinateKind;
+  apps: CoordinateApp[];
+  branch?: string;
+  tagPattern?: string;
   environment: string;
   packageManager: PackageManager;
 };
@@ -116,30 +168,29 @@ function applyCommon(
 
 /**
  * Render the branch-target deploy workflow.
- *
- * When `plan` is false the plan job, the pull_request trigger, and the
- * workflow_dispatch dry-run input are all removed (a plan-less workflow has no
- * meaningful dry-run), and the deploy job runs unconditionally.
  * @param params - Workspace and rendering configuration
  * @returns Rendered YAML and the list of managed job/step ids
  */
 export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
-  const { branch, plan } = params;
-  const erdPreview = plan ? params.erdPreview : null;
+  const { branch } = params;
+  const seedValidate = params.seedValidate ?? false;
+  const migrationDriftCheck = params.migrationDriftCheck ?? false;
+  const erdPreview = params.erdPreview;
 
   let out = branchTemplate;
-  out = block(out, "PLAN_JOB", plan);
+  out = block(out, "PLAN_JOB", true);
   out = block(out, "ERD_PREVIEW_JOB", erdPreview !== null);
   out = block(out, "ERD_PREVIEW_COMMENT_JOB", erdPreview !== null);
-  out = block(out, "PULL_REQUEST", plan);
-  out = block(out, "DISPATCH_INPUTS", plan);
-  // With no plan there is no PR/dry-run path, so the deploy job always runs.
+  out = block(out, "PULL_REQUEST", true);
+  out = block(out, "DISPATCH_INPUTS", true);
+  out = block(out, "SEED_VALIDATE", seedValidate);
+  out = block(out, "MIGRATION_DRIFT_CHECK", migrationDriftCheck);
+  // SEED_DATA is dropped from the default rendering; users add their own step.
+  out = block(out, "SEED_DATA", false);
   out = line(
     out,
     "DEPLOY_IF",
-    plan
-      ? `if: >-\n  github.event_name == 'push' ||\n  (github.event_name == 'workflow_dispatch' && !inputs['dry-run'])`
-      : undefined,
+    `if: >-\n  github.event_name == 'push' ||\n  (github.event_name == 'workflow_dispatch' && !inputs['dry-run'])`,
   );
   out = line(
     out,
@@ -149,16 +200,21 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
 
   out = applyCommon(out, params).replaceAll("__BRANCH__", () => branch);
 
-  const generatedIds: string[] = [];
-  if (plan) {
-    generatedIds.push(
-      "tailor-plan",
-      "tailor-plan/tailor-checkout",
-      "tailor-plan/tailor-setup",
-      "tailor-plan/tailor-generate-check",
-      "tailor-plan/tailor-plan",
-    );
+  const generatedIds: string[] = [
+    "tailor-plan",
+    "tailor-plan/tailor-checkout",
+    "tailor-plan/tailor-setup",
+    "tailor-plan/tailor-install",
+    "tailor-plan/tailor-generate-check",
+  ];
+  if (seedValidate) {
+    generatedIds.push("tailor-plan/tailor-seed-validate");
   }
+  generatedIds.push("tailor-plan/tailor-drift-check");
+  if (migrationDriftCheck) {
+    generatedIds.push("tailor-plan/tailor-migration-drift-check");
+  }
+  generatedIds.push("tailor-plan/tailor-plan");
   if (erdPreview) {
     generatedIds.push(
       "tailor-erd-preview-matrix",
@@ -186,7 +242,9 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
     "tailor-deploy",
     "tailor-deploy/tailor-checkout",
     "tailor-deploy/tailor-setup",
+    "tailor-deploy/tailor-install",
     "tailor-deploy/tailor-apply",
+    "tailor-deploy/tailor-notify",
   );
 
   return { content: out, generatedIds };
@@ -203,9 +261,15 @@ export function renderBranchWorkflow(params: RenderBranchParams): RenderResult {
 export function renderTagWorkflow(params: RenderTagParams): RenderResult {
   const { tagPattern, branch } = params;
   const hasGuard = branch !== undefined;
+  const seedValidate = params.seedValidate ?? false;
+  const migrationDriftCheck = params.migrationDriftCheck ?? false;
 
   let out = tagTemplate;
   out = block(out, "TAG_GUARD_JOB", hasGuard);
+  out = block(out, "SEED_VALIDATE", seedValidate);
+  out = block(out, "MIGRATION_DRIFT_CHECK", migrationDriftCheck);
+  // SEED_DATA is dropped from the default rendering; users add their own step.
+  out = block(out, "SEED_DATA", false);
   out = line(out, "PLAN_NEEDS", hasGuard ? "needs: tailor-tag-guard" : undefined);
   out = line(
     out,
@@ -232,13 +296,296 @@ export function renderTagWorkflow(params: RenderTagParams): RenderResult {
     "tailor-plan",
     "tailor-plan/tailor-checkout",
     "tailor-plan/tailor-setup",
+    "tailor-plan/tailor-install",
     "tailor-plan/tailor-generate-check",
+  );
+  if (seedValidate) {
+    generatedIds.push("tailor-plan/tailor-seed-validate");
+  }
+  generatedIds.push("tailor-plan/tailor-drift-check");
+  if (migrationDriftCheck) {
+    generatedIds.push("tailor-plan/tailor-migration-drift-check");
+  }
+  generatedIds.push(
     "tailor-plan/tailor-plan",
     "tailor-deploy",
     "tailor-deploy/tailor-checkout",
     "tailor-deploy/tailor-setup",
+    "tailor-deploy/tailor-install",
     "tailor-deploy/tailor-apply",
+    "tailor-deploy/tailor-notify",
   );
 
   return { content: out, generatedIds };
+}
+
+/**
+ * Render the preview workflow (PR open/sync/close triggers).
+ *
+ * The deploy job runs on opened/synchronize/reopened events; the cleanup job
+ * runs on the closed event.  Both jobs run in the same workflow so PR number
+ * context is always available.
+ * @param params - Workspace and rendering configuration
+ * @returns Rendered YAML and the list of managed job/step ids
+ */
+export function renderPreviewWorkflow(params: RenderPreviewParams): RenderResult {
+  const { branch } = params;
+  const requirePreviewLabel = params.requirePreviewLabel ?? false;
+
+  let out = previewTemplate;
+  out = line(
+    out,
+    "PATHS",
+    params.workingDirectory ? `paths: ["${params.workingDirectory}/**"]` : undefined,
+  );
+
+  // PR trigger event types — single line() marker avoids duplicate YAML map keys in the template.
+  out = line(
+    out,
+    "PR_TYPES",
+    requirePreviewLabel
+      ? "types: [labeled, synchronize, reopened, closed]"
+      : "types: [opened, synchronize, reopened, closed]",
+  );
+
+  // Deploy job if condition. Fork PRs don't have access to secrets/vars, so guard them out.
+  const deployIf = requirePreviewLabel
+    ? `if: >-\n  contains(github.event.pull_request.labels.*.name, 'tailor:preview') &&\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`
+    : `if: >-\n  github.event.action != 'closed' &&\n  !github.event.pull_request.draft &&\n  !github.event.pull_request.head.repo.fork`;
+  out = line(out, "DEPLOY_IF", deployIf);
+
+  // Cleanup always runs on closed regardless of current labels: the label may have been
+  // removed after a preview deploy, and the cleanup action is a no-op when no workspace exists.
+  // Fork PRs also need guarding since cleanup requires secrets/vars.
+  out = line(
+    out,
+    "CLEANUP_IF",
+    `if: >-\n  github.event.action == 'closed' &&\n  !github.event.pull_request.head.repo.fork`,
+  );
+
+  out = applyCommon(out, params)
+    .replaceAll("__BRANCH__", () => branch)
+    .replaceAll("__REGION__", () => params.region);
+
+  const generatedIds: string[] = [
+    "tailor-preview-deploy",
+    "tailor-preview-deploy/tailor-checkout",
+    "tailor-preview-deploy/tailor-setup",
+    "tailor-preview-deploy/tailor-install",
+    "tailor-preview-deploy/tailor-generate-check",
+    "tailor-preview-deploy/tailor-preview-deploy",
+    "tailor-preview-deploy/tailor-preview-comment",
+    "tailor-preview-cleanup",
+    "tailor-preview-cleanup/tailor-checkout",
+    "tailor-preview-cleanup/tailor-setup",
+    "tailor-preview-cleanup/tailor-install",
+    "tailor-preview-cleanup/tailor-preview-cleanup",
+  ];
+
+  return { content: out, generatedIds };
+}
+
+/**
+ * Render the per-app composite action.
+ *
+ * The action contains only the deploy step and a failure notification.
+ * Checkout, setup, and install are the caller's responsibility (coordinator workflow).
+ * @param params - Workspace and rendering configuration
+ * @returns Rendered YAML and the list of managed step ids
+ */
+export function renderActionWorkflow(params: RenderActionParams): RenderResult {
+  let out = actionTemplate;
+  out = line(out, "HEADER", HEADER);
+
+  // build-site is a user-owned slot; include when staticWebsites are configured.
+  out = block(out, "STATIC_WEBSITE_BUILD", params.hasStaticWebsites ?? false);
+
+  out = out.replaceAll("__WORKSPACE_NAME__", () => params.workspaceName);
+
+  const generatedIds = ["tailor-apply", "tailor-notify"];
+
+  return { content: out, generatedIds };
+}
+
+const ACTIONS_SHA = "e74173d4bdd931d036ad359cf5f7729fc6aa7067"; // v1.5.1
+
+/**
+ * Render the coordinator workflow that orchestrates per-app composite actions.
+ *
+ * Generates per-app plan steps (generate-check, drift-check, plan) and per-app
+ * deploy steps (calling each app's composite action at .github/actions/tailor-<name>).
+ * Checkout, setup, and install are done once per job using the local tailor-setup action.
+ * @param params - Coordinator and app configuration
+ * @returns Rendered YAML and the list of managed job/step ids
+ */
+export function renderCoordinateWorkflow(params: RenderCoordinateParams): RenderResult {
+  const { coordinatorName, kind, apps, environment, packageManager } = params;
+  const isTag = kind === "tag";
+  const branch = params.branch;
+  const tagPattern = params.tagPattern ?? "v*";
+
+  let out = coordinateTemplate;
+  out = line(out, "HEADER", HEADER);
+
+  out = block(out, "PULL_REQUEST", !isTag);
+  out = block(out, "PUSH_BRANCHES", !isTag);
+  out = block(out, "PUSH_TAGS", isTag);
+  out = block(out, "TAG_GUARD_JOB", isTag && branch !== undefined);
+
+  if (isTag && branch !== undefined) {
+    out = line(out, "PLAN_NEEDS", "needs: tailor-tag-guard");
+    out = line(
+      out,
+      "PLAN_IF",
+      `if: >-\n  github.event_name == 'workflow_dispatch' ||\n  needs.tailor-tag-guard.outputs.on-branch == 'true'`,
+    );
+  } else if (isTag) {
+    out = line(out, "PLAN_NEEDS", undefined);
+    out = line(out, "PLAN_IF", undefined);
+  } else {
+    out = line(out, "PLAN_NEEDS", undefined);
+    out = line(
+      out,
+      "PLAN_IF",
+      `if: >-\n  github.event_name == 'pull_request' ||\n  (github.event_name == 'workflow_dispatch' && inputs['dry-run'])`,
+    );
+  }
+
+  if (isTag) {
+    // Tag coordinator: deploy runs after plan (plan checks tag reachability).
+    // When plan is skipped via workflow_dispatch dry-run, deploy is also skipped.
+    out = line(out, "DEPLOY_NEEDS", "needs: tailor-plan");
+    out = line(
+      out,
+      "DEPLOY_IF",
+      `if: \${{ !(github.event_name == 'workflow_dispatch' && inputs['dry-run']) }}`,
+    );
+    out = line(out, "DEPLOY_ENVIRONMENT", `environment: ${environment}`);
+  } else {
+    // Branch coordinator: plan (PR) and deploy (push) are independent jobs —
+    // no needs relationship, so deploy is not skipped when plan is skipped on push.
+    out = line(out, "DEPLOY_NEEDS", undefined);
+    out = line(
+      out,
+      "DEPLOY_IF",
+      `if: >-\n  github.event_name == 'push' ||\n  (github.event_name == 'workflow_dispatch' && !inputs['dry-run'])`,
+    );
+    out = line(out, "DEPLOY_ENVIRONMENT", `environment: ${environment}`);
+  }
+
+  const driftCheckStep = [
+    `- id: tailor-drift-check`,
+    `  uses: tailor-platform/actions/drift-check@${ACTIONS_SHA} # v1.5.1`,
+    `  with:`,
+    `    package-manager: ${packageManager}`,
+  ].join("\n");
+  const perAppPlanSteps = apps
+    .flatMap((app) => {
+      const wd = app.dir !== "." ? app.dir : undefined;
+      const wdLine = wd ? `\n    working-directory: ${wd}` : "";
+      return [
+        `- id: tailor-generate-check-${app.name}`,
+        `  uses: tailor-platform/actions/generate-check@${ACTIONS_SHA} # v1.5.1`,
+        `  with:`,
+        `    package-manager: ${packageManager}${wdLine}`,
+        `- id: tailor-plan-${app.name}`,
+        `  if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork`,
+        `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # v1.5.1`,
+        `  with:`,
+        `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
+        `    package-manager: ${packageManager}${wdLine}`,
+        `    label: ${coordinatorName}/${app.name}`,
+        `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
+        `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
+        `    github-token: \${{ secrets.GITHUB_TOKEN }}`,
+      ];
+    })
+    .join("\n");
+  out = line(out, "PER_APP_PLAN_STEPS", `${driftCheckStep}\n${perAppPlanSteps}`);
+
+  const deploySteps = apps
+    .flatMap((app) => [
+      `- id: tailor-deploy-${app.name}`,
+      `  uses: ./.github/actions/tailor-${app.name}`,
+      `  with:`,
+      `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
+      `    name: ${app.name}`,
+      `    working-directory: ${app.dir}`,
+      `    package-manager: ${packageManager}`,
+      `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
+      `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
+      `    slack-token: \${{ secrets.TAILOR_SLACK_BOT_TOKEN }}`,
+      `    slack-channel-id: \${{ vars.TAILOR_SLACK_CHANNEL_ID }}`,
+      `    # editable: api-url:`,
+    ])
+    .join("\n");
+  out = line(out, "PER_APP_DEPLOY_STEPS", deploySteps);
+
+  // Plain placeholders last so values containing `$` are not interpreted as
+  // replacement patterns.
+  out = out.replaceAll("__WORKSPACE_NAME__", () => coordinatorName);
+  out = out.replaceAll("__ENVIRONMENT__", () => environment);
+  if (branch !== undefined) {
+    out = out.replaceAll("__BRANCH__", () => branch);
+  }
+  if (isTag) {
+    out = out.replaceAll("__TAG_PATTERN__", () => tagPattern);
+  }
+
+  const generatedIds: string[] = [];
+  if (isTag && branch !== undefined) {
+    generatedIds.push(
+      "tailor-tag-guard",
+      "tailor-tag-guard/tailor-checkout",
+      "tailor-tag-guard/tailor-tag-guard",
+    );
+  }
+  generatedIds.push(
+    "tailor-plan",
+    "tailor-plan/tailor-checkout",
+    "tailor-plan/tailor-setup",
+    "tailor-plan/tailor-drift-check",
+  );
+  for (const app of apps) {
+    generatedIds.push(
+      `tailor-plan/tailor-generate-check-${app.name}`,
+      `tailor-plan/tailor-plan-${app.name}`,
+    );
+  }
+  generatedIds.push("tailor-deploy", "tailor-deploy/tailor-checkout", "tailor-deploy/tailor-setup");
+  for (const app of apps) {
+    generatedIds.push(`tailor-deploy/tailor-deploy-${app.name}`);
+  }
+
+  return { content: out, generatedIds };
+}
+
+/**
+ * Render the content of the user-owned .github/actions/tailor-setup/action.yml local action.
+ *
+ * This file is generated once by `setup coordinate` and never overwritten.
+ * It wraps the setup and install actions with the package manager baked in.
+ * @param params - Package manager configuration
+ * @returns File content string
+ */
+export function renderTailorSetupAction(params: { packageManager: PackageManager }): string {
+  const { packageManager } = params;
+  return [
+    `# This file is user-owned. Generated once by \`tailor setup coordinate\` and never overwritten.`,
+    `# Customize freely: add pre/post steps, change install flags, etc.`,
+    `name: Tailor Setup`,
+    `description: Install dependencies and run tailor setup for composite action callers.`,
+    `runs:`,
+    `  using: composite`,
+    `  steps:`,
+    `    - uses: tailor-platform/actions/setup@${ACTIONS_SHA} # v1.5.1`,
+    `      with:`,
+    `        package-manager: ${packageManager}`,
+    `    # Add custom steps here (e.g. private registry authentication)`,
+    `    - uses: tailor-platform/actions/install@${ACTIONS_SHA} # v1.5.1`,
+    `      with:`,
+    `        package-manager: ${packageManager}`,
+    `        # editable: install-command:`,
+    ``,
+  ].join("\n");
 }

@@ -73,15 +73,11 @@ describe("extractColumnTemplate", () => {
     ]);
   });
 
-  test("returns null for explicit column list", () => {
-    expect(extractColumnTemplate('select id, name from "User"')).toBeNull();
-  });
-
-  test("returns null for unparseable query", () => {
-    expect(extractColumnTemplate("select from")).toBeNull();
-  });
-
-  test("returns null for COUNT(*)", () => {
-    expect(extractColumnTemplate('select count(*) from "User"')).toBeNull();
+  test.each([
+    ["explicit column list", 'select id, name from "User"'],
+    ["unparseable query", "select from"],
+    ["COUNT(*)", 'select count(*) from "User"'],
+  ])("returns null for %s", (_label, sql) => {
+    expect(extractColumnTemplate(sql)).toBeNull();
   });
 });

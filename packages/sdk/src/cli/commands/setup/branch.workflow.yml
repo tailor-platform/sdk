@@ -41,18 +41,40 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        uses: tailor-platform/actions/setup@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-install
+        uses: tailor-platform/actions/install@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        uses: tailor-platform/actions/generate-check@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
+      # __SEED_VALIDATE_START__
+      - id: tailor-seed-validate
+        uses: tailor-platform/actions/seed-validate@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
+        with:
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
+      # __SEED_VALIDATE_END__
+      - id: tailor-drift-check
+        uses: tailor-platform/actions/drift-check@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      # __MIGRATION_DRIFT_CHECK_START__
+      - id: tailor-migration-drift-check
+        uses: tailor-platform/actions/migration-drift-check@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
+        with:
+          package-manager: __PACKAGE_MANAGER__
+          # __WORKING_DIRECTORY__
+      # __MIGRATION_DRIFT_CHECK_END__
       - id: tailor-plan
         # Fork PRs cannot read secrets; the checks above still run for them.
         if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-        uses: tailor-platform/actions/plan@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        uses: tailor-platform/actions/plan@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -142,8 +164,8 @@ jobs:
             return normalized;
           }
 
-          const headTarget = lockTarget(".github/tailor-sdk.lock");
-          const baseTarget = lockTarget(".tailor-erd-base/.github/tailor-sdk.lock");
+          const headTarget = lockTarget(".github/tailor.lock");
+          const baseTarget = lockTarget(".tailor-erd-base/.github/tailor.lock");
           const baseAppDir = normalizeDir(baseTarget?.inputs?.dir, "base setup lock");
           const namespaces = [
             ...new Set([
@@ -301,12 +323,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          run_tailor_sdk() {
+          run_tailor_cli() {
             case "__PACKAGE_MANAGER__" in
-              pnpm) pnpm exec tailor-sdk "$@" ;;
-              npm) npx tailor-sdk "$@" ;;
-              yarn) yarn tailor-sdk "$@" ;;
-              bun) bunx tailor-sdk "$@" ;;
+              pnpm) pnpm exec tailor "$@" ;;
+              npm) npx tailor "$@" ;;
+              yarn) yarn tailor "$@" ;;
+              bun) bunx tailor "$@" ;;
               *)
                 echo "::error::Unsupported package-manager '__PACKAGE_MANAGER__' (expected pnpm, npm, yarn, or bun)"
                 exit 1
@@ -327,7 +349,7 @@ jobs:
             esac
           }
 
-          tailor_sdk_bin="$(
+          tailor_cli_bin="$(
             run_head_node - <<'NODE'
           const path = require("node:path");
           const { createRequire } = require("node:module");
@@ -359,12 +381,12 @@ jobs:
           NODE
           )"
 
-          run_head_tailor_sdk_bin() {
+          run_head_tailor_cli_bin() {
             local command_cwd="$1"
             shift
 
             run_head_cli_env() {
-              env TAILOR_SDK_BIN="$tailor_sdk_bin" TAILOR_SDK_CWD="$command_cwd" "$@"
+              env TAILOR_CLI_BIN="$tailor_cli_bin" TAILOR_CLI_CWD="$command_cwd" "$@"
             }
 
             (
@@ -382,12 +404,12 @@ jobs:
             )
           }
 
-          run_base_tailor_sdk_bin() {
+          run_base_tailor_cli_bin() {
             local command_cwd="$1"
             shift
 
             run_head_cli_env() {
-              env TAILOR_SDK_BIN="$tailor_sdk_bin" TAILOR_SDK_CWD="$command_cwd" "$@"
+              env TAILOR_CLI_BIN="$tailor_cli_bin" TAILOR_CLI_CWD="$command_cwd" "$@"
             }
 
             (
@@ -409,7 +431,7 @@ jobs:
           base_output="$RUNNER_TEMP/tailor-erd/base"
           preview_output="$RUNNER_TEMP/tailor-erd/preview"
           dts_output="$RUNNER_TEMP/tailor-erd/dts"
-          head_cli_runner="$RUNNER_TEMP/tailor-erd/run-head-tailor-sdk.mjs"
+          head_cli_runner="$RUNNER_TEMP/tailor-erd/run-head-cli.mjs"
           head_log="$RUNNER_TEMP/tailor-erd/head-$NAMESPACE.log"
           base_log="$RUNNER_TEMP/tailor-erd/base-$NAMESPACE.log"
           rm -rf "$head_output" "$base_output" "$preview_output" "$dts_output"
@@ -417,10 +439,10 @@ jobs:
           cat > "$head_cli_runner" <<'NODE'
           import { pathToFileURL } from "node:url";
 
-          const cliBin = process.env.TAILOR_SDK_BIN;
-          const commandCwd = process.env.TAILOR_SDK_CWD;
+          const cliBin = process.env.TAILOR_CLI_BIN;
+          const commandCwd = process.env.TAILOR_CLI_CWD;
           if (!cliBin || !commandCwd) {
-            throw new Error("TAILOR_SDK_BIN and TAILOR_SDK_CWD are required.");
+            throw new Error("TAILOR_CLI_BIN and TAILOR_CLI_CWD are required.");
           }
 
           process.chdir(commandCwd);
@@ -441,7 +463,7 @@ jobs:
           elif ! (
             cd "$GITHUB_WORKSPACE/$APP_DIR" || exit 1
             TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/head-$NAMESPACE.d.ts" \
-              run_tailor_sdk tailordb erd export --config "$head_config" --namespace "$NAMESPACE" --output "$head_output"
+              run_tailor_cli tailordb erd export --config "$head_config" --namespace "$NAMESPACE" --output "$head_output"
           ) >"$head_log" 2>&1; then
             if grep -q 'not found in local config.db' "$head_log"; then
               cat "$head_log"
@@ -461,7 +483,7 @@ jobs:
             base_missing="true"
           elif ! (
             TAILOR_PLATFORM_SDK_DTS_PATH="$dts_output/base-$NAMESPACE.d.ts" \
-              run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
+              run_base_tailor_cli_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config" --namespace "$NAMESPACE" --output "$base_output"
           ) >"$base_log" 2>&1; then
             if grep -q 'not found in local config.db' "$base_log"; then
               cat "$base_log"
@@ -495,7 +517,7 @@ jobs:
           if [ "$base_missing" = "false" ]; then
             diff_args+=(--base-html "$base_html")
           fi
-          run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff "${diff_args[@]}"
+          run_head_tailor_cli_bin "$GITHUB_WORKSPACE" tailordb erd diff "${diff_args[@]}"
       - id: tailor-upload-erd-viewer
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -572,14 +594,49 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        uses: tailor-platform/actions/setup@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
+        with:
+          package-manager: __PACKAGE_MANAGER__
+      - id: tailor-install
+        uses: tailor-platform/actions/install@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@7817f37adf2891fbb2ebbe0a3b222a5fa2ed0c1f # v1.3.0
+        uses: tailor-platform/actions/deploy@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
           platform-client-id: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}
           platform-client-secret: ${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+      # __SEED_DATA_START__
+      - id: seed-data
+        if: false
+        shell: bash
+        # __WORKING_DIRECTORY__
+        run: |
+          # Uncomment and implement to seed data on deploy.
+          # Run after apply so the schema is ready.
+          # Example: node scripts/seed.mjs
+          true
+      # __SEED_DATA_END__
+      - id: slack-prereq
+        if: always()
+        shell: bash
+        env:
+          SLACK_TOKEN: ${{ secrets.TAILOR_SLACK_BOT_TOKEN }}
+          SLACK_CHANNEL_ID: ${{ vars.TAILOR_SLACK_CHANNEL_ID }}
+        run: |
+          if [[ -n "$SLACK_TOKEN" && -n "$SLACK_CHANNEL_ID" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - id: tailor-notify
+        if: always() && steps.slack-prereq.outputs.ready == 'true'
+        uses: tailor-platform/actions/notify@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
+        with:
+          provider: slack
+          status: ${{ job.status }}
+          workspace-name: __WORKSPACE_NAME__
+          slack-token: ${{ secrets.TAILOR_SLACK_BOT_TOKEN }}
+          slack-channel-id: ${{ vars.TAILOR_SLACK_CHANNEL_ID }}
+          # user-mapping: ${{ vars.TAILOR_SLACK_USER_MAPPING }}
