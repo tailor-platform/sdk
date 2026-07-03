@@ -1,8 +1,10 @@
 import { describe, expectTypeOf, expect, test } from "vitest";
 import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/type";
+import { brandValue } from "#/utils/brand";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
 import type { AuthServiceInput } from "#/configure/services/auth/types";
+import type { TailorDBInstance } from "#/configure/services/tailordb/types";
 import type { UUIDString } from "#/configure/types/scalar.types";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
@@ -29,6 +31,7 @@ type AuthInput = AuthServiceInput<typeof userType, Attributes, AttributeList, "a
 
 type MachineUserConfig = NonNullable<AuthInput["machineUsers"]>["admin"];
 type AuthSchemaInput = Omit<z.input<typeof AuthConfigSchema>, "name">;
+type IsUnknown<T> = unknown extends T ? ([keyof T] extends [never] ? true : false) : false;
 
 describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
   test("aligns top-level keys and optionality with the schema", () => {
@@ -61,6 +64,8 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
     type AlignedSchemaAttributes = Pick<SchemaAttributes, keyof ServiceAttributes>;
 
     expectTypeOf<ServiceAttributes>().toMatchObjectType<AlignedSchemaAttributes>();
+    expectTypeOf<IsUnknown<SchemaUserProfile["type"]>>().toEqualTypeOf<false>();
+    expectTypeOf<SchemaUserProfile["type"]>().toExtend<TailorDBInstance>();
     expectTypeOf<ServiceUserProfile["type"]>().toExtend<SchemaUserProfile["type"]>();
     expectTypeOf<ServiceUserProfile["usernameField"]>().toExtend<
       SchemaUserProfile["usernameField"]
@@ -377,5 +382,88 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
 
     const result = AuthConfigSchema.parse(config);
     expect(result.userProfile?.namespace).toBe("external-ns");
+  });
+
+  test("strips TailorDB type builder helpers from userProfile.type", () => {
+    const result = AuthConfigSchema.parse({
+      name: "my-auth",
+      userProfile: {
+        type: userType,
+        usernameField: "email",
+      },
+    });
+
+    expect(result.userProfile?.type).toMatchObject({
+      name: "User",
+      fields: expect.any(Object),
+    });
+    expect(result.userProfile?.type).not.toHaveProperty("hooks");
+    expect(result.userProfile?.type).not.toHaveProperty("_output");
+  });
+
+  test("rejects unbranded userProfile.type copies with unknown keys", () => {
+    const result = AuthConfigSchema.safeParse({
+      name: "my-auth",
+      userProfile: {
+        type: { ...userType, unknownOption: true },
+        usernameField: "email",
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("Expected AuthConfigSchema parsing to fail");
+    }
+    expect(JSON.stringify(result.error.issues)).toContain("unknownOption");
+  });
+
+  test("omits unknown outer userProfile.type keys with TailorDB builder helpers", () => {
+    const typeWithUnknownKey = brandValue(
+      {
+        ...userType,
+        unknownOption: true,
+      },
+      "tailordb-type",
+    );
+
+    const result = AuthConfigSchema.parse({
+      name: "my-auth",
+      userProfile: {
+        type: typeWithUnknownKey,
+        usernameField: "email",
+      },
+    });
+
+    expect(result.userProfile?.type).not.toHaveProperty("unknownOption");
+  });
+
+  test("rejects invalid TailorDB fields in userProfile.type", () => {
+    const typeWithInvalidField = brandValue(
+      {
+        ...userType,
+        fields: {
+          ...userType.fields,
+          unsupported: {
+            type: "unsupported",
+            metadata: {},
+          },
+        },
+      },
+      "tailordb-type",
+    );
+
+    const result = AuthConfigSchema.safeParse({
+      name: "my-auth",
+      userProfile: {
+        type: typeWithInvalidField,
+        usernameField: "email",
+      },
+    });
+
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("Expected AuthConfigSchema parsing to fail");
+    }
+    expect(JSON.stringify(result.error.issues)).toContain("unsupported");
   });
 });
