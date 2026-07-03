@@ -7,7 +7,7 @@ export default createResolver({
   operation: "mutation",
   input: {
     orderId: t.string().description("Order ID to process"),
-    customerId: t.string().description("Customer ID for the order"),
+    customerId: t.uuid().description("Customer ID for the order"),
   },
   body: async ({ input }) => {
     // Trigger the workflow with invoker (machine user name is type-narrowed via tailor.d.ts)

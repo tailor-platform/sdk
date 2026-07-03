@@ -12,6 +12,7 @@
  * }
  */
 
+import type { UUIDString } from "#/configure/types/scalar.types";
 import type { TailorPrincipal } from "#/runtime/types";
 
 /**
@@ -29,7 +30,7 @@ export type Invoker = TailorPrincipal;
  */
 export interface ContextInvoker {
   /** The invoker's ID */
-  id: string;
+  id: UUIDString;
   /** The invoker's type */
   type: "user" | "machine_user";
   /** The workspace ID */

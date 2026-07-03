@@ -479,7 +479,7 @@ describe("t.object tests", () => {
 
 describe("TailorField runtime validation tests", () => {
   const invoker: TailorPrincipal = {
-    id: "test",
+    id: "123e4567-e89b-12d3-a456-426614174000",
     type: "user",
     workspaceId: "workspace-test",
     attributes: {},
@@ -866,7 +866,7 @@ describe("TailorField runtime validation tests", () => {
 
 describe("TailorField clone-on-write / no aliasing", () => {
   const invoker: TailorPrincipal = {
-    id: "test",
+    id: "123e4567-e89b-12d3-a456-426614174000",
     type: "user",
     workspaceId: "workspace-test",
     attributes: {},

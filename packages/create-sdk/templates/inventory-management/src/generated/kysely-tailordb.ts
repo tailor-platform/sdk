@@ -1,6 +1,7 @@
 import {
   createGetDB,
   type Generated,
+  type UUIDString,
   type Timestamp,
   type NamespaceDB,
   type NamespaceInsertable,
@@ -14,7 +15,7 @@ import {
 export interface Namespace {
   "main-db": {
     Category: {
-      id: Generated<string>;
+      id: Generated<UUIDString>;
       name: string;
       description: string | null;
       createdAt: Generated<Timestamp>;
@@ -22,7 +23,7 @@ export interface Namespace {
     }
 
     Contact: {
-      id: Generated<string>;
+      id: Generated<UUIDString>;
       name: string;
       email: string;
       phone: string | null;
@@ -32,35 +33,35 @@ export interface Namespace {
     }
 
     Inventory: {
-      id: Generated<string>;
-      productId: string;
+      id: Generated<UUIDString>;
+      productId: UUIDString;
       quantity: number;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }
 
     Notification: {
-      id: Generated<string>;
+      id: Generated<UUIDString>;
       message: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }
 
     Order: {
-      id: Generated<string>;
+      id: Generated<UUIDString>;
       name: string;
       description: string | null;
       orderDate: Timestamp;
       orderType: "PURCHASE" | "SALES";
-      contactId: string;
+      contactId: UUIDString;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }
 
     OrderItem: {
-      id: Generated<string>;
-      orderId: string;
-      productId: string;
+      id: Generated<UUIDString>;
+      orderId: UUIDString;
+      productId: UUIDString;
       quantity: number;
       unitPrice: number;
       totalPrice: Generated<number | null>;
@@ -69,16 +70,16 @@ export interface Namespace {
     }
 
     Product: {
-      id: Generated<string>;
+      id: Generated<UUIDString>;
       name: string;
       description: string | null;
-      categoryId: string;
+      categoryId: UUIDString;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }
 
     User: {
-      id: Generated<string>;
+      id: Generated<UUIDString>;
       name: string;
       email: string;
       role: "MANAGER" | "STAFF";

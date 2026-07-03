@@ -61,7 +61,7 @@ describe("Kysely TypeProcessor", () => {
 
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
 
-      expect(result.typeDef).toContain("startDate: Timestamp;");
+      expect(result.typeDef).toContain("startDate: DateString;");
       expect(result.typeDef).toContain("endDate: Timestamp;");
       expect(result.typeDef).toContain("cancelledAt: Timestamp | null;");
     });
@@ -74,8 +74,8 @@ describe("Kysely TypeProcessor", () => {
 
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
 
-      expect(result.typeDef).toContain("userId: string;");
-      expect(result.typeDef).toContain("deviceId: string | null;");
+      expect(result.typeDef).toContain("userId: UUIDString;");
+      expect(result.typeDef).toContain("deviceId: UUIDString | null;");
     });
   });
 
@@ -101,7 +101,7 @@ describe("Kysely TypeProcessor", () => {
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
 
       expect(result.typeDef).toContain("eventDates: ArrayColumnType<Timestamp>;");
-      expect(result.typeDef).toContain("optionalDates: ArrayColumnType<Timestamp> | null;");
+      expect(result.typeDef).toContain("optionalDates: DateString[] | null;");
     });
   });
 
@@ -181,7 +181,7 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("phone?: string | null");
     });
 
-    test("should use Date | string instead of Timestamp for date fields inside nested objects", async () => {
+    test("should use DateString for date fields inside nested objects", async () => {
       const type = db.type("Receipt", {
         receiptDate: db.date(),
         dueSchedule: db.object({
@@ -192,10 +192,10 @@ describe("Kysely TypeProcessor", () => {
 
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
 
-      expect(result.typeDef).toContain("receiptDate: Timestamp;");
+      expect(result.typeDef).toContain("receiptDate: DateString;");
       // Nested object with datetime is wrapped in ObjectColumnType
       expect(result.typeDef).toContain("ObjectColumnType<");
-      expect(result.typeDef).toContain("dueDate: Timestamp");
+      expect(result.typeDef).toContain("dueDate: DateString");
       expect(result.typeDef).toContain("reminderAt?: Timestamp | null");
       expect(result.usedUtilityTypes.Timestamp).toBe(true);
     });
@@ -287,14 +287,14 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("updatedAt: Generated<Timestamp>;");
     });
 
-    test("should always include Generated<string> for id field", async () => {
+    test("should always include Generated<UUIDString> for id field", async () => {
       const type = db.type("User", {
         name: db.string(),
       });
 
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
 
-      expect(result.typeDef).toContain("id: Generated<string>;");
+      expect(result.typeDef).toContain("id: Generated<UUIDString>;");
     });
 
     test("should correctly track used utility types - basic types only", async () => {

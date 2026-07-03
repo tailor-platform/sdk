@@ -19,18 +19,32 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
 
   test("Client.user forwards args and namespace", async () => {
     using idpM = mockIdp();
-    idpM.enqueueResult({ id: "u-1", name: "alice", disabled: false });
+    idpM.enqueueResult({
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "alice",
+      disabled: false,
+    });
 
     const client = new idp.Client({ namespace: "ns" });
-    const result = await client.user("u-1");
+    const result = await client.user("11111111-1111-4111-8111-111111111111");
 
-    expect(result).toEqual({ id: "u-1", name: "alice", disabled: false });
-    expect(idpM.calls).toEqual([{ method: "user", args: ["u-1"], namespace: "ns" }]);
+    expect(result).toEqual({
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "alice",
+      disabled: false,
+    });
+    expect(idpM.calls).toEqual([
+      { method: "user", args: ["11111111-1111-4111-8111-111111111111"], namespace: "ns" },
+    ]);
   });
 
   test("Client.userByName forwards", async () => {
     using idpM = mockIdp();
-    idpM.enqueueResult({ id: "u-1", name: "alice", disabled: false });
+    idpM.enqueueResult({
+      id: "11111111-1111-4111-8111-111111111111",
+      name: "alice",
+      disabled: false,
+    });
 
     const client = new idp.Client({ namespace: "ns" });
     await client.userByName("alice");
@@ -41,7 +55,7 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
   test("Client.users forwards options", async () => {
     using idpM = mockIdp();
     idpM.enqueueResult({
-      users: [{ id: "u-1", name: "alice", disabled: false }],
+      users: [{ id: "11111111-1111-4111-8111-111111111111", name: "alice", disabled: false }],
       nextPageToken: null,
       totalCount: 1,
     });
@@ -56,15 +70,15 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
   test("Client.createUser / updateUser / deleteUser forward", async () => {
     using idpM = mockIdp();
     idpM.enqueueResults(
-      { id: "u-2", name: "bob", disabled: false },
-      { id: "u-2", name: "bob2", disabled: false },
+      { id: "22222222-2222-4222-8222-222222222222", name: "bob", disabled: false },
+      { id: "22222222-2222-4222-8222-222222222222", name: "bob2", disabled: false },
       true,
     );
 
     const client = new idp.Client({ namespace: "ns" });
     await client.createUser({ name: "bob", password: "p" });
-    await client.updateUser({ id: "u-2", name: "bob2" });
-    const removed = await client.deleteUser("u-2");
+    await client.updateUser({ id: "22222222-2222-4222-8222-222222222222", name: "bob2" });
+    const removed = await client.deleteUser("22222222-2222-4222-8222-222222222222");
 
     expect(removed).toBe(true);
     expect(idpM.calls.map((c) => c.method)).toEqual(["createUser", "updateUser", "deleteUser"]);
@@ -74,7 +88,7 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
     using idpM = mockIdp();
     const client = new idp.Client({ namespace: "ns" });
     const ok = await client.sendPasswordResetEmail({
-      userId: "u-1",
+      userId: "11111111-1111-4111-8111-111111111111",
       redirectUri: "https://example.com/reset",
     });
 
@@ -82,7 +96,12 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
     expect(idpM.calls).toEqual([
       {
         method: "sendPasswordResetEmail",
-        args: [{ userId: "u-1", redirectUri: "https://example.com/reset" }],
+        args: [
+          {
+            userId: "11111111-1111-4111-8111-111111111111",
+            redirectUri: "https://example.com/reset",
+          },
+        ],
         namespace: "ns",
       },
     ]);
@@ -91,13 +110,16 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
   test("Client.unenrollMfa forwards", async () => {
     using idpM = mockIdp();
     const client = new idp.Client({ namespace: "ns" });
-    const ok = await client.unenrollMfa({ userId: "u-1", mfaFactorId: "f-1" });
+    const ok = await client.unenrollMfa({
+      userId: "11111111-1111-4111-8111-111111111111",
+      mfaFactorId: "f-1",
+    });
 
     expect(ok).toBe(true);
     expect(idpM.calls).toEqual([
       {
         method: "unenrollMfa",
-        args: [{ userId: "u-1", mfaFactorId: "f-1" }],
+        args: [{ userId: "11111111-1111-4111-8111-111111111111", mfaFactorId: "f-1" }],
         namespace: "ns",
       },
     ]);

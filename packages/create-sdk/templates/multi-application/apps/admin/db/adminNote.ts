@@ -4,14 +4,12 @@ import {
   unsafeAllowAllTypePermission,
 } from "@tailor-platform/sdk";
 
-type UUIDString = `${string}-${string}-${string}-${string}-${string}`;
-
 export const adminNote = db
   .type("AdminNote", {
     title: db.string(),
     content: db.string(),
     authorId: db.uuid().hooks({
-      create: ({ invoker }) => (invoker?.id ?? crypto.randomUUID()) as UUIDString,
+      create: ({ invoker }) => invoker?.id ?? crypto.randomUUID(),
     }),
     ...db.fields.timestamps(),
   })

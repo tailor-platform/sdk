@@ -3,6 +3,17 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
+import type { TailorPrincipal } from "#/runtime/types";
+import type { output, InferFieldsOutput } from "#/types/helpers";
+import type {
+  DateString,
+  DateTimeString,
+  DecimalString,
+  TimeString,
+  UUIDString,
+} from "./scalar.types";
+import type { NonEmptyObject } from "type-fest";
+
 export interface EnumValue {
   value: string;
   description?: string;
@@ -21,13 +32,14 @@ export type TailorFieldType =
   | "time"
   | "nested";
 
-type DateString = `${number}-${number}-${number}`;
-type TimeString = `${number}:${number}`;
-type TimeZoneOffsetString = "Z" | "z" | `${"+" | "-"}${TimeString}`;
-type DateTimeString =
-  `${DateString}${"T" | "t"}${TimeString}:${number}${"" | `.${number}`}${TimeZoneOffsetString}`;
-type UUIDString = `${string}-${string}-${string}-${string}-${string}`;
-type DecimalString = `${number}`;
+export type {
+  DateString,
+  DateTimeString,
+  DecimalString,
+  TimeString,
+  TimeZoneOffsetString,
+  UUIDString,
+} from "./scalar.types";
 
 export type TailorToTs = {
   string: string;
@@ -81,10 +93,6 @@ export type ArrayFieldOutput<T, O extends FieldOptions> = [O] extends [
 ]
   ? T[]
   : T;
-
-import type { TailorPrincipal } from "#/runtime/types";
-import type { output, InferFieldsOutput } from "#/types/helpers";
-import type { NonEmptyObject } from "type-fest";
 
 /**
  * Validation function type

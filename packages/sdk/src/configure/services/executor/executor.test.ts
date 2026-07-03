@@ -16,6 +16,7 @@ import {
 } from "./trigger/event";
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
+import type { UUIDString } from "#/configure/types/scalar.types";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { Operation } from "./operation";
 
@@ -310,7 +311,7 @@ describe("recordCreatedTrigger", () => {
             appNamespace: string;
             typeName: string;
             newRecord: {
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             };
@@ -326,7 +327,7 @@ describe("recordCreatedTrigger", () => {
             appNamespace: string;
             typeName: string;
             newRecord: {
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             };
@@ -388,12 +389,12 @@ describe("recordUpdatedTrigger", () => {
             appNamespace: string;
             typeName: string;
             newRecord: {
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             };
             oldRecord: {
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             };
@@ -409,12 +410,12 @@ describe("recordUpdatedTrigger", () => {
             appNamespace: string;
             typeName: string;
             newRecord: {
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             };
             oldRecord: {
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             };
@@ -476,7 +477,7 @@ describe("recordDeletedTrigger", () => {
             appNamespace: string;
             typeName: string;
             oldRecord: {
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             };
@@ -492,7 +493,7 @@ describe("recordDeletedTrigger", () => {
             appNamespace: string;
             typeName: string;
             oldRecord: {
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             };
@@ -726,7 +727,7 @@ describe("resolverExecutedTrigger", () => {
     const resolver = createResolver({
       name: "test",
       operation: "query",
-      body: () => ({ userId: "user-123" }),
+      body: () => ({ userId: "123e4567-e89b-12d3-a456-426614174000" }),
       output: t.object({
         userId: t.string(),
       }),
@@ -872,19 +873,19 @@ describe("recordTrigger (multi-event)", () => {
           // Can narrow by kind
           if (args.event === "created") {
             expectTypeOf(args.newRecord).toExtend<{
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             }>();
           }
           if (args.event === "updated") {
             expectTypeOf(args.newRecord).toExtend<{
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             }>();
             expectTypeOf(args.oldRecord).toExtend<{
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             }>();
@@ -927,7 +928,7 @@ describe("recordTrigger (multi-event)", () => {
         body: (args) => {
           if (args.event === "deleted") {
             expectTypeOf(args.oldRecord).toExtend<{
-              id: string;
+              id: UUIDString;
               name: string;
               age: number;
             }>();
@@ -962,7 +963,7 @@ describe("idpUserTrigger (multi-event)", () => {
             workspaceId: string;
             appNamespace: string;
             namespaceName: string;
-            userId: string;
+            userId: UUIDString;
           }>();
           if (args.event === "created") {
             expectTypeOf(args.event).toEqualTypeOf<"created">();
@@ -991,7 +992,7 @@ describe("authAccessTokenTrigger (multi-event)", () => {
             workspaceId: string;
             appNamespace: string;
             namespaceName: string;
-            userId: string;
+            userId: UUIDString;
           }>();
           if (args.event === "issued") {
             expectTypeOf(args.event).toEqualTypeOf<"issued">();
@@ -1110,7 +1111,7 @@ describe("gqlTarget", () => {
           }
         `,
         variables: () => ({
-          id: "test-id",
+          id: "123e4567-e89b-12d3-a456-426614174000",
         }),
       },
     });
@@ -1291,7 +1292,7 @@ describe("workflowTarget", () => {
       operation: {
         kind: "workflow",
         workflow: testWorkflow,
-        args: { orderId: "test-id" },
+        args: { orderId: "123e4567-e89b-12d3-a456-426614174000" },
       },
     });
     expect(executor.operation.kind).toBe("workflow");
@@ -1372,7 +1373,7 @@ describe("workflowTarget", () => {
       operation: {
         kind: "workflow",
         workflow: testWorkflow,
-        args: { orderId: "test-id" },
+        args: { orderId: "123e4567-e89b-12d3-a456-426614174000" },
         invoker: "admin",
       },
     });
@@ -1408,7 +1409,7 @@ describe("workflowTarget", () => {
         workflow: testWorkflow,
         args: (args) => {
           expectTypeOf(args).not.toHaveProperty("invoker");
-          return { orderId: "test-id" };
+          return { orderId: "123e4567-e89b-12d3-a456-426614174000" };
         },
       },
     });
