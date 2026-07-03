@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Show &amp; Tell — Profiles &amp; Machine Users</title>
+    <title>Show &amp; Tell — Profiles, Platform Settings &amp; Machine Users</title>
     <style>
       :root {
         --ground: #0c1118;
@@ -24,7 +24,11 @@
         margin: 0;
         background: var(--ground);
         color: var(--text);
-        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
         line-height: 1.65;
       }
 
@@ -389,12 +393,12 @@
     <div class="hero">
       <div class="hero-inner">
         <div class="hero-eyebrow">Tailor Platform SDK — Show &amp; Tell</div>
-        <h1>Profiles &amp;<br />Machine Users</h1>
+        <h1>Profiles, Platform Settings<br />&amp; Machine Users</h1>
         <p class="hero-lead">
-          We start with "what is a profile?" and work through the
-          <code>.envrc</code> combo, then cover the main act: a read-only profile combined with a
-          pinned read-only machine user, so a local AI agent or CI pipeline can't accidentally mutate
-          staging. Every command has a <code>copy</code> button.
+          Four capabilities built into profiles: save the Platform API connection so switching
+          profiles also switches environments; lock a profile to read-only so write commands fail
+          fast; pin a default machine user; and deny overrides to prevent identity escalation. Every
+          command has a <code>copy</code> button.
         </p>
       </div>
     </div>
@@ -404,8 +408,8 @@
       <div class="part-label">Part 1</div>
       <h2>Feature Overview</h2>
       <p>
-        Profiles, default machine users, override deny, and the .envrc combo — concepts before
-        commands.
+        Profiles, platform settings, default machine users, override deny, and the .envrc combo —
+        concepts before commands.
       </p>
     </div>
 
@@ -419,8 +423,7 @@
           After authenticating with <code class="il">tailor-sdk login</code>, a profile holds which
           workspace your commands talk to. No more repeating
           <code class="il">-w &lt;workspace-id&gt;</code> on every command — switching is a single
-          <code class="il">--profile</code> flag away.
-          <br /><br />
+          <code class="il">--profile</code> flag away. <br /><br />
           <div class="cmd" style="margin-top: 0.3rem">
             <pre><code>tailor-sdk profile list</code></pre>
           </div>
@@ -449,6 +452,44 @@
               <td>Current login (state from tailor-sdk login)</td>
             </tr>
           </table>
+        </div>
+      </div>
+
+      <!-- Platform settings -->
+      <div class="sec">Platform settings</div>
+
+      <div class="concept">
+        <div class="concept-head">Save the Platform API connection on a profile</div>
+        <div class="concept-body">
+          When workspaces live on a non-default Tailor Platform instance (custom domain), pass
+          <code class="il">--platform-url</code>, <code class="il">--oauth2-client-id</code>, and
+          <code class="il">--console-url</code> to <code class="il">profile create</code>. After
+          that, switching profiles switches the entire environment — API URL, OAuth2 client, and
+          Console — without ever re-exporting env vars. <br /><br />
+          First-time setup (once per Platform instance):
+          <div class="cmd" style="margin-top: 0.5rem">
+            <pre><code>export TAILOR_PLATFORM_URL=https://&lt;org&gt;.tailor.tech
+export TAILOR_PLATFORM_OAUTH2_CLIENT_ID=&lt;oauth2-client-id&gt;
+export TAILOR_PLATFORM_CONSOLE_URL=https://console.&lt;org&gt;.tailor.tech
+
+tailor-sdk login
+tailor-sdk profile create staging \
+  -u you@example.com \
+  -w &lt;staging-workspace-id&gt; \
+  --platform-url "$TAILOR_PLATFORM_URL" \
+  --oauth2-client-id "$TAILOR_PLATFORM_OAUTH2_CLIENT_ID" \
+  --console-url "$TAILOR_PLATFORM_CONSOLE_URL"
+
+unset TAILOR_PLATFORM_URL TAILOR_PLATFORM_OAUTH2_CLIENT_ID TAILOR_PLATFORM_CONSOLE_URL</code></pre>
+          </div>
+          Day-to-day — no env vars needed:
+          <div class="cmd" style="margin-top: 0.5rem">
+            <pre><code>tailor-sdk deploy -p staging
+tailor-sdk open -p staging
+tailor-sdk login -p staging    # refresh token without re-exporting URLs</code></pre>
+          </div>
+          To clear a saved setting, pass an empty string:
+          <code class="il">profile update staging --platform-url ""</code>
         </div>
       </div>
 
@@ -501,10 +542,10 @@
       <div class="concept">
         <div class="concept-head">Switch environments just by cd-ing</div>
         <div class="concept-body">
-          Drop an <code class="il">.envrc</code> in each directory and direnv loads it the moment you
-          enter. Split dev / stg / prod into separate directories (worktrees) and
-          <strong style="color: var(--text)">directory = environment</strong> — accidental deploys to
-          the wrong workspace stop happening.
+          Drop an <code class="il">.envrc</code> in each directory and direnv loads it the moment
+          you enter. Split dev / stg / prod into separate directories (worktrees) and
+          <strong style="color: var(--text)">directory = environment</strong> — accidental deploys
+          to the wrong workspace stop happening.
           <div class="cmd" style="margin-top: 0.6rem">
             <pre><code># .envrc (place it in the directory)
 export TAILOR_PLATFORM_PROFILE="show-and-tell"
@@ -572,9 +613,8 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
         </div>
         <div class="step-desc">
           With <code class="il">--permission read</code>, write commands (deploy, truncate, workflow
-          start, secret set, …) fail fast. Reads like
-          <code class="il">query</code> / <code class="il">*list</code> /
-          <code class="il">describe</code> still work.
+          start, secret set, …) fail fast. Reads like <code class="il">query</code> /
+          <code class="il">*list</code> / <code class="il">describe</code> still work.
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk profile create stg-readonly -u akira_higuchi@tailor.tech -w 5d80e666-2f32-499f-b878-213229a558b8 --permission read</code></pre>
@@ -629,7 +669,7 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
       </div>
 
       <!-- Cleanup -->
-      <div class="sec">5. Cleanup</div>
+      <div class="sec">Cleanup</div>
 
       <div class="step">
         <div class="step-head">
@@ -652,16 +692,11 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
         </div>
         <div class="step-desc">
           AI agents and MCP servers increasingly run queries against real environments (RAG,
-          analytics, debugging). Point your local agent at this read-only profile + read-only machine
-          user and:
+          analytics, debugging). Point your local agent at this read-only profile + read-only
+          machine user and:
         </div>
         <ul
-          style="
-            margin: 0.2rem 0 0;
-            padding-left: 1.2rem;
-            color: var(--muted);
-            font-size: 0.87rem;
-          "
+          style="margin: 0.2rem 0 0; padding-left: 1.2rem; color: var(--muted); font-size: 0.87rem"
         >
           <li>it can read / inspect staging data, but cannot deploy, mutate, or delete;</li>
           <li>a prompt injection or a buggy tool call can't escalate to writes;</li>
@@ -675,11 +710,131 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
           local setup.
         </div>
       </div>
+    </div>
+    <!-- /wrap -->
+
+    <div style="max-width: 900px; margin: 3rem auto 0; padding: 0 1.5rem">
+      <hr class="divider" />
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ PART 3 -->
+    <div class="part-header">
+      <div class="part-label">Part 3 — Reference</div>
+      <h2>Platform profile setup</h2>
+      <p>
+        How to save Platform API connection settings on a profile so switching profiles switches the
+        entire environment — no env vars needed day-to-day.
+      </p>
+    </div>
+
+    <div class="wrap">
+      <div class="note">
+        ⚑ This section applies when your workspace is on a non-default Tailor Platform instance
+        (custom domain). For the default platform, profiles need only <code class="il">-u</code> and
+        <code class="il">-w</code>.
+      </div>
+
+      <div class="sec info">First-time setup (once per Platform instance)</div>
+
+      <div class="step info">
+        <div class="step-head">
+          <span class="badge">[A1]</span>
+          <span class="step-title">Export platform URLs and log in</span>
+        </div>
+        <div class="step-desc">
+          Export the platform connection variables, then log in. These credentials are stored by
+          <code class="il">tailor-sdk login</code> scoped to the Platform URL.
+        </div>
+        <div class="cmd">
+          <pre><code>export TAILOR_PLATFORM_URL=https://&lt;org&gt;.tailor.tech
+export TAILOR_PLATFORM_OAUTH2_CLIENT_ID=&lt;oauth2-client-id&gt;
+export TAILOR_PLATFORM_CONSOLE_URL=https://console.&lt;org&gt;.tailor.tech
+
+tailor-sdk login</code></pre>
+        </div>
+        <div class="expect ok">✓ Expect: browser opens, authentication completes</div>
+      </div>
+
+      <div class="step info">
+        <div class="step-head">
+          <span class="badge">[A2]</span>
+          <span class="step-title">Create a profile with platform settings</span>
+        </div>
+        <div class="step-desc">
+          Pass the same env vars as <code class="il">--platform-url</code>,
+          <code class="il">--oauth2-client-id</code>, and <code class="il">--console-url</code>. The
+          profile stores them alongside the workspace ID.
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile create staging \
+  -u you@example.com \
+  -w &lt;staging-workspace-id&gt; \
+  --platform-url "$TAILOR_PLATFORM_URL" \
+  --oauth2-client-id "$TAILOR_PLATFORM_OAUTH2_CLIENT_ID" \
+  --console-url "$TAILOR_PLATFORM_CONSOLE_URL"</code></pre>
+        </div>
+        <div class="expect ok">✓ Expect: Profile "staging" created successfully.</div>
+      </div>
+
+      <div class="step info">
+        <div class="step-head">
+          <span class="badge">[A3]</span>
+          <span class="step-title">Unset the env vars — they are no longer needed</span>
+        </div>
+        <div class="cmd">
+          <pre><code>unset TAILOR_PLATFORM_URL TAILOR_PLATFORM_OAUTH2_CLIENT_ID TAILOR_PLATFORM_CONSOLE_URL</code></pre>
+        </div>
+      </div>
+
+      <div class="sec ok">Day-to-day (no env vars needed)</div>
+
+      <div class="step ok">
+        <div class="step-head">
+          <span class="badge">[A4]</span>
+          <span class="step-title">Deploy and open — profile carries everything</span>
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk deploy -p staging
+tailor-sdk open -p staging</code></pre>
+        </div>
+        <div class="expect ok">
+          ✓ Expect: deploys to the staging workspace; opens the correct Console URL
+        </div>
+      </div>
+
+      <div class="step ok">
+        <div class="step-head">
+          <span class="badge">[A5]</span>
+          <span class="step-title">Refresh the login token without re-exporting URLs</span>
+        </div>
+        <div class="step-desc">
+          <code class="il">login -p</code> reads the Platform URL and OAuth2 client ID from the
+          profile and re-authenticates against that platform.
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk login -p staging</code></pre>
+        </div>
+        <div class="expect ok">
+          ✓ Expect: browser opens for the profile's Platform, token refreshed
+        </div>
+      </div>
 
       <!-- Wrap-up -->
       <div class="wrap-up">
         <div class="wu-label">Talking points (wrap-up)</div>
         <ul>
+          <li>
+            Platform settings (<code class="il">--platform-url</code>,
+            <code class="il">--oauth2-client-id</code>, <code class="il">--console-url</code>) are
+            optional: omit them for workspaces on the default Tailor Platform.
+          </li>
+          <li>
+            Login tokens are scoped per Platform URL — log in once per Platform, then switch freely.
+          </li>
+          <li>
+            Clear a saved setting with an empty string:
+            <code class="il">profile update staging --platform-url ""</code>
+          </li>
           <li>
             Precedence: <code class="il">--machine-user</code> &gt;
             <code class="il">TAILOR_PLATFORM_MACHINE_USER_NAME</code> &gt; the profile's default.
@@ -691,8 +846,7 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
           <li>
             Applies to application-data commands:
             <code class="il">query</code> / <code class="il">workflow start</code> /
-            <code class="il">function test-run</code> /
-            <code class="il">machineuser token</code>.
+            <code class="il">function test-run</code> / <code class="il">machineuser token</code>.
           </li>
           <li>
             Profiles are local per-developer config — a personal safety guard that covers
@@ -709,7 +863,10 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
     <script>
       function copyToClipboard(text) {
         if (navigator.clipboard) {
-          return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+          return navigator.clipboard
+            .writeText(text)
+            .then(() => true)
+            .catch(() => false);
         }
         return Promise.resolve(false);
       }
@@ -722,7 +879,9 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
         ta.focus();
         ta.select();
         let ok = false;
-        try { ok = document.execCommand("copy"); } catch {}
+        try {
+          ok = document.execCommand("copy");
+        } catch {}
         document.body.removeChild(ta);
         return ok;
       }

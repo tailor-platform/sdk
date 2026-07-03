@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Show &amp; Tell — プロファイルとマシンユーザー</title>
+    <title>Show &amp; Tell — プロファイル・プラットフォーム設定・マシンユーザー</title>
     <style>
       :root {
         --ground: #0c1118;
@@ -24,7 +24,11 @@
         margin: 0;
         background: var(--ground);
         color: var(--text);
-        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-family:
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
         line-height: 1.65;
       }
 
@@ -389,11 +393,12 @@
     <div class="hero">
       <div class="hero-inner">
         <div class="hero-eyebrow">Tailor Platform SDK — Show &amp; Tell</div>
-        <h1>プロファイルと<br />マシンユーザー</h1>
+        <h1>プロファイル・<br />プラットフォーム設定・<br />マシンユーザー</h1>
         <p class="hero-lead">
-          「プロファイルとは何か」から始め、read-only プロファイル +
-          read-only マシンユーザーの組み合わせで — ローカルの AI エージェントや CI が
-          ステージング環境を誤って書き換えない仕組みをライブデモで確認します。コマンドには
+          プロファイルに搭載された 4 つの機能を紹介します：プラットフォーム API
+          接続情報をプロファイルに保存してプロファイル切り替えと同時に環境切り替え、read-only
+          権限で書き込みコマンドをブロック、デフォルトマシンユーザーの固定、override deny による
+          identity エスカレーション防止。コマンドには
           <code>copy</code> ボタン付き。
         </p>
       </div>
@@ -404,7 +409,8 @@
       <div class="part-label">Part 1</div>
       <h2>機能説明</h2>
       <p>
-        プロファイル・デフォルトマシンユーザー・override deny・.envrc コンボの概念を整理します。
+        プロファイル・プラットフォーム設定・デフォルトマシンユーザー・override deny・.envrc
+        コンボの概念を整理します。
       </p>
     </div>
 
@@ -415,15 +421,17 @@
       <div class="concept">
         <div class="concept-head">ユーザー × ワークスペースの「名前付きペア」</div>
         <div class="concept-body">
-          <code class="il">tailor-sdk login</code> で認証したあと、プロファイルが「どのワークスペースに対してコマンドを実行するか」を保持します。
+          <code class="il">tailor-sdk login</code>
+          で認証したあと、プロファイルが「どのワークスペースに対してコマンドを実行するか」を保持します。
           <code class="il">-w &lt;workspace-id&gt;</code> を毎回指定する必要がなくなり、切り替えも
-          <code class="il">--profile</code> ひとつで完結します。
-          <br /><br />
+          <code class="il">--profile</code> ひとつで完結します。 <br /><br />
           <div class="cmd" style="margin-top: 0.3rem">
             <pre><code>tailor-sdk profile list</code></pre>
           </div>
           <div style="margin-top: 0.45rem">
-            → <code class="il">name / user / workspaceId / permission / machineUser</code> の表が表示されます。
+            →
+            <code class="il">name / user / workspaceId / permission / machineUser</code>
+            の表が表示されます。
           </div>
         </div>
       </div>
@@ -449,13 +457,57 @@
         </div>
       </div>
 
+      <!-- プラットフォーム設定 -->
+      <div class="sec">プラットフォーム設定</div>
+
+      <div class="concept">
+        <div class="concept-head">プラットフォーム API 接続情報をプロファイルに保存する</div>
+        <div class="concept-body">
+          ワークスペースが非デフォルトの Tailor Platform
+          インスタンス（カスタムドメイン）上にある場合、
+          <code class="il">profile create</code> に <code class="il">--platform-url</code>・<code
+            class="il"
+            >--oauth2-client-id</code
+          >・<code class="il">--console-url</code>
+          を渡します。一度保存すれば、プロファイルを切り替えるだけで API URL・OAuth2
+          クライアント・コンソール URL がすべて切り替わります。環境変数の再 export は不要です。
+          <br /><br />
+          初回セットアップ（Platform インスタンスごとに 1 回のみ）：
+          <div class="cmd" style="margin-top: 0.5rem">
+            <pre><code>export TAILOR_PLATFORM_URL=https://&lt;org&gt;.tailor.tech
+export TAILOR_PLATFORM_OAUTH2_CLIENT_ID=&lt;oauth2-client-id&gt;
+export TAILOR_PLATFORM_CONSOLE_URL=https://console.&lt;org&gt;.tailor.tech
+
+tailor-sdk login
+tailor-sdk profile create staging \
+  -u you@example.com \
+  -w &lt;staging-workspace-id&gt; \
+  --platform-url "$TAILOR_PLATFORM_URL" \
+  --oauth2-client-id "$TAILOR_PLATFORM_OAUTH2_CLIENT_ID" \
+  --console-url "$TAILOR_PLATFORM_CONSOLE_URL"
+
+unset TAILOR_PLATFORM_URL TAILOR_PLATFORM_OAUTH2_CLIENT_ID TAILOR_PLATFORM_CONSOLE_URL</code></pre>
+          </div>
+          以降は環境変数なしで使えます：
+          <div class="cmd" style="margin-top: 0.5rem">
+            <pre><code>tailor-sdk deploy -p staging
+tailor-sdk open -p staging
+tailor-sdk login -p staging    # URL を再 export せずにトークンを更新</code></pre>
+          </div>
+          保存した設定を消すには空文字を渡します：
+          <code class="il">profile update staging --platform-url ""</code>
+        </div>
+      </div>
+
       <!-- マシンユーザー -->
       <div class="sec">マシンユーザー</div>
 
       <div class="concept">
         <div class="concept-head">デフォルトマシンユーザー — 未指定時のフォールバック</div>
         <div class="concept-body">
-          プロファイル作成時に <code class="il">-m &lt;machine-user&gt;</code> を渡すと、コマンドにマシンユーザーが指定されていない場合にそのプロファイルのデフォルトが自動で使われます。<br /><br />
+          プロファイル作成時に
+          <code class="il">-m &lt;machine-user&gt;</code>
+          を渡すと、コマンドにマシンユーザーが指定されていない場合にそのプロファイルのデフォルトが自動で使われます。<br /><br />
           マシンユーザーの解決優先順位も同じ構造です：
           <table class="ptable">
             <tr>
@@ -477,13 +529,16 @@
       <div class="concept">
         <div class="concept-head">--machine-user-override deny — identity の固定</div>
         <div class="concept-body">
-          <code class="il">profile update --machine-user-override deny</code> を設定すると、CLI フラグ・環境変数のどちらからも
+          <code class="il">profile update --machine-user-override deny</code> を設定すると、CLI
+          フラグ・環境変数のどちらからも
           <strong style="color: var(--text)">別のマシンユーザーを指定できなくなります</strong>。
-          指定した瞬間に <code class="il">PROFILE_MACHINE_USER_OVERRIDE_DENIED</code> エラー。<br /><br />
-          <strong style="color: var(--text)">「同じ値を渡す」のは OK</strong> —
-          deny はあくまで「別の identity への切り替え」を禁止します。<br /><br />
+          指定した瞬間に
+          <code class="il">PROFILE_MACHINE_USER_OVERRIDE_DENIED</code> エラー。<br /><br />
+          <strong style="color: var(--text)">「同じ値を渡す」のは OK</strong> — deny
+          はあくまで「別の identity への切り替え」を禁止します。<br /><br />
           適用範囲: <code class="il">query</code> / <code class="il">workflow start</code> /
-          <code class="il">function test-run</code> / <code class="il">machineuser token</code> などアプリケーションデータ操作コマンド全般。
+          <code class="il">function test-run</code> /
+          <code class="il">machineuser token</code> などアプリケーションデータ操作コマンド全般。
         </div>
       </div>
 
@@ -493,9 +548,11 @@
       <div class="concept">
         <div class="concept-head">cd するだけで環境が切り替わる</div>
         <div class="concept-body">
-          各ディレクトリに <code class="il">.envrc</code> を置き direnv でオートロード。dev /
-          stg / prod を別ディレクトリ（worktree）に分ければ、
-          <strong style="color: var(--text)">「間違ったワークスペースに deploy した」がなくなります</strong>。
+          各ディレクトリに <code class="il">.envrc</code> を置き direnv でオートロード。dev / stg /
+          prod を別ディレクトリ（worktree）に分ければ、
+          <strong style="color: var(--text)"
+            >「間違ったワークスペースに deploy した」がなくなります</strong
+          >。
           <div class="cmd" style="margin-top: 0.6rem">
             <pre><code># .envrc の例（ディレクトリに配置）
 export TAILOR_PLATFORM_PROFILE="show-and-tell"
@@ -504,8 +561,9 @@ export TAILOR_PLATFORM_PROFILE="show-and-tell"
 export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
           </div>
           <div style="margin-top: 0.45rem; font-size: 0.82rem; color: var(--muted)">
-            初回のみ <code class="il">direnv allow</code> が必要です。この show-and-tell worktree 自体が
-            <code class="il">TAILOR_PLATFORM_PROFILE="show-and-tell"</code> を .envrc で設定しています（ライブ例）。
+            初回のみ <code class="il">direnv allow</code> が必要です。この show-and-tell worktree
+            自体が <code class="il">TAILOR_PLATFORM_PROFILE="show-and-tell"</code> を .envrc
+            で設定しています（ライブ例）。
           </div>
         </div>
       </div>
@@ -535,7 +593,8 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
       </div>
 
       <div class="note">
-        ⚠ <code class="il">example/</code> ディレクトリから実行してください。トークン/クエリコマンドは
+        ⚠
+        <code class="il">example/</code> ディレクトリから実行してください。トークン/クエリコマンドは
         <code class="il">-c tailor.config.ts</code> で設定を明示します。
       </div>
 
@@ -561,8 +620,9 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
           <span class="step-title">--permission read でプロファイルを作成</span>
         </div>
         <div class="step-desc">
-          <code class="il">--permission read</code> を付けると、deploy・truncate・workflow start・secret
-          set などの書き込み系コマンドが即座に失敗します。query / list / describe などの読み取りは通ります。
+          <code class="il">--permission read</code> を付けると、deploy・truncate・workflow
+          start・secret set などの書き込み系コマンドが即座に失敗します。query / list / describe
+          などの読み取りは通ります。
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk profile create stg-readonly -u akira_higuchi@tailor.tech -w 5d80e666-2f32-499f-b878-213229a558b8 --permission read</code></pre>
@@ -605,9 +665,11 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
           <span class="step-title">マシンユーザーを固定する（override deny）</span>
         </div>
         <div class="step-desc">
-          プロファイルが CLI の書き込みを止め、マシンユーザー自身のロール権限がサーバーを守ります。実際のステージング運用では、TailorDB /
-          IdP の権限が read-only なマシンユーザーをここに指定します。
-          <code class="il">deny</code> により、プロンプトインジェクションや誤ったツール呼び出しでより特権のあるマシンユーザーに切り替えようとしても即座にエラーになります。
+          プロファイルが CLI
+          の書き込みを止め、マシンユーザー自身のロール権限がサーバーを守ります。実際のステージング運用では、TailorDB
+          / IdP の権限が read-only なマシンユーザーをここに指定します。
+          <code class="il">deny</code>
+          により、プロンプトインジェクションや誤ったツール呼び出しでより特権のあるマシンユーザーに切り替えようとしても即座にエラーになります。
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk profile update stg-readonly -m manager-machine-user --machine-user-override deny</code></pre>
@@ -616,7 +678,7 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
       </div>
 
       <!-- Cleanup -->
-      <div class="sec">5. クリーンアップ</div>
+      <div class="sec">クリーンアップ</div>
 
       <div class="step">
         <div class="step-head">
@@ -638,25 +700,134 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
           <span class="step-title">なぜ AI 環境に重要か</span>
         </div>
         <div class="step-desc">
-          AI エージェントや MCP サーバーはリアルな環境に対してクエリを発行するケースが増えています（RAG・分析・デバッグ）。この
+          AI エージェントや MCP
+          サーバーはリアルな環境に対してクエリを発行するケースが増えています（RAG・分析・デバッグ）。この
           read-only プロファイル + read-only マシンユーザーをローカルのエージェントに向けることで：
         </div>
         <ul
-          style="
-            margin: 0.2rem 0 0;
-            padding-left: 1.2rem;
-            color: var(--muted);
-            font-size: 0.87rem;
-          "
+          style="margin: 0.2rem 0 0; padding-left: 1.2rem; color: var(--muted); font-size: 0.87rem"
         >
           <li>ステージングデータの閲覧・検索はできるが、deploy・mutation・削除は不可</li>
           <li>プロンプトインジェクションやバグったツール呼び出しが書き込みにエスカレートしない</li>
           <li>
-            <code class="il">--machine-user-override deny</code> により、より特権のあるユーザーへの切り替えも不可
+            <code class="il">--machine-user-override deny</code>
+            により、より特権のあるユーザーへの切り替えも不可
           </li>
         </ul>
         <div class="step-desc" style="margin-top: 0.65rem">
-          CLI とプラットフォームの両方で一つの read-only identity が強制される — 自分のローカル環境にスコープされた安全ガード。
+          CLI とプラットフォームの両方で一つの read-only identity が強制される —
+          自分のローカル環境にスコープされた安全ガード。
+        </div>
+      </div>
+    </div>
+    <!-- /wrap -->
+
+    <div style="max-width: 900px; margin: 3rem auto 0; padding: 0 1.5rem">
+      <hr class="divider" />
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════ PART 3 -->
+    <div class="part-header">
+      <div class="part-label">Part 3 — リファレンス</div>
+      <h2>プラットフォームプロファイルの設定手順</h2>
+      <p>
+        プロファイルにプラットフォーム API
+        接続情報を保存し、プロファイル切り替えだけで環境全体を切り替える方法。
+      </p>
+    </div>
+
+    <div class="wrap">
+      <div class="note">
+        ⚑ このセクションは、ワークスペースが非デフォルトの Tailor Platform
+        インスタンス（カスタムドメイン）上にある場合に該当します。デフォルトプラットフォームでは
+        <code class="il">-u</code> と <code class="il">-w</code> のみで十分です。
+      </div>
+
+      <div class="sec info">初回セットアップ（Platform インスタンスごとに 1 回）</div>
+
+      <div class="step info">
+        <div class="step-head">
+          <span class="badge">[A1]</span>
+          <span class="step-title">プラットフォーム URL を export してログイン</span>
+        </div>
+        <div class="step-desc">
+          接続変数を export したうえで <code class="il">login</code> します。認証情報は Platform URL
+          にスコープして保存されます。
+        </div>
+        <div class="cmd">
+          <pre><code>export TAILOR_PLATFORM_URL=https://&lt;org&gt;.tailor.tech
+export TAILOR_PLATFORM_OAUTH2_CLIENT_ID=&lt;oauth2-client-id&gt;
+export TAILOR_PLATFORM_CONSOLE_URL=https://console.&lt;org&gt;.tailor.tech
+
+tailor-sdk login</code></pre>
+        </div>
+        <div class="expect ok">✓ 期待値: ブラウザが開き認証完了</div>
+      </div>
+
+      <div class="step info">
+        <div class="step-head">
+          <span class="badge">[A2]</span>
+          <span class="step-title">プラットフォーム設定付きでプロファイルを作成</span>
+        </div>
+        <div class="step-desc">
+          同じ env vars を
+          <code class="il">--platform-url</code>・<code class="il">--oauth2-client-id</code>・<code
+            class="il"
+            >--console-url</code
+          >
+          として渡します。ワークスペース ID と一緒にプロファイルに保存されます。
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk profile create staging \
+  -u you@example.com \
+  -w &lt;staging-workspace-id&gt; \
+  --platform-url "$TAILOR_PLATFORM_URL" \
+  --oauth2-client-id "$TAILOR_PLATFORM_OAUTH2_CLIENT_ID" \
+  --console-url "$TAILOR_PLATFORM_CONSOLE_URL"</code></pre>
+        </div>
+        <div class="expect ok">✓ 期待値: Profile "staging" created successfully.</div>
+      </div>
+
+      <div class="step info">
+        <div class="step-head">
+          <span class="badge">[A3]</span>
+          <span class="step-title">env vars を unset — 以降は不要</span>
+        </div>
+        <div class="cmd">
+          <pre><code>unset TAILOR_PLATFORM_URL TAILOR_PLATFORM_OAUTH2_CLIENT_ID TAILOR_PLATFORM_CONSOLE_URL</code></pre>
+        </div>
+      </div>
+
+      <div class="sec ok">以降の日常操作（env vars 不要）</div>
+
+      <div class="step ok">
+        <div class="step-head">
+          <span class="badge">[A4]</span>
+          <span class="step-title">deploy と open — プロファイルがすべて持っている</span>
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk deploy -p staging
+tailor-sdk open -p staging</code></pre>
+        </div>
+        <div class="expect ok">
+          ✓ 期待値: staging ワークスペースにデプロイ。正しいコンソール URL が開く
+        </div>
+      </div>
+
+      <div class="step ok">
+        <div class="step-head">
+          <span class="badge">[A5]</span>
+          <span class="step-title">URL を再 export せずにトークンを更新</span>
+        </div>
+        <div class="step-desc">
+          <code class="il">login -p</code> はプロファイルに保存された Platform URL と OAuth2
+          クライアント ID を読み取り、そのプラットフォームに対して再認証します。
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk login -p staging</code></pre>
+        </div>
+        <div class="expect ok">
+          ✓ 期待値: そのプロファイルの Platform 向けにブラウザが開き、トークン更新
         </div>
       </div>
 
@@ -665,13 +836,28 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
         <div class="wu-label">まとめ / Talking points</div>
         <ul>
           <li>
+            プラットフォーム設定（<code class="il">--platform-url</code>・<code class="il"
+              >--oauth2-client-id</code
+            >・<code class="il">--console-url</code>）はオプション。デフォルト Tailor Platform
+            のワークスペースには不要。
+          </li>
+          <li>
+            ログイントークンは Platform URL ごとにスコープされる。Platform ごとに 1
+            回ログインすれば、あとはプロファイルを切り替えるだけ。
+          </li>
+          <li>
+            保存した設定を消すには空文字：<code class="il"
+              >profile update staging --platform-url ""</code
+            >
+          </li>
+          <li>
             マシンユーザー優先順位:
             <code class="il">--machine-user</code> &gt;
             <code class="il">TAILOR_PLATFORM_MACHINE_USER_NAME</code> &gt; プロファイルのデフォルト
           </li>
           <li>
-            <code class="il">--machine-user-override deny</code> は CLI・env var
-            の両方からの identity 切り替えを設定レベルで禁止する
+            <code class="il">--machine-user-override deny</code> は CLI・env var の両方からの
+            identity 切り替えを設定レベルで禁止する
           </li>
           <li>
             対象コマンド: <code class="il">query</code> / <code class="il">workflow start</code> /
@@ -691,7 +877,10 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
     <script>
       function copyToClipboard(text) {
         if (navigator.clipboard) {
-          return navigator.clipboard.writeText(text).then(() => true).catch(() => false);
+          return navigator.clipboard
+            .writeText(text)
+            .then(() => true)
+            .catch(() => false);
         }
         return Promise.resolve(false);
       }
@@ -704,7 +893,9 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
         ta.focus();
         ta.select();
         let ok = false;
-        try { ok = document.execCommand("copy"); } catch {}
+        try {
+          ok = document.execCommand("copy");
+        } catch {}
         document.body.removeChild(ta);
         return ok;
       }
