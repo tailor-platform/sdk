@@ -3,10 +3,9 @@ import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/type";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
 import type { AuthServiceInput } from "#/configure/services/auth/types";
+import type { UUIDString } from "#/configure/types/scalar.types";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
-
-type UUIDString = `${string}-${string}-${string}-${string}-${string}`;
 
 // Define userType for type inference
 const userType = db.type("User", {

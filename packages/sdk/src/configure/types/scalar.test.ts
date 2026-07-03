@@ -55,6 +55,9 @@ describe("scalar string helpers", () => {
     expect(isDateString("2026/07/03")).toBe(false);
     expect(isDateTimeString("2026-07-03T12:34:56+0900")).toBe(false);
     expect(isTimeString("12:34:56")).toBe(false);
+    expect(isTimeString("24:00")).toBe(false);
+    expect(isTimeString("23:60")).toBe(false);
+    expect(isTimeString("99:99")).toBe(false);
     expect(isDecimalString("1_000")).toBe(false);
     expect(isUUIDString(123)).toBe(false);
   });

@@ -3,7 +3,7 @@ const regex = {
   date: /^\d{4}-\d{2}-\d{2}$/,
   datetime:
     /^\d{4}-\d{2}-\d{2}[Tt](?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d):(?<second>[0-5]\d|60)(\.(?<fraction>\d+))?(?<offset>[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/,
-  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
+  time: /^(?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d)$/,
   decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
 } as const;
 

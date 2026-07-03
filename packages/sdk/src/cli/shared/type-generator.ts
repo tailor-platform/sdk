@@ -32,6 +32,19 @@ const knownAttributeListTypes = new Set<string>([
   ...scalarTypeNames,
 ]);
 
+const fieldTypeScriptTypes: Record<string, string> = {
+  boolean: "boolean",
+  bool: "boolean",
+  uuid: "UUIDString",
+  date: "DateString",
+  datetime: "DateTimeString | Date",
+  time: "TimeString",
+  decimal: "DecimalString",
+  integer: "number",
+  float: "number",
+  number: "number",
+};
+
 interface ExtractedAttributes {
   attributes?: AttributesConfig;
   attributeList?: AttributeListConfig;
@@ -232,23 +245,11 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
     }
 
     const typeStr =
-      type === "boolean" || type === "bool"
-        ? "boolean"
-        : type === "enum" && metadata?.allowedValues
-          ? metadata.allowedValues.map((v) => `"${v.value}"`).join(" | ")
-          : type === "uuid"
-            ? "UUIDString"
-            : type === "date"
-              ? "DateString"
-              : type === "datetime"
-                ? "DateTimeString | Date"
-                : type === "time"
-                  ? "TimeString"
-                  : type === "decimal"
-                    ? "DecimalString"
-                    : type === "integer" || type === "float" || type === "number"
-                      ? "number"
-                      : "string";
+      type === "enum" && metadata?.allowedValues
+        ? metadata.allowedValues.map((v) => `"${v.value}"`).join(" | ")
+        : type
+          ? (fieldTypeScriptTypes[type] ?? "string")
+          : "string";
 
     // Add array suffix if needed
     if (metadata?.array) {
