@@ -36,7 +36,7 @@ import type { User as IdpUser } from "../runtime/idp";
 // `@tailor-platform/sdk` externally instead of inlining the registry — the same
 // generated `declare module "@tailor-platform/sdk"` that narrows
 // `authconnection.getConnectionToken` then also narrows this mock's API.
-import type { AuthConnectionTokenResult, ConnectionName } from "@tailor-platform/sdk";
+import type { AuthConnectionTokenResult, ConnectionName, UUIDString } from "@tailor-platform/sdk";
 
 export { RUNTIME_FLAG_KEY } from "./globals";
 
@@ -701,23 +701,29 @@ export function mockAuthconnection() {
 
 const IDP_DEFAULTS: Record<string, unknown> = {
   users: { users: [], nextPageToken: null, totalCount: 0 },
-  user: { id: "mock-id", name: "mock-user", disabled: false, mfaEnrolled: false, mfaFactorIds: [] },
+  user: {
+    id: "123e4567-e89b-12d3-a456-426614174000",
+    name: "mock-user",
+    disabled: false,
+    mfaEnrolled: false,
+    mfaFactorIds: [],
+  },
   userByName: {
-    id: "mock-id",
+    id: "123e4567-e89b-12d3-a456-426614174000",
     name: "mock-user",
     disabled: false,
     mfaEnrolled: false,
     mfaFactorIds: [],
   },
   createUser: {
-    id: "mock-id",
+    id: "123e4567-e89b-12d3-a456-426614174000",
     name: "mock-user",
     disabled: false,
     mfaEnrolled: false,
     mfaFactorIds: [],
   },
   updateUser: {
-    id: "mock-id",
+    id: "123e4567-e89b-12d3-a456-426614174000",
     name: "mock-user",
     disabled: false,
     mfaEnrolled: false,
@@ -738,7 +744,7 @@ const IDP_DEFAULTS: Record<string, unknown> = {
  * test("resolver-based", async () => {
  *   using idp = mockIdp();
  *   idp.setResolver((method) =>
- *     method === "user" ? { id: "u-1", name: "alice", disabled: false } : null,
+ *     method === "user" ? { id: "11111111-1111-4111-8111-111111111111", name: "alice", disabled: false } : null,
  *   );
  *   // …
  * });
@@ -771,11 +777,11 @@ export function mockIdp() {
   ) {
     const namespace = config.namespace;
     this.users = async (options?: unknown) => handle("users", [options], namespace);
-    this.user = async (userId: string) => handle("user", [userId], namespace);
+    this.user = async (userId: UUIDString) => handle("user", [userId], namespace);
     this.userByName = async (name: string) => handle("userByName", [name], namespace);
     this.createUser = async (input: unknown) => handle("createUser", [input], namespace);
     this.updateUser = async (input: unknown) => handle("updateUser", [input], namespace);
-    this.deleteUser = async (userId: string) => handle("deleteUser", [userId], namespace);
+    this.deleteUser = async (userId: UUIDString) => handle("deleteUser", [userId], namespace);
     this.sendPasswordResetEmail = async (input: unknown) =>
       handle("sendPasswordResetEmail", [input], namespace);
     this.unenrollMfa = async (input: unknown) => handle("unenrollMfa", [input], namespace);
@@ -783,21 +789,21 @@ export function mockIdp() {
     users(options?: {
       first?: number;
       after?: string;
-      query?: { ids?: string[]; names?: string[] };
+      query?: { ids?: UUIDString[]; names?: string[] };
     }): Promise<{ users: IdpUser[]; nextPageToken: string | null; totalCount: number }>;
-    user(userId: string): Promise<IdpUser>;
+    user(userId: UUIDString): Promise<IdpUser>;
     userByName(name: string): Promise<IdpUser>;
     createUser(input: { name: string; password?: string; disabled?: boolean }): Promise<IdpUser>;
     updateUser(input: {
-      id: string;
+      id: UUIDString;
       name?: string;
       password?: string;
       clearPassword?: boolean;
       disabled?: boolean;
     }): Promise<IdpUser>;
-    deleteUser(userId: string): Promise<boolean>;
-    sendPasswordResetEmail(input: { userId: string; redirectUri: string }): Promise<boolean>;
-    unenrollMfa(input: { userId: string; mfaFactorId: string }): Promise<boolean>;
+    deleteUser(userId: UUIDString): Promise<boolean>;
+    sendPasswordResetEmail(input: { userId: UUIDString; redirectUri: string }): Promise<boolean>;
+    unenrollMfa(input: { userId: UUIDString; mfaFactorId: string }): Promise<boolean>;
   };
 
   root.idp = { Client };

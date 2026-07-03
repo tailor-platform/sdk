@@ -21,7 +21,7 @@ describe("TailorDBField basic field type tests", () => {
       name: db.string(),
     });
     expectTypeOf<output<typeof _stringType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       name: string;
     }>();
   });
@@ -31,7 +31,7 @@ describe("TailorDBField basic field type tests", () => {
       age: db.int(),
     });
     expectTypeOf<output<typeof _intType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       age: number;
     }>();
   });
@@ -41,7 +41,7 @@ describe("TailorDBField basic field type tests", () => {
       active: db.bool(),
     });
     expectTypeOf<output<typeof _boolType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       active: boolean;
     }>();
   });
@@ -51,7 +51,7 @@ describe("TailorDBField basic field type tests", () => {
       price: db.float(),
     });
     expectTypeOf<output<typeof _floatType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       price: number;
     }>();
   });
@@ -61,7 +61,7 @@ describe("TailorDBField basic field type tests", () => {
       uuid: db.uuid(),
     });
     expectTypeOf<output<typeof _uuidType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       uuid: UUIDString;
     }>();
   });
@@ -71,7 +71,7 @@ describe("TailorDBField basic field type tests", () => {
       birthDate: db.date(),
     });
     expectTypeOf<output<typeof _dateType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       birthDate: DateString;
     }>();
   });
@@ -81,7 +81,7 @@ describe("TailorDBField basic field type tests", () => {
       timestamp: db.datetime(),
     });
     expectTypeOf<output<typeof _datetimeType>>().toMatchObjectType<{
-      id: string;
+      id: UUIDString;
       timestamp: DateTimeString | Date;
     }>();
   });
@@ -91,12 +91,12 @@ describe("TailorDBField basic field type tests", () => {
       openingTime: db.time(),
     });
     expectTypeOf<output<typeof _timeType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       openingTime: TimeString;
     }>();
   });
 
-  test("pickFields preserves the generated id string type", () => {
+  test("pickFields preserves the generated id UUID type", () => {
     const _schemaType = t.object({
       ...db
         .type("Test", {
@@ -106,7 +106,7 @@ describe("TailorDBField basic field type tests", () => {
     });
 
     expectTypeOf<output<typeof _schemaType>>().toEqualTypeOf<{
-      id?: string | null;
+      id?: UUIDString | null;
     }>();
   });
 
@@ -121,7 +121,7 @@ describe("TailorDBField basic field type tests", () => {
     });
 
     expectTypeOf<output<typeof _schemaType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       names: string;
       nickname: string;
     }>();
@@ -166,7 +166,7 @@ describe("TailorDBField optional option tests", () => {
       description: db.string({ optional: true }),
     });
     expectTypeOf<output<typeof _optionalType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       description?: string | null;
     }>();
   });
@@ -178,7 +178,7 @@ describe("TailorDBField optional option tests", () => {
       count: db.int({ optional: true }),
     });
     expectTypeOf<output<typeof _multiOptionalType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       title: string;
       description?: string | null;
       count?: number | null;
@@ -192,7 +192,7 @@ describe("TailorDBField array option tests", () => {
       tags: db.string({ array: true }),
     });
     expectTypeOf<output<typeof _arrayType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       tags: string[];
     }>();
   });
@@ -202,7 +202,7 @@ describe("TailorDBField array option tests", () => {
       items: db.string({ optional: true, array: true }),
     });
     expectTypeOf<output<typeof _optionalArrayType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       items?: string[] | null;
     }>();
   });
@@ -214,7 +214,7 @@ describe("TailorDBField array option tests", () => {
       flags: db.bool({ array: true }),
     });
     expectTypeOf<output<typeof _multiArrayType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       tags: string[];
       numbers: number[];
       flags: boolean[];
@@ -269,7 +269,7 @@ describe("TailorDBField enum field tests", () => {
       priority: db.enum(["high", "medium", "low"], { optional: true }),
     });
     expectTypeOf<output<typeof _optionalEnumType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       priority?: "high" | "medium" | "low" | null;
     }>();
   });
@@ -290,7 +290,7 @@ describe("TailorDBField enum field tests", () => {
       categories: db.enum(["a", "b", "c"], { array: true }),
     });
     expectTypeOf<output<typeof _enumArrayType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       categories: ("a" | "b" | "c")[];
     }>();
   });
@@ -432,7 +432,7 @@ describe("TailorDBField modifier chain tests", () => {
       email: db.string().index(),
     });
     expectTypeOf<output<typeof _indexType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       email: string;
     }>();
   });
@@ -442,7 +442,7 @@ describe("TailorDBField modifier chain tests", () => {
       username: db.string().unique(),
     });
     expectTypeOf<output<typeof _uniqueType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       username: string;
     }>();
   });
@@ -547,7 +547,7 @@ describe("TailorDBField relation modifier tests", () => {
       }),
     });
     expectTypeOf<output<typeof _postType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       title: string;
       authorId: UUIDString;
     }>();
@@ -579,7 +579,7 @@ describe("TailorDBField hooks modifier tests", () => {
       }),
     });
     expectTypeOf<output<typeof _hookType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       name: string;
     }>();
   });
@@ -610,7 +610,7 @@ describe("TailorDBField validate modifier tests", () => {
       email: db.string().validate(() => true),
     });
     expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       email: string;
     }>();
   });
@@ -620,7 +620,7 @@ describe("TailorDBField validate modifier tests", () => {
       email: db.string().validate([({ value }) => value.includes("@"), "Email must contain @"]),
     });
     expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       email: string;
     }>();
 
@@ -755,7 +755,7 @@ describe("TailorDBType withTimestamps option tests", () => {
       ...db.fields.timestamps(),
     });
     expectTypeOf<output<typeof _timestampType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       name: string;
       createdAt: DateTimeString | Date;
       updatedAt: DateTimeString | Date;
@@ -839,7 +839,7 @@ describe("TailorDBType composite type tests", () => {
       closingTime: db.time(),
     });
     expectTypeOf<output<typeof _complexType>>().toMatchObjectType<{
-      id: string;
+      id: UUIDString;
       name: string;
       email: string;
       age?: number | null;
@@ -860,7 +860,7 @@ describe("TailorDBType edge case tests", () => {
       value: db.string(),
     });
     expectTypeOf<output<typeof _singleFieldType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       value: string;
     }>();
   });
@@ -872,7 +872,7 @@ describe("TailorDBType edge case tests", () => {
       c: db.bool({ optional: true }),
     });
     expectTypeOf<output<typeof _allOptionalType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       a?: string | null;
       b?: number | null;
       c?: boolean | null;
@@ -886,7 +886,7 @@ describe("TailorDBType edge case tests", () => {
       booleans: db.bool({ array: true }),
     });
     expectTypeOf<output<typeof _allArrayType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       strings: string[];
       numbers: number[];
       booleans: boolean[];
@@ -912,7 +912,7 @@ describe("TailorDBType type consistency tests", () => {
       name: db.string(),
     });
     expectTypeOf<output<typeof _typeWithoutId>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       name: string;
     }>();
   });
@@ -1019,7 +1019,7 @@ describe("TailorDBType plural form tests", () => {
     });
 
     expectTypeOf<output<typeof _postType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       title: string;
       content?: string | null;
       createdAt: DateTimeString | Date;
@@ -1107,7 +1107,7 @@ describe("TailorDBType hooks modifier tests", () => {
         },
       });
     expectTypeOf<output<typeof _hookType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       name: string;
     }>();
   });
@@ -1146,7 +1146,7 @@ describe("TailorDBType hooks modifier tests", () => {
     expectTypeOf<ActualNameType>().toEqualTypeOf<
       Hook<
         {
-          id: string;
+          id: UUIDString;
           readonly name: string;
         },
         string
@@ -1165,7 +1165,7 @@ describe("TailorDBType hooks modifier tests", () => {
     expectTypeOf<ActualNameType>().toEqualTypeOf<
       Hook<
         {
-          id: string;
+          id: UUIDString;
           name?: string | null;
         },
         string | null
@@ -1185,7 +1185,7 @@ describe("TailorDBType validate modifier tests", () => {
       });
 
     expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       email: string;
     }>();
     const fieldMetadata = _validateType.fields.email.metadata;
@@ -1247,7 +1247,7 @@ describe("TailorDBType validate modifier tests", () => {
 
   test("validate modifier on string field receives string", () => {
     const _validate = db.type("Test", { name: db.string() }).validate;
-    expectTypeOf<ValidateConfig<string, { id: string; name: string }>>().toExtend<
+    expectTypeOf<ValidateConfig<string, { id: UUIDString; name: string }>>().toExtend<
       Parameters<typeof _validate>[0]["name"]
     >();
   });
@@ -1256,9 +1256,9 @@ describe("TailorDBType validate modifier tests", () => {
     const _validate = db.type("Test", {
       name: db.string({ optional: true }),
     }).validate;
-    expectTypeOf<ValidateConfig<string | null, { id: string; name?: string | null }>>().toExtend<
-      Parameters<typeof _validate>[0]["name"]
-    >();
+    expectTypeOf<
+      ValidateConfig<string | null, { id: UUIDString; name?: string | null }>
+    >().toExtend<Parameters<typeof _validate>[0]["name"]>();
   });
 });
 
@@ -1271,7 +1271,7 @@ describe("db.object tests", () => {
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       user: {
         name: string;
         age: number;
@@ -1298,7 +1298,7 @@ describe("db.object tests", () => {
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       user: {
         name: string;
         age?: number | null;
@@ -1318,7 +1318,7 @@ describe("db.object tests", () => {
       ),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       user?: {
         name: string;
         avatar?: string | null;
@@ -1337,7 +1337,7 @@ describe("db.object tests", () => {
       ),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       users: {
         name: string;
         age: number;
@@ -1354,7 +1354,7 @@ describe("db.object tests", () => {
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       user: {
         name: string;
         tags: string[];
@@ -1375,7 +1375,7 @@ describe("db.object tests", () => {
       ),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       optionalUsers?:
         | {
             name: string;
@@ -1394,7 +1394,7 @@ describe("db.object tests", () => {
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       settings: {
         enabled: boolean;
         push?: boolean | null;
@@ -1412,7 +1412,7 @@ describe("db.object tests", () => {
       }),
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       product: {
         name: string;
         price: number;
@@ -1571,7 +1571,7 @@ describe("TailorDBType files method tests", () => {
 
 describe("TailorDBField runtime validation tests", () => {
   const invoker: TailorPrincipal = {
-    id: "test",
+    id: "123e4567-e89b-12d3-a456-426614174000",
     type: "user",
     workspaceId: "workspace-test",
     attributes: {},
@@ -2238,7 +2238,7 @@ describe("TailorDBField decimal type tests", () => {
       price: db.decimal(),
     });
     expectTypeOf<output<typeof _decimalType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       price: DecimalString;
     }>();
   });
@@ -2248,7 +2248,7 @@ describe("TailorDBField decimal type tests", () => {
       discount: db.decimal({ optional: true }),
     });
     expectTypeOf<output<typeof _decimalType>>().toEqualTypeOf<{
-      id: string;
+      id: UUIDString;
       discount?: DecimalString | null;
     }>();
   });
@@ -2277,7 +2277,7 @@ describe("TailorDBField decimal type tests", () => {
   test("decimal parse validates valid decimal strings", () => {
     const field = db.decimal();
     const invoker: TailorPrincipal = {
-      id: "test",
+      id: "123e4567-e89b-12d3-a456-426614174000",
       type: "user",
       workspaceId: "workspace-test",
       attributes: {},
@@ -2298,7 +2298,7 @@ describe("TailorDBField decimal type tests", () => {
   test("decimal parse rejects invalid decimal strings", () => {
     const field = db.decimal();
     const invoker: TailorPrincipal = {
-      id: "test",
+      id: "123e4567-e89b-12d3-a456-426614174000",
       type: "user",
       workspaceId: "workspace-test",
       attributes: {},

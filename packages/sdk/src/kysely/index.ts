@@ -16,6 +16,7 @@ import {
   type Transaction as KyselyTransaction,
   type Updateable,
 } from "kysely";
+import type { DateTimeString } from "#/configure/types/scalar.types";
 
 export {
   type ColumnType,
@@ -30,7 +31,20 @@ export {
 
 export { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
 
-export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+export type {
+  DateString,
+  DateTimeString,
+  DecimalString,
+  TimeString,
+  TimeZoneOffsetString,
+  UUIDString,
+} from "#/configure/types/scalar.types";
+
+export type Timestamp = ColumnType<
+  Date | DateTimeString,
+  Date | DateTimeString,
+  Date | DateTimeString
+>;
 type ResolveSelect<T> = T extends ColumnType<infer S, unknown, unknown> ? S : T;
 type ResolveInsert<T> = T extends ColumnType<unknown, infer I, unknown> ? I : T;
 type ResolveUpdate<T> = T extends ColumnType<unknown, unknown, infer U> ? U : T;

@@ -188,8 +188,8 @@ describe("db-types-generator", () => {
       const filePath = await writeDbTypesFile(snapshot, testDir, 1);
       const content = fs.readFileSync(filePath, "utf-8");
 
-      expect(content).toContain("externalId: string;");
-      expect(content).toContain("referenceId: string | null;");
+      expect(content).toContain("externalId: UUIDString;");
+      expect(content).toContain("referenceId: UUIDString | null;");
     });
 
     test("generates types with date/datetime fields using Timestamp", async () => {
@@ -208,8 +208,10 @@ describe("db-types-generator", () => {
       const content = fs.readFileSync(filePath, "utf-8");
 
       // Should define Timestamp type
-      expect(content).toContain("type Timestamp = ColumnType<Date, Date | string, Date | string>;");
-      expect(content).toContain("eventDate: Timestamp;");
+      expect(content).toContain(
+        "type Timestamp = ColumnType<Date | DateTimeString, Date | DateTimeString, Date | DateTimeString>;",
+      );
+      expect(content).toContain("eventDate: DateString;");
       expect(content).toContain("startTime: Timestamp;");
       expect(content).toContain("endTime: Timestamp | null;");
     });
@@ -308,7 +310,7 @@ describe("db-types-generator", () => {
       const filePath = await writeDbTypesFile(snapshot, testDir, 1);
       const content = fs.readFileSync(filePath, "utf-8");
 
-      expect(content).toContain("id: Generated<string>;");
+      expect(content).toContain("id: Generated<UUIDString>;");
       expect(content).toContain(
         "type Generated<T> = T extends ColumnType<infer S, infer I, infer U>",
       );
@@ -413,7 +415,7 @@ describe("db-types-generator", () => {
       const content = fs.readFileSync(filePath, "utf-8");
 
       expect(content).toContain(
-        "updatedAt: ColumnType<Date | null, Date | string, Date | string>;",
+        "updatedAt: ColumnType<Date | DateTimeString | null, Date | DateTimeString, Date | DateTimeString>;",
       );
     });
 

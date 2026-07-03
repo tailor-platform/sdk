@@ -26,6 +26,7 @@ import type {
   ValidateConfig,
   Validators,
 } from "#/configure/types/field.types";
+import type { UUIDString } from "#/configure/types/scalar.types";
 import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
 import type { InferredAttributes, TailorPrincipal } from "#/runtime/types";
 import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
@@ -1220,7 +1221,7 @@ function createTailorDBType<
   return brandValue(dbType, "tailordb-type");
 }
 
-const idField = createField<"uuid", Record<never, never>, string>("uuid");
+const idField = createField<"uuid", Record<never, never>, UUIDString>("uuid");
 type idField = typeof idField;
 type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = TailorDBInstance<
   { id: idField } & F

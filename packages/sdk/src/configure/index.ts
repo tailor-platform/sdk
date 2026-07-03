@@ -16,6 +16,14 @@ export namespace t {
 }
 
 export { type TailorField } from "#/configure/types/type";
+export type {
+  DateString,
+  DateTimeString,
+  DecimalString,
+  TimeString,
+  TimeZoneOffsetString,
+  UUIDString,
+} from "#/configure/types/scalar.types";
 export {
   type TailorPrincipal,
   type Attributes,
