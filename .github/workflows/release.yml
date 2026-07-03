@@ -24,6 +24,9 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
+          # ensure-github-releases.sh diffs package.json against HEAD^ to
+          # tell whether a version was introduced at this commit.
+          fetch-depth: 2
 
       - name: Install Deps
         uses: ./.github/actions/install-deps

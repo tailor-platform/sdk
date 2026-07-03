@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
 # Creates a GitHub release (and its underlying tag) for every non-private
-# workspace package whose checked-out version doesn't have one yet.
+# workspace package whose version was introduced at the current commit.
 #
 # `gh release create <tag> --target <sha>` creates the tag via the GitHub API
 # when it doesn't already exist, so this needs no local git tag/push and no
 # git identity — sidestepping the class of failure where `changeset publish`
 # (invoked with --no-git-tag, see release.yml) or its underlying `git tag`
 # would otherwise need a configured committer.
+#
+# This runs on every push to main, not just publishes, so it only acts on
+# packages whose version differs from HEAD^ (requires fetch-depth: 2 in the
+# checkout step). Without that guard, an unrelated later push would "fix" an
+# older missing release by tagging it at the wrong (much later) commit.
 #
 # Idempotent: packages whose version already has a release are skipped. Also
 # doubles as the regression guard for the release workflow — if release
@@ -15,6 +20,13 @@
 set -euo pipefail
 
 sha="$(git rev-parse HEAD)"
+parent="$(git rev-parse HEAD^ 2>/dev/null || true)"
+
+version_at() { # <package.json path> <commit> -> version, or empty if absent
+  [ -n "$2" ] || return 0
+  git show "${2}:${1}" 2>/dev/null | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version" 2>/dev/null
+  return 0
+}
 
 changelog_entry() { # <changelog-file> <version>
   awk -v ver="## $2" '
@@ -32,6 +44,9 @@ for pkg_json in packages/*/package.json; do
   version="$(node -p "require('./${pkg_json}').version")"
   dir="$(dirname "$pkg_json")"
   tag="${name}@${version}"
+
+  prev_version="$(version_at "$pkg_json" "$parent")"
+  [ "$prev_version" = "$version" ] && continue
 
   if gh release view "$tag" >/dev/null 2>&1; then
     continue
