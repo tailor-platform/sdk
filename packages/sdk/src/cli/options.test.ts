@@ -50,13 +50,10 @@ const checkArgs = (extracted: ExtractedFields, path: string[]): void => {
   }
 };
 
-const checkNoHybridPositionalCommand = (
-  command: AnyCommand,
-  extracted: ExtractedFields,
-  path: string[],
-): void => {
-  if (!command.subCommands || !command.run) return;
+const checkNoHybridPositionalCommand = (command: AnyCommand, path: string[]): void => {
+  if (!command.subCommands || !command.run || !command.args) return;
 
+  const extracted = extractFields(command.args);
   const positionalFields = extracted.fields.filter((field) => field.positional);
   if (positionalFields.length === 0) return;
 
@@ -111,10 +108,8 @@ describe("CLI options", () => {
     let checked = 0;
 
     await walkMainCommands((command, path) => {
-      if (!command.args) return;
-
       checked += 1;
-      checkNoHybridPositionalCommand(command, extractFields(command.args), path);
+      checkNoHybridPositionalCommand(command, path);
     });
 
     expect(checked).toBeGreaterThan(0);
