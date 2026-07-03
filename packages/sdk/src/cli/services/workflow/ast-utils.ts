@@ -4,6 +4,8 @@ import type {
   AwaitExpression,
   ImportExpression,
   CallExpression,
+  StaticMemberExpression,
+  IdentifierReference,
   ObjectPropertyKind,
   ObjectProperty,
   ArrowFunctionExpression,
@@ -17,6 +19,13 @@ export interface Replacement {
   start: number;
   end: number;
   text: string;
+}
+
+export interface TriggerCallInfo {
+  identifierName: string;
+  callRange: { start: number; end: number };
+  argsText: string;
+  optionsText?: string;
 }
 
 export interface FoundProperty {
@@ -69,6 +78,52 @@ export function getImportSource(node: Expression | null | undefined): string | n
     }
   }
   return null;
+}
+
+function argumentSourceText(arg: unknown, sourceText: string): string | undefined {
+  if (arg && typeof arg === "object" && "start" in arg && "end" in arg) {
+    return sourceText.slice(arg.start as number, arg.end as number);
+  }
+  return undefined;
+}
+
+/**
+ * Get metadata for a static `identifier.trigger(...)` call.
+ * @param node - AST node to inspect
+ * @param sourceText - Source code text
+ * @returns Trigger call metadata, or null when the node is not a trigger call
+ */
+export function getTriggerCallInfo(
+  node: ASTNode | null | undefined,
+  sourceText: string,
+): TriggerCallInfo | null {
+  if (!node || typeof node !== "object" || node.type !== "CallExpression") {
+    return null;
+  }
+
+  const callExpr = node as unknown as CallExpression;
+  const callee = callExpr.callee;
+  if (callee.type !== "MemberExpression") {
+    return null;
+  }
+
+  const memberExpr = callee as unknown as StaticMemberExpression;
+  if (
+    // callee may be a ComputedMemberExpression at runtime
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    memberExpr.computed ||
+    memberExpr.object.type !== "Identifier" ||
+    memberExpr.property.name !== "trigger"
+  ) {
+    return null;
+  }
+
+  return {
+    identifierName: (memberExpr.object as IdentifierReference).name,
+    callRange: { start: callExpr.start, end: callExpr.end },
+    argsText: argumentSourceText(callExpr.arguments[0], sourceText) ?? "",
+    optionsText: argumentSourceText(callExpr.arguments[1], sourceText),
+  };
 }
 
 /**

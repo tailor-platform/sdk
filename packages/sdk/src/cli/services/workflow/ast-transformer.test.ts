@@ -1,6 +1,7 @@
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { findAllJobs, detectTriggerCalls, buildJobNameMap } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import { transformFunctionTriggers } from "./trigger-transformer";
@@ -766,7 +767,27 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.triggerWorkflow("my-workflow"');
-      expect(result).toContain("{ authInvoker: authInvoker }");
+      expect(result).toContain("{ authInvoker }");
+    });
+
+    test("transforms workflow.trigger() without options and omits the helper", () => {
+      const source = `
+const result = await myWorkflow.trigger({ id: 1 });
+`;
+      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
+      const jobNameMap = new Map<string, string>();
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
+
+      expect(result).toContain('tailor.workflow.triggerWorkflow("my-workflow", { id: 1 })');
+      expect(result).not.toContain("__tailor_normalizeTriggerOptions");
     });
 
     test("wraps a string-literal authInvoker with the runtime normalizer when authNamespace is provided", () => {
@@ -786,10 +807,10 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
       );
 
       expect(result).toContain('tailor.workflow.triggerWorkflow("my-workflow"');
-      expect(result).toContain('{ authInvoker: __tailor_normalizeAuthInvoker("kiosk") }');
+      expect(result).toContain('__tailor_normalizeTriggerOptions({ authInvoker: "kiosk" })');
       // Helper injected at the top of the file with the namespace baked in
       expect(result).toContain(
-        'const __tailor_normalizeAuthInvoker = (v) => typeof v === "string" ? { namespace: "my-auth", machineUserName: v } : v;',
+        'const __tailor_normalizeTriggerOptions = (o) => o && typeof o.authInvoker === "string" ? { ...o, authInvoker: { namespace: "my-auth", machineUserName: o.authInvoker } } : o;',
       );
     });
 
@@ -810,7 +831,7 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: invoker });
         "my-auth",
       );
 
-      expect(result).toContain("{ authInvoker: __tailor_normalizeAuthInvoker(invoker) }");
+      expect(result).toContain("__tailor_normalizeTriggerOptions({ authInvoker: invoker })");
     });
 
     test("wraps a shorthand authInvoker with the runtime normalizer", () => {
@@ -830,7 +851,69 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker });
         "my-auth",
       );
 
-      expect(result).toContain("{ authInvoker: __tailor_normalizeAuthInvoker(authInvoker) }");
+      expect(result).toContain("__tailor_normalizeTriggerOptions({ authInvoker })");
+    });
+
+    test("wraps a variable options argument with the runtime normalizer", () => {
+      const source = `
+const opts = { authInvoker: "kiosk" };
+const result = await myWorkflow.trigger({ id: 1 }, opts);
+`;
+      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
+      const jobNameMap = new Map<string, string>();
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
+
+      expect(result).toContain(
+        'tailor.workflow.triggerWorkflow("my-workflow", { id: 1 }, __tailor_normalizeTriggerOptions(opts))',
+      );
+    });
+
+    test("wraps spread options with the runtime normalizer", () => {
+      const source = `
+const result = await myWorkflow.trigger({ id: 1 }, { ...base });
+`;
+      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
+      const jobNameMap = new Map<string, string>();
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
+
+      expect(result).toContain("__tailor_normalizeTriggerOptions({ ...base })");
+    });
+
+    test("transforms workflow.trigger() with an empty options object", () => {
+      const source = `
+const result = await myWorkflow.trigger({ id: 1 }, {});
+`;
+      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
+      const jobNameMap = new Map<string, string>();
+
+      const result = transformFunctionTriggers(
+        source,
+        workflowNameMap,
+        jobNameMap,
+        undefined,
+        undefined,
+        "my-auth",
+      );
+
+      expect(result).toContain(
+        'tailor.workflow.triggerWorkflow("my-workflow", { id: 1 }, __tailor_normalizeTriggerOptions({}))',
+      );
     });
 
     test("injects the normalizer helper only once per file even for multiple trigger calls", () => {
@@ -850,11 +933,11 @@ await myWorkflow.trigger({ id: 2 }, { authInvoker: "batch" });
         "my-auth",
       );
 
-      const matches = result.match(/const __tailor_normalizeAuthInvoker =/g);
+      const matches = result.match(/const __tailor_normalizeTriggerOptions =/g);
       expect(matches).toHaveLength(1);
     });
 
-    test("keeps authInvoker unchanged and omits the helper when authNamespace is not provided", () => {
+    test("keeps options unchanged and omits the helper when authNamespace is not provided", () => {
       const source = `
 const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
 `;
@@ -863,8 +946,10 @@ const result = await myWorkflow.trigger({ id: 1 }, { authInvoker: "kiosk" });
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain('{ authInvoker: "kiosk" }');
-      expect(result).not.toContain("__tailor_normalizeAuthInvoker");
+      expect(result).toContain(
+        'tailor.workflow.triggerWorkflow("my-workflow", { id: 1 }, { authInvoker: "kiosk" })',
+      );
+      expect(result).not.toContain("__tailor_normalizeTriggerOptions");
     });
   });
 
@@ -939,9 +1024,8 @@ const unknown = await randomThing.trigger({ id: 3 });
       expect(result).toContain("randomThing.trigger({ id: 3 })");
     });
 
-    test("does not transform workflow identifier used as job trigger (wrong argument count)", () => {
+    test("transforms workflow.trigger() regardless of argument count", () => {
       const source = `
-// Workflow trigger requires 2 args - this has only 1, so it won't be transformed as workflow
 const result = await myWorkflow.trigger({ id: 1 });
 `;
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
@@ -949,9 +1033,8 @@ const result = await myWorkflow.trigger({ id: 1 });
 
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
-      // Not transformed because workflow needs 2 args
-      expect(result).toContain("myWorkflow.trigger({ id: 1 })");
-      expect(result).not.toContain("tailor.workflow");
+      expect(result).toContain('tailor.workflow.triggerWorkflow("my-workflow", { id: 1 })');
+      expect(result).not.toContain("myWorkflow.trigger");
     });
   });
 
@@ -1084,6 +1167,24 @@ fetchCustomer.trigger({ customerId: "123" }).then((customer) => {
       );
     });
 
+    test("transforms only the outer call when a known trigger is nested inside another", () => {
+      const source = `
+await myWorkflow.trigger(fetchCustomer.trigger({ customerId: "123" }));
+`;
+      const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
+      const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+
+      expect(result).toContain(
+        'await tailor.workflow.triggerWorkflow("my-workflow", fetchCustomer.trigger({ customerId: "123" }));',
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Nested trigger call "fetchCustomer.trigger(...)" inside "myWorkflow.trigger(...)" cannot be converted. Move it to a separate statement and pass the result instead.',
+      );
+    });
+
     test("wraps job.trigger() nested inside an unknown .trigger() argument", () => {
       const source = `
 unknown.trigger(fetchCustomer.trigger({ customerId: "123" }));
@@ -1170,7 +1271,7 @@ export const job = createWorkflowJob({
       expect(result).toContain('import simpleWorkflow from "./simple"');
     });
 
-    test("does not remove import when trigger call is not transformed (wrong arg count)", () => {
+    test("removes default import when the trigger call has no options argument", () => {
       const source = `
 import simpleWorkflow from "./simple";
 
@@ -1183,7 +1284,8 @@ export const job = createWorkflowJob({
 `;
       const result = transformSimpleImport(source);
 
-      expect(result).toContain('import simpleWorkflow from "./simple"');
+      expect(result).not.toContain('import simpleWorkflow from "./simple"');
+      expect(result).toContain('tailor.workflow.triggerWorkflow("simple-workflow", { input: 0 })');
     });
 
     test("removes multiple dead default imports from different workflow files", () => {

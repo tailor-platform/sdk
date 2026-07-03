@@ -17,6 +17,12 @@ describe("bundleWorkflowJobs", () => {
   describe("cross-file workflow default import", () => {
     let tmpDir: string | undefined;
 
+    type BuildBundleFixtureOptions = {
+      ext: string;
+      importPath: string;
+      triggerArgs?: string;
+    };
+
     afterEach(() => {
       if (tmpDir) {
         fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -24,7 +30,9 @@ describe("bundleWorkflowJobs", () => {
       }
     });
 
-    const buildBundleFixture = ({ ext, importPath }: { ext: string; importPath: string }) => {
+    const buildBundleFixture = (options: BuildBundleFixtureOptions) => {
+      const { ext, importPath, triggerArgs = `{ input: 0 }, { authInvoker: "admin" }` } = options;
+
       // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
       tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
 
@@ -58,7 +66,7 @@ import simpleWorkflow from "${importPath}";
 export const callerJob = createWorkflowJob({
   name: "caller-job",
   body: async () => {
-    const executionId = await simpleWorkflow.trigger({ input: 0 }, { authInvoker: "admin" });
+    const executionId = await simpleWorkflow.trigger(${triggerArgs});
     return { executionId };
   },
 });
@@ -95,7 +103,8 @@ export default createWorkflow({
     test.each([
       { label: "cross-file default import", ext: "ts", importPath: "./simple" },
       { label: ".mts dependency files", ext: "mts", importPath: "./simple.mjs" },
-    ])("transforms workflow.trigger() from $label", async ({ ext, importPath }) => {
+    ])("transforms workflow.trigger() from $label", async (options) => {
+      const { ext, importPath } = options;
       const result = await buildBundleFixture({ ext, importPath });
 
       expect(result.bundledCode.has("caller-job")).toBe(true);
@@ -119,6 +128,20 @@ export default createWorkflow({
         expect(code).not.toContain("registerJob");
         expect(code).not.toContain("platformSerialize");
       }
+    });
+
+    test("transforms workflow.trigger() without an options argument", async () => {
+      const result = await buildBundleFixture({
+        ext: "ts",
+        importPath: "./simple",
+        triggerArgs: "{ input: 0 }",
+      });
+
+      expect(result.bundledCode.has("caller-job")).toBe(true);
+      const callerCode = result.bundledCode.get("caller-job")!;
+
+      expect(callerCode).toContain("triggerWorkflow");
+      expect(callerCode).not.toContain("simpleWorkflow.trigger");
     });
   });
 });
