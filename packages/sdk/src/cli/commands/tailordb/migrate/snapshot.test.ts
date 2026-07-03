@@ -237,13 +237,18 @@ describe("snapshot", () => {
 
       const normalized = normalizeSchemaSnapshot(snapshot);
 
-      expect(normalized).toBe(snapshot);
+      expect(normalized).not.toBe(snapshot);
       expectTypeOf(normalized).toEqualTypeOf<NormalizedSchemaSnapshot>();
       expectTypeOf<NormalizedSchemaSnapshot>().toExtend<SchemaSnapshot>();
       expectTypeOf<SchemaSnapshot>().not.toExtend<NormalizedSchemaSnapshot>();
-      expect(snapshot.types.Product?.pluralForm).toBe("Products");
-      expect(snapshot.types.Product?.fields.price?.scale).toBe(6);
-      expect(snapshot.types.Product?.fields.metadata?.fields?.discount?.scale).toBe(6);
+      expect(normalized.types.Product?.pluralForm).toBe("Products");
+      expect(normalized.types.Product?.fields.price?.scale).toBe(6);
+      expect(normalized.types.Product?.fields.metadata?.fields?.discount?.scale).toBe(6);
+
+      // Original snapshot must remain unmutated (the footgun this behavior fixes)
+      expect(snapshot.types.Product?.pluralForm).toBeUndefined();
+      expect(snapshot.types.Product?.fields.price?.scale).toBeUndefined();
+      expect(snapshot.types.Product?.fields.metadata?.fields?.discount?.scale).toBeUndefined();
     });
   });
 
@@ -2449,18 +2454,22 @@ describe("snapshot", () => {
         }),
       ];
 
-      const values = Object.values;
+      const entries = Object.entries;
       const normalizedFieldRecords: unknown[] = [];
-      const valuesSpy = vi.spyOn(Object, "values").mockImplementation((value) => {
-        if (Object.hasOwn(value, "amount")) {
+      const entriesSpy = vi.spyOn(Object, "entries").mockImplementation((value) => {
+        const amountField = (value as Record<string, unknown>).amount;
+        // The raw remote fields record always sets `array` explicitly (even to
+        // false); the converted SnapshotFieldConfig only sets it when true. This
+        // isolates the post-conversion fields record from the pre-conversion one.
+        if (amountField && typeof amountField === "object" && !("array" in amountField)) {
           normalizedFieldRecords.push(value);
         }
-        return values(value);
+        return entries(value);
       });
       try {
         createSnapshotFromRemoteTypes(remoteTypes, namespace);
       } finally {
-        valuesSpy.mockRestore();
+        entriesSpy.mockRestore();
       }
 
       expect(normalizedFieldRecords).toHaveLength(1);
