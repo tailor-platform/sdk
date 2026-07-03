@@ -191,7 +191,6 @@ export const loginCommand = defineAppCommand({
           env: "TAILOR_PLATFORM_PROFILE",
         }),
       })
-
       .describe("User Login"),
     z
       .strictObject({

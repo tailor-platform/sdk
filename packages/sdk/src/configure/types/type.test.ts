@@ -6,6 +6,23 @@ import type { output } from "#/types/helpers";
 import type { AllowedValues } from "./field";
 import type { DateString, DateTimeString, TimeString, UUIDString } from "./scalar.types";
 
+const invoker: TailorPrincipal = {
+  id: "123e4567-e89b-12d3-a456-426614174000",
+  type: "user",
+  workspaceId: "workspace-test",
+  attributes: {},
+  attributeList: [],
+};
+const data = {};
+
+function expectParsed<V>(result: { issues?: unknown; value?: V }): V {
+  expect(result.issues).toBeUndefined();
+  if (result.issues) {
+    throw new Error("Unexpected issues");
+  }
+  return result.value as V;
+}
+
 describe("TailorType basic field type tests", () => {
   test("string field outputs string type correctly", () => {
     const _stringType = t.object({
@@ -138,38 +155,75 @@ describe("TailorField array option tests", () => {
 });
 
 describe("TailorField enum field tests", () => {
-  test("set enum field by passing string", () => {
-    const enumField = t.enum(["active", "inactive", "pending"]);
-    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
-    expect(enumField.metadata.allowedValues).toEqual([
-      { value: "active", description: "" },
-      { value: "inactive", description: "" },
-      { value: "pending", description: "" },
-    ]);
+  test.each([
+    {
+      name: "set enum field by passing string",
+      values: ["active", "inactive", "pending"] as const,
+      expected: [
+        { value: "active", description: "" },
+        { value: "inactive", description: "" },
+        { value: "pending", description: "" },
+      ],
+    },
+    {
+      name: "set enum field by passing object",
+      values: [
+        { value: "small", description: "Small size" },
+        { value: "medium" },
+        { value: "large", description: "Large size" },
+      ] as const,
+      expected: [
+        { value: "small", description: "Small size" },
+        { value: "medium", description: "" },
+        { value: "large", description: "Large size" },
+      ],
+    },
+    {
+      name: "set enum field by mixing string and object",
+      values: ["red", { value: "green", description: "Green color" }, "blue"] as const,
+      expected: [
+        { value: "red", description: "" },
+        { value: "green", description: "Green color" },
+        { value: "blue", description: "" },
+      ],
+    },
+    {
+      name: "accepts as const readonly array",
+      values: ["active", "inactive", "pending"] as const,
+      expected: [
+        { value: "active", description: "" },
+        { value: "inactive", description: "" },
+        { value: "pending", description: "" },
+      ],
+    },
+  ])("$name", ({ values, expected }) => {
+    const enumField = t.enum(values);
+    expect(enumField.metadata.allowedValues).toEqual(expected);
   });
 
-  test("set enum field by passing object", () => {
+  test("set enum field by passing string infers a string literal union", () => {
+    const enumField = t.enum(["active", "inactive", "pending"]);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
+  });
+
+  test("set enum field by passing object infers a string literal union", () => {
     const enumField = t.enum([
       { value: "small", description: "Small size" },
       { value: "medium" },
       { value: "large", description: "Large size" },
     ]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"small" | "medium" | "large">();
-    expect(enumField.metadata.allowedValues).toEqual([
-      { value: "small", description: "Small size" },
-      { value: "medium", description: "" },
-      { value: "large", description: "Large size" },
-    ]);
   });
 
-  test("set enum field by mixing string and object", () => {
+  test("set enum field by mixing string and object infers a string literal union", () => {
     const enumField = t.enum(["red", { value: "green", description: "Green color" }, "blue"]);
     expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"red" | "green" | "blue">();
-    expect(enumField.metadata.allowedValues).toEqual([
-      { value: "red", description: "" },
-      { value: "green", description: "Green color" },
-      { value: "blue", description: "" },
-    ]);
+  });
+
+  test("accepts as const readonly array and infers a string literal union", () => {
+    const STATUSES = ["active", "inactive", "pending"] as const;
+    const enumField = t.enum(STATUSES);
+    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
   });
 
   test("setting enum without values causes type error", () => {
@@ -188,20 +242,8 @@ describe("TailorField enum field tests", () => {
     }>();
   });
 
-  test("accepts as const readonly array", () => {
-    const STATUSES = ["active", "inactive", "pending"] as const;
-    const enumField = t.enum(STATUSES);
-    expectTypeOf<output<typeof enumField>>().toEqualTypeOf<"active" | "inactive" | "pending">();
-    expect(enumField.metadata.allowedValues).toEqual([
-      { value: "active", description: "" },
-      { value: "inactive", description: "" },
-      { value: "pending", description: "" },
-    ]);
-  });
-
   test("AllowedValues type accepts readonly arrays", () => {
     const STATUSES = ["active", "inactive"] as const;
-    // Verify that readonly arrays are assignable to AllowedValues
     const _values: AllowedValues = STATUSES;
     expect(_values).toEqual(STATUSES);
   });
@@ -472,236 +514,145 @@ describe("t.object tests", () => {
 });
 
 describe("TailorField runtime validation tests", () => {
-  const invoker: TailorPrincipal = {
-    id: "123e4567-e89b-12d3-a456-426614174000",
-    type: "user",
-    workspaceId: "workspace-test",
-    attributes: {},
-    attributeList: [],
-  };
-  const data = {};
-
   describe("validates primitive types", () => {
     test("validates string type", () => {
-      {
-        const result = t.string().parse({ value: "valid string", data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBe("valid string");
-      }
+      const ok = t.string().parse({ value: "valid string", data, invoker });
+      expect(expectParsed(ok)).toBe("valid string");
 
-      {
-        const result = t.string().parse({ value: 123, data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual("Expected a string: received 123");
-        expect(result.issues?.[0]?.path).toBeUndefined();
-      }
+      const bad = t.string().parse({ value: 123, data, invoker });
+      expect(bad.issues).toBeDefined();
+      expect(bad.issues?.[0]?.message).toEqual("Expected a string: received 123");
+      expect(bad.issues?.[0]?.path).toBeUndefined();
     });
 
-    test("validates integer type", () => {
-      {
-        const result = t.int().parse({ value: 123, data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBe(123);
-      }
-
-      {
-        const result = t.int().parse({ value: "invalid string", data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual("Expected an integer: received invalid string");
-      }
-
-      {
-        const result = t.int().parse({ value: 1.5, data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual("Expected an integer: received 1.5");
-      }
+    test.each([
+      { value: "invalid string", message: "Expected an integer: received invalid string" },
+      { value: 1.5, message: "Expected an integer: received 1.5" },
+    ])("validates integer type - rejects $value", ({ value, message }) => {
+      const result = t.int().parse({ value, data, invoker });
+      expect(result.issues).toBeDefined();
+      expect(result.issues?.[0]?.message).toEqual(message);
     });
 
-    test("validates float type", () => {
-      {
-        const result = t.float().parse({ value: 1.5, data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBe(1.5);
-      }
+    test("validates integer type - accepts a valid integer", () => {
+      const result = t.int().parse({ value: 123, data, invoker });
+      expect(expectParsed(result)).toBe(123);
+    });
 
-      {
-        const result = t.float().parse({ value: Number.NaN, data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual("Expected a number: received NaN");
-      }
+    test.each([
+      { value: Number.NaN, message: "Expected a number: received NaN" },
+      { value: "invalid string", message: "Expected a number: received invalid string" },
+    ])("validates float type - rejects $value", ({ value, message }) => {
+      const result = t.float().parse({ value, data, invoker });
+      expect(result.issues).toBeDefined();
+      expect(result.issues?.[0]?.message).toEqual(message);
+    });
 
-      {
-        const result = t.float().parse({ value: "invalid string", data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual("Expected a number: received invalid string");
-      }
+    test("validates float type - accepts a valid float", () => {
+      const result = t.float().parse({ value: 1.5, data, invoker });
+      expect(expectParsed(result)).toBe(1.5);
     });
 
     test("validates boolean type", () => {
-      {
-        const result = t.bool().parse({ value: true, data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBe(true);
-      }
+      const ok = t.bool().parse({ value: true, data, invoker });
+      expect(expectParsed(ok)).toBe(true);
 
-      {
-        const result = t.bool().parse({ value: "true", data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual("Expected a boolean: received true");
-      }
+      const bad = t.bool().parse({ value: "true", data, invoker });
+      expect(bad.issues).toBeDefined();
+      expect(bad.issues?.[0]?.message).toEqual("Expected a boolean: received true");
     });
   });
 
   describe("validates format-specific types", () => {
-    test("validates uuid format", () => {
+    test.each([
       {
-        const result = t.uuid().parse({
-          value: "550e8400-e29b-41d4-a716-446655440000",
-          data,
-          invoker,
-        });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBe("550e8400-e29b-41d4-a716-446655440000");
+        name: "uuid",
+        field: t.uuid(),
+        validValue: "550e8400-e29b-41d4-a716-446655440000",
+        invalidValue: "not-a-uuid",
+        invalidMessage: "Expected a valid UUID: received not-a-uuid",
+      },
+      {
+        name: "date",
+        field: t.date(),
+        validValue: "2025-12-21",
+        invalidValue: "2025/12/21",
+        invalidMessage: 'Expected to match "yyyy-MM-dd" format: received 2025/12/21',
+      },
+      {
+        name: "datetime",
+        field: t.datetime(),
+        validValue: "2025-12-21T10:11:12.123Z",
+        invalidValue: "2025-12-21 10:11:12",
+        invalidMessage: "Expected to match ISO format: received 2025-12-21 10:11:12",
+      },
+      {
+        name: "time",
+        field: t.time(),
+        validValue: "10:11",
+        invalidValue: "10:11:12",
+        invalidMessage: 'Expected to match "HH:mm" format: received 10:11:12',
+      },
+    ])("validates $name format", ({ field, validValue, invalidValue, invalidMessage }) => {
+      const ok = field.parse({ value: validValue, data, invoker });
+      if (ok.issues) {
+        throw new Error("Unexpected issues");
       }
+      expect(ok.value).toBe(validValue);
 
-      {
-        const result = t.uuid().parse({ value: "not-a-uuid", data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual("Expected a valid UUID: received not-a-uuid");
-      }
+      const bad = field.parse({ value: invalidValue, data, invoker });
+      expect(bad.issues).toBeDefined();
+      expect(bad.issues?.[0]?.message).toEqual(invalidMessage);
     });
 
-    test("validates date format", () => {
-      {
-        const result = t.date().parse({ value: "2025-12-21", data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBe("2025-12-21");
-      }
-
-      {
-        const result = t.date().parse({ value: "2025/12/21", data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual(
-          'Expected to match "yyyy-MM-dd" format: received 2025/12/21',
-        );
-      }
-
-      {
-        const result = t.date().parse({ value: "2025-02-30", data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBe("2025-02-30");
-      }
+    test("accepts a date with an out-of-range day (e.g. February 30)", () => {
+      const result = t.date().parse({ value: "2025-02-30", data, invoker });
+      expect(expectParsed(result)).toBe("2025-02-30");
     });
 
-    test("validates datetime format", () => {
-      for (const value of [
-        "2025-12-21T10:11:12Z",
-        "2025-12-21T10:11:12.123456Z",
-        "2025-12-21T10:11:12+09:00",
-        "2025-12-21t10:11:12-08:00",
-        "2025-02-30T10:11:12Z",
-      ]) {
-        const result = t.datetime().parse({ value, data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBe(value);
-      }
-
-      {
-        const result = t.datetime().parse({
-          value: "2025-12-21T10:11:12+0900",
-          data,
-          invoker,
-        });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual(
-          "Expected to match ISO format: received 2025-12-21T10:11:12+0900",
-        );
-      }
-
-      {
-        const result = t.datetime().parse({ value: "2025-12-21T25:11:12Z", data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual(
-          "Expected to match ISO format: received 2025-12-21T25:11:12Z",
-        );
-      }
-
-      {
-        const result = t.datetime().parse({
-          value: "2025-12-21T10:11:12+24:00",
-          data,
-          invoker,
-        });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual(
-          "Expected to match ISO format: received 2025-12-21T10:11:12+24:00",
-        );
-      }
+    test.each([
+      "2025-12-21T10:11:12Z",
+      "2025-12-21T10:11:12.123456Z",
+      "2025-12-21T10:11:12+09:00",
+      "2025-12-21t10:11:12-08:00",
+      "2025-02-30T10:11:12Z",
+    ])("validates datetime format - accepts %s", (value) => {
+      const result = t.datetime().parse({ value, data, invoker });
+      expect(expectParsed(result)).toBe(value);
     });
 
-    test("vlidates time format", () => {
+    test.each([
       {
-        const result = t.time().parse({ value: "10:11", data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBe("10:11");
-      }
-
+        value: "2025-12-21T10:11:12+0900",
+        message: "Expected to match ISO format: received 2025-12-21T10:11:12+0900",
+      },
       {
-        const result = t.time().parse({ value: "10:11:12", data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual(
-          'Expected to match "HH:mm" format: received 10:11:12',
-        );
-      }
+        value: "2025-12-21T25:11:12Z",
+        message: "Expected to match ISO format: received 2025-12-21T25:11:12Z",
+      },
+      {
+        value: "2025-12-21T10:11:12+24:00",
+        message: "Expected to match ISO format: received 2025-12-21T10:11:12+24:00",
+      },
+    ])("validates datetime format - rejects $value", ({ value, message }) => {
+      const result = t.datetime().parse({ value, data, invoker });
+      expect(result.issues).toBeDefined();
+      expect(result.issues?.[0]?.message).toEqual(message);
     });
   });
 
   describe("validates complex types", () => {
     test("validates enum values", () => {
       const status = t.enum(["active", "inactive"]);
-      {
-        const result = status.parse({ value: "active", data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBe("active");
-      }
 
-      {
-        const result = status.parse({ value: "pending", data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual(
-          "Must be one of [active, inactive]: received pending",
-        );
-      }
+      const ok = status.parse({ value: "active", data, invoker });
+      expect(expectParsed(ok)).toBe("active");
+
+      const bad = status.parse({ value: "pending", data, invoker });
+      expect(bad.issues).toBeDefined();
+      expect(bad.issues?.[0]?.message).toEqual(
+        "Must be one of [active, inactive]: received pending",
+      );
     });
 
     test("validates nested object fields", () => {
@@ -710,164 +661,91 @@ describe("TailorField runtime validation tests", () => {
         age: t.int({ optional: true }),
         gender: t.enum(["male", "female", "other"]),
       });
-      {
-        const result = schema.parse({
-          value: {
-            name: "name",
-            age: null,
-            gender: "male",
-          },
-          data,
-          invoker,
-        });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toEqual({
-          name: "name",
-          age: null,
-          gender: "male",
-        });
-      }
 
-      {
-        const result = schema.parse({
-          value: { age: 1, gender: "invalid" },
-          data,
-          invoker,
-        });
-        expect(result.issues).toBeDefined();
-        expect(result.issues).toEqual([
-          {
-            message: "Required field is missing",
-            path: ["name"],
-          },
-          {
-            message: "Must be one of [male, female, other]: received invalid",
-            path: ["gender"],
-          },
-        ]);
-      }
+      const ok = schema.parse({
+        value: { name: "name", age: null, gender: "male" },
+        data,
+        invoker,
+      });
+      expect(expectParsed(ok)).toEqual({ name: "name", age: null, gender: "male" });
 
-      {
-        const schema = t.object({
-          value: t.string({ optional: true }),
-        });
-        const now = new Date();
-        const result = schema.parse({ value: now, data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual(`Expected an object: received ${String(now)}`);
-      }
+      const bad = schema.parse({ value: { age: 1, gender: "invalid" }, data, invoker });
+      expect(bad.issues).toBeDefined();
+      expect(bad.issues).toEqual([
+        { message: "Required field is missing", path: ["name"] },
+        { message: "Must be one of [male, female, other]: received invalid", path: ["gender"] },
+      ]);
+
+      const notAnObjectSchema = t.object({ value: t.string({ optional: true }) });
+      const now = new Date();
+      const notAnObject = notAnObjectSchema.parse({ value: now, data, invoker });
+      expect(notAnObject.issues).toBeDefined();
+      expect(notAnObject.issues?.[0]?.message).toEqual(
+        `Expected an object: received ${String(now)}`,
+      );
     });
 
     test("validates array fields and element paths", () => {
       const schema = t.int({ array: true });
-      {
-        const result = schema.parse({ value: [1, 2, 3], data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toEqual([1, 2, 3]);
-      }
 
-      {
-        const result = schema.parse({ value: "invalid", data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual("Expected an array");
-      }
+      const ok = schema.parse({ value: [1, 2, 3], data, invoker });
+      expect(expectParsed(ok)).toEqual([1, 2, 3]);
 
-      {
-        const result = schema.parse({ value: [1, "x"], data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]).toEqual({
-          path: ["[1]"],
-          message: "Expected an integer: received x",
-        });
-      }
+      const notAnArray = schema.parse({ value: "invalid", data, invoker });
+      expect(notAnArray.issues).toBeDefined();
+      expect(notAnArray.issues?.[0]?.message).toEqual("Expected an array");
+
+      const badElement = schema.parse({ value: [1, "x"], data, invoker });
+      expect(badElement.issues).toBeDefined();
+      expect(badElement.issues?.[0]).toEqual({
+        path: ["[1]"],
+        message: "Expected an integer: received x",
+      });
     });
 
     test("treats null/undefined as missing when required, and allowed when optional", () => {
-      {
-        const schema = t.string();
-        const result = schema.parse({ value: null, data, invoker });
-        expect(result.issues).toBeDefined();
-        expect(result.issues?.[0]?.message).toEqual("Required field is missing");
-      }
+      const required = t.string().parse({ value: null, data, invoker });
+      expect(required.issues).toBeDefined();
+      expect(required.issues?.[0]?.message).toEqual("Required field is missing");
 
-      {
-        const schema = t.string({ optional: true });
-        const result = schema.parse({ value: null, data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBeNull();
-      }
+      const optionalScalar = t.string({ optional: true }).parse({ value: null, data, invoker });
+      expect(expectParsed(optionalScalar)).toBeNull();
 
-      {
-        const schema = t.int({ optional: true, array: true });
-        const result = schema.parse({
-          value: null,
-          data,
-          invoker,
-        });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error("Unexpected issues");
-        }
-        expect(result.value).toBeNull();
-      }
+      const optionalArray = t
+        .int({ optional: true, array: true })
+        .parse({ value: null, data, invoker });
+      expect(expectParsed(optionalArray)).toBeNull();
     });
   });
 
   describe("validates decimal type", () => {
-    test("accepts valid decimal strings", () => {
-      for (const value of [
-        "123.45",
-        "0",
-        "-99.99",
-        "1000",
-        ".5",
-        "5.",
-        "4.321e+4",
-        "1E-5",
-        "2.41E-3",
-        "-1.5e10",
-      ]) {
-        const result = t.decimal().parse({ value, data, invoker });
-        expect(result.issues).toBeUndefined();
-        if (result.issues) {
-          throw new Error(`Unexpected issues for "${value}"`);
-        }
-        expect(result.value).toBe(value);
-      }
+    test.each([
+      "123.45",
+      "0",
+      "-99.99",
+      "1000",
+      ".5",
+      "5.",
+      "4.321e+4",
+      "1E-5",
+      "2.41E-3",
+      "-1.5e10",
+    ])("accepts valid decimal string %s", (value) => {
+      const result = t.decimal().parse({ value, data, invoker });
+      expect(expectParsed(result)).toBe(value);
     });
 
-    test("rejects invalid decimal values", () => {
-      for (const value of ["abc", "", "1_000_000", "0b1.1p-5", "1e", "e5", "."]) {
+    test.each(["abc", "", "1_000_000", "0b1.1p-5", "1e", "e5", ".", 123])(
+      "rejects invalid decimal value %s",
+      (value) => {
         const result = t.decimal().parse({ value, data, invoker });
         expect(result.issues).toBeDefined();
-      }
-      {
-        const result = t.decimal().parse({ value: 123, data, invoker });
-        expect(result.issues).toBeDefined();
-      }
-    });
+      },
+    );
   });
 });
 
 describe("TailorField clone-on-write / no aliasing", () => {
-  const invoker: TailorPrincipal = {
-    id: "123e4567-e89b-12d3-a456-426614174000",
-    type: "user",
-    workspaceId: "workspace-test",
-    attributes: {},
-    attributeList: [],
-  };
-  const data = {};
-
   test("description() returns a clone and never mutates the original", () => {
     const original = t.string();
     const updated = original.description("for A");

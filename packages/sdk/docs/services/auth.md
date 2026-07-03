@@ -467,7 +467,7 @@ tailor authconnection list
 tailor authconnection revoke --name google-connection
 ```
 
-Connection creation is handled by `tailor deploy` via the config, but recreation on deploy can drop the authorized token (see the warning at the top of this section) — for shared and CI workflows, create connections and tokens from the Console (`tailor authconnection open`) instead.
+Connection creation and updates are handled by `tailor deploy` via the config. Deploy updates connections in-place, preserving the authorized token, and warns you if an update requires re-authorization (see the note above).
 
 See [Auth Resource Commands](../cli/auth.md) for full CLI documentation.
 

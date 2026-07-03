@@ -690,9 +690,7 @@ function createTailorDBFieldRuntime<
    * @param args - Parse arguments
    * @returns Parse result with value or issues
    */
-  function parseInternal(
-    args: FieldParseInternalArgs,
-  ): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
+  function parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<FieldValue> {
     const { value, data, invoker, pathArray } = args;
     const issues: StandardSchemaV1.Issue[] = [];
 

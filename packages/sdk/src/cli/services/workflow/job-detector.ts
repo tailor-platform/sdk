@@ -1,13 +1,13 @@
 import { assertDefined } from "#/utils/assert";
-import { type ASTNode, isStringLiteral, isFunctionExpression, findProperty } from "./ast-utils";
+import {
+  type ASTNode,
+  isStringLiteral,
+  isFunctionExpression,
+  findProperty,
+  getTriggerCallInfo,
+} from "./ast-utils";
 import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
-import type {
-  Program,
-  CallExpression,
-  ObjectExpression,
-  StaticMemberExpression,
-  IdentifierReference,
-} from "@oxc-project/types";
+import type { Program, CallExpression, ObjectExpression } from "@oxc-project/types";
 
 export interface JobLocation {
   name: string;
@@ -137,39 +137,13 @@ export function detectTriggerCalls(program: Program, sourceText: string): Trigge
   function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object") return;
 
-    // Detect pattern: identifier.trigger(args)
-    if (node.type === "CallExpression") {
-      const callExpr = node as unknown as CallExpression;
-      const callee = callExpr.callee;
-
-      if (callee.type === "MemberExpression") {
-        const memberExpr = callee as unknown as StaticMemberExpression;
-        if (
-          // callee may be a ComputedMemberExpression at runtime
-          // oxlint-disable-next-line typescript/no-unnecessary-condition
-          !memberExpr.computed &&
-          memberExpr.object.type === "Identifier" &&
-          memberExpr.property.name === "trigger"
-        ) {
-          const identifierName = (memberExpr.object as IdentifierReference).name;
-
-          let argsText = "";
-          if (callExpr.arguments.length > 0) {
-            const firstArg = callExpr.arguments[0];
-            // callee may be a ComputedMemberExpression at runtime
-            // oxlint-disable-next-line typescript/no-unnecessary-condition
-            if (firstArg && "start" in firstArg && "end" in firstArg) {
-              argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
-            }
-          }
-
-          calls.push({
-            identifierName,
-            callRange: { start: callExpr.start, end: callExpr.end },
-            argsText,
-          });
-        }
-      }
+    const triggerCall = getTriggerCallInfo(node, sourceText);
+    if (triggerCall) {
+      calls.push({
+        identifierName: triggerCall.identifierName,
+        callRange: triggerCall.callRange,
+        argsText: triggerCall.argsText,
+      });
     }
 
     for (const key of Object.keys(node)) {

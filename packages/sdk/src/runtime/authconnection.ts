@@ -6,7 +6,7 @@
  * `mockAuthconnection` from `@tailor-platform/sdk/vitest` to mock in unit tests.
  *
  * `connectionName` is narrowed to the connection names defined in `defineAuth()`'s
- * `connections` once `tailor.d.ts` has been generated (via `tailor-sdk deploy`/`generate`).
+ * `connections` once `tailor.d.ts` has been generated (via `tailor deploy`/`generate`).
  * @example
  * import { authconnection } from "@tailor-platform/sdk/runtime";
  *

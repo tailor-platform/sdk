@@ -20,56 +20,43 @@ import type { UUIDString } from "#/configure/types/scalar.types";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { Operation } from "./operation";
 
-describe("createExecutor", () => {
-  test("can disable executor", () => {
-    const disabled = createExecutor({
-      name: "test-executor",
-      description: "A test executor",
-      disabled: true,
-      trigger: incomingWebhookTrigger(),
-      operation: {
-        kind: "function",
-        body: () => {},
-      },
-    });
-    expect(disabled.description).toBe("A test executor");
-    expect(disabled.disabled).toBe(true);
-
-    const disabledWithoutDescription = createExecutor({
-      name: "test-executor",
-      disabled: true,
-      trigger: incomingWebhookTrigger(),
-      operation: {
-        kind: "function",
-        body: () => {},
-      },
-    });
-    expect(disabledWithoutDescription.description).toBeUndefined();
-    expect(disabledWithoutDescription.disabled).toBe(true);
-
-    const enabled = createExecutor({
-      name: "test-executor",
-      description: "A test executor",
-      trigger: incomingWebhookTrigger(),
-      operation: {
-        kind: "function",
-        body: () => {},
-      },
-    });
-    expect(enabled.description).toBe("A test executor");
-    expect(enabled.disabled).toBeUndefined();
-
-    const enabledWithoutDescription = createExecutor({
-      name: "test-executor",
-      trigger: incomingWebhookTrigger(),
-      operation: {
-        kind: "function",
-        body: () => {},
-      },
-    });
-    expect(enabledWithoutDescription.description).toBeUndefined();
-    expect(enabledWithoutDescription.disabled).toBeUndefined();
+const createUserType = () =>
+  db.type("User", {
+    name: db.string(),
+    age: db.int(),
   });
+
+const createBoolResolver = () =>
+  createResolver({
+    name: "test",
+    operation: "query",
+    body: () => ({ result: true }),
+    output: t.object({ result: t.bool() }),
+  });
+
+describe("createExecutor", () => {
+  test.each([
+    { description: "A test executor", disabled: true, expectedDisabled: true },
+    { description: undefined, disabled: true, expectedDisabled: true },
+    { description: "A test executor", disabled: undefined, expectedDisabled: undefined },
+    { description: undefined, disabled: undefined, expectedDisabled: undefined },
+  ])(
+    "can disable executor (description: $description, disabled: $disabled)",
+    ({ description, disabled, expectedDisabled }) => {
+      const executor = createExecutor({
+        name: "test-executor",
+        ...(description !== undefined && { description }),
+        ...(disabled !== undefined && { disabled }),
+        trigger: incomingWebhookTrigger(),
+        operation: {
+          kind: "function",
+          body: () => {},
+        },
+      });
+      expect(executor.description).toBe(description);
+      expect(executor.disabled).toBe(expectedDisabled);
+    },
+  );
 
   test("preserves compatibility for explicit legacy generic args", () => {
     type Args = {
@@ -262,33 +249,21 @@ describe("webhookTrigger response", () => {
 
 describe("recordCreatedTrigger", () => {
   test("can omit condition", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     recordCreatedTrigger({
-      type: user,
+      type: createUserType(),
     });
   });
 
   test("can specify condition", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     recordCreatedTrigger({
-      type: user,
+      type: createUserType(),
       condition: (args) => args.newRecord.age >= 18,
     });
   });
 
   test("can not return invalid type from condition", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     recordCreatedTrigger({
-      type: user,
+      type: createUserType(),
       // @ts-expect-error invalid return type
       condition: () => {
         return "invalid";
@@ -297,14 +272,10 @@ describe("recordCreatedTrigger", () => {
   });
 
   test("function args include event args", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     createExecutor({
       name: "test",
       trigger: recordCreatedTrigger({
-        type: user,
+        type: createUserType(),
         condition: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
@@ -340,33 +311,21 @@ describe("recordCreatedTrigger", () => {
 
 describe("recordUpdatedTrigger", () => {
   test("can omit condition", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     recordUpdatedTrigger({
-      type: user,
+      type: createUserType(),
     });
   });
 
   test("can specify condition", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     recordUpdatedTrigger({
-      type: user,
+      type: createUserType(),
       condition: (args) => args.oldRecord.age < 18 && args.newRecord.age >= 18,
     });
   });
 
   test("can not return invalid type from condition", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     recordUpdatedTrigger({
-      type: user,
+      type: createUserType(),
       // @ts-expect-error invalid return type
       condition: () => {
         return "invalid";
@@ -375,14 +334,10 @@ describe("recordUpdatedTrigger", () => {
   });
 
   test("function args include and event args", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     createExecutor({
       name: "test",
       trigger: recordUpdatedTrigger({
-        type: user,
+        type: createUserType(),
         condition: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
@@ -428,33 +383,21 @@ describe("recordUpdatedTrigger", () => {
 
 describe("recordDeletedTrigger", () => {
   test("can omit condition", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     recordDeletedTrigger({
-      type: user,
+      type: createUserType(),
     });
   });
 
   test("can specify condition", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     recordDeletedTrigger({
-      type: user,
+      type: createUserType(),
       condition: (args) => args.oldRecord.age < 18,
     });
   });
 
   test("can not return invalid type from condition", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     recordDeletedTrigger({
-      type: user,
+      type: createUserType(),
       // @ts-expect-error invalid return type
       condition: () => {
         return "invalid";
@@ -463,14 +406,10 @@ describe("recordDeletedTrigger", () => {
   });
 
   test("function args include event args", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     createExecutor({
       name: "test",
       trigger: recordDeletedTrigger({
-        type: user,
+        type: createUserType(),
         condition: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
@@ -506,39 +445,21 @@ describe("recordDeletedTrigger", () => {
 
 describe("resolverExecutedTrigger", () => {
   test("can omit condition", () => {
-    const resolver = createResolver({
-      name: "test",
-      operation: "query",
-      body: () => ({ result: true }),
-      output: t.object({ result: t.bool() }),
-    });
     resolverExecutedTrigger({
-      resolver,
+      resolver: createBoolResolver(),
     });
   });
 
   test("can specify condition", () => {
-    const resolver = createResolver({
-      name: "test",
-      operation: "query",
-      body: () => ({ result: true }),
-      output: t.object({ result: t.bool() }),
-    });
     resolverExecutedTrigger({
-      resolver,
+      resolver: createBoolResolver(),
       condition: (args) => !args.error,
     });
   });
 
   test("can not return invalid type from condition", () => {
-    const resolver = createResolver({
-      name: "test",
-      operation: "query",
-      body: () => ({ result: true }),
-      output: t.object({ result: t.bool() }),
-    });
     resolverExecutedTrigger({
-      resolver,
+      resolver: createBoolResolver(),
       // @ts-expect-error invalid return type
       condition: () => {
         return "invalid";
@@ -547,16 +468,10 @@ describe("resolverExecutedTrigger", () => {
   });
 
   test("function args include client and event args with success tag", () => {
-    const resolver = createResolver({
-      name: "test",
-      operation: "query",
-      body: () => ({ result: true }),
-      output: t.object({ result: t.bool() }),
-    });
     createExecutor({
       name: "test",
       trigger: resolverExecutedTrigger({
-        resolver,
+        resolver: createBoolResolver(),
         condition: (args) => {
           expectTypeOf(args).toExtend<{
             workspaceId: string;
@@ -833,12 +748,8 @@ describe("resolverExecutedTrigger", () => {
 
 describe("recordTrigger (multi-event)", () => {
   test("can specify multiple events", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     const trigger = recordTrigger({
-      type: user,
+      type: createUserType(),
       events: ["created", "updated"],
     });
     expect(trigger.kind).toBe("tailordb");
@@ -850,14 +761,10 @@ describe("recordTrigger (multi-event)", () => {
   });
 
   test("args are a union of selected events with kind discriminant", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     createExecutor({
       name: "test",
       trigger: recordTrigger({
-        type: user,
+        type: createUserType(),
         events: ["created", "updated"],
       }),
       operation: {
@@ -896,12 +803,8 @@ describe("recordTrigger (multi-event)", () => {
   });
 
   test("condition args are union type", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     recordTrigger({
-      type: user,
+      type: createUserType(),
       events: ["created", "deleted"],
       condition: (args) => {
         if (args.event === "created") {
@@ -913,14 +816,10 @@ describe("recordTrigger (multi-event)", () => {
   });
 
   test("all three events produce full union", () => {
-    const user = db.type("User", {
-      name: db.string(),
-      age: db.int(),
-    });
     createExecutor({
       name: "test",
       trigger: recordTrigger({
-        type: user,
+        type: createUserType(),
         events: ["created", "updated", "deleted"],
       }),
       operation: {

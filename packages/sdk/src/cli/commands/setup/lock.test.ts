@@ -69,30 +69,30 @@ describe("readLock / writeLock", () => {
     expect(() => readLock(testDir)).toThrow(/newer SDK/);
   });
 
-  test("throws with restore guidance when the version field is missing", () => {
-    const lock = makeLock() as unknown as Record<string, unknown>;
-    delete lock.version;
+  test.each([
+    {
+      title: "throws with restore guidance when the version field is missing",
+      content: () => {
+        const lock = makeLock() as unknown as Record<string, unknown>;
+        delete lock.version;
+        return `${JSON.stringify(lock, null, 2)}\n`;
+      },
+      error: /no valid 'version'/,
+    },
+    {
+      title: "throws with restore guidance when targets is not an array",
+      content: () => `${JSON.stringify({ version: LOCK_VERSION }, null, 2)}\n`,
+      error: /no valid 'targets'/,
+    },
+    {
+      title: "throws on invalid JSON",
+      content: () => "{ not json",
+      error: /not valid JSON/,
+    },
+  ])("$title", ({ content, error }) => {
     fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
-    fs.writeFileSync(
-      path.join(testDir, ".github/tailor.lock"),
-      `${JSON.stringify(lock, null, 2)}\n`,
-    );
-    expect(() => readLock(testDir)).toThrow(/no valid 'version'/);
-  });
-
-  test("throws with restore guidance when targets is not an array", () => {
-    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
-    fs.writeFileSync(
-      path.join(testDir, ".github/tailor.lock"),
-      `${JSON.stringify({ version: LOCK_VERSION }, null, 2)}\n`,
-    );
-    expect(() => readLock(testDir)).toThrow(/no valid 'targets'/);
-  });
-
-  test("throws on invalid JSON", () => {
-    fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
-    fs.writeFileSync(path.join(testDir, ".github/tailor.lock"), "{ not json");
-    expect(() => readLock(testDir)).toThrow(/not valid JSON/);
+    fs.writeFileSync(path.join(testDir, ".github/tailor.lock"), content());
+    expect(() => readLock(testDir)).toThrow(error);
   });
 });
 

@@ -224,42 +224,18 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     } as any;
   }
 
-  function mkAddFieldMigration(
+  function mkFieldMigration(
+    kind: "field_added" | "field_removed",
     number: number,
     typeName: string,
     fieldName: string,
   ): PendingMigration {
-    return {
-      number,
-      scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
-      diffPath: `/test/migrations/${String(number).padStart(4, "0")}/diff.json`,
-      namespace: "test-ns",
-      migrationsDir: "/test/migrations",
-      diff: {
-        version: 1,
-        namespace: "test-ns",
-        createdAt: new Date().toISOString(),
-        changes: [
-          {
-            kind: "field_added",
-            typeName,
-            fieldName,
-            after: { type: "string", required: false, array: true },
-          },
-        ],
-        hasBreakingChanges: false,
-        breakingChanges: [],
-        requiresMigrationScript: false,
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any;
-  }
+    const fieldSpec = { type: "string", array: true };
+    const change =
+      kind === "field_added"
+        ? { kind, typeName, fieldName, after: { ...fieldSpec, required: false } }
+        : { kind, typeName, fieldName, before: { ...fieldSpec, required: true } };
 
-  function mkRemoveFieldMigration(
-    number: number,
-    typeName: string,
-    fieldName: string,
-  ): PendingMigration {
     return {
       number,
       scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
@@ -270,14 +246,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
         version: 1,
         namespace: "test-ns",
         createdAt: new Date().toISOString(),
-        changes: [
-          {
-            kind: "field_removed",
-            typeName,
-            fieldName,
-            before: { type: "string", required: true, array: true },
-          },
-        ],
+        changes: [change],
         hasBreakingChanges: false,
         breakingChanges: [],
         requiresMigrationScript: false,
@@ -295,8 +264,8 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     const planResult = createMockPlanResult();
 
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddFieldMigration(1, "User", "permissions"),
-      mkRemoveFieldMigration(5, "User", "roles"),
+      mkFieldMigration("field_added", 1, "User", "permissions"),
+      mkFieldMigration("field_removed", 5, "User", "roles"),
     ]);
 
     await applyTailorDB(client, planResult, "create-update");
@@ -323,7 +292,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     const planResult = createMockPlanResult();
 
     vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkAddFieldMigration(1, "SomeOtherType", "foo"),
+      mkFieldMigration("field_added", 1, "SomeOtherType", "foo"),
     ]);
 
     await applyTailorDB(client, planResult, "create-update");
@@ -379,7 +348,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     ];
     planResult.changeSet.type.updates = [];
 
-    const migration = mkAddFieldMigration(1, "SalesOrder", "reference");
+    const migration = mkFieldMigration("field_added", 1, "SalesOrder", "reference");
     migration.diff.changes = [
       {
         kind: "field_added",

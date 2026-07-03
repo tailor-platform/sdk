@@ -208,6 +208,19 @@ export const configArg = {
 } satisfies ArgsShape;
 
 /**
+ * Shared config arg for commands that accept one or more comma-separated config file paths
+ */
+export const multiConfigArg = {
+  config: arg(z.string().default("tailor.config.ts"), {
+    alias: "c",
+    description:
+      "Path to SDK config file. Use comma-separated paths to deploy multiple apps together.",
+    env: "TAILOR_PLATFORM_SDK_CONFIG_PATH",
+    completion: { type: "file", extensions: ["ts"] },
+  }),
+} satisfies ArgsShape;
+
+/**
  * Arguments for commands that interact with deployed resources (includes config)
  */
 export const deploymentArgs = {

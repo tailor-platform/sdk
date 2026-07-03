@@ -45,18 +45,15 @@ describe("detectPackageManager", () => {
   beforeEach(() => fs.mkdirSync(testDir, { recursive: true }));
   afterEach(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
-  test("detects pnpm", () => {
-    fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
-    expect(detectPackageManager(testDir)).toBe("pnpm");
+  test.each([
+    ["pnpm-lock.yaml", "pnpm"],
+    ["yarn.lock", "yarn"],
+    ["bun.lock", "bun"],
+  ] as const)("detects %s from %s", (lockfile, expected) => {
+    fs.writeFileSync(path.join(testDir, lockfile), "");
+    expect(detectPackageManager(testDir)).toBe(expected);
   });
-  test("detects yarn", () => {
-    fs.writeFileSync(path.join(testDir, "yarn.lock"), "");
-    expect(detectPackageManager(testDir)).toBe("yarn");
-  });
-  test("detects bun", () => {
-    fs.writeFileSync(path.join(testDir, "bun.lock"), "");
-    expect(detectPackageManager(testDir)).toBe("bun");
-  });
+
   test("defaults to npm", () => {
     expect(detectPackageManager(testDir)).toBe("npm");
   });
@@ -189,9 +186,9 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain(
       "namespace: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs.namespaces) }}",
     );
-    expect(content).toContain(".tailor-erd-base/.github/tailor-sdk.lock");
-    expect(content).toContain("run_tailor_sdk tailordb erd export");
-    expect(content).toContain('run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff');
+    expect(content).toContain(".tailor-erd-base/.github/tailor.lock");
+    expect(content).toContain("run_tailor_cli tailordb erd export");
+    expect(content).toContain('run_head_tailor_cli_bin "$GITHUB_WORKSPACE" tailordb erd diff');
     expect(content).toContain("const namespacePattern = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;");
     expect(content).toContain("Invalid ERD namespace in");
     expect(content).toContain("id: tailor-detect-base-package-manager");
@@ -211,12 +208,12 @@ describe("renderBranchWorkflow", () => {
       'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR/tailor.config.ts"',
     );
     expect(content).toContain("BASE_PACKAGE_MANAGER:");
-    expect(content).toContain("tailor_sdk_bin");
+    expect(content).toContain("tailor_cli_bin");
     expect(content).toContain("run_head_node - <<'NODE'");
     expect(content).toContain('path.join(githubWorkspace, appDir, "package.json")');
     expect(content).toContain('path.join(githubWorkspace, "package.json")');
     expect(content).toContain(
-      'run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
+      'run_base_tailor_cli_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
     );
     expect(content).toContain('yarn) run_head_cli_env yarn node "$head_cli_runner" "$@" ;;');
     expect(content).toContain('head_missing="false"');
@@ -315,8 +312,8 @@ describe("renderBranchWorkflow", () => {
 
     expect(start).toBeGreaterThanOrEqual(0);
     expect(end).toBeGreaterThan(start);
-    expect(buildStep).toContain("run_head_tailor_sdk_bin() {");
-    expect(buildStep).toContain("run_base_tailor_sdk_bin() {");
+    expect(buildStep).toContain("run_head_tailor_cli_bin() {");
+    expect(buildStep).toContain("run_base_tailor_cli_bin() {");
     expect(buildStep).toContain('cd "$GITHUB_WORKSPACE"');
     expect(buildStep).toContain('local command_cwd="$1"');
     expect(buildStep).toContain("process.chdir(commandCwd);");
@@ -328,7 +325,7 @@ describe("renderBranchWorkflow", () => {
     expect(buildStep).toContain('case "$BASE_PACKAGE_MANAGER" in');
     expect(buildStep).toContain('cd "$command_cwd"');
     expect(buildStep).toContain(
-      'run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
+      'run_base_tailor_cli_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
     );
   });
 
@@ -351,7 +348,7 @@ describe("renderBranchWorkflow", () => {
       'base_config="$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR/tailor.config.ts"',
     );
     expect(buildStep).toContain(
-      'run_base_tailor_sdk_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
+      'run_base_tailor_cli_bin "$GITHUB_WORKSPACE/.tailor-erd-base/$BASE_APP_DIR" tailordb erd export --config "$base_config"',
     );
     expect(buildStep).not.toContain(".tailor-erd-base/$APP_DIR/tailor.config.ts");
     expect(buildStep).not.toContain('.tailor-erd-base/$APP_DIR" tailordb erd export');
@@ -382,9 +379,9 @@ describe("renderBranchWorkflow", () => {
       'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            TAILOR_PLATFORM_SDK_DTS_PATH',
     );
     expect(buildStep).not.toContain(
-      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_tailor_sdk tailordb erd diff',
+      'cd "$GITHUB_WORKSPACE/$APP_DIR"\n            run_tailor_cli tailordb erd diff',
     );
-    expect(buildStep).toContain('run_head_tailor_sdk_bin "$GITHUB_WORKSPACE" tailordb erd diff');
+    expect(buildStep).toContain('run_head_tailor_cli_bin "$GITHUB_WORKSPACE" tailordb erd diff');
   });
 
   test("treats missing ERD preview configs as empty diff sides", () => {
@@ -444,13 +441,14 @@ describe("renderBranchWorkflow", () => {
     expect(content).toContain("environment: staging");
   });
 
-  test("delegates setup to the composite action for every package manager", () => {
-    for (const pm of ["pnpm", "yarn", "npm", "bun"] as const) {
+  test.each(["pnpm", "yarn", "npm", "bun"] as const)(
+    "delegates setup to the composite action and passes packageManager=%s",
+    (pm) => {
       const { content } = renderBranchWorkflow({ ...branchBase, packageManager: pm });
       expect(content).toContain("uses: tailor-platform/actions/setup@");
       expect(content).toContain(`package-manager: ${pm}`);
-    }
-  });
+    },
+  );
 
   test("generatedIds list the managed jobs and steps", () => {
     const { generatedIds } = renderBranchWorkflow(branchBase);
@@ -529,53 +527,23 @@ describe("decideAction", () => {
     contentHash: hashContent("managed"),
   };
 
-  test("create: no lock entry, no file", () => {
-    expect(
-      decideAction({ existing: undefined, fileExists: false, currentContent: null, force: false })
-        .action,
-    ).toBe("create");
-  });
-
-  test("conflict: no lock entry but file exists", () => {
-    expect(
-      decideAction({ existing: undefined, fileExists: true, currentContent: "x", force: false })
-        .action,
-    ).toBe("conflict");
-  });
-
-  test("--force adopts an unmanaged file", () => {
-    expect(
-      decideAction({ existing: undefined, fileExists: true, currentContent: "x", force: true })
-        .action,
-    ).toBe("regenerate");
-  });
-
-  test("regenerate: lock entry, hash matches", () => {
-    expect(
-      decideAction({ existing: target, fileExists: true, currentContent: "managed", force: false })
-        .action,
-    ).toBe("regenerate");
-  });
-
-  test("conflict: lock entry, hash mismatch (hand edited)", () => {
-    expect(
-      decideAction({ existing: target, fileExists: true, currentContent: "edited", force: false })
-        .action,
-    ).toBe("conflict");
-  });
-
-  test("--force overrides a hand edit", () => {
-    expect(
-      decideAction({ existing: target, fileExists: true, currentContent: "edited", force: true })
-        .action,
-    ).toBe("regenerate");
-  });
-
-  test("restore: lock entry, file missing", () => {
-    expect(
-      decideAction({ existing: target, fileExists: false, currentContent: null, force: false })
-        .action,
-    ).toBe("restore");
+  test.each([
+    ["create: no lock entry, no file", undefined, false, null, false, "create"],
+    ["conflict: no lock entry but file exists", undefined, true, "x", false, "conflict"],
+    ["--force adopts an unmanaged file", undefined, true, "x", true, "regenerate"],
+    ["regenerate: lock entry, hash matches", target, true, "managed", false, "regenerate"],
+    [
+      "conflict: lock entry, hash mismatch (hand edited)",
+      target,
+      true,
+      "edited",
+      false,
+      "conflict",
+    ],
+    ["--force overrides a hand edit", target, true, "edited", true, "regenerate"],
+    ["restore: lock entry, file missing", target, false, null, false, "restore"],
+  ] as const)("%s", (_name, existing, fileExists, currentContent, force, expected) => {
+    expect(decideAction({ existing, fileExists, currentContent, force }).action).toBe(expected);
   });
 
   test("normalize: custom run: body normalises to regenerate", () => {
@@ -764,10 +732,14 @@ describe("setupTarget (integration)", () => {
     );
   });
 
-  test("rejects a branch name with YAML-unsafe characters", async () => {
+  test.each([
+    ["branch name", { branch: "feat,bar" }, /Invalid branch name/],
+    ["environment name", { environment: "prod: evil" }, /Invalid environment name/],
+    ["--dir", { dir: "apps/${{ evil }}" }, /Invalid --dir/],
+  ] as const)("rejects a %s with YAML-unsafe characters", async (_label, overrides, error) => {
     await expect(
-      setupTarget(baseOptions({ workspaceName: "my-app", branch: "feat,bar" })),
-    ).rejects.toThrow(/Invalid branch name/);
+      setupTarget(baseOptions({ workspaceName: "my-app", ...overrides })),
+    ).rejects.toThrow(error);
   });
 
   test("rejects a tag pattern with YAML-unsafe characters", async () => {
@@ -783,18 +755,6 @@ describe("setupTarget (integration)", () => {
         loadConfigName: async () => "cfg-app",
       }),
     ).rejects.toThrow(/Invalid tag pattern/);
-  });
-
-  test("rejects an environment name with YAML-unsafe characters", async () => {
-    await expect(
-      setupTarget(baseOptions({ workspaceName: "my-app", environment: "prod: evil" })),
-    ).rejects.toThrow(/Invalid environment name/);
-  });
-
-  test("rejects a --dir with YAML-unsafe characters", async () => {
-    await expect(
-      setupTarget(baseOptions({ workspaceName: "my-app", dir: "apps/${{ evil }}" })),
-    ).rejects.toThrow(/Invalid --dir/);
   });
 
   test("normalizes a --dir with ./ prefix and trailing slash", async () => {
@@ -1011,13 +971,13 @@ describe("setupCoordinate", () => {
   });
 
   test("errors when lock file is missing", async () => {
-    await expect(setupCoordinate(coordinateOpts())).rejects.toThrow(/tailor-sdk\.lock not found/);
+    await expect(setupCoordinate(coordinateOpts())).rejects.toThrow(/tailor\.lock not found/);
   });
 
   test("errors when an action target is not in the lock", async () => {
     await setupTarget(actionOpts("api"));
     await expect(setupCoordinate(coordinateOpts({ actions: ["missing-app"] }))).rejects.toThrow(
-      /not found in .github\/tailor-sdk\.lock/,
+      /not found in .github\/tailor\.lock/,
     );
   });
 

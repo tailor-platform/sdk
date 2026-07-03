@@ -694,7 +694,7 @@ export async function setupTarget(options: SetupTargetOptions): Promise<void> {
     logger.newline();
     logger.log(`The composite action has been generated at ${styles.path(resolved.file)}.`);
     logger.log(
-      "Use `tailor-sdk setup coordinate` to generate a coordinator workflow that orchestrates this action.",
+      "Use `tailor setup coordinate` to generate a coordinator workflow that orchestrates this action.",
     );
   } else {
     printNextSteps({ environment: resolved.environment, idInjected });
@@ -718,7 +718,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   if (actions.length === 0) {
     throw new Error(
       "At least one --action is required. " +
-        "Run `tailor-sdk setup action --dir <app-dir>` for each app first.",
+        "Run `tailor setup action --dir <app-dir>` for each app first.",
     );
   }
 
@@ -746,8 +746,8 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
 
   if (!lock) {
     throw new Error(
-      ".github/tailor-sdk.lock not found. " +
-        "Run `tailor-sdk setup action --name <name>` for each app before running setup coordinate.",
+      ".github/tailor.lock not found. " +
+        "Run `tailor setup action --name <name>` for each app before running setup coordinate.",
     );
   }
 
@@ -764,8 +764,8 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
     const entry = lock.targets.find((t) => t.kind === "action" && t.workspaceName === name);
     if (!entry) {
       throw new Error(
-        `Action target "${name}" not found in .github/tailor-sdk.lock. ` +
-          `Run \`tailor-sdk setup action --name ${name}\` first.`,
+        `Action target "${name}" not found in .github/tailor.lock. ` +
+          `Run \`tailor setup action --name ${name}\` first.`,
       );
     }
     validateDir(entry.inputs.dir);
@@ -858,11 +858,11 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   logger.log(
     `2. Provision each workspace and set TAILOR_PLATFORM_WORKSPACE_ID on the "${environment}" environment:`,
   );
-  logger.log("   tailor-sdk workspace create   # one per app; copy the id");
+  logger.log("   tailor workspace create   # one per app; copy the id");
   logger.log(`   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env ${environment}`);
   logger.newline();
   logger.log("3. Commit the generated files:");
   logger.log(`   - ${file}`);
   logger.log(`   - ${tailorSetupFile}  (if newly created)`);
-  logger.log("   - .github/tailor-sdk.lock");
+  logger.log("   - .github/tailor.lock");
 }

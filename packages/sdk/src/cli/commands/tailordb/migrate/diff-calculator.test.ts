@@ -38,8 +38,7 @@ function createDiff(
 describe("diff-calculator", () => {
   describe("hasChanges", () => {
     test("should return false for empty changes", () => {
-      const diff = createDiff([]);
-      expect(hasChanges(diff)).toBe(false);
+      expect(hasChanges(createDiff([]))).toBe(false);
     });
 
     test("should return true when there are changes", () => {
@@ -57,142 +56,121 @@ describe("diff-calculator", () => {
 
   describe("formatMigrationDiff", () => {
     test("should format empty result", () => {
-      const diff = createDiff([]);
-      const result = formatMigrationDiff(diff);
-      expect(result).toBe("No schema differences detected.");
+      expect(formatMigrationDiff(createDiff([]))).toBe("No schema differences detected.");
     });
 
-    test("should format added field", () => {
-      const diff = createDiff([
-        {
-          kind: "field_added",
-          typeName: "User",
-          fieldName: "email",
-          after: { type: "string", required: false },
-        },
-      ]);
-      const result = formatMigrationDiff(diff);
-      expect(result).toContain("tailordb.User:");
-      expect(result).toContain("+ email: string (optional)");
-    });
-
-    test("should format added required field", () => {
-      const diff = createDiff([
-        {
-          kind: "field_added",
-          typeName: "User",
-          fieldName: "email",
-          after: { type: "string", required: true },
-        },
-      ]);
-      const result = formatMigrationDiff(diff);
-      expect(result).toContain("+ email: string (required)");
-    });
-
-    test("should format removed field", () => {
-      const diff = createDiff([
-        {
-          kind: "field_removed",
-          typeName: "User",
-          fieldName: "email",
-          before: { type: "string", required: true },
-        },
-      ]);
-      const result = formatMigrationDiff(diff);
-      expect(result).toContain("- email: string");
-    });
-
-    test("should format modified field", () => {
-      const diff = createDiff([
-        {
-          kind: "field_modified",
-          typeName: "User",
-          fieldName: "email",
-          before: { type: "string", required: false },
-          after: { type: "string", required: true },
-        },
-      ]);
-      const result = formatMigrationDiff(diff);
-      expect(result).toContain("~ email: required: false → true");
-    });
-
-    test("should format type addition", () => {
-      const diff = createDiff([
-        {
-          kind: "type_added",
-          typeName: "NewType",
-          after: snapshotType("NewType"),
-        },
-      ]);
-      const result = formatMigrationDiff(diff);
-      expect(result).toContain("+ [Type] NewType (new type)");
-    });
-
-    test("should format type removal", () => {
-      const diff = createDiff([
-        {
-          kind: "type_removed",
-          typeName: "OldType",
-          before: snapshotType("OldType"),
-        },
-      ]);
-      const result = formatMigrationDiff(diff);
-      expect(result).toContain("- [Type] OldType (removed)");
-    });
-
-    test("should format array field", () => {
-      const diff = createDiff([
-        {
-          kind: "field_added",
-          typeName: "User",
-          fieldName: "tags",
-          after: { type: "string", required: false, array: true },
-        },
-      ]);
-      const result = formatMigrationDiff(diff);
-      expect(result).toContain("+ tags: string[] (optional)");
-    });
-
-    test("should group changes by type", () => {
-      const diff = createDiff([
-        {
-          kind: "field_added",
-          typeName: "User",
-          fieldName: "email",
-          after: { type: "string", required: false },
-        },
-        {
-          kind: "field_added",
-          typeName: "User",
-          fieldName: "phone",
-          after: { type: "string", required: false },
-        },
-        {
-          kind: "field_added",
-          typeName: "Product",
-          fieldName: "price",
-          after: { type: "number", required: true },
-        },
-      ]);
-      const result = formatMigrationDiff(diff);
-      expect(result).toContain("tailordb.User:");
-      expect(result).toContain("tailordb.Product:");
+    test.each<{ name: string; changes: MigrationDiff["changes"]; expected: string[] }>([
+      {
+        name: "added field",
+        changes: [
+          {
+            kind: "field_added",
+            typeName: "User",
+            fieldName: "email",
+            after: { type: "string", required: false },
+          },
+        ],
+        expected: ["tailordb.User:", "+ email: string (optional)"],
+      },
+      {
+        name: "added required field",
+        changes: [
+          {
+            kind: "field_added",
+            typeName: "User",
+            fieldName: "email",
+            after: { type: "string", required: true },
+          },
+        ],
+        expected: ["+ email: string (required)"],
+      },
+      {
+        name: "removed field",
+        changes: [
+          {
+            kind: "field_removed",
+            typeName: "User",
+            fieldName: "email",
+            before: { type: "string", required: true },
+          },
+        ],
+        expected: ["- email: string"],
+      },
+      {
+        name: "modified field",
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "User",
+            fieldName: "email",
+            before: { type: "string", required: false },
+            after: { type: "string", required: true },
+          },
+        ],
+        expected: ["~ email: required: false → true"],
+      },
+      {
+        name: "type addition",
+        changes: [{ kind: "type_added", typeName: "NewType", after: snapshotType("NewType") }],
+        expected: ["+ [Type] NewType (new type)"],
+      },
+      {
+        name: "type removal",
+        changes: [{ kind: "type_removed", typeName: "OldType", before: snapshotType("OldType") }],
+        expected: ["- [Type] OldType (removed)"],
+      },
+      {
+        name: "array field",
+        changes: [
+          {
+            kind: "field_added",
+            typeName: "User",
+            fieldName: "tags",
+            after: { type: "string", required: false, array: true },
+          },
+        ],
+        expected: ["+ tags: string[] (optional)"],
+      },
+      {
+        name: "changes grouped by type",
+        changes: [
+          {
+            kind: "field_added",
+            typeName: "User",
+            fieldName: "email",
+            after: { type: "string", required: false },
+          },
+          {
+            kind: "field_added",
+            typeName: "User",
+            fieldName: "phone",
+            after: { type: "string", required: false },
+          },
+          {
+            kind: "field_added",
+            typeName: "Product",
+            fieldName: "price",
+            after: { type: "number", required: true },
+          },
+        ],
+        expected: ["tailordb.User:", "tailordb.Product:"],
+      },
+    ])("should format $name", ({ changes, expected }) => {
+      const result = formatMigrationDiff(createDiff(changes));
+      for (const substring of expected) {
+        expect(result).toContain(substring);
+      }
     });
   });
 
   describe("formatBreakingChanges", () => {
     test("should return empty string for no breaking changes", () => {
-      const result = formatBreakingChanges([]);
-      expect(result).toBe("");
+      expect(formatBreakingChanges([])).toBe("");
     });
 
     test("should format breaking changes with field", () => {
       const breakingChanges: BreakingChangeInfo[] = [
-        {
-          typeName: "User",
-          fieldName: "email",
-          reason: "Required field added",
-        },
+        { typeName: "User", fieldName: "email", reason: "Required field added" },
       ];
       const result = formatBreakingChanges(breakingChanges);
       expect(result).toContain("Breaking changes detected:");
@@ -201,27 +179,15 @@ describe("diff-calculator", () => {
 
     test("should format breaking changes without field (type-level)", () => {
       const breakingChanges: BreakingChangeInfo[] = [
-        {
-          typeName: "OldType",
-          reason: "Type removed",
-        },
+        { typeName: "OldType", reason: "Type removed" },
       ];
-      const result = formatBreakingChanges(breakingChanges);
-      expect(result).toContain("OldType: Type removed");
+      expect(formatBreakingChanges(breakingChanges)).toContain("OldType: Type removed");
     });
 
     test("should format multiple breaking changes", () => {
       const breakingChanges: BreakingChangeInfo[] = [
-        {
-          typeName: "User",
-          fieldName: "email",
-          reason: "Field removed",
-        },
-        {
-          typeName: "Product",
-          fieldName: "price",
-          reason: "Type changed",
-        },
+        { typeName: "User", fieldName: "email", reason: "Field removed" },
+        { typeName: "Product", fieldName: "price", reason: "Type changed" },
       ];
       const result = formatBreakingChanges(breakingChanges);
       expect(result).toContain("User.email: Field removed");
@@ -231,8 +197,7 @@ describe("diff-calculator", () => {
 
   describe("formatWarnings", () => {
     test("should return empty string for no warnings", () => {
-      const result = formatWarnings([]);
-      expect(result).toBe("");
+      expect(formatWarnings([])).toBe("");
     });
 
     test("should format warnings with field", () => {
@@ -258,8 +223,7 @@ describe("diff-calculator", () => {
             "Type removed (all records of this type will be dropped in the post-migration phase)",
         },
       ];
-      const result = formatWarnings(warnings);
-      expect(result).toContain(
+      expect(formatWarnings(warnings)).toContain(
         "OldType: Type removed (all records of this type will be dropped in the post-migration phase)",
       );
     });
@@ -277,88 +241,84 @@ describe("diff-calculator", () => {
 
   describe("formatDiffSummary", () => {
     test("should return 'No changes' for empty diff", () => {
-      const diff = createDiff([]);
-      const result = formatDiffSummary(diff);
-      expect(result).toBe("No changes");
+      expect(formatDiffSummary(createDiff([]))).toBe("No changes");
     });
 
-    test("should count types added", () => {
-      const diff = createDiff([
-        { kind: "type_added", typeName: "NewType1", after: snapshotType("NewType1") },
-        { kind: "type_added", typeName: "NewType2", after: snapshotType("NewType2") },
-      ]);
-      const result = formatDiffSummary(diff);
-      expect(result).toContain("2 type(s) added");
-    });
-
-    test("should count types removed", () => {
-      const diff = createDiff([
-        { kind: "type_removed", typeName: "OldType", before: snapshotType("OldType") },
-      ]);
-      const result = formatDiffSummary(diff);
-      expect(result).toContain("1 type(s) removed");
-    });
-
-    test("should count fields added", () => {
-      const diff = createDiff([
-        {
-          kind: "field_added",
-          typeName: "User",
-          fieldName: "email",
-          after: { type: "string", required: false },
-        },
-      ]);
-      const result = formatDiffSummary(diff);
-      expect(result).toContain("1 field(s) added");
-    });
-
-    test("should count fields removed", () => {
-      const diff = createDiff([
-        {
-          kind: "field_removed",
-          typeName: "User",
-          fieldName: "oldField",
-          before: { type: "string", required: false },
-        },
-      ]);
-      const result = formatDiffSummary(diff);
-      expect(result).toContain("1 field(s) removed");
-    });
-
-    test("should count fields modified", () => {
-      const diff = createDiff([
-        {
-          kind: "field_modified",
-          typeName: "User",
-          fieldName: "email",
-          before: { type: "string", required: false },
-          after: { type: "string", required: true },
-        },
-      ]);
-      const result = formatDiffSummary(diff);
-      expect(result).toContain("1 field(s) modified");
-    });
-
-    test("should combine multiple counts", () => {
-      const diff = createDiff([
-        { kind: "type_added", typeName: "NewType", after: snapshotType("NewType") },
-        {
-          kind: "field_added",
-          typeName: "User",
-          fieldName: "email",
-          after: { type: "string", required: false },
-        },
-        {
-          kind: "field_removed",
-          typeName: "User",
-          fieldName: "oldField",
-          before: { type: "string", required: false },
-        },
-      ]);
-      const result = formatDiffSummary(diff);
-      expect(result).toContain("1 type(s) added");
-      expect(result).toContain("1 field(s) added");
-      expect(result).toContain("1 field(s) removed");
+    test.each<{ name: string; changes: MigrationDiff["changes"]; expected: string[] }>([
+      {
+        name: "types added",
+        changes: [
+          { kind: "type_added", typeName: "NewType1", after: snapshotType("NewType1") },
+          { kind: "type_added", typeName: "NewType2", after: snapshotType("NewType2") },
+        ],
+        expected: ["2 type(s) added"],
+      },
+      {
+        name: "types removed",
+        changes: [{ kind: "type_removed", typeName: "OldType", before: snapshotType("OldType") }],
+        expected: ["1 type(s) removed"],
+      },
+      {
+        name: "fields added",
+        changes: [
+          {
+            kind: "field_added",
+            typeName: "User",
+            fieldName: "email",
+            after: { type: "string", required: false },
+          },
+        ],
+        expected: ["1 field(s) added"],
+      },
+      {
+        name: "fields removed",
+        changes: [
+          {
+            kind: "field_removed",
+            typeName: "User",
+            fieldName: "oldField",
+            before: { type: "string", required: false },
+          },
+        ],
+        expected: ["1 field(s) removed"],
+      },
+      {
+        name: "fields modified",
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "User",
+            fieldName: "email",
+            before: { type: "string", required: false },
+            after: { type: "string", required: true },
+          },
+        ],
+        expected: ["1 field(s) modified"],
+      },
+      {
+        name: "multiple counts",
+        changes: [
+          { kind: "type_added", typeName: "NewType", after: snapshotType("NewType") },
+          {
+            kind: "field_added",
+            typeName: "User",
+            fieldName: "email",
+            after: { type: "string", required: false },
+          },
+          {
+            kind: "field_removed",
+            typeName: "User",
+            fieldName: "oldField",
+            before: { type: "string", required: false },
+          },
+        ],
+        expected: ["1 type(s) added", "1 field(s) added", "1 field(s) removed"],
+      },
+    ])("should count $name", ({ changes, expected }) => {
+      const result = formatDiffSummary(createDiff(changes));
+      for (const substring of expected) {
+        expect(result).toContain(substring);
+      }
     });
   });
 });

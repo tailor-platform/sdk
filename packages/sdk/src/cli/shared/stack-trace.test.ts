@@ -45,19 +45,6 @@ describe("parseStackTrace", () => {
     });
   });
 
-  test("skips eval frames without file:/// prefix", () => {
-    const error = [
-      "rpc error: code = Aborted desc = TypeError: undefined is not a function",
-      "    at fn (file:///bundle.js:1:100)",
-      "    at <eval>:17:38",
-    ].join("\n");
-
-    const result = parseStackTrace(error);
-
-    expect(result.frames).toHaveLength(1);
-    expect(result.frames[0]!.functionName).toBe("fn");
-  });
-
   test("returns empty frames for error without stack trace", () => {
     const error = "Script execution failed with unknown error";
 
@@ -67,55 +54,65 @@ describe("parseStackTrace", () => {
     expect(result.frames).toHaveLength(0);
   });
 
-  test("parses anonymous function frames (no function name)", () => {
-    const error = [
-      "rpc error: code = Aborted desc = Error: test",
-      "    at file:///bundle.js:1:500",
-    ].join("\n");
-
-    const result = parseStackTrace(error);
+  test.each<{ name: string; stackLines: string[]; expectedFrame: StackFrame }>([
+    {
+      name: "skips eval frames without file:/// prefix",
+      stackLines: [
+        "rpc error: code = Aborted desc = TypeError: undefined is not a function",
+        "    at fn (file:///bundle.js:1:100)",
+        "    at <eval>:17:38",
+      ],
+      expectedFrame: { functionName: "fn", file: "file:///bundle.js", line: 1, column: 100 },
+    },
+    {
+      name: "parses anonymous function frames (no function name)",
+      stackLines: [
+        "rpc error: code = Aborted desc = Error: test",
+        "    at file:///bundle.js:1:500",
+      ],
+      expectedFrame: {
+        functionName: "<anonymous>",
+        file: "file:///bundle.js",
+        line: 1,
+        column: 500,
+      },
+    },
+    {
+      name: "parses Windows file URLs with drive letter",
+      stackLines: [
+        "rpc error: code = Aborted desc = Error: test",
+        "    at fn (file:///C:/Users/dev/project/bundle.js:1:100)",
+      ],
+      expectedFrame: {
+        functionName: "fn",
+        file: "file:///C:/Users/dev/project/bundle.js",
+        line: 1,
+        column: 100,
+      },
+    },
+  ])("$name", ({ stackLines, expectedFrame }) => {
+    const result = parseStackTrace(stackLines.join("\n"));
 
     expect(result.frames).toHaveLength(1);
-    expect(result.frames[0]).toEqual({
-      functionName: "<anonymous>",
-      file: "file:///bundle.js",
-      line: 1,
-      column: 500,
-    });
+    expect(result.frames[0]).toEqual(expectedFrame);
   });
 
-  test("parses Windows file URLs with drive letter", () => {
-    const error = [
-      "rpc error: code = Aborted desc = Error: test",
-      "    at fn (file:///C:/Users/dev/project/bundle.js:1:100)",
-    ].join("\n");
-
+  test.each([
+    {
+      name: "strips rpc error prefix from error message",
+      error:
+        "rpc error: code = Aborted desc = RangeError: out of bounds\n    at fn (file:///b.js:1:1)",
+      expectedMessage: "RangeError: out of bounds",
+    },
+    {
+      name: "preserves error message without rpc prefix",
+      error: "Error: simple error\n    at fn (file:///b.js:1:1)",
+      expectedMessage: "Error: simple error",
+    },
+  ])("$name", ({ error, expectedMessage }) => {
     const result = parseStackTrace(error);
 
-    expect(result.frames).toHaveLength(1);
-    expect(result.frames[0]).toEqual({
-      functionName: "fn",
-      file: "file:///C:/Users/dev/project/bundle.js",
-      line: 1,
-      column: 100,
-    });
-  });
-
-  test("strips rpc error prefix from error message", () => {
-    const error =
-      "rpc error: code = Aborted desc = RangeError: out of bounds\n    at fn (file:///b.js:1:1)";
-
-    const result = parseStackTrace(error);
-
-    expect(result.errorMessage).toBe("RangeError: out of bounds");
-  });
-
-  test("preserves error message without rpc prefix", () => {
-    const error = "Error: simple error\n    at fn (file:///b.js:1:1)";
-
-    const result = parseStackTrace(error);
-
-    expect(result.errorMessage).toBe("Error: simple error");
+    expect(result.errorMessage).toBe(expectedMessage);
   });
 
   test("preserves multi-line error messages", () => {

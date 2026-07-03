@@ -132,6 +132,18 @@ function areStaticWebsitesEqual(
 }
 
 /**
+ * Static website names expected to exist after this deploy run.
+ * @param context - Planning context
+ * @returns Names from the deploy-run scope when set, otherwise the application's own websites
+ */
+export function expectedLocalStaticWebsiteNames(context: PlanContext): ReadonlySet<string> {
+  return (
+    context.expectedLocalStaticWebsiteNames ??
+    new Set(context.application.staticWebsiteServices.map((website) => website.name))
+  );
+}
+
+/**
  * Plan static website changes based on current and desired state.
  * @param context - Planning context
  * @returns Planned changes
@@ -152,7 +164,6 @@ export async function planStaticWebsite(context: PlanContext) {
 
   const existingWebsites = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, pageSize) => {
       const { staticwebsites, nextPageToken } = await client.listStaticWebsites({
         workspaceId,
@@ -162,7 +173,7 @@ export async function planStaticWebsite(context: PlanContext) {
       return [staticwebsites, nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "staticwebsite", name),
+    getTrn: (name) => resourceTrn(workspaceId, "staticwebsite", name),
   });
 
   // Track owned website names to plan custom domains afterward

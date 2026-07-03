@@ -492,77 +492,22 @@ describe("concurrencyLimitInterceptor", () => {
 });
 
 describe("parseMethodName", () => {
-  test("parses Create methods", () => {
-    expect(parseMethodName("CreateWorkflow")).toEqual({
-      operation: "create",
-      resourceType: "Workflow",
-    });
-    expect(parseMethodName("CreateTailorDBService")).toEqual({
-      operation: "create",
-      resourceType: "TailorDBService",
-    });
-    expect(parseMethodName("CreateTailorDBType")).toEqual({
-      operation: "create",
-      resourceType: "TailorDBType",
-    });
-  });
-
-  test("parses Update methods", () => {
-    expect(parseMethodName("UpdateWorkflow")).toEqual({
-      operation: "update",
-      resourceType: "Workflow",
-    });
-    expect(parseMethodName("UpdateTailorDBType")).toEqual({
-      operation: "update",
-      resourceType: "TailorDBType",
-    });
-  });
-
-  test("parses Delete methods", () => {
-    expect(parseMethodName("DeleteWorkflow")).toEqual({
-      operation: "delete",
-      resourceType: "Workflow",
-    });
-    expect(parseMethodName("DeleteExecutorExecutor")).toEqual({
-      operation: "delete",
-      resourceType: "ExecutorExecutor",
-    });
-  });
-
-  test("parses Set methods", () => {
-    expect(parseMethodName("SetMetadata")).toEqual({
-      operation: "set",
-      resourceType: "Metadata",
-    });
-  });
-
-  test("parses List methods", () => {
-    expect(parseMethodName("ListWorkflows")).toEqual({
-      operation: "list",
-      resourceType: "Workflows",
-    });
-    expect(parseMethodName("ListWorkflowJobFunctions")).toEqual({
-      operation: "list",
-      resourceType: "WorkflowJobFunctions",
-    });
-  });
-
-  test("parses Get methods", () => {
-    expect(parseMethodName("GetStaticWebsite")).toEqual({
-      operation: "get",
-      resourceType: "StaticWebsite",
-    });
-  });
-
-  test("returns default for unknown method patterns", () => {
-    expect(parseMethodName("UnknownMethod")).toEqual({
-      operation: "perform",
-      resourceType: "resource",
-    });
-    expect(parseMethodName("")).toEqual({
-      operation: "perform",
-      resourceType: "resource",
-    });
+  test.each([
+    ["CreateWorkflow", "create", "Workflow"],
+    ["CreateTailorDBService", "create", "TailorDBService"],
+    ["CreateTailorDBType", "create", "TailorDBType"],
+    ["UpdateWorkflow", "update", "Workflow"],
+    ["UpdateTailorDBType", "update", "TailorDBType"],
+    ["DeleteWorkflow", "delete", "Workflow"],
+    ["DeleteExecutorExecutor", "delete", "ExecutorExecutor"],
+    ["SetMetadata", "set", "Metadata"],
+    ["ListWorkflows", "list", "Workflows"],
+    ["ListWorkflowJobFunctions", "list", "WorkflowJobFunctions"],
+    ["GetStaticWebsite", "get", "StaticWebsite"],
+    ["UnknownMethod", "perform", "resource"],
+    ["", "perform", "resource"],
+  ])("parses %s as { operation: %s, resourceType: %s }", (methodName, operation, resourceType) => {
+    expect(parseMethodName(methodName)).toEqual({ operation, resourceType });
   });
 });
 

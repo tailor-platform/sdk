@@ -127,15 +127,11 @@ export const updateCommand = defineAppCommand({
       args["platform-url"] !== undefined
     ) {
       // Check if user exists
-      const { accessToken: token, user: latestUser } = await fetchLatestToken(
-        config,
-        newUser,
-        tokenLookupPlatformConfig,
-      );
-      resolvedUser = latestUser;
+      const refreshed = await fetchLatestToken(config, newUser, tokenLookupPlatformConfig);
+      resolvedUser = refreshed.user;
 
       // Check if workspace exists
-      const client = await initOperatorClient(token, finalPlatformConfig);
+      const client = await initOperatorClient(refreshed.accessToken, finalPlatformConfig);
       const workspaces = await fetchAll(async (pageToken, maxPageSize) => {
         const { workspaces, nextPageToken } = await client.listWorkspaces({
           pageToken,

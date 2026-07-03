@@ -1,11 +1,7 @@
 import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import {
-  fetchLatestToken,
-  loadPlatformClientConfig,
-  readPlatformConfig,
-} from "#/cli/shared/context";
+import { fetchLatestToken, readPlatformConfig } from "#/cli/shared/context";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { listCommand } from "./list";
 
@@ -17,16 +13,12 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 vi.mock("#/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal()),
   fetchLatestToken: vi.fn(),
-  loadPlatformClientConfig: vi.fn(),
   readPlatformConfig: vi.fn(),
 }));
 
 describe("user pat list", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(loadPlatformClientConfig).mockResolvedValue({
-      platformUrl: "https://api.dev.tailor.tech",
-    });
     vi.mocked(fetchLatestToken).mockResolvedValue({
       accessToken: "scoped-token",
       user: "u@example.com",

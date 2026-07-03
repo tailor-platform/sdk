@@ -1,6 +1,6 @@
 import { brandValue } from "#/utils/brand";
 import type { TailorWorkflowAPI } from "#/runtime/workflow";
-import type { JsonCompatible } from "#/types/helpers";
+import type { JsonCompatible, TypeLevelError } from "#/types/helpers";
 
 /**
  * A single wait point instance with typed `.wait()` and `.resolve()` methods.
@@ -81,23 +81,23 @@ function createWaitPointInstance(initialKey: string): WaitPointWithSetter {
 /**
  * The type produced by `define<Payload, Result>()` / `createWaitPoint<Payload, Result>(key)`.
  * Resolves to `WaitPointInstance<Payload, Result>` when both types are JsonValue-compatible,
- * or to a template-literal error string that surfaces at the call site.
+ * or to a type-level error that surfaces at the call site.
  */
 type WaitPointDef<Payload, Result> = [null] extends [Payload]
-  ? "ERROR: Payload cannot be null at the top level"
+  ? TypeLevelError<"Payload cannot be null at the top level">
   : [undefined] extends [Result]
-    ? "ERROR: Result cannot be (or include) undefined (resolve callback must return a value)"
+    ? TypeLevelError<"Result cannot be (or include) undefined (resolve callback must return a value)">
     : [Payload] extends [undefined]
       ? [Result] extends [JsonCompatible<Result>]
         ? WaitPointInstance<Payload, Result>
-        : "ERROR: Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
+        : TypeLevelError<"Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">
       : [undefined] extends [Payload]
-        ? "ERROR: Payload cannot include undefined at the top level"
+        ? TypeLevelError<"Payload cannot include undefined at the top level">
         : [Payload] extends [JsonCompatible<Payload>]
           ? [Result] extends [JsonCompatible<Result>]
             ? WaitPointInstance<Payload, Result>
-            : "ERROR: Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
-          : "ERROR: Payload must be JsonValue-compatible (plain objects/arrays; no class instances or functions)";
+            : TypeLevelError<"Result must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">
+          : TypeLevelError<"Payload must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">;
 
 /**
  * The `define` function passed to the `createWaitPoints` builder callback.
