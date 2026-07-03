@@ -93,7 +93,7 @@ jobs:
           # check entirely (treat as relevant) once a page is full.
           if [ "$head_missing" = "false" ] && [ "$pr_file_count" -lt 300 ] &&
             ! echo "$pr_changed_files" | grep -qE '^(example/tailor\.config\.ts|packages/sdk/src/cli/commands/tailordb/erd/)'; then
-            namespace_dirs=$(grep -oP 'loaded from \K[^/]+(?=/)' "$head_log" | sort -u)
+            namespace_dirs=$(grep -oP 'loaded from \K[^/]+(?=/)' "$head_log" | sort -u || true)
             relevant="false"
             if [ -n "$namespace_dirs" ]; then
               while IFS= read -r dir; do
@@ -113,11 +113,11 @@ jobs:
           # the first one at or before the fork point (schema-export runs
           # after the fork point may include changes unrelated to this PR).
           run_id=""
-          for candidate_sha in $(gh api "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
+          for candidate_sha in $(gh api -X GET "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
             -f branch=main -f status=success -f per_page=100 --jq '.workflow_runs[].head_sha'); do
             status=$(gh api "repos/$REPO/compare/$candidate_sha...$fork_sha" --jq '.status' 2>/dev/null || echo "diverged")
             if [ "$status" = "ahead" ] || [ "$status" = "identical" ]; then
-              run_id=$(gh api "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
+              run_id=$(gh api -X GET "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
                 -f head_sha="$candidate_sha" -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')
               break
             fi
@@ -125,7 +125,7 @@ jobs:
 
           if [ -z "$run_id" ]; then
             echo "No ERD schema export found at or before fork point $fork_sha; falling back to the latest export on main."
-            run_id=$(gh api "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
+            run_id=$(gh api -X GET "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
               -f branch=main -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')
           fi
 

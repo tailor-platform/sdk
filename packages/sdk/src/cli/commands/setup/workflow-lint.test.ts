@@ -93,6 +93,25 @@ describe("repository ERD preview workflow", () => {
     expect(content).toContain('status" = "ahead" ] || [ "$status" = "identical"');
   });
 
+  test("uses -X GET when filtering workflow runs with -f, since gh api defaults writable-looking calls to a write method", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+
+    const filterCalls =
+      content.match(/gh api [^\n]*actions\/workflows\/erd-schema-export\.yml\/runs/g) ?? [];
+    expect(filterCalls.length).toBeGreaterThan(0);
+    for (const call of filterCalls) {
+      expect(call).toContain("-X GET");
+    }
+  });
+
+  test("does not let a no-match grep abort the script under set -euo pipefail", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+
+    expect(content).toContain(
+      "grep -oP 'loaded from \\K[^/]+(?=/)' \"$head_log\" | sort -u || true",
+    );
+  });
+
   test("renders a diff even when no base schema export can be found", () => {
     const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
 
@@ -166,6 +185,12 @@ describe("repository ERD schema export workflow", () => {
     expect(content).toContain("repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA");
     expect(content).toContain("grep -oP 'loaded from \\K[^/]+(?=/)'");
     expect(content).toContain("This push did not touch namespace '$NAMESPACE'; skipping upload.");
+  });
+
+  test("does not let a no-match grep abort the script under set -euo pipefail", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_EXPORT_WORKFLOW, "utf-8");
+
+    expect(content).toContain("grep -oP 'loaded from \\K[^/]+(?=/)' \"$log\" | sort -u || true");
   });
 
   test("treats a full page of compare files as relevant instead of trusting a possibly-truncated list", () => {

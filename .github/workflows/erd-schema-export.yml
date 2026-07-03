@@ -91,7 +91,7 @@ jobs:
             exit 0
           fi
 
-          namespace_dirs=$(grep -oP 'loaded from \K[^/]+(?=/)' "$log" | sort -u)
+          namespace_dirs=$(grep -oP 'loaded from \K[^/]+(?=/)' "$log" | sort -u || true)
           if [ -z "$namespace_dirs" ]; then
             echo "No type files were loaded for namespace '$NAMESPACE'; keeping the export as-is."
             exit 0
