@@ -32,7 +32,7 @@ pnpm lint:fix
 pnpm format
 pnpm format:check
 
-# Run all checks (format, lint:fix, typecheck)
+# Run all checks (build, generate, format, and every check:* script in package.json)
 pnpm check
 
 # Check CLI documentation matches command definitions
@@ -46,10 +46,11 @@ pnpm -C packages/sdk docs:update
 
 ```
 ├── packages/
-│   ├── sdk/          # Main Tailor Platform SDK package
-│   ├── create-sdk/   # Project scaffolding CLI
-│   └── tailor-proto/        # Protocol buffer definitions
-└── example/                 # Development and testing example
+│   ├── sdk/           # Main Tailor Platform SDK package
+│   ├── create-sdk/    # Project scaffolding CLI
+│   ├── sdk-codemod/   # Codemod runner for SDK upgrades
+│   └── tailor-proto/  # Protocol buffer definitions
+└── example/           # Development and testing example
 ```
 
 ## Release
