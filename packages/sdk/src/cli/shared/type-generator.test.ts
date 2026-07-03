@@ -10,12 +10,65 @@ import {
 import type { AttributeListConfig, AttributeMapConfig } from "./type-generator";
 
 describe("generateTypeDefinition", () => {
-  test("should generate tuple type in __tuple property", () => {
-    const attributeList: AttributeListConfig = ["attr1", "attr2"];
-
-    const result = generateTypeDefinition(undefined, attributeList);
-
-    expect(result).toContain("__tuple?: [string, string]");
+  test.each<{
+    name: string;
+    args: Parameters<typeof generateTypeDefinition>;
+    expected: string[];
+  }>([
+    {
+      name: "generates tuple type in __tuple property",
+      args: [undefined, ["attr1", "attr2"]],
+      expected: ["__tuple?: [string, string]"],
+    },
+    {
+      name: "generates AttributeMap interface",
+      args: [{ role: '"MANAGER" | "STAFF"', isActive: "boolean" }, undefined],
+      expected: ["interface AttributeMap", 'role: "MANAGER" | "STAFF"', "isActive: boolean"],
+    },
+    {
+      name: "generates empty AttributeMap when no attributes",
+      args: [undefined, undefined],
+      expected: ["interface AttributeMap {}", "interface AttributeList", "__tuple?: []"],
+    },
+    {
+      name: "includes proper file header and structure",
+      args: [undefined, undefined],
+      expected: [
+        "// This file is auto-generated",
+        'declare module "@tailor-platform/sdk"',
+        "export {};",
+      ],
+    },
+    {
+      name: "generates Env interface with literal types",
+      args: [undefined, undefined, { hoge: 1, fuga: "hello", piyo: true }],
+      expected: ["interface Env", "hoge: 1;", 'fuga: "hello";', "piyo: true;"],
+    },
+    {
+      name: "generates empty Env interface when no env provided",
+      args: [undefined, undefined],
+      expected: ["interface Env {}"],
+    },
+    {
+      name: "generates empty MachineUserNameRegistry when no machine users provided",
+      args: [undefined, undefined],
+      expected: ["interface MachineUserNameRegistry {}"],
+    },
+    {
+      name: "generates empty IdpNameRegistry when no idps provided",
+      args: [undefined, undefined],
+      expected: ["interface IdpNameRegistry {}"],
+    },
+    {
+      name: "generates IdpNameRegistry with idp names",
+      args: [undefined, undefined, undefined, undefined, ["primary-idp", "backoffice"]],
+      expected: ["interface IdpNameRegistry", '"primary-idp": true;', "backoffice: true;"],
+    },
+  ])("should $name", ({ args, expected }) => {
+    const result = generateTypeDefinition(...args);
+    for (const substring of expected) {
+      expect(result).toContain(substring);
+    }
   });
 
   test("should generate interface AttributeList for declaration merging", () => {
@@ -26,66 +79,9 @@ describe("generateTypeDefinition", () => {
 
     const result = generateTypeDefinition(attributeMap, attributeList);
 
-    // Should use interface instead of type for AttributeList
     expect(result).toContain("interface AttributeList");
     expect(result).not.toContain("type AttributeList =");
     expect(result).toContain("__tuple?: []");
-  });
-
-  test("should generate AttributeMap interface", () => {
-    const attributeMap: AttributeMapConfig = {
-      role: '"MANAGER" | "STAFF"',
-      isActive: "boolean",
-    };
-
-    const result = generateTypeDefinition(attributeMap, undefined);
-
-    expect(result).toContain("interface AttributeMap");
-    expect(result).toContain('role: "MANAGER" | "STAFF"');
-    expect(result).toContain("isActive: boolean");
-  });
-
-  test("should generate empty AttributeMap when no attributes", () => {
-    const result = generateTypeDefinition(undefined, undefined);
-
-    expect(result).toContain("interface AttributeMap {}");
-    expect(result).toContain("interface AttributeList");
-    expect(result).toContain("__tuple?: []");
-  });
-
-  test("should include proper file header and structure", () => {
-    const result = generateTypeDefinition(undefined, undefined);
-
-    expect(result).toContain("// This file is auto-generated");
-    expect(result).toContain('declare module "@tailor-platform/sdk"');
-    expect(result).toContain("export {};");
-  });
-
-  test("should generate Env interface with literal types", () => {
-    const env = {
-      hoge: 1,
-      fuga: "hello",
-      piyo: true,
-    };
-
-    const result = generateTypeDefinition(undefined, undefined, env);
-
-    expect(result).toContain("interface Env");
-    expect(result).toContain("hoge: 1;");
-    expect(result).toContain('fuga: "hello";');
-    expect(result).toContain("piyo: true;");
-  });
-
-  test("should generate empty Env interface when no env provided", () => {
-    const result = generateTypeDefinition(undefined, undefined);
-
-    expect(result).toContain("interface Env {}");
-  });
-
-  test("should generate empty MachineUserNameRegistry when no machine users provided", () => {
-    const result = generateTypeDefinition(undefined, undefined);
-
-    expect(result).toContain("interface MachineUserNameRegistry {}");
   });
 
   test("should generate MachineUserNameRegistry with machine user names", () => {
@@ -100,23 +96,6 @@ describe("generateTypeDefinition", () => {
     // Valid identifiers are emitted unquoted (matches formatter output)
     expect(result).toContain("kiosk: true;");
     expect(result).not.toContain('"kiosk": true;');
-  });
-
-  test("should generate empty IdpNameRegistry when no idps provided", () => {
-    const result = generateTypeDefinition(undefined, undefined);
-
-    expect(result).toContain("interface IdpNameRegistry {}");
-  });
-
-  test("should generate IdpNameRegistry with idp names", () => {
-    const result = generateTypeDefinition(undefined, undefined, undefined, undefined, [
-      "primary-idp",
-      "backoffice",
-    ]);
-
-    expect(result).toContain("interface IdpNameRegistry");
-    expect(result).toContain('"primary-idp": true;');
-    expect(result).toContain("backoffice: true;");
   });
 
   test("should generate empty ConnectionNameRegistry when no connections provided", () => {

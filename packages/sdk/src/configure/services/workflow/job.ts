@@ -1,7 +1,7 @@
 import { brandValue } from "#/utils/brand";
 import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
 import type { TailorEnv, TailorInvoker } from "#/runtime/types";
-import type { JsonCompatible } from "#/types/helpers";
+import type { JsonCompatible, TypeLevelError } from "#/types/helpers";
 
 /**
  * Context object passed as the second argument to workflow job body functions.
@@ -14,21 +14,21 @@ export type WorkflowJobContext = {
 /**
  * The body function type for a workflow job.
  * Resolves to the callable signature when `I` / `O` are JsonValue-compatible,
- * or to a template-literal error string that surfaces at the `body:` property.
+ * or to a type-level error that surfaces at the `body:` property.
  */
 type JobBody<I, O> = [null] extends [I]
-  ? "ERROR: Input cannot be null at the top level"
+  ? TypeLevelError<"Input cannot be null at the top level">
   : [I] extends [undefined]
     ? [O] extends [JsonCompatible<O> | undefined | void]
       ? (input: I, context: WorkflowJobContext) => O | Promise<O>
-      : "ERROR: Output must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
+      : TypeLevelError<"Output must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">
     : [undefined] extends [I]
-      ? "ERROR: Input cannot include undefined at the top level"
+      ? TypeLevelError<"Input cannot include undefined at the top level">
       : [I] extends [JsonCompatible<I>]
         ? [O] extends [JsonCompatible<O> | undefined | void]
           ? (input: I, context: WorkflowJobContext) => O | Promise<O>
-          : "ERROR: Output must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
-        : "ERROR: Input must be JsonValue-compatible (plain objects/arrays; no class instances or functions)";
+          : TypeLevelError<"Output must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">
+        : TypeLevelError<"Input must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">;
 
 /**
  * WorkflowJob represents a job that can be triggered in a workflow.

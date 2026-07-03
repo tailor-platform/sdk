@@ -51,6 +51,11 @@ vi.mock("./change-set", async (importOriginal) => {
   };
 });
 
+type EventConfig = {
+  case: string;
+  value: Record<string, unknown> & { condition?: { expr: string } | undefined };
+};
+
 describe("planExecutor", () => {
   const workspaceId = "test-workspace";
   const appName = "test-app";
@@ -169,6 +174,20 @@ describe("planExecutor", () => {
     } as unknown as Application;
   }
 
+  function buildPlanContext(
+    application: Application,
+    overrides?: Partial<Omit<PlanContext, "application">>,
+  ): PlanContext {
+    return {
+      client: createMockClient([]),
+      workspaceId,
+      application,
+      forRemoval: false,
+      config: mockConfig,
+      ...overrides,
+    };
+  }
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -181,15 +200,7 @@ describe("planExecutor", () => {
       // New config has "new-executor" (renamed from old-executor)
       const application = createMockApplication([createMockExecutor("new-executor")]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       // "new-executor" should be created
       expect(result.changeSet.creates).toHaveLength(1);
@@ -216,15 +227,7 @@ describe("planExecutor", () => {
         createMockExecutor("executor-b"),
       ]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       // "executor-a-renamed" should be created
       expect(result.changeSet.creates).toHaveLength(1);
@@ -251,15 +254,7 @@ describe("planExecutor", () => {
       // New config only has executor-a (executor-b removed)
       const application = createMockApplication([createMockExecutor("executor-a")]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       // "executor-a" should be updated
       expect(result.changeSet.updates).toHaveLength(1);
@@ -284,15 +279,7 @@ describe("planExecutor", () => {
       // New config is empty
       const application = createMockApplication([]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       // All should be deleted
       expect(result.changeSet.deletes).toHaveLength(3);
@@ -318,15 +305,7 @@ describe("planExecutor", () => {
       // New config is empty
       const application = createMockApplication([]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       // Should NOT be deleted (no label means not managed by SDK)
       expect(result.changeSet.deletes).toHaveLength(0);
@@ -339,15 +318,7 @@ describe("planExecutor", () => {
       // New config is empty
       const application = createMockApplication([]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       // Should NOT be deleted (owned by different app)
       expect(result.changeSet.deletes).toHaveLength(0);
@@ -366,15 +337,7 @@ describe("planExecutor", () => {
       // New config is empty
       const application = createMockApplication([]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       // Only own executor should be deleted
       expect(result.changeSet.deletes).toHaveLength(1);
@@ -393,15 +356,7 @@ describe("planExecutor", () => {
       // New executor in config
       const application = createMockApplication([createMockExecutor("new-executor")]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       // Should be created
       expect(result.changeSet.creates).toHaveLength(1);
@@ -421,15 +376,7 @@ describe("planExecutor", () => {
       // Same executor in config (will be updated)
       const application = createMockApplication([createMockExecutor("existing-executor")]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       // Should be updated
       expect(result.changeSet.updates).toHaveLength(1);
@@ -442,14 +389,7 @@ describe("planExecutor", () => {
 
     test("existing executor is unchanged when remote definition matches desired definition", async () => {
       const executor = createMockExecutor("existing-executor");
-      const createClient = createMockClient([]);
-      const createResult = await planExecutor({
-        client: createClient,
-        workspaceId,
-        application: createMockApplication([executor]),
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const createResult = await planExecutor(buildPlanContext(createMockApplication([executor])));
       const desiredExecutor = createResult.changeSet.creates[0]!.request.executor;
 
       const client = createMockClient([
@@ -460,13 +400,9 @@ describe("planExecutor", () => {
         },
       ]);
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application: createMockApplication([executor]),
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client }),
+      );
 
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0]!.name).toBe("existing-executor");
@@ -488,14 +424,10 @@ describe("planExecutor", () => {
           body: () => {},
         },
       };
-      const createClient = createMockClient([]);
-      const createResult = await planExecutor({
-        client: createClient,
-        workspaceId,
-        application: createMockApplication([executor], { tailorDBTypes: { User: "tailordb" } }),
-        forRemoval: false,
-        config: mockConfig,
+      const application = createMockApplication([executor], {
+        tailorDBTypes: { User: "tailordb" },
       });
+      const createResult = await planExecutor(buildPlanContext(application));
       const desiredExecutor = structuredClone(createResult.changeSet.creates[0]!.request.executor);
       const eventConfig = desiredExecutor?.triggerConfig?.config;
       if (eventConfig?.case !== "event") {
@@ -511,13 +443,7 @@ describe("planExecutor", () => {
         },
       ]);
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application: createMockApplication([executor], { tailorDBTypes: { User: "tailordb" } }),
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       expect(result.changeSet.unchanged).toHaveLength(1);
       expect(result.changeSet.unchanged[0]!.name).toBe("existing-executor");
@@ -534,15 +460,7 @@ describe("planExecutor", () => {
       // Config has same name
       const application = createMockApplication([createMockExecutor("my-executor")]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       // Should detect unmanaged resource
       expect(result.unmanaged).toHaveLength(1);
@@ -555,15 +473,7 @@ describe("planExecutor", () => {
       // Config has same name
       const application = createMockApplication([createMockExecutor("my-executor")]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application, { client }));
 
       // Should detect conflict
       expect(result.conflicts).toHaveLength(1);
@@ -586,15 +496,9 @@ describe("planExecutor", () => {
         executorService: { loadExecutors },
       } as unknown as Application;
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: true,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(
+        buildPlanContext(application, { client, forRemoval: true }),
+      );
 
       // loadExecutors should NOT be called
       expect(loadExecutors).not.toHaveBeenCalled();
@@ -606,21 +510,12 @@ describe("planExecutor", () => {
 
   describe("resolverExecutedTrigger success field", () => {
     test("includes success field in trigger condition expression", async () => {
-      const client = createMockClient([]);
       const application = createMockApplication(
         [createMockResolverExecutedExecutor("test-executor")],
         { resolverNames: { testResolver: "test-resolver-ns" } },
       );
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application));
 
       expect(result.changeSet.creates).toHaveLength(1);
       const create = result.changeSet.creates[0]!;
@@ -643,21 +538,12 @@ describe("planExecutor", () => {
     });
 
     test("includes success field in function operation variables expression", async () => {
-      const client = createMockClient([]);
       const application = createMockApplication(
         [createMockResolverExecutedExecutor("test-executor")],
         { resolverNames: { testResolver: "test-resolver-ns" } },
       );
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planExecutor(ctx);
+      const result = await planExecutor(buildPlanContext(application));
 
       expect(result.changeSet.creates).toHaveLength(1);
       const create = result.changeSet.creates[0]!;
@@ -675,52 +561,189 @@ describe("planExecutor", () => {
   });
 
   describe("typed event config", () => {
-    function getEventConfig(result: Awaited<ReturnType<typeof planExecutor>>) {
+    function getEventConfig(result: Awaited<ReturnType<typeof planExecutor>>): EventConfig {
       const create = result.changeSet.creates[0]!;
       return (
         create.request.executor?.triggerConfig?.config as {
           case: "event";
-          value: { typedConfig: { case: string; value: Record<string, unknown> } };
+          value: { typedConfig: EventConfig };
         }
       ).value.typedConfig;
     }
 
-    test("recordCreated emits tailordb typed config", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-record-created",
-        description: "test",
-        disabled: false,
-        trigger: {
-          kind: "tailordb",
-          events: ["tailordb.type_record.created"],
+    test.each([
+      {
+        name: "recordCreated emits tailordb typed config",
+        executor: {
+          name: "on-record-created",
+          description: "test",
+          disabled: false,
+          trigger: {
+            kind: "tailordb",
+            events: ["tailordb.type_record.created"],
+            typeName: "User",
+          },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: { tailorDBTypes: { User: "my-tailordb" } },
+        expected: {
+          case: "tailordb",
+          eventTypes: ["tailordb.type_record.created"],
+          namespaceName: "my-tailordb",
           typeName: "User",
+          resolverName: undefined,
         },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        tailorDBTypes: { User: "my-tailordb" },
-      });
+      },
+      {
+        name: "resolverExecuted emits pipeline typed config",
+        executor: {
+          name: "on-resolver-exec",
+          description: "test",
+          disabled: false,
+          trigger: { kind: "resolverExecuted", resolverName: "myResolver" },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: { resolverNames: { myResolver: "my-pipeline" } },
+        expected: {
+          case: "pipeline",
+          eventTypes: ["pipeline.resolver.executed"],
+          namespaceName: "my-pipeline",
+          typeName: undefined,
+          resolverName: "myResolver",
+        },
+      },
+      {
+        name: "idpUserCreated emits idp typed config",
+        executor: {
+          name: "on-idp-user-created",
+          description: "test",
+          disabled: false,
+          trigger: { kind: "idpUser", events: ["idp.user.created"] },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: { idpNames: ["my-idp"] },
+        expected: {
+          case: "idp",
+          eventTypes: ["idp.user.created"],
+          namespaceName: "my-idp",
+          typeName: undefined,
+          resolverName: undefined,
+        },
+      },
+      {
+        name: "authAccessTokenIssued emits auth typed config",
+        executor: {
+          name: "on-auth-token-issued",
+          description: "test",
+          disabled: false,
+          trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: { authName: "my-auth" },
+        expected: {
+          case: "auth",
+          eventTypes: ["auth.access_token.issued"],
+          namespaceName: "my-auth",
+          typeName: undefined,
+          resolverName: undefined,
+        },
+      },
+      {
+        name: "multi-event record trigger emits multiple eventTypes",
+        executor: {
+          name: "on-record-change",
+          description: "test",
+          disabled: false,
+          trigger: {
+            kind: "tailordb",
+            events: ["tailordb.type_record.created", "tailordb.type_record.updated"],
+            typeName: "User",
+          },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: { tailorDBTypes: { User: "my-tailordb" } },
+        expected: {
+          case: "tailordb",
+          eventTypes: ["tailordb.type_record.created", "tailordb.type_record.updated"],
+          namespaceName: "my-tailordb",
+          typeName: "User",
+          resolverName: undefined,
+        },
+      },
+      {
+        name: "multi-event idpUser trigger emits multiple eventTypes",
+        executor: {
+          name: "on-idp-user-change",
+          description: "test",
+          disabled: false,
+          trigger: { kind: "idpUser", events: ["idp.user.created", "idp.user.deleted"] },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: { idpNames: ["my-idp"] },
+        expected: {
+          case: "idp",
+          eventTypes: ["idp.user.created", "idp.user.deleted"],
+          namespaceName: "my-idp",
+          typeName: undefined,
+          resolverName: undefined,
+        },
+      },
+      {
+        name: "multi-event authAccessToken trigger emits multiple eventTypes",
+        executor: {
+          name: "on-auth-token-change",
+          description: "test",
+          disabled: false,
+          trigger: {
+            kind: "authAccessToken",
+            events: ["auth.access_token.issued", "auth.access_token.revoked"],
+          },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: { authName: "my-auth" },
+        expected: {
+          case: "auth",
+          eventTypes: ["auth.access_token.issued", "auth.access_token.revoked"],
+          namespaceName: "my-auth",
+          typeName: undefined,
+          resolverName: undefined,
+        },
+      },
+    ])("$name", async ({ executor, appOptions, expected }) => {
+      const application = createMockApplication([executor], appOptions);
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(buildPlanContext(application));
 
       expect(result.changeSet.creates).toHaveLength(1);
       const typedConfig = getEventConfig(result);
-      expect(typedConfig.case).toBe("tailordb");
-      expect(typedConfig.value.eventTypes).toEqual(["tailordb.type_record.created"]);
-      expect(typedConfig.value.namespaceName).toBe("my-tailordb");
-      expect(typedConfig.value.typeName).toBe("User");
+      expect(typedConfig.case).toBe(expected.case);
+      expect(typedConfig.value.eventTypes).toEqual(expected.eventTypes);
+      expect(typedConfig.value.namespaceName).toBe(expected.namespaceName);
+      expect(typedConfig.value.typeName).toBe(expected.typeName);
+      expect(typedConfig.value.resolverName).toBe(expected.resolverName);
       expect(typedConfig.value.condition).toBeUndefined();
     });
 
+    test("idpUserCreated picks the matching IdP when multiple are configured and idp is specified", async () => {
+      const executor: Executor = {
+        name: "on-idp-user-created",
+        description: "test",
+        disabled: false,
+        trigger: { kind: "idpUser", events: ["idp.user.created"], idp: "idp-b" },
+        operation: { kind: "function", body: () => {} },
+      };
+      const application = createMockApplication([executor], {
+        idpNames: ["idp-a", "idp-b"],
+      });
+
+      const result = await planExecutor(buildPlanContext(application));
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("idp");
+      expect(typedConfig.value.namespaceName).toBe("idp-b");
+    });
+
     test("recordCreated with condition emits condition in typed config", async () => {
-      const client = createMockClient([]);
       const executor: Executor = {
         name: "on-record-created-cond",
         description: "test",
@@ -737,13 +760,7 @@ describe("planExecutor", () => {
         tailorDBTypes: { User: "my-tailordb" },
       });
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(buildPlanContext(application));
 
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("tailordb");
@@ -751,327 +768,7 @@ describe("planExecutor", () => {
       expect((typedConfig.value.condition as { expr: string }).expr).not.toContain("args.typeName");
     });
 
-    test("resolverExecuted emits pipeline typed config", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-resolver-exec",
-        description: "test",
-        disabled: false,
-        trigger: {
-          kind: "resolverExecuted",
-          resolverName: "myResolver",
-        },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        resolverNames: { myResolver: "my-pipeline" },
-      });
-
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
-
-      const typedConfig = getEventConfig(result);
-      expect(typedConfig.case).toBe("pipeline");
-      expect(typedConfig.value.eventTypes).toEqual(["pipeline.resolver.executed"]);
-      expect(typedConfig.value.namespaceName).toBe("my-pipeline");
-      expect(typedConfig.value.resolverName).toBe("myResolver");
-      expect(typedConfig.value.condition).toBeUndefined();
-    });
-
-    test("idpUserCreated emits idp typed config", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-idp-user-created",
-        description: "test",
-        disabled: false,
-        trigger: { kind: "idpUser", events: ["idp.user.created"] },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        idpNames: ["my-idp"],
-      });
-
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
-
-      const typedConfig = getEventConfig(result);
-      expect(typedConfig.case).toBe("idp");
-      expect(typedConfig.value.eventTypes).toEqual(["idp.user.created"]);
-      expect(typedConfig.value.namespaceName).toBe("my-idp");
-    });
-
-    test("authAccessTokenIssued emits auth typed config", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-auth-token-issued",
-        description: "test",
-        disabled: false,
-        trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        authName: "my-auth",
-      });
-
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
-
-      const typedConfig = getEventConfig(result);
-      expect(typedConfig.case).toBe("auth");
-      expect(typedConfig.value.eventTypes).toEqual(["auth.access_token.issued"]);
-      expect(typedConfig.value.namespaceName).toBe("my-auth");
-    });
-
-    test("recordCreated throws when typeName not found in any TailorDB service", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-record-created",
-        description: "test",
-        disabled: false,
-        trigger: {
-          kind: "tailordb",
-          events: ["tailordb.type_record.created"],
-          typeName: "Unknown",
-        },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        tailorDBTypes: { User: "my-tailordb" },
-      });
-
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow('TailorDB type "Unknown" not found in any namespace');
-    });
-
-    test("resolverExecuted throws when resolver not found in any namespace", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-resolver-exec",
-        description: "test",
-        disabled: false,
-        trigger: { kind: "resolverExecuted", resolverName: "unknown" },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        resolverNames: { myResolver: "my-pipeline" },
-      });
-
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow('Resolver "unknown" not found in any namespace');
-    });
-
-    test("idpUserCreated throws when no IdP service configured", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-idp-user-created",
-        description: "test",
-        disabled: false,
-        trigger: { kind: "idpUser", events: ["idp.user.created"] },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor]);
-
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow(/no IdP is configured/);
-    });
-
-    test("idpUserCreated picks the matching IdP when multiple are configured and idp is specified", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-idp-user-created",
-        description: "test",
-        disabled: false,
-        trigger: { kind: "idpUser", events: ["idp.user.created"], idp: "idp-b" },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        idpNames: ["idp-a", "idp-b"],
-      });
-
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
-
-      const typedConfig = getEventConfig(result);
-      expect(typedConfig.case).toBe("idp");
-      expect(typedConfig.value.namespaceName).toBe("idp-b");
-    });
-
-    test("idpUserCreated throws when multiple IdPs are configured and idp is omitted", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-idp-user-created",
-        description: "test",
-        disabled: false,
-        trigger: { kind: "idpUser", events: ["idp.user.created"] },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        idpNames: ["idp-a", "idp-b"],
-      });
-
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow(/multiple IdPs/);
-    });
-
-    test("idpUserCreated throws when specified idp does not exist", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-idp-user-created",
-        description: "test",
-        disabled: false,
-        trigger: { kind: "idpUser", events: ["idp.user.created"], idp: "missing" },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        idpNames: ["idp-a", "idp-b"],
-      });
-
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow(/no IdP with that name is configured/);
-    });
-
-    test("authAccessTokenIssued throws when no Auth service configured", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-auth-token-issued",
-        description: "test",
-        disabled: false,
-        trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor]);
-
-      await expect(
-        planExecutor({ client, workspaceId, application, forRemoval: false, config: mockConfig }),
-      ).rejects.toThrow("No Auth service configured");
-    });
-
-    test("multi-event record trigger emits multiple eventTypes", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-record-change",
-        description: "test",
-        disabled: false,
-        trigger: {
-          kind: "tailordb",
-          events: ["tailordb.type_record.created", "tailordb.type_record.updated"],
-          typeName: "User",
-        },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        tailorDBTypes: { User: "my-tailordb" },
-      });
-
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
-
-      expect(result.changeSet.creates).toHaveLength(1);
-      const typedConfig = getEventConfig(result);
-      expect(typedConfig.case).toBe("tailordb");
-      expect(typedConfig.value.eventTypes).toEqual([
-        "tailordb.type_record.created",
-        "tailordb.type_record.updated",
-      ]);
-      expect(typedConfig.value.namespaceName).toBe("my-tailordb");
-      expect(typedConfig.value.typeName).toBe("User");
-    });
-
-    test("multi-event idpUser trigger emits multiple eventTypes", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-idp-user-change",
-        description: "test",
-        disabled: false,
-        trigger: {
-          kind: "idpUser",
-          events: ["idp.user.created", "idp.user.deleted"],
-        },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        idpNames: ["my-idp"],
-      });
-
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
-
-      const typedConfig = getEventConfig(result);
-      expect(typedConfig.case).toBe("idp");
-      expect(typedConfig.value.eventTypes).toEqual(["idp.user.created", "idp.user.deleted"]);
-      expect(typedConfig.value.namespaceName).toBe("my-idp");
-    });
-
-    test("multi-event authAccessToken trigger emits multiple eventTypes", async () => {
-      const client = createMockClient([]);
-      const executor: Executor = {
-        name: "on-auth-token-change",
-        description: "test",
-        disabled: false,
-        trigger: {
-          kind: "authAccessToken",
-          events: ["auth.access_token.issued", "auth.access_token.revoked"],
-        },
-        operation: { kind: "function", body: () => {} },
-      };
-      const application = createMockApplication([executor], {
-        authName: "my-auth",
-      });
-
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
-
-      const typedConfig = getEventConfig(result);
-      expect(typedConfig.case).toBe("auth");
-      expect(typedConfig.value.eventTypes).toEqual([
-        "auth.access_token.issued",
-        "auth.access_token.revoked",
-      ]);
-      expect(typedConfig.value.namespaceName).toBe("my-auth");
-    });
-
     test("multi-event record trigger with condition emits condition", async () => {
-      const client = createMockClient([]);
       const executor: Executor = {
         name: "on-record-change-cond",
         description: "test",
@@ -1092,13 +789,7 @@ describe("planExecutor", () => {
         tailorDBTypes: { User: "my-tailordb" },
       });
 
-      const result = await planExecutor({
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planExecutor(buildPlanContext(application));
 
       const typedConfig = getEventConfig(result);
       expect(typedConfig.case).toBe("tailordb");
@@ -1108,6 +799,89 @@ describe("planExecutor", () => {
         "tailordb.type_record.deleted",
       ]);
       expect(typedConfig.value.condition).toBeDefined();
+    });
+
+    test.each([
+      {
+        name: "recordCreated throws when typeName not found in any TailorDB service",
+        executor: {
+          name: "on-record-created",
+          description: "test",
+          disabled: false,
+          trigger: {
+            kind: "tailordb",
+            events: ["tailordb.type_record.created"],
+            typeName: "Unknown",
+          },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: { tailorDBTypes: { User: "my-tailordb" } },
+        errorPattern: 'TailorDB type "Unknown" not found in any namespace',
+      },
+      {
+        name: "resolverExecuted throws when resolver not found in any namespace",
+        executor: {
+          name: "on-resolver-exec",
+          description: "test",
+          disabled: false,
+          trigger: { kind: "resolverExecuted", resolverName: "unknown" },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: { resolverNames: { myResolver: "my-pipeline" } },
+        errorPattern: 'Resolver "unknown" not found in any namespace',
+      },
+      {
+        name: "idpUserCreated throws when no IdP service configured",
+        executor: {
+          name: "on-idp-user-created",
+          description: "test",
+          disabled: false,
+          trigger: { kind: "idpUser", events: ["idp.user.created"] },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: undefined,
+        errorPattern: /no IdP is configured/,
+      },
+      {
+        name: "idpUserCreated throws when multiple IdPs are configured and idp is omitted",
+        executor: {
+          name: "on-idp-user-created",
+          description: "test",
+          disabled: false,
+          trigger: { kind: "idpUser", events: ["idp.user.created"] },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: { idpNames: ["idp-a", "idp-b"] },
+        errorPattern: /multiple IdPs/,
+      },
+      {
+        name: "idpUserCreated throws when specified idp does not exist",
+        executor: {
+          name: "on-idp-user-created",
+          description: "test",
+          disabled: false,
+          trigger: { kind: "idpUser", events: ["idp.user.created"], idp: "missing" },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: { idpNames: ["idp-a", "idp-b"] },
+        errorPattern: /no IdP with that name is configured/,
+      },
+      {
+        name: "authAccessTokenIssued throws when no Auth service configured",
+        executor: {
+          name: "on-auth-token-issued",
+          description: "test",
+          disabled: false,
+          trigger: { kind: "authAccessToken", events: ["auth.access_token.issued"] },
+          operation: { kind: "function", body: () => {} },
+        } satisfies Executor,
+        appOptions: undefined,
+        errorPattern: "No Auth service configured",
+      },
+    ])("$name", async ({ executor, appOptions, errorPattern }) => {
+      const application = createMockApplication([executor], appOptions);
+
+      await expect(planExecutor(buildPlanContext(application))).rejects.toThrow(errorPattern);
     });
   });
 });

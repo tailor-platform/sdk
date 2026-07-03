@@ -1,5 +1,26 @@
 import { describe, test, expect } from "vitest";
-import { chunkSeedData, DEFAULT_MAX_MESSAGE_SIZE, type SeedData } from "./seed-chunker";
+import {
+  chunkSeedData,
+  DEFAULT_MAX_MESSAGE_SIZE,
+  type SeedChunk,
+  type SeedData,
+} from "./seed-chunker";
+
+const makeRecords = (count: number, padSize: number) =>
+  Array.from({ length: count }, (_, i) => ({
+    id: `id-${i}`,
+    description: "x".repeat(padSize),
+  }));
+
+const jsonByteSize = (data: SeedData, order: string[]) =>
+  new TextEncoder().encode(JSON.stringify({ data, order })).length;
+
+const expectSequentialIndices = (chunks: SeedChunk[]) => {
+  for (let i = 0; i < chunks.length; i++) {
+    expect(chunks[i]!.index).toBe(i);
+    expect(chunks[i]!.total).toBe(chunks.length);
+  }
+};
 
 describe("chunkSeedData", () => {
   test("returns single chunk when data fits within budget", () => {
@@ -42,44 +63,25 @@ describe("chunkSeedData", () => {
   });
 
   test("splits data at type boundaries when exceeding budget", () => {
-    // Create data that is large enough to require splitting
-    const largeRecords = Array.from({ length: 100 }, (_, i) => ({
-      id: `id-${i}`,
-      name: `User ${i}`,
-      description: "x".repeat(200),
-    }));
-
-    const data: SeedData = {
-      TypeA: largeRecords,
-      TypeB: largeRecords,
-      TypeC: largeRecords,
-    };
-
-    // Set a small maxMessageSize to force splitting
-    const fullSize = new TextEncoder().encode(
-      JSON.stringify({ data, order: ["TypeA", "TypeB", "TypeC"] }),
-    ).length;
+    const largeRecords = makeRecords(100, 200);
+    const order = ["TypeA", "TypeB", "TypeC"];
+    const data: SeedData = { TypeA: largeRecords, TypeB: largeRecords, TypeC: largeRecords };
+    const fullSize = jsonByteSize(data, order);
 
     const chunks = chunkSeedData({
       data,
-      order: ["TypeA", "TypeB", "TypeC"],
+      order,
       codeByteSize: 1000,
       maxMessageSize: Math.floor(fullSize / 2) + 2000,
     });
 
     expect(chunks.length).toBeGreaterThan(1);
 
-    // Verify all data is preserved
     const allTypes = new Set(chunks.flatMap((c) => c.order));
-    expect(allTypes).toEqual(new Set(["TypeA", "TypeB", "TypeC"]));
+    expect(allTypes).toEqual(new Set(order));
 
-    // Verify index and total are correct
-    for (let i = 0; i < chunks.length; i++) {
-      expect(chunks[i]!.index).toBe(i);
-      expect(chunks[i]!.total).toBe(chunks.length);
-    }
+    expectSequentialIndices(chunks);
 
-    // Verify total record count is preserved
     const totalRecords = chunks.reduce((sum, chunk) => {
       return sum + Object.values(chunk.data).reduce((s, records) => s + records.length, 0);
     }, 0);
@@ -87,20 +89,14 @@ describe("chunkSeedData", () => {
   });
 
   test("preserves dependency order across chunks", () => {
-    const makeRecords = (count: number) =>
-      Array.from({ length: count }, (_, i) => ({
-        id: `id-${i}`,
-        data: "x".repeat(100),
-      }));
-
     const data: SeedData = {
-      Base: makeRecords(50),
-      Child: makeRecords(50),
-      GrandChild: makeRecords(50),
+      Base: makeRecords(50, 100),
+      Child: makeRecords(50, 100),
+      GrandChild: makeRecords(50, 100),
     };
 
     const order = ["Base", "Child", "GrandChild"];
-    const fullSize = new TextEncoder().encode(JSON.stringify({ data, order })).length;
+    const fullSize = jsonByteSize(data, order);
 
     const chunks = chunkSeedData({
       data,
@@ -122,18 +118,9 @@ describe("chunkSeedData", () => {
   });
 
   test("splits records within a single large type", () => {
-    const largeRecords = Array.from({ length: 200 }, (_, i) => ({
-      id: `id-${i}`,
-      payload: "x".repeat(500),
-    }));
-
-    const data: SeedData = {
-      HugeType: largeRecords,
-    };
-
-    const singleTypeSize = new TextEncoder().encode(
-      JSON.stringify({ data, order: ["HugeType"] }),
-    ).length;
+    const largeRecords = makeRecords(200, 500);
+    const data: SeedData = { HugeType: largeRecords };
+    const singleTypeSize = jsonByteSize(data, ["HugeType"]);
 
     const chunks = chunkSeedData({
       data,
@@ -144,21 +131,15 @@ describe("chunkSeedData", () => {
 
     expect(chunks.length).toBeGreaterThan(1);
 
-    // All chunks should contain only HugeType
     for (const chunk of chunks) {
       expect(chunk.order).toEqual(["HugeType"]);
       expect(Object.keys(chunk.data)).toEqual(["HugeType"]);
     }
 
-    // Total records should be preserved
     const totalRecords = chunks.reduce((sum, chunk) => sum + chunk.data["HugeType"]!.length, 0);
     expect(totalRecords).toBe(200);
 
-    // Verify index/total
-    for (let i = 0; i < chunks.length; i++) {
-      expect(chunks[i]!.index).toBe(i);
-      expect(chunks[i]!.total).toBe(chunks.length);
-    }
+    expectSequentialIndices(chunks);
   });
 
   test("throws error when codeByteSize exceeds maxMessageSize", () => {
@@ -232,11 +213,7 @@ describe("chunkSeedData", () => {
   });
 
   test("each chunk fits within the message size budget", () => {
-    const largeRecords = Array.from({ length: 500 }, (_, i) => ({
-      id: `id-${i}`,
-      name: `Name ${i}`,
-      description: "x".repeat(300),
-    }));
+    const largeRecords = makeRecords(500, 300);
 
     const data: SeedData = {
       TypeA: largeRecords.slice(0, 200),
@@ -257,10 +234,7 @@ describe("chunkSeedData", () => {
     const argBudget = maxMessageSize - codeByteSize - 1024;
 
     for (const chunk of chunks) {
-      const argSize = new TextEncoder().encode(
-        JSON.stringify({ data: chunk.data, order: chunk.order }),
-      ).length;
-      expect(argSize).toBeLessThanOrEqual(argBudget);
+      expect(jsonByteSize(chunk.data, chunk.order)).toBeLessThanOrEqual(argBudget);
     }
   });
 });

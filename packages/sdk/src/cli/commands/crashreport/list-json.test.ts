@@ -48,7 +48,10 @@ describe("crashreport list --json", () => {
     ]);
   });
 
-  test("emits an empty JSON array when the crash report directory is unavailable", async () => {
+  test.each([
+    ["emits an empty JSON array when the crash report directory is unavailable", listCommand],
+    ["honors logger jsonMode when parent command delegates without json args", crashReportCommand],
+  ] as const)("%s", async (_label, command) => {
     vi.mocked(parseCrashReportConfig).mockReturnValue({
       localEnabled: false,
       remoteEnabled: false,
@@ -59,24 +62,7 @@ describe("crashreport list --json", () => {
     using _stderr = captureStderr();
     using _json = jsonMode();
 
-    await runCommand(listCommand, []);
-
-    expect(stdout.output).not.toBe("");
-    expect(JSON.parse(stdout.output)).toEqual([]);
-  });
-
-  test("honors logger jsonMode when parent command delegates without json args", async () => {
-    vi.mocked(parseCrashReportConfig).mockReturnValue({
-      localEnabled: false,
-      remoteEnabled: false,
-      localDir: "",
-    });
-
-    using stdout = captureStdout();
-    using _stderr = captureStderr();
-    using _json = jsonMode();
-
-    await runCommand(crashReportCommand, []);
+    await runCommand(command, []);
 
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([]);

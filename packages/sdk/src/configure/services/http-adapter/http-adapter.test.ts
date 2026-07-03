@@ -7,15 +7,19 @@ import {
 } from "./http-adapter";
 import type { TypedQueryDocumentNode } from "graphql";
 
+function getUserAdapter() {
+  return createHttpAdapter({
+    name: "get-user",
+    pathPattern: "/users/*",
+    input: {
+      get: () => ({ query: "{ me { id } }" }),
+    },
+  });
+}
+
 describe("createHttpAdapter", () => {
   test("returns a branded HTTP adapter object", () => {
-    const adapter = createHttpAdapter({
-      name: "get-user",
-      pathPattern: "/users/*",
-      input: {
-        get: () => ({ query: "{ me { id } }" }),
-      },
-    });
+    const adapter = getUserAdapter();
 
     expect(adapter.name).toBe("get-user");
     expect(adapter.pathPattern).toBe("/users/*");
@@ -24,13 +28,7 @@ describe("createHttpAdapter", () => {
   });
 
   test("hides the brand symbol from enumeration", () => {
-    const adapter = createHttpAdapter({
-      name: "get-user",
-      pathPattern: "/users/*",
-      input: {
-        get: () => ({ query: "{ me { id } }" }),
-      },
-    });
+    const adapter = getUserAdapter();
     // The brand symbol is an own property...
     expect(Object.getOwnPropertySymbols(adapter)).toContain(SDK_BRAND);
     // ...but non-enumerable, so it is hidden from enumeration / spread.

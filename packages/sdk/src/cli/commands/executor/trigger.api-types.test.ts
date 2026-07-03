@@ -12,28 +12,19 @@ const incomingWebhookExecutor = createExecutor({
     body: { message: string };
     headers: { "x-request-id": string };
   }>(),
-  operation: {
-    kind: "function",
-    body: () => {},
-  },
+  operation: { kind: "function", body: () => {} },
 });
 
 const scheduleExecutor = createExecutor({
   name: "schedule-executor",
   trigger: scheduleTrigger({ cron: "0 12 * * *" }),
-  operation: {
-    kind: "function",
-    body: () => {},
-  },
+  operation: { kind: "function", body: () => {} },
 });
 
 const eventExecutor = createExecutor({
   name: "event-executor",
   trigger: idpUserCreatedTrigger(),
-  operation: {
-    kind: "function",
-    body: () => {},
-  },
+  operation: { kind: "function", body: () => {} },
 });
 
 describe("triggerExecutor API types", () => {
@@ -44,12 +35,7 @@ describe("triggerExecutor API types", () => {
 
     acceptsOptions({
       executor: incomingWebhookExecutor,
-      payload: {
-        body: { message: "hello" },
-        headers: {
-          "x-request-id": "req-1",
-        },
-      },
+      payload: { body: { message: "hello" }, headers: { "x-request-id": "req-1" } },
     });
   });
 
@@ -58,16 +44,12 @@ describe("triggerExecutor API types", () => {
       _options: TriggerExecutorTypedOptions<typeof scheduleExecutor>,
     ): void => {};
 
-    acceptsOptions({
-      executor: scheduleExecutor,
-    });
+    acceptsOptions({ executor: scheduleExecutor });
 
     acceptsOptions({
       executor: scheduleExecutor,
       // @ts-expect-error - schedule trigger does not accept payload
-      payload: {
-        body: { message: "hello" },
-      },
+      payload: { body: { message: "hello" } },
     });
   });
 
@@ -81,22 +63,15 @@ describe("triggerExecutor API types", () => {
 
     acceptsDefaultOptions({
       executor: incomingWebhookExecutor,
-      payload: {
-        body: { message: "hello" },
-        headers: { "x-request-id": "req-1" },
-      },
+      payload: { body: { message: "hello" }, headers: { "x-request-id": "req-1" } },
     });
 
-    acceptsDefaultOptions({
-      executor: scheduleExecutor,
-    });
+    acceptsDefaultOptions({ executor: scheduleExecutor });
 
     // @ts-expect-error - payload is not allowed for schedule trigger
     acceptsDefaultOptions({
       executor: scheduleExecutor,
-      payload: {
-        body: { message: "hello" },
-      },
+      payload: { body: { message: "hello" } },
     });
   });
 
@@ -105,17 +80,13 @@ describe("triggerExecutor API types", () => {
 
     acceptsDeprecatedOptions({
       executorName: "incoming-webhook-executor",
-      payload: {
-        body: { message: "hello" },
-      },
+      payload: { body: { message: "hello" } },
     });
 
     acceptsDeprecatedOptions({
       // @ts-expect-error - deprecated options must keep legacy executorName shape
       executor: incomingWebhookExecutor,
-      payload: {
-        body: { message: "hello" },
-      },
+      payload: { body: { message: "hello" } },
     });
   });
 });

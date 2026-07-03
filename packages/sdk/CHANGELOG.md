@@ -1,5 +1,27 @@
 # @tailor-platform/sdk
 
+## 1.73.2
+### Patch Changes
+
+
+
+- [#1637](https://github.com/tailor-platform/sdk/pull/1637) [`e608b6d`](https://github.com/tailor-platform/sdk/commit/e608b6d55e4afa8a8a92c1a947411ec4367ab818) Thanks [@toiroakr](https://github.com/toiroakr)! - Bump the generated tailor-platform/actions reference pin to v1.5.1. The previous pin referenced a commit that could be orphaned by an upstream rebase; v1.5.1 fixes that issue.
+
+## 1.73.1
+### Patch Changes
+
+
+
+- [#1634](https://github.com/tailor-platform/sdk/pull/1634) [`bab3cb0`](https://github.com/tailor-platform/sdk/commit/bab3cb0c65ae2cb874e33f94b45e0f897b6d6315) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB hooks and validators defined with method shorthand syntax (e.g. `hooks: { create() { ... } }`) failing at deploy time when the body contained an arrow function or the method was `async`
+
+
+
+- [#1614](https://github.com/tailor-platform/sdk/pull/1614) [`8c6aff4`](https://github.com/tailor-platform/sdk/commit/8c6aff4094dcc764a08355d7610348a77482181c) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB schema drift detection during deploy to compare type settings, indexes, files, relationships, and permissions while normalizing SDK-derived deploy settings.
+
+
+
+- [#1628](https://github.com/tailor-platform/sdk/pull/1628) [`ee21fd6`](https://github.com/tailor-platform/sdk/commit/ee21fd6d115b9f51508f1409b334ddbafb81d683) Thanks [@dqn](https://github.com/dqn)! - Improve workflow type errors for invalid job and wait point definitions.
+
 ## 1.73.0
 ### Minor Changes
 

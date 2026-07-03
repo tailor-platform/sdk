@@ -4,6 +4,61 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { ensureConfigId } from "./config-id-injector";
 
+const THROW_CASES = [
+  {
+    name: "throws when id is not a string literal",
+    source: `import { defineConfig } from "@tailor-platform/sdk";
+
+const id = "computed";
+export default defineConfig({
+  id,
+  name: "my-app",
+});
+`,
+    error: /string literal/,
+  },
+  {
+    name: "throws when id is an empty string",
+    source: `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  id: "",
+  name: "my-app",
+});
+`,
+    error: /non-empty string literal/,
+  },
+  {
+    name: "throws when id is not a UUID",
+    source: `import { defineConfig } from "@tailor-platform/sdk";
+
+export default defineConfig({
+  id: "not-a-uuid",
+  name: "my-app",
+});
+`,
+    error: /UUID/,
+  },
+  {
+    name: "throws when defineConfig is called more than once",
+    source: `import { defineConfig } from "@tailor-platform/sdk";
+
+defineConfig({ name: "first" });
+export default defineConfig({ name: "second" });
+`,
+    error: /Multiple defineConfig/,
+  },
+  {
+    name: "throws when defineConfig argument is not an object literal",
+    source: `import { defineConfig } from "@tailor-platform/sdk";
+
+const config = { name: "my-app" };
+export default defineConfig(config);
+`,
+    error: /inline object literal/,
+  },
+];
+
 describe("ensureConfigId", () => {
   let tempDir: string;
 
@@ -75,71 +130,9 @@ export default defineConfig({
     expect(result).toBeNull();
   });
 
-  test("throws when id is not a string literal", async () => {
-    const filePath = await writeConfig(
-      `import { defineConfig } from "@tailor-platform/sdk";
-
-const id = "computed";
-export default defineConfig({
-  id,
-  name: "my-app",
-});
-`,
-    );
-
-    await expect(ensureConfigId(filePath)).rejects.toThrow(/string literal/);
-  });
-
-  test("throws when id is an empty string", async () => {
-    const filePath = await writeConfig(
-      `import { defineConfig } from "@tailor-platform/sdk";
-
-export default defineConfig({
-  id: "",
-  name: "my-app",
-});
-`,
-    );
-
-    await expect(ensureConfigId(filePath)).rejects.toThrow(/non-empty string literal/);
-  });
-
-  test("throws when id is not a UUID", async () => {
-    const filePath = await writeConfig(
-      `import { defineConfig } from "@tailor-platform/sdk";
-
-export default defineConfig({
-  id: "not-a-uuid",
-  name: "my-app",
-});
-`,
-    );
-
-    await expect(ensureConfigId(filePath)).rejects.toThrow(/UUID/);
-  });
-
-  test("throws when defineConfig is called more than once", async () => {
-    const filePath = await writeConfig(
-      `import { defineConfig } from "@tailor-platform/sdk";
-
-defineConfig({ name: "first" });
-export default defineConfig({ name: "second" });
-`,
-    );
-
-    await expect(ensureConfigId(filePath)).rejects.toThrow(/Multiple defineConfig/);
-  });
-
-  test("throws when defineConfig argument is not an object literal", async () => {
-    const filePath = await writeConfig(
-      `import { defineConfig } from "@tailor-platform/sdk";
-
-const config = { name: "my-app" };
-export default defineConfig(config);
-`,
-    );
-
-    await expect(ensureConfigId(filePath)).rejects.toThrow(/inline object literal/);
+  test.each(THROW_CASES)("$name", async ({ source, error }) => {
+    const filePath = await writeConfig(source);
+    await expect(ensureConfigId(filePath)).rejects.toThrow(error);
   });
 
   test("injects id into an empty defineConfig object without producing invalid syntax", async () => {
