@@ -75,6 +75,8 @@ describe("defineAuth", () => {
     expect(authConfig.name).toBe("minimal");
     expect(authConfig.userProfile.type).toBe(userType);
     expect(authConfig.machineUsers).toBeUndefined();
+    expect(authConfig).not.toHaveProperty("getConnectionToken");
+    expectTypeOf(authConfig).not.toHaveProperty("getConnectionToken");
   });
 
   test("creates auth configuration with machineUsers only", () => {

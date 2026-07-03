@@ -445,7 +445,7 @@ const response = await fetch("https://www.googleapis.com/...", {
 
 Type narrowing is provided by the generated `tailor.d.ts` (the `ConnectionNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new connections to refresh it. Before the first generate, or when `connections` is not defined in `defineAuth()`, `getConnectionToken()` accepts any string — this also supports connections managed entirely via the CLI.
 
-> **Deprecated:** `auth.getConnectionToken("<name>")` still works, but is deprecated. Importing `auth` from `tailor.config.ts` into runtime files pulls config-layer (Node-only) dependencies into the bundle.
+This keeps runtime files independent from `tailor.config.ts`.
 
 See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-interfaces.html#auth-connection) for the full runtime API.
 

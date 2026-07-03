@@ -2,10 +2,9 @@ import { arg } from "politty";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
-  findConfigUserKey,
-  hasUserTokenEntry,
   platformConfigFromProfile,
   readPlatformConfig,
+  resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
@@ -37,15 +36,14 @@ export const switchCommand = defineAppCommand({
       );
     }
 
-    // Check if user exists
-    if (!hasUserTokenEntry(config, args.user, platformConfig)) {
+    const user = resolveConfigUser(config, args.user, platformConfig);
+    if (!user) {
       throw new Error(ml`
         User "${args.user}" not found.
         Please login first using 'tailor login' command to register this user.
       `);
     }
 
-    const user = findConfigUserKey(config, args.user) ?? args.user;
     if (activeProfileEntry) {
       activeProfileEntry.user = user;
     } else {
@@ -53,6 +51,6 @@ export const switchCommand = defineAppCommand({
     }
     writePlatformConfig(config);
 
-    logger.success(`Current user set to "${args.user}" successfully.`);
+    logger.success(`Current user set to "${user}" successfully.`);
   },
 });

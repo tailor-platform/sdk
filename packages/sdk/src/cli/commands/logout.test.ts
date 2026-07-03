@@ -94,7 +94,12 @@ describe("logout --profile", () => {
         refreshToken: "dev-refresh-token",
       },
       futureDate,
-      { platformUrl: "https://api.dev.tailor.tech", oauth2ClientId: "dev-client" },
+      {
+        platformConfig: {
+          platformUrl: "https://api.dev.tailor.tech",
+          oauth2ClientId: "dev-client",
+        },
+      },
     );
     config.current_user = "u@example.com";
     writePlatformConfig(config);

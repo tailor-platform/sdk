@@ -11,10 +11,10 @@ import {
 } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
-  hasUserTokenEntry,
   loadAccessToken,
   platformConfigFromProfile,
   readPlatformConfig,
+  resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
@@ -175,14 +175,15 @@ export const createCommand = defineAppCommand({
         );
       }
 
-      if (!hasUserTokenEntry(config, profileUser, platformConfig)) {
+      const resolvedProfileUser = resolveConfigUser(config, profileUser, platformConfig);
+      if (!resolvedProfileUser) {
         throw new Error(
           `User "${profileUser}" not found.\nPlease verify your user name and login using 'tailor login' command.`,
         );
       }
       profileSetup = {
         name: profileName,
-        user: profileUser,
+        user: resolvedProfileUser,
         platformSettings: profilePlatformSettings(platformConfig),
       };
     }

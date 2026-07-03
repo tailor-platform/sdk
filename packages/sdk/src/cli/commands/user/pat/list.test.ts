@@ -37,8 +37,8 @@ describe("user pat list", () => {
 
   test("uses the active profile platform when loading the current user's token", async () => {
     const config = {
-      version: 2,
-      min_sdk_version: "1.29.0",
+      version: 3,
+      min_sdk_version: "2.0.0",
       users: {},
       profiles: {
         dev: {
@@ -48,7 +48,7 @@ describe("user pat list", () => {
         },
       },
       current_user: null,
-    } as unknown as Awaited<ReturnType<typeof readPlatformConfig>>;
+    } satisfies Awaited<ReturnType<typeof readPlatformConfig>>;
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     vi.mocked(readPlatformConfig).mockResolvedValue(config);
     using _json = jsonMode();

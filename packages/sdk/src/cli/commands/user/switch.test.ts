@@ -3,7 +3,6 @@ import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
-import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { switchCommand } from "./switch";
 
@@ -62,18 +61,18 @@ describe("user switch", () => {
       current_user: null,
     });
 
-    using _stderr = captureStderr();
+    const result = await runCommand(switchCommand, ["user@example.com"]);
 
-    await runCommand(switchCommand, ["user@example.com"]);
-
+    expect(result.success).toBe(true);
     const config = await readPlatformConfig();
     expect(config.current_user).toBe("platform-user-sub");
   });
 
   test("stores the bare user when switching to a TAILOR_PLATFORM_URL-scoped token", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
     writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
+      version: 3,
+      min_sdk_version: "2.0.0",
       users: {
         "https://api.dev.tailor.tech|u@example.com": {
           storage: "file",
@@ -84,7 +83,6 @@ describe("user switch", () => {
       profiles: {},
       current_user: null,
     });
-    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
 
     const result = await runCommand(switchCommand, ["u@example.com"]);
 
@@ -108,18 +106,25 @@ describe("user switch", () => {
       current_user: null,
     });
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
-    const config = await readPlatformConfig();
-    config.users["https://api.dev.tailor.tech|other@example.com"] = {
-      storage: "file",
-      access_token: "other-token",
-      token_expires_at: "2999-01-01T00:00:00.000Z",
-    };
-    config.profiles.dev = {
-      user: "u@example.com",
-      workspace_id: "12345678-1234-4abc-8def-123456789012",
-      platform_url: "https://api.dev.tailor.tech",
-    };
-    writePlatformConfig(config);
+    writePlatformConfig({
+      version: 3,
+      min_sdk_version: "2.0.0",
+      users: {
+        "https://api.dev.tailor.tech|other@example.com": {
+          storage: "file",
+          access_token: "other-token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
 
     const result = await runCommand(switchCommand, ["other@example.com"]);
 
