@@ -69,9 +69,12 @@ function parseTailorDBType(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TailorDBField requires generic type parameters
     TailorDBField<any, any>,
   ][]) {
-    let fieldConfig = parseFieldConfig(fieldDef);
-    const rawRelation = fieldConfig.rawRelation;
     const context = { typeName: type.name, fieldName, allTypeNames };
+    let fieldConfig = parseFieldConfig(fieldDef, {
+      typeName: type.name,
+      fieldPath: [fieldName],
+    });
+    const rawRelation = fieldConfig.rawRelation;
 
     // Process relation if rawRelation is present
     if (rawRelation) {
