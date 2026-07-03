@@ -168,6 +168,47 @@ describe("createCacheManager", () => {
       expect(manifest.entries["resolver:myResolver"].dependencyPaths).toEqual([sourceFile]);
     });
 
+    test("finalize preserves entries from another manager using the same cache directory", () => {
+      const first = createCacheManager({
+        enabled: true,
+        cacheDir,
+        sdkVersion: "2.5.0",
+      });
+      const second = createCacheManager({
+        enabled: true,
+        cacheDir,
+        sdkVersion: "2.5.0",
+      });
+      const firstSource = path.join(tmpDir, "first.ts");
+      const secondSource = path.join(tmpDir, "second.ts");
+      fs.writeFileSync(firstSource, "export const first = 1;");
+      fs.writeFileSync(secondSource, "export const second = 2;");
+
+      first.bundleCache.save({
+        kind: "resolver",
+        name: "first",
+        sourceFile: firstSource,
+        content: "var first = 1;",
+        dependencyPaths: [firstSource],
+      });
+      second.bundleCache.save({
+        kind: "resolver",
+        name: "second",
+        sourceFile: secondSource,
+        content: "var second = 2;",
+        dependencyPaths: [secondSource],
+      });
+      first.finalize();
+      second.finalize();
+
+      const manifestPath = path.join(cacheDir, "manifest.json");
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+      expect(Object.keys(manifest.entries).toSorted()).toEqual([
+        "resolver:first",
+        "resolver:second",
+      ]);
+    });
+
     test("cache is preserved when sdkVersion matches", () => {
       // Pre-populate cache with a manifest and a bundle file
       fs.mkdirSync(path.join(cacheDir, "bundles"), { recursive: true });

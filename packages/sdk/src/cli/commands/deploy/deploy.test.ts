@@ -828,6 +828,7 @@ function fakeTarget(
 ): Parameters<typeof assertUniqueGlobalResourceNames>[0][number] {
   fakeTargetSequence += 1;
   const executorNames = bundles.executorNames ?? Object.keys(bundles.executors ?? {});
+  const resolverNames = Object.keys(bundles.resolvers ?? {});
   return {
     application: {
       name: bundles.appName ?? `fake-app-${fakeTargetSequence}`,
@@ -850,7 +851,10 @@ function fakeTarget(
           }
         : undefined,
       idpServices: (bundles.idpNames ?? []).map((name) => ({ name })),
-      resolverServices: (bundles.resolverNamespaces ?? []).map((namespace) => ({ namespace })),
+      resolverServices: (bundles.resolverNamespaces ?? []).map((namespace) => ({
+        namespace,
+        resolvers: Object.fromEntries(resolverNames.map((name) => [name, { name }])),
+      })),
       aiGatewayServices: (bundles.aiGatewayNames ?? []).map((name) => ({ name })),
       secrets: (bundles.vaultNames ?? []).map((vaultName) => ({ vaultName })),
     },
@@ -921,15 +925,32 @@ describe("multi-config deployment orchestration", () => {
 
 describe("mergeBundledScripts", () => {
   test("allows duplicate resolver and auth hook bundle names across configs", () => {
-    expect(() =>
-      mergeBundledScripts([
-        fakeTarget({ resolvers: { get: "buyer" }, authHooks: { "before-login": "buyer" } }),
-        fakeTarget({ resolvers: { get: "supplier" }, authHooks: { "before-login": "supplier" } }),
-      ]),
-    ).not.toThrow();
+    const bundledScripts = mergeBundledScripts([
+      fakeTarget({
+        resolverNamespaces: ["buyer"],
+        resolvers: { get: "buyer" },
+        authNamespace: "buyer-auth",
+        authHooks: { "auth-hook--buyer-auth--before-login": "buyer-auth" },
+      }),
+      fakeTarget({
+        resolverNamespaces: ["supplier"],
+        resolvers: { get: "supplier" },
+        authNamespace: "supplier-auth",
+        authHooks: { "auth-hook--supplier-auth--before-login": "supplier-auth" },
+      }),
+    ]);
+
+    expect([...bundledScripts.resolvers]).toEqual([
+      ["resolver--buyer--get", "buyer"],
+      ["resolver--supplier--get", "supplier"],
+    ]);
+    expect([...bundledScripts.authHooks]).toEqual([
+      ["auth-hook--buyer-auth--before-login", "buyer-auth"],
+      ["auth-hook--supplier-auth--before-login", "supplier-auth"],
+    ]);
   });
 
-  test("rejects duplicate executor and workflow job bundle names across configs", () => {
+  test("rejects duplicate executor, workflow job, and auth hook bundle names across configs", () => {
     expect(() =>
       mergeBundledScripts([
         fakeTarget({ executors: { sync: "buyer" } }),
@@ -943,6 +964,15 @@ describe("mergeBundledScripts", () => {
         fakeTarget({ workflowJobs: { notify: "supplier" } }),
       ]),
     ).toThrow('Duplicate workflow job bundle name "notify" across config files.');
+
+    expect(() =>
+      mergeBundledScripts([
+        fakeTarget({ authHooks: { "auth-hook--shared--before-login": "buyer" } }),
+        fakeTarget({ authHooks: { "auth-hook--shared--before-login": "supplier" } }),
+      ]),
+    ).toThrow(
+      'Duplicate auth hook bundle name "auth-hook--shared--before-login" across config files.',
+    );
   });
 });
 
