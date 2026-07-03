@@ -45,43 +45,29 @@ jobs:
         run: pnpm add -g npm@latest
         shell: bash
 
-      # `pnpm changeset publish` creates annotated tags (`git tag -m`), which
-      # require a git identity. Without one, tag creation fails, but
-      # @changesets/cli doesn't check the exec result, so it still reports
-      # "Created git tags." — leaving no tag to push and no release to create.
-      - name: Configure git identity for tag creation
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        shell: bash
-
+      # `--no-git-tag` skips @changesets/cli's own `git tag -m` (an annotated
+      # tag, which needs a git identity we don't configure here). We create
+      # tags and releases entirely through the `gh` API instead — see the
+      # "Ensure GitHub releases" step below.
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
           commitMode: "github-api"
-          publish: "pnpm changeset publish"
-          createGithubReleases: true
+          publish: "pnpm changeset publish --no-git-tag"
+          createGithubReleases: false
         env:
           GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
 
-      # @changesets/cli v3 changed the `changeset publish` output, so
-      # changesets/action no longer detects published packages and skips
-      # pushing tags / creating GitHub releases. Reconcile them here.
-      - name: Push tags and create GitHub releases
-        if: steps.changesets.outputs.published != 'true'
+      # Idempotent: creates a release (and its tag, via `gh release create
+      # --target`) for every package version that doesn't have one yet, and
+      # fails the job if creation fails — so a broken release step is caught
+      # immediately instead of the gap going unnoticed.
+      - name: Ensure GitHub releases exist for published packages
         env:
           GH_TOKEN: ${{ steps.get_access_token.outputs.token }}
         shell: bash
-        run: bash ./.github/scripts/sync-published-tags.sh
-
-      # Regression guard: fail loudly if a package's checked-out version has
-      # no matching GitHub release, instead of the gap going unnoticed.
-      - name: Verify GitHub releases exist for published packages
-        env:
-          GH_TOKEN: ${{ steps.get_access_token.outputs.token }}
-        shell: bash
-        run: bash ./.github/scripts/verify-github-releases.sh
+        run: bash ./.github/scripts/ensure-github-releases.sh
 
       - name: Notify Slack on failure
         if: failure()
