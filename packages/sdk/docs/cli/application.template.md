@@ -16,6 +16,16 @@ Commands for managing Tailor Platform applications. These commands work with `ta
 
 On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into your `defineConfig({...})` call in `tailor.config.ts`. This UUID is used to track your application across renames so the SDK can recognize ownership across renames. Commit the generated id to version control. See [Configuration](../configuration.md#application-settings) for details.
 
+**Multiple Config Deploys:**
+
+To deploy interdependent applications to the same workspace in one run, pass comma-separated config paths:
+
+```bash
+tailor deploy --config apps/buyer/tailor.config.ts,apps/supplier/tailor.config.ts
+```
+
+When multiple configs are provided, `deploy` creates or updates all configured services first, then updates the applications. This lets one application reference resources owned by another config with `external: true` during the same deploy.
+
 **Migration Handling:**
 
 When migrations are configured (`db.tailordb.migration` in config), the `deploy` command automatically:
@@ -56,7 +66,7 @@ Plan: 5 to create, 3 to update, 1 to delete
 Use `--dry-run` to preview the plan without applying anything. In dry-run mode the plan is written to **stdout**, so it can be captured in CI without `2>&1`:
 
 ```bash
-tailor-sdk deploy --dry-run > plan.txt
+tailor deploy --dry-run > plan.txt
 ```
 
 In apply mode, the plan is printed to stderr so it does not interfere with piped output.

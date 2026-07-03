@@ -10,6 +10,16 @@ import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { updateCommand } from "./update";
 
+function writeProfiles(profiles: Parameters<typeof writePlatformConfig>[0]["profiles"]) {
+  writePlatformConfig({
+    version: 2,
+    min_sdk_version: "1.29.0",
+    users: {},
+    profiles,
+    current_user: null,
+  });
+}
+
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-update-${Date.now()}-${Math.random()}`);
 
 vi.mock("xdg-basedir", () => ({
@@ -49,28 +59,25 @@ afterAll(() => {
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  resetKeyringState();
+  vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  // Clean up the on-disk config between tests so prior writes don't leak.
+  const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+  if (fs.existsSync(configPath)) fs.rmSync(configPath);
+});
+
 describe("profile update --permission", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    resetKeyringState();
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        rw: { user: "u@example.com", workspace_id: validUUID },
-        ro: { user: "u@example.com", workspace_id: validUUID, readonly: true },
-      },
-      current_user: null,
+    writeProfiles({
+      rw: { user: "u@example.com", workspace_id: validUUID },
+      ro: { user: "u@example.com", workspace_id: validUUID, readonly: true },
     });
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    // Clean up the on-disk config between tests so prior writes don't leak.
-    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
-    if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
   test("sets readonly: true on disk and skips remote validation when only --permission read is passed", async () => {
@@ -111,14 +118,8 @@ describe("profile update --permission", () => {
       listWorkspaces: vi.fn(),
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        rw: { user: "old@example.com", workspace_id: validUUID },
-      },
-      current_user: null,
+    writeProfiles({
+      rw: { user: "old@example.com", workspace_id: validUUID },
     });
 
     await runCommand(updateCommand, ["rw", "--user", "new@example.com", "--permission", "read"]);
@@ -174,24 +175,9 @@ describe("profile update --permission", () => {
 
 describe("profile update --machine-user", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    resetKeyringState();
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: { user: "u@example.com", workspace_id: validUUID },
-      },
-      current_user: null,
+    writeProfiles({
+      myprofile: { user: "u@example.com", workspace_id: validUUID },
     });
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
-    if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
   test("sets machine_user on disk and skips remote validation", async () => {
@@ -207,14 +193,8 @@ describe("profile update --machine-user", () => {
   });
 
   test("clears machine_user when empty string is passed", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
-      },
-      current_user: null,
+    writeProfiles({
+      myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
     });
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["myprofile", "--machine-user", ""]);
@@ -379,24 +359,9 @@ describe("profile update --platform", () => {
 
 describe("profile update --machine-user-override", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    resetKeyringState();
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
-      },
-      current_user: null,
+    writeProfiles({
+      myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
     });
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
-    if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
   test("persists machine_user_override: deny and skips remote validation", async () => {
@@ -412,19 +377,13 @@ describe("profile update --machine-user-override", () => {
   });
 
   test("removes machine_user_override when allow is passed", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: {
-          user: "u@example.com",
-          workspace_id: validUUID,
-          machine_user: "bot",
-          machine_user_override: "deny",
-        },
+    writeProfiles({
+      myprofile: {
+        user: "u@example.com",
+        workspace_id: validUUID,
+        machine_user: "bot",
+        machine_user_override: "deny",
       },
-      current_user: null,
     });
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["myprofile", "--machine-user-override", "allow"]);
@@ -434,14 +393,8 @@ describe("profile update --machine-user-override", () => {
   });
 
   test("errors when deny is set with no machine user present", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: { user: "u@example.com", workspace_id: validUUID },
-      },
-      current_user: null,
+    writeProfiles({
+      myprofile: { user: "u@example.com", workspace_id: validUUID },
     });
     const result = await runCommand(updateCommand, [
       "myprofile",
@@ -455,19 +408,13 @@ describe("profile update --machine-user-override", () => {
   });
 
   test("errors when machine-user is cleared while deny remains", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: {
-          user: "u@example.com",
-          workspace_id: validUUID,
-          machine_user: "bot",
-          machine_user_override: "deny",
-        },
+    writeProfiles({
+      myprofile: {
+        user: "u@example.com",
+        workspace_id: validUUID,
+        machine_user: "bot",
+        machine_user_override: "deny",
       },
-      current_user: null,
     });
     const result = await runCommand(updateCommand, ["myprofile", "--machine-user", ""]);
     expect(result.success).toBe(false);
@@ -475,19 +422,13 @@ describe("profile update --machine-user-override", () => {
   });
 
   test("clears machine_user and machine_user_override together", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: {
-          user: "u@example.com",
-          workspace_id: validUUID,
-          machine_user: "bot",
-          machine_user_override: "deny",
-        },
+    writeProfiles({
+      myprofile: {
+        user: "u@example.com",
+        workspace_id: validUUID,
+        machine_user: "bot",
+        machine_user_override: "deny",
       },
-      current_user: null,
     });
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, [
@@ -504,18 +445,12 @@ describe("profile update --machine-user-override", () => {
   });
 
   test("unrelated update succeeds when stored deny has no machine user (hand-edited config)", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: {
-          user: "u@example.com",
-          workspace_id: validUUID,
-          machine_user_override: "deny",
-        },
+    writeProfiles({
+      myprofile: {
+        user: "u@example.com",
+        workspace_id: validUUID,
+        machine_user_override: "deny",
       },
-      current_user: null,
     });
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["myprofile", "--permission", "write"]);

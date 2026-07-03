@@ -940,7 +940,7 @@ export async function fetchLatestToken(
     shouldResolveSubjectOnRefresh(storedConfigUser, userEntry)
   ) {
     try {
-      const userInfo = await fetchUserInfo(resp.accessToken);
+      const userInfo = await fetchUserInfo(resp.accessToken, platformConfig);
       resolvedUser = userInfo.sub;
       email = userInfo.email;
     } catch (error) {

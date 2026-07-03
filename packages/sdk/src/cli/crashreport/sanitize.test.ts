@@ -3,12 +3,55 @@ import { describe, test, expect } from "vitest";
 import { sanitizeArgv, sanitizeMessage, sanitizeStackTrace } from "./sanitize";
 
 describe("sanitizeStackTrace", () => {
-  test("replaces SDK absolute paths with relative paths", () => {
-    const stack =
-      "Error: boom\n    at Object.<anonymous> (/home/user/projects/packages/sdk/src/cli/index.ts:10:5)";
+  test.each([
+    {
+      name: "replaces SDK absolute paths with relative paths",
+      stack:
+        "Error: boom\n    at Object.<anonymous> (/home/user/projects/packages/sdk/src/cli/index.ts:10:5)",
+      contains: ["packages/sdk/src/cli/index.ts:10:5"],
+      excludes: ["/home/user/projects/"],
+    },
+    {
+      name: "replaces external absolute paths with <external>/filename",
+      stack: "Error: boom\n    at Object.<anonymous> (/usr/lib/node_modules/some-lib/index.js:1:1)",
+      contains: ["<external>/index.js"],
+      excludes: ["/usr/lib/"],
+    },
+    {
+      name: "redacts sensitive data in the error message line of a stack trace",
+      stack:
+        "Error: token abc123def456789012345678901234567890 for user@example.com\n    at Object.<anonymous> (/home/user/projects/packages/sdk/src/cli/index.ts:10:5)",
+      contains: ["<redacted>", "<email>"],
+      excludes: ["abc123def456789012345678901234567890", "user@example.com"],
+    },
+    {
+      name: "redacts sensitive data in multiline error messages before stack frames",
+      stack: [
+        "Error: Failed to connect",
+        'Request: {"token":"s3cret","email":"admin@corp.com"}',
+        "    at Object.<anonymous> (/home/user/projects/packages/sdk/src/cli/index.ts:10:5)",
+      ].join("\n"),
+      contains: [],
+      excludes: ["s3cret", "admin@corp.com"],
+    },
+    {
+      name: "replaces Windows-style absolute paths with <external>/filename",
+      stack:
+        "Error: boom\n    at Object.<anonymous> (C:\\Users\\admin\\projects\\some-lib\\index.js:1:1)",
+      contains: ["<external>/index.js"],
+      excludes: ["C:\\Users\\admin"],
+    },
+    {
+      name: "replaces Windows SDK paths with relative paths",
+      stack:
+        "Error: boom\n    at Object.<anonymous> (D:\\work\\packages\\sdk\\src\\cli\\index.ts:10:5)",
+      contains: ["packages/sdk/src/cli/index.ts:10:5"],
+      excludes: ["D:\\work\\"],
+    },
+  ])("$name", ({ stack, contains, excludes }) => {
     const result = sanitizeStackTrace(stack);
-    expect(result).toContain("packages/sdk/src/cli/index.ts:10:5");
-    expect(result).not.toContain("/home/user/projects/");
+    for (const value of contains) expect(result).toContain(value);
+    for (const value of excludes) expect(result).not.toContain(value);
   });
 
   test("replaces home directory paths with ~/<redacted>/", () => {
@@ -19,133 +62,104 @@ describe("sanitizeStackTrace", () => {
     expect(result).not.toContain(homeDir);
   });
 
-  test("replaces external absolute paths with <external>/filename", () => {
-    const stack =
-      "Error: boom\n    at Object.<anonymous> (/usr/lib/node_modules/some-lib/index.js:1:1)";
-    const result = sanitizeStackTrace(stack);
-    expect(result).toContain("<external>/index.js");
-    expect(result).not.toContain("/usr/lib/");
-  });
-
   test("preserves non-path content", () => {
     const stack = "TypeError: Cannot read properties of undefined";
     const result = sanitizeStackTrace(stack);
     expect(result).toBe("TypeError: Cannot read properties of undefined");
   });
-
-  test("redacts sensitive data in the error message line of a stack trace", () => {
-    const stack =
-      "Error: token abc123def456789012345678901234567890 for user@example.com\n    at Object.<anonymous> (/home/user/projects/packages/sdk/src/cli/index.ts:10:5)";
-    const result = sanitizeStackTrace(stack);
-    expect(result).not.toContain("abc123def456789012345678901234567890");
-    expect(result).not.toContain("user@example.com");
-    expect(result).toContain("<redacted>");
-    expect(result).toContain("<email>");
-  });
-
-  test("redacts sensitive data in multiline error messages before stack frames", () => {
-    const stack = [
-      "Error: Failed to connect",
-      'Request: {"token":"s3cret","email":"admin@corp.com"}',
-      "    at Object.<anonymous> (/home/user/projects/packages/sdk/src/cli/index.ts:10:5)",
-    ].join("\n");
-    const result = sanitizeStackTrace(stack);
-    expect(result).not.toContain("s3cret");
-    expect(result).not.toContain("admin@corp.com");
-  });
-
-  test("replaces Windows-style absolute paths with <external>/filename", () => {
-    const stack =
-      "Error: boom\n    at Object.<anonymous> (C:\\Users\\admin\\projects\\some-lib\\index.js:1:1)";
-    const result = sanitizeStackTrace(stack);
-    expect(result).toContain("<external>/index.js");
-    expect(result).not.toContain("C:\\Users\\admin");
-  });
-
-  test("replaces Windows SDK paths with relative paths", () => {
-    const stack =
-      "Error: boom\n    at Object.<anonymous> (D:\\work\\packages\\sdk\\src\\cli\\index.ts:10:5)";
-    const result = sanitizeStackTrace(stack);
-    expect(result).toContain("packages/sdk/src/cli/index.ts:10:5");
-    expect(result).not.toContain("D:\\work\\");
-  });
 });
 
 describe("sanitizeMessage", () => {
-  test("redacts UUIDs", () => {
-    const message = "Workspace 550e8400-e29b-41d4-a716-446655440000 not found";
+  test.each([
+    {
+      name: "redacts UUIDs",
+      message: "Workspace 550e8400-e29b-41d4-a716-446655440000 not found",
+      contains: ["<uuid>"],
+      excludes: ["550e8400"],
+    },
+    {
+      name: "redacts long hex strings (tokens)",
+      message: "Token abc123def456789012345678901234567890 is invalid",
+      contains: ["<redacted>"],
+      excludes: ["abc123def456789012345678901234567890"],
+    },
+    {
+      name: "redacts email addresses",
+      message: "User user@example.com not found",
+      contains: ["<email>"],
+      excludes: ["user@example.com"],
+    },
+    {
+      name: "redacts URL query strings",
+      message: "Failed to fetch https://api.example.com/v1/data?token=secret&id=123",
+      contains: ["?<redacted>"],
+      excludes: ["token=secret"],
+    },
+    {
+      name: "redacts absolute paths keeping basename",
+      message: "File not found: /home/user/projects/my-app/config.yaml",
+      contains: ["<path>/config.yaml"],
+      excludes: ["/home/user/"],
+    },
+    {
+      name: "strips serialized request bodies from error messages",
+      message:
+        'Failed to apply config\nRequest: {"secretmanagerSecretValue":"s3cret","name":"test"}',
+      contains: ["Failed to apply config", "Request: <redacted>"],
+      excludes: ["s3cret"],
+    },
+    {
+      name: "redacts Windows-style absolute paths keeping basename",
+      message: "File not found: C:\\Users\\admin\\project\\tailor.config.ts",
+      contains: ["<path>/tailor.config.ts"],
+      excludes: ["C:\\Users\\admin"],
+    },
+  ])("$name", ({ message, contains, excludes }) => {
     const result = sanitizeMessage(message);
-    expect(result).toContain("<uuid>");
-    expect(result).not.toContain("550e8400");
-  });
-
-  test("redacts long hex strings (tokens)", () => {
-    const message = "Token abc123def456789012345678901234567890 is invalid";
-    const result = sanitizeMessage(message);
-    expect(result).toContain("<redacted>");
-    expect(result).not.toContain("abc123def456789012345678901234567890");
-  });
-
-  test("redacts email addresses", () => {
-    const message = "User user@example.com not found";
-    const result = sanitizeMessage(message);
-    expect(result).toContain("<email>");
-    expect(result).not.toContain("user@example.com");
-  });
-
-  test("redacts URL query strings", () => {
-    const message = "Failed to fetch https://api.example.com/v1/data?token=secret&id=123";
-    const result = sanitizeMessage(message);
-    expect(result).toContain("?<redacted>");
-    expect(result).not.toContain("token=secret");
-  });
-
-  test("redacts absolute paths keeping basename", () => {
-    const message = "File not found: /home/user/projects/my-app/config.yaml";
-    const result = sanitizeMessage(message);
-    expect(result).toContain("<path>/config.yaml");
-    expect(result).not.toContain("/home/user/");
+    for (const value of contains) expect(result).toContain(value);
+    for (const value of excludes) expect(result).not.toContain(value);
   });
 
   test("preserves simple messages", () => {
     const message = "Something went wrong";
     expect(sanitizeMessage(message)).toBe("Something went wrong");
   });
-
-  test("strips serialized request bodies from error messages", () => {
-    const message =
-      'Failed to apply config\nRequest: {"secretmanagerSecretValue":"s3cret","name":"test"}';
-    const result = sanitizeMessage(message);
-    expect(result).toContain("Failed to apply config");
-    expect(result).not.toContain("s3cret");
-    expect(result).toContain("Request: <redacted>");
-  });
-
-  test("redacts Windows-style absolute paths keeping basename", () => {
-    const message = "File not found: C:\\Users\\admin\\project\\tailor.config.ts";
-    const result = sanitizeMessage(message);
-    expect(result).toContain("<path>/tailor.config.ts");
-    expect(result).not.toContain("C:\\Users\\admin");
-  });
 });
 
 describe("sanitizeArgv", () => {
   test("keeps command and subcommand names", () => {
     const argv = ["node", "tailor", "apply"];
-    const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor", "apply"]);
+    expect(sanitizeArgv(argv)).toEqual(["node", "tailor", "apply"]);
   });
 
-  test("redacts value after any long flag (space format)", () => {
-    const argv = ["node", "tailor", "show", "--workspace-id", "some-uuid"];
-    const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor", "show", "--workspace-id", "<redacted>"]);
-  });
-
-  test("redacts value after any short flag (space format)", () => {
-    const argv = ["node", "tailor", "show", "-w", "some-uuid"];
-    const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor", "show", "-w", "<redacted>"]);
+  test.each([
+    {
+      name: "redacts value after any long flag (space format)",
+      argv: ["node", "tailor", "show", "--workspace-id", "some-uuid"],
+      expected: ["node", "tailor", "show", "--workspace-id", "<redacted>"],
+    },
+    {
+      name: "redacts value after any short flag (space format)",
+      argv: ["node", "tailor", "show", "-w", "some-uuid"],
+      expected: ["node", "tailor", "show", "-w", "<redacted>"],
+    },
+    {
+      name: "redacts value after any flag regardless of flag name",
+      argv: ["node", "tailor", "apply", "--region", "asia-northeast"],
+      expected: ["node", "tailor", "apply", "--region", "<redacted>"],
+    },
+    {
+      name: "treats consecutive flags correctly (no value between them)",
+      argv: ["node", "tailor", "apply", "--verbose", "--yes"],
+      expected: ["node", "tailor", "apply", "--verbose", "--yes"],
+    },
+    {
+      name: "redacts value after boolean flag followed by valued flag",
+      argv: ["node", "tailor", "apply", "--verbose", "--workspace-id", "secret"],
+      expected: ["node", "tailor", "apply", "--verbose", "--workspace-id", "<redacted>"],
+    },
+  ])("$name", ({ argv, expected }) => {
+    expect(sanitizeArgv(argv)).toEqual(expected);
   });
 
   test("redacts --flag=value (equals format)", () => {
@@ -155,49 +169,28 @@ describe("sanitizeArgv", () => {
     expect(result).not.toContain("some-uuid");
   });
 
-  test("redacts value after any flag regardless of flag name", () => {
-    const argv = ["node", "tailor", "apply", "--region", "asia-northeast"];
+  test.each([
+    {
+      name: "redacts absolute path positional arguments",
+      argv: ["node", "tailor", "/home/user/project/tailor.config.ts"],
+      contains: "<path>",
+      excludes: "/home/user/",
+    },
+    {
+      name: "redacts Windows-style absolute path positional arguments",
+      argv: ["node", "tailor", "C:\\Users\\admin\\project\\tailor.config.ts"],
+      contains: "<path>",
+      excludes: "C:\\Users\\admin",
+    },
+    {
+      name: "redacts email address positional arguments",
+      argv: ["node", "tailor", "user", "switch", "user@example.com"],
+      contains: "<email>",
+      excludes: "user@example.com",
+    },
+  ])("$name", ({ argv, contains, excludes }) => {
     const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor", "apply", "--region", "<redacted>"]);
-  });
-
-  test("treats consecutive flags correctly (no value between them)", () => {
-    const argv = ["node", "tailor", "apply", "--verbose", "--yes"];
-    const result = sanitizeArgv(argv);
-    expect(result).toEqual(["node", "tailor", "apply", "--verbose", "--yes"]);
-  });
-
-  test("redacts value after boolean flag followed by valued flag", () => {
-    const argv = ["node", "tailor", "apply", "--verbose", "--workspace-id", "secret"];
-    const result = sanitizeArgv(argv);
-    expect(result).toEqual([
-      "node",
-      "tailor",
-      "apply",
-      "--verbose",
-      "--workspace-id",
-      "<redacted>",
-    ]);
-  });
-
-  test("redacts absolute path positional arguments", () => {
-    const argv = ["node", "tailor", "/home/user/project/tailor.config.ts"];
-    const result = sanitizeArgv(argv);
-    expect(result).toContain("<path>");
-    expect(result).not.toContain("/home/user/");
-  });
-
-  test("redacts Windows-style absolute path positional arguments", () => {
-    const argv = ["node", "tailor", "C:\\Users\\admin\\project\\tailor.config.ts"];
-    const result = sanitizeArgv(argv);
-    expect(result).toContain("<path>");
-    expect(result).not.toContain("C:\\Users\\admin");
-  });
-
-  test("redacts email address positional arguments", () => {
-    const argv = ["node", "tailor", "user", "switch", "user@example.com"];
-    const result = sanitizeArgv(argv);
-    expect(result).toContain("<email>");
-    expect(result).not.toContain("user@example.com");
+    expect(result).toContain(contains);
+    expect(result).not.toContain(excludes);
   });
 });

@@ -1,92 +1,44 @@
 import { parseSync } from "oxc-parser";
+import { logger } from "#/cli/shared/logger";
 import {
   type ASTNode,
   type Replacement,
   applyReplacements,
   findStatementEnd,
+  getTriggerCallInfo,
   resolvePath,
 } from "./ast-utils";
 import { detectDefaultImports } from "./workflow-detector";
-import type {
-  Program,
-  CallExpression,
-  ObjectExpression,
-  ObjectProperty,
-  StaticMemberExpression,
-  IdentifierReference,
-  ImportDeclaration,
-  ImportDefaultSpecifier,
-} from "@oxc-project/types";
-
-interface InvokerInfo {
-  isShorthand: boolean;
-  valueText: string;
-}
+import type { Program, ImportDeclaration, ImportDefaultSpecifier } from "@oxc-project/types";
 
 interface ExtendedTriggerCall {
   kind: "job" | "workflow";
   identifierName: string;
   callRange: { start: number; end: number };
   argsText: string;
-  invoker?: InvokerInfo;
+  // For workflow triggers, source text of the options argument if present
+  optionsText?: string;
 }
 
 /**
  * Name of the injected runtime normalizer helper. Chosen to be unique enough
  * to avoid collisions with user code.
  */
-const NORMALIZER_IDENTIFIER = "__tailor_normalizeInvoker";
+const NORMALIZER_IDENTIFIER = "__tailor_normalizeTriggerOptions";
 
 /**
  * Build the source text of the injected normalizer helper.
  *
- * Accepts a plain string machine user name and returns the object form
- * expected by the platform RPC.
- * The auth namespace is baked in at bundle time.
+ * Renames an `invoker` in the trigger options to the `authInvoker` form the
+ * platform RPC expects: a plain string (machine user name) becomes
+ * `{ namespace, machineUserName }`, while an object form passes through
+ * as-is. Any other options value is unchanged. The auth namespace is baked
+ * in at bundle time.
  * @param authNamespace - Auth service namespace to embed
  * @returns Source line defining the helper
  */
 function buildNormalizerHelperSource(authNamespace: string): string {
-  return `const ${NORMALIZER_IDENTIFIER} = (machineUserName) => ({ namespace: ${JSON.stringify(authNamespace)}, machineUserName });\n`;
-}
-
-/**
- * Extract invoker info from a config object expression.
- * Returns the invoker value text and whether it's a shorthand property.
- * @param configArg - Config argument node
- * @param sourceText - Source code text
- * @returns Extracted invoker info, if any
- */
-function extractInvokerInfo(configArg: unknown, sourceText: string): InvokerInfo | undefined {
-  if (!configArg || typeof configArg !== "object") return undefined;
-
-  const arg = configArg as { type?: string };
-  if (arg.type !== "ObjectExpression") return undefined;
-
-  const objExpr = configArg as ObjectExpression;
-
-  for (const prop of objExpr.properties) {
-    if (prop.type !== "Property") continue;
-
-    const objProp = prop as ObjectProperty;
-    const keyName =
-      objProp.key.type === "Identifier"
-        ? objProp.key.name
-        : objProp.key.type === "Literal"
-          ? (objProp.key as { value?: string }).value
-          : null;
-
-    if (keyName === "invoker") {
-      if (objProp.shorthand) {
-        return { isShorthand: true, valueText: "invoker" };
-      }
-      // Extract value text directly from source
-      const valueText = sourceText.slice(objProp.value.start, objProp.value.end);
-      return { isShorthand: false, valueText };
-    }
-  }
-
-  return undefined;
+  return `const ${NORMALIZER_IDENTIFIER} = (o) => { if (!o) return o; const { invoker, ...rest } = o; return typeof invoker === "string" ? { ...rest, authInvoker: { namespace: ${JSON.stringify(authNamespace)}, machineUserName: invoker } } : typeof invoker === "object" ? { ...rest, authInvoker: invoker } : o; };\n`;
 }
 
 /**
@@ -280,61 +232,25 @@ function detectExtendedTriggerCalls(
   function walk(node: ASTNode | null | undefined): void {
     if (!node || typeof node !== "object") return;
 
-    // Detect pattern: identifier.trigger(args) or identifier.trigger(args, config)
-    if (node.type === "CallExpression") {
-      const callExpr = node as unknown as CallExpression;
-      const callee = callExpr.callee;
-
-      if (callee.type === "MemberExpression") {
-        const memberExpr = callee as unknown as StaticMemberExpression;
-
-        // callee may be a ComputedMemberExpression at runtime
-        // oxlint-disable typescript/no-unnecessary-condition
-        const identifierName =
-          !memberExpr.computed && memberExpr.object.type === "Identifier"
-            ? (memberExpr.object as IdentifierReference).name
-            : null;
-        const propertyName = !memberExpr.computed ? memberExpr.property.name : null;
-        // oxlint-enable typescript/no-unnecessary-condition
-
-        if (identifierName && propertyName === "trigger") {
-          const isWorkflow = workflowNames.has(identifierName);
-          const isJob = jobNames.has(identifierName);
-          if (isWorkflow || isJob) {
-            const argCount = callExpr.arguments.length;
-
-            let argsText = "";
-            if (argCount > 0) {
-              const firstArg = callExpr.arguments[0];
-              // callee may be a ComputedMemberExpression at runtime
-              // oxlint-disable-next-line typescript/no-unnecessary-condition
-              if (firstArg && "start" in firstArg && "end" in firstArg) {
-                argsText = sourceText.slice(firstArg.start as number, firstArg.end as number);
-              }
-            }
-
-            if (isWorkflow && argCount >= 2) {
-              const secondArg = callExpr.arguments[1];
-              const invoker = extractInvokerInfo(secondArg, sourceText);
-              if (invoker) {
-                calls.push({
-                  kind: "workflow",
-                  identifierName,
-                  callRange: { start: callExpr.start, end: callExpr.end },
-                  argsText,
-                  invoker,
-                });
-              }
-            } else if (isJob) {
-              calls.push({
-                kind: "job",
-                identifierName,
-                callRange: { start: callExpr.start, end: callExpr.end },
-                argsText,
-              });
-            }
-          }
-        }
+    const triggerCall = getTriggerCallInfo(node, sourceText);
+    if (triggerCall) {
+      const isWorkflow = workflowNames.has(triggerCall.identifierName);
+      const isJob = jobNames.has(triggerCall.identifierName);
+      if (isWorkflow) {
+        calls.push({
+          kind: "workflow",
+          identifierName: triggerCall.identifierName,
+          callRange: triggerCall.callRange,
+          argsText: triggerCall.argsText,
+          optionsText: triggerCall.optionsText,
+        });
+      } else if (isJob) {
+        calls.push({
+          kind: "job",
+          identifierName: triggerCall.identifierName,
+          callRange: triggerCall.callRange,
+          argsText: triggerCall.argsText,
+        });
       }
     }
 
@@ -408,8 +324,31 @@ export function transformFunctionTriggers(
   const workflowNames = new Set(localWorkflowNameMap.keys());
   const jobNames = new Set(jobNameMap.keys());
 
-  // Detect trigger calls only for known workflows and jobs
-  const triggerCalls = detectExtendedTriggerCalls(program, source, workflowNames, jobNames);
+  // Detect trigger calls only for known workflows and jobs.
+  // When trigger calls nest, keep only the outermost one: the outer
+  // replacement text is built from the original source, so applying an inner
+  // replacement as well would corrupt the output.
+  const allTriggerCalls = detectExtendedTriggerCalls(program, source, workflowNames, jobNames);
+  const nestedTriggerCalls: Array<{ call: ExtendedTriggerCall; parent: ExtendedTriggerCall }> = [];
+  const triggerCalls = allTriggerCalls.filter((call) => {
+    const parent = allTriggerCalls.find(
+      (other) =>
+        other !== call &&
+        other.callRange.start <= call.callRange.start &&
+        call.callRange.end <= other.callRange.end,
+    );
+    if (parent) {
+      nestedTriggerCalls.push({ call, parent });
+      return false;
+    }
+    return true;
+  });
+
+  for (const { call, parent } of nestedTriggerCalls) {
+    logger.warn(
+      `Nested trigger call "${call.identifierName}.trigger(...)" inside "${parent.identifierName}.trigger(...)" cannot be converted. Move it to a separate statement and pass the result instead.`,
+    );
+  }
 
   const replacements: Replacement[] = [];
   // Whether any workflow trigger invoker was wrapped with the runtime
@@ -420,26 +359,27 @@ export function transformFunctionTriggers(
   const transformedCallsPerIdentifier = new Map<string, number>();
 
   for (const call of triggerCalls) {
-    if (call.kind === "workflow" && call.invoker) {
+    if (call.kind === "workflow") {
       // Workflow trigger - get workflow name from map
       const workflowName = localWorkflowNameMap.get(call.identifierName);
       if (workflowName) {
-        const rawExpr = call.invoker.isShorthand ? "invoker" : call.invoker.valueText;
-        // Wrap with the runtime normalizer so string expressions become the
-        // object form the platform RPC expects. The normalizer is injected
-        // once at the top of the file.
-        // When no auth service is configured we can't expand a string, so
-        // we pass through unchanged (platform will reject a string with a
-        // clear error).
-        let invokerExpr: string;
-        if (authNamespace) {
-          invokerExpr = `${NORMALIZER_IDENTIFIER}(${rawExpr})`;
-          needsNormalizerHelper = true;
-        } else {
-          invokerExpr = rawExpr;
+        // Wrap the options with the runtime normalizer so an `invoker` in any
+        // options shape (object literal, variable reference, spread) becomes
+        // the `authInvoker` object form the platform RPC expects. The
+        // normalizer is injected once at the top of the file. When no auth
+        // service is configured we can't expand a string, so we pass through
+        // unchanged (platform will reject a string with a clear error).
+        let optionsPart = "";
+        if (call.optionsText !== undefined) {
+          if (authNamespace) {
+            optionsPart = `, ${NORMALIZER_IDENTIFIER}(${call.optionsText})`;
+            needsNormalizerHelper = true;
+          } else {
+            optionsPart = `, ${call.optionsText}`;
+          }
         }
         // Transform to tailor.workflow.triggerWorkflow
-        const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}, { authInvoker: ${invokerExpr} })`;
+        const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}${optionsPart})`;
         replacements.push({
           start: call.callRange.start,
           end: call.callRange.end,
@@ -450,7 +390,7 @@ export function transformFunctionTriggers(
           (transformedCallsPerIdentifier.get(call.identifierName) ?? 0) + 1,
         );
       }
-    } else if (call.kind === "job") {
+    } else {
       const jobName = jobNameMap.get(call.identifierName);
       if (jobName) {
         const transformedCall = `tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"})`;

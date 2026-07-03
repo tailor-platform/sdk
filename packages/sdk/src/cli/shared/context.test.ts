@@ -932,7 +932,7 @@ describe("loadAccessToken", () => {
       const config = await readPlatformConfig();
 
       expect(token).toBe("new-access-token");
-      expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token");
+      expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token", undefined);
       expect(config.version).toBe(3);
       expect(config.users["legacy@example.com"]).toBeUndefined();
       expect(config.users["platform-user-sub"]).toMatchObject({
@@ -1014,7 +1014,7 @@ describe("loadAccessToken", () => {
       const config = await readPlatformConfig();
 
       expect(token).toBe("new-access-token");
-      expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token");
+      expect(clientMocks.fetchUserInfo).toHaveBeenCalledWith("new-access-token", undefined);
       expect(config.users["platform-user-sub"]).toBeUndefined();
       expect(config.users["legacy@example.com"]).toMatchObject({
         storage: "keyring",

@@ -6,7 +6,7 @@ on:
     branches: ["__BRANCH__"]
     # __PR_TYPES__
     # To deploy only for PRs that carry the `tailor:preview` label instead of all PRs,
-    # re-run: tailor-sdk setup --require-preview-label
+    # re-run: tailor setup preview --require-preview-label
     # __PATHS__
 
 permissions:
@@ -29,20 +29,20 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
+        uses: tailor-platform/actions/setup@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
+        uses: tailor-platform/actions/install@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
+        uses: tailor-platform/actions/generate-check@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       - id: tailor-preview-deploy
-        uses: tailor-platform/actions/preview-deploy@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
+        uses: tailor-platform/actions/preview-deploy@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
           region: "__REGION__"
@@ -55,7 +55,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - id: tailor-preview-comment
         if: always()
-        uses: tailor-platform/actions/preview-comment@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
+        uses: tailor-platform/actions/preview-comment@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
           workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}
@@ -75,15 +75,15 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
+        uses: tailor-platform/actions/setup@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
+        uses: tailor-platform/actions/install@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-preview-cleanup
-        uses: tailor-platform/actions/preview-cleanup@d203a37c87b7a69c6040611c33e9e50c1d564ed1 # v1.5.0
+        uses: tailor-platform/actions/preview-cleanup@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
           package-manager: __PACKAGE_MANAGER__

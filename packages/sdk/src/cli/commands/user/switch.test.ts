@@ -34,6 +34,8 @@ describe("user switch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
   });
 
   afterEach(() => {
@@ -90,6 +92,19 @@ describe("user switch", () => {
   });
 
   test("updates the active profile user when switching users", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {},
+      current_user: null,
+    });
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     writePlatformConfig({
       version: 3,
@@ -120,6 +135,20 @@ describe("user switch", () => {
   });
 
   test("rejects scoped token keys as current user values", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "token",
+          token_expires_at: "2999-01-01T00:00:00.000Z",
+        },
+      },
+      profiles: {},
+      current_user: null,
+    });
+
     const result = await runCommand(switchCommand, ["https://api.dev.tailor.tech|u@example.com"]);
 
     expect(result.success).toBe(false);

@@ -40,7 +40,10 @@ import {
   getLatestMigrationNumber,
   getMigrationFiles,
   INITIAL_SCHEMA_NUMBER,
+  type RemoteGqlPermission,
   type SchemaSnapshot,
+  type SnapshotGqlOperations,
+  type SnapshotSettings,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import {
@@ -56,14 +59,8 @@ import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
-import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "../label";
+import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "../label";
+import { fetchExistingResourcesWithLabels } from "../owned-resource";
 import {
   executeMigrations,
   detectPendingMigrations,
@@ -114,6 +111,123 @@ async function fetchRemoteTypes(
   });
 }
 
+async function fetchRemoteGqlPermissions(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+): Promise<RemoteGqlPermission[]> {
+  return fetchAll(async (pageToken, maxPageSize) => {
+    try {
+      const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
+        workspaceId,
+        namespaceName: namespace,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [permissions, nextPageToken];
+    } catch (error) {
+      if (error instanceof ConnectError && error.code === Code.NotFound) {
+        return [[], ""];
+      }
+      throw error;
+    }
+  });
+}
+
+type RemoteTailorDBSettings = NonNullable<NonNullable<ProtoTailorDBType["schema"]>["settings"]>;
+type DeployGqlOperations = SnapshotGqlOperations | "query" | undefined;
+
+function definedWhenNotEmpty<T extends object>(value: T): T | undefined {
+  return Object.keys(value).length > 0 ? value : undefined;
+}
+
+function namespaceConfig(
+  config: LoadedConfig,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  namespace: string,
+): TailorDBServiceConfig | undefined {
+  const inputConfig = tailorDBInputs.find((input) => input.namespace === namespace)?.config;
+  return inputConfig ?? (config.db?.[namespace] as TailorDBServiceConfig | undefined);
+}
+
+function namespaceGqlOperations(
+  config: LoadedConfig,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  namespace: string,
+): DeployGqlOperations {
+  return namespaceConfig(config, tailorDBInputs, namespace)?.gqlOperations;
+}
+
+const GQL_OPERATION_KEYS = ["create", "update", "delete", "read"] as const;
+
+function configuredDisabledGqlOperations(
+  operations: DeployGqlOperations,
+): SnapshotGqlOperations | undefined {
+  if (!operations) return undefined;
+  if (operations === "query") {
+    return { create: false, update: false, delete: false };
+  }
+
+  const disabled: SnapshotGqlOperations = {};
+  for (const key of GQL_OPERATION_KEYS) {
+    if (operations[key] === false) disabled[key] = false;
+  }
+
+  return definedWhenNotEmpty(disabled);
+}
+
+function appliedConfiguredDisabledGqlOperations(
+  remoteDisabled: RemoteTailorDBSettings["disableGqlOperations"] | undefined,
+  configuredDisabled: SnapshotGqlOperations | undefined,
+): SnapshotGqlOperations | undefined {
+  if (!remoteDisabled || !configuredDisabled) return undefined;
+
+  const disabled: SnapshotGqlOperations = {};
+  for (const key of GQL_OPERATION_KEYS) {
+    if (configuredDisabled[key] === false && remoteDisabled[key]) disabled[key] = false;
+  }
+
+  return definedWhenNotEmpty(disabled);
+}
+
+function deployComparableSnapshot(
+  snapshot: SchemaSnapshot,
+  remoteTypes: ReadonlyArray<ProtoTailorDBType>,
+  gqlOperations: DeployGqlOperations,
+): SchemaSnapshot {
+  const remoteTypesByName = new Map(remoteTypes.map((type) => [type.name, type]));
+  const configuredDisabled = configuredDisabledGqlOperations(gqlOperations);
+  const types: Record<string, TailorDBSnapshotType> = {};
+
+  for (const [typeName, type] of Object.entries(snapshot.types)) {
+    const settings: SnapshotSettings = { ...type.settings };
+    const remoteSettings = remoteTypesByName.get(typeName)?.schema?.settings;
+
+    if (type.settings?.publishEvents === undefined && remoteSettings?.publishRecordEvents) {
+      settings.publishEvents = true;
+    }
+
+    if (type.settings?.gqlOperations === undefined) {
+      const disabled = appliedConfiguredDisabledGqlOperations(
+        remoteSettings?.disableGqlOperations,
+        configuredDisabled,
+      );
+      if (disabled) settings.gqlOperations = disabled;
+    }
+
+    const comparableType = { ...type };
+    const comparableSettings = definedWhenNotEmpty(settings);
+    if (comparableSettings) {
+      comparableType.settings = comparableSettings;
+    } else {
+      delete comparableType.settings;
+    }
+    types[typeName] = comparableType;
+  }
+
+  return { ...snapshot, types };
+}
+
 /**
  * Get the current migration number from remote metadata
  * @param {OperatorClient} client - Operator client instance
@@ -145,12 +259,16 @@ async function getRemoteMigrationNumber(
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migration config
+ * @param {LoadedConfig} config - Loaded application config
+ * @param {ReadonlyArray<TailorDBDeployInput>} tailorDBInputs - Deploy inputs for namespace defaults
  * @returns {Promise<RemoteSchemaVerificationResult[]>} Verification results per namespace
  */
 async function verifyRemoteSchema(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
+  config: LoadedConfig,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
 ): Promise<RemoteSchemaVerificationResult[]> {
   const results: RemoteSchemaVerificationResult[] = [];
 
@@ -187,10 +305,22 @@ async function verifyRemoteSchema(
     }
 
     // Fetch remote types
-    const remoteTypes = await fetchRemoteTypes(client, workspaceId, namespace);
+    const [remoteTypes, remoteGqlPermissions] = await Promise.all([
+      fetchRemoteTypes(client, workspaceId, namespace),
+      fetchRemoteGqlPermissions(client, workspaceId, namespace),
+    ]);
+    const expectedDeploySnapshot = deployComparableSnapshot(
+      expectedSnapshot,
+      remoteTypes,
+      namespaceGqlOperations(config, tailorDBInputs, namespace),
+    );
 
     // Compare remote with expected snapshot
-    const drifts = compareRemoteWithSnapshot(remoteTypes, expectedSnapshot);
+    const drifts = compareRemoteWithSnapshot(
+      remoteTypes,
+      expectedDeploySnapshot,
+      remoteGqlPermissions,
+    );
 
     results.push({
       namespace,
@@ -240,6 +370,7 @@ type ValidateAndDetectResult = {
  * @param {ReadonlyMap<string, Record<string, TailorDBSnapshotType>>} typesByNamespace - Types by namespace
  * @param {LoadedConfig} config - Loaded application config (includes path)
  * @param {boolean} noSchemaCheck - Whether to skip schema diff check
+ * @param {ReadonlyArray<TailorDBDeployInput>} tailorDBInputs - Deploy inputs for namespace defaults
  * @returns {Promise<ValidateAndDetectResult>} Pending migrations and namespaces that have migration directories configured
  */
 async function validateAndDetectMigrations(
@@ -248,6 +379,7 @@ async function validateAndDetectMigrations(
   typesByNamespace: ReadonlyMap<string, Record<string, TailorDBSnapshotType>>,
   config: LoadedConfig,
   noSchemaCheck: boolean,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
 ): Promise<ValidateAndDetectResult> {
   const configDir = path.dirname(config.path);
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
@@ -282,6 +414,8 @@ async function validateAndDetectMigrations(
         client,
         workspaceId,
         namespacesWithMigrations,
+        config,
+        tailorDBInputs,
       );
       const hasRemoteDrift = remoteVerificationResults.some((r) => r.hasDrift);
 
@@ -293,6 +427,21 @@ async function validateAndDetectMigrations(
         logger.info("  - Another developer applied different migrations", { mode: "plain" });
         logger.info("  - Manual schema changes were made directly", { mode: "plain" });
         logger.info("  - Migration history is out of sync", { mode: "plain" });
+        logger.newline();
+        logger.info("To resolve:");
+        logger.info("  - Run 'tailor tailordb migration status' to compare local vs remote.", {
+          mode: "plain",
+        });
+        logger.info("  - If remote is correct, update local types and run 'migration generate'.", {
+          mode: "plain",
+        });
+        logger.info(
+          "  - If local migration history is correct, run 'migration sync <N>' to overwrite remote.",
+          { mode: "plain" },
+        );
+        logger.info("  - If only bookkeeping is stale, run 'migration set <N>'.", {
+          mode: "plain",
+        });
         logger.newline();
         logger.info("Use '--no-schema-check' to skip this check (not recommended).");
         throw new Error("Remote schema verification failed");
@@ -431,6 +580,7 @@ export async function applyTailorDB(
       typesByNamespace,
       migrationContext.config,
       migrationContext.noSchemaCheck,
+      migrationContext.tailorDBInputs,
     );
 
     if (pendingMigrations.length > 0) {
@@ -1162,7 +1312,7 @@ export async function planTailorDB(context: PlanContext) {
   const executors = forRemoval
     ? []
     : Object.values((await application.executorService?.loadExecutors()) ?? {});
-  const executorUsedTypes = new Set<string>();
+  const executorUsedTypes = new Set(context.executorUsedTailorDBTypes ?? []);
   for (const executor of executors) {
     if (executor.trigger.kind === "tailordb") {
       executorUsedTypes.add(executor.trigger.typeName);
@@ -1349,37 +1499,19 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingServices = await fetchExistingResourcesWithLabels({
+    client,
+    fetchPage: async (pageToken, maxPageSize) => {
       const { tailordbServices, nextPageToken } = await client.listTailorDBServices({
         workspaceId,
         pageToken,
         pageSize: maxPageSize,
       });
       return [tailordbServices, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.namespace?.name,
+    getTrn: (name) => resourceTrn(workspaceId, "tailordb", name),
   });
-  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      if (!resource.namespace?.name) {
-        return;
-      }
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "tailordb", resource.namespace.name),
-      });
-      existingServices[resource.namespace.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   for (const tailordb of tailordbs) {
     const existing = existingServices[tailordb.namespace];

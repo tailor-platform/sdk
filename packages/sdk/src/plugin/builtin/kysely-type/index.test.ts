@@ -65,6 +65,13 @@ describe("KyselyTypePlugin integration tests", () => {
     };
   }
 
+  async function runOnTailorDBReady(
+    namespaces: { namespace: string; types: Record<string, TailorDBType> }[],
+  ) {
+    const plugin = kyselyTypePlugin({ distPath: testDistPath });
+    return plugin.onTailorDBReady!(createCtx(namespaces));
+  }
+
   describe("basic functionality tests", () => {
     test("processKyselyType correctly processes basic TailorDBType", async () => {
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(mockBasicType)));
@@ -142,16 +149,12 @@ describe("KyselyTypePlugin integration tests", () => {
 
   describe("onTailorDBReady tests", () => {
     test("integrates type definitions and returns file generation result", async () => {
-      const parsedType = parseTailorDBType(toSchemaOutput(mockBasicType));
-      const ctx = createCtx([
+      const result = await runOnTailorDBReady([
         {
           namespace: "test-namespace",
-          types: { User: parsedType },
+          types: { User: parseTailorDBType(toSchemaOutput(mockBasicType)) },
         },
       ]);
-
-      const plugin = kyselyTypePlugin({ distPath: testDistPath });
-      const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0]!.path).toBe(testDistPath);
@@ -174,17 +177,15 @@ describe("KyselyTypePlugin integration tests", () => {
     });
 
     test("complete integration test with multiple types", async () => {
-      const parsedBasicType = parseTailorDBType(toSchemaOutput(mockBasicType));
-      const parsedEnumType = parseTailorDBType(toSchemaOutput(mockEnumType));
-      const ctx = createCtx([
+      const result = await runOnTailorDBReady([
         {
           namespace: "test-namespace",
-          types: { User: parsedBasicType, Status: parsedEnumType },
+          types: {
+            User: parseTailorDBType(toSchemaOutput(mockBasicType)),
+            Status: parseTailorDBType(toSchemaOutput(mockEnumType)),
+          },
         },
       ]);
-
-      const plugin = kyselyTypePlugin({ distPath: testDistPath });
-      const result = await plugin.onTailorDBReady!(ctx);
 
       expect(result.files).toHaveLength(1);
       expect(result.files[0]!.path).toBe(testDistPath);
@@ -225,14 +226,10 @@ describe("KyselyTypePlugin integration tests", () => {
 
   describe("multiple namespace support", () => {
     test("aggregates types from multiple namespaces", async () => {
-      const userType = db.type("User", {
-        name: db.string(),
-      });
-      const eventType = db.type("Event", {
-        timestamp: db.datetime(),
-      });
+      const userType = db.type("User", { name: db.string() });
+      const eventType = db.type("Event", { timestamp: db.datetime() });
 
-      const ctx = createCtx([
+      const result = await runOnTailorDBReady([
         {
           namespace: "tailordb",
           types: { User: parseTailorDBType(toSchemaOutput(userType)) },
@@ -243,45 +240,31 @@ describe("KyselyTypePlugin integration tests", () => {
         },
       ]);
 
-      const plugin = kyselyTypePlugin({ distPath: testDistPath });
-      const result = await plugin.onTailorDBReady!(ctx);
-
       expect(result.files).toHaveLength(1);
       const content = result.files[0]!.content;
 
-      // Check both namespaces are included
       expect(content).toContain('"tailordb": {');
       expect(content).toContain('"analytics": {');
       expect(content).toContain("User: {");
       expect(content).toContain("Event: {");
-
-      // Check Timestamp utility type is imported (used by analytics)
       expect(content).toContain("type Timestamp,");
       expect(content).toContain("interface Namespace {");
     });
 
     test("includes only necessary utility types", async () => {
-      const simpleType = db.type("Simple", {
-        name: db.string(),
-      });
+      const simpleType = db.type("Simple", { name: db.string() });
 
-      const ctx = createCtx([
+      const result = await runOnTailorDBReady([
         {
           namespace: "test",
           types: { Simple: parseTailorDBType(toSchemaOutput(simpleType)) },
         },
       ]);
 
-      const plugin = kyselyTypePlugin({ distPath: testDistPath });
-      const result = await plugin.onTailorDBReady!(ctx);
-
       const content = result.files[0]!.content;
 
-      // Timestamp should not be imported (not used)
       expect(content).not.toContain("type Timestamp");
-      // Generated should always be imported
       expect(content).toContain("type Generated,");
-      // Serial should not be imported (not used)
       expect(content).not.toContain("type Serial");
     });
   });

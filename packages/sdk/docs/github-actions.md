@@ -69,7 +69,7 @@ Pass `--erd-preview` on a branch target to add TailorDB ERD preview artifacts
 to pull requests:
 
 ```bash
-tailor-sdk setup -n my-app-stg --erd-preview
+tailor setup -n my-app-stg --erd-preview
 ```
 
 The generated workflow builds one self-contained ERD viewer HTML file for each

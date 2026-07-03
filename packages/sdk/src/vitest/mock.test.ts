@@ -733,23 +733,20 @@ describe("mock", () => {
       expect(iconv.calls).toHaveLength(0);
     });
 
-    test("default convert returns string for UTF-8 target, Uint8Array otherwise", () => {
-      using _iconv = mockIconv();
-      const utf8Result = (globalThis as any).tailor.iconv.convert("hi", "Shift_JIS", "UTF-8");
-      expect(utf8Result).toBe("");
-      const binResult = (globalThis as any).tailor.iconv.convert("hi", "UTF-8", "Shift_JIS");
-      expect(binResult).toBeInstanceOf(Uint8Array);
-      expect(binResult).toHaveLength(0);
-    });
-
-    test("default encode returns string for UTF-8 target, Uint8Array otherwise", () => {
-      using _iconv = mockIconv();
-      const utf8Result = (globalThis as any).tailor.iconv.encode("hi", "UTF-8");
-      expect(utf8Result).toBe("");
-      const binResult = (globalThis as any).tailor.iconv.encode("hi", "Shift_JIS");
-      expect(binResult).toBeInstanceOf(Uint8Array);
-      expect(binResult).toHaveLength(0);
-    });
+    test.each([
+      ["convert", ["hi", "Shift_JIS", "UTF-8"], ["hi", "UTF-8", "Shift_JIS"]],
+      ["encode", ["hi", "UTF-8"], ["hi", "Shift_JIS"]],
+    ] as const)(
+      "default %s returns string for UTF-8 target, Uint8Array otherwise",
+      (method, utf8Args, binArgs) => {
+        using _iconv = mockIconv();
+        const utf8Result = (globalThis as any).tailor.iconv[method](...utf8Args);
+        expect(utf8Result).toBe("");
+        const binResult = (globalThis as any).tailor.iconv[method](...binArgs);
+        expect(binResult).toBeInstanceOf(Uint8Array);
+        expect(binResult).toHaveLength(0);
+      },
+    );
 
     test("resolver returning undefined falls back to default", () => {
       using iconv = mockIconv();

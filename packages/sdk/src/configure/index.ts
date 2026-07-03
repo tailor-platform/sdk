@@ -53,6 +53,7 @@ export {
   type ConnectionNameRegistry,
   type ConnectionName,
 } from "#/configure/types/connection-name";
+export { type AIGatewayNameRegistry, type AIGatewayName } from "#/configure/types/aigateway-name";
 
 export * from "#/configure/services/index";
 

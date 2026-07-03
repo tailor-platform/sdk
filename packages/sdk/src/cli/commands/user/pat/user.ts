@@ -29,6 +29,6 @@ export async function createPatOperatorClient() {
     throw new Error("No user logged in.\nPlease login first using 'tailor login' command.");
   }
 
-  const { accessToken: token } = await fetchLatestToken(config, user, platformConfig);
-  return await initOperatorClient(token, platformConfig);
+  const { accessToken } = await fetchLatestToken(config, user, platformConfig);
+  return await initOperatorClient(accessToken, platformConfig);
 }

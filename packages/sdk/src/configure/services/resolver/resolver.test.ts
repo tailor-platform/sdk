@@ -18,9 +18,7 @@ describe("createResolver", () => {
       createResolver({
         name: "noInput",
         operation: "query",
-        output: t.object({
-          result: t.string(),
-        }),
+        output: t.object({ result: t.string() }),
         body: (context) => {
           expectTypeOf(context).toHaveProperty("caller");
           expectTypeOf(context).toHaveProperty("input");
@@ -37,9 +35,7 @@ describe("createResolver", () => {
       createResolver({
         name: "noInput",
         operation: "mutation",
-        output: t.object({
-          success: t.bool(),
-        }),
+        output: t.object({ success: t.bool() }),
         body: (context) => {
           expectTypeOf(context).toHaveProperty("caller");
           expectTypeOf(context).toHaveProperty("input");
@@ -60,9 +56,7 @@ describe("createResolver", () => {
         name: "withInput",
         operation: "query",
         input: inputType,
-        output: t.object({
-          message: t.string(),
-        }),
+        output: t.object({ message: t.string() }),
         body: (context) => {
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context).toHaveProperty("caller");
@@ -85,9 +79,7 @@ describe("createResolver", () => {
         name: "optionalFields",
         operation: "query",
         input: inputType,
-        output: t.object({
-          result: t.string(),
-        }),
+        output: t.object({ result: t.string() }),
         body: (context) => {
           expectTypeOf(context.input.required).toBeString();
           expectTypeOf(context.input.optional).toEqualTypeOf<string | null | undefined>();
@@ -106,9 +98,7 @@ describe("createResolver", () => {
         name: "arrayFields",
         operation: "mutation",
         input: inputType,
-        output: t.object({
-          count: t.int(),
-        }),
+        output: t.object({ count: t.int() }),
         body: (context) => {
           expectTypeOf(context.input.items).toBeArray();
           expectTypeOf(context.input.numbers).toBeArray();
@@ -127,9 +117,7 @@ describe("createResolver", () => {
         name: "enumFields",
         operation: "query",
         input: inputType,
-        output: t.object({
-          message: t.string(),
-        }),
+        output: t.object({ message: t.string() }),
         body: (context) => {
           expectTypeOf(context.input.role).toEqualTypeOf<"ADMIN" | "USER">();
           expectTypeOf(context.input.status).toEqualTypeOf<
@@ -155,9 +143,7 @@ describe("createResolver", () => {
         name: "nestedObjects",
         operation: "query",
         input: inputType,
-        output: t.object({
-          fullName: t.string(),
-        }),
+        output: t.object({ fullName: t.string() }),
         body: (context) => {
           expectTypeOf(context.input.user.name.first).toBeString();
           expectTypeOf(context.input.user.name.last).toBeString();
@@ -188,9 +174,7 @@ describe("createResolver", () => {
         name: "mixedTypes",
         operation: "mutation",
         input: inputType,
-        output: t.object({
-          success: t.bool(),
-        }),
+        output: t.object({ success: t.bool() }),
         body: (context) => {
           expectTypeOf(context.input.id).toEqualTypeOf<UUIDString>();
           expectTypeOf(context.input.name).toBeString();
@@ -239,12 +223,8 @@ describe("createResolver", () => {
       createResolver({
         name: "asyncResolver",
         operation: "query",
-        input: {
-          id: t.string(),
-        },
-        output: t.object({
-          data: t.string(),
-        }),
+        input: { id: t.string() },
+        output: t.object({ data: t.string() }),
         body: async (context) => {
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context).toHaveProperty("caller");
@@ -258,12 +238,8 @@ describe("createResolver", () => {
       createResolver({
         name: "withDbNamespace",
         operation: "mutation",
-        input: {
-          name: t.string(),
-        },
-        output: t.object({
-          success: t.bool(),
-        }),
+        input: { name: t.string() },
+        output: t.object({ success: t.bool() }),
         body: async (context) => {
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context).toHaveProperty("caller");
@@ -276,9 +252,7 @@ describe("createResolver", () => {
       createResolver({
         name: "withUser",
         operation: "query",
-        output: t.object({
-          userId: t.string(),
-        }),
+        output: t.object({ userId: t.string() }),
         body: (context) => {
           expectTypeOf(context.caller).toEqualTypeOf<TailorPrincipal | null>();
           if (!context.caller) return { userId: "anonymous" };
@@ -316,9 +290,7 @@ describe("createResolver", () => {
         name: "complexNested",
         operation: "mutation",
         input: inputType,
-        output: t.object({
-          processed: t.int(),
-        }),
+        output: t.object({ processed: t.int() }),
         body: (context) => {
           expectTypeOf(context.input.orders).toBeArray();
           expectTypeOf(context.input.orders[0]?.id).toExtend<string | undefined>();
@@ -343,9 +315,7 @@ describe("createResolver", () => {
         name: "allBasicTypes",
         operation: "query",
         input: inputType,
-        output: t.object({
-          summary: t.string(),
-        }),
+        output: t.object({ summary: t.string() }),
         body: (context) => {
           expectTypeOf(context.input.uuid).toEqualTypeOf<UUIDString>();
           expectTypeOf(context.input.string).toBeString();
@@ -369,9 +339,7 @@ describe("createResolver", () => {
         name: "enumArray",
         operation: "query",
         input: inputType,
-        output: t.object({
-          count: t.int(),
-        }),
+        output: t.object({ count: t.int() }),
         body: (context) => {
           expectTypeOf(context.input.roles).toBeArray();
           return { count: context.input.roles.length };
@@ -470,9 +438,7 @@ describe("createResolver", () => {
         age: t.int(),
       };
 
-      const outputType = t.object({
-        message: t.string(),
-      });
+      const outputType = t.object({ message: t.string() });
 
       const resolver = createResolver({
         name: "testResolver",
@@ -480,9 +446,7 @@ describe("createResolver", () => {
         operation: "query",
         input: inputType,
         output: outputType,
-        body: (context) => ({
-          message: `Hello ${context.input.name}`,
-        }),
+        body: (context) => ({ message: `Hello ${context.input.name}` }),
       });
 
       expect(resolver.name).toBe("testResolver");
@@ -511,9 +475,7 @@ describe("createResolver", () => {
     });
 
     test("creates minimal resolver without optional fields", () => {
-      const outputType = t.object({
-        result: t.string(),
-      });
+      const outputType = t.object({ result: t.string() });
 
       const resolver = createResolver({
         name: "minimal",
@@ -540,7 +502,6 @@ describe("createResolver", () => {
         body: () => ({ name: "John", age: 30 }),
       });
 
-      // Verify the output was converted to t.object()
       expect(resolver.output.type).toBe("nested");
       expect(resolver.output.fields).toBeDefined();
       expect(resolver.output.fields.name!.type).toBe("string");
@@ -550,15 +511,9 @@ describe("createResolver", () => {
 
   describe("description support", () => {
     test("Output field supports description", () => {
-      const inputType = {
-        name: t.string(),
-      };
+      const inputType = { name: t.string() };
 
-      const outputType = t
-        .object({
-          result: t.string(),
-        })
-        .description("Output type description");
+      const outputType = t.object({ result: t.string() }).description("Output type description");
 
       const resolver = createResolver({
         name: "withDescriptions",
@@ -600,9 +555,7 @@ describe("createResolver", () => {
         name: "withFieldDescriptions",
         operation: "query",
         input: inputType,
-        output: t.object({
-          result: t.string().description("Result message"),
-        }),
+        output: t.object({ result: t.string().description("Result message") }),
         body: (context) => ({ result: `${context.input.name}` }),
       });
 
@@ -625,9 +578,7 @@ describe("createResolver", () => {
         name: "withNestedDescriptions",
         operation: "query",
         input: inputType,
-        output: t.object({
-          result: t.string(),
-        }),
+        output: t.object({ result: t.string() }),
         body: (context) => ({ result: context.input.user.name }),
       });
 
@@ -643,35 +594,23 @@ describe("createResolver", () => {
         name: "compatTest",
         description: "Test compatibility",
         operation: "query",
-        input: {
-          id: t.string(),
-        },
-        output: t.object({
-          result: t.string(),
-        }),
+        input: { id: t.string() },
+        output: t.object({ result: t.string() }),
         body: (context) => ({ result: context.input.id }),
       });
 
-      // Verify that the resolver object is compatible with ResolverInput
       expectTypeOf(resolver).toExtend<ResolverInput>();
     });
 
     test("all ResolverInput fields (except input/output) are supported in createResolver config", () => {
-      // Test that all fields from ResolverInput (except input/output which have different types)
-      // can be used in createResolver config
-
       const resolver = createResolver({
-        // Required fields
         name: "fullConfigTest",
         operation: "mutation",
         output: t.object({ success: t.bool() }),
         body: () => ({ success: true }),
-
-        // Optional fields from ResolverInput
         description: "Full configuration test",
       });
 
-      // Verify that all expected fields are present
       expect(resolver.name).toBe("fullConfigTest");
       expect(resolver.operation).toBe("mutation");
       expect(resolver.description).toBe("Full configuration test");
@@ -710,10 +649,8 @@ describe("createResolver", () => {
         }),
       });
 
-      // The resolver should be assignable to ResolverInput
       expectTypeOf(resolver).toExtend<ResolverInput>();
 
-      // Verify runtime values
       expect(resolver.name).toBe("typeCompatTest");
       expect(resolver.description).toBe("Type compatibility test");
       expect(resolver.operation).toBe("query");
@@ -729,7 +666,6 @@ describe("createResolver", () => {
         body: () => ({ value: "test" }),
       });
 
-      // Even minimal configuration should be compatible with ResolverInput
       expectTypeOf(resolver).toExtend<ResolverInput>();
 
       expect(resolver.name).toBe("minimalCompat");

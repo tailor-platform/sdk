@@ -73,7 +73,29 @@ describe("profile list", () => {
     expect(JSON.parse(stdout.output)).toEqual([]);
   });
 
-  test("includes machineUser in JSON output when profile has machine_user set", async () => {
+  test.each<
+    [
+      name: string,
+      profileFields: { machine_user: string; machine_user_override?: "allow" | "deny" },
+      expectedMatch: object,
+    ]
+  >([
+    [
+      "includes machineUser in JSON output when profile has machine_user set",
+      { machine_user: "bot" },
+      { name: "myprofile", machineUser: "bot" },
+    ],
+    [
+      "includes machineUserOverride: deny when machine_user_override is set",
+      { machine_user: "bot", machine_user_override: "deny" },
+      { machineUser: "bot", machineUserOverride: "deny" },
+    ],
+    [
+      "includes machineUserOverride: allow when machine_user is set but override is absent",
+      { machine_user: "bot" },
+      { machineUser: "bot", machineUserOverride: "allow" },
+    ],
+  ])("%s", async (_name, profileFields, expectedMatch) => {
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -82,7 +104,7 @@ describe("profile list", () => {
         myprofile: {
           user: "u@example.com",
           workspace_id: "12345678-1234-4abc-8def-123456789012",
-          machine_user: "bot",
+          ...profileFields,
         },
       },
       current_user: null,
@@ -96,7 +118,7 @@ describe("profile list", () => {
 
     const parsed = JSON.parse(stdout.output);
     expect(parsed).toHaveLength(1);
-    expect(parsed[0]).toMatchObject({ name: "myprofile", machineUser: "bot" });
+    expect(parsed[0]).toMatchObject(expectedMatch);
   });
 
   test("omits machineUser from JSON output when profile has no machine_user", async () => {
@@ -122,59 +144,6 @@ describe("profile list", () => {
     const parsed = JSON.parse(stdout.output);
     expect(parsed).toHaveLength(1);
     expect(parsed[0]).not.toHaveProperty("machineUser");
-  });
-
-  test("includes machineUserOverride: deny when machine_user_override is set", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: {
-          user: "u@example.com",
-          workspace_id: "12345678-1234-4abc-8def-123456789012",
-          machine_user: "bot",
-          machine_user_override: "deny",
-        },
-      },
-      current_user: null,
-    });
-
-    using stdout = captureStdout();
-    using _stderr = captureStderr();
-    using _json = jsonMode();
-
-    await runCommand(listCommand, []);
-
-    const parsed = JSON.parse(stdout.output);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0]).toMatchObject({ machineUser: "bot", machineUserOverride: "deny" });
-  });
-
-  test("includes machineUserOverride: allow when machine_user is set but override is absent", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: {
-          user: "u@example.com",
-          workspace_id: "12345678-1234-4abc-8def-123456789012",
-          machine_user: "bot",
-        },
-      },
-      current_user: null,
-    });
-
-    using stdout = captureStdout();
-    using _stderr = captureStderr();
-    using _json = jsonMode();
-
-    await runCommand(listCommand, []);
-
-    const parsed = JSON.parse(stdout.output);
-    expect(parsed).toHaveLength(1);
-    expect(parsed[0]).toMatchObject({ machineUser: "bot", machineUserOverride: "allow" });
   });
 
   test("includes platform settings in JSON output when profile has them", async () => {

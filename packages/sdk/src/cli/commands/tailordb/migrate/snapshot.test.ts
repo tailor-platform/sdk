@@ -1,4 +1,11 @@
 import * as fs from "node:fs";
+import {
+  TailorDBGQLPermission_Action,
+  TailorDBGQLPermission_Permit,
+  TailorDBType_PermitAction,
+  TailorDBType_Permission_Permit,
+  type TailorDBType as ProtoTailorDBType,
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import { describe, expect, expectTypeOf, test, beforeEach, afterAll, vi } from "vitest";
 import {
@@ -25,11 +32,11 @@ import {
   INITIAL_SCHEMA_NUMBER,
   formatMigrationNumber,
   type NormalizedSchemaSnapshot,
+  type RemoteGqlPermission,
   type SchemaSnapshot,
 } from "./snapshot";
 import type { ParsedField, TailorDBType } from "#/parser/service/tailordb/types";
 import type { MigrationDiff, RelationshipAddedChange } from "./diff-calculator";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 function writeSchemaToDir(baseDir: string, num: number, content: SchemaSnapshot | object): string {
   const migDir = path.join(baseDir, formatMigrationNumber(num));
@@ -726,6 +733,109 @@ describe("snapshot", () => {
       expect(diff.changes.length).toBe(0);
     });
 
+    test("detects type settings changes", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            settings: { aggregation: true, publishEvents: true },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            settings: { bulkUpsert: true, gqlOperations: { create: false } },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "type_settings_modified",
+          typeName: "User",
+          reason: expect.stringContaining("settings changed"),
+        }),
+      ]);
+    });
+
+    test("detects explicit GQL operation enable overrides", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            settings: { gqlOperations: { create: true } },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "type_settings_modified",
+          typeName: "User",
+          reason: expect.stringContaining("settings changed"),
+        }),
+      ]);
+    });
+
+    test("detects explicit empty GQL operation overrides", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            settings: { gqlOperations: {} },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "type_settings_modified",
+          typeName: "User",
+          reason: expect.stringContaining("settings changed"),
+        }),
+      ]);
+    });
+
     test("includes relationshipType in relationship_added changes", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
@@ -796,6 +906,59 @@ describe("snapshot", () => {
 
       expect(forwardChange?.relationshipType).toBe("forward");
       expect(backwardChange?.relationshipType).toBe("backward");
+    });
+
+    test("detects relationship description changes", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            backwardRelationships: {
+              posts: {
+                targetType: "Post",
+                targetField: "authorId",
+                sourceField: "id",
+                isArray: true,
+                description: "Posts by user",
+              },
+            },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            backwardRelationships: {
+              posts: {
+                targetType: "Post",
+                targetField: "authorId",
+                sourceField: "id",
+                isArray: true,
+                description: "Published posts by user",
+              },
+            },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "relationship_modified",
+          typeName: "User",
+          relationshipName: "posts",
+          relationshipType: "backward",
+          reason: expect.stringContaining("description changed"),
+        }),
+      ]);
     });
   });
 
@@ -2038,49 +2201,97 @@ describe("snapshot", () => {
   // compareRemoteWithSnapshot
   // ==========================================================================
   describe("compareRemoteWithSnapshot", () => {
-    /**
-     * Create a mock ParsedTailorDBType for testing
-     * @param {string} name - Type name
-     * @param {Record<string, object>} fields - Field configurations
-     * @returns {ProtoTailorDBType} Mock ParsedTailorDBType
-     */
-    function createMockRemoteType(
-      name: string,
-      fields: Record<
-        string,
-        {
-          type: string;
-          required: boolean;
-          array?: boolean;
-          unique?: boolean;
-          foreignKey?: boolean;
-          foreignKeyType?: string;
-          allowedValues?: { value: string }[];
-          scale?: number;
-        }
-      >,
-    ): ProtoTailorDBType {
+    type MockRemoteFieldConfig = {
+      type: string;
+      required: boolean;
+      array?: boolean;
+      unique?: boolean;
+      foreignKey?: boolean;
+      foreignKeyType?: string;
+      foreignKeyField?: string;
+      index?: boolean;
+      allowedValues?: { value: string }[];
+      description?: string;
+      scale?: number;
+      validate?: unknown[];
+      hooks?: {
+        create?: { expr: string };
+        update?: { expr: string };
+      };
+      serial?: {
+        start: number;
+        maxValue?: number;
+        format?: string;
+      };
+      fields?: Record<string, MockRemoteFieldConfig>;
+    };
+
+    function createMockRemoteFieldConfigs(
+      fields: Record<string, MockRemoteFieldConfig>,
+    ): Record<string, unknown> {
       const fieldConfigs: Record<string, unknown> = {};
       for (const [fieldName, config] of Object.entries(fields)) {
         fieldConfigs[fieldName] = {
           type: config.type,
           required: config.required,
           array: config.array ?? false,
+          index: config.index ?? false,
           unique: config.unique ?? false,
           foreignKey: config.foreignKey ?? false,
           foreignKeyType: config.foreignKeyType,
+          foreignKeyField: config.foreignKeyField,
+          description: config.description ?? "",
           allowedValues: config.allowedValues ?? [],
-          validate: [],
+          validate: config.validate ?? [],
+          hooks: config.hooks,
+          serial: config.serial,
+          fields: config.fields ? createMockRemoteFieldConfigs(config.fields) : {},
           ...(config.scale !== undefined && { scale: config.scale }),
         };
       }
+      return fieldConfigs;
+    }
 
+    /**
+     * Create a mock ParsedTailorDBType for testing
+     * @param {string} name - Type name
+     * @param {Record<string, object>} fields - Field configurations
+     * @param {Record<string, unknown>} schema - Additional remote schema properties
+     * @returns {ProtoTailorDBType} Mock ParsedTailorDBType
+     */
+    function createMockRemoteType(
+      name: string,
+      fields: Record<string, MockRemoteFieldConfig>,
+      schema: Record<string, unknown> = {},
+    ): ProtoTailorDBType {
       return {
         name,
         schema: {
-          fields: fieldConfigs,
+          ...schema,
+          fields: createMockRemoteFieldConfigs(fields),
         },
       } as unknown as ProtoTailorDBType;
+    }
+
+    function createMockRemoteGqlPermission(
+      typeName: string,
+      permit: TailorDBGQLPermission_Permit,
+      actions: TailorDBGQLPermission_Action[] = [TailorDBGQLPermission_Action.READ],
+    ): RemoteGqlPermission {
+      return {
+        typeName,
+        permission: {
+          id: "task-gql-permission",
+          policies: [
+            {
+              conditions: [],
+              actions,
+              permit,
+              description: "Can read tasks",
+            },
+          ],
+        },
+      } as unknown as RemoteGqlPermission;
     }
 
     test("reconstructs remote types as normalized schema snapshots", () => {
@@ -2097,6 +2308,138 @@ describe("snapshot", () => {
       expect(snapshot.namespace).toBe(namespace);
       expect(snapshot.types.Order?.pluralForm).toBe("Orders");
       expect(snapshot.types.Order?.fields.amount?.scale).toBe(6);
+    });
+
+    test("reconstructs remote type-level schema elements", () => {
+      const snapshot = createSnapshotFromRemoteTypes(
+        [
+          createMockRemoteType(
+            "User",
+            {
+              id: { type: "uuid", required: true },
+              email: { type: "string", required: true, index: true },
+            },
+            {
+              description: "Application user",
+              settings: {
+                pluralForm: "users",
+                aggregation: true,
+                bulkUpsert: true,
+                publishRecordEvents: true,
+                disableGqlOperations: { create: true, update: false, delete: false, read: false },
+              },
+              indexes: {
+                email_unique: { fieldNames: ["email"], unique: true },
+              },
+              files: {
+                avatar: { description: "Avatar file" },
+              },
+              relationships: {
+                posts: {
+                  refType: "Post",
+                  refField: "authorId",
+                  srcField: "id",
+                  array: true,
+                  description: "Posts by user",
+                },
+              },
+              permission: {
+                create: [],
+                read: [
+                  {
+                    conditions: [],
+                    permit: TailorDBType_Permission_Permit.ALLOW,
+                    description: "Can read users",
+                  },
+                ],
+                update: [],
+                delete: [],
+              },
+            },
+          ),
+        ],
+        namespace,
+      );
+
+      expect(snapshot.types.User).toMatchObject({
+        description: "Application user",
+        settings: {
+          aggregation: true,
+          bulkUpsert: true,
+          publishEvents: true,
+          gqlOperations: { create: false },
+        },
+        indexes: {
+          email_unique: { fields: ["email"], unique: true },
+        },
+        files: {
+          avatar: "Avatar file",
+        },
+        backwardRelationships: {
+          posts: {
+            targetType: "Post",
+            targetField: "authorId",
+            sourceField: "id",
+            isArray: true,
+            description: "Posts by user",
+          },
+        },
+        permissions: {
+          record: {
+            read: [{ conditions: [], permit: "allow", description: "Can read users" }],
+          },
+        },
+      });
+    });
+
+    test("reconstructs remote GQL permissions", () => {
+      const snapshot = createSnapshotFromRemoteTypes(
+        [
+          createMockRemoteType("Task", {
+            id: { type: "uuid", required: true },
+            title: { type: "string", required: true },
+          }),
+        ],
+        namespace,
+        [createMockRemoteGqlPermission("Task", TailorDBGQLPermission_Permit.ALLOW)],
+      );
+
+      expect(snapshot.types.Task?.permissions?.gql).toEqual([
+        {
+          conditions: [],
+          actions: ["read"],
+          permit: "allow",
+          description: "Can read tasks",
+        },
+      ]);
+    });
+
+    test("normalizes remote validation expressions back to snapshot form", () => {
+      const snapshot = createSnapshotFromRemoteTypes(
+        [
+          createMockRemoteType("User", {
+            email: {
+              type: "string",
+              required: true,
+              validate: [
+                {
+                  action: TailorDBType_PermitAction.DENY,
+                  script: { expr: "!value.includes('@')" },
+                  errorMessage: "Email is invalid",
+                },
+              ],
+            },
+          }),
+        ],
+        namespace,
+      );
+
+      expect(snapshot.types.User?.fields.email?.validate).toEqual([
+        {
+          script: { expr: "value.includes('@')" },
+          errorMessage: "Email is invalid",
+        },
+      ]);
     });
 
     test("normalizes remote snapshots once at the schema level", () => {
@@ -2176,6 +2519,463 @@ describe("snapshot", () => {
 
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts).toEqual([]);
+    });
+
+    test("detects remote drift in type-level schema elements", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              email: { type: "string", required: true, index: true },
+            },
+            settings: { aggregation: true },
+            indexes: {
+              email_unique: { fields: ["email"], unique: true },
+            },
+            files: {
+              avatar: "Avatar file",
+            },
+            backwardRelationships: {
+              posts: {
+                targetType: "Post",
+                targetField: "authorId",
+                sourceField: "id",
+                isArray: true,
+                description: "Posts by user",
+              },
+            },
+            permissions: {
+              record: {
+                create: [],
+                read: [{ conditions: [], permit: "allow" }],
+                update: [],
+                delete: [],
+              },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+          email: { type: "string", required: true, index: true },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+
+      expect(drifts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ typeName: "User", kind: "type_settings_mismatch" }),
+          expect.objectContaining({ typeName: "User", kind: "index_missing_remote" }),
+          expect.objectContaining({ typeName: "User", kind: "file_missing_remote" }),
+          expect.objectContaining({ typeName: "User", kind: "relationship_missing_remote" }),
+          expect.objectContaining({ typeName: "User", kind: "permission_mismatch" }),
+        ]),
+      );
+    });
+
+    test("detects mismatched type-level schema element configs", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              email: { type: "string", required: true },
+            },
+            indexes: {
+              email_unique: { fields: ["email"], unique: true },
+            },
+            files: {
+              avatar: "Avatar file",
+            },
+            backwardRelationships: {
+              posts: {
+                targetType: "Post",
+                targetField: "authorId",
+                sourceField: "id",
+                isArray: true,
+                description: "Posts by user",
+              },
+            },
+          },
+        },
+      };
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          {
+            id: { type: "uuid", required: true },
+            email: { type: "string", required: true },
+          },
+          {
+            indexes: {
+              email_unique: { fieldNames: ["email"], unique: false },
+            },
+            files: {
+              avatar: { description: "Remote avatar file" },
+            },
+            relationships: {
+              posts: {
+                refType: "Post",
+                refField: "writerId",
+                srcField: "id",
+                array: true,
+                description: "Posts by user",
+              },
+            },
+          },
+        ),
+      ];
+
+      expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ typeName: "User", kind: "index_mismatch" }),
+          expect.objectContaining({ typeName: "User", kind: "file_mismatch" }),
+          expect.objectContaining({ typeName: "User", kind: "relationship_mismatch" }),
+        ]),
+      );
+    });
+
+    test("matches explicit GQL operation enable overrides in remote snapshots", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+            },
+            settings: { gqlOperations: { create: true } },
+          },
+        },
+      };
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          {
+            id: { type: "uuid", required: true },
+          },
+          {
+            settings: {
+              pluralForm: "users",
+              disableGqlOperations: {
+                create: false,
+                update: false,
+                delete: false,
+                read: false,
+              },
+            },
+          },
+        ),
+      ];
+
+      expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual([]);
+    });
+
+    test("detects remote relationship description mismatch", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+            },
+            backwardRelationships: {
+              posts: {
+                targetType: "Post",
+                targetField: "authorId",
+                sourceField: "id",
+                isArray: true,
+                description: "Posts by user",
+              },
+            },
+          },
+        },
+      };
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          {
+            id: { type: "uuid", required: true },
+          },
+          {
+            relationships: {
+              posts: {
+                refType: "Post",
+                refField: "authorId",
+                srcField: "id",
+                array: true,
+                description: "Published posts by user",
+              },
+            },
+          },
+        ),
+      ];
+
+      expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual([
+        expect.objectContaining({
+          typeName: "User",
+          kind: "relationship_mismatch",
+          relationshipName: "posts",
+          details: expect.stringContaining("description changed"),
+        }),
+      ]);
+    });
+
+    test("treats empty permission blocks as unset during remote comparison", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+            },
+            permissions: {
+              record: {
+                create: [],
+                read: [],
+                update: [],
+                delete: [],
+              },
+              gql: [],
+            },
+          },
+        },
+      };
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          {
+            id: { type: "uuid", required: true },
+          },
+          {
+            permission: {
+              create: [],
+              read: [],
+              update: [],
+              delete: [],
+            },
+          },
+        ),
+      ];
+
+      expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual([]);
+    });
+
+    test("uses remote GQL permissions when comparing remote snapshots", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          Task: {
+            name: "Task",
+            pluralForm: "Tasks",
+            fields: {
+              id: { type: "uuid", required: true },
+              title: { type: "string", required: true },
+            },
+            permissions: {
+              gql: [
+                {
+                  conditions: [],
+                  actions: ["read", "create"],
+                  permit: "allow",
+                  description: "Can read tasks",
+                },
+              ],
+            },
+          },
+        },
+      };
+      const remoteTypes = [
+        createMockRemoteType("Task", {
+          id: { type: "uuid", required: true },
+          title: { type: "string", required: true },
+        }),
+      ];
+
+      expect(
+        compareRemoteWithSnapshot(remoteTypes, snapshot, [
+          createMockRemoteGqlPermission("Task", TailorDBGQLPermission_Permit.ALLOW, [
+            TailorDBGQLPermission_Action.CREATE,
+            TailorDBGQLPermission_Action.READ,
+          ]),
+        ]),
+      ).toEqual([]);
+
+      expect(
+        compareRemoteWithSnapshot(remoteTypes, snapshot, [
+          createMockRemoteGqlPermission("Task", TailorDBGQLPermission_Permit.DENY),
+        ]),
+      ).toEqual([expect.objectContaining({ typeName: "Task", kind: "permission_mismatch" })]);
+    });
+
+    test("ignores permission policy order when comparing remote snapshots", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          Task: {
+            name: "Task",
+            pluralForm: "Tasks",
+            fields: { id: { type: "uuid", required: true } },
+            permissions: {
+              record: {
+                create: [],
+                read: [
+                  { conditions: [], permit: "allow", description: "everyone" },
+                  { conditions: [], permit: "deny", description: "blocked" },
+                ],
+                update: [],
+                delete: [],
+              },
+              gql: [
+                { conditions: [], actions: ["read"], permit: "allow" },
+                { conditions: [], actions: ["create"], permit: "deny" },
+              ],
+            },
+          },
+        },
+      };
+      const remoteTypes = [
+        {
+          name: "Task",
+          schema: {
+            fields: {
+              id: {
+                type: "uuid",
+                required: true,
+                array: false,
+                index: false,
+                unique: false,
+                foreignKey: false,
+                allowedValues: [],
+                vector: false,
+                validate: [],
+                fields: {},
+              },
+            },
+            relationships: {},
+            indexes: {},
+            files: {},
+            settings: { pluralForm: "Tasks" },
+            permission: {
+              create: [],
+              read: [
+                {
+                  conditions: [],
+                  permit: TailorDBType_Permission_Permit.DENY,
+                  description: "blocked",
+                },
+                {
+                  conditions: [],
+                  permit: TailorDBType_Permission_Permit.ALLOW,
+                  description: "everyone",
+                },
+              ],
+              update: [],
+              delete: [],
+            },
+          },
+        } as unknown as ProtoTailorDBType,
+      ];
+      const remoteGqlPermissions = [
+        {
+          typeName: "Task",
+          permission: {
+            id: "task-gql-permission",
+            policies: [
+              {
+                conditions: [],
+                actions: [TailorDBGQLPermission_Action.CREATE],
+                permit: TailorDBGQLPermission_Permit.DENY,
+                description: "",
+              },
+              {
+                conditions: [],
+                actions: [TailorDBGQLPermission_Action.READ],
+                permit: TailorDBGQLPermission_Permit.ALLOW,
+                description: "",
+              },
+            ],
+          },
+        } as unknown as RemoteGqlPermission,
+      ];
+
+      expect(compareRemoteWithSnapshot(remoteTypes, snapshot, remoteGqlPermissions)).toEqual([]);
+    });
+
+    test("does not report drift for one-to-one backward relationships", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+            },
+            backwardRelationships: {
+              profile: {
+                targetType: "Profile",
+                targetField: "userId",
+                sourceField: "id",
+                isArray: false,
+                description: "",
+              },
+            },
+          },
+        },
+      };
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          {
+            id: { type: "uuid", required: true },
+          },
+          {
+            relationships: {
+              profile: {
+                refType: "Profile",
+                refField: "userId",
+                srcField: "id",
+                array: false,
+                description: "",
+              },
+            },
+          },
+        ),
+      ];
+
+      expect(compareRemoteWithSnapshot(remoteTypes, snapshot)).toEqual([]);
     });
 
     test("detects type missing in remote", () => {
@@ -2423,6 +3223,68 @@ describe("snapshot", () => {
       expect(drifts.length).toBe(1);
       expect(drifts[0]!.kind).toBe("field_mismatch");
       expect(drifts[0]!.details).toContain("allowedValues");
+    });
+
+    test("reports detailed drift for hooks, validation, serial, and nested fields", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              metadata: {
+                type: "nested",
+                required: false,
+                hooks: { create: { expr: "snapshotCreate" } },
+                validate: [
+                  {
+                    script: { expr: "snapshotValid" },
+                    errorMessage: "Snapshot validation",
+                  },
+                ],
+                serial: { start: 10, maxValue: 99, format: "S-%02d" },
+                fields: {
+                  child: { type: "string", required: false },
+                },
+              },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+          metadata: {
+            type: "nested",
+            required: false,
+            hooks: { create: { expr: "remoteCreate" } },
+            validate: [
+              {
+                action: TailorDBType_PermitAction.ALLOW,
+                script: { expr: "remoteValid" },
+                errorMessage: "Remote validation",
+              },
+            ],
+            serial: { start: 1, maxValue: 9, format: "R-%02d" },
+            fields: {
+              child: { type: "number", required: false },
+            },
+          },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts).toHaveLength(1);
+      expect(drifts[0]!.kind).toBe("field_mismatch");
+      expect(drifts[0]!.details).toContain("hooks.create");
+      expect(drifts[0]!.details).toContain("validate[0].script");
+      expect(drifts[0]!.details).toContain("serial.start");
+      expect(drifts[0]!.details).toContain("fields.child.type");
     });
 
     test("normalizes decimal scale at compare entry so missing scale matches remote default", () => {
