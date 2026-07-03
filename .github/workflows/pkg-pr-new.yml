@@ -70,7 +70,7 @@ jobs:
           pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build
 
       - name: Publish to pkg.pr.new
-        run: pnpm dlx pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/create-sdk" # zizmor: ignore[use-trusted-publishing]
+        run: pnpm exec pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/create-sdk" # zizmor: ignore[use-trusted-publishing]
 
   init-smoke:
     needs: [publish]
