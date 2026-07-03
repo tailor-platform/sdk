@@ -9,6 +9,7 @@ const contextMocks = vi.hoisted(() => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
   loadConfigPath: vi.fn(),
+  loadPlatformClientConfig: vi.fn(),
   readPlatformConfig: vi.fn(),
 }));
 
@@ -167,6 +168,7 @@ describe.skipIf(isWindows)("dispatchPlugin", () => {
     contextMocks.loadAccessToken.mockResolvedValue("tok-123");
     contextMocks.loadWorkspaceId.mockResolvedValue("ws-456");
     contextMocks.loadConfigPath.mockReturnValue("/proj/tailor.config.ts");
+    contextMocks.loadPlatformClientConfig.mockResolvedValue(undefined);
     contextMocks.readPlatformConfig.mockResolvedValue({
       users: { u1: { email: "me@example.com" } },
       profiles: {},
@@ -216,6 +218,29 @@ describe.skipIf(isWindows)("dispatchPlugin", () => {
     expect(env.TAILOR_CONFIG_PATH).toBe("/proj/tailor.config.ts");
     expect(env.TAILOR_BIN).toBeTruthy();
     expect(env.TAILOR_VERSION).toBeTruthy();
+  });
+
+  test("injects the active profile's platform URL and OAuth client", async () => {
+    contextMocks.loadPlatformClientConfig.mockResolvedValue({
+      platformUrl: "https://api.staging.example.com",
+      oauth2ClientId: "cpoc_staging",
+    });
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: [],
+      cliName: CLI,
+      profile: "staging",
+    });
+
+    expect(code).toBe(0);
+    const { env } = readCapture();
+    expect(env.TAILOR_PLATFORM_URL).toBe("https://api.staging.example.com");
+    expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBe("cpoc_staging");
   });
 
   test("omits best-effort context when it cannot be resolved but still dispatches", async () => {

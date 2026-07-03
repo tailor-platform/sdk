@@ -2,8 +2,14 @@ import { spawn } from "node:child_process";
 import { accessSync, constants, readdirSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { getOAuth2ClientId, getPlatformBaseUrl } from "./client";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId, readPlatformConfig } from "./context";
+import { getOAuth2ClientId, getPlatformBaseUrl, type PlatformClientConfig } from "./client";
+import {
+  loadAccessToken,
+  loadConfigPath,
+  loadPlatformClientConfig,
+  loadWorkspaceId,
+  readPlatformConfig,
+} from "./context";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
 
@@ -41,18 +47,38 @@ function* ancestorDirs(start: string): Generator<string> {
   yield dir;
 }
 
+/** Fallback executable extensions when `PATHEXT` is unset (Windows). */
+const DEFAULT_PATHEXT = ".COM;.EXE;.BAT;.CMD;.PS1";
+
 /**
- * Check whether a path exists and is executable (X_OK on POSIX, existence on Windows).
+ * Lowercased executable extensions from `PATHEXT` (Windows).
+ * @returns Recognized executable extensions (e.g. `.exe`, `.cmd`)
+ */
+function windowsExecutableExts(): string[] {
+  return (process.env.PATHEXT ?? DEFAULT_PATHEXT)
+    .split(";")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Check whether a path exists and is runnable: X_OK on POSIX; on Windows, the
+ * file must exist and either be extension-less (shebang script) or carry a
+ * `PATHEXT` extension, so plain data files are not mistaken for plugins.
  * @param filePath - Path to check
  * @returns Whether the path is an executable file
  */
 function isExecutable(filePath: string): boolean {
   try {
     accessSync(filePath, process.platform === "win32" ? constants.F_OK : constants.X_OK);
-    return true;
   } catch {
     return false;
   }
+  if (process.platform === "win32") {
+    const ext = path.extname(filePath).toLowerCase();
+    return ext === "" || windowsExecutableExts().includes(ext);
+  }
+  return true;
 }
 
 /**
@@ -64,12 +90,8 @@ function binaryCandidates(binName: string): string[] {
   if (process.platform !== "win32") {
     return [binName];
   }
-  const exts = (process.env.PATHEXT ?? ".EXE;.CMD;.BAT;.PS1")
-    .split(";")
-    .map((e) => e.trim())
-    .filter(Boolean);
   // Bare name first (shebang scripts), then PATHEXT variants.
-  return [binName, ...exts.map((ext) => `${binName}${ext}`)];
+  return [binName, ...windowsExecutableExts().map((ext) => `${binName}${ext}`)];
 }
 
 /**
@@ -212,9 +234,17 @@ async function resolveActiveUser(profile?: string): Promise<string | undefined> 
  */
 async function buildPluginEnv(options: PluginContextOptions = {}): Promise<Record<string, string>> {
   const { profile } = options;
+  // Resolve the active profile's platform settings so the injected URL and
+  // OAuth client match the profile the token and workspace belong to.
+  let platformConfig: PlatformClientConfig | undefined;
+  try {
+    platformConfig = await loadPlatformClientConfig({ profile, allowMissingProfile: true });
+  } catch {
+    // Fall back to env/default platform settings when the profile is unreadable.
+  }
   const env: Record<string, string> = {
-    TAILOR_PLATFORM_URL: getPlatformBaseUrl(),
-    TAILOR_PLATFORM_OAUTH2_CLIENT_ID: getOAuth2ClientId(),
+    TAILOR_PLATFORM_URL: getPlatformBaseUrl(platformConfig),
+    TAILOR_PLATFORM_OAUTH2_CLIENT_ID: getOAuth2ClientId(platformConfig),
   };
 
   const binPath = process.argv[1];
@@ -285,12 +315,24 @@ function buildSpawnTarget(
   }
 
   const ext = path.extname(pluginPath).toLowerCase();
-  if (ext === ".exe") {
+  if (ext === ".exe" || ext === ".com") {
     return { command: pluginPath, args: [...args], shell: false };
   }
   if (ext === ".cmd" || ext === ".bat") {
     // .cmd/.bat must run through the shell on Windows.
     return { command: pluginPath, args: [...args], shell: true };
+  }
+  if (ext === ".ps1") {
+    // PowerShell scripts are not directly executable via spawn.
+    const pwsh =
+      findExecutableIn(pathDirs(), "pwsh") ??
+      findExecutableIn(pathDirs(), "powershell") ??
+      "powershell";
+    return {
+      command: pwsh,
+      args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", pluginPath, ...args],
+      shell: false,
+    };
   }
 
   // Extension-less shebang script: dispatch through `sh` (Git for Windows).
