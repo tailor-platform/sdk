@@ -17,13 +17,56 @@ function scalarTypeError(label: string, expected: string): TypeError {
   return new TypeError(`${label} must be a ${expected}`);
 }
 
+type ScalarHelpers<T extends string> = {
+  isString: (value: unknown) => value is T;
+  parseString: (value: unknown, label?: string) => T;
+  assertString: (value: unknown, label?: string) => asserts value is T;
+};
+
+function makeScalarHelpers<T extends string>(
+  isValid: (value: string) => boolean,
+  expected: string,
+): ScalarHelpers<T> {
+  const isString = (value: unknown): value is T => typeof value === "string" && isValid(value);
+  const parseString = (value: unknown, label = "value"): T => {
+    if (isString(value)) return value;
+    throw scalarTypeError(label, expected);
+  };
+  const assertString = (value: unknown, label?: string): asserts value is T => {
+    parseString(value, label);
+  };
+
+  return { isString, parseString, assertString };
+}
+
+const uuidString: ScalarHelpers<UUIDString> = makeScalarHelpers<UUIDString>(
+  isValidUUIDString,
+  "UUID string",
+);
+const dateString: ScalarHelpers<DateString> = makeScalarHelpers<DateString>(
+  isValidDateString,
+  "date string",
+);
+const dateTimeString: ScalarHelpers<DateTimeString> = makeScalarHelpers<DateTimeString>(
+  isValidDateTimeString,
+  "datetime string",
+);
+const timeString: ScalarHelpers<TimeString> = makeScalarHelpers<TimeString>(
+  isValidTimeString,
+  "time string",
+);
+const decimalString: ScalarHelpers<DecimalString> = makeScalarHelpers<DecimalString>(
+  isValidDecimalString,
+  "decimal string",
+);
+
 /**
  * Check whether a value is a UUID string accepted by Tailor fields.
  * @param value - Value to check
  * @returns True when the value is a UUID string
  */
 export function isUUIDString(value: unknown): value is UUIDString {
-  return typeof value === "string" && isValidUUIDString(value);
+  return uuidString.isString(value);
 }
 
 /**
@@ -32,7 +75,7 @@ export function isUUIDString(value: unknown): value is UUIDString {
  * @returns True when the value matches `yyyy-MM-dd`
  */
 export function isDateString(value: unknown): value is DateString {
-  return typeof value === "string" && isValidDateString(value);
+  return dateString.isString(value);
 }
 
 /**
@@ -41,7 +84,7 @@ export function isDateString(value: unknown): value is DateString {
  * @returns True when the value matches the supported ISO datetime format
  */
 export function isDateTimeString(value: unknown): value is DateTimeString {
-  return typeof value === "string" && isValidDateTimeString(value);
+  return dateTimeString.isString(value);
 }
 
 /**
@@ -50,7 +93,7 @@ export function isDateTimeString(value: unknown): value is DateTimeString {
  * @returns True when the value matches `HH:mm`
  */
 export function isTimeString(value: unknown): value is TimeString {
-  return typeof value === "string" && isValidTimeString(value);
+  return timeString.isString(value);
 }
 
 /**
@@ -59,7 +102,7 @@ export function isTimeString(value: unknown): value is TimeString {
  * @returns True when the value is a decimal string
  */
 export function isDecimalString(value: unknown): value is DecimalString {
-  return typeof value === "string" && isValidDecimalString(value);
+  return decimalString.isString(value);
 }
 
 /**
@@ -69,8 +112,7 @@ export function isDecimalString(value: unknown): value is DecimalString {
  * @returns The original value typed as `UUIDString`
  */
 export function parseUUIDString(value: unknown, label = "value"): UUIDString {
-  if (isUUIDString(value)) return value;
-  throw scalarTypeError(label, "UUID string");
+  return uuidString.parseString(value, label);
 }
 
 /**
@@ -80,8 +122,7 @@ export function parseUUIDString(value: unknown, label = "value"): UUIDString {
  * @returns The original value typed as `DateString`
  */
 export function parseDateString(value: unknown, label = "value"): DateString {
-  if (isDateString(value)) return value;
-  throw scalarTypeError(label, "date string");
+  return dateString.parseString(value, label);
 }
 
 /**
@@ -91,8 +132,7 @@ export function parseDateString(value: unknown, label = "value"): DateString {
  * @returns The original value typed as `DateTimeString`
  */
 export function parseDateTimeString(value: unknown, label = "value"): DateTimeString {
-  if (isDateTimeString(value)) return value;
-  throw scalarTypeError(label, "datetime string");
+  return dateTimeString.parseString(value, label);
 }
 
 /**
@@ -102,8 +142,7 @@ export function parseDateTimeString(value: unknown, label = "value"): DateTimeSt
  * @returns The original value typed as `TimeString`
  */
 export function parseTimeString(value: unknown, label = "value"): TimeString {
-  if (isTimeString(value)) return value;
-  throw scalarTypeError(label, "time string");
+  return timeString.parseString(value, label);
 }
 
 /**
@@ -113,8 +152,7 @@ export function parseTimeString(value: unknown, label = "value"): TimeString {
  * @returns The original value typed as `DecimalString`
  */
 export function parseDecimalString(value: unknown, label = "value"): DecimalString {
-  if (isDecimalString(value)) return value;
-  throw scalarTypeError(label, "decimal string");
+  return decimalString.parseString(value, label);
 }
 
 /**
@@ -123,7 +161,7 @@ export function parseDecimalString(value: unknown, label = "value"): DecimalStri
  * @param label - Name used in the error message
  */
 export function assertUUIDString(value: unknown, label?: string): asserts value is UUIDString {
-  parseUUIDString(value, label);
+  uuidString.assertString(value, label);
 }
 
 /**
@@ -132,7 +170,7 @@ export function assertUUIDString(value: unknown, label?: string): asserts value 
  * @param label - Name used in the error message
  */
 export function assertDateString(value: unknown, label?: string): asserts value is DateString {
-  parseDateString(value, label);
+  dateString.assertString(value, label);
 }
 
 /**
@@ -144,7 +182,7 @@ export function assertDateTimeString(
   value: unknown,
   label?: string,
 ): asserts value is DateTimeString {
-  parseDateTimeString(value, label);
+  dateTimeString.assertString(value, label);
 }
 
 /**
@@ -153,7 +191,7 @@ export function assertDateTimeString(
  * @param label - Name used in the error message
  */
 export function assertTimeString(value: unknown, label?: string): asserts value is TimeString {
-  parseTimeString(value, label);
+  timeString.assertString(value, label);
 }
 
 /**
@@ -165,5 +203,5 @@ export function assertDecimalString(
   value: unknown,
   label?: string,
 ): asserts value is DecimalString {
-  parseDecimalString(value, label);
+  decimalString.assertString(value, label);
 }
