@@ -9,6 +9,7 @@ import {
   type SchemaSnapshot,
   type SnapshotFieldConfig,
 } from "./snapshot";
+import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 
 const TEST_MIGRATIONS_BASE = path.join(__dirname, "__test_db_types__");
 
@@ -51,23 +52,6 @@ function createMockSnapshot(
   };
 }
 
-function createMockDiff(
-  changes: MigrationDiff["changes"],
-  options: Partial<Pick<MigrationDiff, "hasBreakingChanges" | "requiresMigrationScript">> = {},
-): MigrationDiff {
-  return {
-    version: SCHEMA_SNAPSHOT_VERSION,
-    namespace: "tailordb",
-    createdAt: new Date().toISOString(),
-    changes,
-    hasBreakingChanges: options.hasBreakingChanges ?? false,
-    breakingChanges: [],
-    hasWarnings: false,
-    warnings: [],
-    requiresMigrationScript: options.requiresMigrationScript ?? false,
-  };
-}
-
 describe("db-types-generator", () => {
   let testDir: string;
 
@@ -87,137 +71,107 @@ describe("db-types-generator", () => {
     }
   });
 
-  // ==========================================================================
-  // writeDbTypesFile - Empty Types
-  // ==========================================================================
-  describe("writeDbTypesFile with empty types", () => {
-    test("generates empty db types when no types in snapshot", async () => {
-      const snapshot = createMockSnapshot({}, "tailordb");
-      createMigrationDir(testDir, 1);
+  async function generateContent(
+    snapshot: SchemaSnapshot,
+    migrationNumber = 1,
+    diff?: MigrationDiff,
+  ): Promise<{ filePath: string; content: string }> {
+    createMigrationDir(testDir, migrationNumber);
+    const filePath = await writeDbTypesFile(snapshot, testDir, migrationNumber, diff);
+    const content = fs.readFileSync(filePath, "utf-8");
+    return { filePath, content };
+  }
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1);
+  test("generates empty db types when no types in snapshot", async () => {
+    const snapshot = createMockSnapshot({}, "tailordb");
 
-      expect(fs.existsSync(filePath)).toBe(true);
-      const content = fs.readFileSync(filePath, "utf-8");
+    const { filePath, content } = await generateContent(snapshot);
 
-      expect(content).toContain("Auto-generated Kysely types");
-      expect(content).toContain("Namespace: tailordb");
-      expect(content).toContain("interface Database {}");
-      expect(content).toContain("export type Transaction = KyselyTransaction<Database>");
-      // env-aware migration context type (inlines TailorEnv via the exported Env)
-      expect(content).toContain('import type { Env } from "@tailor-platform/sdk"');
-      expect(content).toContain("export type MigrationContext = {");
-      expect(content).toContain(
-        "env: keyof Env extends never ? Record<string, string | number | boolean> : Env;",
-      );
-    });
+    expect(fs.existsSync(filePath)).toBe(true);
+    expect(content).toContain("Auto-generated Kysely types");
+    expect(content).toContain("Namespace: tailordb");
+    expect(content).toContain("interface Database {}");
+    expect(content).toContain("export type Transaction = KyselyTransaction<Database>");
+    // env-aware migration context type (inlines TailorEnv via the exported Env)
+    expect(content).toContain('import type { Env } from "@tailor-platform/sdk"');
+    expect(content).toContain("export type MigrationContext = {");
+    expect(content).toContain(
+      "env: keyof Env extends never ? Record<string, string | number | boolean> : Env;",
+    );
   });
 
-  // ==========================================================================
-  // writeDbTypesFile - Basic Field Types
-  // ==========================================================================
+  type BasicFieldTypesCase = {
+    testName: string;
+    typeName: string;
+    fields: Record<string, Partial<SnapshotFieldConfig>>;
+    expectedContains: string[];
+  };
+
   describe("writeDbTypesFile with basic field types", () => {
-    test("generates types with string fields", async () => {
-      const snapshot = createMockSnapshot({
-        User: {
-          fields: {
-            name: { type: "string", required: true },
-            email: { type: "string", required: false },
-          },
+    test.each<BasicFieldTypesCase>([
+      {
+        testName: "generates types with string fields",
+        typeName: "User",
+        fields: {
+          name: { type: "string", required: true },
+          email: { type: "string", required: false },
         },
-      });
-      createMigrationDir(testDir, 1);
-
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1);
-      const content = fs.readFileSync(filePath, "utf-8");
-
-      expect(content).toContain("User: {");
-      expect(content).toContain("name: string;");
-      expect(content).toContain("email: string | null;");
-    });
-
-    test("generates types with number fields (integer, float)", async () => {
-      const snapshot = createMockSnapshot({
-        Product: {
-          fields: {
-            quantity: { type: "integer", required: true },
-            price: { type: "float", required: true },
-            discount: { type: "number", required: false },
-          },
+        expectedContains: ["User: {", "name: string;", "email: string | null;"],
+      },
+      {
+        testName: "generates types with number fields (integer, float)",
+        typeName: "Product",
+        fields: {
+          quantity: { type: "integer", required: true },
+          price: { type: "float", required: true },
+          discount: { type: "number", required: false },
         },
-      });
-      createMigrationDir(testDir, 1);
-
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1);
-      const content = fs.readFileSync(filePath, "utf-8");
-
-      expect(content).toContain("quantity: number;");
-      expect(content).toContain("price: number;");
-      expect(content).toContain("discount: number | null;");
-    });
-
-    test("generates types with boolean fields", async () => {
-      const snapshot = createMockSnapshot({
-        Settings: {
-          fields: {
-            isActive: { type: "boolean", required: true },
-            isVerified: { type: "bool", required: false },
-          },
+        expectedContains: ["quantity: number;", "price: number;", "discount: number | null;"],
+      },
+      {
+        testName: "generates types with boolean fields",
+        typeName: "Settings",
+        fields: {
+          isActive: { type: "boolean", required: true },
+          isVerified: { type: "bool", required: false },
         },
-      });
-      createMigrationDir(testDir, 1);
-
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1);
-      const content = fs.readFileSync(filePath, "utf-8");
-
-      expect(content).toContain("isActive: boolean;");
-      expect(content).toContain("isVerified: boolean | null;");
-    });
-
-    test("generates types with uuid fields", async () => {
-      const snapshot = createMockSnapshot({
-        Entity: {
-          fields: {
-            externalId: { type: "uuid", required: true },
-            referenceId: { type: "uuid", required: false },
-          },
+        expectedContains: ["isActive: boolean;", "isVerified: boolean | null;"],
+      },
+      {
+        testName: "generates types with uuid fields",
+        typeName: "Entity",
+        fields: {
+          externalId: { type: "uuid", required: true },
+          referenceId: { type: "uuid", required: false },
         },
-      });
-      createMigrationDir(testDir, 1);
-
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1);
-      const content = fs.readFileSync(filePath, "utf-8");
-
-      expect(content).toContain("externalId: string;");
-      expect(content).toContain("referenceId: string | null;");
-    });
-
-    test("generates types with date/datetime fields using Timestamp", async () => {
-      const snapshot = createMockSnapshot({
-        Event: {
-          fields: {
-            eventDate: { type: "date", required: true },
-            startTime: { type: "datetime", required: true },
-            endTime: { type: "datetime", required: false },
-          },
+        expectedContains: ["externalId: string;", "referenceId: string | null;"],
+      },
+      {
+        testName: "generates types with date/datetime fields using Timestamp",
+        typeName: "Event",
+        fields: {
+          eventDate: { type: "date", required: true },
+          startTime: { type: "datetime", required: true },
+          endTime: { type: "datetime", required: false },
         },
-      });
-      createMigrationDir(testDir, 1);
+        expectedContains: [
+          "type Timestamp = ColumnType<Date, Date | string, Date | string>;",
+          "eventDate: Timestamp;",
+          "startTime: Timestamp;",
+          "endTime: Timestamp | null;",
+        ],
+      },
+    ])("$testName", async ({ typeName, fields, expectedContains }) => {
+      const snapshot = createMockSnapshot({ [typeName]: { fields } });
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1);
-      const content = fs.readFileSync(filePath, "utf-8");
+      const { content } = await generateContent(snapshot);
 
-      // Should define Timestamp type
-      expect(content).toContain("type Timestamp = ColumnType<Date, Date | string, Date | string>;");
-      expect(content).toContain("eventDate: Timestamp;");
-      expect(content).toContain("startTime: Timestamp;");
-      expect(content).toContain("endTime: Timestamp | null;");
+      for (const expected of expectedContains) {
+        expect(content).toContain(expected);
+      }
     });
   });
 
-  // ==========================================================================
-  // writeDbTypesFile - Array Fields
-  // ==========================================================================
   describe("writeDbTypesFile with array fields", () => {
     test("generates types with array fields", async () => {
       const snapshot = createMockSnapshot({
@@ -228,19 +182,14 @@ describe("db-types-generator", () => {
           },
         },
       });
-      createMigrationDir(testDir, 1);
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1);
-      const content = fs.readFileSync(filePath, "utf-8");
+      const { content } = await generateContent(snapshot);
 
       expect(content).toContain("tags: string[];");
       expect(content).toContain("scores: number[] | null;");
     });
   });
 
-  // ==========================================================================
-  // writeDbTypesFile - Enum Fields
-  // ==========================================================================
   describe("writeDbTypesFile with enum fields", () => {
     test("generates types with enum fields and allowed values", async () => {
       const snapshot = createMockSnapshot({
@@ -259,10 +208,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      createMigrationDir(testDir, 1);
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1);
-      const content = fs.readFileSync(filePath, "utf-8");
+      const { content } = await generateContent(snapshot);
 
       expect(content).toContain('"ACTIVE" | "INACTIVE" | "PENDING"');
       expect(content).toContain('"ADMIN" | "USER"');
@@ -281,19 +228,14 @@ describe("db-types-generator", () => {
           },
         },
       });
-      createMigrationDir(testDir, 1);
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1);
-      const content = fs.readFileSync(filePath, "utf-8");
+      const { content } = await generateContent(snapshot);
 
       // Enum array should have parentheses
       expect(content).toContain('("ADMIN" | "USER" | "GUEST")[]');
     });
   });
 
-  // ==========================================================================
-  // writeDbTypesFile - Generated ID Field
-  // ==========================================================================
   describe("writeDbTypesFile with Generated id field", () => {
     test("always includes Generated id field", async () => {
       const snapshot = createMockSnapshot({
@@ -303,10 +245,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      createMigrationDir(testDir, 1);
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1);
-      const content = fs.readFileSync(filePath, "utf-8");
+      const { content } = await generateContent(snapshot);
 
       expect(content).toContain("id: Generated<string>;");
       expect(content).toContain(
@@ -315,32 +255,15 @@ describe("db-types-generator", () => {
     });
   });
 
-  // ==========================================================================
-  // writeDbTypesFile - Multiple Types
-  // ==========================================================================
   describe("writeDbTypesFile with multiple types", () => {
     test("generates types with multiple types", async () => {
       const snapshot = createMockSnapshot({
-        User: {
-          fields: {
-            name: { type: "string", required: true },
-          },
-        },
-        Order: {
-          fields: {
-            total: { type: "float", required: true },
-          },
-        },
-        Product: {
-          fields: {
-            sku: { type: "string", required: true },
-          },
-        },
+        User: { fields: { name: { type: "string", required: true } } },
+        Order: { fields: { total: { type: "float", required: true } } },
+        Product: { fields: { sku: { type: "string", required: true } } },
       });
-      createMigrationDir(testDir, 1);
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1);
-      const content = fs.readFileSync(filePath, "utf-8");
+      const { content } = await generateContent(snapshot);
 
       expect(content).toContain("User: {");
       expect(content).toContain("Order: {");
@@ -348,9 +271,6 @@ describe("db-types-generator", () => {
     });
   });
 
-  // ==========================================================================
-  // writeDbTypesFile - Breaking Changes
-  // ==========================================================================
   describe("writeDbTypesFile with breaking changes (diff)", () => {
     test("generates ColumnType for optional to required change", async () => {
       const snapshot = createMockSnapshot({
@@ -362,10 +282,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      createMigrationDir(testDir, 1);
-
-      const diff = createMockDiff(
-        [
+      const diff = createMockMigrationDiff({
+        changes: [
           {
             kind: "field_modified",
             typeName: "User",
@@ -374,11 +292,11 @@ describe("db-types-generator", () => {
             after: { type: "string", required: true },
           },
         ],
-        { hasBreakingChanges: true, requiresMigrationScript: true },
-      );
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff);
-      const content = fs.readFileSync(filePath, "utf-8");
+      const { content } = await generateContent(snapshot, 1, diff);
 
       // Should generate ColumnType for optional->required field
       // SELECT returns T | null (existing data might be null)
@@ -396,8 +314,8 @@ describe("db-types-generator", () => {
       });
       createMigrationDir(testDir, 1);
 
-      const diff = createMockDiff(
-        [
+      const diff = createMockMigrationDiff({
+        changes: [
           {
             kind: "field_modified",
             typeName: "User",
@@ -406,8 +324,9 @@ describe("db-types-generator", () => {
             after: { type: "datetime", required: true },
           },
         ],
-        { hasBreakingChanges: true, requiresMigrationScript: true },
-      );
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
 
       const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff);
       const content = fs.readFileSync(filePath, "utf-8");
@@ -425,10 +344,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      createMigrationDir(testDir, 1);
-
-      const diff = createMockDiff(
-        [
+      const diff = createMockMigrationDiff({
+        changes: [
           {
             kind: "field_added",
             typeName: "User",
@@ -436,11 +353,11 @@ describe("db-types-generator", () => {
             after: { type: "string", required: true },
           },
         ],
-        { hasBreakingChanges: true, requiresMigrationScript: true },
-      );
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff);
-      const content = fs.readFileSync(filePath, "utf-8");
+      const { content } = await generateContent(snapshot, 1, diff);
 
       // Added required field should be treated like optional->required
       expect(content).toContain("role: ColumnType<string | null, string, string>;");
@@ -458,10 +375,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      createMigrationDir(testDir, 1);
-
-      const diff = createMockDiff(
-        [
+      const diff = createMockMigrationDiff({
+        changes: [
           {
             kind: "field_modified",
             typeName: "User",
@@ -478,11 +393,11 @@ describe("db-types-generator", () => {
             },
           },
         ],
-        { hasBreakingChanges: true, requiresMigrationScript: true },
-      );
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff);
-      const content = fs.readFileSync(filePath, "utf-8");
+      const { content } = await generateContent(snapshot, 1, diff);
 
       // Should generate ColumnType with all values for SELECT, only after values for INSERT/UPDATE
       expect(content).toContain("ColumnType<");
@@ -502,10 +417,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      createMigrationDir(testDir, 1);
-
-      const diff = createMockDiff(
-        [
+      const diff = createMockMigrationDiff({
+        changes: [
           {
             kind: "field_modified",
             typeName: "User",
@@ -522,11 +435,11 @@ describe("db-types-generator", () => {
             },
           },
         ],
-        { hasBreakingChanges: true, requiresMigrationScript: true },
-      );
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff);
-      const content = fs.readFileSync(filePath, "utf-8");
+      const { content } = await generateContent(snapshot, 1, diff);
 
       // Should include null in all parts
       expect(content).toContain("| null");
@@ -545,10 +458,8 @@ describe("db-types-generator", () => {
           },
         },
       });
-      createMigrationDir(testDir, 1);
-
-      const diff = createMockDiff(
-        [
+      const diff = createMockMigrationDiff({
+        changes: [
           {
             kind: "field_modified",
             typeName: "User",
@@ -567,11 +478,11 @@ describe("db-types-generator", () => {
             },
           },
         ],
-        { hasBreakingChanges: true, requiresMigrationScript: true },
-      );
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff);
-      const content = fs.readFileSync(filePath, "utf-8");
+      const { content } = await generateContent(snapshot, 1, diff);
 
       // Should generate array type with ColumnType
       expect(content).toContain("ColumnType<");
@@ -579,9 +490,6 @@ describe("db-types-generator", () => {
     });
   });
 
-  // ==========================================================================
-  // writeDbTypesFile - File Location
-  // ==========================================================================
   describe("writeDbTypesFile file location", () => {
     test("writes file to correct location", async () => {
       const snapshot = createMockSnapshot({
@@ -592,9 +500,8 @@ describe("db-types-generator", () => {
         },
       });
       const migrationNumber = 5;
-      createMigrationDir(testDir, migrationNumber);
 
-      const filePath = await writeDbTypesFile(snapshot, testDir, migrationNumber);
+      const { filePath } = await generateContent(snapshot, migrationNumber);
 
       const expectedPath = path.join(testDir, formatMigrationNumber(migrationNumber), "db.ts");
       expect(filePath).toBe(expectedPath);

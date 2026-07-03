@@ -34,12 +34,21 @@ function workflowExecution(
   } as WorkflowExecution;
 }
 
-function workflowClient(
+function wait(
   getWorkflowExecution: ReturnType<typeof vi.fn>,
-): Parameters<typeof waitForWorkflowExecution>[0]["client"] {
-  return {
-    getWorkflowExecution,
-  } as unknown as Parameters<typeof waitForWorkflowExecution>[0]["client"];
+  overrides: Partial<Parameters<typeof waitForWorkflowExecution>[0]> = {},
+) {
+  return waitForWorkflowExecution({
+    client: { getWorkflowExecution } as unknown as Parameters<
+      typeof waitForWorkflowExecution
+    >[0]["client"],
+    workspaceId: "workspace-1",
+    executionId: "execution-1",
+    interval: 1,
+    timeout: 100,
+    until: "success",
+    ...overrides,
+  });
 }
 
 describe("waitForWorkflowExecution", () => {
@@ -56,14 +65,7 @@ describe("waitForWorkflowExecution", () => {
         execution: workflowExecution(WorkflowExecution_Status.SUCCESS),
       });
 
-    const result = await waitForWorkflowExecution({
-      client: workflowClient(getWorkflowExecution),
-      workspaceId: "workspace-1",
-      executionId: "execution-1",
-      interval: 1,
-      timeout: 100,
-      until: "success",
-    });
+    const result = await wait(getWorkflowExecution);
 
     expect(result).toMatchObject({
       id: "execution-1",
@@ -82,14 +84,7 @@ describe("waitForWorkflowExecution", () => {
       ]),
     });
 
-    const result = await waitForWorkflowExecution({
-      client: workflowClient(getWorkflowExecution),
-      workspaceId: "workspace-1",
-      executionId: "execution-1",
-      interval: 1,
-      timeout: 100,
-      until: "suspended",
-    });
+    const result = await wait(getWorkflowExecution, { until: "suspended" });
 
     expect(result.status).toBe("RUNNING");
     expect(result.statusClass).toBe("suspended");
@@ -104,14 +99,7 @@ describe("waitForWorkflowExecution", () => {
         execution: workflowExecution(WorkflowExecution_Status.SUCCESS),
       });
 
-    const result = await waitForWorkflowExecution({
-      client: workflowClient(getWorkflowExecution),
-      workspaceId: "workspace-1",
-      executionId: "execution-1",
-      interval: 1,
-      timeout: 100,
-      until: "success",
-    });
+    const result = await wait(getWorkflowExecution);
 
     expect(result.status).toBe("SUCCESS");
     expect(result.attempts).toBe(2);
@@ -123,14 +111,7 @@ describe("waitForWorkflowExecution", () => {
       execution: workflowExecution(WorkflowExecution_Status.PENDING),
     });
 
-    const result = await waitForWorkflowExecution({
-      client: workflowClient(getWorkflowExecution),
-      workspaceId: "workspace-1",
-      executionId: "execution-1",
-      interval: 1,
-      timeout: 5,
-      until: "success",
-    });
+    const result = await wait(getWorkflowExecution, { timeout: 5 });
 
     expect(result).toMatchObject({
       id: "execution-1",

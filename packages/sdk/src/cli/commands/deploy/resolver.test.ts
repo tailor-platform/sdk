@@ -8,10 +8,8 @@ import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { PlanContext } from "./types";
 
-// Mock config values for tests
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
-// Mock label.ts
 vi.mock("./label", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   const original = (await importOriginal()) as typeof import("./label");
@@ -40,117 +38,110 @@ vi.mock("./change-set", async (importOriginal) => {
   };
 });
 
-describe("planPipeline (resolver service level)", () => {
-  const workspaceId = "test-workspace";
-  const appName = "test-app";
+const workspaceId = "test-workspace";
+const appName = "test-app";
 
-  // Helper to create mock resolver service
-  function createMockResolverService(namespace: string): ResolverService {
-    return {
-      namespace,
-      config: {},
-      resolvers: {},
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
-    } as unknown as ResolverService;
-  }
+function createMockExecutorService(): ExecutorService {
+  return {
+    config: {},
+    executors: {},
+    loadExecutors: vi.fn().mockResolvedValue({}),
+  } as unknown as ExecutorService;
+}
 
-  // Helper to create mock executor service
-  function createMockExecutorService(): ExecutorService {
-    return {
-      config: {},
-      executors: {},
-      loadExecutors: vi.fn().mockResolvedValue({}),
-    } as unknown as ExecutorService;
-  }
+function createMockResolverService(namespace: string): ResolverService {
+  return {
+    namespace,
+    config: {},
+    resolvers: {},
+    loadResolvers: vi.fn().mockResolvedValue(undefined),
+  } as unknown as ResolverService;
+}
 
-  // Helper to create mock client
-  function createMockClient(
-    existingServices: Array<{
-      name: string;
-      label?: string;
-      sdkVersion?: string;
-    }>,
-    existingResolvers: Record<string, Array<Record<string, unknown>>> = {},
-    resolverDetails: Record<string, Record<string, unknown>> = {},
-  ): OperatorClient {
-    return {
-      listPipelineServices: vi.fn().mockResolvedValue({
-        pipelineServices: existingServices.map((s) => ({
-          namespace: { name: s.name },
-        })),
+function createMockApplication(
+  resolverServices: ResolverService[],
+  extra: Record<string, unknown> = {},
+): Application {
+  return {
+    name: appName,
+    env: {},
+    resolverServices,
+    executorService: createMockExecutorService(),
+    ...extra,
+  } as unknown as Application;
+}
+
+function createMockClient(
+  existingServices: Array<{ name: string; label?: string; sdkVersion?: string }>,
+  existingResolvers: Record<string, Array<Record<string, unknown>>> = {},
+  resolverDetails: Record<string, Record<string, unknown>> = {},
+): OperatorClient {
+  return {
+    listPipelineServices: vi.fn().mockResolvedValue({
+      pipelineServices: existingServices.map((s) => ({
+        namespace: { name: s.name },
+      })),
+      nextPageToken: "",
+    }),
+    listPipelineResolvers: vi
+      .fn()
+      .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
+        pipelineResolvers: existingResolvers[namespaceName] ?? [],
         nextPageToken: "",
-      }),
-      listPipelineResolvers: vi
-        .fn()
-        .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
-          pipelineResolvers: existingResolvers[namespaceName] ?? [],
-          nextPageToken: "",
-        })),
-      getPipelineResolver: vi
-        .fn()
-        .mockImplementation(
-          ({ namespaceName, resolverName }: { namespaceName: string; resolverName: string }) => ({
-            pipelineResolver:
-              resolverDetails[`${namespaceName}:${resolverName}`] ??
-              (existingResolvers[namespaceName] ?? []).find(
-                (resolver) => resolver.name === resolverName,
-              ),
-          }),
-        ),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-        const name = trn.split(":").pop();
-        const service = existingServices.find((s) => s.name === name);
-        return {
-          metadata: {
-            labels: service?.label
-              ? {
-                  [sdkNameLabelKey]: service.label,
-                  "sdk-version": service.sdkVersion ?? "v1-0-0",
-                }
-              : {},
-          },
-        };
-      }),
-    } as unknown as OperatorClient;
-  }
+      })),
+    getPipelineResolver: vi
+      .fn()
+      .mockImplementation(
+        ({ namespaceName, resolverName }: { namespaceName: string; resolverName: string }) => ({
+          pipelineResolver:
+            resolverDetails[`${namespaceName}:${resolverName}`] ??
+            (existingResolvers[namespaceName] ?? []).find(
+              (resolver) => resolver.name === resolverName,
+            ),
+        }),
+      ),
+    getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      const name = trn.split(":").pop();
+      const service = existingServices.find((s) => s.name === name);
+      return {
+        metadata: {
+          labels: service?.label
+            ? {
+                [sdkNameLabelKey]: service.label,
+                "sdk-version": service.sdkVersion ?? "v1-0-0",
+              }
+            : {},
+        },
+      };
+    }),
+  } as unknown as OperatorClient;
+}
 
-  // Helper to create mock application
-  function createMockApplication(resolverServices: ResolverService[]): Application {
-    return {
-      name: appName,
-      env: {},
-      resolverServices,
-      executorService: createMockExecutorService(),
-    } as unknown as Application;
-  }
+function buildCtx(overrides: Partial<PlanContext>): PlanContext {
+  return {
+    client: createMockClient([]),
+    workspaceId,
+    application: createMockApplication([]),
+    forRemoval: false,
+    config: mockConfig,
+    ...overrides,
+  };
+}
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
+describe("planPipeline (resolver service level)", () => {
   describe("rename scenarios (service level)", () => {
     test("old service is deleted when renamed", async () => {
-      // Existing service: "old-resolver" with app label
       const client = createMockClient([{ name: "old-resolver", label: appName }]);
-
-      // New config has "new-resolver" (renamed)
       const application = createMockApplication([createMockResolverService("new-resolver")]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
+      const result = await planPipeline(buildCtx({ client, application }));
 
-      const result = await planPipeline(ctx);
-
-      // "new-resolver" should be created
       expect(result.changeSet.service.creates).toHaveLength(1);
       expect(result.changeSet.service.creates[0]!.name).toBe("new-resolver");
-
-      // "old-resolver" should be deleted
       expect(result.changeSet.service.deletes).toHaveLength(1);
       expect(result.changeSet.service.deletes[0]!.name).toBe("old-resolver");
     });
@@ -162,25 +153,12 @@ describe("planPipeline (resolver service level)", () => {
         { name: "resolver-a", label: appName },
         { name: "resolver-b", label: appName },
       ]);
-
-      // Only resolver-a in config
       const application = createMockApplication([createMockResolverService("resolver-a")]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
+      const result = await planPipeline(buildCtx({ client, application }));
 
-      const result = await planPipeline(ctx);
-
-      // "resolver-a" should be unchanged
       expect(result.changeSet.service.unchanged).toHaveLength(1);
       expect(result.changeSet.service.unchanged[0]!.name).toBe("resolver-a");
-
-      // "resolver-b" should be deleted
       expect(result.changeSet.service.deletes).toHaveLength(1);
       expect(result.changeSet.service.deletes[0]!.name).toBe("resolver-b");
     });
@@ -191,17 +169,7 @@ describe("planPipeline (resolver service level)", () => {
         { name: "resolver-2", label: appName },
       ]);
 
-      const application = createMockApplication([]);
-
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planPipeline(ctx);
+      const result = await planPipeline(buildCtx({ client }));
 
       expect(result.changeSet.service.deletes).toHaveLength(2);
       expect(result.changeSet.service.deletes.map((d) => d.name).toSorted()).toEqual([
@@ -213,21 +181,9 @@ describe("planPipeline (resolver service level)", () => {
 
   describe("label ownership scenarios (service level)", () => {
     test("service without label is NOT deleted", async () => {
-      const client = createMockClient([
-        { name: "unmanaged-resolver" }, // No label
-      ]);
+      const client = createMockClient([{ name: "unmanaged-resolver" }]);
 
-      const application = createMockApplication([]);
-
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planPipeline(ctx);
+      const result = await planPipeline(buildCtx({ client }));
 
       expect(result.changeSet.service.deletes).toHaveLength(0);
     });
@@ -235,17 +191,7 @@ describe("planPipeline (resolver service level)", () => {
     test("service owned by different app is NOT deleted", async () => {
       const client = createMockClient([{ name: "other-resolver", label: "other-app" }]);
 
-      const application = createMockApplication([]);
-
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planPipeline(ctx);
+      const result = await planPipeline(buildCtx({ client }));
 
       expect(result.changeSet.service.deletes).toHaveLength(0);
       expect(result.resourceOwners.has("other-app")).toBe(true);
@@ -255,20 +201,10 @@ describe("planPipeline (resolver service level)", () => {
       const client = createMockClient([
         { name: "my-resolver", label: appName },
         { name: "other-resolver", label: "other-app" },
-        { name: "unmanaged-resolver" }, // No label
+        { name: "unmanaged-resolver" },
       ]);
 
-      const application = createMockApplication([]);
-
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planPipeline(ctx);
+      const result = await planPipeline(buildCtx({ client }));
 
       expect(result.changeSet.service.deletes).toHaveLength(1);
       expect(result.changeSet.service.deletes[0]!.name).toBe("my-resolver");
@@ -279,18 +215,9 @@ describe("planPipeline (resolver service level)", () => {
       const client = createMockClient([
         { name: "resolver-a", label: appName, sdkVersion: "v0-9-0" },
       ]);
-
       const application = createMockApplication([createMockResolverService("resolver-a")]);
 
-      const ctx: PlanContext = {
-        client,
-        workspaceId,
-        application,
-        forRemoval: false,
-        config: mockConfig,
-      };
-
-      const result = await planPipeline(ctx);
+      const result = await planPipeline(buildCtx({ client, application }));
 
       expect(result.changeSet.service.updates).toHaveLength(1);
       expect(result.changeSet.service.unchanged).toHaveLength(0);
@@ -298,42 +225,38 @@ describe("planPipeline (resolver service level)", () => {
   });
 
   describe("resolver no-op detection", () => {
-    test("resolver is unchanged when remote definition matches desired definition", async () => {
-      const resolver = {
-        name: "test-resolver",
-        operation: 0,
-        output: {
-          type: "string",
-          metadata: {},
-        },
-      };
-      const pipeline = {
+    function createPipeline(resolver: Record<string, unknown>): ResolverService {
+      return {
         namespace: "my-resolver",
         config: {},
-        resolvers: { [resolver.name]: resolver },
+        resolvers: { [resolver.name as string]: resolver },
         loadResolvers: vi.fn().mockResolvedValue(undefined),
       } as unknown as ResolverService;
+    }
 
-      const createClient = createMockClient([]);
-      const createResult = await planPipeline({
-        client: createClient,
-        workspaceId,
-        application: createMockApplication([pipeline]),
-        forRemoval: false,
-        config: mockConfig,
+    // Plans against an empty workspace to derive the exact desired resolver definition,
+    // so tests can feed it back in as the "existing remote state".
+    async function getDesiredResolver(pipeline: ResolverService) {
+      const createResult = await planPipeline(
+        buildCtx({ client: createMockClient([]), application: createMockApplication([pipeline]) }),
+      );
+      return createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
+    }
+
+    test("resolver is unchanged when remote definition matches desired definition", async () => {
+      const pipeline = createPipeline({
+        name: "test-resolver",
+        operation: 0,
+        output: { type: "string", metadata: {} },
       });
-      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
+      const desiredResolver = await getDesiredResolver(pipeline);
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
         "my-resolver": [desiredResolver as Record<string, unknown>],
       });
-      const result = await planPipeline({
-        client,
-        workspaceId,
-        application: createMockApplication([pipeline]),
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planPipeline(
+        buildCtx({ client, application: createMockApplication([pipeline]) }),
+      );
 
       expect(result.changeSet.resolver.unchanged).toHaveLength(1);
       expect(result.changeSet.resolver.unchanged[0]!.name).toBe("test-resolver");
@@ -341,48 +264,22 @@ describe("planPipeline (resolver service level)", () => {
     });
 
     test("resolver is unchanged when list response is summary-only but get returns full definition", async () => {
-      const resolver = {
+      const pipeline = createPipeline({
         name: "test-resolver",
         operation: 0,
         body: () => "hello",
-        output: {
-          type: "string",
-          metadata: {},
-        },
-      };
-      const pipeline = {
-        namespace: "my-resolver",
-        config: {},
-        resolvers: { [resolver.name]: resolver },
-        loadResolvers: vi.fn().mockResolvedValue(undefined),
-      } as unknown as ResolverService;
-
-      const createClient = createMockClient([]);
-      const createResult = await planPipeline({
-        client: createClient,
-        workspaceId,
-        application: createMockApplication([pipeline]),
-        forRemoval: false,
-        config: mockConfig,
+        output: { type: "string", metadata: {} },
       });
-      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
+      const desiredResolver = await getDesiredResolver(pipeline);
 
       const client = createMockClient(
         [{ name: "my-resolver", label: appName }],
-        {
-          "my-resolver": [{ name: "test-resolver" }],
-        },
-        {
-          "my-resolver:test-resolver": desiredResolver as Record<string, unknown>,
-        },
+        { "my-resolver": [{ name: "test-resolver" }] },
+        { "my-resolver:test-resolver": desiredResolver as Record<string, unknown> },
       );
-      const result = await planPipeline({
-        client,
-        workspaceId,
-        application: createMockApplication([pipeline]),
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planPipeline(
+        buildCtx({ client, application: createMockApplication([pipeline]) }),
+      );
 
       expect(result.changeSet.resolver.unchanged).toHaveLength(1);
       expect(result.changeSet.resolver.unchanged[0]!.name).toBe("test-resolver");
@@ -390,90 +287,47 @@ describe("planPipeline (resolver service level)", () => {
     });
 
     test("resolver is updated when forceApplyAll is enabled", async () => {
-      const resolver = {
+      const pipeline = createPipeline({
         name: "test-resolver",
         operation: 0,
         body: () => "hello",
-        output: {
-          type: "string",
-          metadata: {},
-        },
-      };
-      const pipeline = {
-        namespace: "my-resolver",
-        config: {},
-        resolvers: { [resolver.name]: resolver },
-        loadResolvers: vi.fn().mockResolvedValue(undefined),
-      } as unknown as ResolverService;
-
-      const createClient = createMockClient([]);
-      const createResult = await planPipeline({
-        client: createClient,
-        workspaceId,
-        application: createMockApplication([pipeline]),
-        forRemoval: false,
-        config: mockConfig,
+        output: { type: "string", metadata: {} },
       });
-      const desiredResolver = createResult.changeSet.resolver.creates[0]!.request.pipelineResolver;
+      const desiredResolver = await getDesiredResolver(pipeline);
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
         "my-resolver": [desiredResolver as Record<string, unknown>],
       });
-      const result = await planPipeline({
-        client,
-        workspaceId,
-        application: createMockApplication([pipeline]),
-        forRemoval: false,
-        config: mockConfig,
-        forceApplyAll: true,
-      });
+      const result = await planPipeline(
+        buildCtx({
+          client,
+          application: createMockApplication([pipeline]),
+          forceApplyAll: true,
+        }),
+      );
 
       expect(result.changeSet.resolver.updates).toHaveLength(1);
       expect(result.changeSet.resolver.unchanged).toHaveLength(0);
     });
 
     test("resolver is updated when invoker differs", async () => {
-      const resolver = {
+      const pipeline = createPipeline({
         name: "test-resolver",
         operation: 0,
         body: () => "hello",
-        output: {
-          type: "string",
-          metadata: {},
-        },
+        output: { type: "string", metadata: {} },
         invoker: { namespace: "my-auth", machineUserName: "batch-user" },
-      };
-      const pipeline = {
-        namespace: "my-resolver",
-        config: {},
-        resolvers: { [resolver.name]: resolver },
-        loadResolvers: vi.fn().mockResolvedValue(undefined),
-      } as unknown as ResolverService;
-
-      const createClient = createMockClient([]);
-      const createResult = await planPipeline({
-        client: createClient,
-        workspaceId,
-        application: createMockApplication([pipeline]),
-        forRemoval: false,
-        config: mockConfig,
       });
-      const desiredResolver = structuredClone(
-        createResult.changeSet.resolver.creates[0]!.request.pipelineResolver,
-      );
+      const desiredResolver = structuredClone(await getDesiredResolver(pipeline));
       expect(desiredResolver).toBeDefined();
       delete desiredResolver!.pipelines?.[0]?.invoker;
 
       const client = createMockClient([{ name: "my-resolver", label: appName }], {
         "my-resolver": [desiredResolver as Record<string, unknown>],
       });
-      const result = await planPipeline({
-        client,
-        workspaceId,
-        application: createMockApplication([pipeline]),
-        forRemoval: false,
-        config: mockConfig,
-      });
+      const result = await planPipeline(
+        buildCtx({ client, application: createMockApplication([pipeline]) }),
+      );
 
       expect(result.changeSet.resolver.updates).toHaveLength(1);
       expect(result.changeSet.resolver.updates[0]!.name).toBe("test-resolver");
@@ -483,55 +337,10 @@ describe("planPipeline (resolver service level)", () => {
 });
 
 describe("processResolver invoker mapping", () => {
-  const workspaceId = "test-workspace";
-  const appName = "test-app";
-
-  function createMockClient(
-    existingServices: Array<{
-      name: string;
-      label?: string;
-      sdkVersion?: string;
-    }>,
-    existingResolvers: Record<string, Array<{ name: string }>> = {},
-  ): OperatorClient {
+  function createResolverServiceWithAuthInvoker(
+    invoker?: Record<string, unknown> | string,
+  ): ResolverService {
     return {
-      listPipelineServices: vi.fn().mockResolvedValue({
-        pipelineServices: existingServices.map((s) => ({
-          namespace: { name: s.name },
-        })),
-        nextPageToken: "",
-      }),
-      listPipelineResolvers: vi
-        .fn()
-        .mockImplementation(({ namespaceName }: { namespaceName: string }) => ({
-          pipelineResolvers: existingResolvers[namespaceName] ?? [],
-          nextPageToken: "",
-        })),
-      getMetadata: vi.fn().mockImplementation(({ trn }: { trn: string }) => {
-        const name = trn.split(":").pop();
-        const service = existingServices.find((s) => s.name === name);
-        return {
-          metadata: {
-            labels: service?.label
-              ? {
-                  [sdkNameLabelKey]: service.label,
-                  "sdk-version": service.sdkVersion ?? "v1-0-0",
-                }
-              : {},
-          },
-        };
-      }),
-    } as unknown as OperatorClient;
-  }
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  test("invoker is mapped to proto invoker field", async () => {
-    const client = createMockClient([{ name: "test-ns", label: appName }]);
-
-    const resolverService = {
       namespace: "test-ns",
       config: {},
       resolvers: {
@@ -540,32 +349,29 @@ describe("processResolver invoker mapping", () => {
           operation: "query",
           body: () => "hello",
           output: { type: "string", metadata: {}, fields: {} },
-          invoker: { namespace: "my-auth", machineUserName: "batch-user" },
+          ...(invoker !== undefined ? { invoker } : {}),
         },
       },
       loadResolvers: vi.fn().mockResolvedValue(undefined),
     } as unknown as ResolverService;
+  }
 
-    const application = {
-      name: appName,
-      env: {},
-      resolverServices: [resolverService],
-      executorService: {
-        config: {},
-        executors: {},
-        loadExecutors: vi.fn().mockResolvedValue({}),
-      },
-    } as unknown as Application;
+  async function planWithResolverService(
+    resolverService: ResolverService,
+    extraApplicationFields: Record<string, unknown> = {},
+  ) {
+    const client = createMockClient([{ name: "test-ns", label: appName }]);
+    const application = createMockApplication([resolverService], extraApplicationFields);
+    return planPipeline(buildCtx({ client, application }));
+  }
 
-    const ctx: PlanContext = {
-      client,
-      workspaceId,
-      application,
-      forRemoval: false,
-      config: { path: "/test/tailor.config.ts" } as LoadedConfig,
-    };
+  test("invoker is mapped to proto invoker field", async () => {
+    const resolverService = createResolverServiceWithAuthInvoker({
+      namespace: "my-auth",
+      machineUserName: "batch-user",
+    });
 
-    const result = await planPipeline(ctx);
+    const result = await planWithResolverService(resolverService);
 
     const resolverCreate = result.changeSet.resolver.creates[0];
     expect(resolverCreate).toBeDefined();
@@ -578,44 +384,11 @@ describe("processResolver invoker mapping", () => {
   });
 
   test("string invoker is normalized using the configured auth service name", async () => {
-    const client = createMockClient([{ name: "test-ns", label: appName }]);
+    const resolverService = createResolverServiceWithAuthInvoker("batch-user");
 
-    const resolverService = {
-      namespace: "test-ns",
-      config: {},
-      resolvers: {
-        myResolver: {
-          name: "myResolver",
-          operation: "query",
-          body: () => "hello",
-          output: { type: "string", metadata: {}, fields: {} },
-          invoker: "batch-user",
-        },
-      },
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
-    } as unknown as ResolverService;
-
-    const application = {
-      name: appName,
-      env: {},
-      resolverServices: [resolverService],
+    const result = await planWithResolverService(resolverService, {
       authService: { config: { name: "my-auth" } },
-      executorService: {
-        config: {},
-        executors: {},
-        loadExecutors: vi.fn().mockResolvedValue({}),
-      },
-    } as unknown as Application;
-
-    const ctx: PlanContext = {
-      client,
-      workspaceId,
-      application,
-      forRemoval: false,
-      config: { path: "/test/tailor.config.ts" } as LoadedConfig,
-    };
-
-    const result = await planPipeline(ctx);
+    });
 
     const resolverCreate = result.changeSet.resolver.creates[0];
     expect(resolverCreate).toBeDefined();
@@ -628,134 +401,17 @@ describe("processResolver invoker mapping", () => {
   });
 
   test("string invoker without auth service configured throws", async () => {
-    const client = createMockClient([{ name: "test-ns", label: appName }]);
+    const resolverService = createResolverServiceWithAuthInvoker("batch-user");
 
-    const resolverService = {
-      namespace: "test-ns",
-      config: {},
-      resolvers: {
-        myResolver: {
-          name: "myResolver",
-          operation: "query",
-          body: () => "hello",
-          output: { type: "string", metadata: {}, fields: {} },
-          invoker: "batch-user",
-        },
-      },
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
-    } as unknown as ResolverService;
-
-    const application = {
-      name: appName,
-      env: {},
-      resolverServices: [resolverService],
-      executorService: {
-        config: {},
-        executors: {},
-        loadExecutors: vi.fn().mockResolvedValue({}),
-      },
-    } as unknown as Application;
-
-    const ctx: PlanContext = {
-      client,
-      workspaceId,
-      application,
-      forRemoval: false,
-      config: { path: "/test/tailor.config.ts" } as LoadedConfig,
-    };
-
-    await expect(planPipeline(ctx)).rejects.toThrow(/no Auth service is configured/);
-  });
-
-  test("string invoker uses external auth config name", async () => {
-    const client = createMockClient([{ name: "test-ns", label: appName }]);
-
-    const resolverService = {
-      namespace: "test-ns",
-      config: {},
-      resolvers: {
-        myResolver: {
-          name: "myResolver",
-          operation: "query",
-          body: () => "hello",
-          output: { type: "string", metadata: {}, fields: {} },
-          invoker: "batch-user",
-        },
-      },
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
-    } as unknown as ResolverService;
-
-    const application = {
-      name: appName,
-      env: {},
-      config: {
-        auth: { name: "external-auth", external: true },
-      },
-      resolverServices: [resolverService],
-      executorService: {
-        config: {},
-        executors: {},
-        loadExecutors: vi.fn().mockResolvedValue({}),
-      },
-    } as unknown as Application;
-
-    const ctx: PlanContext = {
-      client,
-      workspaceId,
-      application,
-      forRemoval: false,
-      config: { path: "/test/tailor.config.ts" } as LoadedConfig,
-    };
-
-    const result = await planPipeline(ctx);
-
-    const resolverCreate = result.changeSet.resolver.creates[0];
-    expect(resolverCreate).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const proto = (resolverCreate as any).request.pipelineResolver;
-    expect(proto.pipelines[0].invoker).toEqual({
-      namespace: "external-auth",
-      machineUserName: "batch-user",
-    });
+    await expect(planWithResolverService(resolverService)).rejects.toThrow(
+      /no Auth service is configured/,
+    );
   });
 
   test("invoker is undefined when invoker is not set", async () => {
-    const client = createMockClient([{ name: "test-ns", label: appName }]);
+    const resolverService = createResolverServiceWithAuthInvoker();
 
-    const resolverService = {
-      namespace: "test-ns",
-      config: {},
-      resolvers: {
-        myResolver: {
-          name: "myResolver",
-          operation: "query",
-          body: () => "hello",
-          output: { type: "string", metadata: {}, fields: {} },
-        },
-      },
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
-    } as unknown as ResolverService;
-
-    const application = {
-      name: appName,
-      env: {},
-      resolverServices: [resolverService],
-      executorService: {
-        config: {},
-        executors: {},
-        loadExecutors: vi.fn().mockResolvedValue({}),
-      },
-    } as unknown as Application;
-
-    const ctx: PlanContext = {
-      client,
-      workspaceId,
-      application,
-      forRemoval: false,
-      config: { path: "/test/tailor.config.ts" } as LoadedConfig,
-    };
-
-    const result = await planPipeline(ctx);
+    const result = await planWithResolverService(resolverService);
 
     const resolverCreate = result.changeSet.resolver.creates[0];
     expect(resolverCreate).toBeDefined();
@@ -770,15 +426,7 @@ describe("formatResolverChangeEntries", () => {
     const entries = formatResolverChangeEntries(
       {
         creates: [],
-        updates: [
-          {
-            name: "add",
-            request: {
-              workspaceId: "ws",
-              namespaceName: "my-resolver",
-            },
-          },
-        ],
+        updates: [{ name: "add", request: { workspaceId: "ws", namespaceName: "my-resolver" } }],
         deletes: [],
         replaces: [],
       },
@@ -806,15 +454,7 @@ describe("formatResolverChangeEntries", () => {
       {
         creates: [],
         updates: [],
-        deletes: [
-          {
-            name: "add",
-            request: {
-              workspaceId: "ws",
-              namespaceName: "my-resolver",
-            },
-          },
-        ],
+        deletes: [{ name: "add", request: { workspaceId: "ws", namespaceName: "my-resolver" } }],
         replaces: [],
       },
       {
@@ -838,12 +478,10 @@ describe("formatResolverChangeEntries", () => {
 });
 
 describe("applyPipeline phase separation", () => {
-  // Helper to create mock client with spies for delete operations
   function createMockClientWithSpies() {
     return {
       deletePipelineResolver: vi.fn().mockResolvedValue({}),
       deletePipelineService: vi.fn().mockResolvedValue({}),
-      // Also mock create/update methods for completeness
       createPipelineService: vi.fn().mockResolvedValue({}),
       createPipelineResolver: vi.fn().mockResolvedValue({}),
       updatePipelineResolver: vi.fn().mockResolvedValue({}),
@@ -851,7 +489,6 @@ describe("applyPipeline phase separation", () => {
     } as unknown as OperatorClient;
   }
 
-  // Helper to create a mock plan result with deletes
   function createMockPlanResult() {
     return {
       changeSet: {
@@ -861,10 +498,7 @@ describe("applyPipeline phase separation", () => {
           deletes: [
             {
               name: "test-pipeline",
-              request: {
-                workspaceId: "test-workspace",
-                namespaceName: "test-pipeline",
-              },
+              request: { workspaceId: "test-workspace", namespaceName: "test-pipeline" },
             },
           ],
           title: "Pipeline Services",
@@ -895,41 +529,29 @@ describe("applyPipeline phase separation", () => {
     } as unknown as Awaited<ReturnType<typeof planPipeline>>;
   }
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   test("delete-resources phase deletes resolvers, but NOT services", async () => {
     const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
 
-    await applyPipeline(client, planResult, "delete-resources");
+    await applyPipeline(client, createMockPlanResult(), "delete-resources");
 
-    // Resolvers should be deleted
     expect(client.deletePipelineResolver).toHaveBeenCalledTimes(1);
-    // Services should NOT be deleted
     expect(client.deletePipelineService).not.toHaveBeenCalled();
   });
 
   test("delete-services phase deletes ONLY services", async () => {
     const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
 
-    await applyPipeline(client, planResult, "delete-services");
+    await applyPipeline(client, createMockPlanResult(), "delete-services");
 
-    // Resolvers should NOT be deleted
     expect(client.deletePipelineResolver).not.toHaveBeenCalled();
-    // Services should be deleted
     expect(client.deletePipelineService).toHaveBeenCalledTimes(1);
   });
 
   test("create-update phase does not delete anything", async () => {
     const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
 
-    await applyPipeline(client, planResult, "create-update");
+    await applyPipeline(client, createMockPlanResult(), "create-update");
 
-    // No deletes should happen in create-update phase
     expect(client.deletePipelineResolver).not.toHaveBeenCalled();
     expect(client.deletePipelineService).not.toHaveBeenCalled();
   });

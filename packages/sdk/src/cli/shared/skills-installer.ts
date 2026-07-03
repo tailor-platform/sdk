@@ -21,6 +21,12 @@ export interface RunSkillsInstallerOptions {
   spawnFn?: SpawnLike;
 }
 
+interface BuildSkillsAddArgsOptions {
+  source: string;
+  agent?: string;
+  yes?: boolean;
+}
+
 function resolveNpxCommand(platform: NodeJS.Platform = process.platform): string {
   return platform === "win32" ? "npx.cmd" : "npx";
 }
@@ -33,16 +39,12 @@ function resolveSkillsSource(source: string): string {
  * Build CLI arguments for `skills add` with the fixed tailor skill target.
  * `--copy` is included so the installed skill survives `pnpm install` wiping `node_modules`.
  * @param options - Options controlling the generated `skills add` arguments
- * @param options.source
- * @param options.agent
- * @param options.yes
+ * @param options.source - Skill source package or path passed to `skills add`
+ * @param options.agent - Target agent name passed through with `--agent`
+ * @param options.yes - Whether to add `--yes` for non-interactive installation
  * @returns CLI arguments for `npx skills add`
  */
-export function buildSkillsAddArgs(options: {
-  source: string;
-  agent?: string;
-  yes?: boolean;
-}): string[] {
+export function buildSkillsAddArgs(options: BuildSkillsAddArgsOptions): string[] {
   const args = [
     "skills",
     "add",

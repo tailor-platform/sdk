@@ -807,8 +807,8 @@ export async function resolveTokens(
  * @param config - Platform config
  * @param user - User identifier
  * @param tokens - Token data to save
- * @param tokens.accessToken - Access token to save
- * @param tokens.refreshToken - Optional refresh token to save
+ * @param tokens.accessToken - Access token to persist
+ * @param tokens.refreshToken - Refresh token to persist when available
  * @param expiresAt - Token expiration date
  * @param platformConfig - Optional platform connection settings
  * @param metadata - Optional user metadata to persist with the token entry

@@ -54,28 +54,17 @@ describe("FunctionOperationSchema", () => {
 });
 
 describe("GqlOperationSchema", () => {
-  test("converts query to string", () => {
-    const documentNode = {
-      kind: "Document",
-      definitions: [],
-      toString: () => "query { users { id } }",
-    };
+  const documentNode = {
+    kind: "Document",
+    definitions: [],
+    toString: () => "query { users { id } }",
+  };
 
-    const result = GqlOperationSchema.safeParse({
-      kind: "graphql",
-      query: documentNode,
-    });
-
-    const data = expectParseSuccess(result);
-    expect(data.query).toBe("query { users { id } }");
-  });
-
-  test("accepts string query directly", () => {
-    const result = GqlOperationSchema.safeParse({
-      kind: "graphql",
-      query: "query { users { id } }",
-    });
-
+  test.each([
+    ["converts query to string", documentNode],
+    ["accepts string query directly", "query { users { id } }"],
+  ] as const)("%s", (_description, query) => {
+    const result = GqlOperationSchema.safeParse({ kind: "graphql", query });
     const data = expectParseSuccess(result);
     expect(data.query).toBe("query { users { id } }");
   });

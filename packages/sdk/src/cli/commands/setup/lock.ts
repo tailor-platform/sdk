@@ -8,7 +8,7 @@ export const LOCK_VERSION = 1;
 /** Lock file path, relative to the repository root. */
 const LOCK_FILENAME = ".github/tailor.lock";
 
-export type TargetKind = "branch" | "tag";
+export type TargetKind = "branch" | "tag" | "preview" | "action" | "coordinate";
 
 export type LockInputs = {
   branch: string | null;
@@ -18,9 +18,23 @@ export type LockInputs = {
   environment: string;
   dir: string;
   packageManager: string;
-  plan: boolean;
+  /** For `preview` kind: workspace region used when creating the preview workspace. */
+  region?: string;
+  /**
+   * For `preview` kind: when true, the preview workflow deploys only for PRs labeled
+   * `tailor:preview`. False (default) means all PRs trigger a preview deploy.
+   */
+  requirePreviewLabel?: boolean;
+  /** For `coordinate` kind: ordered list of app dirs whose per-app actions are orchestrated. */
+  actionDirs?: string[];
   erdPreview?: boolean;
   erdNamespaces?: string[];
+  /** Whether tailor-migration-drift-check was generated (config had namespaces with migrations). */
+  migrationDriftCheck?: boolean;
+  /** Whether tailor-seed-validate was generated (config used seedPlugin). */
+  seedValidate?: boolean;
+  /** Whether the config had staticWebsites when setup was last run (action kind only). */
+  hasStaticWebsites?: boolean;
 };
 
 export type LockTarget = {

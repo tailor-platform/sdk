@@ -707,7 +707,10 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
     body: formData,
   });
   if (!resp.ok) {
-    throw new Error("Failed to fetch machine user token");
+    const body = await resp.text().catch(() => "");
+    throw new Error(
+      `Failed to fetch machine user token: ${resp.status} ${resp.statusText} ${body.slice(0, 500)}`,
+    );
   }
   const rawJson = await resp.json();
 

@@ -37,6 +37,7 @@ const attributeMapConfig: Attributes = {
 
 const attributeListConfig: AttributeList = ["externalId"];
 const machineUserAttributeList: [string] = [randomUUID()];
+const basicUserProfile = { type: userType, usernameField: "email" } as const;
 
 describe("defineAuth", () => {
   test("creates auth configuration with userProfile and machineUsers", () => {
@@ -68,10 +69,7 @@ describe("defineAuth", () => {
 
   test("creates minimal auth configuration", () => {
     const authConfig = defineAuth("minimal", {
-      userProfile: {
-        type: userType,
-        usernameField: "email",
-      },
+      userProfile: basicUserProfile,
     });
 
     expect(authConfig.name).toBe("minimal");
@@ -140,10 +138,7 @@ describe("defineAuth", () => {
   describe("name literal type inference", () => {
     test("infers name as literal type", () => {
       const authConfig = defineAuth("my-auth-service", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
       });
 
       expectTypeOf(authConfig.name).toEqualTypeOf<"my-auth-service">();
@@ -151,10 +146,7 @@ describe("defineAuth", () => {
 
     test("preserves name literal in readonly object", () => {
       const _authConfig = defineAuth("production-auth", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
         machineUsers: {
           admin: {},
         },
@@ -169,10 +161,7 @@ describe("defineAuth", () => {
 
     test("name type is available for type extraction", () => {
       const _authConfig = defineAuth("typed-auth", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
       });
 
       type ExtractedName = typeof _authConfig.name;
@@ -186,10 +175,7 @@ describe("defineAuth", () => {
         // no return value
       };
       const authConfig = defineAuth("hook-auth", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
         machineUsers: {
           "hook-invoker": {},
         },
@@ -215,10 +201,7 @@ describe("defineAuth", () => {
 
     test("works with multiple machine users without narrowing MachineUserNames", () => {
       const authConfig = defineAuth("multi-mu-hook", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
         machineUsers: {
           admin: {},
           worker: {},
@@ -255,10 +238,7 @@ describe("defineAuth", () => {
 
     test("is optional — existing tests continue to pass without it", () => {
       const authConfig = defineAuth("no-hook", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
       });
 
       expect(authConfig.hooks).toBeUndefined();

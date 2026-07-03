@@ -30,15 +30,16 @@ describe("migration constants", () => {
     expect(MIGRATION_LABEL_PREFIX).toBe("m");
   });
 
-  test("MIGRATION_NUMBER_PATTERN should match 4-digit format", () => {
-    expect(MIGRATION_NUMBER_PATTERN.test("0001")).toBe(true);
-    expect(MIGRATION_NUMBER_PATTERN.test("0100")).toBe(true);
-    expect(MIGRATION_NUMBER_PATTERN.test("9999")).toBe(true);
-    // Invalid formats
-    expect(MIGRATION_NUMBER_PATTERN.test("001")).toBe(false);
-    expect(MIGRATION_NUMBER_PATTERN.test("00001")).toBe(false);
-    expect(MIGRATION_NUMBER_PATTERN.test("test")).toBe(false);
-    expect(MIGRATION_NUMBER_PATTERN.test("")).toBe(false);
+  test.each([
+    ["0001", true],
+    ["0100", true],
+    ["9999", true],
+    ["001", false],
+    ["00001", false],
+    ["test", false],
+    ["", false],
+  ])("MIGRATION_NUMBER_PATTERN.test(%j) is %s", (value, expected) => {
+    expect(MIGRATION_NUMBER_PATTERN.test(value)).toBe(expected);
   });
 
   test("SCHEMA_ERROR_PATTERNS should contain expected patterns", () => {
@@ -61,66 +62,64 @@ describe("migration constants", () => {
 });
 
 describe("isValidMigrationNumber", () => {
-  test("returns true for valid migration numbers", () => {
-    expect(isValidMigrationNumber("0001")).toBe(true);
-    expect(isValidMigrationNumber("0002")).toBe(true);
-    expect(isValidMigrationNumber("0100")).toBe(true);
-    expect(isValidMigrationNumber("9999")).toBe(true);
-  });
-
-  test("returns false for invalid migration numbers", () => {
-    // Too short
-    expect(isValidMigrationNumber("001")).toBe(false);
-    expect(isValidMigrationNumber("1")).toBe(false);
-
-    // Too long
-    expect(isValidMigrationNumber("00001")).toBe(false);
-
-    // Non-numeric
-    expect(isValidMigrationNumber("test")).toBe(false);
-    expect(isValidMigrationNumber("000a")).toBe(false);
-
-    // Empty string
-    expect(isValidMigrationNumber("")).toBe(false);
-
-    // Old format (timestamp-based)
-    expect(isValidMigrationNumber("20260107-123456_test")).toBe(false);
+  test.each([
+    ["0001", true],
+    ["0002", true],
+    ["0100", true],
+    ["9999", true],
+    ["001", false], // Too short
+    ["1", false], // Too short
+    ["00001", false], // Too long
+    ["test", false], // Non-numeric
+    ["000a", false], // Non-numeric
+    ["", false], // Empty string
+    ["20260107-123456_test", false], // Old format (timestamp-based)
+  ])("isValidMigrationNumber(%j) is %s", (value, expected) => {
+    expect(isValidMigrationNumber(value)).toBe(expected);
   });
 });
 
 describe("formatMigrationNumber", () => {
-  test("formats numbers with 4-digit padding", () => {
-    expect(formatMigrationNumber(1)).toBe("0001");
-    expect(formatMigrationNumber(2)).toBe("0002");
-    expect(formatMigrationNumber(10)).toBe("0010");
-    expect(formatMigrationNumber(100)).toBe("0100");
-    expect(formatMigrationNumber(1000)).toBe("1000");
-    expect(formatMigrationNumber(9999)).toBe("9999");
+  test.each([
+    [1, "0001"],
+    [2, "0002"],
+    [10, "0010"],
+    [100, "0100"],
+    [1000, "1000"],
+    [9999, "9999"],
+  ])("formatMigrationNumber(%i) is %j", (value, expected) => {
+    expect(formatMigrationNumber(value)).toBe(expected);
   });
 });
 
 describe("parseMigrationNumber", () => {
-  test("parses migration number from valid file names", () => {
-    expect(parseMigrationNumber("0001_schema.json")).toBe(1);
-    expect(parseMigrationNumber("0002_diff.json")).toBe(2);
-    expect(parseMigrationNumber("0010_migrate.ts")).toBe(10);
-    expect(parseMigrationNumber("0100_schema.json")).toBe(100);
+  test.each([
+    ["0001_schema.json", 1],
+    ["0002_diff.json", 2],
+    ["0010_migrate.ts", 10],
+    ["0100_schema.json", 100],
+  ])("parses migration number %j as %i", (fileName, expected) => {
+    expect(parseMigrationNumber(fileName)).toBe(expected);
   });
 
-  test("returns null for invalid file names", () => {
-    expect(parseMigrationNumber("schema.json")).toBe(null);
-    expect(parseMigrationNumber("invalid_schema.json")).toBe(null);
-    expect(parseMigrationNumber("001_schema.json")).toBe(null); // Too few digits
-    expect(parseMigrationNumber("")).toBe(null);
+  test.each([
+    ["schema.json"],
+    ["invalid_schema.json"],
+    ["001_schema.json"], // Too few digits
+    [""],
+  ])("returns null for invalid file name %j", (fileName) => {
+    expect(parseMigrationNumber(fileName)).toBe(null);
   });
 });
 
 describe("sanitizeMigrationLabel", () => {
-  test("adds prefix and formats migration number", () => {
-    expect(sanitizeMigrationLabel(1)).toBe("m0001");
-    expect(sanitizeMigrationLabel(2)).toBe("m0002");
-    expect(sanitizeMigrationLabel(100)).toBe("m0100");
-    expect(sanitizeMigrationLabel(9999)).toBe("m9999");
+  test.each([
+    [1, "m0001"],
+    [2, "m0002"],
+    [100, "m0100"],
+    [9999, "m9999"],
+  ])("adds prefix and formats migration number %i as %j", (value, expected) => {
+    expect(sanitizeMigrationLabel(value)).toBe(expected);
   });
 
   test("produces labels that match Kubernetes label pattern", () => {
@@ -131,91 +130,69 @@ describe("sanitizeMigrationLabel", () => {
 });
 
 describe("parseMigrationLabelNumber", () => {
-  test("parses migration number from valid labels", () => {
-    expect(parseMigrationLabelNumber("m0001")).toBe(1);
-    expect(parseMigrationLabelNumber("m0002")).toBe(2);
-    expect(parseMigrationLabelNumber("m0100")).toBe(100);
-    expect(parseMigrationLabelNumber("m9999")).toBe(9999);
+  test.each([
+    ["m0001", 1],
+    ["m0002", 2],
+    ["m0100", 100],
+    ["m9999", 9999],
+  ])("parses migration number %j as %i", (label, expected) => {
+    expect(parseMigrationLabelNumber(label)).toBe(expected);
   });
 
-  test("returns null for invalid labels", () => {
-    expect(parseMigrationLabelNumber("0001")).toBe(null); // Missing prefix
-    expect(parseMigrationLabelNumber("x0001")).toBe(null); // Wrong prefix
-    expect(parseMigrationLabelNumber("m")).toBe(null); // No number
-    expect(parseMigrationLabelNumber("")).toBe(null);
-    expect(parseMigrationLabelNumber("m0001-extra")).toBe(null); // Trailing garbage
-    expect(parseMigrationLabelNumber("m1x")).toBe(null); // Non-digit suffix
-    expect(parseMigrationLabelNumber("m10000")).toBe(null); // Out of range
+  test.each([
+    ["0001"], // Missing prefix
+    ["x0001"], // Wrong prefix
+    ["m"], // No number
+    [""],
+    ["m0001-extra"], // Trailing garbage
+    ["m1x"], // Non-digit suffix
+    ["m10000"], // Out of range
+  ])("returns null for invalid label %j", (label) => {
+    expect(parseMigrationLabelNumber(label)).toBe(null);
   });
 });
 
 describe("getMigrationDirPath", () => {
-  test("returns correct directory path", () => {
-    expect(getMigrationDirPath("/migrations/tailordb", 0)).toBe("/migrations/tailordb/0000");
-    expect(getMigrationDirPath("/migrations/tailordb", 1)).toBe("/migrations/tailordb/0001");
-    expect(getMigrationDirPath("/migrations/tailordb", 10)).toBe("/migrations/tailordb/0010");
+  test.each([
+    [0, "/migrations/tailordb/0000"],
+    [1, "/migrations/tailordb/0001"],
+    [10, "/migrations/tailordb/0010"],
+  ])("returns correct directory path for number %i", (number, expected) => {
+    expect(getMigrationDirPath("/migrations/tailordb", number)).toBe(expected);
   });
 });
 
 describe("getMigrationFilePath", () => {
-  test("returns correct path for schema files (directory structure)", () => {
-    expect(getMigrationFilePath("/migrations/tailordb", 0, "schema")).toBe(
-      "/migrations/tailordb/0000/schema.json",
-    );
-    expect(getMigrationFilePath("/migrations/tailordb", 1, "schema")).toBe(
-      "/migrations/tailordb/0001/schema.json",
-    );
-  });
-
-  test("returns correct path for diff files (directory structure)", () => {
-    expect(getMigrationFilePath("/migrations/tailordb", 1, "diff")).toBe(
-      "/migrations/tailordb/0001/diff.json",
-    );
-    expect(getMigrationFilePath("/migrations/tailordb", 2, "diff")).toBe(
-      "/migrations/tailordb/0002/diff.json",
-    );
-  });
-
-  test("returns correct path for migrate files (directory structure)", () => {
-    expect(getMigrationFilePath("/migrations/tailordb", 1, "migrate")).toBe(
-      "/migrations/tailordb/0001/migrate.ts",
-    );
-    expect(getMigrationFilePath("/migrations/tailordb", 3, "migrate")).toBe(
-      "/migrations/tailordb/0003/migrate.ts",
-    );
-  });
-
-  test("returns correct path for db types files (directory structure)", () => {
-    expect(getMigrationFilePath("/migrations/tailordb", 1, "db")).toBe(
-      "/migrations/tailordb/0001/db.ts",
-    );
+  test.each([
+    [0, "schema", "/migrations/tailordb/0000/schema.json"],
+    [1, "schema", "/migrations/tailordb/0001/schema.json"],
+    [1, "diff", "/migrations/tailordb/0001/diff.json"],
+    [2, "diff", "/migrations/tailordb/0002/diff.json"],
+    [1, "migrate", "/migrations/tailordb/0001/migrate.ts"],
+    [3, "migrate", "/migrations/tailordb/0003/migrate.ts"],
+    [1, "db", "/migrations/tailordb/0001/db.ts"],
+  ] as const)("returns correct path for number %i, kind %s", (number, kind, expected) => {
+    expect(getMigrationFilePath("/migrations/tailordb", number, kind)).toBe(expected);
   });
 });
 
 describe("isSchemaError", () => {
-  test("returns true for messages containing schema error patterns", () => {
-    expect(isSchemaError("failed to fetch schema")).toBe(true);
-    expect(isSchemaError("sqlaccess error: connection failed")).toBe(true);
-    expect(isSchemaError("schema not found in database")).toBe(true);
-    expect(isSchemaError("invalid schema structure")).toBe(true);
-  });
-
-  test("returns true for case-insensitive matches", () => {
-    expect(isSchemaError("FAILED TO FETCH SCHEMA")).toBe(true);
-    expect(isSchemaError("SQLAccess Error")).toBe(true);
-    expect(isSchemaError("Schema Not Found")).toBe(true);
-    expect(isSchemaError("Invalid SCHEMA")).toBe(true);
-  });
-
-  test("returns false for non-schema errors", () => {
-    expect(isSchemaError("network timeout")).toBe(false);
-    expect(isSchemaError("authentication failed")).toBe(false);
-    expect(isSchemaError("permission denied")).toBe(false);
-    expect(isSchemaError("")).toBe(false);
-  });
-
-  test("returns true when error pattern is part of longer message", () => {
-    expect(isSchemaError("Error: failed to fetch schema for type User")).toBe(true);
-    expect(isSchemaError("Database sqlaccess error occurred during migration")).toBe(true);
+  test.each([
+    ["failed to fetch schema", true],
+    ["sqlaccess error: connection failed", true],
+    ["schema not found in database", true],
+    ["invalid schema structure", true],
+    ["FAILED TO FETCH SCHEMA", true],
+    ["SQLAccess Error", true],
+    ["Schema Not Found", true],
+    ["Invalid SCHEMA", true],
+    ["network timeout", false],
+    ["authentication failed", false],
+    ["permission denied", false],
+    ["", false],
+    ["Error: failed to fetch schema for type User", true],
+    ["Database sqlaccess error occurred during migration", true],
+  ])("isSchemaError(%j) is %s", (message, expected) => {
+    expect(isSchemaError(message)).toBe(expected);
   });
 });

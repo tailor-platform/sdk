@@ -21,11 +21,16 @@ describe("detectFunctionType", () => {
     }
   });
 
+  const writeFile = (fileName: string, contents: string) => {
+    const filePath = path.join(testDir, fileName);
+    fs.writeFileSync(filePath, contents);
+    return filePath;
+  };
+
   describe("resolver detection", () => {
     test("detects a default-exported resolver", async () => {
-      const filePath = path.join(testDir, "resolver.mjs");
-      fs.writeFileSync(
-        filePath,
+      const filePath = writeFile(
+        "resolver.mjs",
         `
 export default {
   operation: "query",
@@ -70,9 +75,8 @@ export default resolver;
 
   describe("executor detection", () => {
     test("detects a default-exported function executor", async () => {
-      const filePath = path.join(testDir, "executor.mjs");
-      fs.writeFileSync(
-        filePath,
+      const filePath = writeFile(
+        "executor.mjs",
         `
 export default {
   name: "my-executor",
@@ -118,9 +122,8 @@ export default executor;
     });
 
     test("does not detect a non-function executor", async () => {
-      const filePath = path.join(testDir, "gql-executor.mjs");
-      fs.writeFileSync(
-        filePath,
+      const filePath = writeFile(
+        "gql-executor.mjs",
         `
 export default {
   name: "gql-executor",
@@ -139,10 +142,23 @@ export default {
   });
 
   describe("workflow job detection", () => {
+    const multiJobSource = `
+export const job_a = {
+  name: "job-a",
+  trigger: () => {},
+  body: (input) => input,
+};
+
+export const job_b = {
+  name: "job-b",
+  trigger: () => {},
+  body: (input) => input,
+};
+`;
+
     test("detects a single named-exported workflow job", async () => {
-      const filePath = path.join(testDir, "workflow.mjs");
-      fs.writeFileSync(
-        filePath,
+      const filePath = writeFile(
+        "workflow.mjs",
         `
 export const my_job = {
   name: "my-job",
@@ -164,23 +180,7 @@ export default {
     });
 
     test("selects a workflow job by --name", async () => {
-      const filePath = path.join(testDir, "multi-jobs.mjs");
-      fs.writeFileSync(
-        filePath,
-        `
-export const job_a = {
-  name: "job-a",
-  trigger: () => {},
-  body: (input) => input,
-};
-
-export const job_b = {
-  name: "job-b",
-  trigger: () => {},
-  body: (input) => input,
-};
-`,
-      );
+      const filePath = writeFile("multi-jobs.mjs", multiJobSource);
 
       const result = await detectFunctionType({ filePath, jobName: "job-b" });
       expect(result.type).toBe("workflow-job");
@@ -189,23 +189,7 @@ export const job_b = {
     });
 
     test("throws when multiple jobs exist without --name", async () => {
-      const filePath = path.join(testDir, "multi-jobs.mjs");
-      fs.writeFileSync(
-        filePath,
-        `
-export const job_a = {
-  name: "job-a",
-  trigger: () => {},
-  body: (input) => input,
-};
-
-export const job_b = {
-  name: "job-b",
-  trigger: () => {},
-  body: (input) => input,
-};
-`,
-      );
+      const filePath = writeFile("multi-jobs.mjs", multiJobSource);
 
       await expect(detectFunctionType({ filePath })).rejects.toThrow(
         "Multiple workflow jobs found",
@@ -213,9 +197,8 @@ export const job_b = {
     });
 
     test("throws when --name does not match any job", async () => {
-      const filePath = path.join(testDir, "workflow.mjs");
-      fs.writeFileSync(
-        filePath,
+      const filePath = writeFile(
+        "workflow.mjs",
         `
 export const my_job = {
   name: "my-job",
@@ -233,9 +216,8 @@ export const my_job = {
 
   describe("plain function detection", () => {
     test("detects a default-exported plain function", async () => {
-      const filePath = path.join(testDir, "my-function.mjs");
-      fs.writeFileSync(
-        filePath,
+      const filePath = writeFile(
+        "my-function.mjs",
         `
 export default function(input) {
   return { result: input };
@@ -250,9 +232,8 @@ export default function(input) {
     });
 
     test("detects a named-exported main function", async () => {
-      const filePath = path.join(testDir, "my-main.mjs");
-      fs.writeFileSync(
-        filePath,
+      const filePath = writeFile(
+        "my-main.mjs",
         `
 export function main(input) {
   return { result: input };
@@ -267,9 +248,8 @@ export function main(input) {
     });
 
     test("prefers default export over named main", async () => {
-      const filePath = path.join(testDir, "both.mjs");
-      fs.writeFileSync(
-        filePath,
+      const filePath = writeFile(
+        "both.mjs",
         `
 export function main(input) {
   return { named: true };
@@ -288,8 +268,7 @@ export default function(input) {
 
   describe("error cases", () => {
     test("throws when file exports nothing recognizable", async () => {
-      const filePath = path.join(testDir, "empty.mjs");
-      fs.writeFileSync(filePath, `export default 42;`);
+      const filePath = writeFile("empty.mjs", `export default 42;`);
 
       await expect(detectFunctionType({ filePath })).rejects.toThrow("Could not detect");
     });

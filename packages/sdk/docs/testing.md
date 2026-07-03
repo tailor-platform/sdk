@@ -26,7 +26,7 @@ Platform API mocks under `@tailor-platform/sdk/vitest` (for use with the [`tailo
 - `mockTailordb` — TailorDB query stubs and call recording
 - `mockWorkflow` — `tailor.workflow` job / wait / resolve mocks
 - `runWorkflowLocally` — local full-chain workflow runner
-- `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv` — corresponding platform API mocks
+- `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway` — corresponding platform API mocks
 
 For tighter alignment with the production runtime — Node.js module blocking, Web-only globals, and platform API mocks — pair the resolver helpers with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below.
 
@@ -63,7 +63,7 @@ export default defineConfig({
 
 ### Acquiring mocks with `using`
 
-Each mock controller (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`) is a **factory function**. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — its state is reset automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
+Each mock controller (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway`) is a **factory function**. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — its state is reset automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
 
 ```typescript
 import { mockTailordb } from "@tailor-platform/sdk/vitest";
@@ -294,6 +294,23 @@ test("mock encoding conversion", () => {
   expect(iconv.calls).toMatchObject([{ method: "decode" }]);
 });
 ```
+
+### AI Gateway Mock
+
+```typescript
+import { mockAigateway } from "@tailor-platform/sdk/vitest";
+
+test("resolves an AI Gateway URL", async () => {
+  using aigateway = mockAigateway();
+  aigateway.setUrls({ "my-aigateway": "https://my-aigateway.example.com" });
+
+  const { url } = await tailor.aigateway.get("my-aigateway");
+  expect(url).toBe("https://my-aigateway.example.com");
+  expect(aigateway.calls).toEqual([{ name: "my-aigateway" }]);
+});
+```
+
+Calling `get` for a name that hasn't been registered via `setUrls` throws.
 
 ### Loading Secrets from Config
 
@@ -560,6 +577,35 @@ describe("resolveApproval resolver", () => {
 ```
 
 `setResolveHandler` receives `(executionId, key, callback)` and decides whether to invoke the callback — that's how you assert the value returned to the suspended job.
+
+#### Resolvers that resume failed workflows
+
+Resolvers or executors that call `workflow.resumeWorkflow(executionId)` delegate to `tailor.workflow.resumeWorkflow` at runtime. With the `tailor-runtime` environment active, use `mockWorkflow().setResumeHandler` to control the returned execution ID and inspect `resumeWorkflow.mock.calls`:
+
+```typescript
+import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
+import { mockWorkflow } from "@tailor-platform/sdk/vitest";
+import { describe, expect, test } from "vitest";
+import resolver from "./retryFailedWorkflow";
+
+describe("retryFailedWorkflow resolver", () => {
+  test("resumes a failed workflow execution", async () => {
+    using wf = mockWorkflow();
+    wf.setResumeHandler("exec-resumed-123");
+
+    const result = await resolver.body({
+      input: { executionId: "exec-failed-456" },
+      user: unauthenticatedTailorUser,
+      env: {},
+    });
+
+    expect(result).toEqual({ resumedExecutionId: "exec-resumed-123" });
+    expect(wf.resumeWorkflow.mock.calls).toEqual([["exec-failed-456"]]);
+  });
+});
+```
+
+`setResumeHandler` accepts a static string (same execution ID for every call) or a function `(executionId) => string` that computes one per call. By default the mock echoes the input `executionId`.
 
 ### Testing Executors
 

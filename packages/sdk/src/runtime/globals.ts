@@ -52,6 +52,19 @@ import type {
   PlatformTriggerWorkflowOptions as WorkflowTriggerWorkflowOptions,
 } from "./workflow";
 
+type TailorIdpClientConfig = IdpClientConfig;
+type TailorIdpCreateUserInput = IdpCreateUserInput;
+type TailorIdpClientInstance = IdpClientInstance;
+type TailorIdpListUsersOptions = IdpListUsersOptions;
+type TailorIdpListUsersResponse = IdpListUsersResponse;
+type TailorIdpSendPasswordResetEmailInput = IdpSendPasswordResetEmailInput;
+type TailorIdpUnenrollMfaInput = IdpUnenrollMfaInput;
+type TailorIdpUpdateUserInput = IdpUpdateUserInput;
+type TailorIdpUser = IdpUser;
+type TailorIdpUserQuery = IdpUserQuery;
+type TailorWorkflowInvoker = WorkflowInvoker;
+type TailorWorkflowTriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
+
 declare global {
   namespace tailordb {
     type QueryResult<T> = TailordbQueryResult<T>;
@@ -68,21 +81,21 @@ declare global {
     }
 
     namespace idp {
-      type Client = IdpClientInstance;
-      type ClientConfig = IdpClientConfig;
-      type User = IdpUser;
-      type UserQuery = IdpUserQuery;
-      type ListUsersOptions = IdpListUsersOptions;
-      type ListUsersResponse = IdpListUsersResponse;
-      type CreateUserInput = IdpCreateUserInput;
-      type UpdateUserInput = IdpUpdateUserInput;
-      type SendPasswordResetEmailInput = IdpSendPasswordResetEmailInput;
-      type UnenrollMfaInput = IdpUnenrollMfaInput;
+      type Client = TailorIdpClientInstance;
+      type ClientConfig = TailorIdpClientConfig;
+      type User = TailorIdpUser;
+      type UserQuery = TailorIdpUserQuery;
+      type ListUsersOptions = TailorIdpListUsersOptions;
+      type ListUsersResponse = TailorIdpListUsersResponse;
+      type CreateUserInput = TailorIdpCreateUserInput;
+      type UpdateUserInput = TailorIdpUpdateUserInput;
+      type SendPasswordResetEmailInput = TailorIdpSendPasswordResetEmailInput;
+      type UnenrollMfaInput = TailorIdpUnenrollMfaInput;
     }
 
     namespace workflow {
-      type Invoker = WorkflowInvoker;
-      type TriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
+      type Invoker = TailorWorkflowInvoker;
+      type TriggerWorkflowOptions = TailorWorkflowTriggerWorkflowOptions;
     }
 
     namespace context {

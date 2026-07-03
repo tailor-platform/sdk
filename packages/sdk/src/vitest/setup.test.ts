@@ -10,6 +10,20 @@ import {
   restoreBlockedGlobals,
 } from "./setup";
 
+function withPerformance(
+  now: () => number = () => 1,
+  configurable = true,
+): Record<string, unknown> {
+  const g: Record<string, unknown> = {};
+  Object.defineProperty(g, "performance", {
+    value: { now },
+    configurable,
+    writable: configurable,
+    enumerable: true,
+  });
+  return g;
+}
+
 describe("extractVaultStore", () => {
   test("unwraps a defineSecretManager() shape via the .vaults field", () => {
     // Mimics the runtime-private shape: `vaults` is the canonical map.
@@ -136,13 +150,7 @@ describe("loadSecretsFromConfig", () => {
 
 describe("removeBlockedGlobals", () => {
   test("deletes configurable properties and returns their descriptors", () => {
-    const g: Record<string, unknown> = {};
-    Object.defineProperty(g, "performance", {
-      value: { now: () => 1 },
-      configurable: true,
-      writable: true,
-      enumerable: true,
-    });
+    const g = withPerformance();
     const removed = removeBlockedGlobals(g, ["performance"]);
     expect("performance" in g).toBe(false);
     expect(removed.performance?.value).toEqual({ now: expect.any(Function) });
@@ -153,14 +161,8 @@ describe("removeBlockedGlobals", () => {
     // `performance`), `delete g.performance` throws TypeError. The helper
     // must skip the deletion AND must not record a descriptor — otherwise
     // afterEach would try to redefine a property that was never removed.
-    const g: Record<string, unknown> = {};
-    const value = { now: () => 1 };
-    Object.defineProperty(g, "performance", {
-      value,
-      configurable: false,
-      writable: false,
-      enumerable: true,
-    });
+    const g = withPerformance(() => 1, false);
+    const value = g.performance;
     expect(() => removeBlockedGlobals(g, ["performance"])).not.toThrow();
     const removed = removeBlockedGlobals(g, ["performance"]);
     // Property still present, descriptor not recorded.
@@ -177,13 +179,7 @@ describe("removeBlockedGlobals", () => {
 
 describe("restoreBlockedGlobals", () => {
   test("re-defines previously-removed properties", () => {
-    const g: Record<string, unknown> = {};
-    Object.defineProperty(g, "performance", {
-      value: { now: () => 7 },
-      configurable: true,
-      writable: true,
-      enumerable: true,
-    });
+    const g = withPerformance(() => 7);
     const saved = removeBlockedGlobals(g, ["performance"]);
     expect("performance" in g).toBe(false);
     restoreBlockedGlobals(g, saved);
@@ -198,18 +194,6 @@ describe("restoreBlockedGlobals", () => {
 });
 
 describe("createBlockedGlobalsLifecycle (concurrent-test safety)", () => {
-  // Helper: build a global with a configurable `performance` property.
-  function withPerformance(): Record<string, unknown> {
-    const g: Record<string, unknown> = {};
-    Object.defineProperty(g, "performance", {
-      value: { now: () => 1 },
-      configurable: true,
-      writable: true,
-      enumerable: true,
-    });
-    return g;
-  }
-
   test("removes globals on first enter and restores on matching exit", () => {
     const g = withPerformance();
     const lifecycle = createBlockedGlobalsLifecycle();

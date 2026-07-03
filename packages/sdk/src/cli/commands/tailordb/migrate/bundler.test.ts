@@ -4,6 +4,8 @@ import { describe, expect, test, beforeEach, afterAll } from "vitest";
 import { bundleMigrationScript } from "./bundler";
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
+const DB_TS = `export type Transaction = any;\n`;
+const DB_TS_WITH_CONTEXT = `${DB_TS}export type MigrationContext = { env: Record<string, string | number | boolean> };\n`;
 
 describe("migration-bundler", () => {
   let testDir: string;
@@ -28,28 +30,25 @@ describe("migration-bundler", () => {
     }
   });
 
+  function writeMigration(
+    body: string,
+    { withContext = false }: { withContext?: boolean } = {},
+  ): string {
+    const scriptPath = path.join(testDir, "migrate.ts");
+    const signature = withContext
+      ? "main(trx: Transaction, { env }: MigrationContext): Promise<void>"
+      : "main(trx: Transaction): Promise<void>";
+    fs.writeFileSync(
+      scriptPath,
+      `import type { Transaction${withContext ? ", MigrationContext" : ""} } from "./db";\nexport async function ${signature} {\n${body}\n}\n`,
+    );
+    fs.writeFileSync(path.join(testDir, "db.ts"), withContext ? DB_TS_WITH_CONTEXT : DB_TS);
+    return scriptPath;
+  }
+
   describe("bundleMigrationScript", () => {
     test("returns correct namespace and migration number", async () => {
-      // Create a simple migration script
-      const scriptPath = path.join(testDir, "migrate.ts");
-      fs.writeFileSync(
-        scriptPath,
-        `
-import type { Transaction } from "./db";
-export async function main(trx: Transaction): Promise<void> {
-  // Migration logic
-}
-`,
-      );
-
-      // Create a minimal db.ts for the import
-      fs.writeFileSync(
-        path.join(testDir, "db.ts"),
-        `
-export type Transaction = any;
-`,
-      );
-
+      const scriptPath = writeMigration("  // Migration logic");
       const result = await bundleMigrationScript(scriptPath, "test-namespace", 5);
 
       expect(result.namespace).toBe("test-namespace");
@@ -58,26 +57,7 @@ export type Transaction = any;
     });
 
     test("bundles migration script with getDB function", async () => {
-      // Create a migration script that uses Transaction
-      const scriptPath = path.join(testDir, "migrate.ts");
-      fs.writeFileSync(
-        scriptPath,
-        `
-import type { Transaction } from "./db";
-export async function main(trx: Transaction): Promise<void> {
-  await trx.selectFrom("User").selectAll().execute();
-}
-`,
-      );
-
-      // Create db.ts
-      fs.writeFileSync(
-        path.join(testDir, "db.ts"),
-        `
-export type Transaction = any;
-`,
-      );
-
+      const scriptPath = writeMigration('  await trx.selectFrom("User").selectAll().execute();');
       const result = await bundleMigrationScript(scriptPath, "my-namespace", 1);
 
       // Bundled code should contain getDB function
@@ -87,24 +67,7 @@ export type Transaction = any;
     });
 
     test("wraps migration in transaction", async () => {
-      const scriptPath = path.join(testDir, "migrate.ts");
-      fs.writeFileSync(
-        scriptPath,
-        `
-import type { Transaction } from "./db";
-export async function main(trx: Transaction): Promise<void> {
-  // Simple migration
-}
-`,
-      );
-
-      fs.writeFileSync(
-        path.join(testDir, "db.ts"),
-        `
-export type Transaction = any;
-`,
-      );
-
+      const scriptPath = writeMigration("  // Simple migration");
       const result = await bundleMigrationScript(scriptPath, "tailordb", 2);
 
       // Bundled code should wrap migration in transaction
@@ -113,24 +76,7 @@ export type Transaction = any;
     });
 
     test("exports main function for TestExecScript", async () => {
-      const scriptPath = path.join(testDir, "migrate.ts");
-      fs.writeFileSync(
-        scriptPath,
-        `
-import type { Transaction } from "./db";
-export async function main(trx: Transaction): Promise<void> {
-  // Migration
-}
-`,
-      );
-
-      fs.writeFileSync(
-        path.join(testDir, "db.ts"),
-        `
-export type Transaction = any;
-`,
-      );
-
+      const scriptPath = writeMigration("  // Migration");
       const result = await bundleMigrationScript(scriptPath, "tailordb", 1);
 
       // Should have exported main function
@@ -139,24 +85,7 @@ export type Transaction = any;
     });
 
     test("returns success object from main function", async () => {
-      const scriptPath = path.join(testDir, "migrate.ts");
-      fs.writeFileSync(
-        scriptPath,
-        `
-import type { Transaction } from "./db";
-export async function main(trx: Transaction): Promise<void> {
-  // Migration
-}
-`,
-      );
-
-      fs.writeFileSync(
-        path.join(testDir, "db.ts"),
-        `
-export type Transaction = any;
-`,
-      );
-
+      const scriptPath = writeMigration("  // Migration");
       const result = await bundleMigrationScript(scriptPath, "tailordb", 1);
 
       // Should return success object
@@ -164,24 +93,7 @@ export type Transaction = any;
     });
 
     test("uses correct namespace in getDB call", async () => {
-      const scriptPath = path.join(testDir, "migrate.ts");
-      fs.writeFileSync(
-        scriptPath,
-        `
-import type { Transaction } from "./db";
-export async function main(trx: Transaction): Promise<void> {
-  // Migration
-}
-`,
-      );
-
-      fs.writeFileSync(
-        path.join(testDir, "db.ts"),
-        `
-export type Transaction = any;
-`,
-      );
-
+      const scriptPath = writeMigration("  // Migration");
       const result = await bundleMigrationScript(scriptPath, "custom-namespace", 1);
 
       // getDB should be called with the correct namespace
@@ -208,13 +120,7 @@ export async function main(trx: Transaction): Promise<void> {
 }
 `,
       );
-
-      fs.writeFileSync(
-        path.join(testDir, "db.ts"),
-        `
-export type Transaction = any;
-`,
-      );
+      fs.writeFileSync(path.join(testDir, "db.ts"), DB_TS);
 
       const result = await bundleMigrationScript(scriptPath, "tailordb", 3);
 
@@ -224,25 +130,10 @@ export type Transaction = any;
     });
 
     test("injects env into the migration context", async () => {
-      const scriptPath = path.join(testDir, "migrate.ts");
-      fs.writeFileSync(
-        scriptPath,
-        `
-import type { Transaction, MigrationContext } from "./db";
-export async function main(trx: Transaction, { env }: MigrationContext): Promise<void> {
-  await trx.updateTable("User").set({ stage: env.ENVIRONMENT }).execute();
-}
-`,
+      const scriptPath = writeMigration(
+        '  await trx.updateTable("User").set({ stage: env.ENVIRONMENT }).execute();',
+        { withContext: true },
       );
-
-      fs.writeFileSync(
-        path.join(testDir, "db.ts"),
-        `
-export type Transaction = any;
-export type MigrationContext = { env: Record<string, string | number | boolean> };
-`,
-      );
-
       const result = await bundleMigrationScript(scriptPath, "tailordb", 7, {
         ENVIRONMENT: "staging",
         RETRIES: 3,
@@ -255,22 +146,7 @@ export type MigrationContext = { env: Record<string, string | number | boolean> 
     });
 
     test("injects an empty env object when none is provided", async () => {
-      const scriptPath = path.join(testDir, "migrate.ts");
-      fs.writeFileSync(
-        scriptPath,
-        `
-import type { Transaction } from "./db";
-export async function main(trx: Transaction): Promise<void> {}
-`,
-      );
-
-      fs.writeFileSync(
-        path.join(testDir, "db.ts"),
-        `
-export type Transaction = any;
-`,
-      );
-
+      const scriptPath = writeMigration("");
       const result = await bundleMigrationScript(scriptPath, "tailordb", 8);
 
       // The wrapper always defines and forwards an env binding

@@ -7,13 +7,15 @@
  * into the full top-level runtime objects, and are reused by the ambient
  * `var tailor` / `var tailordb` declarations in `./globals`.
  * @example
- * import { iconv, secretmanager, idp, workflow, file } from "@tailor-platform/sdk/runtime";
+ * import { iconv, secretmanager, idp, workflow, file, aigateway } from "@tailor-platform/sdk/runtime";
  *
  * const utf8 = iconv.convert(sjisBuffer, "Shift_JIS", "UTF-8");
  * const secret = await secretmanager.getSecret("my-vault", "API_KEY");
  * const client = new idp.Client({ namespace: "my-namespace" });
+ * const { url } = await aigateway.get("my-aigateway");
  */
 
+import type { TailorAigatewayAPI } from "./aigateway";
 import type { TailorAuthconnectionAPI } from "./authconnection";
 import type { TailorContextAPI } from "./context";
 import type { TailorDBFileAPI } from "./file";
@@ -29,6 +31,7 @@ export * as idp from "./idp";
 export * as workflow from "./workflow";
 export * as context from "./context";
 export * as file from "./file";
+export * as aigateway from "./aigateway";
 
 /** SQL command type recorded on a {@link TailordbQueryResult}. */
 export type TailordbCommandType =
@@ -68,6 +71,7 @@ export interface TailorRuntime {
   idp: TailorIdpAPI;
   workflow: TailorWorkflowAPI;
   context: TailorContextAPI;
+  aigateway: TailorAigatewayAPI;
 }
 
 /** Top-level `tailordb` runtime object. */

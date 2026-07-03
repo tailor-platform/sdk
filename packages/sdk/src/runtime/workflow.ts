@@ -56,6 +56,13 @@ export interface TailorWorkflowAPI {
   ): Promise<string>;
 
   /**
+   * Resumes a failed or pending-retry workflow execution and returns its execution ID.
+   * @param executionId - The execution to resume
+   * @returns The execution ID of the resumed workflow
+   */
+  resumeWorkflow(executionId: string): Promise<string>;
+
+  /**
    * Triggers a job function and returns its result.
    * @param jobName - Job name as defined in the workflow
    * @param args - Arguments forwarded to the job
@@ -101,6 +108,14 @@ export function triggerWorkflow(
   }
   return api().triggerWorkflow(workflowName, args, { authInvoker: options.invoker });
 }
+
+/**
+ * See {@link TailorWorkflowAPI.resumeWorkflow}.
+ * @param args - Forwarded to {@link TailorWorkflowAPI.resumeWorkflow}
+ * @returns The execution ID of the resumed workflow
+ */
+export const resumeWorkflow: TailorWorkflowAPI["resumeWorkflow"] = (...args) =>
+  api().resumeWorkflow(...args);
 
 /**
  * See {@link TailorWorkflowAPI.triggerJobFunction}.
