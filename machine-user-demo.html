@@ -488,6 +488,13 @@ unset TAILOR_PLATFORM_URL TAILOR_PLATFORM_OAUTH2_CLIENT_ID TAILOR_PLATFORM_CONSO
 tailor-sdk open -p staging
 tailor-sdk login -p staging    # refresh token without re-exporting URLs</code></pre>
           </div>
+          <code class="il">--platform-url</code>, <code class="il">--oauth2-client-id</code>, and
+          <code class="il">--console-url</code> also read from
+          <code class="il">TAILOR_PLATFORM_URL</code>,
+          <code class="il">TAILOR_PLATFORM_OAUTH2_CLIENT_ID</code>, and
+          <code class="il">TAILOR_PLATFORM_CONSOLE_URL</code> respectively — so if those env vars
+          are already exported, the flags can be omitted from
+          <code class="il">profile create</code> entirely.<br /><br />
           To clear a saved setting, pass an empty string:
           <code class="il">profile update staging --platform-url ""</code>
         </div>
@@ -761,17 +768,16 @@ tailor-sdk login</code></pre>
           <span class="step-title">Create a profile with platform settings</span>
         </div>
         <div class="step-desc">
-          Pass the same env vars as <code class="il">--platform-url</code>,
-          <code class="il">--oauth2-client-id</code>, and <code class="il">--console-url</code>. The
-          profile stores them alongside the workspace ID.
+          <code class="il">--platform-url</code>, <code class="il">--oauth2-client-id</code>, and
+          <code class="il">--console-url</code> read from the corresponding env vars automatically
+          (<code class="il">TAILOR_PLATFORM_URL</code>,
+          <code class="il">TAILOR_PLATFORM_OAUTH2_CLIENT_ID</code>,
+          <code class="il">TAILOR_PLATFORM_CONSOLE_URL</code>), so the flags can be omitted here.
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk profile create staging \
   -u you@example.com \
-  -w &lt;staging-workspace-id&gt; \
-  --platform-url "$TAILOR_PLATFORM_URL" \
-  --oauth2-client-id "$TAILOR_PLATFORM_OAUTH2_CLIENT_ID" \
-  --console-url "$TAILOR_PLATFORM_CONSOLE_URL"</code></pre>
+  -w &lt;staging-workspace-id&gt;</code></pre>
         </div>
         <div class="expect ok">✓ Expect: Profile "staging" created successfully.</div>
       </div>

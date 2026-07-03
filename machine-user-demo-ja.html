@@ -494,6 +494,15 @@ unset TAILOR_PLATFORM_URL TAILOR_PLATFORM_OAUTH2_CLIENT_ID TAILOR_PLATFORM_CONSO
 tailor-sdk open -p staging
 tailor-sdk login -p staging    # URL を再 export せずにトークンを更新</code></pre>
           </div>
+          <code class="il">--platform-url</code>・<code class="il">--oauth2-client-id</code>・<code
+            class="il"
+            >--console-url</code
+          >
+          はそれぞれ対応する環境変数（<code class="il">TAILOR_PLATFORM_URL</code>・<code class="il"
+            >TAILOR_PLATFORM_OAUTH2_CLIENT_ID</code
+          >・<code class="il">TAILOR_PLATFORM_CONSOLE_URL</code
+          >）から自動で読み込まれるため、環境変数が export されていればフラグを省略して
+          <code class="il">profile create</code> を実行できます。<br /><br />
           保存した設定を消すには空文字を渡します：
           <code class="il">profile update staging --platform-url ""</code>
         </div>
@@ -770,20 +779,17 @@ tailor-sdk login</code></pre>
           <span class="step-title">プラットフォーム設定付きでプロファイルを作成</span>
         </div>
         <div class="step-desc">
-          同じ env vars を
           <code class="il">--platform-url</code>・<code class="il">--oauth2-client-id</code>・<code
             class="il"
             >--console-url</code
           >
-          として渡します。ワークスペース ID と一緒にプロファイルに保存されます。
+          はそれぞれ対応する環境変数から自動で読み込まれるため、env vars が export
+          されていればフラグを省略できます。
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk profile create staging \
   -u you@example.com \
-  -w &lt;staging-workspace-id&gt; \
-  --platform-url "$TAILOR_PLATFORM_URL" \
-  --oauth2-client-id "$TAILOR_PLATFORM_OAUTH2_CLIENT_ID" \
-  --console-url "$TAILOR_PLATFORM_CONSOLE_URL"</code></pre>
+  -w &lt;staging-workspace-id&gt;</code></pre>
         </div>
         <div class="expect ok">✓ 期待値: Profile "staging" created successfully.</div>
       </div>
