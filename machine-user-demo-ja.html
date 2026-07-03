@@ -779,17 +779,20 @@ tailor-sdk login</code></pre>
           <span class="step-title">プラットフォーム設定付きでプロファイルを作成</span>
         </div>
         <div class="step-desc">
-          <code class="il">--platform-url</code>・<code class="il">--oauth2-client-id</code>・<code
+          プラットフォーム設定を明示的なフラグで渡します。各フラグは対応する環境変数（<code
             class="il"
-            >--console-url</code
-          >
-          はそれぞれ対応する環境変数から自動で読み込まれるため、env vars が export
-          されていればフラグを省略できます。
+            >TAILOR_PLATFORM_URL</code
+          >・<code class="il">TAILOR_PLATFORM_OAUTH2_CLIENT_ID</code>・<code class="il"
+            >TAILOR_PLATFORM_CONSOLE_URL</code
+          >）からも自動で読み込まれるため、既に export されていればフラグを省略できます。
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk profile create staging \
   -u you@example.com \
-  -w &lt;staging-workspace-id&gt;</code></pre>
+  -w &lt;staging-workspace-id&gt; \
+  --platform-url "$TAILOR_PLATFORM_URL" \
+  --oauth2-client-id "$TAILOR_PLATFORM_OAUTH2_CLIENT_ID" \
+  --console-url "$TAILOR_PLATFORM_CONSOLE_URL"</code></pre>
         </div>
         <div class="expect ok">✓ 期待値: Profile "staging" created successfully.</div>
       </div>

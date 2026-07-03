@@ -768,16 +768,19 @@ tailor-sdk login</code></pre>
           <span class="step-title">Create a profile with platform settings</span>
         </div>
         <div class="step-desc">
-          <code class="il">--platform-url</code>, <code class="il">--oauth2-client-id</code>, and
-          <code class="il">--console-url</code> read from the corresponding env vars automatically
-          (<code class="il">TAILOR_PLATFORM_URL</code>,
+          Pass the platform settings as explicit flags. Each flag also reads from the corresponding
+          env var (<code class="il">TAILOR_PLATFORM_URL</code>,
           <code class="il">TAILOR_PLATFORM_OAUTH2_CLIENT_ID</code>,
-          <code class="il">TAILOR_PLATFORM_CONSOLE_URL</code>), so the flags can be omitted here.
+          <code class="il">TAILOR_PLATFORM_CONSOLE_URL</code>), so the flags can be omitted when
+          those vars are already exported.
         </div>
         <div class="cmd">
           <pre><code>tailor-sdk profile create staging \
   -u you@example.com \
-  -w &lt;staging-workspace-id&gt;</code></pre>
+  -w &lt;staging-workspace-id&gt; \
+  --platform-url "$TAILOR_PLATFORM_URL" \
+  --oauth2-client-id "$TAILOR_PLATFORM_OAUTH2_CLIENT_ID" \
+  --console-url "$TAILOR_PLATFORM_CONSOLE_URL"</code></pre>
         </div>
         <div class="expect ok">✓ Expect: Profile "staging" created successfully.</div>
       </div>
