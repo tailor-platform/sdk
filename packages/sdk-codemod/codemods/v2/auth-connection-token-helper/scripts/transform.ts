@@ -1,11 +1,12 @@
 import { parse, Lang } from "@ast-grep/napi";
 import {
+  buildAddNamedImportEdit,
   findImportStatements,
+  importBindings,
   importSource,
   importSpecNames,
   isTypeOnlyImport,
   localDeclarationNames,
-  namedImportsNode,
 } from "../../../../src/ast-grep-helpers";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
@@ -70,36 +71,13 @@ function findAuthImports(imports: SgNode[]): AuthImport[] {
   return authImports;
 }
 
-function importLocalNames(importStmt: SgNode): Set<string> {
-  const names = new Set<string>();
-  const clause = importStmt.children().find((child) => child.kind() === "import_clause");
-  if (!clause) return names;
-
-  for (const child of clause.children()) {
-    if (child.kind() === "identifier") {
-      names.add(child.text());
-      continue;
-    }
-    if (child.kind() === "namespace_import") {
-      const local = child.children().find((grandchild) => grandchild.kind() === "identifier");
-      if (local) names.add(local.text());
-      continue;
-    }
-    if (child.kind() !== "named_imports") continue;
-    for (const spec of child.findAll({ rule: { kind: "import_specifier" } })) {
-      const specNames = importSpecNames(spec);
-      if (specNames && !specNames.typeOnly) names.add(specNames.localName);
-    }
-  }
-  return names;
-}
-
 function runtimeAuthconnectionReference(imports: SgNode[]): string | null {
   for (const importStmt of imports) {
     if (importSource(importStmt) !== RUNTIME_MODULE || isTypeOnlyImport(importStmt)) continue;
-    for (const spec of importStmt.findAll({ rule: { kind: "import_specifier" } })) {
-      const names = importSpecNames(spec);
-      if (names?.importedName === AUTHCONNECTION && !names.typeOnly) return names.localName;
+    for (const binding of importBindings(importStmt)) {
+      if (binding.importedName === AUTHCONNECTION && !binding.typeOnly) {
+        return binding.localName;
+      }
     }
 
     const clause = importStmt.children().find((child) => child.kind() === "import_clause");
@@ -110,23 +88,14 @@ function runtimeAuthconnectionReference(imports: SgNode[]): string | null {
   return null;
 }
 
-function runtimeNamedValueImport(imports: SgNode[]): SgNode | null {
-  return (
-    imports.find(
-      (importStmt) =>
-        importSource(importStmt) === RUNTIME_MODULE &&
-        !isTypeOnlyImport(importStmt) &&
-        namedImportsNode(importStmt),
-    ) ?? null
-  );
-}
-
 function hasRuntimeImportCollision(root: SgNode, imports: SgNode[]): boolean {
   if (localDeclarationNames(root).has(AUTHCONNECTION)) return true;
   return imports.some(
     (importStmt) =>
-      importLocalNames(importStmt).has(AUTHCONNECTION) &&
-      importSource(importStmt) !== RUNTIME_MODULE,
+      importSource(importStmt) !== RUNTIME_MODULE &&
+      importBindings(importStmt).some(
+        (binding) => binding.localName === AUTHCONNECTION && !binding.typeOnly,
+      ),
   );
 }
 
@@ -205,27 +174,14 @@ function importInsertionIndex(root: SgNode, imports: SgNode[], source: string): 
 }
 
 function buildAddRuntimeImportEdit(root: SgNode, source: string, imports: SgNode[]): Edit {
-  const existingRuntimeImport = runtimeNamedValueImport(imports);
-  const namedImports = existingRuntimeImport ? namedImportsNode(existingRuntimeImport) : null;
-  if (namedImports) {
-    const specTexts = namedImports.findAll({ rule: { kind: "import_specifier" } }).map((spec) => {
-      const names = importSpecNames(spec);
-      return names?.importedName === AUTHCONNECTION && names.localName === AUTHCONNECTION
-        ? AUTHCONNECTION
-        : spec.text();
-    });
-    const nextSpecTexts = specTexts.includes(AUTHCONNECTION)
-      ? specTexts
-      : [...specTexts, AUTHCONNECTION];
-    return namedImports.replace(`{ ${nextSpecTexts.join(", ")} }`);
-  }
-
-  const pos = importInsertionIndex(root, imports, source);
-  const insertedText =
-    pos === 0 || source[pos - 1] === "\n"
-      ? `import { ${AUTHCONNECTION} } from "${RUNTIME_MODULE}";\n\n`
-      : `\nimport { ${AUTHCONNECTION} } from "${RUNTIME_MODULE}";`;
-  return { startPos: pos, endPos: pos, insertedText };
+  return buildAddNamedImportEdit({
+    importName: AUTHCONNECTION,
+    imports,
+    insertionIndex: importInsertionIndex,
+    moduleName: RUNTIME_MODULE,
+    root,
+    source,
+  });
 }
 
 function lineStartIndex(source: string, index: number): number {

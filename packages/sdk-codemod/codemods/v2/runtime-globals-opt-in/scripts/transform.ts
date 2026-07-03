@@ -1,24 +1,15 @@
 import { parse, Lang } from "@ast-grep/napi";
 import {
+  buildAddNamedImportEdit,
   findImportStatements,
-  importSource,
-  importSpecNames,
-  isTypeOnlyImport,
+  importBindings,
   localDeclarationNames,
-  namedImportsNode,
 } from "../../../../src/ast-grep-helpers";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
 const TAILOR_IDP_CLIENT = "tailor.idp.Client";
 const NON_ARGUMENT_KINDS = new Set(["(", ")", ",", "comment"]);
-
-interface ImportBinding {
-  localName: string;
-  importedName?: string;
-  source: string;
-  typeOnly: boolean;
-}
 
 function quickFilter(source: string): boolean {
   return source.includes(TAILOR_IDP_CLIENT);
@@ -28,46 +19,6 @@ function sourceLang(filePath: string, source: string): Lang {
   return filePath.endsWith(".tsx") || filePath.endsWith(".jsx") || source.includes("</")
     ? Lang.Tsx
     : Lang.TypeScript;
-}
-
-function importBindings(importStmt: SgNode): ImportBinding[] {
-  const source = importSource(importStmt);
-  if (!source) return [];
-
-  const requireClause = importStmt
-    .children()
-    .find((child) => child.kind() === "import_require_clause");
-  if (requireClause) {
-    const local = requireClause.children().find((child) => child.kind() === "identifier");
-    return local ? [{ localName: local.text(), source, typeOnly: false }] : [];
-  }
-
-  const typeOnly = isTypeOnlyImport(importStmt);
-  const clause = importStmt.children().find((child) => child.kind() === "import_clause");
-  if (!clause) return [];
-
-  const bindings: ImportBinding[] = [];
-  for (const child of clause.children()) {
-    if (child.kind() === "identifier") {
-      bindings.push({ localName: child.text(), source, typeOnly });
-      continue;
-    }
-
-    if (child.kind() === "namespace_import") {
-      const local = child.children().find((c) => c.kind() === "identifier");
-      if (local) bindings.push({ localName: local.text(), source, typeOnly });
-      continue;
-    }
-
-    if (child.kind() !== "named_imports") continue;
-    for (const spec of child.findAll({ rule: { kind: "import_specifier" } })) {
-      const names = importSpecNames(spec);
-      if (!names) continue;
-      bindings.push({ ...names, source, typeOnly: typeOnly || names.typeOnly });
-    }
-  }
-
-  return bindings;
 }
 
 function runtimeIdpLocalName(imports: SgNode[]): string | null {
@@ -83,6 +34,10 @@ function runtimeIdpLocalName(imports: SgNode[]): string | null {
     }
   }
   return null;
+}
+
+function isRuntimeIdpBinding(binding: ReturnType<typeof importBindings>[number]): boolean {
+  return binding.source === RUNTIME_MODULE && binding.importedName === "idp";
 }
 
 function hasCollision(
@@ -101,25 +56,13 @@ function hasCollision(
   for (const importStmt of imports) {
     for (const binding of importBindings(importStmt)) {
       if (binding.localName === "tailor") return true;
-      if (
-        binding.localName === "idp" &&
-        !(binding.source === RUNTIME_MODULE && binding.importedName === "idp" && !binding.typeOnly)
-      ) {
-        return true;
-      }
+      if (binding.localName !== "idp") continue;
+      if (isRuntimeIdpBinding(binding)) continue;
+      return true;
     }
   }
 
   return false;
-}
-
-function runtimeNamedValueImport(imports: SgNode[]): SgNode | null {
-  return (
-    imports.find(
-      (stmt) =>
-        importSource(stmt) === RUNTIME_MODULE && !isTypeOnlyImport(stmt) && namedImportsNode(stmt),
-    ) ?? null
-  );
 }
 
 function isDirectiveStatement(node: SgNode): boolean {
@@ -150,23 +93,14 @@ function importInsertionIndex(root: SgNode, imports: SgNode[], source: string): 
 }
 
 function buildAddRuntimeImportEdit(root: SgNode, source: string, imports: SgNode[]): Edit {
-  const existingRuntimeImport = runtimeNamedValueImport(imports);
-  const namedImports = existingRuntimeImport ? namedImportsNode(existingRuntimeImport) : null;
-  if (namedImports) {
-    const specTexts = namedImports.findAll({ rule: { kind: "import_specifier" } }).map((spec) => {
-      const names = importSpecNames(spec);
-      return names?.importedName === "idp" && names.localName === "idp" ? "idp" : spec.text();
-    });
-    const nextSpecTexts = specTexts.includes("idp") ? specTexts : [...specTexts, "idp"];
-    return namedImports.replace(`{ ${nextSpecTexts.join(", ")} }`);
-  }
-
-  const pos = importInsertionIndex(root, imports, source);
-  const insertedText =
-    pos === 0 || (pos > 0 && source[pos - 1] === "\n")
-      ? `import { idp } from "${RUNTIME_MODULE}";\n\n`
-      : `\nimport { idp } from "${RUNTIME_MODULE}";`;
-  return { startPos: pos, endPos: pos, insertedText };
+  return buildAddNamedImportEdit({
+    importName: "idp",
+    imports,
+    insertionIndex: importInsertionIndex,
+    moduleName: RUNTIME_MODULE,
+    root,
+    source,
+  });
 }
 
 function argumentExpressions(args: SgNode): SgNode[] {
