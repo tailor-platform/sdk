@@ -4,13 +4,7 @@ import { t } from "./type";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { output } from "#/types/helpers";
 import type { AllowedValues } from "./field";
-
-type DateString = `${number}-${number}-${number}`;
-type TimeString = `${number}:${number}`;
-type TimeZoneOffsetString = "Z" | "z" | `${"+" | "-"}${TimeString}`;
-type DateTimeString =
-  `${DateString}${"T" | "t"}${TimeString}:${number}${"" | `.${number}`}${TimeZoneOffsetString}`;
-type UUIDString = `${string}-${string}-${string}-${string}-${string}`;
+import type { DateString, DateTimeString, TimeString, UUIDString } from "./scalar.types";
 
 describe("TailorType basic field type tests", () => {
   test("string field outputs string type correctly", () => {
