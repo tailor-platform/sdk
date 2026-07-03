@@ -518,6 +518,35 @@ const mainJob = createWorkflowJob({
       );
     });
 
+    test("does not transform trigger calls inside fallback-removed job bodies", () => {
+      const source = `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+const nestedJob = createWorkflowJob({
+  name: "nested-job",
+  body: () => "nested"
+});
+
+createWorkflowJob({
+  name: "fallback-job",
+  body: async () => {
+    await nestedJob.trigger({ id: 1 });
+    return "fallback";
+  }
+});
+
+const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => "main"
+});
+`;
+      const result = transformWorkflowSource(source, "main-job");
+
+      expect(result).toContain("body: () => {}");
+      expect(result).not.toContain("nestedJob.trigger");
+      expect(result).not.toContain("triggerJobFunction");
+    });
+
     test("does not modify jobs without trigger calls", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";

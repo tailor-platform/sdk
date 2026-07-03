@@ -1,3 +1,4 @@
+import { assertDefined } from "#/utils/assert";
 import type {
   Expression,
   AwaitExpression,
@@ -138,12 +139,25 @@ export function findProperty(properties: ObjectPropertyKind[], name: string): Fo
 /**
  * Apply string replacements to source code
  * Replacements are applied from end to start to maintain positions
+ * Ranges must not overlap; applying an overlapping range on top of an
+ * already-shifted string would splice at stale offsets and corrupt the output,
+ * so overlap is rejected up front
  * @param source - Original source code
  * @param replacements - Replacements to apply
  * @returns Transformed source code
  */
 export function applyReplacements(source: string, replacements: Replacement[]): string {
   const sorted = replacements.toSorted((a, b) => b.start - a.start);
+  for (let i = 0; i + 1 < sorted.length; i++) {
+    const current = assertDefined(sorted[i], `replacement missing at index ${i}`);
+    const previous = assertDefined(sorted[i + 1], `replacement missing at index ${i + 1}`);
+    if (previous.end > current.start) {
+      throw new Error(
+        `applyReplacements: overlapping replacement ranges ` +
+          `[${previous.start}, ${previous.end}) and [${current.start}, ${current.end})`,
+      );
+    }
+  }
   let result = source;
   for (const r of sorted) {
     result = result.slice(0, r.start) + r.text + result.slice(r.end);
