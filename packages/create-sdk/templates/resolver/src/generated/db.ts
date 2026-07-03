@@ -1,6 +1,7 @@
 import {
   createGetDB,
   type Generated,
+  type UUIDString,
   type Timestamp,
   type NamespaceDB,
   type NamespaceInsertable,
@@ -14,7 +15,7 @@ import {
 export interface Namespace {
   "main-db": {
     User: {
-      id: Generated<string>;
+      id: Generated<UUIDString>;
       name: string;
       email: string;
       age: number;

@@ -8,7 +8,7 @@ describe("createAuditLog", () => {
     await createAuditLog({
       action: "USER_CREATED",
       entityType: "User",
-      entityId: "test-id",
+      entityId: "123e4567-e89b-12d3-a456-426614174000",
       message: "Test audit log",
     });
 

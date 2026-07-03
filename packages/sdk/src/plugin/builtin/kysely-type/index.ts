@@ -42,8 +42,17 @@ export function kyselyTypePlugin(
           (acc, type) => ({
             Timestamp: acc.Timestamp || type.usedUtilityTypes.Timestamp,
             Serial: acc.Serial || type.usedUtilityTypes.Serial,
+            DateString: acc.DateString || type.usedUtilityTypes.DateString,
+            DecimalString: acc.DecimalString || type.usedUtilityTypes.DecimalString,
+            TimeString: acc.TimeString || type.usedUtilityTypes.TimeString,
           }),
-          { Timestamp: false, Serial: false },
+          {
+            Timestamp: false,
+            Serial: false,
+            DateString: false,
+            DecimalString: false,
+            TimeString: false,
+          },
         );
 
         allNamespaceData.push({

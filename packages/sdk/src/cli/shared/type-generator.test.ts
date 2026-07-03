@@ -1,6 +1,7 @@
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { defineAuth } from "#/configure/services/auth/index";
+import { db } from "#/configure/services/tailordb/schema";
 import { t } from "#/configure/types/type";
 import {
   extractAttributesFromConfig,
@@ -236,6 +237,8 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
       auth: defineAuth("auth", {
         machineUserAttributes: {
           role: t.enum(["ADMIN", "WORKER"]),
+          externalId: t.uuid(),
+          balance: t.decimal(),
           isActive: t.bool(),
           tags: t.string({ array: true }),
         },
@@ -243,6 +246,8 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
           admin: {
             attributes: {
               role: "ADMIN",
+              externalId: "123e4567-e89b-12d3-a456-426614174000",
+              balance: "123.45",
               isActive: true,
               tags: ["root"],
             },
@@ -255,8 +260,45 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     const content = generateTypeDefinition(attributes, undefined);
 
     expect(content).toContain('role: "ADMIN" | "WORKER";');
+    expect(content).toContain(
+      'import type { DecimalString, UUIDString } from "@tailor-platform/sdk";',
+    );
+    expect(content).toContain("externalId: UUIDString;");
+    expect(content).toContain("balance: DecimalString;");
     expect(content).toContain("isActive: boolean;");
     expect(content).toContain("tags: string[];");
+  });
+
+  test("preserves scalar types from userProfile attributes and attributeList", () => {
+    const userType = db.type("User", {
+      email: db.string().unique(),
+      externalId: db.uuid(),
+      balance: db.decimal(),
+    });
+    const config = {
+      name: "test-app",
+      auth: defineAuth("auth", {
+        userProfile: {
+          type: userType,
+          usernameField: "email",
+          attributes: {
+            externalId: true,
+            balance: true,
+          },
+          attributeList: ["externalId"] as ["externalId"],
+        },
+      }),
+    };
+
+    const { attributes, attributeList } = extractAttributesFromConfig(config);
+    const content = generateTypeDefinition(attributes, attributeList);
+
+    expect(content).toContain(
+      'import type { DecimalString, UUIDString } from "@tailor-platform/sdk";',
+    );
+    expect(content).toContain("externalId: UUIDString;");
+    expect(content).toContain("balance: DecimalString;");
+    expect(content).toContain("__tuple?: [UUIDString];");
   });
 
   test("extracts machine user names into MachineUserNameRegistry", () => {

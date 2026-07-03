@@ -5,6 +5,7 @@ import { brandValue } from "#/utils/brand";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
 import type { AuthServiceInput } from "#/configure/services/auth/types";
 import type { TailorDBInstance } from "#/configure/services/tailordb/types";
+import type { UUIDString } from "#/configure/types/scalar.types";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
 
@@ -95,11 +96,11 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
       role: string;
       isActive: boolean;
       tags: string[];
-      externalId: string;
+      externalId: UUIDString;
     }>();
 
     expectTypeOf<MachineUserConfig>().toMatchObjectType<{
-      attributeList: [string];
+      attributeList: [UUIDString];
     }>();
   });
 

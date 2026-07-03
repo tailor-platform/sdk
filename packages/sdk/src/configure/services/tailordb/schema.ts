@@ -4,6 +4,13 @@ import {
   type AllowedValuesOutput,
   mapAllowedValues,
 } from "#/configure/types/field";
+import {
+  isValidDateString,
+  isValidDateTimeString,
+  isValidDecimalString,
+  isValidTimeString,
+  isValidUUIDString,
+} from "#/configure/types/field-format";
 import { brandValue } from "#/utils/brand";
 import type {
   TailorDBField as TailorDBFieldBase,
@@ -25,6 +32,7 @@ import type {
   ValidateConfig,
   Validators,
 } from "#/configure/types/field.types";
+import type { UUIDString } from "#/configure/types/scalar.types";
 import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
 import type { InferredAttributes, TailorPrincipal } from "#/runtime/types";
 import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
@@ -94,8 +102,34 @@ type WithDBFieldCloneOptions<
   Defined extends DefinedDBFieldMetadata,
   NewOpt extends FieldOptions,
 > = Omit<Defined, "array"> & {
-  array: NewOpt extends { array: true } ? true : Defined["array"];
+  array: DBFieldCloneArrayOption<Defined, NewOpt>;
 };
+type DBFieldCloneArrayOption<
+  Defined extends DefinedDBFieldMetadata,
+  NewOpt extends FieldOptions,
+> = NewOpt extends { array: false }
+  ? false
+  : NewOpt extends { array: true }
+    ? true
+    : Defined["array"];
+type DBFieldCloneFieldOptions<
+  Defined extends DefinedDBFieldMetadata,
+  Output,
+  NewOpt extends FieldOptions,
+> = {
+  optional: NewOpt extends { optional: infer NewOptional extends boolean }
+    ? NewOptional
+    : null extends Output
+      ? true
+      : false;
+  array: DBFieldCloneArrayOption<Defined, NewOpt>;
+};
+type DBFieldCloneOutput<
+  Defined extends DefinedDBFieldMetadata,
+  Output,
+  OutputBase,
+  NewOpt extends FieldOptions,
+> = FieldOutput<OutputBase, DBFieldCloneFieldOptions<Defined, Output, NewOpt>>;
 type FileKeyConflictError<
   Fields extends Record<string, TailorAnyDBField>,
   User extends object,
@@ -105,77 +139,82 @@ type FileKeyConflictError<
     TypeLevelError<"file keys cannot use existing field names">
   >
 >;
-type DBFieldDescriptionFn<Defined extends DefinedDBFieldMetadata, Output> = (
+type DBFieldDescriptionFn<Defined extends DefinedDBFieldMetadata, Output, OutputBase> = (
   description: string,
-) => TailorDBField<WithDBFieldDescription<Defined>, Output>;
-type DBFieldRelationFn<Defined extends DefinedDBFieldMetadata, Output> = {
+) => TailorDBField<WithDBFieldDescription<Defined>, Output, OutputBase>;
+type DBFieldRelationFn<Defined extends DefinedDBFieldMetadata, Output, OutputBase> = {
   <S extends RelationType, T extends TailorAnyDBType>(
     config: RelationConfig<S, T>,
-  ): TailorDBField<WithDBFieldRelation<Defined, S>, Output>;
-  <S extends RelationSelfConfig>(config: S): TailorDBField<WithDBFieldRelation<Defined, S>, Output>;
+  ): TailorDBField<WithDBFieldRelation<Defined, S>, Output, OutputBase>;
+  <S extends RelationSelfConfig>(
+    config: S,
+  ): TailorDBField<WithDBFieldRelation<Defined, S>, Output, OutputBase>;
 };
-type DBFieldIndexFn<Defined extends DefinedDBFieldMetadata, Output> = () => TailorDBField<
-  WithDBFieldIndex<Defined>,
-  Output
->;
-type DBFieldUniqueFn<Defined extends DefinedDBFieldMetadata, Output> = () => TailorDBField<
-  WithDBFieldUnique<Defined>,
-  Output
->;
-type DBFieldVectorFn<Defined extends DefinedDBFieldMetadata, Output> = () => TailorDBField<
-  WithDBFieldVector<Defined>,
-  Output
->;
-type DBFieldHooksFn<Defined extends DefinedDBFieldMetadata, Output> = <
+type DBFieldIndexFn<
+  Defined extends DefinedDBFieldMetadata,
+  Output,
+  OutputBase,
+> = () => TailorDBField<WithDBFieldIndex<Defined>, Output, OutputBase>;
+type DBFieldUniqueFn<
+  Defined extends DefinedDBFieldMetadata,
+  Output,
+  OutputBase,
+> = () => TailorDBField<WithDBFieldUnique<Defined>, Output, OutputBase>;
+type DBFieldVectorFn<
+  Defined extends DefinedDBFieldMetadata,
+  Output,
+  OutputBase,
+> = () => TailorDBField<WithDBFieldVector<Defined>, Output, OutputBase>;
+type DBFieldHooksFn<Defined extends DefinedDBFieldMetadata, Output, OutputBase> = <
   const H extends Hook<unknown, Output>,
 >(
   hooks: H,
-) => TailorDBField<WithDBFieldHooks<Defined, H>, Output>;
-type DBFieldValidateFn<Defined extends DefinedDBFieldMetadata, Output> = (
+) => TailorDBField<WithDBFieldHooks<Defined, H>, Output, OutputBase>;
+type DBFieldValidateFn<Defined extends DefinedDBFieldMetadata, Output, OutputBase> = (
   ...validate: FieldValidateInput<Output>[]
-) => TailorDBField<WithDBFieldValidate<Defined>, Output>;
-type DBFieldSerialFn<Defined extends DefinedDBFieldMetadata, Output> = (
+) => TailorDBField<WithDBFieldValidate<Defined>, Output, OutputBase>;
+type DBFieldSerialFn<Defined extends DefinedDBFieldMetadata, Output, OutputBase> = (
   config: SerialConfig<Defined["type"] & ("integer" | "string")>,
-) => TailorDBField<WithDBFieldSerial<Defined>, Output>;
-type DBFieldDescriptionMethod<Defined extends DefinedDBFieldMetadata, Output> =
+) => TailorDBField<WithDBFieldSerial<Defined>, Output, OutputBase>;
+type DBFieldDescriptionMethod<Defined extends DefinedDBFieldMetadata, Output, OutputBase> =
   IsAny<Defined> extends true
-    ? DBFieldDescriptionFn<Defined, Output>
+    ? DBFieldDescriptionFn<Defined, Output, OutputBase>
     : Defined extends { description: unknown }
       ? TypeLevelError<".description() has already been set">
-      : DBFieldDescriptionFn<Defined, Output>;
-type DBFieldRelationMethod<Defined extends DefinedDBFieldMetadata, Output> =
+      : DBFieldDescriptionFn<Defined, Output, OutputBase>;
+type DBFieldRelationMethod<Defined extends DefinedDBFieldMetadata, Output, OutputBase> =
   IsAny<Defined> extends true
-    ? DBFieldRelationFn<Defined, Output>
+    ? DBFieldRelationFn<Defined, Output, OutputBase>
     : Defined extends { relation: unknown }
       ? TypeLevelError<".relation() has already been set">
-      : DBFieldRelationFn<Defined, Output>;
-type DBFieldIndexMethod<Defined extends DefinedDBFieldMetadata, Output> =
+      : DBFieldRelationFn<Defined, Output, OutputBase>;
+type DBFieldIndexMethod<Defined extends DefinedDBFieldMetadata, Output, OutputBase> =
   IsAny<Defined> extends true
-    ? DBFieldIndexFn<Defined, Output>
+    ? DBFieldIndexFn<Defined, Output, OutputBase>
     : Defined extends { index: unknown }
       ? TypeLevelError<".index() has already been set">
       : Defined extends { array: true }
         ? TypeLevelError<"index cannot be set on array fields">
-        : DBFieldIndexFn<Defined, Output>;
-type DBFieldUniqueMethod<Defined extends DefinedDBFieldMetadata, Output> =
+        : DBFieldIndexFn<Defined, Output, OutputBase>;
+type DBFieldUniqueMethod<Defined extends DefinedDBFieldMetadata, Output, OutputBase> =
   IsAny<Defined> extends true
-    ? DBFieldUniqueFn<Defined, Output>
+    ? DBFieldUniqueFn<Defined, Output, OutputBase>
     : Defined extends { unique: unknown }
       ? TypeLevelError<".unique() has already been set">
       : Defined extends { array: true }
         ? TypeLevelError<"unique cannot be set on array fields">
-        : DBFieldUniqueFn<Defined, Output>;
-type DBFieldVectorMethod<Defined extends DefinedDBFieldMetadata, Output> =
+        : DBFieldUniqueFn<Defined, Output, OutputBase>;
+type DBFieldVectorMethod<Defined extends DefinedDBFieldMetadata, Output, OutputBase> =
   IsAny<Defined> extends true
-    ? DBFieldVectorFn<Defined, Output>
+    ? DBFieldVectorFn<Defined, Output, OutputBase>
     : Defined extends { vector: unknown }
       ? TypeLevelError<".vector() has already been set">
       : Defined extends { type: "string"; array: false }
-        ? DBFieldVectorFn<Defined, Output>
+        ? DBFieldVectorFn<Defined, Output, OutputBase>
         : TypeLevelError<"vector can only be set on non-array string fields">;
-type DBFieldHooksMethod<Defined extends DefinedDBFieldMetadata, Output> =
+type DBFieldHooksMethod<Defined extends DefinedDBFieldMetadata, Output, OutputBase> =
   IsAny<Defined> extends true
-    ? DBFieldHooksFn<Defined, Output>
+    ? DBFieldHooksFn<Defined, Output, OutputBase>
     : Defined extends {
           serial: true;
           hooks: { create: false; update: false };
@@ -187,28 +226,28 @@ type DBFieldHooksMethod<Defined extends DefinedDBFieldMetadata, Output> =
         ? TypeLevelError<".hooks() has already been set">
         : Defined extends { type: "nested" }
           ? TypeLevelError<"hooks cannot be set on nested type fields">
-          : DBFieldHooksFn<Defined, Output>;
-type DBFieldValidateMethod<Defined extends DefinedDBFieldMetadata, Output> =
+          : DBFieldHooksFn<Defined, Output, OutputBase>;
+type DBFieldValidateMethod<Defined extends DefinedDBFieldMetadata, Output, OutputBase> =
   IsAny<Defined> extends true
-    ? DBFieldValidateFn<Defined, Output>
+    ? DBFieldValidateFn<Defined, Output, OutputBase>
     : Defined extends { validate: unknown }
       ? TypeLevelError<".validate() has already been set">
-      : DBFieldValidateFn<Defined, Output>;
-type DBFieldSerialMethod<Defined extends DefinedDBFieldMetadata, Output> =
+      : DBFieldValidateFn<Defined, Output, OutputBase>;
+type DBFieldSerialMethod<Defined extends DefinedDBFieldMetadata, Output, OutputBase> =
   IsAny<Defined> extends true
-    ? DBFieldSerialFn<Defined, Output>
+    ? DBFieldSerialFn<Defined, Output, OutputBase>
     : Defined extends { serial: true }
       ? TypeLevelError<".serial() has already been set">
       : Defined extends { serial: false }
         ? TypeLevelError<"serial cannot be set after hooks">
         : IsAny<Output> extends true
           ? Defined extends { type: "integer" | "string"; array: false }
-            ? DBFieldSerialFn<Defined, Output>
+            ? DBFieldSerialFn<Defined, Output, OutputBase>
             : TypeLevelError<"serial can only be set on non-array integer or string fields">
           : null extends Output
             ? TypeLevelError<"serial can only be set on non-array integer or string fields">
             : Defined extends { type: "integer" | "string"; array: false }
-              ? DBFieldSerialFn<Defined, Output>
+              ? DBFieldSerialFn<Defined, Output, OutputBase>
               : TypeLevelError<"serial can only be set on non-array integer or string fields">;
 
 /**
@@ -219,6 +258,7 @@ export interface TailorDBField<
   Defined extends DefinedDBFieldMetadata = DefinedDBFieldMetadata,
   // oxlint-disable-next-line no-explicit-any
   Output = any,
+  OutputBase = Output,
 > extends Omit<TailorDBFieldBase<Defined, Output>, "fields"> {
   readonly fields: Record<string, TailorAnyDBField>;
   _metadata: DBFieldMetadata;
@@ -243,51 +283,52 @@ export interface TailorDBField<
   /**
    * Set a description for the field
    */
-  description: DBFieldDescriptionMethod<Defined, Output>;
+  description: DBFieldDescriptionMethod<Defined, Output, OutputBase>;
 
   /**
    * Define a relation to another type.
    */
-  relation: DBFieldRelationMethod<Defined, Output>;
+  relation: DBFieldRelationMethod<Defined, Output, OutputBase>;
 
   /**
    * Add an index to the field
    */
-  index: DBFieldIndexMethod<Defined, Output>;
+  index: DBFieldIndexMethod<Defined, Output, OutputBase>;
 
   /**
    * Make the field unique (also adds an index)
    */
-  unique: DBFieldUniqueMethod<Defined, Output>;
+  unique: DBFieldUniqueMethod<Defined, Output, OutputBase>;
 
   /**
    * Enable vector search on the field (string type only)
    */
-  vector: DBFieldVectorMethod<Defined, Output>;
+  vector: DBFieldVectorMethod<Defined, Output, OutputBase>;
 
   /**
    * Add hooks for create/update operations on this field.
    */
-  hooks: DBFieldHooksMethod<Defined, Output>;
+  hooks: DBFieldHooksMethod<Defined, Output, OutputBase>;
 
   /**
    * Add validation functions to the field.
    */
-  validate: DBFieldValidateMethod<Defined, Output>;
+  validate: DBFieldValidateMethod<Defined, Output, OutputBase>;
 
   /**
    * Configure serial/auto-increment behavior
    */
-  serial: DBFieldSerialMethod<Defined, Output>;
+  serial: DBFieldSerialMethod<Defined, Output, OutputBase>;
 
   /**
    * Clone the field with optional overrides for field options
    */
-  clone<const NewOpt extends FieldOptions>(
+  clone<const NewOpt extends FieldOptions = Record<never, never>>(
     options?: NewOpt,
   ): TailorDBField<
     WithDBFieldCloneOptions<Defined, NewOpt>,
-    FieldOutput<TailorToTs[Defined["type"]], NewOpt>
+    DBFieldCloneOutput<Defined, Output, OutputBase, NewOpt>,
+    OutputBase
   >;
 }
 
@@ -330,13 +371,8 @@ export interface TailorDBType<
     keys: K[],
     options: Opt,
   ): {
-    [P in K]: Fields[P] extends TailorDBField<infer D, infer _O>
-      ? TailorDBField<
-          Omit<D, "array"> & {
-            array: Opt extends { array: true } ? true : D["array"];
-          },
-          FieldOutput<TailorToTs[D["type"]], Opt>
-        >
+    [P in K]: Fields[P] extends TailorDBField<infer D, infer O, infer OBase>
+      ? TailorDBField<WithDBFieldCloneOptions<D, Opt>, DBFieldCloneOutput<D, O, OBase, Opt>, OBase>
       : never;
   };
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
@@ -378,15 +414,6 @@ function isRelationSelfConfig(
   return config.toward.type === "self";
 }
 
-const regex = {
-  uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
-  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
-  datetime:
-    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
-  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
-} as const;
-
 type FieldParseArgs = {
   value: unknown;
   data: unknown;
@@ -422,7 +449,7 @@ type TailorDBFieldInstance<
   T extends TailorFieldType,
   Opt extends FieldOptions,
   OutputBase = TailorToTs[T],
-> = TailorDBField<DBFieldDefined<T, Opt>, DBFieldOutput<T, Opt, OutputBase>>;
+> = TailorDBField<DBFieldDefined<T, Opt>, DBFieldOutput<T, Opt, OutputBase>, OutputBase>;
 type TailorDBFieldRuntimeInstance<
   T extends TailorFieldType,
   Opt extends FieldOptions,
@@ -553,7 +580,7 @@ function createTailorDBFieldRuntime<
         break;
 
       case "uuid":
-        if (typeof value !== "string" || !regex.uuid.test(value)) {
+        if (typeof value !== "string" || !isValidUUIDString(value)) {
           issues.push({
             message: `Expected a valid UUID: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -561,7 +588,7 @@ function createTailorDBFieldRuntime<
         }
         break;
       case "date":
-        if (typeof value !== "string" || !regex.date.test(value)) {
+        if (typeof value !== "string" || !isValidDateString(value)) {
           issues.push({
             message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -569,7 +596,7 @@ function createTailorDBFieldRuntime<
         }
         break;
       case "datetime":
-        if (typeof value !== "string" || !regex.datetime.test(value)) {
+        if (typeof value !== "string" || !isValidDateTimeString(value)) {
           issues.push({
             message: `Expected to match ISO format: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -577,7 +604,7 @@ function createTailorDBFieldRuntime<
         }
         break;
       case "time":
-        if (typeof value !== "string" || !regex.time.test(value)) {
+        if (typeof value !== "string" || !isValidTimeString(value)) {
           issues.push({
             message: `Expected to match "HH:mm" format: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -585,7 +612,7 @@ function createTailorDBFieldRuntime<
         }
         break;
       case "decimal":
-        if (typeof value !== "string" || !regex.decimal.test(value)) {
+        if (typeof value !== "string" || !isValidDecimalString(value)) {
           issues.push({
             message: `Expected a decimal string: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -945,7 +972,7 @@ function date<const Opt extends FieldOptions>(options?: Opt) {
 
 /**
  * Create a datetime field (date and time).
- * Format: ISO 8601 "yyyy-MM-ddTHH:mm:ssZ"
+ * Format: ISO 8601 "yyyy-MM-ddTHH:mm:ssZ" or "yyyy-MM-ddTHH:mm:ss+09:00"
  * @param options - Field configuration options
  * @returns A datetime field
  * @example db.datetime()
@@ -978,7 +1005,8 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   options?: Opt,
 ): TailorDBField<
   { type: "enum"; array: Opt extends { array: true } ? true : false },
-  FieldOutput<AllowedValuesOutput<V>, Opt>
+  FieldOutput<AllowedValuesOutput<V>, Opt>,
+  AllowedValuesOutput<V>
 > {
   return createField<"enum", Opt, AllowedValuesOutput<V>>("enum", options, undefined, values);
 }
@@ -997,7 +1025,8 @@ function object<
 >(fields: F, options?: Opt) {
   return createField("nested", options, fields) as unknown as TailorDBField<
     { type: "nested"; array: Opt extends { array: true } ? true : false },
-    FieldOutput<InferFieldsOutput<F>, Opt>
+    FieldOutput<InferFieldsOutput<F>, Opt>,
+    InferFieldsOutput<F>
   >;
 }
 
@@ -1190,7 +1219,7 @@ function createTailorDBType<
   return brandValue(dbType, "tailordb-type");
 }
 
-const idField = uuid();
+const idField = createField<"uuid", Record<never, never>, UUIDString>("uuid");
 type idField = typeof idField;
 type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = TailorDBInstance<
   { id: idField } & F

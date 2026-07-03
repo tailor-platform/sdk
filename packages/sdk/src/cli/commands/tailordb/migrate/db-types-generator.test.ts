@@ -144,7 +144,7 @@ describe("db-types-generator", () => {
           externalId: { type: "uuid", required: true },
           referenceId: { type: "uuid", required: false },
         },
-        expectedContains: ["externalId: string;", "referenceId: string | null;"],
+        expectedContains: ["externalId: UUIDString;", "referenceId: UUIDString | null;"],
       },
       {
         testName: "generates types with date/datetime fields using Timestamp",
@@ -155,8 +155,8 @@ describe("db-types-generator", () => {
           endTime: { type: "datetime", required: false },
         },
         expectedContains: [
-          "type Timestamp = ColumnType<Date, Date | string, Date | string>;",
-          "eventDate: Timestamp;",
+          "type Timestamp = ColumnType<Date | DateTimeString, Date | DateTimeString, Date | DateTimeString>;",
+          "eventDate: DateString;",
           "startTime: Timestamp;",
           "endTime: Timestamp | null;",
         ],
@@ -248,7 +248,7 @@ describe("db-types-generator", () => {
 
       const { content } = await generateContent(snapshot);
 
-      expect(content).toContain("id: Generated<string>;");
+      expect(content).toContain("id: Generated<UUIDString>;");
       expect(content).toContain(
         "type Generated<T> = T extends ColumnType<infer S, infer I, infer U>",
       );
@@ -332,7 +332,7 @@ describe("db-types-generator", () => {
       const content = fs.readFileSync(filePath, "utf-8");
 
       expect(content).toContain(
-        "updatedAt: ColumnType<Date | null, Date | string, Date | string>;",
+        "updatedAt: ColumnType<Date | DateTimeString | null, Date | DateTimeString, Date | DateTimeString>;",
       );
     });
 

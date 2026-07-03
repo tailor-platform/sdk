@@ -1,6 +1,7 @@
 import {
   createGetDB,
   type Generated,
+  type UUIDString,
   type Timestamp,
   type NamespaceDB,
   type NamespaceInsertable,
@@ -14,18 +15,18 @@ import {
 export interface Namespace {
   "main-db": {
     AuditLog: {
-      id: Generated<string>;
+      id: Generated<UUIDString>;
       action: string;
       entityType: string;
-      entityId: string;
+      entityId: UUIDString;
       message: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }
 
     Notification: {
-      id: Generated<string>;
-      userId: string;
+      id: Generated<UUIDString>;
+      userId: UUIDString;
       title: string;
       body: string;
       isRead: boolean;
@@ -34,7 +35,7 @@ export interface Namespace {
     }
 
     User: {
-      id: Generated<string>;
+      id: Generated<UUIDString>;
       name: string;
       email: string;
       role: "ADMIN" | "MEMBER";

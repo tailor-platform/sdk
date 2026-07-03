@@ -78,13 +78,13 @@ describe("KyselyTypePlugin integration tests", () => {
 
       expect(result.name).toBe("User");
       expect(result.typeDef).toContain("User: {");
-      expect(result.typeDef).toContain("id: Generated<string>;");
+      expect(result.typeDef).toContain("id: Generated<UUIDString>;");
       expect(result.typeDef).toContain("name: string;");
       expect(result.typeDef).toContain("email: string;");
       expect(result.typeDef).toContain("age: number | null;");
       expect(result.typeDef).toContain("isActive: boolean;");
       expect(result.typeDef).toContain("score: number | null;");
-      expect(result.typeDef).toContain("birthDate: Timestamp | null;");
+      expect(result.typeDef).toContain("birthDate: DateString | null;");
       expect(result.typeDef).toContain("lastLogin: Timestamp | null;");
       expect(result.typeDef).toContain("tags: string[];");
       expect(result.typeDef).toContain("createdAt: Generated<Timestamp>;");
