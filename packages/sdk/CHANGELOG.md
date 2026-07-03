@@ -150,6 +150,25 @@
 
 - [#1421](https://github.com/tailor-platform/sdk/pull/1421) [`b933f47`](https://github.com/tailor-platform/sdk/commit/b933f474d65f8dfed56f3991aae3a52589368b10) Thanks [@dqn](https://github.com/dqn)! - Corrupted or hand-edited TailorDB migration snapshot/diff files now fail with a clear validation error when loaded, instead of causing undefined behavior later.
 
+## 1.73.3
+### Patch Changes
+
+
+
+- [#1632](https://github.com/tailor-platform/sdk/pull/1632) [`56cb49d`](https://github.com/tailor-platform/sdk/commit/56cb49db80fd47f37eb43ea5d5f0c4e093cb6909) Thanks [@dqn](https://github.com/dqn)! - Validate that script expressions generated from TailorDB hooks and validators are valid JavaScript, failing at build time with a clear error instead of deploying broken scripts
+
+
+
+- [#1635](https://github.com/tailor-platform/sdk/pull/1635) [`0af2c23`](https://github.com/tailor-platform/sdk/commit/0af2c2346b34f5c026d0221e151ba35ca9148d9a) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB relations silently dropping a forward relationship when two fields on the same type default to the same forward name; this now throws a validation error instead, matching the existing behavior for duplicate backward relationship names
+
+
+
+- [#1631](https://github.com/tailor-platform/sdk/pull/1631) [`fffc654`](https://github.com/tailor-platform/sdk/commit/fffc6548935e4329dcd65e8d91e2ae1a76833abf) Thanks [@dqn](https://github.com/dqn)! - Fail with a clear error instead of producing corrupted bundle code when build-time source rewriting would apply overlapping edits
+
+
+
+- [#1630](https://github.com/tailor-platform/sdk/pull/1630) [`69a034e`](https://github.com/tailor-platform/sdk/commit/69a034e36f1e2dbf9dfcf6e9d86a4a615502d24d) Thanks [@dqn](https://github.com/dqn)! - Fix `workflow.trigger()` calls in resolvers, executors, and workflow jobs failing at runtime when called without an options argument, or with options passed as a variable, a spread, or an object without a literal `authInvoker` property. All these forms are now rewritten at build time as the documented `trigger(args, options?)` signature promises; previously they compiled but threw "workflow.trigger() is rewritten at build time and unavailable in the bundle" after deploy.
+
 ## 1.73.2
 ### Patch Changes
 

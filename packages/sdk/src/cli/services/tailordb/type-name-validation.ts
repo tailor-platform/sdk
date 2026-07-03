@@ -3,7 +3,7 @@ import { fetchAll } from "#/cli/shared/client";
 import { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
 import type { TypeSourceInfo, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
 
-type LocalTailorDBService = {
+export type LocalTailorDBService = {
   readonly namespace: string;
   readonly types: Readonly<Record<string, unknown>>;
   readonly typeSourceInfo: Readonly<TypeSourceInfo>;
@@ -54,7 +54,10 @@ export interface AssertUniqueTailorDBTypeNamesArgs {
 }
 
 export interface AssertUniqueTailorDBTypeNamesWithExternalArgs
-  extends CollectLocalTailorDBTypeNameSourcesArgs, FetchExternalTailorDBTypeNameSourcesArgs {}
+  extends CollectLocalTailorDBTypeNameSourcesArgs, FetchExternalTailorDBTypeNameSourcesArgs {
+  /** External TailorDB services planned in the same deploy run. */
+  plannedExternalTailorDBServices?: ReadonlyArray<LocalTailorDBService>;
+}
 
 /**
  * Format a TailorDB type source for validation errors.
@@ -207,13 +210,30 @@ export async function assertUniqueTailorDBTypeNamesWithExternal(
   args: AssertUniqueTailorDBTypeNamesWithExternalArgs,
 ): Promise<void> {
   const localSources = collectLocalTailorDBTypeNameSources(args);
+  const plannedExternalServices = args.plannedExternalTailorDBServices ?? [];
+  const plannedExternalNamespaces = new Set(
+    plannedExternalServices.map((service) => service.namespace),
+  );
+  const plannedExternalSources = collectLocalTailorDBTypeNameSources({
+    tailorDBServices: plannedExternalServices,
+  }).map((source) => ({
+    ...source,
+    kind: "external" as const,
+  }));
+  const remoteExternalNamespaces = args.externalTailorDBNamespaces.filter(
+    (namespace) => !plannedExternalNamespaces.has(namespace),
+  );
   const externalSources =
-    args.externalTailorDBNamespaces.length > 0
-      ? await fetchExternalTailorDBTypeNameSources(args)
+    remoteExternalNamespaces.length > 0
+      ? await fetchExternalTailorDBTypeNameSources({
+          client: args.client,
+          workspaceId: args.workspaceId,
+          externalTailorDBNamespaces: remoteExternalNamespaces,
+        })
       : [];
 
   assertUniqueTailorDBTypeNames({
-    sources: [...localSources, ...externalSources],
+    sources: [...localSources, ...plannedExternalSources, ...externalSources],
   });
 }
 

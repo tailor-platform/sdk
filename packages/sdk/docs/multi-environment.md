@@ -32,8 +32,8 @@ export TAILOR_PLATFORM_URL=<platform-api-url>
 export TAILOR_PLATFORM_OAUTH2_CLIENT_ID=<oauth2-client-id>
 export TAILOR_PLATFORM_CONSOLE_URL=<console-url>
 
-tailor-sdk login
-tailor-sdk profile create development \
+tailor login
+tailor profile create development \
   -u you@example.com \
   -w <development-workspace-id> \
   --platform-url "$TAILOR_PLATFORM_URL" \
@@ -41,11 +41,11 @@ tailor-sdk profile create development \
   --console-url "$TAILOR_PLATFORM_CONSOLE_URL"
 
 unset TAILOR_PLATFORM_URL TAILOR_PLATFORM_OAUTH2_CLIENT_ID TAILOR_PLATFORM_CONSOLE_URL
-tailor-sdk deploy -p development
-tailor-sdk open -p development
+tailor deploy -p development
+tailor open -p development
 ```
 
-After the profile exists, run `tailor-sdk login -p development` to refresh the login for that Platform without re-exporting the connection variables.
+After the profile exists, run `tailor login -p development` to refresh the login for that Platform without re-exporting the connection variables.
 
 ## Varying config values per environment
 
