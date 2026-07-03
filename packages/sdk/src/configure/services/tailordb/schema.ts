@@ -4,7 +4,13 @@ import {
   type AllowedValuesOutput,
   mapAllowedValues,
 } from "#/configure/types/field";
-import { isValidDateString, isValidDateTimeString } from "#/configure/types/field-format";
+import {
+  isValidDateString,
+  isValidDateTimeString,
+  isValidDecimalString,
+  isValidTimeString,
+  isValidUUIDString,
+} from "#/configure/types/field-format";
 import { brandValue } from "#/utils/brand";
 import type {
   TailorDBField as TailorDBFieldBase,
@@ -408,12 +414,6 @@ function isRelationSelfConfig(
   return config.toward.type === "self";
 }
 
-const regex = {
-  uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
-  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
-} as const;
-
 type FieldParseArgs = {
   value: unknown;
   data: unknown;
@@ -580,7 +580,7 @@ function createTailorDBFieldRuntime<
         break;
 
       case "uuid":
-        if (typeof value !== "string" || !regex.uuid.test(value)) {
+        if (typeof value !== "string" || !isValidUUIDString(value)) {
           issues.push({
             message: `Expected a valid UUID: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -604,7 +604,7 @@ function createTailorDBFieldRuntime<
         }
         break;
       case "time":
-        if (typeof value !== "string" || !regex.time.test(value)) {
+        if (typeof value !== "string" || !isValidTimeString(value)) {
           issues.push({
             message: `Expected to match "HH:mm" format: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,
@@ -612,7 +612,7 @@ function createTailorDBFieldRuntime<
         }
         break;
       case "decimal":
-        if (typeof value !== "string" || !regex.decimal.test(value)) {
+        if (typeof value !== "string" || !isValidDecimalString(value)) {
           issues.push({
             message: `Expected a decimal string: received ${String(value)}`,
             path: pathArray.length > 0 ? pathArray : undefined,

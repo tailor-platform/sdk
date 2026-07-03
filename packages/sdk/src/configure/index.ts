@@ -25,6 +25,23 @@ export type {
   UUIDString,
 } from "#/configure/types/scalar.types";
 export {
+  assertDateString,
+  assertDateTimeString,
+  assertDecimalString,
+  assertTimeString,
+  assertUUIDString,
+  isDateString,
+  isDateTimeString,
+  isDecimalString,
+  isTimeString,
+  isUUIDString,
+  parseDateString,
+  parseDateTimeString,
+  parseDecimalString,
+  parseTimeString,
+  parseUUIDString,
+} from "#/configure/types/scalar";
+export {
   type TailorPrincipal,
   type Attributes,
   type AttributeList,

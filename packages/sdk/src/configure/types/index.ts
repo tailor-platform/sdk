@@ -1,6 +1,7 @@
 export * from "./machine-user";
 export * from "./type";
 export * from "./field";
+export * from "./scalar";
 export type {
   DateString,
   DateTimeString,
