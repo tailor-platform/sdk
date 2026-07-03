@@ -103,6 +103,10 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/auth-invoker-unwrap")).resolves.toBeUndefined();
   });
 
+  test("v2/auth-connection-token-helper transforms correctly", async () => {
+    await expect(runFixtureCases("v2/auth-connection-token-helper")).resolves.toBeUndefined();
+  });
+
   test("v2/tailordb-namespace transforms correctly", async () => {
     await expect(runFixtureCases("v2/tailordb-namespace")).resolves.toBeUndefined();
   });
