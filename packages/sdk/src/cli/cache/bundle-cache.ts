@@ -15,6 +15,7 @@ type BundleKind =
 
 type BundleCacheRestoreParams = {
   kind: BundleKind;
+  namespace?: string;
   name: string;
   /** Optional hash of non-file context (e.g., env variables) to include in cache validation. */
   contextHash?: string;
@@ -22,6 +23,7 @@ type BundleCacheRestoreParams = {
 
 type BundleCacheSaveParams = {
   kind: BundleKind;
+  namespace?: string;
   name: string;
   sourceFile: string;
   content: string;
@@ -41,8 +43,8 @@ type BundleCache = {
   save(params: BundleCacheSaveParams): void;
 };
 
-function buildCacheKey(kind: string, name: string): string {
-  return `${kind}:${name}`;
+function buildCacheKey(kind: string, name: string, namespace?: string): string {
+  return namespace ? `${kind}:${namespace}:${name}` : `${kind}:${name}`;
 }
 
 function combineHash(fileHash: string, contextHash?: string): string {
@@ -90,6 +92,7 @@ function computeBundlerContextHash(params: ComputeBundlerContextHashParams): str
 type WithCacheParams = {
   cache: BundleCache | undefined;
   kind: BundleKind;
+  namespace?: string;
   name: string;
   sourceFile: string;
   contextHash: string | undefined;
@@ -104,13 +107,13 @@ type WithCacheParams = {
  * @returns The bundled code string
  */
 async function withCache(params: WithCacheParams): Promise<string> {
-  const { cache, kind, name, sourceFile, contextHash, build } = params;
+  const { cache, kind, namespace, name, sourceFile, contextHash, build } = params;
 
   if (!cache) {
     return await build([]);
   }
 
-  const content = cache.tryRestore({ kind, name, contextHash });
+  const content = cache.tryRestore({ kind, namespace, name, contextHash });
   if (content !== undefined) {
     logger.debug(`  ${styles.dim("cached")}: ${name}`);
     return content;
@@ -119,7 +122,15 @@ async function withCache(params: WithCacheParams): Promise<string> {
   const { plugin, getResult } = createDepCollectorPlugin();
   const code = await build([plugin]);
 
-  cache.save({ kind, name, sourceFile, content: code, dependencyPaths: getResult(), contextHash });
+  cache.save({
+    kind,
+    namespace,
+    name,
+    sourceFile,
+    content: code,
+    dependencyPaths: getResult(),
+    contextHash,
+  });
 
   return code;
 }
@@ -131,7 +142,7 @@ async function withCache(params: WithCacheParams): Promise<string> {
  */
 function createBundleCache(store: CacheStore): BundleCache {
   function tryRestore(params: BundleCacheRestoreParams): string | undefined {
-    const cacheKey = buildCacheKey(params.kind, params.name);
+    const cacheKey = buildCacheKey(params.kind, params.name, params.namespace);
     const entry = store.getEntry(cacheKey);
 
     if (!entry) {
@@ -155,8 +166,8 @@ function createBundleCache(store: CacheStore): BundleCache {
   }
 
   function save(params: BundleCacheSaveParams): void {
-    const { kind, name, sourceFile, content, dependencyPaths, contextHash } = params;
-    const cacheKey = buildCacheKey(kind, name);
+    const { kind, namespace, name, sourceFile, content, dependencyPaths, contextHash } = params;
+    const cacheKey = buildCacheKey(kind, name, namespace);
     // Always include sourceFile in dependency paths so that changes to the
     // source file itself are detected even when dep-collector only finds
     // node_modules imports (which are filtered out).
