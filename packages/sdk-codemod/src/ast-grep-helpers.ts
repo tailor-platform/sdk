@@ -1,4 +1,4 @@
-import type { SgNode } from "@ast-grep/napi";
+import type { Edit, SgNode } from "@ast-grep/napi";
 
 const DECLARATION_KINDS = [
   "function_declaration",
@@ -16,6 +16,22 @@ export interface ImportSpecifierNames {
   importedName: string;
   localName: string;
   typeOnly: boolean;
+}
+
+export interface ImportBinding {
+  localName: string;
+  importedName?: string;
+  source: string;
+  typeOnly: boolean;
+}
+
+export interface AddNamedImportEditOptions {
+  importName: string;
+  imports: SgNode[];
+  insertionIndex: (root: SgNode, imports: SgNode[], source: string) => number;
+  moduleName: string;
+  root: SgNode;
+  source: string;
 }
 
 function isBindingLeafKind(kind: ReturnType<SgNode["kind"]>): boolean {
@@ -68,6 +84,75 @@ export function findImportStatements(root: SgNode): SgNode[] {
     .toSorted((a, b) => a.range().start.index - b.range().start.index);
 }
 
+export function importBindings(importStmt: SgNode): ImportBinding[] {
+  const source = importSource(importStmt);
+  if (!source) return [];
+
+  const requireClause = importStmt
+    .children()
+    .find((child) => child.kind() === "import_require_clause");
+  if (requireClause) {
+    const local = requireClause.children().find((child) => child.kind() === "identifier");
+    return local ? [{ localName: local.text(), source, typeOnly: false }] : [];
+  }
+
+  const typeOnly = isTypeOnlyImport(importStmt);
+  const clause = importStmt.children().find((child) => child.kind() === "import_clause");
+  if (!clause) return [];
+
+  const bindings: ImportBinding[] = [];
+  for (const child of clause.children()) {
+    if (child.kind() === "identifier") {
+      bindings.push({ localName: child.text(), source, typeOnly });
+      continue;
+    }
+
+    if (child.kind() === "namespace_import") {
+      const local = child.children().find((grandchild) => grandchild.kind() === "identifier");
+      if (local) bindings.push({ localName: local.text(), source, typeOnly });
+      continue;
+    }
+
+    if (child.kind() !== "named_imports") continue;
+    for (const spec of child.findAll({ rule: { kind: "import_specifier" } })) {
+      const names = importSpecNames(spec);
+      if (!names) continue;
+      bindings.push({ ...names, source, typeOnly: typeOnly || names.typeOnly });
+    }
+  }
+
+  return bindings;
+}
+
+export function buildAddNamedImportEdit(options: AddNamedImportEditOptions): Edit {
+  const { importName, imports, insertionIndex, moduleName, root, source } = options;
+  const existingImport =
+    imports.find(
+      (importStmt) =>
+        importSource(importStmt) === moduleName &&
+        !isTypeOnlyImport(importStmt) &&
+        namedImportsNode(importStmt),
+    ) ?? null;
+  const namedImports = existingImport ? namedImportsNode(existingImport) : null;
+  if (namedImports) {
+    const specTexts = namedImports.findAll({ rule: { kind: "import_specifier" } }).map((spec) => {
+      const names = importSpecNames(spec);
+      return names?.importedName === importName && names.localName === importName
+        ? importName
+        : spec.text();
+    });
+    const nextSpecTexts = specTexts.includes(importName) ? specTexts : [...specTexts, importName];
+    return namedImports.replace(`{ ${nextSpecTexts.join(", ")} }`);
+  }
+
+  const pos = insertionIndex(root, imports, source);
+  const insertedText =
+    pos === 0 || source[pos - 1] === "\n"
+      ? `import { ${importName} } from "${moduleName}";\n\n`
+      : `\nimport { ${importName} } from "${moduleName}";`;
+  return { startPos: pos, endPos: pos, insertedText };
+}
+
 export function collectBindingNames(node: SgNode, names: Set<string>): void {
   if (isBindingLeafKind(node.kind())) {
     names.add(node.text());
@@ -87,6 +172,7 @@ function firstDeclaratorChild(node: SgNode): SgNode | null {
 
 function collectDirectBindingChildren(node: SgNode, names: Set<string>): void {
   for (const child of node.children()) {
+    if (child.kind() === "=") break;
     if (isBindingPatternKind(child.kind())) collectBindingNames(child, names);
   }
 }
