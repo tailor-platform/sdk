@@ -400,21 +400,20 @@ describe("AuthConfigSchema userProfile/machineUserAttributes validation", () => 
     expect(result.userProfile?.type).not.toHaveProperty("_output");
   });
 
-  test("strips TailorDB type builder helpers from unbranded userProfile.type copies", () => {
-    const result = AuthConfigSchema.parse({
+  test("rejects unbranded userProfile.type copies with unknown keys", () => {
+    const result = AuthConfigSchema.safeParse({
       name: "my-auth",
       userProfile: {
-        type: { ...userType },
+        type: { ...userType, unknownOption: true },
         usernameField: "email",
       },
     });
 
-    expect(result.userProfile?.type).toMatchObject({
-      name: "User",
-      fields: expect.any(Object),
-    });
-    expect(result.userProfile?.type).not.toHaveProperty("hooks");
-    expect(result.userProfile?.type).not.toHaveProperty("_output");
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("Expected AuthConfigSchema parsing to fail");
+    }
+    expect(JSON.stringify(result.error.issues)).toContain("unknownOption");
   });
 
   test("omits unknown outer userProfile.type keys with TailorDB builder helpers", () => {

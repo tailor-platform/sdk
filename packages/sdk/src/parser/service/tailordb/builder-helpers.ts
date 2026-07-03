@@ -1,9 +1,10 @@
+import { isSdkBranded } from "#/utils/brand";
 import { TailorDBTypeSchema } from "./schema";
 
 const TAILORDB_TYPE_SCHEMA_KEYS = TailorDBTypeSchema.keyof().options;
 
 export function stripTailorDBTypeBuilderHelpers(type: unknown): unknown {
-  if (typeof type !== "object" || type === null) {
+  if (!isSdkBranded(type, "tailordb-type")) {
     return type;
   }
 
