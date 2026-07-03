@@ -27,6 +27,9 @@
 # instead of the gap going unnoticed.
 set -euo pipefail
 
+notes_file=""
+trap '[ -n "$notes_file" ] && rm -f "$notes_file"' EXIT
+
 sha="$(git rev-parse HEAD)"
 parent="$(git rev-parse HEAD^ 2>/dev/null || true)"
 
@@ -82,6 +85,7 @@ for pkg_json in packages/*/package.json; do
     changelog_entry "$version" <<<"$changelog" >"$notes_file"
     gh release create "$tag" --target "$sha" --title "$tag" --notes-file "$notes_file" "${prerelease[@]}"
     rm -f "$notes_file"
+    notes_file=""
   else
     echo "No changelog entry for ${tag}; generating release notes"
     gh release create "$tag" --target "$sha" --title "$tag" --generate-notes "${prerelease[@]}"
