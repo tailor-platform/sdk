@@ -13,6 +13,14 @@
 # checkout step). Without that guard, an unrelated later push would "fix" an
 # older missing release by tagging it at the wrong (much later) commit.
 #
+# All package metadata (name, version, private, changelog) is read from git
+# object history via `git show <sha>:<path>`, never from the working tree.
+# When pending changesets exist, `changesets/action` runs `changeset version`
+# locally to prepare the release PR diff — this bumps package.json/CHANGELOG.md
+# on disk without ever committing that bump to the current HEAD. Reading the
+# working tree here would treat that uncommitted bump as "introduced at HEAD"
+# and create a release for a version that was never actually published.
+#
 # Idempotent: packages whose version already has a release are skipped. Also
 # doubles as the regression guard for the release workflow — if release
 # creation fails for a just-published version, this step (and the job) fails
@@ -22,32 +30,43 @@ set -euo pipefail
 sha="$(git rev-parse HEAD)"
 parent="$(git rev-parse HEAD^ 2>/dev/null || true)"
 
-version_at() { # <package.json path> <commit> -> version, or empty if absent
+# <package.json path> <commit> -> "name<TAB>version<TAB>private", or empty if
+# the path doesn't exist at that commit (e.g. a newly added package, or no
+# parent commit). The trailing `return 0` is required, not decorative: under
+# `pipefail`, `git show` failing (missing path/commit) makes the pipeline's
+# exit status non-zero, which would abort the whole script under `set -e`
+# without it.
+pkg_at() {
   [ -n "$2" ] || return 0
-  git show "${2}:${1}" 2>/dev/null | node -pe "JSON.parse(require('fs').readFileSync(0,'utf8')).version" 2>/dev/null
+  git show "${2}:${1}" 2>/dev/null | node -pe "
+    const p = JSON.parse(require('fs').readFileSync(0,'utf8'));
+    [p.name, p.version, !!p.private].join('\t')
+  " 2>/dev/null
   return 0
 }
 
-changelog_entry() { # <changelog-file> <version>
-  awk -v ver="## $2" '
+changelog_entry() { # <version> — reads full changelog content from stdin
+  awk -v ver="## $1" '
     $0 == ver { found = 1; next }
     found && /^## / { exit }
     found { print }
-  ' "$1"
+  '
 }
 
 for pkg_json in packages/*/package.json; do
-  private="$(node -p "!!require('./${pkg_json}').private")"
+  dir="$(dirname "$pkg_json")"
+
+  head_line="$(pkg_at "$pkg_json" "$sha")"
+  [ -n "$head_line" ] || continue
+  IFS=$'\t' read -r name version private <<<"$head_line"
   [ "$private" = "true" ] && continue
 
-  name="$(node -p "require('./${pkg_json}').name")"
-  version="$(node -p "require('./${pkg_json}').version")"
-  dir="$(dirname "$pkg_json")"
-  tag="${name}@${version}"
-
-  prev_version="$(version_at "$pkg_json" "$parent")"
+  parent_line="$(pkg_at "$pkg_json" "$parent")"
+  prev_version=""
+  [ -n "$parent_line" ] && IFS=$'\t' read -r _ prev_version _ <<<"$parent_line"
   [ "$prev_version" = "$version" ] && continue
 
+  tag="${name}@${version}"
   if gh release view "$tag" >/dev/null 2>&1; then
     continue
   fi
@@ -56,12 +75,14 @@ for pkg_json in packages/*/package.json; do
   prerelease=()
   case "$version" in *-*) prerelease=(--prerelease) ;; esac
 
+  changelog="$(git show "${sha}:${dir}/CHANGELOG.md" 2>/dev/null)" || true
+
   # A version heading may exist with an empty body (e.g. packages with no
   # direct changes), which is a valid empty release. Only fall back to
   # auto-generated notes when the heading is missing entirely.
-  if grep -qxF "## ${version}" "${dir}/CHANGELOG.md" 2>/dev/null; then
+  if grep -qxF "## ${version}" <<<"$changelog"; then
     notes_file="$(mktemp)"
-    changelog_entry "${dir}/CHANGELOG.md" "$version" >"$notes_file"
+    changelog_entry "$version" <<<"$changelog" >"$notes_file"
     gh release create "$tag" --target "$sha" --title "$tag" --notes-file "$notes_file" "${prerelease[@]}"
     rm -f "$notes_file"
   else
