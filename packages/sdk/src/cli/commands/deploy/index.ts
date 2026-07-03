@@ -1,7 +1,7 @@
 import { arg } from "politty";
 import { z } from "zod";
 import { deploy } from "#/cli/commands/deploy/deploy";
-import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
+import { confirmationArgs, multiConfigArg, workspaceArgs } from "#/cli/shared/args";
 import { defineAppCommand } from "#/cli/shared/command";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 
@@ -11,7 +11,8 @@ export const deployCommand = defineAppCommand({
   description: "Deploy your application by applying the Tailor configuration.",
   args: z
     .object({
-      ...deploymentArgs,
+      ...workspaceArgs,
+      ...multiConfigArg,
       ...confirmationArgs,
       "dry-run": arg(z.boolean().optional(), {
         alias: "d",

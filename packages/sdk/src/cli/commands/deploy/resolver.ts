@@ -129,6 +129,7 @@ export async function planPipeline(context: PlanContext) {
     workspaceId,
     pipelines,
     executors,
+    context.executorUsedResolvers ?? new Set<string>(),
     deletedServices,
     application.env,
     application.authService?.config.name,
@@ -281,6 +282,7 @@ async function planResolvers(
   workspaceId: string,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
   executors: ReadonlyArray<Executor>,
+  initialExecutorUsedResolvers: ReadonlySet<string>,
   deletedServices: ReadonlyArray<string>,
   env: Record<string, string | number | boolean>,
   authNamespace: string | undefined,
@@ -309,7 +311,7 @@ async function planResolvers(
     });
   };
 
-  const executorUsedResolvers = new Set<string>();
+  const executorUsedResolvers = new Set(initialExecutorUsedResolvers);
   for (const executor of executors) {
     if (executor.trigger.kind === "resolverExecuted") {
       executorUsedResolvers.add(executor.trigger.resolverName);
