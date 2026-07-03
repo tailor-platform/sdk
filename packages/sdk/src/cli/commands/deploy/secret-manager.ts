@@ -2,8 +2,12 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "#/cli/shared/client";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
-import { fetchExistingResourcesWithLabels } from "./owned-resource";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
@@ -147,21 +151,16 @@ export async function planSecretManager(context: PlanContext) {
           appName: application.name,
           appId: application.id,
         });
-        const owned = isOwnedByApp(existing.allLabels, application.name, application.id);
-        if (!owned) {
-          if (!existing.label) {
-            unmanaged.push({
-              resourceType: "Secret Manager vault",
-              resourceName: vaultName,
-            });
-          } else {
-            conflicts.push({
-              resourceType: "Secret Manager vault",
-              resourceName: vaultName,
-              currentOwner: existing.label,
-            });
-          }
-        }
+        const owned = trackDesiredResourceOwnership({
+          labels: existing.allLabels,
+          ownerLabel: existing.label,
+          appName: application.name,
+          appId: application.id,
+          resourceType: "Secret Manager vault",
+          resourceName: vaultName,
+          conflicts,
+          unmanaged,
+        });
         if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
           vaultChangeSet.unchanged.push({ name: vaultName });
         } else {
@@ -250,11 +249,13 @@ export async function planSecretManager(context: PlanContext) {
   // Remaining existing vaults not in config - mark managed ones for deletion
   for (const [name, entry] of Object.entries(existingVaults)) {
     if (!entry) continue;
-    const label = entry.label;
-    const owned = isOwnedByApp(entry.allLabels, application.name, application.id);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry.allLabels,
+      ownerLabel: entry.label,
+      appName: application.name,
+      appId: application.id,
+      resourceOwners,
+    });
     if (owned) {
       // Delete secrets inside the vault before deleting the vault itself
       const secrets = await fetchAll(async (pageToken, maxPageSize) => {
