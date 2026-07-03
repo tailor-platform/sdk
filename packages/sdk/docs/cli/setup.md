@@ -24,7 +24,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`setup action`](#setup-action)         | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).  |
 | [`setup coordinate`](#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
 | [`setup check`](#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
-| [`setup delete`](#setup-delete)         | Delete a managed workflow/action file and its .github/tailor-sdk.lock entry.                     |
+| [`setup delete`](#setup-delete)         | Delete managed workflow/action file(s) and their .github/tailor-sdk.lock entries.                |
 
 ### setup action
 
@@ -113,7 +113,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ### setup delete
 
-Delete a managed workflow/action file and its .github/tailor-sdk.lock entry.
+Delete managed workflow/action file(s) and their .github/tailor-sdk.lock entries.
 
 **Usage**
 

@@ -230,7 +230,7 @@ const previewCommand = defineAppCommand({
 
 const deleteCommand = defineAppCommand({
   name: "delete",
-  description: "Delete a managed workflow/action file and its .github/tailor-sdk.lock entry.",
+  description: "Delete managed workflow/action file(s) and their .github/tailor-sdk.lock entries.",
   args: z
     .object({
       ...confirmationArgs,
