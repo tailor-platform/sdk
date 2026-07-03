@@ -75,6 +75,11 @@ export const auth = defineAuth("my-auth", {
         role: "MANAGER",
       },
     },
+    "viewer-machine-user": {
+      attributes: {
+        role: "STAFF",
+      },
+    },
   },
   hooks: {
     beforeLogin: {

@@ -430,7 +430,8 @@
           <div style="margin-top: 0.45rem">
             → Shows a table of
             <code class="il">name / user / workspaceId / permission</code> (plus
-            <code class="il">machineUser</code>, <code class="il">platformUrl</code>, etc. when set).
+            <code class="il">machineUser</code>, <code class="il">platformUrl</code>, etc. when
+            set).
           </div>
         </div>
       </div>
@@ -670,12 +671,34 @@ export TAILOR_PLATFORM_MACHINE_USER_NAME="manager-machine-user"</code></pre>
         <div class="expect ok">✓ Expect: machineUserOverride = deny</div>
       </div>
 
+      <div class="step err">
+        <div class="step-head">
+          <span class="badge">[05]</span>
+          <span class="step-title">Write mutation blocked by machine user override deny</span>
+        </div>
+        <div class="step-desc">
+          Even a GraphQL mutation is stopped before the server sees it. The CLI checks the pinned
+          machine user and refuses to substitute a different one.
+        </div>
+        <div class="cmd">
+          <pre><code>tailor-sdk query --engine gql \
+  -q 'mutation { createSupplier(input: { name: "deny-test", state: ACTIVE }) { id name } }' \
+  -m viewer-machine-user \
+  -p stg-readonly \
+  -c tailor.config.ts</code></pre>
+        </div>
+        <div class="expect err">
+          ✗ Expect: Error [PROFILE_MACHINE_USER_OVERRIDE_DENIED] — "Profile "stg-readonly" denies
+          overriding the machine user."
+        </div>
+      </div>
+
       <!-- Cleanup -->
       <div class="sec">Cleanup</div>
 
       <div class="step">
         <div class="step-head">
-          <span class="badge">[05]</span>
+          <span class="badge">[06]</span>
           <span class="step-title">Delete the demo profile</span>
         </div>
         <div class="cmd">
