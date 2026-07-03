@@ -16,21 +16,13 @@ describe("createTailorDBHook", () => {
       expect(result.id).toBe("00000000-0000-0000-0000-000000000001");
     });
 
-    test("generates a UUID when data has no id", () => {
+    test.each([
+      ["data has no id", { name: "b" }],
+      ["data is null", null],
+      ["data is undefined", undefined],
+    ])("generates a UUID when %s", (_label, data) => {
       const type = db.type("Test", { name: db.string() });
-      const result = createTailorDBHook(type)({ name: "b" });
-      expect(result.id).toMatch(UUID_REGEX);
-    });
-
-    test("generates a UUID when data is null", () => {
-      const type = db.type("Test", { name: db.string() });
-      const result = createTailorDBHook(type)(null);
-      expect(result.id).toMatch(UUID_REGEX);
-    });
-
-    test("generates a UUID when data is undefined", () => {
-      const type = db.type("Test", { name: db.string() });
-      const result = createTailorDBHook(type)(undefined);
+      const result = createTailorDBHook(type)(data);
       expect(result.id).toMatch(UUID_REGEX);
     });
   });
@@ -50,15 +42,12 @@ describe("createTailorDBHook", () => {
       expect(result).toMatchObject({ name: "alice", age: 30, active: true });
     });
 
-    test("does not set scalar fields when data is null", () => {
+    test.each([
+      ["data is null", null],
+      ["data is a non-object primitive", "not-an-object"],
+    ])("does not set scalar fields when %s", (_label, data) => {
       const type = db.type("Test", { name: db.string() });
-      const result = createTailorDBHook(type)(null);
-      expect(result.name).toBeUndefined();
-    });
-
-    test("does not set scalar fields when data is a non-object primitive", () => {
-      const type = db.type("Test", { name: db.string() });
-      const result = createTailorDBHook(type)("not-an-object");
+      const result = createTailorDBHook(type)(data);
       expect(result.name).toBeUndefined();
     });
 
@@ -157,18 +146,14 @@ describe("createTailorDBHook", () => {
       expect(result.lines).toEqual([]);
     });
 
-    test("passes through null for optional array field", () => {
+    test.each([
+      ["passes through null for optional array field", { lines: null }, null],
+      ["passes through undefined for omitted optional array field", {}, undefined],
+    ])("%s", (_label, data, expected) => {
       const type = db.type("Test", {
         lines: db.object({ kind: db.string() }, { optional: true, array: true }),
       });
-      expect(createTailorDBHook(type)({ lines: null }).lines).toBeNull();
-    });
-
-    test("passes through undefined for omitted optional array field", () => {
-      const type = db.type("Test", {
-        lines: db.object({ kind: db.string() }, { optional: true, array: true }),
-      });
-      expect(createTailorDBHook(type)({}).lines).toBeUndefined();
+      expect(createTailorDBHook(type)(data).lines).toBe(expected);
     });
 
     test("passes through non-array values without recursing (so the validator surfaces a clear error)", () => {
@@ -259,15 +244,11 @@ describe("createStandardSchema", () => {
     });
   });
 
-  test("returns a value when the optional array field is null", () => {
-    const result = buildSchema()["~standard"].validate({
-      paymentTermSnapshotLines: null,
-    });
-    expect(result).toHaveProperty("value");
-  });
-
-  test("returns a value when the optional array field is omitted", () => {
-    const result = buildSchema()["~standard"].validate({});
+  test.each([
+    ["null", { paymentTermSnapshotLines: null }],
+    ["omitted", {}],
+  ])("returns a value when the optional array field is %s", (_label, input) => {
+    const result = buildSchema()["~standard"].validate(input);
     expect(result).toHaveProperty("value");
   });
 

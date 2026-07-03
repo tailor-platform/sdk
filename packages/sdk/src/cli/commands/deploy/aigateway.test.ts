@@ -18,19 +18,7 @@ vi.mock("./label", async (importOriginal) => {
   };
 });
 
-vi.mock("./change-set", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
-  const createChangeSet = original.createChangeSet as (title: string) => {
-    print: () => void;
-  };
-  return {
-    ...original,
-    createChangeSet: (title: string) => ({
-      ...createChangeSet(title),
-      print: () => {},
-    }),
-  };
-});
+vi.mock("./change-set", async (importOriginal) => importOriginal());
 
 const workspaceId = "test-workspace";
 const appName = "test-app";
@@ -103,68 +91,65 @@ describe("planAIGateway", () => {
 
     const result = await planAIGateway(createContext(client));
 
+    expect(result.changeSet.creates).toHaveLength(0);
+    expect(result.changeSet.updates).toHaveLength(0);
     expect(result.changeSet.unchanged).toHaveLength(1);
+    expect(result.conflicts).toHaveLength(0);
+    expect(result.unmanaged).toHaveLength(0);
     expect(result.changeSet.unchanged[0]!.name).toBe("gateway-a");
-    expect(result.changeSet.updates).toHaveLength(0);
   });
 
-  test("marks gateway updated when remote state differs", async () => {
-    const client = createMockClient([
-      {
-        name: "gateway-a",
-        authNamespace: "old-namespace",
-        cors: ["https://example.com"],
-        label: appName,
-      },
-    ]);
+  test.each([
+    {
+      name: "marks gateway updated when remote state differs",
+      gateways: [
+        {
+          name: "gateway-a",
+          authNamespace: "old-namespace",
+          cors: ["https://example.com"],
+          label: appName,
+        },
+      ],
+      expected: { creates: 0, updates: 1, unchanged: 0, conflicts: 0, unmanaged: 0 },
+    },
+    {
+      name: "marks gateway updated when config matches but ownership metadata is missing",
+      gateways: [
+        {
+          name: "gateway-a",
+          authNamespace: "default",
+          cors: ["https://example.com", "https://app.example.com"],
+        },
+      ],
+      expected: { creates: 0, updates: 1, unchanged: 0, conflicts: 0, unmanaged: 1 },
+    },
+    {
+      name: "marks gateway updated when config matches but resource is owned by another app",
+      gateways: [
+        {
+          name: "gateway-a",
+          authNamespace: "default",
+          cors: ["https://example.com", "https://app.example.com"],
+          label: "other-app",
+        },
+      ],
+      expected: { creates: 0, updates: 1, unchanged: 0, conflicts: 1, unmanaged: 0 },
+    },
+    {
+      name: "creates gateway when it does not exist",
+      gateways: [],
+      expected: { creates: 1, updates: 0, unchanged: 0, conflicts: 0, unmanaged: 0 },
+    },
+  ])("$name", async ({ gateways, expected }) => {
+    const client = createMockClient(gateways);
 
     const result = await planAIGateway(createContext(client));
 
-    expect(result.changeSet.updates).toHaveLength(1);
-    expect(result.changeSet.unchanged).toHaveLength(0);
-  });
-
-  test("marks gateway updated when config matches but ownership metadata is missing", async () => {
-    const client = createMockClient([
-      {
-        name: "gateway-a",
-        authNamespace: "default",
-        cors: ["https://example.com", "https://app.example.com"],
-      },
-    ]);
-
-    const result = await planAIGateway(createContext(client));
-
-    expect(result.changeSet.updates).toHaveLength(1);
-    expect(result.changeSet.unchanged).toHaveLength(0);
-    expect(result.unmanaged).toHaveLength(1);
-  });
-
-  test("marks gateway updated when config matches but resource is owned by another app", async () => {
-    const client = createMockClient([
-      {
-        name: "gateway-a",
-        authNamespace: "default",
-        cors: ["https://example.com", "https://app.example.com"],
-        label: "other-app",
-      },
-    ]);
-
-    const result = await planAIGateway(createContext(client));
-
-    expect(result.changeSet.updates).toHaveLength(1);
-    expect(result.changeSet.unchanged).toHaveLength(0);
-    expect(result.conflicts).toHaveLength(1);
-  });
-
-  test("creates gateway when it does not exist", async () => {
-    const client = createMockClient([]);
-
-    const result = await planAIGateway(createContext(client));
-
-    expect(result.changeSet.creates).toHaveLength(1);
-    expect(result.changeSet.updates).toHaveLength(0);
-    expect(result.changeSet.unchanged).toHaveLength(0);
+    expect(result.changeSet.creates).toHaveLength(expected.creates);
+    expect(result.changeSet.updates).toHaveLength(expected.updates);
+    expect(result.changeSet.unchanged).toHaveLength(expected.unchanged);
+    expect(result.conflicts).toHaveLength(expected.conflicts);
+    expect(result.unmanaged).toHaveLength(expected.unmanaged);
   });
 
   test("resolves staticwebsite :url placeholder in cors against deployed URL", async () => {

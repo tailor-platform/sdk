@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test } from "vitest";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
 import type { Plugin } from "rolldown";
 
@@ -22,26 +22,29 @@ function extractLoadHandler(plugin: Plugin): (id: string) => unknown {
 }
 
 describe("createDepCollectorPlugin", () => {
+  let plugin: Plugin;
+  let getResult: () => string[];
+  let load: (id: string) => unknown;
+
+  beforeEach(() => {
+    ({ plugin, getResult } = createDepCollectorPlugin());
+    load = extractLoadHandler(plugin);
+  });
+
   test("returns an object with plugin and getResult", () => {
-    const { plugin, getResult } = createDepCollectorPlugin();
     expect(plugin).toBeDefined();
     expect(getResult).toBeTypeOf("function");
   });
 
   test("plugin has name 'cache-dep-collector'", () => {
-    const { plugin } = createDepCollectorPlugin();
     expect(plugin.name).toBe("cache-dep-collector");
   });
 
   test("getResult returns empty array initially", () => {
-    const { getResult } = createDepCollectorPlugin();
     expect(getResult()).toEqual([]);
   });
 
   test("collects module IDs passed to the load handler", () => {
-    const { plugin, getResult } = createDepCollectorPlugin();
-    const load = extractLoadHandler(plugin);
-
     load("/src/app/foo.ts");
     load("/src/app/bar.ts");
 
@@ -50,75 +53,47 @@ describe("createDepCollectorPlugin", () => {
     expect(result).toContain("/src/app/bar.ts");
   });
 
-  test("excludes paths containing node_modules", () => {
-    const { plugin, getResult } = createDepCollectorPlugin();
-    const load = extractLoadHandler(plugin);
-
-    load("/src/app/index.ts");
-    load("/project/node_modules/@tailor-platform/sdk/dist/index.js");
-    load("/src/utils/helper.ts");
-
-    const result = getResult();
-    expect(result).toEqual(["/src/app/index.ts", "/src/utils/helper.ts"]);
-  });
-
-  test("returns sorted paths", () => {
-    const { plugin, getResult } = createDepCollectorPlugin();
-    const load = extractLoadHandler(plugin);
-
-    load("/src/z/last.ts");
-    load("/src/a/first.ts");
-    load("/src/m/middle.ts");
-
-    const result = getResult();
-    expect(result).toEqual(["/src/a/first.ts", "/src/m/middle.ts", "/src/z/last.ts"]);
-  });
-
-  test("deduplicates paths", () => {
-    const { plugin, getResult } = createDepCollectorPlugin();
-    const load = extractLoadHandler(plugin);
-
-    load("/src/app/foo.ts");
-    load("/src/app/foo.ts");
-    load("/src/app/bar.ts");
-
-    const result = getResult();
-    expect(result).toEqual(["/src/app/bar.ts", "/src/app/foo.ts"]);
-  });
-
-  test("excludes entry files (.entry.js)", () => {
-    const { plugin, getResult } = createDepCollectorPlugin();
-    const load = extractLoadHandler(plugin);
-
-    load("/src/app/index.ts");
-    load("/dist/resolvers/myResolver.entry.js");
-    load("/dist/executors/myExecutor.entry.js");
-    load("/src/utils/helper.ts");
-
-    const result = getResult();
-    expect(result).toEqual(["/src/app/index.ts", "/src/utils/helper.ts"]);
-  });
-
-  test("collects non-JS files (JSON, CJS, etc.)", () => {
-    const { plugin, getResult } = createDepCollectorPlugin();
-    const load = extractLoadHandler(plugin);
-
-    load("/src/app/index.ts");
-    load("/src/config/settings.json");
-    load("/src/utils/legacy.cjs");
-
-    const result = getResult();
-    expect(result).toEqual([
-      "/src/app/index.ts",
-      "/src/config/settings.json",
-      "/src/utils/legacy.cjs",
-    ]);
+  test.each([
+    [
+      "excludes paths containing node_modules",
+      [
+        "/src/app/index.ts",
+        "/project/node_modules/@tailor-platform/sdk/dist/index.js",
+        "/src/utils/helper.ts",
+      ],
+      ["/src/app/index.ts", "/src/utils/helper.ts"],
+    ],
+    [
+      "returns sorted paths",
+      ["/src/z/last.ts", "/src/a/first.ts", "/src/m/middle.ts"],
+      ["/src/a/first.ts", "/src/m/middle.ts", "/src/z/last.ts"],
+    ],
+    [
+      "deduplicates paths",
+      ["/src/app/foo.ts", "/src/app/foo.ts", "/src/app/bar.ts"],
+      ["/src/app/bar.ts", "/src/app/foo.ts"],
+    ],
+    [
+      "excludes entry files (.entry.js)",
+      [
+        "/src/app/index.ts",
+        "/dist/resolvers/myResolver.entry.js",
+        "/dist/executors/myExecutor.entry.js",
+        "/src/utils/helper.ts",
+      ],
+      ["/src/app/index.ts", "/src/utils/helper.ts"],
+    ],
+    [
+      "collects non-JS files (JSON, CJS, etc.)",
+      ["/src/app/index.ts", "/src/config/settings.json", "/src/utils/legacy.cjs"],
+      ["/src/app/index.ts", "/src/config/settings.json", "/src/utils/legacy.cjs"],
+    ],
+  ])("%s", (_label, loaded, expected) => {
+    for (const id of loaded) load(id);
+    expect(getResult()).toEqual(expected);
   });
 
   test("handler returns null (does not modify code)", () => {
-    const { plugin } = createDepCollectorPlugin();
-    const load = extractLoadHandler(plugin);
-
     const result = load("/src/app/foo.ts");
     expect(result).toBeNull();
   });

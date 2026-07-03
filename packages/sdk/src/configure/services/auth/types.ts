@@ -45,9 +45,6 @@ export type MachineUserName = keyof MachineUserNameRegistry extends never
 /** Result of retrieving a connection token at runtime. */
 export type AuthConnectionTokenResult = {
   access_token: string;
-  refresh_token?: string;
-  token_type?: string;
-  expiry?: string;
 };
 
 // Helper types for literal permission and auth attribute operands.
@@ -332,15 +329,8 @@ export type AuthServiceInput<
 declare const authDefinitionBrand: unique symbol;
 export type AuthDefinitionBrand = { readonly [authDefinitionBrand]: true };
 
-type ConnectionNames<Config> = Config extends { connections?: Record<infer K, unknown> }
-  ? K & string
-  : string;
-
 export type DefinedAuth<Name extends string, Config> = Config & {
   name: Name;
-  getConnectionToken<C extends ConnectionNames<Config>>(
-    connectionName: C,
-  ): Promise<AuthConnectionTokenResult>;
 } & AuthDefinitionBrand;
 
 export type AuthExternalConfig = { name: string; external: true };

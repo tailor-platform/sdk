@@ -10,6 +10,16 @@ import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { updateCommand } from "./update";
 
+function writeProfiles(profiles: Parameters<typeof writePlatformConfig>[0]["profiles"]) {
+  writePlatformConfig({
+    version: 2,
+    min_sdk_version: "1.29.0",
+    users: {},
+    profiles,
+    current_user: null,
+  });
+}
+
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-profile-update-${Date.now()}-${Math.random()}`);
 
 vi.mock("xdg-basedir", () => ({
@@ -49,28 +59,25 @@ afterAll(() => {
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
+beforeEach(() => {
+  vi.clearAllMocks();
+  resetKeyringState();
+  vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+  // Clean up the on-disk config between tests so prior writes don't leak.
+  const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+  if (fs.existsSync(configPath)) fs.rmSync(configPath);
+});
+
 describe("profile update --permission", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    resetKeyringState();
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        rw: { user: "u@example.com", workspace_id: validUUID },
-        ro: { user: "u@example.com", workspace_id: validUUID, readonly: true },
-      },
-      current_user: null,
+    writeProfiles({
+      rw: { user: "u@example.com", workspace_id: validUUID },
+      ro: { user: "u@example.com", workspace_id: validUUID, readonly: true },
     });
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    // Clean up the on-disk config between tests so prior writes don't leak.
-    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
-    if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
   test("sets readonly: true on disk and skips remote validation when only --permission read is passed", async () => {
@@ -111,20 +118,18 @@ describe("profile update --permission", () => {
       listWorkspaces: vi.fn(),
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        rw: { user: "old@example.com", workspace_id: validUUID },
-      },
-      current_user: null,
+    writeProfiles({
+      rw: { user: "old@example.com", workspace_id: validUUID },
     });
 
     await runCommand(updateCommand, ["rw", "--user", "new@example.com", "--permission", "read"]);
 
     expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(expect.anything(), "new@example.com");
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(
+      expect.anything(),
+      "new@example.com",
+      undefined,
+    );
     expect(vi.mocked(initOperatorClient)).toHaveBeenCalledTimes(1);
 
     const config = await readPlatformConfig();
@@ -159,6 +164,7 @@ describe("profile update --permission", () => {
     expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(
       expect.anything(),
       "legacy@example.com",
+      undefined,
     );
 
     const config = await readPlatformConfig();
@@ -169,24 +175,9 @@ describe("profile update --permission", () => {
 
 describe("profile update --machine-user", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    resetKeyringState();
-    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: { user: "u@example.com", workspace_id: validUUID },
-      },
-      current_user: null,
+    writeProfiles({
+      myprofile: { user: "u@example.com", workspace_id: validUUID },
     });
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
-    if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
   test("sets machine_user on disk and skips remote validation", async () => {
@@ -202,14 +193,8 @@ describe("profile update --machine-user", () => {
   });
 
   test("clears machine_user when empty string is passed", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
-      },
-      current_user: null,
+    writeProfiles({
+      myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
     });
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["myprofile", "--machine-user", ""]);
@@ -219,17 +204,28 @@ describe("profile update --machine-user", () => {
   });
 });
 
-describe("profile update --machine-user-override", () => {
+describe("profile update --platform", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", undefined);
+    vi.mocked(fetchLatestToken).mockResolvedValue({
+      accessToken: "mock-token",
+      user: "u@example.com",
+    });
+    vi.mocked(fetchAll).mockResolvedValue([{ id: validUUID }]);
+    vi.mocked(initOperatorClient).mockResolvedValue({
+      listWorkspaces: vi.fn(),
+    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
       users: {},
       profiles: {
-        myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
+        myprofile: { user: "u@example.com", workspace_id: validUUID },
       },
       current_user: null,
     });
@@ -239,6 +235,133 @@ describe("profile update --machine-user-override", () => {
     vi.unstubAllEnvs();
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  test("stores platform settings and validates the workspace against that platform", async () => {
+    using stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    await runCommand(updateCommand, [
+      "myprofile",
+      "--platform-url",
+      "https://api.dev.tailor.tech",
+      "--oauth2-client-id",
+      "dev-client",
+      "--console-url",
+      "https://console.dev.tailor.tech",
+    ]);
+
+    const expectedPlatformConfig = {
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    };
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(
+      expect.anything(),
+      "u@example.com",
+      expectedPlatformConfig,
+    );
+    expect(vi.mocked(initOperatorClient)).toHaveBeenCalledWith(
+      "mock-token",
+      expectedPlatformConfig,
+    );
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile).toMatchObject({
+      platform_url: "https://api.dev.tailor.tech",
+      oauth2_client_id: "dev-client",
+      console_url: "https://console.dev.tailor.tech",
+    });
+    expect(JSON.parse(stdout.output)).toMatchObject({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+  });
+
+  test("clears platform settings when empty strings are passed", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+
+    await runCommand(updateCommand, [
+      "myprofile",
+      "--platform-url",
+      "",
+      "--oauth2-client-id",
+      "",
+      "--console-url",
+      "",
+    ]);
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.platform_url).toBeUndefined();
+    expect(config.profiles.myprofile?.oauth2_client_id).toBeUndefined();
+    expect(config.profiles.myprofile?.console_url).toBeUndefined();
+  });
+
+  test("uses the existing platform URL for token lookup when clearing only platform-url", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        myprofile: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success");
+
+    await runCommand(updateCommand, ["myprofile", "--platform-url", ""]);
+
+    expect(vi.mocked(fetchLatestToken)).toHaveBeenCalledWith(expect.anything(), "u@example.com", {
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+    expect(vi.mocked(initOperatorClient)).toHaveBeenCalledWith("mock-token", {
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+  });
+
+  test("rejects invalid platform URLs before writing config", async () => {
+    const result = await runCommand(updateCommand, ["myprofile", "--platform-url", "not-a-url"]);
+
+    expect(result.success).toBe(false);
+    expect(vi.mocked(fetchLatestToken)).not.toHaveBeenCalled();
+    expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.myprofile?.platform_url).toBeUndefined();
+  });
+});
+
+describe("profile update --machine-user-override", () => {
+  beforeEach(() => {
+    writeProfiles({
+      myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
+    });
   });
 
   test("persists machine_user_override: deny and skips remote validation", async () => {
@@ -254,19 +377,13 @@ describe("profile update --machine-user-override", () => {
   });
 
   test("removes machine_user_override when allow is passed", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: {
-          user: "u@example.com",
-          workspace_id: validUUID,
-          machine_user: "bot",
-          machine_user_override: "deny",
-        },
+    writeProfiles({
+      myprofile: {
+        user: "u@example.com",
+        workspace_id: validUUID,
+        machine_user: "bot",
+        machine_user_override: "deny",
       },
-      current_user: null,
     });
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["myprofile", "--machine-user-override", "allow"]);
@@ -276,14 +393,8 @@ describe("profile update --machine-user-override", () => {
   });
 
   test("errors when deny is set with no machine user present", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: { user: "u@example.com", workspace_id: validUUID },
-      },
-      current_user: null,
+    writeProfiles({
+      myprofile: { user: "u@example.com", workspace_id: validUUID },
     });
     const result = await runCommand(updateCommand, [
       "myprofile",
@@ -297,19 +408,13 @@ describe("profile update --machine-user-override", () => {
   });
 
   test("errors when machine-user is cleared while deny remains", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: {
-          user: "u@example.com",
-          workspace_id: validUUID,
-          machine_user: "bot",
-          machine_user_override: "deny",
-        },
+    writeProfiles({
+      myprofile: {
+        user: "u@example.com",
+        workspace_id: validUUID,
+        machine_user: "bot",
+        machine_user_override: "deny",
       },
-      current_user: null,
     });
     const result = await runCommand(updateCommand, ["myprofile", "--machine-user", ""]);
     expect(result.success).toBe(false);
@@ -317,19 +422,13 @@ describe("profile update --machine-user-override", () => {
   });
 
   test("clears machine_user and machine_user_override together", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: {
-          user: "u@example.com",
-          workspace_id: validUUID,
-          machine_user: "bot",
-          machine_user_override: "deny",
-        },
+    writeProfiles({
+      myprofile: {
+        user: "u@example.com",
+        workspace_id: validUUID,
+        machine_user: "bot",
+        machine_user_override: "deny",
       },
-      current_user: null,
     });
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, [
@@ -346,18 +445,12 @@ describe("profile update --machine-user-override", () => {
   });
 
   test("unrelated update succeeds when stored deny has no machine user (hand-edited config)", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: {
-          user: "u@example.com",
-          workspace_id: validUUID,
-          machine_user_override: "deny",
-        },
+    writeProfiles({
+      myprofile: {
+        user: "u@example.com",
+        workspace_id: validUUID,
+        machine_user_override: "deny",
       },
-      current_user: null,
     });
     using _logger = silenceLogger("out", "success");
     await runCommand(updateCommand, ["myprofile", "--permission", "write"]);

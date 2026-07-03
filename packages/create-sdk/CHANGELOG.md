@@ -30,6 +30,43 @@
 
 ## 1.66.0
 
+## 1.71.0
+
+## 1.73.3
+
+## 1.73.2
+
+## 1.73.1
+
+## 1.73.0
+
+## 1.72.0
+
+## 1.70.1
+### Patch Changes
+
+
+
+- [#1569](https://github.com/tailor-platform/sdk/pull/1569) [`259dec9`](https://github.com/tailor-platform/sdk/commit/259dec92592c7927bcfb0e2d5dcbbd0e206eeba3) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB migration drift checks to normalize reconstructed snapshots and remote schemas through the same snapshot shape before comparison.
+
+## 1.70.0
+
+## 1.69.0
+### Patch Changes
+
+
+
+- [#1533](https://github.com/tailor-platform/sdk/pull/1533) [`e3bc2ce`](https://github.com/tailor-platform/sdk/commit/e3bc2ce65ab30ee53e5de0eb48ca6c24049fcd1b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.9.2
+
+## 1.68.0
+
+## 1.67.1
+
+## 1.67.0
+
+## 1.66.1
+
+## 1.66.0
 ## 1.65.0
 
 ## 1.64.0

@@ -14,8 +14,8 @@
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.2",
-    "oxfmt": "0.55.0",
-    "oxlint": "1.70.0",
+    "oxfmt": "0.56.0",
+    "oxlint": "1.71.0",
     "oxlint-tsgolint": "0.23.0",
     "typescript": "6.0.3"
   }

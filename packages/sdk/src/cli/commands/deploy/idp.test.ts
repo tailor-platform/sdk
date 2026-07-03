@@ -4,14 +4,11 @@ import { applyIdP, type planIdP } from "./idp";
 import type { OperatorClient } from "#/cli/shared/client";
 
 describe("applyIdP phase separation", () => {
-  // Helper to create mock client with spies for delete operations
   function createMockClientWithSpies() {
     return {
-      // Delete methods
       deleteIdPClient: vi.fn().mockResolvedValue({}),
       deleteIdPService: vi.fn().mockResolvedValue({}),
       deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
-      // Create/update methods for completeness
       createIdPService: vi.fn().mockResolvedValue({}),
       createIdPClient: vi.fn().mockResolvedValue({}),
       updateIdPClient: vi.fn().mockResolvedValue({}),
@@ -21,7 +18,6 @@ describe("applyIdP phase separation", () => {
     } as unknown as OperatorClient;
   }
 
-  // Helper to create a mock plan result with deletes
   function createMockPlanResult() {
     return {
       changeSet: {
@@ -39,7 +35,7 @@ describe("applyIdP phase separation", () => {
           ],
           title: "IdP Services",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
         client: {
           creates: [],
@@ -56,7 +52,7 @@ describe("applyIdP phase separation", () => {
           ],
           title: "IdP Clients",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
       },
       conflicts: [],
@@ -69,44 +65,25 @@ describe("applyIdP phase separation", () => {
     vi.clearAllMocks();
   });
 
-  test("delete-resources phase deletes clients and vaults, but NOT services", async () => {
+  test.each([
+    [
+      "delete-resources phase deletes clients and vaults, but NOT services",
+      "delete-resources",
+      1,
+      1,
+      0,
+    ],
+    ["delete-services phase deletes ONLY services", "delete-services", 0, 0, 1],
+    ["create-update phase does not delete anything", "create-update", 0, 0, 0],
+  ] as const)("%s", async (_, phase, clientCalls, vaultCalls, serviceCalls) => {
     const client = createMockClientWithSpies();
     const planResult = createMockPlanResult();
 
-    await applyIdP(client, planResult, "delete-resources");
+    await applyIdP(client, planResult, phase);
 
-    // Clients should be deleted
-    expect(client.deleteIdPClient).toHaveBeenCalledTimes(1);
-    // Secret vaults should be deleted
-    expect(client.deleteSecretManagerVault).toHaveBeenCalledTimes(1);
-    // Services should NOT be deleted
-    expect(client.deleteIdPService).not.toHaveBeenCalled();
-  });
-
-  test("delete-services phase deletes ONLY services", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
-
-    await applyIdP(client, planResult, "delete-services");
-
-    // Clients should NOT be deleted
-    expect(client.deleteIdPClient).not.toHaveBeenCalled();
-    // Secret vaults should NOT be deleted
-    expect(client.deleteSecretManagerVault).not.toHaveBeenCalled();
-    // Services should be deleted
-    expect(client.deleteIdPService).toHaveBeenCalledTimes(1);
-  });
-
-  test("create-update phase does not delete anything", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
-
-    await applyIdP(client, planResult, "create-update");
-
-    // No deletes should happen in create-update phase
-    expect(client.deleteIdPClient).not.toHaveBeenCalled();
-    expect(client.deleteSecretManagerVault).not.toHaveBeenCalled();
-    expect(client.deleteIdPService).not.toHaveBeenCalled();
+    expect(client.deleteIdPClient).toHaveBeenCalledTimes(clientCalls);
+    expect(client.deleteSecretManagerVault).toHaveBeenCalledTimes(vaultCalls);
+    expect(client.deleteIdPService).toHaveBeenCalledTimes(serviceCalls);
   });
 });
 
@@ -152,14 +129,15 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
     } as unknown as Awaited<ReturnType<typeof planIdP>>;
   }
 
-  function createClient() {
+  const defaultGetStaticWebsite = () =>
+    vi.fn().mockResolvedValue({ staticwebsite: { url: "https://my-site.example.com" } });
+
+  function createClient(getStaticWebsite = defaultGetStaticWebsite()) {
     return {
       createIdPService: vi.fn().mockResolvedValue({}),
       updateIdPService: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
-      getStaticWebsite: vi
-        .fn()
-        .mockResolvedValue({ staticwebsite: { url: "https://my-site.example.com" } }),
+      getStaticWebsite,
     } as unknown as OperatorClient;
   }
 
@@ -220,12 +198,9 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
   });
 
   test("fails fast when a placeholder cannot be resolved (NotFound)", async () => {
-    const client = {
-      createIdPService: vi.fn().mockResolvedValue({}),
-      updateIdPService: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
-    } as unknown as OperatorClient;
+    const client = createClient(
+      vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+    );
 
     await expect(
       applyIdP(
@@ -238,12 +213,7 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
   });
 
   test("fails fast when a placeholder resolves to a website without URL", async () => {
-    const client = {
-      createIdPService: vi.fn().mockResolvedValue({}),
-      updateIdPService: vi.fn().mockResolvedValue({}),
-      setMetadata: vi.fn().mockResolvedValue({}),
-      getStaticWebsite: vi.fn().mockResolvedValue({ staticwebsite: { url: "" } }),
-    } as unknown as OperatorClient;
+    const client = createClient(vi.fn().mockResolvedValue({ staticwebsite: { url: "" } }));
 
     await expect(
       applyIdP(

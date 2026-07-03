@@ -10,12 +10,65 @@ import {
 import type { AttributeListConfig, AttributesConfig } from "./type-generator";
 
 describe("generateTypeDefinition", () => {
-  test("should generate tuple type in __tuple property", () => {
-    const attributeList: AttributeListConfig = ["attr1", "attr2"];
-
-    const result = generateTypeDefinition(undefined, attributeList);
-
-    expect(result).toContain("__tuple?: [string, string]");
+  test.each<{
+    name: string;
+    args: Parameters<typeof generateTypeDefinition>;
+    expected: string[];
+  }>([
+    {
+      name: "generates tuple type in __tuple property",
+      args: [undefined, ["attr1", "attr2"]],
+      expected: ["__tuple?: [string, string]"],
+    },
+    {
+      name: "generates Attributes interface",
+      args: [{ role: '"MANAGER" | "STAFF"', isActive: "boolean" }, undefined],
+      expected: ["interface Attributes", 'role: "MANAGER" | "STAFF"', "isActive: boolean"],
+    },
+    {
+      name: "generates empty Attributes when no attributes",
+      args: [undefined, undefined],
+      expected: ["interface Attributes {}", "interface AttributeList", "__tuple?: []"],
+    },
+    {
+      name: "includes proper file header and structure",
+      args: [undefined, undefined],
+      expected: [
+        "// This file is auto-generated",
+        'declare module "@tailor-platform/sdk"',
+        "export {};",
+      ],
+    },
+    {
+      name: "generates Env interface with literal types",
+      args: [undefined, undefined, { hoge: 1, fuga: "hello", piyo: true }],
+      expected: ["interface Env", "hoge: 1;", 'fuga: "hello";', "piyo: true;"],
+    },
+    {
+      name: "generates empty Env interface when no env provided",
+      args: [undefined, undefined],
+      expected: ["interface Env {}"],
+    },
+    {
+      name: "generates empty MachineUserNameRegistry when no machine users provided",
+      args: [undefined, undefined],
+      expected: ["interface MachineUserNameRegistry {}"],
+    },
+    {
+      name: "generates empty IdpNameRegistry when no idps provided",
+      args: [undefined, undefined],
+      expected: ["interface IdpNameRegistry {}"],
+    },
+    {
+      name: "generates IdpNameRegistry with idp names",
+      args: [undefined, undefined, undefined, undefined, ["primary-idp", "backoffice"]],
+      expected: ["interface IdpNameRegistry", '"primary-idp": true;', "backoffice: true;"],
+    },
+  ])("should $name", ({ args, expected }) => {
+    const result = generateTypeDefinition(...args);
+    for (const substring of expected) {
+      expect(result).toContain(substring);
+    }
   });
 
   test("should generate interface AttributeList for declaration merging", () => {
@@ -26,7 +79,6 @@ describe("generateTypeDefinition", () => {
 
     const result = generateTypeDefinition(attributes, attributeList);
 
-    // Should use interface instead of type for AttributeList
     expect(result).toContain("interface AttributeList");
     expect(result).not.toContain("type AttributeList =");
     expect(result).toContain("__tuple?: []");
@@ -104,21 +156,43 @@ describe("generateTypeDefinition", () => {
     expect(result).not.toContain('"kiosk": true;');
   });
 
-  test("should generate empty IdpNameRegistry when no idps provided", () => {
+  test("should generate empty ConnectionNameRegistry when no connections provided", () => {
     const result = generateTypeDefinition(undefined, undefined);
 
-    expect(result).toContain("interface IdpNameRegistry {}");
+    expect(result).toContain("interface ConnectionNameRegistry {}");
   });
 
-  test("should generate IdpNameRegistry with idp names", () => {
-    const result = generateTypeDefinition(undefined, undefined, undefined, undefined, [
-      "primary-idp",
-      "backoffice",
+  test("should generate ConnectionNameRegistry with connection names", () => {
+    const result = generateTypeDefinition(undefined, undefined, undefined, undefined, undefined, [
+      "google-oauth",
+      "ms365-oauth",
     ]);
 
-    expect(result).toContain("interface IdpNameRegistry");
-    expect(result).toContain('"primary-idp": true;');
-    expect(result).toContain("backoffice: true;");
+    expect(result).toContain("interface ConnectionNameRegistry");
+    expect(result).toContain('"google-oauth": true;');
+    expect(result).toContain('"ms365-oauth": true;');
+  });
+
+  test("should generate empty AIGatewayNameRegistry when no AI Gateways provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface AIGatewayNameRegistry {}");
+  });
+
+  test("should generate AIGatewayNameRegistry with AI Gateway names", () => {
+    const result = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ["my-aigateway", "second-gateway"],
+    );
+
+    expect(result).toContain("interface AIGatewayNameRegistry");
+    expect(result).toContain('"my-aigateway": true;');
+    expect(result).toContain('"second-gateway": true;');
   });
 });
 
@@ -235,5 +309,83 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
 
     const { idpNames } = extractAttributesFromConfig(config);
     expect(idpNames).toEqual(["primary-idp", "backoffice"]);
+  });
+
+  test("extracts connection names into ConnectionNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      auth: defineAuth("auth", {
+        machineUserAttributes: {},
+        machineUsers: {},
+        connections: {
+          "google-oauth": {
+            type: "oauth2",
+            providerUrl: "https://accounts.google.com",
+            issuerUrl: "https://accounts.google.com",
+            clientId: "x",
+            clientSecret: "y",
+          },
+          "ms365-oauth": {
+            type: "oauth2",
+            providerUrl: "https://login.microsoftonline.com",
+            issuerUrl: "https://login.microsoftonline.com",
+            clientId: "x",
+            clientSecret: "y",
+          },
+        },
+      }),
+    };
+
+    const { connectionNames } = extractAttributesFromConfig(config);
+    expect(connectionNames).toEqual(["google-oauth", "ms365-oauth"]);
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      connectionNames,
+    );
+    expect(content).toContain("interface ConnectionNameRegistry");
+    expect(content).toContain('"google-oauth": true;');
+    expect(content).toContain('"ms365-oauth": true;');
+  });
+
+  test("extracts AI Gateway names into AIGatewayNameRegistry", () => {
+    const config = {
+      name: "test-app",
+      aiGateways: [{ name: "my-aigateway" } as never, { name: "second-gateway" } as never],
+    };
+
+    const { aiGatewayNames } = extractAttributesFromConfig(config);
+    expect(aiGatewayNames).toEqual(["my-aigateway", "second-gateway"]);
+
+    const content = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      aiGatewayNames,
+    );
+    expect(content).toContain("interface AIGatewayNameRegistry");
+    expect(content).toContain('"my-aigateway": true;');
+    expect(content).toContain('"second-gateway": true;');
+  });
+
+  test("de-duplicates AI Gateway names so the registry has unique keys", () => {
+    const config = {
+      name: "test-app",
+      aiGateways: [
+        { name: "my-aigateway" } as never,
+        { name: "second-gateway" } as never,
+        { name: "my-aigateway" } as never,
+      ],
+    };
+
+    const { aiGatewayNames } = extractAttributesFromConfig(config);
+    expect(aiGatewayNames).toEqual(["my-aigateway", "second-gateway"]);
   });
 });

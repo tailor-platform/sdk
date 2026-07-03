@@ -19,28 +19,40 @@ vi.mock("./label", async (importOriginal) => {
   };
 });
 
-vi.mock("./change-set", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
-  const createChangeSet = original.createChangeSet as (title: string) => {
-    print: () => void;
-  };
-  return {
-    ...original,
-    createChangeSet: (title: string) => ({
-      ...createChangeSet(title),
-      print: () => {},
-    }),
-  };
-});
+vi.mock("./change-set", async (importOriginal) => importOriginal());
 
 const workspaceId = "test-workspace";
 const appName = "test-app";
 const sdkVersion = "v1-0-0";
 
+const defaultUserAuthPolicy = {
+  useNonEmailIdentifier: false,
+  allowSelfPasswordReset: true,
+  passwordRequireUppercase: true,
+  passwordRequireLowercase: true,
+  passwordRequireNonAlphanumeric: false,
+  passwordRequireNumeric: true,
+  passwordMinLength: 8,
+  passwordMaxLength: 64,
+  allowedEmailDomains: ["a.example.com", "b.example.com"],
+  allowGoogleOauth: false,
+  disablePasswordAuth: false,
+  allowMicrosoftOauth: false,
+};
+
+const defaultDisableGqlOperations = {
+  create: false,
+  update: false,
+  delete: false,
+  read: false,
+  sendPasswordResetEmail: false,
+};
+
 type MockIdpServiceOpts = {
   name?: string;
   clients?: string[];
   publishUserEvents?: boolean | undefined;
+  gqlOperations?: Record<string, boolean | undefined>;
 };
 
 function createMockApplication(opts?: {
@@ -74,6 +86,7 @@ function createMockApplication(opts?: {
           delete: true,
           read: true,
           sendPasswordResetEmail: true,
+          ...service.gqlOperations,
         },
         clients: service.clients ?? ["default-idp-client"],
       };
@@ -89,16 +102,30 @@ function createMockApplication(opts?: {
   } as unknown as Application;
 }
 
+type MockRemoteService = {
+  name: string;
+  lang: IdPLang;
+  publishUserEvents: boolean;
+  userAuthPolicy?: Record<string, unknown>;
+  disableGqlOperations?: Record<string, boolean>;
+  permission?: Record<string, unknown>;
+  label?: string;
+};
+
+function createMatchingRemoteService(overrides?: Partial<MockRemoteService>): MockRemoteService {
+  return {
+    name: "idp-a",
+    lang: IdPLang.JA,
+    publishUserEvents: true,
+    userAuthPolicy: defaultUserAuthPolicy,
+    disableGqlOperations: defaultDisableGqlOperations,
+    label: appName,
+    ...overrides,
+  };
+}
+
 function createMockClient(opts?: {
-  services?: Array<{
-    name: string;
-    lang: IdPLang;
-    publishUserEvents: boolean;
-    userAuthPolicy?: Record<string, unknown>;
-    disableGqlOperations?: Record<string, boolean>;
-    permission?: Record<string, unknown>;
-    label?: string;
-  }>;
+  services?: MockRemoteService[];
   clients?: Record<string, Array<{ name: string; clientSecret: string }>>;
 }): OperatorClient {
   const services = opts?.services ?? [];
@@ -143,41 +170,15 @@ function createContext(client: OperatorClient): PlanContext {
   };
 }
 
+const defaultIdpClientSecret = {
+  "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
+};
+
 describe("planIdP", () => {
   test("marks idp service and client unchanged when remote state matches", async () => {
     const client = createMockClient({
-      services: [
-        {
-          name: "idp-a",
-          lang: IdPLang.JA,
-          publishUserEvents: true,
-          userAuthPolicy: {
-            useNonEmailIdentifier: false,
-            allowSelfPasswordReset: true,
-            passwordRequireUppercase: true,
-            passwordRequireLowercase: true,
-            passwordRequireNonAlphanumeric: false,
-            passwordRequireNumeric: true,
-            passwordMinLength: 8,
-            passwordMaxLength: 64,
-            allowedEmailDomains: ["a.example.com", "b.example.com"],
-            allowGoogleOauth: false,
-            disablePasswordAuth: false,
-            allowMicrosoftOauth: false,
-          },
-          disableGqlOperations: {
-            create: false,
-            update: false,
-            delete: false,
-            read: false,
-            sendPasswordResetEmail: false,
-          },
-          label: appName,
-        },
-      ],
-      clients: {
-        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
-      },
+      services: [createMatchingRemoteService()],
+      clients: defaultIdpClientSecret,
     });
 
     const result = await planIdP(createContext(client));
@@ -190,38 +191,8 @@ describe("planIdP", () => {
 
   test("marks idp service and client updated when forceApplyAll is enabled", async () => {
     const client = createMockClient({
-      services: [
-        {
-          name: "idp-a",
-          lang: IdPLang.JA,
-          publishUserEvents: true,
-          userAuthPolicy: {
-            useNonEmailIdentifier: false,
-            allowSelfPasswordReset: true,
-            passwordRequireUppercase: true,
-            passwordRequireLowercase: true,
-            passwordRequireNonAlphanumeric: false,
-            passwordRequireNumeric: true,
-            passwordMinLength: 8,
-            passwordMaxLength: 64,
-            allowedEmailDomains: ["a.example.com", "b.example.com"],
-            allowGoogleOauth: false,
-            disablePasswordAuth: false,
-            allowMicrosoftOauth: false,
-          },
-          disableGqlOperations: {
-            create: false,
-            update: false,
-            delete: false,
-            read: false,
-            sendPasswordResetEmail: false,
-          },
-          label: appName,
-        },
-      ],
-      clients: {
-        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
-      },
+      services: [createMatchingRemoteService()],
+      clients: defaultIdpClientSecret,
     });
 
     const result = await planIdP({
@@ -237,17 +208,8 @@ describe("planIdP", () => {
 
   test("marks idp service updated when remote state differs", async () => {
     const client = createMockClient({
-      services: [
-        {
-          name: "idp-a",
-          lang: IdPLang.EN,
-          publishUserEvents: false,
-          label: appName,
-        },
-      ],
-      clients: {
-        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
-      },
+      services: [{ name: "idp-a", lang: IdPLang.EN, publishUserEvents: false, label: appName }],
+      clients: defaultIdpClientSecret,
     });
 
     const result = await planIdP(createContext(client));
@@ -258,37 +220,8 @@ describe("planIdP", () => {
 
   test("marks idp service updated when config matches but ownership metadata is missing", async () => {
     const client = createMockClient({
-      services: [
-        {
-          name: "idp-a",
-          lang: IdPLang.JA,
-          publishUserEvents: true,
-          userAuthPolicy: {
-            useNonEmailIdentifier: false,
-            allowSelfPasswordReset: true,
-            passwordRequireUppercase: true,
-            passwordRequireLowercase: true,
-            passwordRequireNonAlphanumeric: false,
-            passwordRequireNumeric: true,
-            passwordMinLength: 8,
-            passwordMaxLength: 64,
-            allowedEmailDomains: ["a.example.com", "b.example.com"],
-            allowGoogleOauth: false,
-            disablePasswordAuth: false,
-            allowMicrosoftOauth: false,
-          },
-          disableGqlOperations: {
-            create: false,
-            update: false,
-            delete: false,
-            read: false,
-            sendPasswordResetEmail: false,
-          },
-        },
-      ],
-      clients: {
-        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
-      },
+      services: [createMatchingRemoteService({ label: undefined })],
+      clients: defaultIdpClientSecret,
     });
 
     const result = await planIdP(createContext(client));
@@ -300,38 +233,8 @@ describe("planIdP", () => {
 
   test("marks idp service updated when config matches but resource is owned by another app", async () => {
     const client = createMockClient({
-      services: [
-        {
-          name: "idp-a",
-          lang: IdPLang.JA,
-          publishUserEvents: true,
-          userAuthPolicy: {
-            useNonEmailIdentifier: false,
-            allowSelfPasswordReset: true,
-            passwordRequireUppercase: true,
-            passwordRequireLowercase: true,
-            passwordRequireNonAlphanumeric: false,
-            passwordRequireNumeric: true,
-            passwordMinLength: 8,
-            passwordMaxLength: 64,
-            allowedEmailDomains: ["a.example.com", "b.example.com"],
-            allowGoogleOauth: false,
-            disablePasswordAuth: false,
-            allowMicrosoftOauth: false,
-          },
-          disableGqlOperations: {
-            create: false,
-            update: false,
-            delete: false,
-            read: false,
-            sendPasswordResetEmail: false,
-          },
-          label: "other-app",
-        },
-      ],
-      clients: {
-        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
-      },
+      services: [createMatchingRemoteService({ label: "other-app" })],
+      clients: defaultIdpClientSecret,
     });
 
     const result = await planIdP(createContext(client));
@@ -343,38 +246,8 @@ describe("planIdP", () => {
 
   test("marks idp service updated when permission changes", async () => {
     const client = createMockClient({
-      services: [
-        {
-          name: "idp-a",
-          lang: IdPLang.JA,
-          publishUserEvents: true,
-          userAuthPolicy: {
-            useNonEmailIdentifier: false,
-            allowSelfPasswordReset: true,
-            passwordRequireUppercase: true,
-            passwordRequireLowercase: true,
-            passwordRequireNonAlphanumeric: false,
-            passwordRequireNumeric: true,
-            passwordMinLength: 8,
-            passwordMaxLength: 64,
-            allowedEmailDomains: ["a.example.com", "b.example.com"],
-            allowGoogleOauth: false,
-            disablePasswordAuth: false,
-            allowMicrosoftOauth: false,
-          },
-          disableGqlOperations: {
-            create: false,
-            update: false,
-            delete: false,
-            read: false,
-            sendPasswordResetEmail: false,
-          },
-          label: appName,
-        },
-      ],
-      clients: {
-        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
-      },
+      services: [createMatchingRemoteService()],
+      clients: defaultIdpClientSecret,
     });
 
     const context = createContext(client);
@@ -397,31 +270,7 @@ describe("planIdP", () => {
   test("marks idp service unchanged when permission policies omit description and remote returns empty string", async () => {
     const client = createMockClient({
       services: [
-        {
-          name: "idp-a",
-          lang: IdPLang.JA,
-          publishUserEvents: true,
-          userAuthPolicy: {
-            useNonEmailIdentifier: false,
-            allowSelfPasswordReset: true,
-            passwordRequireUppercase: true,
-            passwordRequireLowercase: true,
-            passwordRequireNonAlphanumeric: false,
-            passwordRequireNumeric: true,
-            passwordMinLength: 8,
-            passwordMaxLength: 64,
-            allowedEmailDomains: ["a.example.com", "b.example.com"],
-            allowGoogleOauth: false,
-            disablePasswordAuth: false,
-            allowMicrosoftOauth: false,
-          },
-          disableGqlOperations: {
-            create: false,
-            update: false,
-            delete: false,
-            read: false,
-            sendPasswordResetEmail: false,
-          },
+        createMatchingRemoteService({
           // Platform returns the proto default empty string for policy descriptions
           permission: {
             create: [{ conditions: [], permit: IdPPermissionPermit.ALLOW, description: "" }],
@@ -431,12 +280,9 @@ describe("planIdP", () => {
             sendPasswordResetEmail: [],
             unenrollMfa: [],
           },
-          label: appName,
-        },
+        }),
       ],
-      clients: {
-        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
-      },
+      clients: defaultIdpClientSecret,
     });
 
     const context = createContext(client);
@@ -459,31 +305,7 @@ describe("planIdP", () => {
   test("marks idp service unchanged when permission is omitted and remote is empty permission", async () => {
     const client = createMockClient({
       services: [
-        {
-          name: "idp-a",
-          lang: IdPLang.JA,
-          publishUserEvents: true,
-          userAuthPolicy: {
-            useNonEmailIdentifier: false,
-            allowSelfPasswordReset: true,
-            passwordRequireUppercase: true,
-            passwordRequireLowercase: true,
-            passwordRequireNonAlphanumeric: false,
-            passwordRequireNumeric: true,
-            passwordMinLength: 8,
-            passwordMaxLength: 64,
-            allowedEmailDomains: ["a.example.com", "b.example.com"],
-            allowGoogleOauth: false,
-            disablePasswordAuth: false,
-            allowMicrosoftOauth: false,
-          },
-          disableGqlOperations: {
-            create: false,
-            update: false,
-            delete: false,
-            read: false,
-            sendPasswordResetEmail: false,
-          },
+        createMatchingRemoteService({
           permission: {
             create: [],
             read: [],
@@ -492,12 +314,9 @@ describe("planIdP", () => {
             sendPasswordResetEmail: [],
             unenrollMfa: [],
           },
-          label: appName,
-        },
+        }),
       ],
-      clients: {
-        "idp-a": [{ name: "default-idp-client", clientSecret: "secret" }],
-      },
+      clients: defaultIdpClientSecret,
     });
 
     const result = await planIdP(createContext(client));
@@ -508,23 +327,38 @@ describe("planIdP", () => {
 
   test("creates idp client when it does not exist remotely", async () => {
     const client = createMockClient({
-      services: [
-        {
-          name: "idp-a",
-          lang: IdPLang.JA,
-          publishUserEvents: true,
-          label: appName,
-        },
-      ],
-      clients: {
-        "idp-a": [],
-      },
+      services: [{ name: "idp-a", lang: IdPLang.JA, publishUserEvents: true, label: appName }],
+      clients: { "idp-a": [] },
     });
 
     const result = await planIdP(createContext(client));
 
     expect(result.changeSet.client.creates).toHaveLength(1);
     expect(result.changeSet.client.unchanged).toHaveLength(0);
+  });
+});
+
+describe("planIdP / gqlOperations MFA mapping", () => {
+  test.each`
+    label                                       | gqlOperations                                           | expected
+    ${"defaults to false when not disabled"}    | ${undefined}                                            | ${false}
+    ${"flips to true when explicitly disabled"} | ${{ requestMfaSettingsUrl: false, unenrollMfa: false }} | ${true}
+  `("$label", async ({ gqlOperations, expected }) => {
+    const app = createMockApplication(
+      gqlOperations ? { idpServices: [{ gqlOperations }] } : undefined,
+    );
+    const client = createMockClient({ services: [], clients: { "idp-a": [] } });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(),
+    });
+
+    expect(result.changeSet.service.creates).toHaveLength(1);
+    const request = result.changeSet.service.creates[0]!.request;
+    expect(request.disableGqlOperations?.requestMfaSettingsUrl).toBe(expected);
+    expect(request.disableGqlOperations?.unenrollMfa).toBe(expected);
   });
 });
 

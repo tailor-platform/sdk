@@ -1,6 +1,6 @@
 ## plugin
 
-Manage and inspect CLI plugins.
+Manage and inspect CLI plugins (beta).
 
 **Usage**
 

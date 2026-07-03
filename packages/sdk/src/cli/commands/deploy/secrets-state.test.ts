@@ -12,20 +12,16 @@ vi.mock("#/cli/shared/dist-dir", () => ({
   getDistDir: () => "/tmp/tailor-test-secrets-state",
 }));
 
-describe("secrets-state", () => {
-  beforeEach(() => {
-    const statePath = getSecretsStatePath();
-    if (existsSync(statePath)) {
-      rmSync(statePath);
-    }
-  });
+function removeStateFile(): void {
+  const statePath = getSecretsStatePath();
+  if (existsSync(statePath)) {
+    rmSync(statePath);
+  }
+}
 
-  afterEach(() => {
-    const statePath = getSecretsStatePath();
-    if (existsSync(statePath)) {
-      rmSync(statePath);
-    }
-  });
+describe("secrets-state", () => {
+  beforeEach(removeStateFile);
+  afterEach(removeStateFile);
 
   test("loadSecretsState returns empty state when file does not exist", () => {
     const state = loadSecretsState();

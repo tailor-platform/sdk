@@ -45,43 +45,22 @@ describe("FileUtilsPlugin", () => {
   });
 
   describe("file field collection", () => {
-    test("should collect file field names", async () => {
-      const type = db
-        .type("User", {
-          name: db.string(),
-        })
-        .files({
-          avatar: "profile image",
-        });
+    test.each<[string, string, Record<string, string> | undefined, string[]]>([
+      ["should collect file field names", "User", { avatar: "profile image" }, ["avatar"]],
+      [
+        "should collect multiple file field names",
+        "SalesOrder",
+        { receipt: "receipt file", form: "order form" },
+        ["receipt", "form"],
+      ],
+      ["should return empty array when no files are present", "User", undefined, []],
+    ])("%s", async (_name, typeName, files, expectedFields) => {
+      let type = db.type(typeName, { name: db.string() });
+      if (files) type = type.files(files);
 
       const result = await processFileType(parseTailorDBType(toSchemaOutput(type)));
 
-      expect(result.fileFields).toEqual(["avatar"]);
-    });
-
-    test("should collect multiple file field names", async () => {
-      const type = db
-        .type("SalesOrder", {
-          name: db.string(),
-        })
-        .files({
-          receipt: "receipt file",
-          form: "order form",
-        });
-
-      const result = await processFileType(parseTailorDBType(toSchemaOutput(type)));
-
-      expect(result.fileFields).toEqual(["receipt", "form"]);
-    });
-
-    test("should return empty array when no files are present", async () => {
-      const type = db.type("User", {
-        name: db.string(),
-      });
-
-      const result = await processFileType(parseTailorDBType(toSchemaOutput(type)));
-
-      expect(result.fileFields).toEqual([]);
+      expect(result.fileFields).toEqual(expectedFields);
     });
   });
 

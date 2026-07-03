@@ -2,14 +2,8 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { fetchAll, type OperatorClient } from "#/cli/shared/client";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
-import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
+import { fetchExistingResourcesWithLabels } from "./owned-resource";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
@@ -125,35 +119,19 @@ export async function planSecretManager(context: PlanContext) {
   const resourceOwners = new Set<string>();
 
   // Fetch all existing vaults with metadata to track managed resources
-  const existingVaultList = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingVaults = await fetchExistingResourcesWithLabels({
+    client,
+    fetchPage: async (pageToken, maxPageSize) => {
       const { vaults, nextPageToken } = await client.listSecretManagerVaults({
         workspaceId,
         pageToken,
         pageSize: maxPageSize,
       });
       return [vaults, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.name,
+    getTrn: (name) => resourceTrn(workspaceId, "vault", name),
   });
-
-  const existingVaults: WithLabel<(typeof existingVaultList)[number]> = {};
-  await Promise.all(
-    existingVaultList.map(async (resource) => {
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "vault", resource.name),
-      });
-      existingVaults[resource.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   const state = loadSecretsState();
   const skippedSecrets: string[] = [];

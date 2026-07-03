@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { oauth2ClientId, platformBaseUrl } from "./client";
+import { getOAuth2ClientId, getPlatformBaseUrl } from "./client";
 import { dispatchPlugin, listPlugins, resolvePlugin } from "./plugin";
 
 const contextMocks = vi.hoisted(() => ({
@@ -208,8 +208,8 @@ describe.skipIf(isWindows)("dispatchPlugin", () => {
     expect(code).toBe(0);
     const { env, argv } = readCapture();
     expect(argv).toEqual(["world", "--loud"]);
-    expect(env.TAILOR_PLATFORM_URL).toBe(platformBaseUrl);
-    expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBe(oauth2ClientId);
+    expect(env.TAILOR_PLATFORM_URL).toBe(getPlatformBaseUrl());
+    expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBe(getOAuth2ClientId());
     expect(env.TAILOR_PLATFORM_TOKEN).toBe("tok-123");
     expect(env.TAILOR_PLATFORM_WORKSPACE_ID).toBe("ws-456");
     expect(env.TAILOR_PLATFORM_USER).toBe("me@example.com");
@@ -239,7 +239,7 @@ describe.skipIf(isWindows)("dispatchPlugin", () => {
     expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
     expect(env.TAILOR_PLATFORM_WORKSPACE_ID).toBeUndefined();
     expect(env.TAILOR_PLATFORM_USER).toBeUndefined();
-    expect(env.TAILOR_PLATFORM_URL).toBe(platformBaseUrl);
+    expect(env.TAILOR_PLATFORM_URL).toBe(getPlatformBaseUrl());
   });
 
   test("builds the plugin slug from the command path for nested dispatch", async () => {

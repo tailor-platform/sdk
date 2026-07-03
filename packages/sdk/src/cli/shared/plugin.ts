@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { accessSync, constants, readdirSync } from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { oauth2ClientId, platformBaseUrl } from "./client";
+import { getOAuth2ClientId, getPlatformBaseUrl } from "./client";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId, readPlatformConfig } from "./context";
 import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
@@ -213,8 +213,8 @@ async function resolveActiveUser(profile?: string): Promise<string | undefined> 
 async function buildPluginEnv(options: PluginContextOptions = {}): Promise<Record<string, string>> {
   const { profile } = options;
   const env: Record<string, string> = {
-    TAILOR_PLATFORM_URL: platformBaseUrl,
-    TAILOR_PLATFORM_OAUTH2_CLIENT_ID: oauth2ClientId,
+    TAILOR_PLATFORM_URL: getPlatformBaseUrl(),
+    TAILOR_PLATFORM_OAUTH2_CLIENT_ID: getOAuth2ClientId(),
   };
 
   const binPath = process.argv[1];

@@ -21,85 +21,33 @@ vi.mock("politty", async () => {
   return { ...actual, runMain: vi.fn() };
 });
 
-const templateFiles: Record<string, { commands: string[]; tpl: string }> = {
-  "docs/cli/application.md": {
-    commands: ["init", "generate", "deploy", "remove", "show", "open", "api"],
-    tpl: "docs/cli/application.template.md",
-  },
-  "docs/cli/tailordb.md": {
-    commands: ["tailordb"],
-    tpl: "docs/cli/tailordb.template.md",
-  },
-  "docs/cli/query.md": {
-    commands: ["query"],
-    tpl: "docs/cli/query.template.md",
-  },
-  "docs/cli/user.md": {
-    commands: ["login", "logout", "auth", "user"],
-    tpl: "docs/cli/user.template.md",
-  },
-  "docs/cli/organization.md": {
-    commands: ["organization"],
-    tpl: "docs/cli/organization.template.md",
-  },
-  "docs/cli/workspace.md": {
-    commands: ["workspace", "profile"],
-    tpl: "docs/cli/workspace.template.md",
-  },
-  "docs/cli/auth.md": {
-    commands: ["authconnection", "machineuser", "oauth2client"],
-    tpl: "docs/cli/auth.template.md",
-  },
-  "docs/cli/workflow.md": {
-    commands: ["workflow"],
-    tpl: "docs/cli/workflow.template.md",
-  },
-  "docs/cli/function.md": {
-    commands: ["function"],
-    tpl: "docs/cli/function.template.md",
-  },
-  "docs/cli/executor.md": {
-    commands: ["executor"],
-    tpl: "docs/cli/executor.template.md",
-  },
-  "docs/cli/secret.md": {
-    commands: ["secret"],
-    tpl: "docs/cli/secret.template.md",
-  },
-  "docs/cli/staticwebsite.md": {
-    commands: ["staticwebsite"],
-    tpl: "docs/cli/staticwebsite.template.md",
-  },
-  "docs/cli/crashreport.md": {
-    commands: ["crashreport"],
-    tpl: "docs/cli/crashreport.template.md",
-  },
-  "docs/cli/setup.md": {
-    commands: ["setup"],
-    tpl: "docs/cli/setup.template.md",
-  },
-  "docs/cli/upgrade.md": {
-    commands: ["upgrade"],
-    tpl: "docs/cli/upgrade.template.md",
-  },
-  "docs/cli/skills.md": {
-    commands: ["skills"],
-    tpl: "docs/cli/skills.template.md",
-  },
-  "docs/cli/plugin.md": {
-    commands: ["plugin"],
-    tpl: "docs/cli/plugin.template.md",
-  },
-  "docs/cli/completion.md": {
-    commands: ["completion"],
-    tpl: "docs/cli/completion.template.md",
-  },
-};
+const templateFiles: [output: string, commands: string[]][] = [
+  ["application", ["init", "generate", "deploy", "remove", "show", "open", "api"]],
+  ["tailordb", ["tailordb"]],
+  ["query", ["query"]],
+  ["user", ["login", "logout", "auth", "user"]],
+  ["organization", ["organization"]],
+  ["workspace", ["workspace", "profile"]],
+  ["auth", ["authconnection", "machineuser", "oauth2client"]],
+  ["workflow", ["workflow"]],
+  ["function", ["function"]],
+  ["executor", ["executor"]],
+  ["secret", ["secret"]],
+  ["staticwebsite", ["staticwebsite"]],
+  ["crashreport", ["crashreport"]],
+  ["setup", ["setup"]],
+  ["upgrade", ["upgrade"]],
+  ["skills", ["skills"]],
+  ["plugin", ["plugin"]],
+  ["completion", ["completion"]],
+];
 
-const targetCommands = Object.values(templateFiles).flatMap((c) => c.commands);
+const targetCommands = templateFiles.flatMap(([, commands]) => commands);
 
 const templates = {
-  ...Object.fromEntries(Object.entries(templateFiles).map(([output, { tpl }]) => [output, tpl])),
+  ...Object.fromEntries(
+    templateFiles.map(([name]) => [`docs/cli/${name}.md`, `docs/cli/${name}.template.md`]),
+  ),
   "docs/cli-reference.md": "docs/cli-reference.template.md",
 };
 
