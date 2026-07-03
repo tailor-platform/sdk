@@ -24,6 +24,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 | [`setup action`](#setup-action)         | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).  |
 | [`setup coordinate`](#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
 | [`setup check`](#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
+| [`setup delete`](#setup-delete)         | Delete managed workflow/action file(s) and their .github/tailor-sdk.lock entries.                |
 
 ### setup action
 
@@ -107,6 +108,30 @@ tailor-sdk setup coordinate [options]
 | `--tag`                       | -     | Generate a tag target coordinator                                                       | No       | `false` |
 | `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs                                             | No       | -       |
 | `--force`                     | -     | Discard hand edits and regenerate                                                       | No       | `false` |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+### setup delete
+
+Delete managed workflow/action file(s) and their .github/tailor-sdk.lock entries.
+
+**Usage**
+
+```
+tailor-sdk setup delete [options] <files>
+```
+
+**Arguments**
+
+| Argument | Description                                                                                | Required |
+| -------- | ------------------------------------------------------------------------------------------ | -------- |
+| `files`  | Workflow/action file(s) to delete, as generated under .github/workflows or .github/actions | Yes      |
+
+**Options**
+
+| Option  | Alias | Description               | Required | Default |
+| ------- | ----- | ------------------------- | -------- | ------- |
+| `--yes` | `-y`  | Skip confirmation prompts | No       | `false` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
