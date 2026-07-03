@@ -116,6 +116,13 @@ describe("repository ERD preview workflow", () => {
     expect(content).toContain("if-no-files-found: ignore");
   });
 
+  test("treats a full page of compare files as relevant instead of trusting a possibly-truncated list", () => {
+    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+
+    expect(content).toContain("pr_file_count=$(jq '.files | length' \"$compare_json\")");
+    expect(content).toContain('[ "$pr_file_count" -lt 300 ]');
+  });
+
   test("uploads artifacts with names matched by the sticky comment", () => {
     const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
 
@@ -159,6 +166,12 @@ describe("repository ERD schema export workflow", () => {
     expect(content).toContain("repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA");
     expect(content).toContain("grep -oP 'loaded from \\K[^/]+(?=/)'");
     expect(content).toContain("This push did not touch namespace '$NAMESPACE'; skipping upload.");
+  });
+
+  test("treats a full page of compare files as relevant instead of trusting a possibly-truncated list", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_EXPORT_WORKFLOW, "utf-8");
+
+    expect(content).toContain('$(echo "$compare_json" | jq \'.files | length\')" -ge 300');
   });
 
   test("groups concurrency per commit so a fast-follow push cannot cancel a run", () => {

@@ -81,14 +81,17 @@ jobs:
           compare_json="$RUNNER_TEMP/compare-$NAMESPACE.json"
           gh api "repos/$REPO/compare/$BASE_SHA...$HEAD_SHA" >"$compare_json"
           fork_sha=$(jq -r '.merge_base_commit.sha' "$compare_json")
+          pr_file_count=$(jq '.files | length' "$compare_json")
           pr_changed_files=$(jq -r '.files[]?.filename' "$compare_json")
 
           # Skip this namespace entirely when the PR touched neither the type
           # files this export actually loaded, tailor.config.ts, nor the erd
           # viewer implementation. Using the export's own resolved files
           # (rather than a copy of tailor.config.ts's `files` globs) means
-          # this always matches the live config.
-          if [ "$head_missing" = "false" ] &&
+          # this always matches the live config. The compare API caps `files`
+          # at 300 with no total count to detect truncation by, so skip this
+          # check entirely (treat as relevant) once a page is full.
+          if [ "$head_missing" = "false" ] && [ "$pr_file_count" -lt 300 ] &&
             ! echo "$pr_changed_files" | grep -qE '^(example/tailor\.config\.ts|packages/sdk/src/cli/commands/tailordb/erd/)'; then
             namespace_dirs=$(grep -oP 'loaded from \K[^/]+(?=/)' "$head_log" | sort -u)
             relevant="false"

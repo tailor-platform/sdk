@@ -74,7 +74,17 @@ jobs:
             exit 0
           fi
 
-          changed_files=$(gh api "repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA" --jq '.files[].filename')
+          compare_json=$(gh api "repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA")
+
+          # The compare API caps `files` at 300 entries with no total count to
+          # detect truncation by; treat a full page as "possibly truncated"
+          # and keep the export rather than risk skipping on missing data.
+          if [ "$(echo "$compare_json" | jq '.files | length')" -ge 300 ]; then
+            echo "Compare API file list may be truncated at 300 entries; keeping this export to be safe."
+            exit 0
+          fi
+
+          changed_files=$(echo "$compare_json" | jq -r '.files[]?.filename')
 
           if echo "$changed_files" | grep -qE '^(example/tailor\.config\.ts|packages/sdk/src/cli/commands/tailordb/erd/)'; then
             echo "Relevant config or viewer implementation change detected; keeping this export."
