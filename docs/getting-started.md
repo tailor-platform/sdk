@@ -19,12 +19,12 @@ pnpm build
 
 ## Key Commands
 
-| Command         | Description                                                                       |
-| --------------- | --------------------------------------------------------------------------------- |
-| `pnpm build`    | Build all packages                                                                |
-| `pnpm test`     | Run all tests                                                                     |
-| `pnpm check`    | Build, generate, format, lint, typecheck, knip, publint, JSDoc, agent-rule checks |
-| `pnpm generate` | Run code generation                                                               |
+| Command         | Description                                                                |
+| --------------- | -------------------------------------------------------------------------- |
+| `pnpm build`    | Build all packages                                                         |
+| `pnpm test`     | Run all tests                                                              |
+| `pnpm check`    | Build, generate, format, and every `check:*` script in root `package.json` |
+| `pnpm generate` | Run code generation                                                        |
 
 In `packages/sdk/`:
 
@@ -58,6 +58,8 @@ pnpm test:e2e        # Run E2E tests (requires deployed workspace)
 3. **Lint** — Run standard and Vitest-specific oxlint passes, plus create-sdk template lint
 4. **Typecheck** — Run tsgo
 5. **Knip** — Detect unused dependencies and exports
+
+Steps 2–5 run as a single command, and only when staged files include `.ts`/`.js`.
 
 Post-commit verifies GPG signature.
 

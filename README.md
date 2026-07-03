@@ -32,7 +32,7 @@ pnpm lint:fix
 pnpm format
 pnpm format:check
 
-# Run all checks (build, generate, format, lint, typecheck, knip, publint, JSDoc, agent rules)
+# Run all checks (build, generate, format, and every check:* script in package.json)
 pnpm check
 
 # Check CLI documentation matches command definitions
