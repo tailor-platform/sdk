@@ -32,17 +32,14 @@ parent="$(git rev-parse HEAD^ 2>/dev/null || true)"
 
 # <package.json path> <commit> -> "name<TAB>version<TAB>private", or empty if
 # the path doesn't exist at that commit (e.g. a newly added package, or no
-# parent commit). The trailing `return 0` is required, not decorative: under
-# `pipefail`, `git show` failing (missing path/commit) makes the pipeline's
-# exit status non-zero, which would abort the whole script under `set -e`
-# without it.
+# parent commit). `|| true` makes that a non-fatal empty result instead of
+# aborting the script under `set -e`.
 pkg_at() {
   [ -n "$2" ] || return 0
   git show "${2}:${1}" 2>/dev/null | node -pe "
     const p = JSON.parse(require('fs').readFileSync(0,'utf8'));
     [p.name, p.version, !!p.private].join('\t')
-  " 2>/dev/null
-  return 0
+  " 2>/dev/null || true
 }
 
 changelog_entry() { # <version> — reads full changelog content from stdin
