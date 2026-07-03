@@ -3,17 +3,16 @@ import { describe, expectTypeOf, expect, test } from "vitest";
 import { t } from "#/configure/types/index";
 import { db, type TailorAnyDBField } from "./schema";
 import type { FieldValidateInput, ValidateConfig } from "#/configure/types/field.types";
+import type {
+  DateString,
+  DateTimeString,
+  DecimalString,
+  TimeString,
+  UUIDString,
+} from "#/configure/types/scalar.types";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { output, TypeLevelError } from "#/types/helpers";
 import type { Hook } from "./types";
-
-type DateString = `${number}-${number}-${number}`;
-type TimeString = `${number}:${number}`;
-type TimeZoneOffsetString = "Z" | "z" | `${"+" | "-"}${TimeString}`;
-type DateTimeString =
-  `${DateString}${"T" | "t"}${TimeString}:${number}${"" | `.${number}`}${TimeZoneOffsetString}`;
-type UUIDString = `${string}-${string}-${string}-${string}-${string}`;
-type DecimalString = `${number}`;
 
 describe("TailorDBField basic field type tests", () => {
   test("string field outputs string type correctly", () => {
