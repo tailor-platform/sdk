@@ -12,7 +12,6 @@ on:
       - .github/workflows/*.yaml
       - .github/workflows/*.yml
       - .github/actions/**
-      - .github/scripts/**
       - aqua.yaml
       - aqua-checksums.json
       - .ghalint.yaml
@@ -41,7 +40,7 @@ jobs:
         uses: ./.github/actions/install-aqua
 
       - name: Run actionlint
-        run: node .github/scripts/actionlint-allow-parallel.mjs
+        run: actionlint -color
 
       - name: Run ghalint workflows
         run: ghalint run
