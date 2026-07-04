@@ -97,6 +97,7 @@ export async function bundleResolvers(
   // memory use (each rolldown.build allocates its own module graph).
   const results = await withBundleConcurrency(resolvers, (resolver) =>
     bundleSingleResolver(
+      namespace,
       resolver,
       outputDir,
       tsconfig,
@@ -117,6 +118,7 @@ export async function bundleResolvers(
 }
 
 async function bundleSingleResolver(
+  namespace: string,
   resolver: ResolverInfo,
   outputDir: string,
   tsconfig: string | undefined,
@@ -138,6 +140,7 @@ async function bundleSingleResolver(
   const code = await withCache({
     cache,
     kind: "resolver",
+    namespace,
     name: resolver.name,
     sourceFile: resolver.sourceFile,
     contextHash,

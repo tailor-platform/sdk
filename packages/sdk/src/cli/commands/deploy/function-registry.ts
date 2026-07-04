@@ -1,5 +1,6 @@
 import * as crypto from "node:crypto";
 import { logger } from "#/cli/shared/logger";
+import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
 import {
@@ -175,9 +176,13 @@ export function collectFunctionEntries(
   for (const app of application.applications) {
     for (const pipeline of app.resolverServices) {
       for (const resolver of Object.values(pipeline.resolvers)) {
-        const content = bundledScripts.resolvers.get(resolver.name);
+        const content = bundledScripts.resolvers.get(
+          resolverBundleKey(pipeline.namespace, resolver.name),
+        );
         if (!content) {
-          logger.warn(`Bundled code not found for resolver: ${resolver.name}`);
+          logger.warn(
+            `Bundled code not found for resolver: ${pipeline.namespace}/${resolver.name}`,
+          );
           continue;
         }
         entries.push({

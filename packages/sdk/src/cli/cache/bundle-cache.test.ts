@@ -190,10 +190,7 @@ describe("createBundleCache", () => {
       expect(entry?.outputFiles).toHaveLength(1);
       expect(entry?.outputFiles[0]?.contentHash).toMatch(/^[0-9a-f]{64}$/);
 
-      // Cache filename replaces the ":" in "kind:name" with "_"
-      const cachedBundlePath = path.join(cacheDir, "bundles", "executor_myExecutor.js");
-      expect(fs.existsSync(cachedBundlePath)).toBe(true);
-      expect(fs.readFileSync(cachedBundlePath, "utf-8")).toBe("bundled executor");
+      expect(store.restoreBundleContent("executor:myExecutor")).toBe("bundled executor");
     });
 
     test("updates existing cache entry on re-save", () => {
@@ -243,6 +240,39 @@ describe("createBundleCache", () => {
       expect(store.getEntry("resolver:getUser")).toBeDefined();
       expect(store.getEntry("getUser")).toBeUndefined();
       expect(store.getEntry("resolver")).toBeUndefined();
+    });
+
+    test("cache key includes namespace when provided", () => {
+      const store = createCacheStore({ cacheDir });
+      const cache = createBundleCache(store);
+      const firstSourceFile = writeFile("src/first/resolver.ts", "export default {}");
+      const secondSourceFile = writeFile("src/second/resolver.ts", "export default {}");
+
+      cache.save({
+        kind: "resolver",
+        namespace: "first",
+        name: "getUser",
+        sourceFile: firstSourceFile,
+        content: "first bundle",
+        dependencyPaths: [firstSourceFile],
+      });
+      cache.save({
+        kind: "resolver",
+        namespace: "second",
+        name: "getUser",
+        sourceFile: secondSourceFile,
+        content: "second bundle",
+        dependencyPaths: [secondSourceFile],
+      });
+
+      expect(store.getEntry("resolver:first:getUser")).toBeDefined();
+      expect(store.getEntry("resolver:second:getUser")).toBeDefined();
+      expect(cache.tryRestore({ kind: "resolver", namespace: "first", name: "getUser" })).toBe(
+        "first bundle",
+      );
+      expect(cache.tryRestore({ kind: "resolver", namespace: "second", name: "getUser" })).toBe(
+        "second bundle",
+      );
     });
   });
 });
@@ -350,6 +380,47 @@ describe("withCache", () => {
       build,
     });
     expect(build).toHaveBeenCalledOnce();
+  });
+
+  test("keeps entries separate by namespace", async () => {
+    const cache = createBundleCache(createCacheStore({ cacheDir }));
+    const firstSourceFile = writeFile("src/first/resolver.ts", "export default {}");
+    const secondSourceFile = writeFile("src/second/resolver.ts", "export default {}");
+    const buildFirst = vi.fn(async () => "first bundle");
+    const buildSecond = vi.fn(async () => "second bundle");
+
+    await withCache({
+      cache,
+      kind: "resolver",
+      namespace: "first",
+      name: "getUser",
+      sourceFile: firstSourceFile,
+      contextHash: undefined,
+      build: buildFirst,
+    });
+    await withCache({
+      cache,
+      kind: "resolver",
+      namespace: "second",
+      name: "getUser",
+      sourceFile: secondSourceFile,
+      contextHash: undefined,
+      build: buildSecond,
+    });
+
+    buildFirst.mockClear();
+    const result = await withCache({
+      cache,
+      kind: "resolver",
+      namespace: "first",
+      name: "getUser",
+      sourceFile: firstSourceFile,
+      contextHash: undefined,
+      build: buildFirst,
+    });
+
+    expect(buildFirst).not.toHaveBeenCalled();
+    expect(result).toBe("first bundle");
   });
 });
 
