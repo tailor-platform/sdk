@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { setupInvokerMock, setupTailordbMock, setupTailorErrorsMock } from "#/utils/test/mock";
 import { prepareFixtures } from "./prepare";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry";
@@ -97,9 +98,10 @@ describe("deploy command integration tests", () => {
 
   describe("validation", () => {
     let main: MainFunction;
+    const addResolverBundleKey = resolverBundleKey("test-resolver", "add");
 
     beforeAll(async () => {
-      const code = bundledScripts.resolvers.get("add");
+      const code = bundledScripts.resolvers.get(addResolverBundleKey);
       if (!code) {
         throw new Error("resolvers/add bundle not found");
       }
@@ -107,7 +109,7 @@ describe("deploy command integration tests", () => {
     });
 
     test("resolvers/add bundle is defined", () => {
-      expect(bundledScripts.resolvers.get("add")).toBeDefined();
+      expect(bundledScripts.resolvers.get(addResolverBundleKey)).toBeDefined();
     });
 
     test("resolvers/add validates input correctly - valid values", async () => {
