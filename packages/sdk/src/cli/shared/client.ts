@@ -535,7 +535,7 @@ function isNotFoundError(error: unknown): boolean {
  * Fetch all paginated resources, treating an absent resource group as empty.
  * @template T
  * @param fn - Page fetcher returning items and next page token
- * @returns All fetched items, or an empty list when the fetcher raises NotFound
+ * @returns Items fetched before pagination completes or the fetcher raises NotFound
  */
 export async function fetchAllTolerant<T>(
   fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>,
