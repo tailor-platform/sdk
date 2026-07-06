@@ -67,6 +67,11 @@ jobs:
             cat "$log"
           fi
 
+          if [ ! -s "$RUNNER_TEMP/erd-export/$NAMESPACE/dist/index.html" ]; then
+            echo "::error::ERD export for namespace '$NAMESPACE' produced no output file."
+            exit 1
+          fi
+
       # Always uploaded when the export succeeds, so the preview job can pick
       # any ancestor run as a base without checking which ones have it.
       - name: Upload ERD schema
@@ -127,6 +132,11 @@ jobs:
             exit 1
           elif [ -s "$log" ]; then
             cat "$log"
+          fi
+
+          if [ ! -s "$RUNNER_TEMP/erd-head/$NAMESPACE/dist/index.html" ]; then
+            echo "::error::ERD export for namespace '$NAMESPACE' produced no output file."
+            exit 1
           fi
 
       # Always runs (even when head is missing, since removing a namespace

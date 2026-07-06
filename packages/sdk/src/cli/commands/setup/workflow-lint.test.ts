@@ -99,6 +99,20 @@ describe("repository ERD schema workflow", () => {
     expect(content).toContain("retention-days: 90");
   });
 
+  test("fails loudly instead of silently uploading nothing when erd export produces no file", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(
+      content.match(/ERD export for namespace '\$NAMESPACE' produced no output file/g)?.length,
+    ).toBe(2);
+    expect(content).toContain(
+      'if [ ! -s "$RUNNER_TEMP/erd-export/$NAMESPACE/dist/index.html" ]; then',
+    );
+    expect(content).toContain(
+      'if [ ! -s "$RUNNER_TEMP/erd-head/$NAMESPACE/dist/index.html" ]; then',
+    );
+  });
+
   test("delegates relevance filtering to erd-relevance.mjs in the preview job only, always uploading a successful export", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
