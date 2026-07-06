@@ -7,11 +7,13 @@ on:
       - packages/sdk/src/cli/commands/tailordb/erd/**
       - example/**
       - .github/workflows/erd-schema.yml
+      - .github/scripts/erd-*.mjs
   pull_request:
     paths:
       - packages/sdk/src/cli/commands/tailordb/erd/**
       - example/**
       - .github/workflows/erd-schema.yml
+      - .github/scripts/erd-*.mjs
 
 permissions: {}
 
@@ -45,24 +47,19 @@ jobs:
       - name: Export ERD schema
         id: export
         env:
-          GH_TOKEN: ${{ github.token }}
           NAMESPACE: ${{ matrix.namespace }}
-          REPO: ${{ github.repository }}
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-
-          output="$RUNNER_TEMP/erd-export"
           log="$RUNNER_TEMP/erd-export-$NAMESPACE.log"
-
+          echo "log_file=$log" >>"$GITHUB_OUTPUT"
           if ! (
             cd example
-            pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$output"
+            pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-export"
           ) >"$log" 2>&1; then
             cat "$log"
             if grep -q 'not found in local config.db' "$log"; then
               echo "ERD namespace '$NAMESPACE' not found; skipping export."
+              echo "exported=false" >>"$GITHUB_OUTPUT"
               exit 0
             fi
             exit 1
@@ -70,54 +67,22 @@ jobs:
             cat "$log"
           fi
 
-          # Skip the upload when this push touched neither this namespace's
-          # actual type files (per the export's own resolution above), its
-          # config, nor the erd viewer implementation. Using the files the
-          # export just loaded — rather than a copy of tailor.config.ts's
-          # `files` globs — means this always matches the live config.
-          if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
-            echo "No previous commit to diff against; keeping this export."
-            exit 0
-          fi
-
-          compare_json=$(gh api "repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA")
-
-          # The compare API caps `files` at 300 entries with no total count to
-          # detect truncation by; treat a full page as "possibly truncated"
-          # and keep the export rather than risk skipping on missing data.
-          if [ "$(echo "$compare_json" | jq '.files | length')" -ge 300 ]; then
-            echo "Compare API file list may be truncated at 300 entries; keeping this export to be safe."
-            exit 0
-          fi
-
-          changed_files=$(echo "$compare_json" | jq -r '.files[]?.filename')
-
-          if echo "$changed_files" | grep -qE '^(example/tailor\.config\.ts|packages/sdk/src/cli/commands/tailordb/erd/)'; then
-            echo "Relevant config or viewer implementation change detected; keeping this export."
-            exit 0
-          fi
-
-          namespace_dirs=$(grep -oP 'loaded from \K[^/]+(?=/)' "$log" | sort -u || true)
-          if [ -z "$namespace_dirs" ]; then
-            echo "No type files were loaded for namespace '$NAMESPACE'; keeping the export as-is."
-            exit 0
-          fi
-
-          relevant="false"
-          while IFS= read -r dir; do
-            if echo "$changed_files" | grep -qF "example/$dir/"; then
-              relevant="true"
-              break
-            fi
-          done <<<"$namespace_dirs"
-
-          if [ "$relevant" = "false" ]; then
-            echo "This push did not touch namespace '$NAMESPACE'; skipping upload."
-            echo "relevant=false" >>"$GITHUB_OUTPUT"
-          fi
+      # Determines whether this push actually touched the namespace, using
+      # the export's own resolved files rather than a copy of
+      # tailor.config.ts's `files` globs. See erd-relevance.mjs.
+      - name: Check relevance
+        id: relevance
+        if: steps.export.outputs.exported != 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA_BASE: ${{ github.event.before }}
+          SHA_HEAD: ${{ github.sha }}
+          LOG_FILE: ${{ steps.export.outputs.log_file }}
+        run: node .github/scripts/erd-relevance.mjs
 
       - name: Upload ERD schema
-        if: steps.export.outputs.relevant != 'false'
+        if: steps.export.outputs.exported != 'false' && steps.relevance.outputs.relevant != 'false'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: erd-schema-${{ matrix.namespace }}
@@ -153,131 +118,99 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # Renders the head schema, then reuses the schema the export job above
-      # recorded for this PR's actual fork point on main (not just main's
-      # current tip, which moves forward and would mix in unrelated schema
-      # changes), instead of rebuilding the base side here.
-      - name: Build ERD viewers and diff
-        id: build-erd
+      - name: Export head ERD schema
+        id: head-export
         env:
-          GH_TOKEN: ${{ github.token }}
           NAMESPACE: ${{ matrix.namespace }}
-          REPO: ${{ github.repository }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-
-          mkdir -p "$RUNNER_TEMP/erd-preview" "$RUNNER_TEMP/erd-base"
-
-          head_output="$RUNNER_TEMP/erd-head"
-          head_html="$head_output/$NAMESPACE/dist/index.html"
-          base_html="$RUNNER_TEMP/erd-base/index.html"
-          preview_html="$RUNNER_TEMP/erd-preview/$NAMESPACE.html"
-          head_log="$RUNNER_TEMP/erd-head-$NAMESPACE.log"
-
-          head_missing="false"
+          log="$RUNNER_TEMP/erd-head-$NAMESPACE.log"
+          echo "log_file=$log" >>"$GITHUB_OUTPUT"
           if ! (
             cd example
-            pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$head_output"
-          ) >"$head_log" 2>&1; then
-            cat "$head_log"
-            if grep -q 'not found in local config.db' "$head_log"; then
+            pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-head"
+          ) >"$log" 2>&1; then
+            cat "$log"
+            if grep -q 'not found in local config.db' "$log"; then
               echo "Head ERD namespace '$NAMESPACE' not found; rendering base objects as removed."
-              head_missing="true"
-            else
-              exit 1
-            fi
-          elif [ -s "$head_log" ]; then
-            cat "$head_log"
-          fi
-
-          compare_json="$RUNNER_TEMP/compare-$NAMESPACE.json"
-          gh api "repos/$REPO/compare/$BASE_SHA...$HEAD_SHA" >"$compare_json"
-          fork_sha=$(jq -r '.merge_base_commit.sha' "$compare_json")
-          pr_file_count=$(jq '.files | length' "$compare_json")
-          pr_changed_files=$(jq -r '.files[]?.filename' "$compare_json")
-
-          # Skip this namespace entirely when the PR touched neither the type
-          # files this export actually loaded, tailor.config.ts, nor the erd
-          # viewer implementation. Using the export's own resolved files
-          # (rather than a copy of tailor.config.ts's `files` globs) means
-          # this always matches the live config. The compare API caps `files`
-          # at 300 with no total count to detect truncation by, so skip this
-          # check entirely (treat as relevant) once a page is full.
-          if [ "$head_missing" = "false" ] && [ "$pr_file_count" -lt 300 ] &&
-            ! echo "$pr_changed_files" | grep -qE '^(example/tailor\.config\.ts|packages/sdk/src/cli/commands/tailordb/erd/)'; then
-            namespace_dirs=$(grep -oP 'loaded from \K[^/]+(?=/)' "$head_log" | sort -u || true)
-            relevant="false"
-            if [ -n "$namespace_dirs" ]; then
-              while IFS= read -r dir; do
-                if echo "$pr_changed_files" | grep -qF "example/$dir/"; then
-                  relevant="true"
-                  break
-                fi
-              done <<<"$namespace_dirs"
-            fi
-            if [ "$relevant" = "false" ]; then
-              echo "This PR does not touch namespace '$NAMESPACE'; skipping preview."
+              echo "exported=false" >>"$GITHUB_OUTPUT"
               exit 0
             fi
+            exit 1
+          elif [ -s "$log" ]; then
+            cat "$log"
           fi
 
-          # Walk this workflow's export runs on the PR's actual base branch
-          # (export only ever runs on push to main, so this only finds
-          # anything when base is main or another branch was temporarily
-          # added to the export job's push trigger) newest-first, and use the
-          # first one at or before the fork point (export runs after the
-          # fork point may include changes unrelated to this PR). Bounded to
-          # the export artifacts' own 90-day retention window (see the export
-          # job's Upload step) — a run older than that has no artifact left
-          # to download regardless, so searching further back is pointless.
-          since=$(date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ)
-          candidate_runs=$(gh api -X GET --paginate "repos/$REPO/actions/workflows/erd-schema.yml/runs" \
-            -f branch="$BASE_REF" -f status=success -f "created=>=$since" -f per_page=100 \
-            --jq '.workflow_runs[] | [.head_sha, (.id|tostring)] | @tsv')
+      # Always runs (even when head is missing, since removing a namespace
+      # is inherently relevant) to compute both the relevance verdict and the
+      # PR's fork point (compare's merge_base_commit) for the next step. See
+      # erd-relevance.mjs.
+      - name: Check relevance
+        id: relevance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA_BASE: ${{ github.event.pull_request.base.sha }}
+          SHA_HEAD: ${{ github.event.pull_request.head.sha }}
+          LOG_FILE: ${{ steps.head-export.outputs.log_file }}
+        run: node .github/scripts/erd-relevance.mjs
 
-          run_id=""
-          while IFS=$'\t' read -r candidate_sha candidate_id; do
-            [ -z "$candidate_sha" ] && continue
-            status=$(gh api "repos/$REPO/compare/$candidate_sha...$fork_sha" --jq '.status' 2>/dev/null || echo "diverged")
-            if [ "$status" = "ahead" ] || [ "$status" = "identical" ]; then
-              run_id="$candidate_id"
-              break
-            fi
-          done <<<"$candidate_runs"
+      # Reuses the schema the export job recorded for this PR's actual fork
+      # point on its base branch (not just the base's moving tip, which would
+      # mix in unrelated changes), instead of rebuilding the base side here.
+      # See erd-find-base-run.mjs.
+      - name: Find base run
+        id: find-base-run
+        if: steps.relevance.outputs.relevant != 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          FORK_SHA: ${{ steps.relevance.outputs.fork_sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: node .github/scripts/erd-find-base-run.mjs
 
-          if [ -z "$run_id" ]; then
-            echo "No ERD schema export found at or before fork point $fork_sha; falling back to the latest export on $BASE_REF."
-            run_id=$(gh api -X GET "repos/$REPO/actions/workflows/erd-schema.yml/runs" \
-              -f branch="$BASE_REF" -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')
+      - name: Download base schema
+        id: base
+        if: steps.relevance.outputs.relevant != 'false' && steps.find-base-run.outputs.run_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_id="${{ steps.find-base-run.outputs.run_id }}"
+          if gh run download "$run_id" --repo "${{ github.repository }}" \
+            --name "erd-schema-${{ matrix.namespace }}" --dir "$RUNNER_TEMP/erd-base"; then
+            echo "found=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "ERD schema export run $run_id has no artifact for namespace '${{ matrix.namespace }}'; rendering current objects as added."
           fi
+
+      - name: Render diff
+        if: steps.relevance.outputs.relevant != 'false'
+        env:
+          NAMESPACE: ${{ matrix.namespace }}
+          HEAD_MISSING: ${{ steps.head-export.outputs.exported == 'false' }}
+          BASE_FOUND: ${{ steps.base.outputs.found }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/erd-preview"
 
           base_missing="true"
-          if [ -n "$run_id" ]; then
-            if gh run download "$run_id" --repo "$REPO" --name "erd-schema-$NAMESPACE" --dir "$RUNNER_TEMP/erd-base"; then
-              base_missing="false"
-            else
-              echo "ERD schema export run $run_id has no artifact for namespace '$NAMESPACE'; rendering current objects as added."
-            fi
-          else
-            echo "No successful ERD schema export runs found; rendering current objects as added."
-          fi
+          [ "$BASE_FOUND" = "true" ] && base_missing="false"
 
-          if [ "$head_missing" = "true" ] && [ "$base_missing" = "true" ]; then
+          if [ "$HEAD_MISSING" = "true" ] && [ "$base_missing" = "true" ]; then
             echo "::error::ERD namespace '$NAMESPACE' was not found in head or the base export."
             exit 1
           fi
 
-          diff_args=(--namespace "$NAMESPACE" --output "$preview_html")
-          if [ "$head_missing" = "false" ]; then
-            diff_args+=(--head-html "$head_html")
+          diff_args=(--namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-preview/$NAMESPACE.html")
+          if [ "$HEAD_MISSING" = "false" ]; then
+            diff_args+=(--head-html "$RUNNER_TEMP/erd-head/$NAMESPACE/dist/index.html")
           fi
           if [ "$base_missing" = "false" ]; then
-            diff_args+=(--base-html "$base_html")
+            diff_args+=(--base-html "$RUNNER_TEMP/erd-base/index.html")
           fi
 
+          cd example
           pnpm exec tailor-sdk tailordb erd diff "${diff_args[@]}"
 
       # archive: false (upload-artifact v7+) keeps the file unzipped so the HTML
@@ -311,47 +244,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
-          SERVER: ${{ github.server_url }}
+          SERVER_URL: ${{ github.server_url }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
-          MARKER: "<!-- erd-viewer-preview -->"
-        run: |
-          set -euo pipefail
-
-          artifacts=$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" --paginate \
-            --jq '.artifacts[] | select(.name | endswith(".html")) | [.name, (.id|tostring)] | @tsv' | sort)
-
-          existing=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
-            --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')
-
-          # Every namespace can be skipped as irrelevant to this PR (see
-          # the preview job's "Build ERD viewers and diff" step above); drop
-          # any stale sticky comment instead of posting an empty one.
-          if [ -z "$artifacts" ]; then
-            echo "No ERD preview artifacts in this run; nothing to post."
-            if [ -n "$existing" ]; then
-              gh api --method DELETE "repos/$REPO/issues/comments/$existing" >/dev/null
-              echo "Removed stale sticky comment $existing"
-            fi
-            exit 0
-          fi
-
-          # Build the comment body from this run's ERD preview artifacts.
-          body="$MARKER"$'\n'"### 🗺️ ERD viewer preview"$'\n\n'
-          body+="Self-contained ERD viewer HTML built for this run. Each viewer can switch between the current schema and a diff against base branch \`$BASE_REF\`:"$'\n'
-
-          while IFS=$'\t' read -r name id; do
-            [ -z "$name" ] && continue
-            ns=${name%.html}
-            label="$ns viewer"
-            body+=$'\n'"- **$label**: [$name]($SERVER/$REPO/actions/runs/$RUN_ID/artifacts/$id)"
-          done <<<"$artifacts"
-
-          # Upsert: update the existing sticky comment if present, else create one.
-          if [ -n "$existing" ]; then
-            gh api --method PATCH "repos/$REPO/issues/comments/$existing" -f body="$body" >/dev/null
-            echo "Updated sticky comment $existing"
-          else
-            gh api --method POST "repos/$REPO/issues/$PR_NUMBER/comments" -f body="$body" >/dev/null
-            echo "Created sticky comment"
-          fi
+        run: node .github/scripts/erd-upsert-comment.mjs
