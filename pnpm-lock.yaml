@@ -13,8 +13,8 @@ importers:
   .:
     devDependencies:
       '@changesets/changelog-github':
-        specifier: 1.0.0-next.5
-        version: 1.0.0-next.5
+        specifier: 1.0.0-next.6
+        version: 1.0.0-next.6
       '@changesets/cli':
         specifier: 3.0.0-next.5
         version: 3.0.0-next.5
@@ -786,8 +786,8 @@ packages:
     resolution: {integrity: sha512-z+uAi+BhOUJSBlQj2o5n3oFwhCkHQBk+P1JrFFRvA5fv6pDRAZpugQYbXR7dIQZ5Dn4ndG9cidIKb2o/lGs2wQ==}
     engines: {node: ^22.11 || ^24 || >=26}
 
-  '@changesets/changelog-github@1.0.0-next.5':
-    resolution: {integrity: sha512-c9q7QUmBYCKKCjhW/0U2W8ZNqtOixB1DShU0Y9FHNwYL8w76YVTz+MZiLEGCKXAEduibEUdcJYIQiaSAxQR0dQ==}
+  '@changesets/changelog-github@1.0.0-next.6':
+    resolution: {integrity: sha512-0ShCWgNt50xP0mryAYT8wtSkMUinG8uhxXgCgwHZ4UvJnR2f4ns8OsGAxYu8FIds7kHFdLOz7qX4YQ6AX4tVUA==}
     engines: {node: ^22.11 || ^24 || >=26}
 
   '@changesets/cli@3.0.0-next.5':
@@ -3881,7 +3881,7 @@ snapshots:
     dependencies:
       '@changesets/types': 7.0.0-next.6
 
-  '@changesets/changelog-github@1.0.0-next.5':
+  '@changesets/changelog-github@1.0.0-next.6':
     dependencies:
       '@changesets/get-github-info': 1.0.0-next.3
       '@changesets/types': 7.0.0-next.6
