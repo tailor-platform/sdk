@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: "false"
-      - uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+      - uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         id: filter
         with:
           filters: |
@@ -77,9 +77,37 @@ jobs:
       - name: Run tests
         run: pnpm -r run test --project 'unit*'
 
+  plugin-windows:
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
+    runs-on: windows-latest
+    name: Plugin tests (Windows)
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Build packages
+        run: pnpm -r --filter '!@tailor-platform/sdk' run build
+        shell: bash
+
+      # Windows-specific PATHEXT resolution and .cmd/.ps1 spawn branches are
+      # only exercised here; the main unit suite runs on Linux.
+      - name: Run plugin tests
+        run: pnpm --filter @tailor-platform/sdk exec vitest run --project 'unit*' src/cli/shared/plugin.test.ts
+        shell: bash
+
   test-summary:
     name: test-summary # required status check context (ruleset status_check_main) — keep equal to the job id
-    needs: [changes, test]
+    needs: [changes, test, plugin-windows]
     if: >-
       always() &&
       (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
@@ -92,6 +120,7 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
           TEST_RESULT: ${{ needs.test.result }}
+          PLUGIN_WINDOWS_RESULT: ${{ needs.plugin-windows.result }}
         run: |
           # Fail closed: if the paths-filter job itself failed, should_run is
           # empty and must not be mistaken for "no relevant changes".
@@ -105,6 +134,10 @@ jobs:
           fi
           if [[ "$TEST_RESULT" != "success" ]]; then
             echo "Test jobs failed"
+            exit 1
+          fi
+          if [[ "$PLUGIN_WINDOWS_RESULT" != "success" ]]; then
+            echo "Plugin tests (Windows) failed"
             exit 1
           fi
           echo "All test jobs succeeded"

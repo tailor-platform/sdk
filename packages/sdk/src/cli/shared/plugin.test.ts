@@ -32,7 +32,7 @@ function writeExecutable(dir: string, name: string): string {
   return full;
 }
 
-describe.skipIf(isWindows)("resolvePlugin / listPlugins", () => {
+describe("resolvePlugin / listPlugins", () => {
   let tempDir: string;
   let originalCwd: string;
   let originalPath: string | undefined;
@@ -95,6 +95,19 @@ describe.skipIf(isWindows)("resolvePlugin / listPlugins", () => {
     expect(resolvePlugin("missing", CLI)).toBeNull();
   });
 
+  test("rejects names containing path separators or NUL", () => {
+    // A traversal-shaped name must never resolve, even if such a file exists.
+    const binDir = path.join(tempDir, "project", "node_modules", ".bin");
+    writeExecutable(binDir, `${CLI}-evil`);
+    process.chdir(path.join(tempDir, "project"));
+    process.env.PATH = "";
+
+    expect(resolvePlugin("../evil", CLI)).toBeNull();
+    expect(resolvePlugin("a/b", CLI)).toBeNull();
+    expect(resolvePlugin("a\\b", CLI)).toBeNull();
+    expect(resolvePlugin("a\0b", CLI)).toBeNull();
+  });
+
   test("lists discovered plugins, deduping by name with node_modules precedence", () => {
     const project = path.join(tempDir, "project");
     const binDir = path.join(project, "node_modules", ".bin");
@@ -129,13 +142,22 @@ describe.skipIf(isWindows)("resolvePlugin / listPlugins", () => {
  */
 function writeCapturePlugin(dir: string, name: string, outFile: string, exitCode = 0): string {
   fs.mkdirSync(dir, { recursive: true });
-  const full = path.join(dir, name);
-  const script = `#!${process.execPath}
-const fs = require("node:fs");
+  const jsBody = `const fs = require("node:fs");
 fs.writeFileSync(${JSON.stringify(outFile)}, JSON.stringify({ env: process.env, argv: process.argv.slice(2) }));
 process.exit(${exitCode});
 `;
-  fs.writeFileSync(full, script);
+  if (isWindows) {
+    // Windows can't execute a shebang script directly, so ship a `.cmd` wrapper
+    // that runs Node (by absolute path, so PATH need not contain node) on a
+    // companion `.js` file. This exercises the `.cmd` dispatch branch.
+    const jsPath = path.join(dir, `${name}.js`);
+    fs.writeFileSync(jsPath, jsBody);
+    const cmdPath = path.join(dir, `${name}.cmd`);
+    fs.writeFileSync(cmdPath, `@"${process.execPath}" "${jsPath}" %*\r\n`);
+    return cmdPath;
+  }
+  const full = path.join(dir, name);
+  fs.writeFileSync(full, `#!${process.execPath}\n${jsBody}`);
   fs.chmodSync(full, 0o755);
   return full;
 }
@@ -150,7 +172,7 @@ const CONTEXT_ENV_KEYS = [
   "TAILOR_PLATFORM_PROFILE",
 ] as const;
 
-describe.skipIf(isWindows)("dispatchPlugin", () => {
+describe("dispatchPlugin", () => {
   let tempDir: string;
   let originalCwd: string;
   let originalPath: string | undefined;
