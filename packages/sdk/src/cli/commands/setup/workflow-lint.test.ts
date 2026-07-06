@@ -177,6 +177,16 @@ describe("repository ERD schema workflow", () => {
     expect(content).toContain("RUN_ID: ${{ github.run_id }}");
   });
 
+  test("checks out the repository in every job that runs an erd-*.mjs script", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    const jobBodies = content.split(/^ {2}[a-z]+:\n/m).slice(1);
+    const scriptJobs = jobBodies.filter((job) => job.includes("run: node .github/scripts/erd-"));
+
+    expect(scriptJobs.length).toBeGreaterThan(0);
+    expect(scriptJobs.every((job) => job.includes("uses: actions/checkout@"))).toBe(true);
+  });
+
   test.skipIf(!actionlintAvailable)("passes actionlint", () => {
     const { ok, output } = runActionlint(ERD_SCHEMA_WORKFLOW);
     expect(ok, `actionlint errors for ${ERD_SCHEMA_WORKFLOW}:\n${output}`).toBe(true);
