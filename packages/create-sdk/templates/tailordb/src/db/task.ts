@@ -6,9 +6,8 @@ import { user } from "./user";
 export const task = db
   .type("Task", "A task with comprehensive features", {
     title: db.string().validate(
-      ({ newValue }) => (newValue.length >= 3 ? undefined : "Title must be at least 3 characters"),
-      ({ newValue }) =>
-        newValue.length <= 200 ? undefined : "Title must be at most 200 characters",
+      ({ value }) => (value.length >= 3 ? undefined : "Title must be at least 3 characters"),
+      ({ value }) => (value.length <= 200 ? undefined : "Title must be at most 200 characters"),
     ),
     description: db.string({ optional: true }),
     status: db.enum([
@@ -18,8 +17,8 @@ export const task = db
       { value: "CANCELLED", description: "No longer needed" },
     ]),
     priority: db.int().validate(
-      ({ newValue }) => (newValue >= 0 ? undefined : "Priority must be non-negative"),
-      ({ newValue }) => (newValue <= 4 ? undefined : "Priority must be at most 4"),
+      ({ value }) => (value >= 0 ? undefined : "Priority must be non-negative"),
+      ({ value }) => (value <= 4 ? undefined : "Priority must be at most 4"),
     ),
     dueDate: db.datetime({ optional: true }),
     assigneeId: db.uuid({ optional: true }).relation({

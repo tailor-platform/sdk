@@ -131,7 +131,7 @@ describe("buildTypeScripts", () => {
     expect(typeValidate?.update?.expr).toBe(createExpr);
     expect(createExpr).toContain("const __errs = {}");
     expect(createExpr).toContain('const _value = _newRecord["age"]');
-    expect(createExpr).toContain('const _oldValue = _oldRecord?.["age"] ?? null');
+    expect(createExpr).not.toContain("_oldValue");
     expect(createExpr).toContain("(_value >= 0) ?? (_value < 200)");
     expect(createExpr).toContain('if (typeof __r === "string") { __errs["age"] = __r; }');
     expect(createExpr).toContain("return __errs");

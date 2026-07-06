@@ -198,8 +198,12 @@ const convertToScriptExpr = (
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
+  const argsObject =
+    kind === "validate"
+      ? `{ value: _value }`
+      : `{ value: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`;
   return assertParsableExpression(
-    `(${normalized})({ value: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now })`,
+    `(${normalized})(${argsObject})`,
     formatScriptContext(kind, context),
   );
 };

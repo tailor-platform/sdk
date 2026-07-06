@@ -11,7 +11,7 @@ export const inventory = db
     quantity: db
       .int()
       .description("Quantity of the product in inventory")
-      .validate(({ newValue }) => (newValue < 0 ? "Quantity must be non-negative" : undefined)),
+      .validate(({ value }) => (value < 0 ? "Quantity must be non-negative" : undefined)),
     ...db.fields.timestamps(),
   })
   .permission(permissionLoggedIn)

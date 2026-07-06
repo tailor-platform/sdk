@@ -14,14 +14,14 @@ export default createResolver({
             first: t
               .string()
               .description("User's first name")
-              .validate(({ newValue }) =>
-                newValue.length >= 2 ? undefined : "First name must be at least 2 characters",
+              .validate(({ value }) =>
+                value.length >= 2 ? undefined : "First name must be at least 2 characters",
               ),
             last: t
               .string()
               .description("User's last name")
-              .validate(({ newValue }) =>
-                newValue.length >= 2 ? undefined : "Last name must be at least 2 characters",
+              .validate(({ value }) =>
+                value.length >= 2 ? undefined : "Last name must be at least 2 characters",
               ),
           })
           .description("User's full name"),
