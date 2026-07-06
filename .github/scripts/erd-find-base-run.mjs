@@ -56,6 +56,9 @@ async function main() {
     GITHUB_OUTPUT,
   } = process.env;
   const maxCandidateRuns = Number(MAX_CANDIDATE_RUNS);
+  if (!Number.isInteger(maxCandidateRuns) || maxCandidateRuns <= 0) {
+    throw new Error(`MAX_CANDIDATE_RUNS must be a positive integer, got: "${MAX_CANDIDATE_RUNS}"`);
+  }
 
   function setOutput(name, value) {
     if (GITHUB_OUTPUT) appendFileSync(GITHUB_OUTPUT, `${name}=${value}\n`);
