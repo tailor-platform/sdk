@@ -290,6 +290,18 @@ describe("Kysely TypeProcessor", () => {
       expect(result.typeDef).toContain("updatedAt: Generated<Timestamp>;");
     });
 
+    test("should wrap fields with default in Generated<>", async () => {
+      const typeDef = await getTypeDef(
+        db.type("Order", {
+          status: db.string().default("pending"),
+          priority: db.int(),
+        }),
+      );
+
+      expect(typeDef).toContain("status: Generated<string>;");
+      expect(typeDef).toContain("priority: number;");
+    });
+
     test("should always include Generated<UUIDString> for id field", async () => {
       const typeDef = await getTypeDef(
         db.type("User", {
