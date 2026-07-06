@@ -8,12 +8,14 @@ import {
   concurrencyLimitInterceptor,
   createTransport,
   fetchAll,
+  fetchAllTolerant,
   fetchMachineUserToken,
   fetchPaged,
   formatRequestParams,
   getConsoleBaseUrl,
   getEffectivePlatformConfig,
   getOAuth2ClientId,
+  getOrNull,
   getPlatformBaseUrl,
   initOperatorClient,
   MAX_PAGE_SIZE,
@@ -134,6 +136,67 @@ describe("fetchAll", () => {
     await fetchAll(fn);
 
     expect(fn).toHaveBeenCalledWith("", MAX_PAGE_SIZE);
+  });
+});
+
+describe("fetchAllTolerant", () => {
+  test("returns every page when the fetcher succeeds", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([["a"], "next"])
+      .mockResolvedValueOnce([["b"], ""]);
+
+    const items = await fetchAllTolerant(fn);
+
+    expect(items).toEqual(["a", "b"]);
+    expect(fn).toHaveBeenNthCalledWith(1, "", MAX_PAGE_SIZE);
+    expect(fn).toHaveBeenNthCalledWith(2, "next", MAX_PAGE_SIZE);
+  });
+
+  test("returns an empty list when the fetcher raises NotFound", async () => {
+    const fn = vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    await expect(fetchAllTolerant(fn)).resolves.toEqual([]);
+  });
+
+  test("keeps already fetched pages when a later page raises NotFound", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([["a"], "next"])
+      .mockRejectedValueOnce(new ConnectError("not found", Code.NotFound));
+
+    await expect(fetchAllTolerant(fn)).resolves.toEqual(["a"]);
+  });
+
+  test("rethrows non-NotFound errors", async () => {
+    const error = new ConnectError("unavailable", Code.Unavailable);
+    const fn = vi.fn().mockRejectedValue(error);
+
+    await expect(fetchAllTolerant(fn)).rejects.toBe(error);
+  });
+});
+
+describe("getOrNull", () => {
+  test("returns the fetched value when the getter succeeds", async () => {
+    await expect(getOrNull(async () => ({ id: "item-1" }))).resolves.toEqual({ id: "item-1" });
+  });
+
+  test("returns undefined when the getter raises NotFound", async () => {
+    await expect(
+      getOrNull(async () => {
+        throw new ConnectError("not found", Code.NotFound);
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  test("rethrows non-NotFound errors", async () => {
+    const error = new ConnectError("unavailable", Code.Unavailable);
+
+    await expect(
+      getOrNull(async () => {
+        throw error;
+      }),
+    ).rejects.toBe(error);
   });
 });
 

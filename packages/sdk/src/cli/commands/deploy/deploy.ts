@@ -1,12 +1,11 @@
 import * as fs from "node:fs";
-import { Code, ConnectError } from "@connectrpc/connect";
 import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 import { hashFile } from "#/cli/cache/hasher";
 import { createCacheManager } from "#/cli/cache/manager";
 import { loadApplication, type Application } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
-import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "#/cli/shared/context";
 import { getDistDir } from "#/cli/shared/dist-dir";
@@ -366,19 +365,15 @@ async function shouldForceApplyAll(
   });
 
   for (const trn of candidateTrns) {
-    try {
+    const metadata = await getOrNull(async () => {
       const { metadata } = await client.getMetadata({ trn });
-      if (metadata?.labels[sdkNameLabelKey] !== application.name) {
-        continue;
-      }
-      if (!hasMatchingSdkVersion(metadata.labels, desiredLabels)) {
-        return true;
-      }
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        continue;
-      }
-      throw error;
+      return metadata;
+    });
+    if (metadata?.labels[sdkNameLabelKey] !== application.name) {
+      continue;
+    }
+    if (!hasMatchingSdkVersion(metadata.labels, desiredLabels)) {
+      return true;
     }
   }
 

@@ -1,5 +1,4 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreatePipelineResolverRequestSchema,
   type CreatePipelineServiceRequestSchema,
@@ -17,7 +16,7 @@ import {
 } from "@tailor-platform/tailor-proto/pipeline_resource_pb";
 import * as inflection from "inflection";
 import { type ResolverService } from "#/cli/services/resolver/service";
-import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { normalizeAuthInvoker } from "./auth-invoker";
@@ -294,21 +293,14 @@ async function planResolvers(
   );
 
   const fetchResolvers = (namespaceName: string) => {
-    return fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { pipelineResolvers, nextPageToken } = await client.listPipelineResolvers({
-          workspaceId,
-          namespaceName,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [pipelineResolvers, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
-        }
-        throw error;
-      }
+    return fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { pipelineResolvers, nextPageToken } = await client.listPipelineResolvers({
+        workspaceId,
+        namespaceName,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [pipelineResolvers, nextPageToken];
     });
   };
 

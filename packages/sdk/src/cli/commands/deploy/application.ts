@@ -1,11 +1,15 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type Application as ProtoApplication,
   Subgraph_ServiceType,
   type SubgraphSchema,
 } from "@tailor-platform/tailor-proto/application_resource_pb";
-import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "#/cli/shared/client";
+import {
+  fetchAllTolerant,
+  getOrNull,
+  resolveStaticWebsiteUrls,
+  type OperatorClient,
+} from "#/cli/shared/client";
 import { symbols } from "#/cli/shared/logger";
 import { HTTP_METHODS } from "#/parser/service/http-adapter/index";
 import { assertDefined } from "#/utils/assert";
@@ -246,20 +250,13 @@ export async function planApplication(
     UpdateApplication
   >("Applications");
 
-  const existingApplications = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
-      const { applications, nextPageToken } = await client.listApplications({
-        workspaceId,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [applications, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+  const existingApplications = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+    const { applications, nextPageToken } = await client.listApplications({
+      workspaceId,
+      pageToken,
+      pageSize: maxPageSize,
+    });
+    return [applications, nextPageToken];
   });
 
   if (forRemoval) {
@@ -310,24 +307,17 @@ export async function planApplication(
     if (context.externalAuthIdpConfigNames?.has(authNamespace)) {
       authIdpConfigName = context.externalAuthIdpConfigNames.get(authNamespace);
     } else {
-      const idpConfigs = await fetchAll(async (pageToken, maxPageSize) => {
-        try {
-          const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
-            workspaceId,
-            namespaceName: assertDefined(
-              authNamespace,
-              "authNamespace must be set before listing IDP configs",
-            ),
-            pageToken,
-            pageSize: maxPageSize,
-          });
-          return [idpConfigs, nextPageToken];
-        } catch (error) {
-          if (error instanceof ConnectError && error.code === Code.NotFound) {
-            return [[], ""];
-          }
-          throw error;
-        }
+      const idpConfigs = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+        const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
+          workspaceId,
+          namespaceName: assertDefined(
+            authNamespace,
+            "authNamespace must be set before listing IDP configs",
+          ),
+          pageToken,
+          pageSize: maxPageSize,
+        });
+        return [idpConfigs, nextPageToken];
       });
       if (idpConfigs.length > 0) {
         const [firstConfig] = idpConfigs;
@@ -433,17 +423,13 @@ async function fetchAppLabels(
   workspaceId: string,
   appName: string,
 ): Promise<Record<string, string> | undefined> {
-  try {
+  const response = await getOrNull(async () => {
     const { metadata } = await client.getMetadata({
       trn: resourceTrn(workspaceId, "application", appName),
     });
-    return metadata?.labels;
-  } catch (error) {
-    if (error instanceof ConnectError && error.code === Code.NotFound) {
-      return undefined;
-    }
-    throw error;
-  }
+    return metadata;
+  });
+  return response?.labels;
 }
 
 /**
