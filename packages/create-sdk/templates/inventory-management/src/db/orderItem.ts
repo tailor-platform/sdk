@@ -21,7 +21,7 @@ export const orderItem = db
       .float()
       .description("Unit price of the product")
       .validate(({ value }) => (value < 0 ? "Unit price must be non-negative" : undefined)),
-    totalPrice: db.float({ optional: true }).description("Total price of the order item"),
+    totalPrice: db.float().default(0).description("Total price of the order item"),
     ...db.fields.timestamps(),
   })
   .hooks({
