@@ -870,6 +870,108 @@ export const allCodemods: CodemodPackage[] = [
     ],
   },
   {
+    id: "v2/tailordb-validate-simplify",
+    name: "ValidateFn simplification and type-level validate",
+    description:
+      "Field-level `ValidateFn` is simplified from `(args: { value, data, invoker }) => boolean` to `(args: { value }) => string | void` — the function now returns the error message directly instead of a separate `[fn, message]` tuple. The `ValidateConfig` tuple form and `Validators<F>` record syntax on `db.type().validate()` are removed. Type-level validation uses `db.type().validate((args, issues) => void)` with `{ newRecord, oldRecord, invoker }` args and an `issues(field, message)` callback for cross-field rules.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_3,
+    suspiciousPatterns: ["ValidateConfig", "Validators<", "ValidatorsBase"],
+    examples: [
+      {
+        caption:
+          "Field-level validate: return an error message string instead of a boolean (tuple form removed):",
+        before:
+          '.validate(\n  [({ value }) => value.length > 5, "Name must be longer than 5 characters"],\n)',
+        after:
+          '.validate(({ value }) =>\n  value.length <= 5 ? "Name must be longer than 5 characters" : undefined,\n)',
+      },
+      {
+        caption:
+          "Type-level validate: per-field record syntax replaced by a single function with `issues()` callback:",
+        before:
+          '.validate({\n  name: [({ value }) => value.length > 5, "Name must be longer than 5"],\n})',
+        after:
+          '.validate(({ newRecord }, issues) => {\n  if (newRecord.name && newRecord.name.length <= 5) {\n    issues("name", "Name must be longer than 5");\n  }\n})',
+      },
+    ],
+    prompt: [
+      "The v2 SDK simplifies field validation and introduces type-level validation.",
+      "",
+      "Field-level `.validate()` changes:",
+      "- Signature: `(args: { value, data, invoker }) => boolean` → `(args: { value }) => string | void`",
+      "- The function now returns the error message string directly (or undefined/void to pass)",
+      "  instead of returning a boolean with the message in a separate tuple.",
+      "- The `[fn, errorMessage]` tuple form (`ValidateConfig`) is removed.",
+      "- `data` and `invoker` are no longer available in field-level validators.",
+      "  Use type-level `.validate()` for cross-field or invoker-dependent rules.",
+      "",
+      "Type-level `.validate()` on `db.type()` changes:",
+      "- Old: `.validate({ fieldName: fn | [fn, msg] | fn[] })` (per-field record, `Validators<F>` type)",
+      "- New: `.validate((args, issues) => void)` (single function, `TypeValidateFn<F>` type)",
+      "- Args: `{ newRecord, oldRecord, invoker }` — `newRecord` is the record after hooks run",
+      "- Call `issues(field, message)` to report validation errors; `field` supports dotted paths",
+      "- Move per-field validators that need `data`/`invoker` to the type-level function",
+      "",
+      "For each remaining `ValidateConfig`, `Validators<`, or old-signature `.validate()` usage:",
+      "1. Rewrite field-level validators to return the error string directly",
+      "2. Move cross-field / invoker-dependent validators to the type-level function",
+      "3. Remove unused `ValidateConfig` / `Validators` type imports",
+    ].join("\n"),
+  },
+  {
+    id: "v2/tailordb-hook-redesign",
+    name: "TailorDB hook redesign: field-level args and type-level hooks",
+    description:
+      "Field-level `HookFn` args change from `{ value, data, invoker }` to `{ value, oldValue, invoker, now }` — `data` (the full record) is replaced by `oldValue` (the previous field value) and `now` (operation timestamp). Type-level hooks on `db.type().hooks()` change from per-field mapping `{ fieldName: { create, update } }` (`Hooks<F>`) to a single `{ create, update }` object (`TypeHook<F>`) where each function takes `{ input, oldRecord, invoker, now }` and returns partial field overrides.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_3,
+    suspiciousPatterns: ["Hooks<", "HookFn<"],
+    examples: [
+      {
+        caption:
+          "Field-level hooks: `data` replaced by `oldValue` and `now`; use `now` instead of `new Date()`:",
+        before:
+          "db.datetime().hooks({\n  create: ({ value }) => value ?? new Date(),\n  update: () => new Date(),\n})",
+        after:
+          "db.datetime().hooks({\n  create: ({ value, now }) => value ?? now,\n  update: ({ now }) => now,\n})",
+      },
+      {
+        caption: "Type-level hooks: per-field mapping replaced by single create/update functions:",
+        before:
+          ".hooks({\n  fullAddress: {\n    create: ({ data }) => `${data.postalCode} ${data.address}`,\n    update: ({ data }) => `${data.postalCode} ${data.address}`,\n  },\n})",
+        after:
+          ".hooks({\n  create: ({ input }) => ({\n    fullAddress: `${input.postalCode} ${input.address}`,\n  }),\n  update: ({ input }) => ({\n    fullAddress: `${input.postalCode} ${input.address}`,\n  }),\n})",
+      },
+    ],
+    prompt: [
+      "The v2 SDK redesigns TailorDB hooks at both field and type levels.",
+      "",
+      "Field-level `.hooks()` on individual fields:",
+      "- Args: `{ value, data, invoker }` → `{ value, oldValue, invoker, now }`",
+      "- `data` (full record) is removed; use `oldValue` (previous field value) instead",
+      "- `now` provides the operation timestamp — use `now` instead of `new Date()`",
+      "- If a field-level hook needs the full record (other fields), move it to a type-level hook",
+      "",
+      "Type-level `.hooks()` on `db.type()`:",
+      "- Old: `.hooks({ fieldName: { create: fn, update: fn } })` (per-field mapping, `Hooks<F>` type)",
+      "- New: `.hooks({ create: fn, update: fn })` (single object, `TypeHook<F>` type)",
+      "- Each function: `({ input, oldRecord, invoker, now }) => ({ fieldName: value, ... })`",
+      "- `input` is the pre-hook input (may have nullish values for optional/defaulted fields)",
+      "- `oldRecord` is null on create, the previous record on update",
+      "- Return an object with only the fields to override; unmentioned fields are unchanged",
+      "",
+      "Migration steps for each `.hooks()` call on a `db.type()`:",
+      "1. If the old per-field hooks only use `value`/`invoker` and don't reference `data`,",
+      "   convert them to field-level hooks with the new args (`oldValue`, `now`)",
+      "2. If the old hooks reference `data` (cross-field access), convert to a type-level hook",
+      "   using `input`/`oldRecord`",
+      "3. Remove unused `Hooks<F>` / `HookFn<>` type imports",
+    ].join("\n"),
+  },
+  {
     id: "v2/node-minimum-22-15-0",
     name: "Node.js minimum version raised to 22.15.0",
     description:
