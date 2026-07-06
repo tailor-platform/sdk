@@ -172,9 +172,10 @@ jobs:
         if: steps.relevance.outputs.relevant != 'false' && steps.find-base-run.outputs.run_id != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.find-base-run.outputs.run_id }}
         run: |
           set -euo pipefail
-          run_id="${{ steps.find-base-run.outputs.run_id }}"
+          run_id="$RUN_ID"
           if gh run download "$run_id" --repo "${{ github.repository }}" \
             --name "erd-schema-${{ matrix.namespace }}" --dir "$RUNNER_TEMP/erd-base"; then
             echo "found=true" >>"$GITHUB_OUTPUT"
