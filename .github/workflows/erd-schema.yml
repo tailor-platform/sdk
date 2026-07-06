@@ -225,9 +225,13 @@ jobs:
 
           # Walk this workflow's main-branch export runs newest-first and use
           # the first one at or before the fork point (export runs after the
-          # fork point may include changes unrelated to this PR).
-          candidate_runs=$(gh api -X GET "repos/$REPO/actions/workflows/erd-schema.yml/runs" \
-            -f branch=main -f status=success -f per_page=100 \
+          # fork point may include changes unrelated to this PR). Bounded to
+          # the export artifacts' own 90-day retention window (see the export
+          # job's Upload step) — a run older than that has no artifact left
+          # to download regardless, so searching further back is pointless.
+          since=$(date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ)
+          candidate_runs=$(gh api -X GET --paginate "repos/$REPO/actions/workflows/erd-schema.yml/runs" \
+            -f branch=main -f status=success -f "created=>=$since" -f per_page=100 \
             --jq '.workflow_runs[] | [.head_sha, (.id|tostring)] | @tsv')
 
           run_id=""

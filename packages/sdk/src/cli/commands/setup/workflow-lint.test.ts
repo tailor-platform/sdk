@@ -129,6 +129,14 @@ describe("repository ERD schema workflow", () => {
     expect(content).toContain('run_id="$candidate_id"');
   });
 
+  test("bounds the fork-point search to the export artifact's own 90-day retention window instead of a fixed run count", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("since=$(date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ)");
+    expect(content).toContain('-f "created=>=$since"');
+    expect(content).toContain("gh api -X GET --paginate");
+  });
+
   test("does not let a no-match grep abort either job's script under set -euo pipefail", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
