@@ -721,9 +721,8 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_3,
-    // No scriptPath: this is a codemod-less ("manual") migration.
-    suspiciousPatterns: ["getDB", "toISOString", "mockIdp"],
-    sourceStringSuspiciousPatterns: ["mock-id"],
+    // No scriptPath and no scoping patterns: the migration is type-driven, so
+    // the prompt is surfaced as project-wide guidance instead of per-file.
     examples: [
       {
         caption:
