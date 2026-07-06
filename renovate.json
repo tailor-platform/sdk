@@ -33,6 +33,12 @@
       "groupName": "@connectrpc"
     },
     {
+      "description": "Group changesets ecosystem (cli + changelog generators must stay in sync)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@changesets/*"],
+      "groupName": "@changesets"
+    },
+    {
       "description": "Group ESLint ecosystem (core + plugins need compatible versions)",
       "matchManagers": ["npm"],
       "matchPackageNames": ["eslint", "eslint-*", "@eslint/*", "typescript-eslint"],
