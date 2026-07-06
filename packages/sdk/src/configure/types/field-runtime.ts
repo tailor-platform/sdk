@@ -172,7 +172,7 @@ function validateValue<T extends TailorFieldType>(
   const validateFns = field._metadata.validate;
   if (validateFns && validateFns.length > 0) {
     for (const fn of validateFns) {
-      const result = fn({ newValue: value, oldValue: null });
+      const result = fn({ value });
       if (typeof result === "string") {
         issues.push({
           message: result,

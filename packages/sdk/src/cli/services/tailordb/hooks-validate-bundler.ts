@@ -458,7 +458,7 @@ async function bundleScriptTarget(args: {
     kind === "hooks"
       ? `{ value: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`
       : kind === "validate"
-        ? `{ newValue: _value, oldValue: _oldValue }`
+        ? `{ value: _value }`
         : kind === "typeHook"
           ? `{ input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now }`
           : `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap} }, __issues`;

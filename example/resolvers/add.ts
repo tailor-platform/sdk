@@ -1,10 +1,8 @@
 import { createResolver, t } from "@tailor-platform/sdk";
 
 const validators = [
-  ({ newValue }: { newValue: number }) =>
-    newValue >= 0 ? undefined : "Value must be non-negative",
-  ({ newValue }: { newValue: number }) =>
-    newValue < 10 ? undefined : "Value must be less than 10",
+  ({ value }: { value: number }) => (value >= 0 ? undefined : "Value must be non-negative"),
+  ({ value }: { value: number }) => (value < 10 ? undefined : "Value must be less than 10"),
 ] as const;
 export default createResolver({
   name: "add",

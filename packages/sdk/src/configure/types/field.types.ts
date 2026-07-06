@@ -3,7 +3,6 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
-import type { output } from "#/types/helpers";
 import type {
   DateString,
   DateTimeString,
@@ -11,7 +10,6 @@ import type {
   TimeString,
   UUIDString,
 } from "./scalar.types";
-import type { NonEmptyObject } from "type-fest";
 
 export interface EnumValue {
   value: string;
@@ -96,40 +94,12 @@ export type ArrayFieldOutput<T, O extends FieldOptions> = [O] extends [
 /**
  * Field validation function. Return an error message string to fail, or void/undefined to pass.
  */
-export type ValidateFn<O> = (args: { newValue: O; oldValue: O | null }) => string | void;
+export type ValidateFn<O> = (args: { value: O }) => string | void;
 
 /**
  * Input type for field validation
  */
 export type FieldValidateInput<O> = ValidateFn<O>;
-
-/**
- * Base validators type for field collections
- * @template F - Record of fields
- * @template ExcludeKeys - Keys to exclude from validation (default: "id" for TailorDB)
- */
-type ValidatorsBase<
-  // Structural constraint only
-  // oxlint-disable-next-line no-explicit-any
-  F extends Record<string, { _defined: any; _output: any; [key: string]: any }>,
-  ExcludeKeys extends string = "id",
-> = NonEmptyObject<{
-  [K in Exclude<keyof F, ExcludeKeys> as F[K]["_defined"] extends {
-    validate: unknown;
-  }
-    ? never
-    : K]?: ValidateFn<output<F[K]>> | ValidateFn<output<F[K]>>[];
-}>;
-
-/**
- * Validators type (by default excludes "id" field for TailorDB compatibility)
- * Can be used with both TailorField and TailorDBField
- */
-export type Validators<
-  // Structural constraint only
-  // oxlint-disable-next-line no-explicit-any
-  F extends Record<string, { _defined: any; _output: any; [key: string]: any }>,
-> = ValidatorsBase<F, "id">;
 
 /**
  * Minimal structural interface for TailorField.

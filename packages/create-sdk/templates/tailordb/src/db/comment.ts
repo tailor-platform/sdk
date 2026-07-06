@@ -7,7 +7,7 @@ export const comment = db
   .type("Comment", "A comment on a task", {
     body: db
       .string()
-      .validate(({ newValue }) => (newValue.length < 1 ? "Comment must not be empty" : undefined)),
+      .validate(({ value }) => (value.length < 1 ? "Comment must not be empty" : undefined)),
     taskId: db.uuid().relation({
       type: "n-1",
       toward: { type: task },

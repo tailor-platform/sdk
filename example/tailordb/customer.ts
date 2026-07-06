@@ -3,17 +3,21 @@ import { defaultGqlPermission, defaultPermission } from "./permissions";
 
 export const customer = db
   .type("Customer", "Customer information", {
-    name: db.string(),
+    name: db
+      .string()
+      .validate(({ value }) =>
+        value.length <= 5 ? "Name must be longer than 5 characters" : undefined,
+      ),
     email: db.string(),
     phone: db.string({ optional: true }),
     country: db.string(),
     postalCode: db.string(),
     address: db.string({ optional: true }),
     city: db.string({ optional: true }).validate(
-      ({ newValue }) =>
-        newValue && newValue.length <= 1 ? "City must be longer than 1 character" : undefined,
-      ({ newValue }) =>
-        newValue && newValue.length >= 100 ? "City must be shorter than 100 characters" : undefined,
+      ({ value }) =>
+        value && value.length <= 1 ? "City must be longer than 1 character" : undefined,
+      ({ value }) =>
+        value && value.length >= 100 ? "City must be shorter than 100 characters" : undefined,
     ),
     fullAddress: db.string(),
     state: db.string(),
@@ -26,10 +30,6 @@ export const customer = db
     update: ({ input }) => ({
       fullAddress: `${input.postalCode} ${input.address} ${input.city}`,
     }),
-  })
-  .validate({
-    name: ({ newValue }) =>
-      newValue.length <= 5 ? "Name must be longer than 5 characters" : undefined,
   })
   .validate(({ newRecord }, issues) => {
     if (newRecord.country === "JP" && !newRecord.postalCode) {

@@ -27,8 +27,6 @@ import type {
   TailorFieldType,
   TailorToTs,
   FieldValidateInput,
-  ValidateFn,
-  Validators,
 } from "#/configure/types/field.types";
 import type { UUIDString } from "#/configure/types/scalar.types";
 import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
@@ -261,7 +259,9 @@ type DBFieldDefaultMethod<Defined extends DefinedDBFieldMetadata, Output> =
         ? TypeLevelError<"default cannot be set on nested type fields">
         : Defined extends { serial: true }
           ? TypeLevelError<"default cannot be set on serial fields">
-          : DBFieldDefaultFn<Defined, Output>;
+          : null extends Output
+            ? TypeLevelError<"default cannot be set on optional fields">
+            : DBFieldDefaultFn<Defined, Output>;
 
 /**
  * Full TailorDBField interface with builder methods.
@@ -367,7 +367,6 @@ export interface TailorDBType<
 
   hooks(hook: TypeHook<Fields>): TailorDBType<Fields, User>;
   validate(fn: TypeValidateFn<Fields>): TailorDBType<Fields, User>;
-  validate(validators: Validators<Fields>): TailorDBType<Fields, User>;
   features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User>;
   indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]): TailorDBType<Fields, User>;
   files<const F extends string>(
@@ -896,17 +895,8 @@ function createTailorDBType<
       return this;
     },
 
-    validate(validatorsOrFn: Validators<Fields> | TypeValidateFn<Fields>) {
-      if (typeof validatorsOrFn === "function") {
-        _typeValidate = validatorsOrFn;
-        return this;
-      }
-      Object.entries(validatorsOrFn).forEach(([fieldName, fieldValidators]) => {
-        const field = this.fields[fieldName] as TailorAnyDBField;
-        const fns = fieldValidators as ValidateFn<unknown> | ValidateFn<unknown>[];
-        const updatedField = Array.isArray(fns) ? field.validate(...fns) : field.validate(fns);
-        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
-      });
+    validate(fn: TypeValidateFn<Fields>) {
+      _typeValidate = fn;
       return this;
     },
 

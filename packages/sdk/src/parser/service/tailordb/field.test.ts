@@ -124,8 +124,8 @@ describe("parseFieldConfig validator expressions", () => {
   test("normalizes a method-shorthand validator whose body contains an arrow function", () => {
     // Method shorthand syntax, obtained the same way a user's helper object would produce it.
     const validators = {
-      isValid({ newValue }: { newValue: string; oldValue: string | null }): string | void {
-        if (!([newValue].map((v) => v.includes("@"))[0] ?? false)) return "invalid email";
+      isValid({ value }: { value: string }): string | void {
+        if (!([value].map((v) => v.includes("@"))[0] ?? false)) return "invalid email";
       },
     };
     const type = db.type("User", {
@@ -162,13 +162,8 @@ describe("parseFieldConfig script expression validation", () => {
   });
 
   test("throws a clear error when a validator cannot be converted to valid JavaScript", () => {
-    const check = function check({
-      newValue,
-    }: {
-      newValue: string;
-      oldValue: string | null;
-    }): string | void {
-      if (newValue.length === 0) return "must not be empty";
+    const check = function check({ value }: { value: string }): string | void {
+      if (value.length === 0) return "must not be empty";
     }.bind(null);
     const type = db.type("User", {
       email: db.string().validate(check),
@@ -182,13 +177,8 @@ describe("parseFieldConfig script expression validation", () => {
   });
 
   test("includes the type and field path in conversion errors from type parsing", () => {
-    const check = function check({
-      newValue,
-    }: {
-      newValue: string;
-      oldValue: string | null;
-    }): string | void {
-      if (newValue.length === 0) return "must not be empty";
+    const check = function check({ value }: { value: string }): string | void {
+      if (value.length === 0) return "must not be empty";
     }.bind(null);
     const type = db.type("User", {
       email: db.string().validate(check),

@@ -767,7 +767,7 @@ describe("TailorField clone-on-write / no aliasing", () => {
   test("validate() returns a clone and never mutates the original", () => {
     const original = t.string();
     const updated = original.validate((args) =>
-      args.newValue.length <= 0 ? "Must not be empty" : undefined,
+      args.value.length <= 0 ? "Must not be empty" : undefined,
     );
 
     expect(original.metadata.validate).toBeUndefined();
@@ -832,7 +832,7 @@ describe("TailorField clone-on-write / no aliasing", () => {
 
     const validated = t
       .string()
-      .validate((args) => (args.newValue.length <= 0 ? "Must not be empty" : undefined));
+      .validate((args) => (args.value.length <= 0 ? "Must not be empty" : undefined));
     const validatedClone = validated.description("name");
     expect(validatedClone.metadata.validate).not.toBe(validated.metadata.validate);
   });
@@ -852,8 +852,8 @@ describe("TailorField clone-on-write / no aliasing", () => {
   test("validate() preserves function references through cloning", () => {
     const calls: unknown[] = [];
     const field = t.string().validate((args) => {
-      calls.push(args.newValue);
-      return args.newValue.length <= 0 ? "Must not be empty" : undefined;
+      calls.push(args.value);
+      return args.value.length <= 0 ? "Must not be empty" : undefined;
     });
 
     const result = field.parse({ value: "x", data, invoker });
@@ -864,7 +864,7 @@ describe("TailorField clone-on-write / no aliasing", () => {
   test("validators survive a clone triggered by a later builder, leaving the original intact", () => {
     const validated = t
       .string()
-      .validate((args) => (args.newValue.length <= 0 ? "Must not be empty" : undefined));
+      .validate((args) => (args.value.length <= 0 ? "Must not be empty" : undefined));
     // description() clones the field; the validators must carry over to the clone
     // and keep working, while the original stays unchanged.
     const described = validated.description("name");

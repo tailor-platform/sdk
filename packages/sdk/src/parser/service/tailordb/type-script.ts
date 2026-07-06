@@ -101,27 +101,22 @@ function buildHookObject(
  * failing message keyed by its dotted field path.
  * @param {Record<string, ScriptFieldConfig>} fields - Field configurations
  * @param {string} accessExpr - JS expression to access the parent object
- * @param {string} oldAccessExpr - JS expression to access the old record's parent object
  * @param {string} keyPrefix - Dotted path prefix for error keys
  * @returns {string[]} Array of validation statement strings
  */
 function buildValidateStatements(
   fields: Record<string, ScriptFieldConfig>,
   accessExpr: string,
-  oldAccessExpr: string,
   keyPrefix: string,
 ): string[] {
   const statements: string[] = [];
 
   for (const [name, config] of Object.entries(fields)) {
     const access = `${accessExpr}[${key(name)}]`;
-    const oldAccess = `${oldAccessExpr}?.[${key(name)}]`;
     const fieldPath = keyPrefix ? `${keyPrefix}.${name}` : name;
 
     if (isNestedType(config) && config.fields) {
-      statements.push(
-        ...buildValidateStatements(config.fields, `(${access} || {})`, oldAccess, fieldPath),
-      );
+      statements.push(...buildValidateStatements(config.fields, `(${access} || {})`, fieldPath));
       continue;
     }
 
@@ -129,7 +124,7 @@ function buildValidateStatements(
     if (validators.length > 0) {
       const chain = validators.map((v) => `(${v.script?.expr})`).join(" ?? ");
       statements.push(
-        `{ const _value = ${access}; const _oldValue = ${oldAccess} ?? null;` +
+        `{ const _value = ${access};` +
           ` const __r = ${chain}; if (typeof __r === "string") { __errs[${key(fieldPath)}] = __r; } }`,
       );
     }
@@ -188,7 +183,7 @@ export function buildTypeScripts(
     result.typeHook = hook;
   }
 
-  const statements = buildValidateStatements(fields, NEW_RECORD, OLD_RECORD, "");
+  const statements = buildValidateStatements(fields, NEW_RECORD, "");
   if (statements.length > 0 || typeValidateExpr) {
     const expr = wrapValidate(statements, typeValidateExpr);
     result.typeValidate = { create: { expr }, update: { expr } };

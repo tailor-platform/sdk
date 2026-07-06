@@ -16,11 +16,11 @@ export const orderItem = db
     quantity: db
       .int()
       .description("Quantity of the product")
-      .validate(({ newValue }) => (newValue < 0 ? "Quantity must be non-negative" : undefined)),
+      .validate(({ value }) => (value < 0 ? "Quantity must be non-negative" : undefined)),
     unitPrice: db
       .float()
       .description("Unit price of the product")
-      .validate(({ newValue }) => (newValue < 0 ? "Unit price must be non-negative" : undefined)),
+      .validate(({ value }) => (value < 0 ? "Unit price must be non-negative" : undefined)),
     totalPrice: db.float({ optional: true }).description("Total price of the order item"),
     ...db.fields.timestamps(),
   })
