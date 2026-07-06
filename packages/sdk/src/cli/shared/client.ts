@@ -527,6 +527,46 @@ export async function fetchAll<T>(
   return items;
 }
 
+function isNotFoundError(error: unknown): boolean {
+  return error instanceof ConnectError && error.code === Code.NotFound;
+}
+
+/**
+ * Fetch all paginated resources, treating an absent resource group as empty.
+ * @template T
+ * @param fn - Page fetcher returning items and next page token
+ * @returns All fetched items, or an empty list when the fetcher raises NotFound
+ */
+export async function fetchAllTolerant<T>(
+  fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>,
+): Promise<T[]> {
+  try {
+    return await fetchAll(fn);
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+/**
+ * Fetch a single resource, treating NotFound as an absent value.
+ * @template T
+ * @param fn - Resource getter
+ * @returns Fetched resource, or undefined when the getter raises NotFound
+ */
+export async function getOrNull<T>(fn: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 interface FetchPagedOptions {
   /** Maximum number of items to return. 0 or undefined means unlimited. */
   limit?: number;

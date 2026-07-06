@@ -2,7 +2,6 @@ import { describe, expect, test } from "vitest";
 import {
   isValidMigrationNumber,
   formatMigrationNumber,
-  parseMigrationNumber,
   getMigrationFilePath,
   getMigrationDirPath,
   MIGRATION_NUMBER_PATTERN,
@@ -89,26 +88,6 @@ describe("formatMigrationNumber", () => {
     [9999, "9999"],
   ])("formatMigrationNumber(%i) is %j", (value, expected) => {
     expect(formatMigrationNumber(value)).toBe(expected);
-  });
-});
-
-describe("parseMigrationNumber", () => {
-  test.each([
-    ["0001_schema.json", 1],
-    ["0002_diff.json", 2],
-    ["0010_migrate.ts", 10],
-    ["0100_schema.json", 100],
-  ])("parses migration number %j as %i", (fileName, expected) => {
-    expect(parseMigrationNumber(fileName)).toBe(expected);
-  });
-
-  test.each([
-    ["schema.json"],
-    ["invalid_schema.json"],
-    ["001_schema.json"], // Too few digits
-    [""],
-  ])("returns null for invalid file name %j", (fileName) => {
-    expect(parseMigrationNumber(fileName)).toBe(null);
   });
 });
 

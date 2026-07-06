@@ -1,5 +1,4 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateTailorDBGQLPermissionRequestSchema,
   type CreateTailorDBServiceRequestSchema,
@@ -53,7 +52,7 @@ import {
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { type TailorDBService } from "#/cli/services/tailordb/service";
 import { byName } from "#/cli/shared/apply-concurrency";
-import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
@@ -97,21 +96,14 @@ async function fetchRemoteTypes(
   workspaceId: string,
   namespace: string,
 ): Promise<ProtoTailorDBType[]> {
-  return fetchAll(async (pageToken, maxPageSize) => {
-    try {
-      const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
-        workspaceId,
-        namespaceName: namespace,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [tailordbTypes, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+  return fetchAllTolerant(async (pageToken, maxPageSize) => {
+    const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
+      workspaceId,
+      namespaceName: namespace,
+      pageToken,
+      pageSize: maxPageSize,
+    });
+    return [tailordbTypes, nextPageToken];
   });
 }
 
@@ -120,21 +112,14 @@ async function fetchRemoteGqlPermissions(
   workspaceId: string,
   namespace: string,
 ): Promise<RemoteGqlPermission[]> {
-  return fetchAll(async (pageToken, maxPageSize) => {
-    try {
-      const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
-        workspaceId,
-        namespaceName: namespace,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [permissions, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+  return fetchAllTolerant(async (pageToken, maxPageSize) => {
+    const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
+      workspaceId,
+      namespaceName: namespace,
+      pageToken,
+      pageSize: maxPageSize,
+    });
+    return [permissions, nextPageToken];
   });
 }
 
@@ -1613,21 +1598,14 @@ async function planTypes(
   const changeSet = createChangeSet<CreateType, UpdateType, DeleteType>("TailorDB types");
 
   const fetchTypes = (namespaceName: string) => {
-    return fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
-          workspaceId,
-          namespaceName,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [tailordbTypes, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
-        }
-        throw error;
-      }
+    return fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { tailordbTypes, nextPageToken } = await client.listTailorDBTypes({
+        workspaceId,
+        namespaceName,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [tailordbTypes, nextPageToken];
     });
   };
 
@@ -1877,21 +1855,14 @@ async function planGqlPermissions(
   );
 
   const fetchGqlPermissions = (namespaceName: string) => {
-    return fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
-          workspaceId,
-          namespaceName,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [permissions, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
-        }
-        throw error;
-      }
+    return fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
+        workspaceId,
+        namespaceName,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [permissions, nextPageToken];
     });
   };
 

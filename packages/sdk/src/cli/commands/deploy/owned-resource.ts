@@ -1,5 +1,4 @@
-import { Code, ConnectError } from "@connectrpc/connect";
-import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 
@@ -26,16 +25,7 @@ export async function fetchExistingResourcesWithLabels<T>(
   params: FetchExistingResourcesWithLabelsParams<T>,
 ): Promise<WithLabel<T>> {
   const { client, fetchPage, getName, getTrn } = params;
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
-      return await fetchPage(pageToken, maxPageSize);
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
-  });
+  const withoutLabel = await fetchAllTolerant(fetchPage);
   const existingResources: WithLabel<T> = {};
   await Promise.all(
     withoutLabel.map(async (resource) => {

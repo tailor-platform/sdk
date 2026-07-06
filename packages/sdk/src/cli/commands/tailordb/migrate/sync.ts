@@ -5,7 +5,13 @@ import { z } from "zod";
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
-import { fetchAll, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import {
+  fetchAll,
+  fetchAllTolerant,
+  getOrNull,
+  initOperatorClient,
+  type OperatorClient,
+} from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
@@ -57,21 +63,14 @@ async function fetchRemoteGqlPermissions(
   workspaceId: string,
   namespace: string,
 ): Promise<RemoteGqlPermission[]> {
-  return fetchAll(async (pageToken, maxPageSize) => {
-    try {
-      const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
-        workspaceId,
-        namespaceName: namespace,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [permissions, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+  return fetchAllTolerant(async (pageToken, maxPageSize) => {
+    const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
+      workspaceId,
+      namespaceName: namespace,
+      pageToken,
+      pageSize: maxPageSize,
+    });
+    return [permissions, nextPageToken];
   });
 }
 
@@ -231,17 +230,13 @@ async function fetchRemoteMigrationState(
   client: OperatorClient,
   trn: string,
 ): Promise<RemoteMigrationState> {
-  try {
+  const metadata = await getOrNull(async () => {
     const { metadata } = await client.getMetadata({ trn });
-    const labels = metadata?.labels ?? {};
-    const label = labels[MIGRATION_LABEL_KEY];
-    return { labels, current: label ? parseMigrationLabelNumber(label) : null };
-  } catch (error) {
-    if (error instanceof ConnectError && error.code === Code.NotFound) {
-      return { labels: {}, current: null };
-    }
-    throw error;
-  }
+    return metadata;
+  });
+  const labels = metadata?.labels ?? {};
+  const label = labels[MIGRATION_LABEL_KEY];
+  return { labels, current: label ? parseMigrationLabelNumber(label) : null };
 }
 
 function selectTargetNamespace(
