@@ -195,6 +195,20 @@ describe("createTailorDBHook", () => {
       expect(createTailorDBHook(type)({}).createdAt).toBe("2026-04-15T00:00:00.000Z");
     });
 
+    test("shares the same now timestamp between field-level and type-level hooks", () => {
+      let fieldNow: Date | undefined;
+      let typeNow: Date | undefined;
+      const type = db
+        .type("Test", {
+          createdAt: db.datetime().hooks({ create: ({ now }) => (fieldNow = now) }),
+          label: db.string(),
+        })
+        .hooks({ create: ({ now }) => ((typeNow = now), { label: "x" }) });
+      createTailorDBHook(type)({});
+      expect(fieldNow).toBeInstanceOf(Date);
+      expect(typeNow).toBe(fieldNow);
+    });
+
     test("does not invoke a hook that only defines update (createTailorDBHook is create-only)", () => {
       let updateCalled = false;
       const type = db.type("Test", { updatedAt: db.datetime() }).hooks({
