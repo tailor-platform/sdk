@@ -137,6 +137,14 @@ describe("repository ERD schema workflow", () => {
     expect(content).toContain("gh api -X GET --paginate");
   });
 
+  test("searches the PR's actual base branch for export runs instead of assuming main", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("BASE_REF: ${{ github.event.pull_request.base.ref }}");
+    expect(content).not.toContain("-f branch=main");
+    expect(content).toContain('-f branch="$BASE_REF"');
+  });
+
   test("does not let a no-match grep abort either job's script under set -euo pipefail", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
@@ -150,7 +158,7 @@ describe("repository ERD schema workflow", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     expect(content).toContain('base_missing="true"');
-    expect(content).toContain("falling back to the latest export on main");
+    expect(content).toContain("falling back to the latest export on $BASE_REF");
     expect(content).toContain("rendering current objects as added");
     expect(content).toContain('diff_args=(--namespace "$NAMESPACE"');
     expect(content).toContain('diff_args+=(--base-html "$base_html")');

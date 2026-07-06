@@ -164,6 +164,7 @@ jobs:
           NAMESPACE: ${{ matrix.namespace }}
           REPO: ${{ github.repository }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
@@ -223,15 +224,18 @@ jobs:
             fi
           fi
 
-          # Walk this workflow's main-branch export runs newest-first and use
-          # the first one at or before the fork point (export runs after the
+          # Walk this workflow's export runs on the PR's actual base branch
+          # (export only ever runs on push to main, so this only finds
+          # anything when base is main or another branch was temporarily
+          # added to the export job's push trigger) newest-first, and use the
+          # first one at or before the fork point (export runs after the
           # fork point may include changes unrelated to this PR). Bounded to
           # the export artifacts' own 90-day retention window (see the export
           # job's Upload step) — a run older than that has no artifact left
           # to download regardless, so searching further back is pointless.
           since=$(date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ)
           candidate_runs=$(gh api -X GET --paginate "repos/$REPO/actions/workflows/erd-schema.yml/runs" \
-            -f branch=main -f status=success -f "created=>=$since" -f per_page=100 \
+            -f branch="$BASE_REF" -f status=success -f "created=>=$since" -f per_page=100 \
             --jq '.workflow_runs[] | [.head_sha, (.id|tostring)] | @tsv')
 
           run_id=""
@@ -245,9 +249,9 @@ jobs:
           done <<<"$candidate_runs"
 
           if [ -z "$run_id" ]; then
-            echo "No ERD schema export found at or before fork point $fork_sha; falling back to the latest export on main."
+            echo "No ERD schema export found at or before fork point $fork_sha; falling back to the latest export on $BASE_REF."
             run_id=$(gh api -X GET "repos/$REPO/actions/workflows/erd-schema.yml/runs" \
-              -f branch=main -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')
+              -f branch="$BASE_REF" -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')
           fi
 
           base_missing="true"
