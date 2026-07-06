@@ -97,10 +97,13 @@ export function buildViewerHtml(options: BuildViewerHtmlOptions): string {
   return html
     .replace(
       "<title>TailorDB ERD</title>",
-      `<title>${escapeHtml(options.title ?? "TailorDB ERD")}</title>`,
+      () => `<title>${escapeHtml(options.title ?? "TailorDB ERD")}</title>`,
     )
-    .replace(STYLES_LINK, `<style>\n${css}\n</style>`)
-    .replace(APP_SCRIPT, `${embedScript}${currentSchemaScript}${diffScript}\n    ${inlineScript}`);
+    .replace(STYLES_LINK, () => `<style>\n${css}\n</style>`)
+    .replace(
+      APP_SCRIPT,
+      () => `${embedScript}${currentSchemaScript}${diffScript}\n    ${inlineScript}`,
+    );
 }
 
 /**
