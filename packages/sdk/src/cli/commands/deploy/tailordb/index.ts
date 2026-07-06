@@ -1791,13 +1791,17 @@ function normalizeTailorDBCompareValue(
     return value;
   }
 
+  if (typeof value === "boolean") {
+    if (path.at(-1) === "optionalOnCreate" && value === false) {
+      return undefined;
+    }
+    return value;
+  }
+
   if (typeof value === "number" || typeof value === "bigint" || typeof value === "string") {
     if (matchesNumericStringPath(path) && isNumericLikeValue(value)) {
       return String(value);
     }
-    // Platform returns an empty string for `expr` (validate scripts) and field/type
-    // `description` when the SDK omitted them, while local manifests omit the key
-    // entirely. Treat the empty string as unset so it matches an omitted value.
     if (
       (path.at(-1) === "expr" || path.at(-1) === "description") &&
       value === tailordbCompareKnownDefaults.emptyExpression

@@ -199,8 +199,21 @@ const convertToScriptExpr = (
   }
   const normalized = stringifyFunction(fn);
   return assertParsableExpression(
-    `(${normalized})({ value: _value, newRecord: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now })`,
+    `(${normalized})({ value: _value, input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now })`,
     formatScriptContext(kind, context),
+  );
+};
+
+// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+export const convertTypeHookToExpr = (fn: Function): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+  if (precompiledExpr) {
+    return precompiledExpr;
+  }
+  const normalized = stringifyFunction(fn);
+  return assertParsableExpression(
+    `(${normalized})({ input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now })`,
+    "type-hook",
   );
 };
 

@@ -1023,6 +1023,12 @@ export type TailorDBTypeRawInput = {
           };
         }
       | undefined;
+    typeHook?:
+      | {
+          create?: Function | undefined;
+          update?: Function | undefined;
+        }
+      | undefined;
     typeValidate?: Function | undefined;
   };
 };
@@ -1094,6 +1100,12 @@ export type TailorDBTypeRaw = {
             fields: string[];
             unique?: boolean | undefined;
           };
+        }
+      | undefined;
+    typeHook?:
+      | {
+          create?: Function | undefined;
+          update?: Function | undefined;
         }
       | undefined;
     typeValidate?: Function | undefined;

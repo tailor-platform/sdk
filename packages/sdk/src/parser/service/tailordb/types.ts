@@ -172,5 +172,6 @@ export interface TailorDBType {
   permissions: Permissions;
   indexes?: TailorDBTypeMetadata["indexes"];
   files?: TailorDBTypeMetadata["files"];
+  typeHookExpr?: { create?: string; update?: string };
   typeValidateExpr?: string;
 }

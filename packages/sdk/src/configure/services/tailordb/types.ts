@@ -15,7 +15,6 @@ import type {
   RawPermissions,
   TailorDBServiceConfigInput,
 } from "#/types/tailordb.generated";
-import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
   {
@@ -91,6 +90,8 @@ export interface TailorDBTypeMetadata {
     }
   >;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  typeHook?: { create?: Function; update?: Function };
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   typeValidate?: Function;
 }
 
@@ -154,7 +155,7 @@ type HookArgs<TData> =
 
 type HookFn<TValue, TData, TReturn> = (args: {
   value: TValue;
-  newRecord: HookArgs<TData>;
+  input: HookArgs<TData>;
   oldRecord: HookArgs<TData> | null;
   invoker: TailorPrincipal | null;
   now: Date;
@@ -184,20 +185,20 @@ export type TypeValidateFn<
   issues: (field: DottedPaths<Omit<TData, "id">>, message: string) => void,
 ) => void;
 
-export type Hooks<
+export type TypeHookFn<
   F extends Record<string, TailorAnyDBField>,
   TData = { [K in keyof F]: output<F[K]> },
-> = NonEmptyObject<{
-  [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {
-    hooks: unknown;
-  }
-    ? never
-    : F[K]["_defined"] extends { type: "nested" }
-      ? never
-      : K]?: F[K]["_defined"] extends { default: unknown }
-    ? Hook<TData, output<F[K]>, output<F[K]> | null | undefined>
-    : Hook<TData, output<F[K]>>;
-}>;
+> = (args: {
+  input: HookArgs<TData>;
+  oldRecord: HookArgs<TData> | null;
+  invoker: TailorPrincipal | null;
+  now: Date;
+}) => { [K in Exclude<keyof TData & string, "id">]?: TData[K] | null | undefined };
+
+export type TypeHook<F extends Record<string, TailorAnyDBField>> = {
+  create?: TypeHookFn<F>;
+  update?: TypeHookFn<F>;
+};
 
 // --- Field helper types ---
 

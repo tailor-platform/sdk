@@ -149,21 +149,34 @@ function wrapValidate(statements: string[], typeValidateExpr?: string): string {
  * operation, so all fields touched in one create/update observe the same
  * instant.  Defaults are applied after hooks on create only.  Validators
  * run with the same rules on create and update.
- * @param {Record<string, ScriptFieldConfig>} fields - Field configurations
- * @param {string} [typeValidateExpr] - Precompiled type-level validate expression
- * @returns {TypeScripts} Aggregated type-level scripts
+ * @param fields - Per-field script configuration
+ * @param options - Optional type-level hook/validate expressions
+ * @returns Aggregated type-level scripts
  */
 export function buildTypeScripts(
   fields: Record<string, ScriptFieldConfig>,
-  typeValidateExpr?: string,
+  options?: {
+    typeHookExpr?: { create?: string; update?: string };
+    typeValidateExpr?: string;
+  },
 ): TypeScripts {
   const result: TypeScripts = {};
+  const typeHookExpr = options?.typeHookExpr;
+  const typeValidateExpr = options?.typeValidateExpr;
 
   const hook: { create?: ScriptRef; update?: ScriptRef } = {};
   for (const operation of ["create", "update"] as const) {
-    const objectExpr = buildHookObject(fields, INPUT, operation);
-    if (objectExpr !== null) {
-      hook[operation] = { expr: wrapHook(objectExpr) };
+    const perFieldExpr = buildHookObject(fields, INPUT, operation);
+    const typeLevelExpr = typeHookExpr?.[operation];
+
+    if (perFieldExpr !== null && typeLevelExpr) {
+      hook[operation] = {
+        expr: wrapHook(`Object.assign({}, ${perFieldExpr}, ${typeLevelExpr})`),
+      };
+    } else if (typeLevelExpr) {
+      hook[operation] = { expr: wrapHook(typeLevelExpr) };
+    } else if (perFieldExpr !== null) {
+      hook[operation] = { expr: wrapHook(perFieldExpr) };
     }
   }
   if (hook.create || hook.update) {

@@ -219,6 +219,7 @@ export interface TailorDBSnapshotType {
     record?: SnapshotRecordPermission;
     gql?: SnapshotGqlPermission;
   };
+  typeHookExpr?: { create?: string; update?: string };
   typeValidateExpr?: string;
 }
 

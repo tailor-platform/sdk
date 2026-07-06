@@ -165,10 +165,10 @@ export function generateTailorDBTypeManifestFromSnapshot(
 
   // Field hooks/validators are aggregated into type-level scripts so that a
   // single shared timestamp is observed across every field in one operation.
-  const { typeHook, typeValidate } = buildTypeScripts(
-    snapshotType.fields,
-    snapshotType.typeValidateExpr,
-  );
+  const { typeHook, typeValidate } = buildTypeScripts(snapshotType.fields, {
+    typeHookExpr: snapshotType.typeHookExpr,
+    typeValidateExpr: snapshotType.typeValidateExpr,
+  });
 
   return {
     name: snapshotType.name,

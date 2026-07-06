@@ -25,7 +25,7 @@ export interface Namespace {
       postalCode: string;
       address: string | null;
       city: string | null;
-      fullAddress: Generated<string>;
+      fullAddress: string;
       state: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;

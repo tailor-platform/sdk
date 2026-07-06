@@ -168,49 +168,43 @@ describe("createTailorDBHook", () => {
     });
   });
 
-  describe("create hook on a top-level field", () => {
-    test("invokes the create hook with value, full data, and a null invoker", () => {
-      const seen: { value: unknown; newRecord: unknown; invoker: unknown }[] = [];
+  describe("type-level create hook", () => {
+    test("invokes the create hook and applies field overrides", () => {
+      const seen: { input: unknown; invoker: unknown }[] = [];
       const type = db.type("Order", { total: db.float(), tax: db.float() }).hooks({
-        tax: {
-          create: ({ value, newRecord, invoker }) => {
-            seen.push({ value, newRecord, invoker });
-            return (newRecord as { total: number }).total * 0.1;
-          },
+        create: ({ input, invoker }) => {
+          seen.push({ input, invoker });
+          return { tax: (input as { total: number }).total * 0.1 };
         },
       });
       const result = createTailorDBHook(type)({ total: 100, tax: undefined });
       expect(result.tax).toBe(10);
       expect(seen).toEqual([
         {
-          value: undefined,
-          newRecord: { total: 100, tax: undefined },
+          input: { total: 100, tax: undefined },
           invoker: null,
         },
       ]);
     });
 
-    test("normalizes a Date returned from the create hook to an ISO string", () => {
+    test("normalizes a Date returned from the type hook to an ISO string", () => {
       const fixed = new Date("2026-04-15T00:00:00.000Z");
       const type = db
         .type("Test", { createdAt: db.datetime() })
-        .hooks({ createdAt: { create: () => fixed } });
+        .hooks({ create: () => ({ createdAt: fixed }) });
       expect(createTailorDBHook(type)({}).createdAt).toBe("2026-04-15T00:00:00.000Z");
     });
 
     test("does not invoke a hook that only defines update (createTailorDBHook is create-only)", () => {
       let updateCalled = false;
       const type = db.type("Test", { updatedAt: db.datetime() }).hooks({
-        updatedAt: {
-          update: () => {
-            updateCalled = true;
-            return new Date();
-          },
+        update: () => {
+          updateCalled = true;
+          return { updatedAt: new Date() };
         },
       });
       const result = createTailorDBHook(type)({ updatedAt: "2026-01-01T00:00:00.000Z" });
       expect(updateCalled).toBe(false);
-      // Falls through to plain passthrough
       expect(result.updatedAt).toBe("2026-01-01T00:00:00.000Z");
     });
   });
