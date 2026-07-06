@@ -24,6 +24,7 @@ export {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
   return (data: unknown) => {
+    const now = new Date();
     const hooked = Object.entries(type.fields).reduce(
       (hooked, [key, value]) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,7 +50,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
             value: (data as Record<string, unknown>)[key],
             oldValue: null,
             invoker: null,
-            now: new Date(),
+            now,
           });
           if (hooked[key] instanceof Date) {
             hooked[key] = hooked[key].toISOString();
@@ -69,7 +70,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         input: data,
         oldRecord: null,
         invoker: null,
-        now: new Date(),
+        now,
       });
       if (overrides && typeof overrides === "object") {
         for (const [key, value] of Object.entries(overrides as Record<string, unknown>)) {
