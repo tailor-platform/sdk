@@ -527,7 +527,12 @@ export async function fetchAll<T>(
   return items;
 }
 
-function isNotFoundError(error: unknown): boolean {
+/**
+ * @internal
+ * @param error - Error value to inspect
+ * @returns Whether the error is a Connect NotFound error
+ */
+export function isNotFoundError(error: unknown): boolean {
   return error instanceof ConnectError && error.code === Code.NotFound;
 }
 
@@ -707,8 +712,7 @@ export async function resolveStaticWebsiteUrls(
           );
           return [];
         } catch (error) {
-          const isNotFound = error instanceof ConnectError && error.code === Code.NotFound;
-          if (isNotFound && expectedLocalNames?.has(siteName)) {
+          if (isNotFoundError(error) && expectedLocalNames?.has(siteName)) {
             return [url];
           }
           logger.warn(
