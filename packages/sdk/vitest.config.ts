@@ -43,6 +43,13 @@ const integrationTestIncludes = [
   "src/plugin/compat.test.ts",
 ];
 
+// The CLI plugin test exercises Windows-specific PATHEXT/`.cmd`/`.ps1` spawn
+// branches, so it gets its own project ("unit-plugin", which the `unit*` glob
+// still picks up on Linux) that a Windows CI job can run via `--project
+// unit-plugin` — no separator-sensitive path filter needed. Excluded from the
+// general unit split below so it does not run twice.
+const pluginTestInclude = "src/cli/shared/plugin.test.ts";
+
 // Split unit tests by whether they mutate worker-global state. With
 // `isolate: false` a worker shares one module registry and one global object
 // across files, so per-file partial module mocks (e.g. `vi.mock("node:fs", ...)`)
@@ -51,19 +58,14 @@ const integrationTestIncludes = [
 // isolation; the rest reuse module evaluation across files, which roughly
 // halves their import time.
 // Classification is by file content so new tests are routed automatically.
-// `node:fs` globSync yields OS-native separators (backslashes on Windows).
-// vitest matches include globs and CLI file filters with forward slashes, so
-// normalize here to keep discovery and `vitest run <file>` working on Windows.
-const toPosix = (file: string): string => file.split(path.sep).join("/");
-
 const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
-  const integrationTestFiles = new Set(
-    globSync(integrationTestIncludes, { cwd: __dirname }).map(toPosix),
-  );
+  const integrationTestFiles = new Set(globSync(integrationTestIncludes, { cwd: __dirname }));
   const isExcludedUnitTest = (file: string): boolean =>
     file.includes("/node_modules/") ||
     file.includes("/__test_fixtures__/") ||
     integrationTestFiles.has(file) ||
+    // Carved into its own "unit-plugin" project (see below).
+    file === pluginTestInclude ||
     // Self-contained nested vitest project with its own config.
     file.startsWith("src/vitest/integration/");
 
@@ -76,7 +78,7 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
   const shared: string[] = [];
   for (const file of globSync(["src/**/*.{test,spec}.ts", "scripts/**/*.{test,spec}.ts"], {
     cwd: __dirname,
-  }).map(toPosix)) {
+  })) {
     if (isExcludedUnitTest(file)) continue;
     (needsIsolation(file) ? isolated : shared).push(file);
   }
@@ -122,6 +124,16 @@ export default defineConfig({
           name: "unit-core",
           isolate: false,
           include: sharedUnitTests,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          // Carved out so a Windows CI job can run just the plugin test via
+          // `--project unit-plugin`; the `unit*` glob still runs it on Linux.
+          name: "unit-plugin",
+          include: [pluginTestInclude],
+          typecheck: { enabled: false },
         },
       },
       {
