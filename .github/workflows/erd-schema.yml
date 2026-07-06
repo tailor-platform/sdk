@@ -201,6 +201,11 @@ jobs:
           cd example
           pnpm exec tailor-sdk tailordb erd diff "${diff_args[@]}"
 
+          if [ ! -s "$RUNNER_TEMP/erd-preview/$NAMESPACE.html" ]; then
+            echo "::error::ERD diff render for namespace '$NAMESPACE' produced no output file."
+            exit 1
+          fi
+
       # archive: false (upload-artifact v7+) keeps the file unzipped so the HTML
       # can be viewed directly in the browser from the run's artifact list. Only
       # a single file may be uploaded per artifact when archive is false.

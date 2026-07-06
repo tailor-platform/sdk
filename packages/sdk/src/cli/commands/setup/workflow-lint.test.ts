@@ -150,6 +150,13 @@ describe("repository ERD schema workflow", () => {
     expect(content).toContain("pnpm exec tailor-sdk tailordb erd diff");
   });
 
+  test("fails loudly instead of silently uploading nothing when a relevant diff render produces no file", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain('if [ ! -s "$RUNNER_TEMP/erd-preview/$NAMESPACE.html" ]; then');
+    expect(content).toContain("ERD diff render for namespace '$NAMESPACE' produced no output file");
+  });
+
   test("groups each job's concurrency so a fast-follow push/PR update cannot cancel or race a run", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
