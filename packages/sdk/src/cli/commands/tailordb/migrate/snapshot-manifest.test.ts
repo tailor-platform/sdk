@@ -318,7 +318,9 @@ describe("snapshot-manifest", () => {
       // timestamp once and dispatches each field's hook.
       const createHook = manifest.schema?.typeHook?.create?.expr ?? "";
       expect(createHook).toContain("const _now = new Date()");
-      expect(createHook).toContain('"updatedAt": ((_value) => (now()))(_input["updatedAt"])');
+      expect(createHook).toContain(
+        '"updatedAt": ((_value, _oldValue) => (now()))(_input["updatedAt"], _oldRecord?.["updatedAt"] ?? null)',
+      );
       expect(manifest.schema?.typeHook?.update?.expr).toContain('_input["updatedAt"]');
       expect(manifest.schema?.typeValidate).toBeUndefined();
     });

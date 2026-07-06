@@ -608,12 +608,12 @@ describe("TailorDBField hooks modifier tests", () => {
 
   test("hooks modifier on string field receives string", () => {
     const _hooks = db.string().hooks;
-    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<unknown, string>>();
+    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<string>>();
   });
 
   test("hooks modifier on optional field receives null", () => {
     const _hooks = db.string({ optional: true }).hooks;
-    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<unknown, string | null>>();
+    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<string | null>>();
   });
 });
 
@@ -781,8 +781,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     const now = new Date("2025-06-01T00:00:00Z");
     const result = createHook!({
       value: specified,
-      input: {},
-      oldRecord: null,
+      oldValue: null,
       invoker: timestampHookInvoker,
       now,
     });
@@ -797,8 +796,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
       value: null,
-      input: {},
-      oldRecord: null,
+      oldValue: null,
       invoker: timestampHookInvoker,
       now,
     });
@@ -814,8 +812,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
       value: specified,
-      input: {},
-      oldRecord: null,
+      oldValue: null,
       invoker: timestampHookInvoker,
       now,
     });
@@ -830,8 +827,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
       value: null,
-      input: {},
-      oldRecord: null,
+      oldValue: null,
       invoker: timestampHookInvoker,
       now,
     });
@@ -846,8 +842,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     const now = new Date("2025-06-01T12:00:00Z");
     const result = updateHook!({
       value: null,
-      input: {},
-      oldRecord: null,
+      oldValue: null,
       invoker: timestampHookInvoker,
       now,
     });

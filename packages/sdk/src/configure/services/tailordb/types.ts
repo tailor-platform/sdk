@@ -153,17 +153,16 @@ type HookArgs<TData> =
     ? { readonly [K in keyof TData]?: TData[K] | null | undefined }
     : unknown;
 
-type HookFn<TValue, TData, TReturn> = (args: {
+type HookFn<TValue, TReturn> = (args: {
   value: TValue;
-  input: HookArgs<TData>;
-  oldRecord: HookArgs<TData> | null;
+  oldValue: TValue | null;
   invoker: TailorPrincipal | null;
   now: Date;
 }) => TReturn;
 
-export type Hook<TData, TReturn, TCreateReturn = TReturn> = {
-  create?: HookFn<TReturn | null, TData, TCreateReturn>;
-  update?: HookFn<TReturn | null, TData, TReturn>;
+export type Hook<TReturn, TCreateReturn = TReturn> = {
+  create?: HookFn<TReturn | null, TCreateReturn>;
+  update?: HookFn<TReturn | null, TReturn>;
 };
 
 type DottedPaths<T, Prefix extends string = ""> =

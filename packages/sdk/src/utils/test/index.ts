@@ -47,8 +47,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         } else if (field.metadata.hooks?.create) {
           hooked[key] = field.metadata.hooks.create({
             value: (data as Record<string, unknown>)[key],
-            input: data,
-            oldRecord: null,
+            oldValue: null,
             invoker: null,
             now: new Date(),
           });

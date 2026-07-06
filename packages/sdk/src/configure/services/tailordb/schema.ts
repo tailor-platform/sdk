@@ -166,7 +166,7 @@ type DBFieldVectorFn<
   OutputBase,
 > = () => TailorDBField<WithDBFieldVector<Defined>, Output, OutputBase>;
 type DBFieldHooksFn<Defined extends DefinedDBFieldMetadata, Output, OutputBase> = <
-  const H extends Hook<unknown, Output>,
+  const H extends Hook<Output>,
 >(
   hooks: H,
 ) => TailorDBField<WithDBFieldHooks<Defined, H>, Output, OutputBase>;
@@ -470,7 +470,7 @@ type TailorDBFieldRuntime<Defined extends DefinedDBFieldMetadata, Output> = Omit
   unique(): object;
   vector(): object;
   default(value: unknown): object;
-  hooks(hooks: Hook<unknown, Output>): object;
+  hooks(hooks: Hook<Output>): object;
   serial(config: SerialConfig): object;
   clone(options?: FieldOptions): TailorDBFieldRuntime<DefinedDBFieldMetadata, AnyBuilderMethod>;
   parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
@@ -618,7 +618,7 @@ function createTailorDBFieldRuntime<
       return cloneWith({ default: value }) as any;
     },
 
-    hooks(hooks: Hook<unknown, FieldValue>) {
+    hooks(hooks: Hook<FieldValue>) {
       return cloneWith({ hooks });
     },
 

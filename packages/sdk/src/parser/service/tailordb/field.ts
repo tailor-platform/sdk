@@ -199,7 +199,7 @@ const convertToScriptExpr = (
   }
   const normalized = stringifyFunction(fn);
   return assertParsableExpression(
-    `(${normalized})({ value: _value, input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now })`,
+    `(${normalized})({ value: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now })`,
     formatScriptContext(kind, context),
   );
 };
