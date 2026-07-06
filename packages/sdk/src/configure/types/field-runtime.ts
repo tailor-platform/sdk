@@ -141,6 +141,7 @@ function validateValue<T extends TailorFieldType>(
       break;
 
     case "nested":
+      // Runtime input may not match the declared field type.
       // oxlint-disable typescript/no-unnecessary-condition
       if (
         typeof value !== "object" ||
