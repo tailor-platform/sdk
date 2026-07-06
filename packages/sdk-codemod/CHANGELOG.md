@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.3.4
+
+### Patch Changes
+
+- [#1626](https://github.com/tailor-platform/sdk/pull/1626) [`06cc5f2`](https://github.com/tailor-platform/sdk/commit/06cc5f2960c5a09e9783d6b0923ed8c1b3d606a8) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.0
+
 ## 0.3.3
 ### Patch Changes
 

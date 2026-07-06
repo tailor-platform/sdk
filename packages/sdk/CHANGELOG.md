@@ -1,5 +1,29 @@
 # @tailor-platform/sdk
 
+## 1.74.0
+
+### Minor Changes
+
+- [#1652](https://github.com/tailor-platform/sdk/pull/1652) [`6c33b01`](https://github.com/tailor-platform/sdk/commit/6c33b01eedfbf85382f1d51d45496b79a372dca7) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `tailor-sdk setup delete <file...>` to cleanly remove generated CI workflow/action files together with their `.github/tailor-sdk.lock` entries. It only deletes files recorded in the lock, warns when an action is still referenced by a `setup coordinate` workflow, and removes the composite action's directory once it is empty.
+
+- [#1612](https://github.com/tailor-platform/sdk/pull/1612) [`7e7f00e`](https://github.com/tailor-platform/sdk/commit/7e7f00ee769d561abf12fc588ad10accd78770f2) Thanks [@dqn](https://github.com/dqn)! - Allow `tailor-sdk deploy --config` to accept comma-separated config paths so interdependent apps can be deployed together. Application, executor, workflow, workflow job, StaticWebsite, TailorDB, Auth, Auth connection, IdP, Resolver, AIGateway, and Secret Manager vault names must be unique across all configs passed to a single deploy, and resources still owned by another config in the same deploy are no longer deleted.
+
+### Patch Changes
+
+- [#1646](https://github.com/tailor-platform/sdk/pull/1646) [`6ea74c1`](https://github.com/tailor-platform/sdk/commit/6ea74c11bd3d7a9e44e1afdedaf6328203f7745a) Thanks [@dqn](https://github.com/dqn)! - Keep deploy ownership handling consistent across resource types without changing deploy behavior.
+
+- [#1655](https://github.com/tailor-platform/sdk/pull/1655) [`db7cbef`](https://github.com/tailor-platform/sdk/commit/db7cbef744240795c6b1281dc96f8e9edd8e83f9) Thanks [@toiroakr](https://github.com/toiroakr)! - Reject duplicate executor names, and duplicate resolver names within the same namespace, with a clear error at load time instead of silently deploying only one of them.
+
+- [#1648](https://github.com/tailor-platform/sdk/pull/1648) [`f7eb527`](https://github.com/tailor-platform/sdk/commit/f7eb527be823a5cafc94717118a97cc7c450ef80) Thanks [@dqn](https://github.com/dqn)! - Keep resolver bundle cache entries separate across namespaces.
+
+- [#1626](https://github.com/tailor-platform/sdk/pull/1626) [`06cc5f2`](https://github.com/tailor-platform/sdk/commit/06cc5f2960c5a09e9783d6b0923ed8c1b3d606a8) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.0
+
+- [#1645](https://github.com/tailor-platform/sdk/pull/1645) [`fecb691`](https://github.com/tailor-platform/sdk/commit/fecb691a4cedf01d65eec51c39712b23065ed36b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#1660](https://github.com/tailor-platform/sdk/pull/1660) [`5b7801f`](https://github.com/tailor-platform/sdk/commit/5b7801f82dec177fa9dc7b7eb8eeec7536dbbcb5) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency rolldown to v1.1.4
+
+- [#1650](https://github.com/tailor-platform/sdk/pull/1650) [`d42477b`](https://github.com/tailor-platform/sdk/commit/d42477bfedb4463bec9345c91a15ea5431bc877c) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix schema snapshot normalization mutating the input snapshot in place, which could cause a caller-held `SchemaSnapshot` reference to silently change after normalization.
+
 ## 1.73.3
 ### Patch Changes
 

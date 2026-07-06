@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.73.3",
+  "version": "1.74.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
