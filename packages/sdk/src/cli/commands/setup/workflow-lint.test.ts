@@ -59,8 +59,7 @@ const COMMON = {
 
 const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
 const REPO_ROOT = path.resolve(process.cwd(), "../..");
-const ERD_PREVIEW_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-viewer-preview.yml");
-const ERD_SCHEMA_EXPORT_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-schema-export.yml");
+const ERD_SCHEMA_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-schema.yml");
 
 // Suites are skipped entirely when actionlint is not on PATH (run `aqua i` first).
 const actionlintAvailable = isActionlintAvailable();
@@ -71,22 +70,39 @@ function writeAndLint(name: string, content: string): LintResult {
   return runActionlint(filePath);
 }
 
-describe("repository ERD preview workflow", () => {
-  test("reuses the base commit's schema from erd-schema-export.yml instead of rebuilding it", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+describe("repository ERD schema workflow", () => {
+  test("gates the export and preview jobs by event type in a single workflow file", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("if: github.event_name == 'push'");
+    expect(content).toContain("if: github.event_name == 'pull_request'");
+    expect(content).toContain(
+      "if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository",
+    );
+  });
+
+  test("uploads a per-namespace schema artifact on pushes to main", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("branches: [main]");
+    expect(content).toContain("name: erd-schema-${{ matrix.namespace }}");
+    expect(content).toContain("tailordb erd export --namespace");
+    expect(content).toContain("if-no-files-found: ignore");
+  });
+
+  test("reuses the export job's recorded schema instead of rebuilding the base side", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     expect(content).not.toContain("name: Checkout base branch");
     expect(content).not.toContain("name: Install base deps");
     expect(content).not.toContain("pnpm install --frozen-lockfile");
-    expect(content).toContain("actions/workflows/erd-schema-export.yml/runs");
+    expect(content).toContain("actions/workflows/erd-schema.yml/runs");
     expect(content).toContain("gh run download");
-    expect(content).toContain(
-      "actions: read # look up and download erd-schema-export.yml's artifacts",
-    );
+    expect(content).toContain("actions: read # look up and download the export job's artifacts");
   });
 
   test("looks up the schema at the PR's actual fork point, not just base's moving tip", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     expect(content).toContain("repos/$REPO/compare/$BASE_SHA...$HEAD_SHA");
     expect(content).toContain(".merge_base_commit.sha");
@@ -94,26 +110,36 @@ describe("repository ERD preview workflow", () => {
   });
 
   test("uses -X GET when filtering workflow runs with -f, since gh api defaults writable-looking calls to a write method", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     const filterCalls =
-      content.match(/gh api [^\n]*actions\/workflows\/erd-schema-export\.yml\/runs/g) ?? [];
+      content.match(/gh api [^\n]*actions\/workflows\/erd-schema\.yml\/runs/g) ?? [];
     expect(filterCalls.length).toBeGreaterThan(0);
     for (const call of filterCalls) {
       expect(call).toContain("-X GET");
     }
   });
 
-  test("does not let a no-match grep abort the script under set -euo pipefail", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+  test("resolves each candidate run's id from the same listing call instead of looking it up again by head_sha", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
+    expect(content).not.toContain("-f head_sha=");
+    expect(content).toContain("--jq '.workflow_runs[] | [.head_sha, (.id|tostring)] | @tsv'");
+    expect(content).toContain("while IFS=$'\\t' read -r candidate_sha candidate_id; do");
+    expect(content).toContain('run_id="$candidate_id"');
+  });
+
+  test("does not let a no-match grep abort either job's script under set -euo pipefail", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("grep -oP 'loaded from \\K[^/]+(?=/)' \"$log\" | sort -u || true");
     expect(content).toContain(
       "grep -oP 'loaded from \\K[^/]+(?=/)' \"$head_log\" | sort -u || true",
     );
   });
 
   test("renders a diff even when no base schema export can be found", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     expect(content).toContain('base_missing="true"');
     expect(content).toContain("falling back to the latest export on main");
@@ -123,27 +149,36 @@ describe("repository ERD preview workflow", () => {
     expect(content).toContain("pnpm exec tailor-sdk tailordb erd diff");
   });
 
-  test("triggers broadly on example/** and filters relevance dynamically after checkout", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+  test("triggers broadly on example/** for both push and pull_request, and filters relevance dynamically after checkout", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    expect(content).toContain("- example/**");
     expect(content).not.toContain("- example/tailordb/**");
     expect(content).not.toContain("- example/tailor.config.ts");
+    expect(content.match(/- example\/\*\*/g)?.length).toBe(2);
+    expect(content).toContain("repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA");
     expect(content).toContain('repos/$REPO/compare/$BASE_SHA...$HEAD_SHA" >"$compare_json"');
-    expect(content).toContain("grep -oP 'loaded from \\K[^/]+(?=/)'");
+    expect(content).toContain("This push did not touch namespace '$NAMESPACE'; skipping upload.");
     expect(content).toContain("This PR does not touch namespace '$NAMESPACE'; skipping preview.");
     expect(content).toContain("if-no-files-found: ignore");
   });
 
   test("treats a full page of compare files as relevant instead of trusting a possibly-truncated list", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
+    expect(content).toContain('$(echo "$compare_json" | jq \'.files | length\')" -ge 300');
     expect(content).toContain("pr_file_count=$(jq '.files | length' \"$compare_json\")");
     expect(content).toContain('[ "$pr_file_count" -lt 300 ]');
   });
 
-  test("uploads artifacts with names matched by the sticky comment", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+  test("groups the export job's concurrency per commit so a fast-follow push cannot cancel a run", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("group: erd-schema-export-${{ github.sha }}");
+    expect(content).toContain("cancel-in-progress: false");
+  });
+
+  test("uploads preview artifacts with names matched by the sticky comment", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     expect(content).toContain("name: ${{ matrix.namespace }}.html");
     expect(content).not.toContain("name: ${{ matrix.namespace }}-diff.html");
@@ -153,62 +188,16 @@ describe("repository ERD preview workflow", () => {
     expect(content).not.toContain("name: erd-viewer-diff-${{ matrix.namespace }}");
   });
 
-  test.skipIf(!actionlintAvailable)("passes actionlint", () => {
-    const { ok, output } = runActionlint(ERD_PREVIEW_WORKFLOW);
-    expect(ok, `actionlint errors for ${ERD_PREVIEW_WORKFLOW}:\n${output}`).toBe(true);
-  });
-
   test("removes a stale sticky comment instead of posting an empty one", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     expect(content).toContain('if [ -z "$artifacts" ]; then');
     expect(content).toContain('gh api --method DELETE "repos/$REPO/issues/comments/$existing"');
   });
-});
-
-describe("repository ERD schema export workflow", () => {
-  test("uploads a per-namespace schema artifact on pushes to main", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_EXPORT_WORKFLOW, "utf-8");
-
-    expect(content).toContain("branches: [main]");
-    expect(content).toContain("name: erd-schema-${{ matrix.namespace }}");
-    expect(content).toContain("tailordb erd export --namespace");
-    expect(content).toContain("if-no-files-found: ignore");
-  });
-
-  test("triggers broadly on example/** and skips uploads irrelevant to the namespace", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_EXPORT_WORKFLOW, "utf-8");
-
-    expect(content).toContain("- example/**");
-    expect(content).not.toContain("- example/tailordb/**");
-    expect(content).not.toContain("- example/tailor.config.ts");
-    expect(content).toContain("repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA");
-    expect(content).toContain("grep -oP 'loaded from \\K[^/]+(?=/)'");
-    expect(content).toContain("This push did not touch namespace '$NAMESPACE'; skipping upload.");
-  });
-
-  test("does not let a no-match grep abort the script under set -euo pipefail", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_EXPORT_WORKFLOW, "utf-8");
-
-    expect(content).toContain("grep -oP 'loaded from \\K[^/]+(?=/)' \"$log\" | sort -u || true");
-  });
-
-  test("treats a full page of compare files as relevant instead of trusting a possibly-truncated list", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_EXPORT_WORKFLOW, "utf-8");
-
-    expect(content).toContain('$(echo "$compare_json" | jq \'.files | length\')" -ge 300');
-  });
-
-  test("groups concurrency per commit so a fast-follow push cannot cancel a run", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_EXPORT_WORKFLOW, "utf-8");
-
-    expect(content).toContain("group: ${{ github.workflow }}-${{ github.sha }}");
-    expect(content).toContain("cancel-in-progress: false");
-  });
 
   test.skipIf(!actionlintAvailable)("passes actionlint", () => {
-    const { ok, output } = runActionlint(ERD_SCHEMA_EXPORT_WORKFLOW);
-    expect(ok, `actionlint errors for ${ERD_SCHEMA_EXPORT_WORKFLOW}:\n${output}`).toBe(true);
+    const { ok, output } = runActionlint(ERD_SCHEMA_WORKFLOW);
+    expect(ok, `actionlint errors for ${ERD_SCHEMA_WORKFLOW}:\n${output}`).toBe(true);
   });
 });
 

@@ -1,27 +1,141 @@
-name: ERD Viewer Preview
+name: ERD Schema
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - packages/sdk/src/cli/commands/tailordb/erd/**
+      - example/**
+      - .github/workflows/erd-schema.yml
   pull_request:
     paths:
       - packages/sdk/src/cli/commands/tailordb/erd/**
       - example/**
-      - .github/workflows/erd-viewer-preview.yml
-      - .github/workflows/erd-schema-export.yml
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+      - .github/workflows/erd-schema.yml
 
 permissions: {}
 
 jobs:
+  export:
+    if: github.event_name == 'push'
+    name: Export ERD schema (${{ matrix.namespace }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout the repository
+    concurrency:
+      # Grouped per commit (not per ref) so a rapid follow-up push cannot cancel
+      # an in-flight run and leave that commit without its own schema snapshot.
+      group: erd-schema-export-${{ github.sha }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        namespace: [tailordb, analyticsdb]
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-deps
+
+      # Stores this commit's ERD schema so the preview job below can reuse it
+      # instead of rebuilding the base side itself.
+      - name: Export ERD schema
+        id: export
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAMESPACE: ${{ matrix.namespace }}
+          REPO: ${{ github.repository }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          output="$RUNNER_TEMP/erd-export"
+          log="$RUNNER_TEMP/erd-export-$NAMESPACE.log"
+
+          if ! (
+            cd example
+            pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$output"
+          ) >"$log" 2>&1; then
+            cat "$log"
+            if grep -q 'not found in local config.db' "$log"; then
+              echo "ERD namespace '$NAMESPACE' not found; skipping export."
+              exit 0
+            fi
+            exit 1
+          elif [ -s "$log" ]; then
+            cat "$log"
+          fi
+
+          # Skip the upload when this push touched neither this namespace's
+          # actual type files (per the export's own resolution above), its
+          # config, nor the erd viewer implementation. Using the files the
+          # export just loaded — rather than a copy of tailor.config.ts's
+          # `files` globs — means this always matches the live config.
+          if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            echo "No previous commit to diff against; keeping this export."
+            exit 0
+          fi
+
+          compare_json=$(gh api "repos/$REPO/compare/$BEFORE_SHA...$AFTER_SHA")
+
+          # The compare API caps `files` at 300 entries with no total count to
+          # detect truncation by; treat a full page as "possibly truncated"
+          # and keep the export rather than risk skipping on missing data.
+          if [ "$(echo "$compare_json" | jq '.files | length')" -ge 300 ]; then
+            echo "Compare API file list may be truncated at 300 entries; keeping this export to be safe."
+            exit 0
+          fi
+
+          changed_files=$(echo "$compare_json" | jq -r '.files[]?.filename')
+
+          if echo "$changed_files" | grep -qE '^(example/tailor\.config\.ts|packages/sdk/src/cli/commands/tailordb/erd/)'; then
+            echo "Relevant config or viewer implementation change detected; keeping this export."
+            exit 0
+          fi
+
+          namespace_dirs=$(grep -oP 'loaded from \K[^/]+(?=/)' "$log" | sort -u || true)
+          if [ -z "$namespace_dirs" ]; then
+            echo "No type files were loaded for namespace '$NAMESPACE'; keeping the export as-is."
+            exit 0
+          fi
+
+          relevant="false"
+          while IFS= read -r dir; do
+            if echo "$changed_files" | grep -qF "example/$dir/"; then
+              relevant="true"
+              break
+            fi
+          done <<<"$namespace_dirs"
+
+          if [ "$relevant" = "false" ]; then
+            echo "This push did not touch namespace '$NAMESPACE'; skipping upload."
+            echo "relevant=false" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload ERD schema
+        if: steps.export.outputs.relevant != 'false'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: erd-schema-${{ matrix.namespace }}
+          path: ${{ runner.temp }}/erd-export/${{ matrix.namespace }}/dist/index.html
+          if-no-files-found: ignore
+          retention-days: 90
+
   preview:
+    if: github.event_name == 'pull_request'
     name: Build ERD viewer preview (${{ matrix.namespace }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: read # checkout the repository
-      actions: read # look up and download erd-schema-export.yml's artifacts
+      actions: read # look up and download the export job's artifacts
+    concurrency:
+      group: erd-schema-preview-${{ github.ref }}
+      cancel-in-progress: true
     strategy:
       fail-fast: false
       matrix:
@@ -39,7 +153,7 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # Renders the head schema, then reuses the schema erd-schema-export.yml
+      # Renders the head schema, then reuses the schema the export job above
       # recorded for this PR's actual fork point on main (not just main's
       # current tip, which moves forward and would mix in unrelated schema
       # changes), instead of rebuilding the base side here.
@@ -109,23 +223,26 @@ jobs:
             fi
           fi
 
-          # Walk erd-schema-export.yml's main-branch runs newest-first and use
-          # the first one at or before the fork point (schema-export runs
-          # after the fork point may include changes unrelated to this PR).
+          # Walk this workflow's main-branch export runs newest-first and use
+          # the first one at or before the fork point (export runs after the
+          # fork point may include changes unrelated to this PR).
+          candidate_runs=$(gh api -X GET "repos/$REPO/actions/workflows/erd-schema.yml/runs" \
+            -f branch=main -f status=success -f per_page=100 \
+            --jq '.workflow_runs[] | [.head_sha, (.id|tostring)] | @tsv')
+
           run_id=""
-          for candidate_sha in $(gh api -X GET "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
-            -f branch=main -f status=success -f per_page=100 --jq '.workflow_runs[].head_sha'); do
+          while IFS=$'\t' read -r candidate_sha candidate_id; do
+            [ -z "$candidate_sha" ] && continue
             status=$(gh api "repos/$REPO/compare/$candidate_sha...$fork_sha" --jq '.status' 2>/dev/null || echo "diverged")
             if [ "$status" = "ahead" ] || [ "$status" = "identical" ]; then
-              run_id=$(gh api -X GET "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
-                -f head_sha="$candidate_sha" -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')
+              run_id="$candidate_id"
               break
             fi
-          done
+          done <<<"$candidate_runs"
 
           if [ -z "$run_id" ]; then
             echo "No ERD schema export found at or before fork point $fork_sha; falling back to the latest export on main."
-            run_id=$(gh api -X GET "repos/$REPO/actions/workflows/erd-schema-export.yml/runs" \
+            run_id=$(gh api -X GET "repos/$REPO/actions/workflows/erd-schema.yml/runs" \
               -f branch=main -f status=success -f per_page=1 --jq '.workflow_runs[0].id // empty')
           fi
 
@@ -172,7 +289,7 @@ jobs:
     name: Post preview links
     needs: preview
     # Skip on fork PRs, whose read-only token cannot post comments.
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -200,7 +317,7 @@ jobs:
             --jq 'map(select(.body | contains(env.MARKER))) | .[0].id // empty')
 
           # Every namespace can be skipped as irrelevant to this PR (see
-          # erd-viewer-preview.yml's "Build ERD viewers and diff" step); drop
+          # the preview job's "Build ERD viewers and diff" step above); drop
           # any stale sticky comment instead of posting an empty one.
           if [ -z "$artifacts" ]; then
             echo "No ERD preview artifacts in this run; nothing to post."
