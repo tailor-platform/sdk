@@ -43,6 +43,13 @@ const integrationTestIncludes = [
   "src/plugin/compat.test.ts",
 ];
 
+// The CLI plugin test exercises Windows-specific PATHEXT/`.cmd`/`.ps1` spawn
+// branches, so it gets its own project ("unit-plugin", which the `unit*` glob
+// still picks up on Linux) that a Windows CI job can run via `--project
+// unit-plugin` — no separator-sensitive path filter needed. Excluded from the
+// general unit split below so it does not run twice.
+const pluginTestInclude = "src/cli/shared/plugin.test.ts";
+
 // Split unit tests by whether they mutate worker-global state. With
 // `isolate: false` a worker shares one module registry and one global object
 // across files, so per-file partial module mocks (e.g. `vi.mock("node:fs", ...)`)
@@ -57,6 +64,8 @@ const classifyUnitTests = (): { isolated: string[]; shared: string[] } => {
     file.includes("/node_modules/") ||
     file.includes("/__test_fixtures__/") ||
     integrationTestFiles.has(file) ||
+    // Carved into its own "unit-plugin" project (see below).
+    file === pluginTestInclude ||
     // Self-contained nested vitest project with its own config.
     file.startsWith("src/vitest/integration/");
 
@@ -115,6 +124,16 @@ export default defineConfig({
           name: "unit-core",
           isolate: false,
           include: sharedUnitTests,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          // Carved out so a Windows CI job can run just the plugin test via
+          // `--project unit-plugin`; the `unit*` glob still runs it on Linux.
+          name: "unit-plugin",
+          include: [pluginTestInclude],
+          typecheck: { enabled: false },
         },
       },
       {
