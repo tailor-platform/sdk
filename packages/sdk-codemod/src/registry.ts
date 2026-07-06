@@ -96,6 +96,7 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
 );
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
+const V2_NEXT_3 = "2.0.0-next.3";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -710,6 +711,61 @@ export const allCodemods: CodemodPackage[] = [
       "trigger responses (setJobHandler / enqueueResult), or use runWorkflowLocally() for a",
       "full-chain local run; an unmocked trigger now throws. Outside tests, treat the",
       "trigger result as the job output directly (no Promise wrapper to unwrap).",
+    ].join("\n"),
+  },
+  {
+    id: "v2/strict-scalar-strings",
+    name: "Strict scalar string types for UUID/date/datetime/time/decimal fields",
+    description:
+      "Tailor field outputs infer strict string shapes instead of plain `string`: UUID fields are `UUIDString`, date fields `DateString`, datetime fields `DateTimeString | Date`, time fields `TimeString`, and decimal fields `DecimalString` (all exported from `@tailor-platform/sdk`). Generated Kysely types, migration DB helper types, auth `tailor.d.ts` attributes, and runtime principal / IdP user ids use the same aliases, and the Kysely `Timestamp` columns now select as `Date | DateTimeString` instead of `Date`. String values that already match a shape keep typechecking unchanged; plain `string` values must be narrowed with the new `is*String` / `parse*String` / `assert*String` helpers or have their source types tightened.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_3,
+    // No scriptPath and no scoping patterns: the migration is type-driven, so
+    // the prompt is surfaced as project-wide guidance instead of per-file.
+    examples: [
+      {
+        caption:
+          "Tighten the source type — or narrow at an untyped boundary with the scalar helpers — instead of passing plain `string` to a strict scalar API:",
+        before:
+          'async function loadCustomer(customerId: string) {\n  return getDB("tailordb")\n    .selectFrom("Customer")\n    .where("id", "=", customerId)\n    .selectAll()\n    .executeTakeFirstOrThrow();\n}',
+        after:
+          'import { type UUIDString, parseUUIDString } from "@tailor-platform/sdk";\n\nasync function loadCustomer(customerId: UUIDString) {\n  return getDB("tailordb")\n    .selectFrom("Customer")\n    .where("id", "=", customerId)\n    .selectAll()\n    .executeTakeFirstOrThrow();\n}\n\n// At an untyped boundary:\nawait loadCustomer(parseUUIDString(value, "customerId"));',
+      },
+      {
+        caption:
+          "Kysely `Timestamp` columns now select as `Date | DateTimeString`, so guard `Date` methods:",
+        before: "return { createdAt: customer.createdAt.toISOString() };",
+        after:
+          "return {\n  createdAt:\n    customer.createdAt instanceof Date\n      ? customer.createdAt.toISOString()\n      : customer.createdAt,\n};",
+      },
+      {
+        caption:
+          "Record and principal ids are `UUIDString`, so test fixtures need UUID-shaped literals:",
+        before: 'const payload = { newRecord: { id: "user-1" } };',
+        after: 'const payload = { newRecord: { id: "11111111-1111-4111-8111-111111111111" } };',
+      },
+    ],
+    prompt: [
+      "The v2 SDK types UUID, date, datetime, time, and decimal Tailor field values as",
+      "strict string shapes (UUIDString, DateString, DateTimeString, TimeString,",
+      "DecimalString from @tailor-platform/sdk) instead of plain string. Generated",
+      "Kysely types, auth attributes, and runtime principal / IdP user ids use the same",
+      "aliases, and Kysely Timestamp columns now select as Date | DateTimeString.",
+      "Regenerate the generated types (tailor generate), then typecheck the project and",
+      "fix the remaining errors:",
+      "- String literals that already match a shape typecheck unchanged.",
+      "- For string or unknown values, tighten the source type (e.g. declare the",
+      "  parameter as UUIDString, use t.uuid() for resolver inputs that carry record",
+      "  ids), or narrow with the isUUIDString / parseUUIDString / assertUUIDString",
+      "  helper families (same variants exist for date, datetime, time, and decimal).",
+      "- Guard Date methods on selected timestamp columns:",
+      "  value instanceof Date ? value.toISOString() : value.",
+      '- Give test fixtures UUID-shaped ids (e.g. "11111111-1111-4111-8111-111111111111").',
+      '  The mockIdp default user id changed from "mock-id" to',
+      '  "123e4567-e89b-12d3-a456-426614174000".',
+      "- Existing migration db.ts snapshots keep compiling; leave them unchanged. New",
+      "  migrations are generated with the strict shapes automatically.",
     ].join("\n"),
   },
   {
