@@ -8,13 +8,8 @@ import { type AuthService } from "#/cli/services/auth/service";
 import { fetchAll, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
-import {
-  buildMetaRequest,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+import { buildMetaRequest, resourceTrn, sdkNameLabelKey, type WithLabel } from "./label";
+import { trackDesiredResourceOwnership, trackRemainingResourceOwner } from "./owned-resource";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -177,21 +172,16 @@ export async function planAuthConnections(
     });
 
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (existing.label) {
-          conflicts.push({
-            resourceType: "Auth connection",
-            resourceName: name,
-            currentOwner: existing.label,
-          });
-        } else {
-          unmanaged.push({
-            resourceType: "Auth connection",
-            resourceName: name,
-          });
-        }
-      }
+      trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName,
+        appId,
+        resourceType: "Auth connection",
+        resourceName: name,
+        conflicts,
+        unmanaged,
+      });
 
       const currentHash = hashValue(config.clientSecret);
       const storedHash = state.connections?.[name];
@@ -228,11 +218,13 @@ export async function planAuthConnections(
 
   for (const [name, entry] of Object.entries(existingConnections)) {
     if (!entry) continue;
-    const owned = isOwnedByApp(entry.allLabels, appName, appId);
-    if (entry.label && !owned) {
-      resourceOwners.add(entry.label);
-      continue;
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry.allLabels,
+      ownerLabel: entry.label,
+      appName,
+      appId,
+      resourceOwners,
+    });
     // Only delete connections we own. Connections without our label are
     // treated as unowned and left untouched, even if the local secrets-state
     // happens to track them.

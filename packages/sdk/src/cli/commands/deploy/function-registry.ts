@@ -1,8 +1,13 @@
 import * as crypto from "node:crypto";
 import { logger } from "#/cli/shared/logger";
+import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
-import { fetchExistingResourcesWithLabels } from "./owned-resource";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import type { Application } from "#/cli/services/application";
 import type { CollectedJob } from "#/cli/services/workflow/service";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -171,9 +176,13 @@ export function collectFunctionEntries(
   for (const app of application.applications) {
     for (const pipeline of app.resolverServices) {
       for (const resolver of Object.values(pipeline.resolvers)) {
-        const content = bundledScripts.resolvers.get(resolver.name);
+        const content = bundledScripts.resolvers.get(
+          resolverBundleKey(pipeline.namespace, resolver.name),
+        );
         if (!content) {
-          logger.warn(`Bundled code not found for resolver: ${resolver.name}`);
+          logger.warn(
+            `Bundled code not found for resolver: ${pipeline.namespace}/${resolver.name}`,
+          );
           continue;
         }
         entries.push({
@@ -319,21 +328,16 @@ export async function planFunctionRegistry(
     });
 
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "Function registry",
-            resourceName: entry.name,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "Function registry",
-            resourceName: entry.name,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName,
+        appId,
+        resourceType: "Function registry",
+        resourceName: entry.name,
+        conflicts,
+        unmanaged,
+      });
 
       if (
         existing.resource.contentHash === entry.contentHash &&
@@ -363,11 +367,13 @@ export async function planFunctionRegistry(
   // Remaining entries in existingMap are candidates for deletion
   for (const [name, existing] of Object.entries(existingMap)) {
     if (!existing) continue;
-    const label = existing.label;
-    const owned = isOwnedByApp(existing.allLabels, appName, appId);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: existing.allLabels,
+      ownerLabel: existing.label,
+      appName,
+      appId,
+      resourceOwners,
+    });
     if (owned) {
       changeSet.deletes.push({
         name,

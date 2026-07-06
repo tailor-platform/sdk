@@ -382,6 +382,7 @@ Commands for setting up project infrastructure.
 | [setup branch](./cli/setup.md#setup-branch)         | Generate a branch-target deploy workflow (push to branch triggers deploy).                       |
 | [setup check](./cli/setup.md#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
 | [setup coordinate](./cli/setup.md#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
+| [setup delete](./cli/setup.md#setup-delete)         | Delete managed workflow/action file(s) and their .github/tailor.lock entries.                    |
 | [setup preview](./cli/setup.md#setup-preview)       | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
 | [setup tag](./cli/setup.md#setup-tag)               | Generate a tag-target deploy workflow (tag push triggers deploy).                                |
 

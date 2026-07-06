@@ -1,5 +1,6 @@
 {
   "name": "workflow",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,9 +20,9 @@
     "@types/node": "24.13.2",
     "graphql": "17.0.1",
     "graphql-request": "7.4.0",
-    "oxfmt": "0.56.0",
-    "oxlint": "1.71.0",
-    "oxlint-tsgolint": "0.23.0",
+    "oxfmt": "0.57.0",
+    "oxlint": "1.72.0",
+    "oxlint-tsgolint": "0.24.0",
     "typescript": "6.0.3",
     "vitest": "4.1.9"
   }

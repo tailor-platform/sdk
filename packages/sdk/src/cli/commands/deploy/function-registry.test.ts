@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import {
   applyFunctionRegistry,
   authHookFunctionName,
@@ -481,8 +482,8 @@ describe("collectFunctionEntries", () => {
   test("collects resolver entries with correct names and hashes", () => {
     const scripts = createBundledScripts({
       resolvers: new Map([
-        ["getUser", "// getUser code"],
-        ["listUsers", "// listUsers code"],
+        [resolverBundleKey("my-ns", "getUser"), "// getUser code"],
+        [resolverBundleKey("my-ns", "listUsers"), "// listUsers code"],
       ]),
     });
 
@@ -506,6 +507,40 @@ describe("collectFunctionEntries", () => {
     expect(entries[0]!.contentHash).toBeTruthy();
     expect(entries[0]!.description).toBe("Resolver: my-ns/getUser");
     expect(entries[1]!.name).toBe(resolverFunctionName("my-ns", "listUsers"));
+  });
+
+  test("keeps resolver entries separate when namespaces share resolver names", () => {
+    const scripts = createBundledScripts({
+      resolvers: new Map([
+        [resolverBundleKey("first", "getUser"), "// first getUser code"],
+        [resolverBundleKey("second", "getUser"), "// second getUser code"],
+      ]),
+    });
+
+    const app = createMockApplication({
+      resolverServices: [
+        {
+          namespace: "first",
+          resolvers: {
+            getUser: { name: "getUser" },
+          },
+        },
+        {
+          namespace: "second",
+          resolvers: {
+            getUser: { name: "getUser" },
+          },
+        },
+      ],
+    });
+
+    const entries = collectFunctionEntries(app, [], scripts);
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0]!.name).toBe(resolverFunctionName("first", "getUser"));
+    expect(entries[0]!.scriptContent).toBe("// first getUser code");
+    expect(entries[1]!.name).toBe(resolverFunctionName("second", "getUser"));
+    expect(entries[1]!.scriptContent).toBe("// second getUser code");
   });
 
   test("collects executor entries only for function/jobFunction kinds", () => {

@@ -5,12 +5,10 @@ import {
   mapAllowedValues,
 } from "#/configure/types/field";
 import {
-  isValidDateString,
-  isValidDateTimeString,
-  isValidDecimalString,
-  isValidTimeString,
-  isValidUUIDString,
-} from "#/configure/types/field-format";
+  parseInternal as parseFieldInternal,
+  type FieldParseArgs,
+  type FieldParseInternalArgs,
+} from "#/configure/types/field-runtime";
 import { brandValue } from "#/utils/brand";
 import type {
   TailorDBField as TailorDBFieldBase,
@@ -34,7 +32,7 @@ import type {
 } from "#/configure/types/field.types";
 import type { UUIDString } from "#/configure/types/scalar.types";
 import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
-import type { InferredAttributes, TailorPrincipal } from "#/runtime/types";
+import type { InferredAttributes } from "#/runtime/types";
 import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
 import type { RawPermissions } from "#/types/tailordb.generated";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
@@ -414,28 +412,6 @@ function isRelationSelfConfig(
   return config.toward.type === "self";
 }
 
-type FieldParseArgs = {
-  value: unknown;
-  data: unknown;
-  invoker: TailorPrincipal | null;
-};
-
-type FieldValidateValueArgs<T extends TailorFieldType> = {
-  value: TailorToTs[T];
-  data: unknown;
-  invoker: TailorPrincipal | null;
-  pathArray: string[];
-};
-
-type FieldParseInternalArgs = {
-  // Runtime input is unknown/untyped; we validate and narrow it inside the parser.
-  // oxlint-disable-next-line no-explicit-any
-  value: any;
-  data: unknown;
-  invoker: TailorPrincipal | null;
-  pathArray: string[];
-};
-
 type DBFieldDefined<T extends TailorFieldType, Opt extends FieldOptions> = {
   type: T;
   array: Opt extends { array: true } ? true : false;
@@ -531,226 +507,11 @@ function createTailorDBFieldRuntime<
     _metadata.allowedValues = mapAllowedValues(values);
   }
 
-  /**
-   * Validate a single value (not an array element)
-   * Used internally for array element validation
-   * @param args - Value, context data, and invoker
-   * @returns Array of validation issues
-   */
-  function validateValue(args: FieldValidateValueArgs<T>): StandardSchemaV1.Issue[] {
-    const { value, data, invoker, pathArray } = args;
-    const issues: StandardSchemaV1.Issue[] = [];
-
-    // Type-specific validation
-    switch (type) {
-      case "string":
-        if (typeof value !== "string") {
-          issues.push({
-            message: `Expected a string: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-
-      case "integer":
-        if (typeof value !== "number" || !Number.isInteger(value)) {
-          issues.push({
-            message: `Expected an integer: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-
-      case "float":
-        if (typeof value !== "number" || !Number.isFinite(value)) {
-          issues.push({
-            message: `Expected a number: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-
-      case "boolean":
-        if (typeof value !== "boolean") {
-          issues.push({
-            message: `Expected a boolean: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-
-      case "uuid":
-        if (typeof value !== "string" || !isValidUUIDString(value)) {
-          issues.push({
-            message: `Expected a valid UUID: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-      case "date":
-        if (typeof value !== "string" || !isValidDateString(value)) {
-          issues.push({
-            message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-      case "datetime":
-        if (typeof value !== "string" || !isValidDateTimeString(value)) {
-          issues.push({
-            message: `Expected to match ISO format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-      case "time":
-        if (typeof value !== "string" || !isValidTimeString(value)) {
-          issues.push({
-            message: `Expected to match "HH:mm" format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-      case "decimal":
-        if (typeof value !== "string" || !isValidDecimalString(value)) {
-          issues.push({
-            message: `Expected a decimal string: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-
-      case "enum":
-        if (field._metadata.allowedValues) {
-          const allowedValues = field._metadata.allowedValues.map((v) => v.value);
-          if (typeof value !== "string" || !allowedValues.includes(value)) {
-            issues.push({
-              message: `Must be one of [${allowedValues.join(", ")}]: received ${String(value)}`,
-              path: pathArray.length > 0 ? pathArray : undefined,
-            });
-          }
-        }
-        break;
-
-      case "nested":
-        // Validate nested object fields
-        // runtime value may not match the declared type
-        // oxlint-disable typescript/no-unnecessary-condition
-        if (
-          typeof value !== "object" ||
-          value === null ||
-          Array.isArray(value) ||
-          value instanceof Date
-        ) {
-          // oxlint-enable typescript/no-unnecessary-condition
-          issues.push({
-            message: `Expected an object: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        } else if (Object.keys(field.fields).length > 0) {
-          for (const [fieldName, nestedField] of Object.entries(field.fields)) {
-            const fieldValue = (value as Record<string, unknown>)[fieldName];
-            const result = nestedField._parseInternal({
-              value: fieldValue,
-              data,
-              invoker,
-              pathArray: pathArray.concat(fieldName),
-            });
-            if (result.issues) {
-              issues.push(...result.issues);
-            }
-          }
-        }
-        break;
-    }
-
-    // Custom validation functions
-    const validateFns = field._metadata.validate;
-    if (validateFns && validateFns.length > 0) {
-      for (const validateInput of validateFns) {
-        const { fn, message } =
-          typeof validateInput === "function"
-            ? { fn: validateInput, message: "Validation failed" }
-            : { fn: validateInput[0], message: validateInput[1] };
-
-        if (!fn({ value, data, invoker })) {
-          issues.push({
-            message,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-      }
-    }
-
-    return issues;
-  }
-
-  /**
-   * Internal parse method that tracks field path for nested validation
-   * @param args - Parse arguments
-   * @returns Parse result with value or issues
-   */
   function parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<FieldValue> {
-    const { value, data, invoker, pathArray } = args;
-    const issues: StandardSchemaV1.Issue[] = [];
-
-    // 1. Check required/optional
-    const isNullOrUndefined = value === null || value === undefined;
-    if (field._metadata.required && isNullOrUndefined) {
-      issues.push({
-        message: "Required field is missing",
-        path: pathArray.length > 0 ? pathArray : undefined,
-      });
-      return { issues };
-    }
-
-    // If optional and null/undefined, skip further validation and normalize to null
-    if (!field._metadata.required && isNullOrUndefined) {
-      return { value: value ?? null };
-    }
-
-    // 2. Check array type
-    if (field._metadata.array) {
-      if (!Array.isArray(value)) {
-        issues.push({
-          message: "Expected an array",
-          path: pathArray.length > 0 ? pathArray : undefined,
-        });
-        return { issues };
-      }
-
-      // Validate each array element (without array flag)
-      for (let i = 0; i < value.length; i++) {
-        const elementValue = value[i];
-        const elementPath = pathArray.concat(`[${i}]`);
-
-        // Validate element with same type but without array flag
-        const elementIssues = validateValue({
-          value: elementValue,
-          data,
-          invoker,
-          pathArray: elementPath,
-        });
-        if (elementIssues.length > 0) {
-          issues.push(...elementIssues);
-        }
-      }
-
-      if (issues.length > 0) {
-        return { issues };
-      }
-      return { value: value as FieldValue };
-    }
-
-    // 3. Type-specific validation and custom validation
-    const valueIssues = validateValue({ value, data, invoker, pathArray });
-    issues.push(...valueIssues);
-
-    if (issues.length > 0) {
-      return { issues };
-    }
-
-    return { value };
+    return parseFieldInternal<T, FieldValue>({
+      ...args,
+      field,
+    });
   }
 
   function cloneWith(metadataUpdates: Partial<DBFieldMetadata>) {

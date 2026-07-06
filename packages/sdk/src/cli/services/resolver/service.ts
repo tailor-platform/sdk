@@ -71,6 +71,31 @@ export function createResolverService(
       );
 
       await Promise.all(resolverFiles.map((resolverFile) => loadResolverForFile(resolverFile)));
+      assertUniqueResolverNames(resolvers, namespace);
     },
   };
+}
+
+/**
+ * Assert that every loaded resolver in a namespace has a unique name.
+ * Resolvers are stored by source file, so two files declaring the same
+ * `name` would otherwise silently share a single bundle cache entry.
+ * @param resolvers - Loaded resolvers keyed by source file
+ * @param namespace - The namespace the resolvers belong to
+ */
+function assertUniqueResolverNames(resolvers: Record<string, Resolver>, namespace: string): void {
+  const seenNames = new Map<string, string>();
+  for (const [file, resolver] of Object.entries(resolvers)) {
+    const relativePath = path.relative(process.cwd(), file);
+    const existing = seenNames.get(resolver.name);
+    if (existing) {
+      throw new Error(
+        `Duplicate resolver name "${resolver.name}" found in namespace "${namespace}":\n` +
+          `  - ${existing}\n` +
+          `  - ${relativePath}\n` +
+          `Each resolver must have a unique name within a namespace.`,
+      );
+    }
+    seenNames.set(resolver.name, relativePath);
+  }
 }
