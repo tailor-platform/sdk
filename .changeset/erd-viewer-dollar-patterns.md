@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Preserve dollar-sign sequences when exporting and diffing TailorDB ERD viewer HTML.
+Preserve special characters when exporting TailorDB ERD viewer HTML and generated seed scripts.
