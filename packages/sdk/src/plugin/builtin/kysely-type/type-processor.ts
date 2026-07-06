@@ -186,7 +186,7 @@ function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     usedUtilityTypes.Serial = true;
     finalType = `Serial<${finalType}>`;
   }
-  if (fieldConfig.hooks?.create) {
+  if (fieldConfig.hooks?.create || fieldConfig.default !== undefined) {
     finalType = `Generated<${finalType}>`;
   }
 
