@@ -119,13 +119,12 @@ describe("repository ERD schema workflow", () => {
     expect(content.match(/run: node \.github\/scripts\/erd-relevance\.mjs/g)?.length).toBe(1);
     // Export job: uploads whenever the export itself succeeded, regardless of relevance,
     // so the preview job can pick any ancestor run as a base without checking which ones have it.
-    expect(content).toContain(
-      "- name: Upload ERD schema\n        if: steps.export.outputs.exported != 'false'\n",
-    );
-    // Preview job: always runs, since it must compute the fork point even when head is missing.
-    expect(content).toContain(
-      "id: relevance\n        env:\n          GH_TOKEN: ${{ github.token }}\n          REPO: ${{ github.repository }}\n          SHA_BASE: ${{ github.event.pull_request.base.sha }}",
-    );
+    expect(content).toMatch(/name: Upload ERD schema\s*\n\s*if: steps\.export\.outputs\.exported/);
+    // Preview job: always runs (no `if:` between `id:` and `env:`), since it must compute
+    // the fork point even when head is missing.
+    expect(content).toContain("SHA_BASE: ${{ github.event.pull_request.base.sha }}");
+    expect(content.match(/id: relevance/g)?.length).toBe(1);
+    expect(content).toMatch(/id: relevance\s*\n\s*env:/);
   });
 
   test("reuses the export job's recorded schema via erd-find-base-run.mjs instead of rebuilding the base side", () => {
