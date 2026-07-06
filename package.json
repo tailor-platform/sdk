@@ -37,8 +37,8 @@
     "perf:typecheck": "pnpm --filter example perf:typecheck"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "1.0.0-next.5",
-    "@changesets/cli": "3.0.0-next.5",
+    "@changesets/changelog-github": "1.0.0-next.6",
+    "@changesets/cli": "3.0.0-next.8",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.2",
     "knip": "6.23.0",
