@@ -52,20 +52,23 @@ function serializeDefault(value: unknown, fieldType: string): string {
  * the operation.
  * @param {Record<string, ScriptFieldConfig>} fields - Field configurations
  * @param {string} accessExpr - JS expression to access the parent object
+ * @param {string} oldAccessExpr - JS expression to access the old record parent
  * @param {HookOperation} operation - Hook operation type
  * @returns {string | null} Object literal expression or null
  */
 function buildHookObject(
   fields: Record<string, ScriptFieldConfig>,
   accessExpr: string,
+  oldAccessExpr: string,
   operation: HookOperation,
 ): string | null {
   const parts: string[] = [];
 
   for (const [name, config] of Object.entries(fields)) {
     const access = `${accessExpr}[${key(name)}]`;
+    const oldAccess = `${oldAccessExpr}?.[${key(name)}]`;
     if (isNestedType(config) && config.fields) {
-      const inner = buildHookObject(config.fields, `(${access} || {})`, operation);
+      const inner = buildHookObject(config.fields, `(${access} || {})`, oldAccess, operation);
       if (inner !== null) {
         parts.push(`${key(name)}: Object.assign({}, ${access}, ${inner})`);
       }
@@ -77,10 +80,12 @@ function buildHookObject(
 
     if (hook && hasDefault) {
       parts.push(
-        `${key(name)}: ((_value) => (${hook.expr}))(${access}) ?? ${serializeDefault(config.default, config.type)}`,
+        `${key(name)}: ((_value, _oldValue) => (${hook.expr}))(${access}, ${oldAccess} ?? null) ?? ${serializeDefault(config.default, config.type)}`,
       );
     } else if (hook) {
-      parts.push(`${key(name)}: ((_value) => (${hook.expr}))(${access})`);
+      parts.push(
+        `${key(name)}: ((_value, _oldValue) => (${hook.expr}))(${access}, ${oldAccess} ?? null)`,
+      );
     } else if (hasDefault) {
       parts.push(`${key(name)}: ${access} ?? ${serializeDefault(config.default, config.type)}`);
     }
@@ -166,7 +171,7 @@ export function buildTypeScripts(
 
   const hook: { create?: ScriptRef; update?: ScriptRef } = {};
   for (const operation of ["create", "update"] as const) {
-    const perFieldExpr = buildHookObject(fields, INPUT, operation);
+    const perFieldExpr = buildHookObject(fields, INPUT, OLD_RECORD, operation);
     const typeLevelExpr = typeHookExpr?.[operation];
 
     if (perFieldExpr !== null && typeLevelExpr) {

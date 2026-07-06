@@ -28,8 +28,12 @@ describe("buildTypeScripts", () => {
     // A single `new Date()` is bound once and dispatched to every field.
     const createExpr = typeHook?.create?.expr ?? "";
     expect(createExpr.match(/new Date\(\)/g)).toHaveLength(1);
-    expect(createExpr).toContain('"createdAt": ((_value) => (_now))(_input["createdAt"])');
-    expect(createExpr).toContain('"updatedAt": ((_value) => (_now))(_input["updatedAt"])');
+    expect(createExpr).toContain(
+      '"createdAt": ((_value, _oldValue) => (_now))(_input["createdAt"], _oldRecord?.["createdAt"] ?? null)',
+    );
+    expect(createExpr).toContain(
+      '"updatedAt": ((_value, _oldValue) => (_now))(_input["updatedAt"], _oldRecord?.["updatedAt"] ?? null)',
+    );
 
     // createdAt has no update hook, so the update script only touches updatedAt.
     const updateExpr = typeHook?.update?.expr ?? "";
@@ -55,11 +59,15 @@ describe("buildTypeScripts", () => {
 
     const createExpr = buildTypeScripts(fields).typeHook?.create?.expr ?? "";
     expect(createExpr).toContain('"profile": Object.assign({}, _input["profile"], {');
-    expect(createExpr).toContain('(_input["profile"] || {})["displayName"]');
+    expect(createExpr).toContain(
+      '(_input["profile"] || {})["displayName"], _oldRecord?.["profile"]?.["displayName"] ?? null)',
+    );
     expect(createExpr).toContain(
       '"contact": Object.assign({}, (_input["profile"] || {})["contact"], {',
     );
-    expect(createExpr).toContain('((_input["profile"] || {})["contact"] || {})["email"]');
+    expect(createExpr).toContain(
+      '((_input["profile"] || {})["contact"] || {})["email"], _oldRecord?.["profile"]?.["contact"]?.["email"] ?? null)',
+    );
   });
 
   test("applies default as ?? fallback after hook on create only", () => {
@@ -79,7 +87,9 @@ describe("buildTypeScripts", () => {
     const createExpr = typeHook?.create?.expr ?? "";
 
     // hook + default: hookResult ?? defaultValue
-    expect(createExpr).toContain('"status": ((_value) => (_value))(_input["status"]) ?? "active"');
+    expect(createExpr).toContain(
+      '"status": ((_value, _oldValue) => (_value))(_input["status"], _oldRecord?.["status"] ?? null) ?? "active"',
+    );
     // default only: input ?? defaultValue
     expect(createExpr).toContain('"name": _input["name"] ?? "unnamed"');
 

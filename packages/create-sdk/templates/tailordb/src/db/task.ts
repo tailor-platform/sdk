@@ -30,13 +30,13 @@ export const task = db
       type: "n-1",
       toward: { type: category },
     }),
-    isArchived: db.bool().description("Whether the task is archived"),
+    isArchived: db
+      .bool()
+      .description("Whether the task is archived")
+      .hooks({
+        create: () => false,
+      }),
     ...db.fields.timestamps(),
-  })
-  .hooks({
-    isArchived: {
-      create: () => false,
-    },
   })
   .indexes(
     { fields: ["status", "priority"], unique: false },
