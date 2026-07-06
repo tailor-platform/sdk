@@ -5,9 +5,11 @@
 // step) — a run older than that has no artifact left to download
 // regardless — and to a maximum candidate count (MAX_CANDIDATE_RUNS,
 // default below; configurable since `tailor-sdk setup`-generated workflows
-// may want a different limit). Falls back to the latest export on
-// BASE_REF if nothing at-or-before the fork point is found among the
-// checked candidates.
+// may want a different limit). Returns no match (rather than falling back
+// to the latest export) when nothing at-or-before the fork point is found
+// among the checked candidates — a later export could include changes
+// merged into BASE_REF after the PR branched, which is the exact mismatch
+// this fork-point search exists to avoid.
 import { appendFileSync } from "node:fs";
 
 export const DEFAULT_MAX_CANDIDATE_RUNS = 100;
@@ -39,8 +41,8 @@ export async function findBaseRun({ forkSha, runs, compareStatus }) {
     return { runId: "", reason: "No successful ERD schema export runs found." };
   }
   return {
-    runId: String(runs[0].id),
-    reason: `No export found at or before fork point ${forkSha}; falling back to the latest export.`,
+    runId: "",
+    reason: `No export found at or before fork point ${forkSha} among the checked candidates.`,
   };
 }
 
