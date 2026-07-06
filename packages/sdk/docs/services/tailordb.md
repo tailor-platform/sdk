@@ -279,18 +279,16 @@ field, files entry, or relation on the same type.
 
 ### Hooks
 
-Add hooks to execute functions during data creation or update. Hooks receive four arguments:
-
-- `value`: User input if provided, otherwise existing value on update or null on create
-- `data`: The submitted record data (for accessing other field values)
-- `invoker`: Principal performing the operation
-- `now`: Operation timestamp (`Date`). The same instant is shared by every field's hook in the same create/update, so multiple fields can be stamped with an identical timestamp.
-
-All of a type's hooks run together as one operation and observe the same submitted input: `data` reflects what the client sent, so a hook does not see another field's hook result. Order between fields is not significant.
+Add hooks to execute functions during data creation or update.
 
 #### Field-level Hooks
 
-Set hooks directly on individual fields:
+Set hooks directly on individual fields. Each hook receives:
+
+- `value`: The field value from the input (null on create when not provided)
+- `oldValue`: The previous field value (null on create)
+- `invoker`: Principal performing the operation
+- `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
 
 ```typescript
 db.string().hooks({
@@ -299,11 +297,18 @@ db.string().hooks({
 });
 ```
 
-**Note:** When setting hooks at the field level, the `data` argument type is `unknown` since the field doesn't know about other fields in the type. Use type-level hooks if you need to access other fields with type safety.
+Field-level hooks operate on a single field and cannot access other fields. Use type-level hooks for cross-field logic.
 
 #### Type-level Hooks
 
-Set hooks for multiple fields at once using `db.type().hooks()`:
+Set hooks across multiple fields using `db.type().hooks()`. Each hook receives:
+
+- `input`: The submitted record data (pre-hook values)
+- `oldRecord`: The existing record (null on create)
+- `invoker`: Principal performing the operation
+- `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
+
+The hook returns an object with the fields to override:
 
 ```typescript
 export const customer = db
@@ -313,10 +318,12 @@ export const customer = db
     fullName: db.string(),
   })
   .hooks({
-    fullName: {
-      create: ({ data }) => `${data.firstName} ${data.lastName}`,
-      update: ({ data }) => `${data.firstName} ${data.lastName}`,
-    },
+    create: ({ input }) => ({
+      fullName: `${input.firstName} ${input.lastName}`,
+    }),
+    update: ({ input }) => ({
+      fullName: `${input.firstName} ${input.lastName}`,
+    }),
   });
 ```
 
@@ -329,58 +336,29 @@ export const order = db
     updatedAt: db.datetime(),
   })
   .hooks({
-    createdAt: { create: ({ now }) => now },
-    updatedAt: { create: ({ now }) => now, update: ({ now }) => now },
-  });
-```
-
-**Important:** Field-level and type-level hooks cannot coexist on the same field. TypeScript will prevent this at compile time:
-
-```typescript
-// Compile error - cannot set hooks on the same field twice
-export const user = db
-  .type("User", {
-    name: db.string().hooks({ create: ({ data }) => data.firstName }), // Field-level
-  })
-  .hooks({
-    name: { create: ({ data }) => data.lastName }, // Type-level - ERROR
-  });
-
-// OK - set hooks on different fields
-export const user = db
-  .type("User", {
-    firstName: db.string().hooks({ create: () => "John" }), // Field-level on firstName
-    lastName: db.string(),
-  })
-  .hooks({
-    lastName: { create: () => "Doe" }, // Type-level on lastName
+    create: ({ now }) => ({ createdAt: now, updatedAt: now }),
+    update: ({ now }) => ({ updatedAt: now }),
   });
 ```
 
 ### Validation
 
-Add validation rules to fields. Validators receive three arguments (executed after hooks):
-
-- `value`: Field value after hook transformation
-- `data`: Entire record data after hook transformations (for accessing other field values)
-- `invoker`: Principal performing the operation
-
-Validators return `true` for success, `false` for failure. Use array form `[validator, errorMessage]` for custom error messages.
+Add validation rules to fields. Validators run after hooks.
 
 #### Field-level Validation
 
-Set validators directly on individual fields:
+Set validators directly on individual fields. Each validator receives `{ value }` (the field value after hooks) and returns an error message string to fail, or void to pass:
 
 ```typescript
 db.string().validate(
-  ({ value }) => value.includes("@"),
-  [({ value }) => value.length >= 5, "Email must be at least 5 characters"],
+  ({ value }) => (value.includes("@") ? undefined : "Must contain @"),
+  ({ value }) => (value.length >= 5 ? undefined : "Must be at least 5 characters"),
 );
 ```
 
 #### Type-level Validation
 
-Set validators for multiple fields at once using `db.type().validate()`:
+Set a validator across all fields using `db.type().validate()`. The validator receives `{ newRecord, oldRecord, invoker }` and an `issues()` callback to report errors per field:
 
 ```typescript
 export const user = db
@@ -388,35 +366,13 @@ export const user = db
     name: db.string(),
     email: db.string(),
   })
-  .validate({
-    name: [({ value }) => value.length > 5, "Name must be longer than 5 characters"],
-    email: [
-      ({ value }) => value.includes("@"),
-      [({ value }) => value.length >= 5, "Email must be at least 5 characters"],
-    ],
-  });
-```
-
-**Important:** Field-level and type-level validation cannot coexist on the same field. TypeScript will prevent this at compile time:
-
-```typescript
-// Compile error - cannot set validation on the same field twice
-export const user = db
-  .type("User", {
-    name: db.string().validate(({ value }) => value.length > 0), // Field-level
-  })
-  .validate({
-    name: [({ value }) => value.length < 100, "Too long"], // Type-level - ERROR
-  });
-
-// OK - set validation on different fields
-export const user = db
-  .type("User", {
-    name: db.string().validate(({ value }) => value.length > 0), // Field-level on name
-    email: db.string(),
-  })
-  .validate({
-    email: [({ value }) => value.includes("@"), "Invalid email"], // Type-level on email
+  .validate(({ newRecord }, issues) => {
+    if (newRecord.name.length <= 5) {
+      issues("name", "Name must be longer than 5 characters");
+    }
+    if (!newRecord.email.includes("@")) {
+      issues("email", "Must contain @");
+    }
   });
 ```
 
