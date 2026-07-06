@@ -61,3 +61,15 @@ jobs:
       - name: Validate changeset packages
         if: steps.filter.outputs.changeset == 'true'
         run: pnpm changeset status --since origin/main
+
+      # `changeset status` only validates the plan; it doesn't run the JSON
+      # edits that `changeset version` performs during the Release workflow.
+      # Actually running `version` here catches crashes (e.g. a package.json
+      # missing a "version" key) before they surface post-merge on main.
+      - name: Dry-run changeset version
+        if: steps.filter.outputs.changeset == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm changeset version
+          git checkout -- .
