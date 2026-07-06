@@ -17,12 +17,12 @@ const COMPARE_BATCH_SIZE = 10;
 /**
  * @param {object} params
  * @param {string} params.forkSha
- * @param {import("./erd-find-base-run.mjs").WorkflowRun[]} params.runs - newest-first, already bounded
+ * @param {{ id: number, head_sha: string }[]} params.runs - newest-first, already bounded
  * @param {(base: string, head: string) => Promise<string>} params.compareStatus - resolves to a compare `status`, or "diverged" on error
  * @returns {Promise<{ runId: string, reason: string }>}
  */
 export async function findBaseRun({ forkSha, runs, compareStatus }) {
-  outer: for (let i = 0; i < runs.length; i += COMPARE_BATCH_SIZE) {
+  for (let i = 0; i < runs.length; i += COMPARE_BATCH_SIZE) {
     const batch = runs.slice(i, i + COMPARE_BATCH_SIZE);
     // Checked in batches (not all at once) to stay well clear of GitHub's
     // secondary rate limits, and not one at a time so a fork point with no

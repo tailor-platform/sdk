@@ -30,7 +30,7 @@ export function buildCommentBody({ artifacts, baseRef, serverUrl, repo, runId })
  * @param {(body: string) => Promise<void>} params.postComment
  * @param {(id: number, body: string) => Promise<void>} params.patchComment
  * @param {(id: number) => Promise<void>} params.deleteComment
- * @param {(body: string) => string} params.buildBody
+ * @param {() => string} params.buildBody
  * @returns {Promise<string>} what happened, for logging
  */
 export async function upsertPreviewComment({

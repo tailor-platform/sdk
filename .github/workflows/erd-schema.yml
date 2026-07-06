@@ -67,22 +67,10 @@ jobs:
             cat "$log"
           fi
 
-      # Determines whether this push actually touched the namespace, using
-      # the export's own resolved files rather than a copy of
-      # tailor.config.ts's `files` globs. See erd-relevance.mjs.
-      - name: Check relevance
-        id: relevance
-        if: steps.export.outputs.exported != 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA_BASE: ${{ github.event.before }}
-          SHA_HEAD: ${{ github.sha }}
-          LOG_FILE: ${{ steps.export.outputs.log_file }}
-        run: node .github/scripts/erd-relevance.mjs
-
+      # Always uploaded when the export succeeds, so the preview job can pick
+      # any ancestor run as a base without checking which ones have it.
       - name: Upload ERD schema
-        if: steps.export.outputs.exported != 'false' && steps.relevance.outputs.relevant != 'false'
+        if: steps.export.outputs.exported != 'false'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: erd-schema-${{ matrix.namespace }}

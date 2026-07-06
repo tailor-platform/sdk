@@ -99,20 +99,18 @@ describe("repository ERD schema workflow", () => {
     expect(content).toContain("retention-days: 90");
   });
 
-  test("delegates relevance filtering to erd-relevance.mjs in both jobs", () => {
+  test("delegates relevance filtering to erd-relevance.mjs in the preview job only, always uploading a successful export", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    expect(content.match(/run: node \.github\/scripts\/erd-relevance\.mjs/g)?.length).toBe(2);
-    // Export job: skipped once the export itself is known to be a no-op.
+    expect(content.match(/run: node \.github\/scripts\/erd-relevance\.mjs/g)?.length).toBe(1);
+    // Export job: uploads whenever the export itself succeeded, regardless of relevance,
+    // so the preview job can pick any ancestor run as a base without checking which ones have it.
     expect(content).toContain(
-      "if: steps.export.outputs.exported != 'false'\n        env:\n          GH_TOKEN",
+      "- name: Upload ERD schema\n        if: steps.export.outputs.exported != 'false'\n",
     );
     // Preview job: always runs, since it must compute the fork point even when head is missing.
     expect(content).toContain(
       "id: relevance\n        env:\n          GH_TOKEN: ${{ github.token }}\n          REPO: ${{ github.repository }}\n          SHA_BASE: ${{ github.event.pull_request.base.sha }}",
-    );
-    expect(content).toContain(
-      "if: steps.export.outputs.exported != 'false' && steps.relevance.outputs.relevant != 'false'",
     );
   });
 
