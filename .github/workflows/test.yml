@@ -102,7 +102,7 @@ jobs:
       # Windows-specific PATHEXT resolution and .cmd/.ps1 spawn branches are
       # only exercised here; the main unit suite runs on Linux.
       - name: Run plugin tests
-        run: pnpm --filter @tailor-platform/sdk exec vitest run --project 'unit*' src/cli/shared/plugin.test.ts
+        run: pnpm --filter @tailor-platform/sdk exec vitest run --project unit-plugin
         shell: bash
 
   test-summary:
