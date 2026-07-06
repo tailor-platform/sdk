@@ -16,8 +16,8 @@ importers:
         specifier: 1.0.0-next.5
         version: 1.0.0-next.5
       '@changesets/cli':
-        specifier: 3.0.0-next.5
-        version: 3.0.0-next.5
+        specifier: 3.0.0-next.8
+        version: 3.0.0-next.8
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:packages/sdk
@@ -790,9 +790,9 @@ packages:
     resolution: {integrity: sha512-c9q7QUmBYCKKCjhW/0U2W8ZNqtOixB1DShU0Y9FHNwYL8w76YVTz+MZiLEGCKXAEduibEUdcJYIQiaSAxQR0dQ==}
     engines: {node: ^22.11 || ^24 || >=26}
 
-  '@changesets/cli@3.0.0-next.5':
-    resolution: {integrity: sha512-jminqSK3VQj9kSolTfcAE6M54C8M0MFs5f25BxbVfY6+oqPMlMevTFrHXa1XfcUkYEgy7dUCHEo21A8k1nLFmQ==}
-    engines: {node: ^22.11 || ^24 || >=26}
+  '@changesets/cli@3.0.0-next.8':
+    resolution: {integrity: sha512-gfIPhBs1XNdgXhTJ+uhzfG8jHmMLnQNNL4Uwqxoniw/xmmVRbc9xGIeLniRsGY77RgdhWW0V1z1zVjTztgMQzQ==}
+    engines: {node: ^22.11 || ^24 || >=26, npm: '>=10.9.0', pnpm: '>=10.0.0', yarn: '>=4.5.2'}
     hasBin: true
 
   '@changesets/config@4.0.0-next.6':
@@ -2004,6 +2004,10 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
+
+  '@pnpm/deps.graph-sequencer@1100.0.0':
+    resolution: {integrity: sha512-IfhLdXMjNaAt2Z/r0hAqMvH4UN/Eb6LAbnSHqF9Ay1EhQId8rFX58yIWXLUit6VjJTJAptnSPtO8nSu2/ggQsg==}
+    engines: {node: '>=22.13'}
 
   '@publint/pack@0.1.5':
     resolution: {integrity: sha512-edgyN2pP07uXiP4tJs0s8KVmU8M8i60YPbbI0/WDeok1mIJHRXz+CgD8I0nelwDkoCh3EWL/G5kGfbuHjsdbvw==}
@@ -3886,7 +3890,7 @@ snapshots:
       '@changesets/get-github-info': 1.0.0-next.3
       '@changesets/types': 7.0.0-next.6
 
-  '@changesets/cli@3.0.0-next.5':
+  '@changesets/cli@3.0.0-next.8':
     dependencies:
       '@changesets/apply-release-plan': 8.0.0-next.7
       '@changesets/assemble-release-plan': 7.0.0-next.7
@@ -3902,10 +3906,10 @@ snapshots:
       '@changesets/write': 1.0.0-next.6
       '@clack/prompts': 1.6.0
       '@manypkg/get-packages': 3.1.0
+      '@pnpm/deps.graph-sequencer': 1100.0.0
       cac: 7.0.0
       import-meta-resolve: 4.2.0
       launch-editor: 2.14.1
-      package-manager-detector: 1.7.0
       semver: 7.8.5
       tinyexec: 1.2.4
 
@@ -4724,6 +4728,8 @@ snapshots:
 
   '@oxlint/binding-win32-x64-msvc@1.72.0':
     optional: true
+
+  '@pnpm/deps.graph-sequencer@1100.0.0': {}
 
   '@publint/pack@0.1.5':
     dependencies:
