@@ -25,7 +25,7 @@ const templateFiles: [output: string, commands: string[]][] = [
   ["application", ["init", "generate", "deploy", "remove", "show", "open", "api"]],
   ["tailordb", ["tailordb"]],
   ["query", ["query"]],
-  ["user", ["login", "logout", "user"]],
+  ["user", ["login", "logout", "auth", "user"]],
   ["organization", ["organization"]],
   ["workspace", ["workspace", "profile"]],
   ["auth", ["authconnection", "machineuser", "oauth2client"]],
@@ -38,6 +38,7 @@ const templateFiles: [output: string, commands: string[]][] = [
   ["setup", ["setup"]],
   ["upgrade", ["upgrade"]],
   ["skills", ["skills"]],
+  ["plugin", ["plugin"]],
   ["completion", ["completion"]],
 ];
 

@@ -52,6 +52,42 @@ tailor logout [options]
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
+## auth
+
+Authentication helpers for scripts and plugins.
+
+**Usage**
+
+```
+tailor auth <command>
+```
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Commands**
+
+| Command                     | Description                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------- |
+| [`auth token`](#auth-token) | Print a valid Tailor Platform access token to stdout, refreshing it first if expired. |
+
+### auth token
+
+Print a valid Tailor Platform access token to stdout, refreshing it first if expired.
+
+**Usage**
+
+```
+tailor auth token [options]
+```
+
+**Options**
+
+| Option                | Alias | Description       | Required | Default | Env                       |
+| --------------------- | ----- | ----------------- | -------- | ------- | ------------------------- |
+| `--profile <PROFILE>` | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE` |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
 ## user
 
 Manage Tailor Platform users.
