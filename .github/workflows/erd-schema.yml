@@ -179,6 +179,7 @@ jobs:
             --name "erd-schema-${{ matrix.namespace }}" --dir "$RUNNER_TEMP/erd-base"; then
             echo "found=true" >>"$GITHUB_OUTPUT"
           else
+            echo "found=false" >>"$GITHUB_OUTPUT"
             echo "ERD schema export run $run_id has no artifact for namespace '${{ matrix.namespace }}'; rendering current objects as added."
           fi
 

@@ -139,6 +139,13 @@ describe("repository ERD schema workflow", () => {
     expect(content).toContain("actions: read # look up and download the export job's artifacts");
   });
 
+  test("sets found=false explicitly when the base schema download fails", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain('echo "found=true" >>"$GITHUB_OUTPUT"');
+    expect(content).toContain('echo "found=false" >>"$GITHUB_OUTPUT"');
+  });
+
   test("looks up the schema at the PR's actual fork point, not just base's moving tip", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
