@@ -5,7 +5,6 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  valibot@>=0.31.0 <1.2.0: 1.4.1
   esbuild@>=0.17.0 <0.28.1: 0.28.1
 
 importers:
@@ -2130,7 +2129,7 @@ packages:
     engines: {node: '>=22.12.0'}
     hasBin: true
     peerDependencies:
-      valibot: 1.4.1
+      valibot: '>=1.0.0'
     peerDependenciesMeta:
       valibot:
         optional: true
