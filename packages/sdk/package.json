@@ -179,9 +179,9 @@
     "@jridgewell/trace-mapping": "0.3.31",
     "@napi-rs/keyring": "1.3.0",
     "@opentelemetry/api": "1.9.1",
-    "@opentelemetry/exporter-trace-otlp-proto": "0.219.0",
-    "@opentelemetry/resources": "2.8.0",
-    "@opentelemetry/sdk-trace-node": "2.8.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "0.220.0",
+    "@opentelemetry/resources": "2.9.0",
+    "@opentelemetry/sdk-trace-node": "2.9.0",
     "@opentelemetry/semantic-conventions": "1.41.1",
     "@oxc-project/types": "0.138.0",
     "@standard-schema/spec": "1.1.0",
@@ -221,7 +221,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@opentelemetry/sdk-trace-base": "2.8.0",
+    "@opentelemetry/sdk-trace-base": "2.9.0",
     "@tailor-platform/tailor-proto": "workspace:^",
     "@types/madge": "5.0.3",
     "@types/mime-types": "3.0.1",
