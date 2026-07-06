@@ -37,7 +37,8 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   // (including Create*/Update*/Delete*) and must guard.
   "api/inspect.ts",
   "api/list.ts",
-  // Auth token retrieval (reads/refreshes local credentials only)
+  // Auth token retrieval (may refresh via the OAuth server and persist tokens
+  // locally, but mutates no workspace/platform state)
   "auth/token.ts",
   // Auth connections (read-only)
   "authconnection/index.ts",

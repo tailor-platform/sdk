@@ -141,6 +141,11 @@ function findExecutableIn(dirs: string[], binName: string): string | undefined {
  * @returns The discovered plugin, or null when not found
  */
 export function resolvePlugin(name: string, cliName: string): DiscoveredPlugin | null {
+  // Reject names that could escape the `<cli>-` prefix via path traversal
+  // (e.g. `../evil`) or embed a NUL, before joining them into a filesystem path.
+  if (name.includes("/") || name.includes("\\") || name.includes("\0")) {
+    return null;
+  }
   const binName = `${cliName}-${name}`;
 
   const fromNodeModules = findExecutableIn(nodeModulesBinDirs(), binName);
