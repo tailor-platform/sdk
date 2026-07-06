@@ -132,7 +132,7 @@ describe("buildTypeScripts", () => {
     const typeValidateExpr =
       '(({ newRecord }) => { if (newRecord.start > newRecord.end) __issues("start", "bad"); })({ newRecord: _newRecord, oldRecord: _oldRecord }, __issues)';
 
-    const { typeValidate } = buildTypeScripts({}, typeValidateExpr);
+    const { typeValidate } = buildTypeScripts({}, { typeValidateExpr });
     const expr = typeValidate?.create?.expr ?? "";
     expect(typeValidate?.update?.expr).toBe(expr);
     expect(expr).toContain("const __errs = {}");
@@ -150,7 +150,7 @@ describe("buildTypeScripts", () => {
     };
     const typeValidateExpr = "typeValidateFn({ newRecord: _newRecord }, __issues)";
 
-    const { typeValidate } = buildTypeScripts(fields, typeValidateExpr);
+    const { typeValidate } = buildTypeScripts(fields, { typeValidateExpr });
     const expr = typeValidate?.create?.expr ?? "";
     expect(expr).toContain('const _value = _newRecord["name"]');
     expect(expr).toContain("const __issues = (f, m) => { __errs[f] = m; }");

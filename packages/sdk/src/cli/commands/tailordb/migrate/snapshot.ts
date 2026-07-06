@@ -503,6 +503,10 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
     snapshotType.files = { ...type.files };
   }
 
+  if (type.typeHookExpr) {
+    snapshotType.typeHookExpr = type.typeHookExpr;
+  }
+
   if (type.typeValidateExpr) {
     snapshotType.typeValidateExpr = type.typeValidateExpr;
   }

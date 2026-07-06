@@ -1327,6 +1327,13 @@ export type AuthConfigInput =
                       };
                     }
                   | undefined;
+                typeHook?:
+                  | {
+                      create?: Function | undefined;
+                      update?: Function | undefined;
+                    }
+                  | undefined;
+                typeValidate?: Function | undefined;
               };
               readonly plugins: {
                 pluginId: string;
@@ -1698,7 +1705,7 @@ export type AuthConfig =
                           update?: Function | undefined;
                         }
                       | undefined;
-                    validate?: (Function | [Function, string])[] | undefined;
+                    validate?: Function[] | undefined;
                     serial?:
                       | {
                           start: number;
@@ -1707,6 +1714,7 @@ export type AuthConfig =
                         }
                       | undefined;
                     scale?: number | undefined | undefined;
+                    default?: unknown;
                   };
                   rawRelation?:
                     | {
@@ -2618,6 +2626,13 @@ export type AuthConfig =
                       };
                     }
                   | undefined;
+                typeHook?:
+                  | {
+                      create?: Function | undefined;
+                      update?: Function | undefined;
+                    }
+                  | undefined;
+                typeValidate?: Function | undefined;
               };
             };
             usernameField: string;

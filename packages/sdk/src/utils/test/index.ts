@@ -24,12 +24,11 @@ export {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
   return (data: unknown) => {
-    return Object.entries(type.fields).reduce(
+    const hooked = Object.entries(type.fields).reduce(
       (hooked, [key, value]) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const field = value as TailorField<any, any, any>;
         if (key === "id") {
-          // Use existing id from data if provided, otherwise generate new UUID
           const existingId =
             data && typeof data === "object" ? (data as Record<string, unknown>)[key] : undefined;
           hooked[key] = existingId ?? crypto.randomUUID();
@@ -39,8 +38,6 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const nestedHook = createTailorDBHook({ fields: field.fields } as any);
           if (field.metadata.array) {
-            // For nested array fields, recurse per element and pass through non-array values
-            // (e.g. null/undefined for optional fields) so validation sees the original value.
             hooked[key] = Array.isArray(nestedValue)
               ? nestedValue.map((item) => nestedHook(item))
               : nestedValue;
@@ -50,7 +47,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         } else if (field.metadata.hooks?.create) {
           hooked[key] = field.metadata.hooks.create({
             value: (data as Record<string, unknown>)[key],
-            newRecord: data,
+            input: data,
             oldRecord: null,
             invoker: null,
             now: new Date(),
@@ -64,7 +61,25 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         return hooked;
       },
       {} as Record<string, unknown>,
-    ) as Partial<output<T>>;
+    );
+
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- metadata absent in recursive nested calls
+    if (type.metadata?.typeHook?.create) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+      const overrides = (type.metadata.typeHook.create as Function)({
+        input: data,
+        oldRecord: null,
+        invoker: null,
+        now: new Date(),
+      });
+      if (overrides && typeof overrides === "object") {
+        for (const [key, value] of Object.entries(overrides as Record<string, unknown>)) {
+          hooked[key] = value instanceof Date ? value.toISOString() : value;
+        }
+      }
+    }
+
+    return hooked as Partial<output<T>>;
   };
 }
 

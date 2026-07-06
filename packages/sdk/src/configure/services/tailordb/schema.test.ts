@@ -778,12 +778,13 @@ describe("TailorDBType withTimestamps option tests", () => {
     expect(createHook).toBeDefined();
 
     const specified = new Date("2025-02-10T09:00:00Z");
+    const now = new Date("2025-06-01T00:00:00Z");
     const result = createHook!({
       value: specified,
-      newRecord: {},
+      input: {},
       oldRecord: null,
       invoker: timestampHookInvoker,
-      now: new Date(),
+      now,
     });
     expect(result).toBe(specified);
   });
@@ -793,18 +794,15 @@ describe("TailorDBType withTimestamps option tests", () => {
     const createHook = createdAt.metadata.hooks?.create;
     expect(createHook).toBeDefined();
 
-    const before = Date.now();
+    const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
       value: null,
-      newRecord: {},
+      input: {},
       oldRecord: null,
       invoker: timestampHookInvoker,
-      now: new Date(),
+      now,
     });
-    const after = Date.now();
-    expect(result).toBeInstanceOf(Date);
-    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
-    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
+    expect(result).toBe(now);
   });
 
   test("updatedAt create hook respects a user-specified value", () => {
@@ -813,12 +811,13 @@ describe("TailorDBType withTimestamps option tests", () => {
     expect(createHook).toBeDefined();
 
     const specified = new Date("2025-02-10T09:00:00Z");
+    const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
       value: specified,
-      newRecord: {},
+      input: {},
       oldRecord: null,
       invoker: timestampHookInvoker,
-      now: new Date(),
+      now,
     });
     expect(result).toBe(specified);
   });
@@ -828,37 +827,31 @@ describe("TailorDBType withTimestamps option tests", () => {
     const createHook = updatedAt.metadata.hooks?.create;
     expect(createHook).toBeDefined();
 
-    const before = Date.now();
+    const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
       value: null,
-      newRecord: {},
+      input: {},
       oldRecord: null,
       invoker: timestampHookInvoker,
-      now: new Date(),
+      now,
     });
-    const after = Date.now();
-    expect(result).toBeInstanceOf(Date);
-    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
-    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
+    expect(result).toBe(now);
   });
 
-  test("updatedAt update hook uses current time", () => {
+  test("updatedAt update hook uses now", () => {
     const { updatedAt } = db.fields.timestamps();
     const updateHook = updatedAt.metadata.hooks?.update;
     expect(updateHook).toBeDefined();
 
-    const before = Date.now();
+    const now = new Date("2025-06-01T12:00:00Z");
     const result = updateHook!({
       value: null,
-      newRecord: {},
+      input: {},
       oldRecord: null,
       invoker: timestampHookInvoker,
-      now: new Date(),
+      now,
     });
-    const after = Date.now();
-    expect(result).toBeInstanceOf(Date);
-    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
-    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
+    expect(result).toBe(now);
   });
 });
 
@@ -1116,10 +1109,8 @@ describe("TailorDBType hooks modifier tests", () => {
         name: db.string(),
       })
       .hooks({
-        name: {
-          create: () => "created",
-          update: () => "updated",
-        },
+        create: ({ input }) => ({ name: `${input.name}_created` }),
+        update: ({ input }) => ({ name: `${input.name}_updated` }),
       });
     expectTypeOf<output<typeof _hookType>>().toEqualTypeOf<{
       id: UUIDString;
@@ -1127,65 +1118,35 @@ describe("TailorDBType hooks modifier tests", () => {
     }>();
   });
 
-  test("setting hooks on id causes type error", () => {
-    db.type("Test", {
-      name: db.string(),
-    }).hooks({
-      // @ts-expect-error hooks() cannot be called on the "id" field
-      id: {
-        create: () => "created",
+  test("type hook stores create/update functions in metadata", () => {
+    const createFn = () => ({ name: "created" });
+    const updateFn = () => ({ name: "updated" });
+    const hookType = db.type("Test", { name: db.string() }).hooks({
+      create: createFn,
+      update: updateFn,
+    });
+    expect(hookType.metadata.typeHook?.create).toBe(createFn);
+    expect(hookType.metadata.typeHook?.update).toBe(updateFn);
+  });
+
+  test("type hook return type excludes id", () => {
+    db.type("Test", { name: db.string() }).hooks({
+      // @ts-expect-error id cannot be returned from type hook
+      create: () => ({ id: "00000000-0000-0000-0000-000000000001" }),
+    });
+  });
+
+  test("type hook input args receive correct types", () => {
+    db.type("Test", { name: db.string(), age: db.int({ optional: true }) }).hooks({
+      create: ({ input, oldRecord, invoker, now }) => {
+        expectTypeOf(input.name).toEqualTypeOf<string | null | undefined>();
+        expectTypeOf(input.age).toEqualTypeOf<number | null | undefined>();
+        expectTypeOf(oldRecord).toBeNullable();
+        expectTypeOf(invoker).toBeNullable();
+        expectTypeOf(now).toEqualTypeOf<Date>();
+        return {};
       },
     });
-  });
-
-  test("setting hooks on nested field causes type error", () => {
-    db.type("Test", {
-      name: db.object({
-        first: db.string(),
-        last: db.string(),
-      }),
-      // @ts-expect-error hooks() cannot be called on nested fields
-    }).hooks({
-      name: {
-        create: () => "created",
-      },
-    });
-  });
-
-  test("hooks modifier on string field receives string", () => {
-    const testType = db.type("Test", { name: db.string() });
-    const _hooks = testType.hooks;
-    type ExpectedHooksParam = Parameters<typeof _hooks>[0];
-    type ActualNameType = Exclude<ExpectedHooksParam["name"], undefined>;
-
-    expectTypeOf<ActualNameType>().toEqualTypeOf<
-      Hook<
-        {
-          id: UUIDString;
-          readonly name: string;
-        },
-        string
-      >
-    >();
-  });
-
-  test("hooks modifier on optional field receives null", () => {
-    const testType = db.type("Test", {
-      name: db.string({ optional: true }),
-    });
-    const _hooks = testType.hooks;
-    type ExpectedHooksParam = Parameters<typeof _hooks>[0];
-    type ActualNameType = Exclude<ExpectedHooksParam["name"], undefined>;
-
-    expectTypeOf<ActualNameType>().toEqualTypeOf<
-      Hook<
-        {
-          id: UUIDString;
-          name?: string | null;
-        },
-        string | null
-      >
-    >();
   });
 });
 
@@ -2016,14 +1977,14 @@ describe("TailorDBField immutability", () => {
 });
 
 describe("TailorDBType does not mutate shared fields", () => {
-  test("type.hooks() does not mutate the shared field", () => {
+  test("type.hooks() does not affect other types sharing the same field", () => {
     const sharedField = db.string();
 
-    const typeA = db.type("TypeA", { name: sharedField }).hooks({ name: { create: () => "A" } });
+    const typeA = db.type("TypeA", { name: sharedField }).hooks({ create: () => ({ name: "A" }) });
     const typeB = db.type("TypeB", { name: sharedField });
 
-    expect(typeA.fields.name.metadata.hooks).toBeDefined();
-    expect(typeB.fields.name.metadata.hooks).toBeUndefined();
+    expect(typeA.metadata.typeHook?.create).toBeDefined();
+    expect(typeB.metadata.typeHook).toBeUndefined();
     expect(sharedField.metadata.hooks).toBeUndefined();
   });
 
@@ -2044,9 +2005,8 @@ describe("TailorDBType does not mutate shared fields", () => {
     const nameField = db.string();
     const fields = { name: nameField };
 
-    db.type("TypeA", fields).hooks({ name: { create: () => "hooked" } });
+    db.type("TypeA", fields).hooks({ create: () => ({ name: "hooked" }) });
 
-    // The fields record should still reference the original field instance
     expect(fields.name).toBe(nameField);
   });
 

@@ -20,10 +20,12 @@ export const customer = db
     ...db.fields.timestamps(),
   })
   .hooks({
-    fullAddress: {
-      create: ({ newRecord }) => `${newRecord.postalCode} ${newRecord.address} ${newRecord.city}`,
-      update: ({ newRecord }) => `${newRecord.postalCode} ${newRecord.address} ${newRecord.city}`,
-    },
+    create: ({ input }) => ({
+      fullAddress: `${input.postalCode} ${input.address} ${input.city}`,
+    }),
+    update: ({ input }) => ({
+      fullAddress: `${input.postalCode} ${input.address} ${input.city}`,
+    }),
   })
   .validate({
     name: ({ newValue }) =>

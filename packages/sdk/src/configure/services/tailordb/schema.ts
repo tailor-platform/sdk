@@ -36,7 +36,7 @@ import type { InferredAttributes } from "#/runtime/types";
 import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
 import type { RawPermissions } from "#/types/tailordb.generated";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
-import type { Hook, Hooks, ExcludeNestedDBFields, TypeFeatures, TypeValidateFn } from "./types";
+import type { Hook, TypeHook, ExcludeNestedDBFields, TypeFeatures, TypeValidateFn } from "./types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 // Erased DB fields stay assignable across builder method-state changes.
@@ -365,7 +365,7 @@ export interface TailorDBType<
 > extends TailorDBTypeBase<Fields, User> {
   _description?: string;
 
-  hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User>;
+  hooks(hook: TypeHook<Fields>): TailorDBType<Fields, User>;
   validate(fn: TypeValidateFn<Fields>): TailorDBType<Fields, User>;
   validate(validators: Validators<Fields>): TailorDBType<Fields, User>;
   features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User>;
@@ -848,6 +848,8 @@ function createTailorDBType<
   let _files: Record<string, string> = {};
   const _plugins: PluginAttachment[] = [];
   // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  let _typeHook: { create?: Function; update?: Function } | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
   let _typeValidate: Function | undefined;
 
   if (options.pluralForm) {
@@ -884,20 +886,13 @@ function createTailorDBType<
         permissions: _permissions,
         files: _files,
         ...(Object.keys(indexes).length > 0 && { indexes }),
+        ...(_typeHook && { typeHook: _typeHook }),
         ...(_typeValidate && { typeValidate: _typeValidate }),
       };
     },
 
-    hooks(hooks: Hooks<Fields>) {
-      // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
-      // oxlint-disable-next-line no-explicit-any
-      Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-        const field = this.fields[fieldName];
-        if (field === undefined) throw new Error(`field not found: ${fieldName}`);
-        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = (
-          field as TailorAnyDBField
-        ).hooks(fieldHooks);
-      });
+    hooks(hook: TypeHook<Fields>) {
+      _typeHook = hook;
       return this;
     },
 
@@ -1097,12 +1092,12 @@ export const db = {
      */
     timestamps: () => ({
       createdAt: datetime()
-        .hooks({ create: ({ value }) => value ?? new Date() })
+        .hooks({ create: ({ value, now }) => value ?? now })
         .description("Record creation timestamp"),
       updatedAt: datetime()
         .hooks({
-          create: ({ value }) => value ?? new Date(),
-          update: () => new Date(),
+          create: ({ value, now }) => value ?? now,
+          update: ({ now }) => now,
         })
         .description("Record update timestamp"),
     }),

@@ -3,7 +3,7 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
-import type { output, InferFieldsOutput } from "#/types/helpers";
+import type { output } from "#/types/helpers";
 import type {
   DateString,
   DateTimeString,

@@ -267,6 +267,12 @@ export const TailorDBTypeSchema = z.strictObject({
           }),
         )
         .optional(),
+      typeHook: z
+        .strictObject({
+          create: functionSchema.optional(),
+          update: functionSchema.optional(),
+        })
+        .optional(),
       typeValidate: functionSchema.optional(),
     })
     .strict(),

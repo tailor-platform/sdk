@@ -25,10 +25,12 @@ export const orderItem = db
     ...db.fields.timestamps(),
   })
   .hooks({
-    totalPrice: {
-      create: ({ newRecord }) => (newRecord?.quantity ?? 0) * (newRecord.unitPrice ?? 0),
-      update: ({ newRecord }) => (newRecord?.quantity ?? 0) * (newRecord.unitPrice ?? 0),
-    },
+    create: ({ input }) => ({
+      totalPrice: (input?.quantity ?? 0) * (input.unitPrice ?? 0),
+    }),
+    update: ({ input }) => ({
+      totalPrice: (input?.quantity ?? 0) * (input.unitPrice ?? 0),
+    }),
   })
   .permission(permissionLoggedIn)
   .gqlPermission(gqlPermissionLoggedIn);

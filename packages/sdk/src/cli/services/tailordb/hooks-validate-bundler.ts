@@ -24,7 +24,7 @@ type ScriptFunction = (...args: unknown[]) => unknown;
 
 type ScriptTarget = {
   fn: ScriptFunction;
-  kind: "hooks" | "validate" | "typeValidate";
+  kind: "hooks" | "validate" | "typeHook" | "typeValidate";
 };
 
 /** Binding found in the source file: either an import or a top-level declaration */
@@ -118,6 +118,15 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
 
   for (const field of Object.values(type.fields)) {
     collectFieldTargets(field);
+  }
+
+  if (type.metadata.typeHook) {
+    for (const op of ["create", "update"] as const) {
+      const fn = toScriptFunction(type.metadata.typeHook[op]);
+      if (fn) {
+        targets.push({ fn, kind: "typeHook" });
+      }
+    }
   }
 
   const typeValidateFn = toScriptFunction(type.metadata.typeValidate);
@@ -435,7 +444,7 @@ export function buildMinimalEntryFromResolved(
 
 async function bundleScriptTarget(args: {
   fn: ScriptFunction;
-  kind: "hooks" | "validate" | "typeValidate";
+  kind: "hooks" | "validate" | "typeHook" | "typeValidate";
   sourceFilePath: string;
   sourceBindings: Map<string, SourceBinding>;
   tempDir: string;
@@ -447,14 +456,13 @@ async function bundleScriptTarget(args: {
   const fnSource = stringifyFunction(fn);
   const argsObject =
     kind === "hooks"
-      ? `{ value: _value, newRecord: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now }`
+      ? `{ value: _value, input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now }`
       : kind === "validate"
         ? `{ newValue: _value, oldValue: _oldValue }`
-        : `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap} }, __issues`;
-  const inlineExpr = assertParsableExpression(
-    `(${fnSource})(${argsObject})`,
-    context,
-  );
+        : kind === "typeHook"
+          ? `{ input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now }`
+          : `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap} }, __issues`;
+  const inlineExpr = assertParsableExpression(`(${fnSource})(${argsObject})`, context);
 
   // Check if the function has free variables that need bundling
   const freeVars = findUndefinedReferences(`const __fn = ${fnSource};`);
