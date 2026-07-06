@@ -540,14 +540,16 @@ function isNotFoundError(error: unknown): boolean {
 export async function fetchAllTolerant<T>(
   fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>,
 ): Promise<T[]> {
-  try {
-    return await fetchAll(fn);
-  } catch (error) {
-    if (isNotFoundError(error)) {
-      return [];
+  return await fetchAll(async (pageToken, maxPageSize) => {
+    try {
+      return await fn(pageToken, maxPageSize);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return [[], ""];
+      }
+      throw error;
     }
-    throw error;
-  }
+  });
 }
 
 /**

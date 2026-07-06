@@ -159,6 +159,15 @@ describe("fetchAllTolerant", () => {
     await expect(fetchAllTolerant(fn)).resolves.toEqual([]);
   });
 
+  test("keeps already fetched pages when a later page raises NotFound", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([["a"], "next"])
+      .mockRejectedValueOnce(new ConnectError("not found", Code.NotFound));
+
+    await expect(fetchAllTolerant(fn)).resolves.toEqual(["a"]);
+  });
+
   test("rethrows non-NotFound errors", async () => {
     const error = new ConnectError("unavailable", Code.Unavailable);
     const fn = vi.fn().mockRejectedValue(error);
