@@ -32,7 +32,7 @@
     "pathe": "2.0.3",
     "picomatch": "4.0.4",
     "pkg-types": "2.3.1",
-    "politty": "0.10.1",
+    "politty": "0.11.0",
     "semver": "7.8.5",
     "zod": "4.4.3"
   },
