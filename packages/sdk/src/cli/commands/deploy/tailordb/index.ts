@@ -59,8 +59,12 @@ import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "../label";
-import { fetchExistingResourcesWithLabels } from "../owned-resource";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "../label";
+import {
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "../owned-resource";
 import {
   executeMigrations,
   detectPendingMigrations,
@@ -1522,21 +1526,16 @@ async function planServices(
       existingLabels: existing?.allLabels,
     });
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "TailorDB service",
-            resourceName: tailordb.namespace,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "TailorDB service",
-            resourceName: tailordb.namespace,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName,
+        appId,
+        resourceType: "TailorDB service",
+        resourceName: tailordb.namespace,
+        conflicts,
+        unmanaged,
+      });
 
       if (
         owned &&
@@ -1566,11 +1565,13 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const label = entry?.label;
-    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry?.allLabels,
+      ownerLabel: entry?.label,
+      appName,
+      appId,
+      resourceOwners,
+    });
     if (owned) {
       changeSet.deletes.push({
         name: namespaceName,

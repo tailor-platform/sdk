@@ -30,8 +30,12 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { normalizeInvoker } from "./invoker";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
-import { fetchExistingResourcesWithLabels } from "./owned-resource";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
@@ -201,21 +205,16 @@ async function planServices(
       appId,
     });
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "Pipeline service",
-            resourceName: pipeline.namespace,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "Pipeline service",
-            resourceName: pipeline.namespace,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName,
+        appId,
+        resourceType: "Pipeline service",
+        resourceName: pipeline.namespace,
+        conflicts,
+        unmanaged,
+      });
 
       if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({ name: pipeline.namespace });
@@ -243,11 +242,13 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const label = entry?.label;
-    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry?.allLabels,
+      ownerLabel: entry?.label,
+      appName,
+      appId,
+      resourceOwners,
+    });
     // Only delete services managed by this application (by name or stable id)
     if (owned) {
       changeSet.deletes.push({

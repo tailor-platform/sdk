@@ -1,5 +1,6 @@
 {
   "name": "tailor-dev-kit",
+  "version": "0.0.0",
   "private": true,
   "description": "Tailor Development Kit - Workspace Root",
   "keywords": [],
@@ -40,18 +41,18 @@
     "perf:typecheck": "pnpm --filter example perf:typecheck"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "1.0.0-next.5",
-    "@changesets/cli": "3.0.0-next.5",
+    "@changesets/changelog-github": "1.0.0-next.6",
+    "@changesets/cli": "3.0.0-next.8",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.2",
     "eslint-plugin-zod": "4.7.0",
-    "knip": "6.23.0",
+    "knip": "6.24.0",
     "lefthook": "2.1.9",
-    "oxfmt": "0.56.0",
-    "oxlint": "1.71.0",
+    "oxfmt": "0.57.0",
+    "oxlint": "1.72.0",
     "pkg-pr-new": "0.0.75",
     "publint": "0.3.21",
-    "tsx": "4.22.4",
+    "tsx": "4.22.5",
     "typescript": "6.0.3"
   },
   "engines": {

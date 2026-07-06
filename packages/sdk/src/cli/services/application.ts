@@ -25,6 +25,7 @@ import { type LoadedConfig } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
+import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { buildTriggerContext } from "#/cli/shared/trigger-context";
 import {
   type AppConfig,
@@ -554,7 +555,7 @@ export async function loadApplication(
       bundleLogLevel,
     );
     for (const [name, code] of resolverBundles) {
-      bundledScripts.resolvers.set(name, code);
+      bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
     }
   }
 

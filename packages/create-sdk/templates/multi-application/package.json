@@ -1,5 +1,6 @@
 {
   "name": "multi-application",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,9 +16,9 @@
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.2",
-    "oxfmt": "0.56.0",
-    "oxlint": "1.71.0",
-    "oxlint-tsgolint": "0.23.0",
+    "oxfmt": "0.57.0",
+    "oxlint": "1.72.0",
+    "oxlint-tsgolint": "0.24.0",
     "typescript": "6.0.3"
   }
 }

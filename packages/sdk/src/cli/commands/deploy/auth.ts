@@ -34,8 +34,12 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
-import { buildMetaRequest, isOwnedByApp, resourceTrn } from "./label";
-import { fetchExistingResourcesWithLabels } from "./owned-resource";
+import { buildMetaRequest, resourceTrn } from "./label";
+import {
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { AuthAttributeValue } from "#/configure/services/auth/types";
@@ -426,21 +430,16 @@ async function planServices(
       publishSessionEvents: config.publishSessionEvents,
     };
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "Auth service",
-            resourceName: config.name,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "Auth service",
-            resourceName: config.name,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName,
+        appId,
+        resourceType: "Auth service",
+        resourceName: config.name,
+        conflicts,
+        unmanaged,
+      });
 
       if (
         !forceApplyAll &&
@@ -466,11 +465,13 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const label = entry?.label;
-    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry?.allLabels,
+      ownerLabel: entry?.label,
+      appName,
+      appId,
+      resourceOwners,
+    });
     if (owned) {
       changeSet.deletes.push({
         name: namespaceName,

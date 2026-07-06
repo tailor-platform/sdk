@@ -105,58 +105,66 @@ function copySnapshotRecord<T>(record: Record<string, T> | undefined): Record<st
 }
 
 /**
- * Normalize a snapshot field in place so the snapshot becomes the canonical
- * form for comparison. Currently fills in the platform default decimal scale
- * when omitted, which avoids false drift between local schemas (where scale
- * may be omitted) and the platform (which always materializes a scale).
+ * Normalize a snapshot field into the canonical form for comparison, returning
+ * a new object rather than mutating the input. Currently fills in the platform
+ * default decimal scale when omitted, which avoids false drift between local
+ * schemas (where scale may be omitted) and the platform (which always
+ * materializes a scale).
  * @param {SnapshotFieldConfig} field - Field configuration to normalize
- * @returns The same field object after normalization
+ * @returns {SnapshotFieldConfig} A new, normalized field object
  */
 function normalizeSnapshotField(field: SnapshotFieldConfig): SnapshotFieldConfig {
-  if (field.type === "decimal" && field.scale === undefined) {
-    field.scale = DEFAULT_DECIMAL_SCALE;
-  }
-  if (field.fields) {
-    for (const nested of Object.values(field.fields)) {
-      normalizeSnapshotField(nested);
-    }
-  }
-  return field;
+  const fields = field.fields
+    ? Object.fromEntries(
+        Object.entries(field.fields).map(([name, nested]) => [
+          name,
+          normalizeSnapshotField(nested),
+        ]),
+      )
+    : undefined;
+
+  return {
+    ...field,
+    ...(field.type === "decimal" && field.scale === undefined && { scale: DEFAULT_DECIMAL_SCALE }),
+    ...(fields && { fields }),
+  };
 }
 
 /**
- * Normalize a snapshot type in place to the canonical comparison shape.
- * Currently fills:
+ * Normalize a snapshot type into the canonical comparison shape, returning a
+ * new object rather than mutating the input. Currently fills:
  *   - `pluralForm` via inflection when missing (legacy snapshots written
  *     before `pluralForm` became required may omit it)
  *   - per-field `scale` defaults via {@link normalizeSnapshotField}
  *
  * Idempotent — safe to call multiple times on the same input.
  * @param {TailorDBSnapshotType} type - Snapshot type to normalize
- * @returns The same snapshot type object after normalization
+ * @returns {TailorDBSnapshotType} A new, normalized snapshot type object
  */
 function normalizeSnapshotType(type: TailorDBSnapshotType): TailorDBSnapshotType {
   // `pluralForm` is typed as required by TailorDBSnapshotType, but JSON.parse'd legacy
   // snapshots may have it undefined at runtime — backfill from inflection.
-  if (!(type as { pluralForm?: string }).pluralForm) {
-    type.pluralForm = inflection.pluralize(type.name);
+  const pluralForm =
+    (type as { pluralForm?: string }).pluralForm || inflection.pluralize(type.name);
+  const fields = createSnapshotRecord<SnapshotFieldConfig>();
+  for (const [fieldName, field] of Object.entries(type.fields)) {
+    fields[fieldName] = normalizeSnapshotField(field);
   }
-  for (const field of Object.values(type.fields)) {
-    normalizeSnapshotField(field);
-  }
-  return type;
+  return { ...type, pluralForm, fields };
 }
 
 /**
- * Normalize a schema snapshot in place to the canonical comparison shape.
+ * Normalize a schema snapshot into the canonical comparison shape, returning a
+ * new object rather than mutating the input.
  * @param {SchemaSnapshot} snapshot - Schema snapshot to normalize
- * @returns The same schema snapshot object branded as normalized
+ * @returns {NormalizedSchemaSnapshot} A new schema snapshot object branded as normalized
  */
 export function normalizeSchemaSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
-  for (const type of Object.values(snapshot.types)) {
-    normalizeSnapshotType(type);
+  const types = createSnapshotRecord<TailorDBSnapshotType>();
+  for (const [typeName, type] of Object.entries(snapshot.types)) {
+    types[typeName] = normalizeSnapshotType(type);
   }
-  return snapshot as NormalizedSchemaSnapshot;
+  return { ...snapshot, types } as NormalizedSchemaSnapshot;
 }
 
 // Re-export SCHEMA_SNAPSHOT_VERSION for convenience
@@ -357,8 +365,7 @@ function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
     }
   }
 
-  normalizeSnapshotField(config);
-  return config;
+  return normalizeSnapshotField(config);
 }
 
 /**
@@ -429,8 +436,7 @@ function createSnapshotFieldConfigFromOperatorConfig(
     }
   }
 
-  normalizeSnapshotField(config);
-  return config;
+  return normalizeSnapshotField(config);
 }
 
 /**
