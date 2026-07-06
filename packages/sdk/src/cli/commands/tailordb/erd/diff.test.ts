@@ -6,6 +6,7 @@ import {
   extractEmbeddedErdSchema,
   renderErdDiffHtml,
 } from "./diff";
+import { buildViewerHtml } from "./viewer";
 import type { TailorDbErdSchema, TailorDbErdTable } from "./types";
 
 function table(name: string, overrides: Partial<TailorDbErdTable> = {}): TailorDbErdTable {
@@ -67,6 +68,17 @@ describe("extractEmbeddedErdSchema", () => {
 
   test("reports a missing schema data block", () => {
     expect(() => extractEmbeddedErdSchema("<html></html>")).toThrow("ERD schema block not found");
+  });
+
+  test("preserves dollar replacement patterns in embedded schema values", () => {
+    const description = "Prices use $$, literal match $&, left context $`, right context $'.";
+    const html = buildViewerHtml({
+      schema: schema({
+        tables: [table("Invoice", { description })],
+      }),
+    });
+
+    expect(extractEmbeddedErdSchema(html).tables[0]?.description).toBe(description);
   });
 });
 
