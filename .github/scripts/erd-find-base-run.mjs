@@ -3,16 +3,19 @@
 // BASE_REF, searching successful runs newest-first. Bounded to the export
 // artifacts' own 90-day retention window (see the export job's Upload
 // step) — a run older than that has no artifact left to download
-// regardless — and to a maximum candidate count (MAX_CANDIDATE_RUNS,
-// default below; configurable since `tailor-sdk setup`-generated workflows
-// may want a different limit). Returns no match (rather than falling back
-// to the latest export) when nothing at-or-before the fork point is found
-// among the checked candidates — a later export could include changes
-// merged into BASE_REF after the PR branched, which is the exact mismatch
-// this fork-point search exists to avoid.
+// regardless. MAX_CANDIDATE_RUNS is a secondary safety cap on top of that
+// (default below; configurable since `tailor-sdk setup`-generated
+// workflows may want a different limit) — the export job uploads on every
+// successful export regardless of relevance, so any run within the
+// 90-day window is a valid candidate and the cap should rarely bind.
+// Returns no match (rather than falling back to the latest export) when
+// nothing at-or-before the fork point is found among the checked
+// candidates — a later export could include changes merged into BASE_REF
+// after the PR branched, which is the exact mismatch this fork-point
+// search exists to avoid.
 import { appendFileSync } from "node:fs";
 
-export const DEFAULT_MAX_CANDIDATE_RUNS = 100;
+export const DEFAULT_MAX_CANDIDATE_RUNS = 1000;
 export const RETENTION_DAYS = 90;
 const COMPARE_BATCH_SIZE = 10;
 
