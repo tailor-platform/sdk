@@ -236,6 +236,7 @@ describe("dataplane", () => {
               email: "customer-${randomUUID()}@example.com"
               country: "USA"
               postalCode: "12345"
+              fullAddress: "12345 USA"
               state: "California"
             }
           ) {
@@ -419,6 +420,7 @@ describe("dataplane", () => {
               email: "customer@example.com"
               country: "USA"
               postalCode: "12345"
+              fullAddress: "12345 USA"
               state: "California"
             }
           ) {
@@ -546,6 +548,7 @@ describe("dataplane", () => {
               postalCode: "12345"
               address: "123 Main St"
               city: "Los Angeles"
+              fullAddress: "placeholder"
               state: "California"
             }
           ) {
@@ -577,6 +580,7 @@ describe("dataplane", () => {
               email: "bob@example.com"
               country: "USA"
               postalCode: "12345"
+              fullAddress: "12345 USA"
               state: "California"
             }
           ) {
