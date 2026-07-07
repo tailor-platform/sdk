@@ -1,6 +1,7 @@
 import { platformSerialize } from "#/utils/test/platform-serialize";
 import { buildJobContext } from "./test-env-key";
 import type { TailorEnv, TailorInvoker } from "#/runtime/types";
+import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
 
 /**
  * Body signature shared by workflow jobs at registry-write time.
@@ -21,7 +22,11 @@ const WORKFLOW_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:wor
 
 type PlatformWorkflow = {
   triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
-  triggerJobFunction: (name: string, args?: unknown, options?: unknown) => unknown;
+  triggerJobFunction: (
+    name: string,
+    args?: unknown,
+    options?: TriggerJobFunctionOptions,
+  ) => unknown;
 };
 
 type GlobalWithRegistry = typeof globalThis & {
@@ -121,7 +126,11 @@ export async function runRegisteredWorkflow(name: string, args?: unknown): Promi
 
 // `.trigger()` routes through the installed `tailor.workflow` shim, falling back
 // to running the registered body/workflow locally when none is installed.
-export function dispatchTriggerJob(name: string, args?: unknown, options?: unknown): unknown {
+export function dispatchTriggerJob(
+  name: string,
+  args?: unknown,
+  options?: TriggerJobFunctionOptions,
+): unknown {
   const workflow = currentPlatformWorkflow();
   return workflow ? workflow.triggerJobFunction(name, args, options) : runRegisteredJob(name, args);
 }
