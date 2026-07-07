@@ -116,13 +116,19 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
           "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",
         );
       }
-    : // Preserve arity: only forward `options` when the caller supplied it, so
-      // `dispatchTriggerJob` (and downstream mocks) sees the same shape as the
-      // bundler rewrite of `.trigger(args)` vs `.trigger(args, options)`.
-      async (args?: unknown, options?: TriggerJobFunctionOptions) =>
-        (options === undefined
-          ? await dispatchTriggerJob(config.name, args)
-          : await dispatchTriggerJob(config.name, args, options)) as Awaited<O>;
+    : // Preserve arity: use `arguments.length` (regular function, not arrow) so
+      // `.trigger(args, undefined)` is treated as "options passed" — matching
+      // the bundler rewrite, which forwards the literal `undefined` from the
+      // AST as a third argument. Without this, local execution and bundled
+      // workflows would hand mocks different call shapes.
+      async function trigger(args?: unknown, options?: TriggerJobFunctionOptions) {
+        // oxlint-disable-next-line prefer-rest-params
+        return (
+          arguments.length >= 2
+            ? await dispatchTriggerJob(config.name, args, options)
+            : await dispatchTriggerJob(config.name, args)
+        ) as Awaited<O>;
+      };
 
   return brandValue(
     { name: config.name, trigger, body } as WorkflowJob<Name, I, Awaited<O>>,
