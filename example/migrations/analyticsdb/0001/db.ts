@@ -8,12 +8,10 @@
 import {
   type ColumnType,
   type Transaction as KyselyTransaction,
-  type UUIDString,
-  type DateTimeString,
 } from "@tailor-platform/sdk/kysely";
 import type { Env } from "@tailor-platform/sdk";
 
-type Timestamp = ColumnType<Date | DateTimeString, Date | DateTimeString, Date | DateTimeString>;
+type Timestamp = ColumnType<Date, Date | string, Date | string>;
 type Generated<T> =
   T extends ColumnType<infer S, infer I, infer U>
     ? ColumnType<S, I | undefined, U>
@@ -21,14 +19,10 @@ type Generated<T> =
 
 interface Database {
   Event: {
-    id: Generated<UUIDString>;
+    id: Generated<string>;
     name: "CLICK" | "VIEW" | "PURCHASE";
     createdAt: Timestamp;
-    updatedAt: ColumnType<
-      Date | DateTimeString | null,
-      Date | DateTimeString,
-      Date | DateTimeString
-    >;
+    updatedAt: ColumnType<Date | null, Date | string, Date | string>;
   };
 }
 

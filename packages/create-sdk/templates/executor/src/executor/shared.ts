@@ -1,10 +1,9 @@
 import { getDB } from "../generated/db";
-import type { UUIDString } from "@tailor-platform/sdk";
 
 interface AuditLogInput {
   action: string;
   entityType: string;
-  entityId: UUIDString;
+  entityId: string;
   message: string;
 }
 

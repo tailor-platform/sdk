@@ -13,9 +13,7 @@ describe("upsertUsers resolver", () => {
     mock.setQueryResolver((query) => {
       switch (query.kind) {
         case "SelectQueryNode":
-          return query.parameters.includes("exists@example.com")
-            ? [{ id: "11111111-1111-4111-8111-111111111111" }]
-            : [];
+          return query.parameters.includes("exists@example.com") ? [{ id: "user-1" }] : [];
         case "InsertQueryNode":
         case "UpdateQueryNode":
           return { numAffectedRows: 1 };

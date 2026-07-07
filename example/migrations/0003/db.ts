@@ -8,12 +8,10 @@
 import {
   type ColumnType,
   type Transaction as KyselyTransaction,
-  type UUIDString,
-  type DateTimeString,
 } from "@tailor-platform/sdk/kysely";
 import type { Env } from "@tailor-platform/sdk";
 
-type Timestamp = ColumnType<Date | DateTimeString, Date | DateTimeString, Date | DateTimeString>;
+type Timestamp = ColumnType<Date, Date | string, Date | string>;
 type Generated<T> =
   T extends ColumnType<infer S, infer I, infer U>
     ? ColumnType<S, I | undefined, U>
@@ -21,7 +19,7 @@ type Generated<T> =
 
 interface Database {
   Customer: {
-    id: Generated<UUIDString>;
+    id: Generated<string>;
     name: string;
     email: string;
     phone: string | null;
@@ -32,83 +30,63 @@ interface Database {
     fullAddress: string;
     state: string;
     createdAt: Timestamp;
-    updatedAt: ColumnType<
-      Date | DateTimeString | null,
-      Date | DateTimeString,
-      Date | DateTimeString
-    >;
+    updatedAt: ColumnType<Date | null, Date | string, Date | string>;
   };
   Invoice: {
-    id: Generated<UUIDString>;
+    id: Generated<string>;
     invoiceNumber: string;
-    salesOrderID: UUIDString;
+    salesOrderID: string;
     amount: number | null;
     sequentialId: number;
     status: "draft" | "sent" | "paid" | "cancelled" | null;
     createdAt: Timestamp;
-    updatedAt: ColumnType<
-      Date | DateTimeString | null,
-      Date | DateTimeString,
-      Date | DateTimeString
-    >;
+    updatedAt: ColumnType<Date | null, Date | string, Date | string>;
   };
   NestedProfile: {
-    id: Generated<UUIDString>;
+    id: Generated<string>;
     userInfo: string;
     metadata: string;
     archived: boolean | null;
     createdAt: Timestamp;
-    updatedAt: ColumnType<
-      Date | DateTimeString | null,
-      Date | DateTimeString,
-      Date | DateTimeString
-    >;
+    updatedAt: ColumnType<Date | null, Date | string, Date | string>;
   };
   PurchaseOrder: {
-    id: Generated<UUIDString>;
-    supplierID: UUIDString;
+    id: Generated<string>;
+    supplierID: string;
     totalPrice: number;
     discount: number | null;
     status: string;
     attachedFiles: string[];
     createdAt: Timestamp;
-    updatedAt: ColumnType<
-      Date | DateTimeString | null,
-      Date | DateTimeString,
-      Date | DateTimeString
-    >;
+    updatedAt: ColumnType<Date | null, Date | string, Date | string>;
   };
   SalesOrder: {
-    id: Generated<UUIDString>;
-    customerID: UUIDString;
-    approvedByUserIDs: UUIDString[] | null;
+    id: Generated<string>;
+    customerID: string;
+    approvedByUserIDs: string[] | null;
     totalPrice: number | null;
     discount: number | null;
     status: string | null;
     cancelReason: string | null;
     canceledAt: Timestamp | null;
     createdAt: Timestamp;
-    updatedAt: ColumnType<
-      Date | DateTimeString | null,
-      Date | DateTimeString,
-      Date | DateTimeString
-    >;
+    updatedAt: ColumnType<Date | null, Date | string, Date | string>;
   };
   SalesOrderCreated: {
-    id: Generated<UUIDString>;
-    salesOrderID: UUIDString;
-    customerID: UUIDString;
+    id: Generated<string>;
+    salesOrderID: string;
+    customerID: string;
     totalPrice: number | null;
     status: string | null;
   };
   Selfie: {
-    id: Generated<UUIDString>;
+    id: Generated<string>;
     name: string;
-    parentID: UUIDString | null;
-    dependId: UUIDString | null;
+    parentID: string | null;
+    dependId: string | null;
   };
   Supplier: {
-    id: Generated<UUIDString>;
+    id: Generated<string>;
     name: string;
     phone: string;
     fax: string | null;
@@ -118,47 +96,31 @@ interface Database {
     state: "Alabama" | "Alaska";
     city: string;
     createdAt: Timestamp;
-    updatedAt: ColumnType<
-      Date | DateTimeString | null,
-      Date | DateTimeString,
-      Date | DateTimeString
-    >;
+    updatedAt: ColumnType<Date | null, Date | string, Date | string>;
   };
   User: {
-    id: Generated<UUIDString>;
+    id: Generated<string>;
     name: string;
     email: string;
     status: string | null;
     department: string | null;
     role: "MANAGER" | "STAFF";
     createdAt: Timestamp;
-    updatedAt: ColumnType<
-      Date | DateTimeString | null,
-      Date | DateTimeString,
-      Date | DateTimeString
-    >;
+    updatedAt: ColumnType<Date | null, Date | string, Date | string>;
   };
   UserLog: {
-    id: Generated<UUIDString>;
-    userID: UUIDString;
+    id: Generated<string>;
+    userID: string;
     message: string;
     createdAt: Timestamp;
-    updatedAt: ColumnType<
-      Date | DateTimeString | null,
-      Date | DateTimeString,
-      Date | DateTimeString
-    >;
+    updatedAt: ColumnType<Date | null, Date | string, Date | string>;
   };
   UserSetting: {
-    id: Generated<UUIDString>;
+    id: Generated<string>;
     language: "jp" | "en";
-    userID: UUIDString;
+    userID: string;
     createdAt: Timestamp;
-    updatedAt: ColumnType<
-      Date | DateTimeString | null,
-      Date | DateTimeString,
-      Date | DateTimeString
-    >;
+    updatedAt: ColumnType<Date | null, Date | string, Date | string>;
   };
 }
 

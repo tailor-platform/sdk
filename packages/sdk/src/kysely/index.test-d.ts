@@ -4,11 +4,8 @@ import type {
   ObjectColumnType,
   ArrayColumnType,
   Timestamp,
-  DateString,
-  DateTimeString,
   NamespaceInsertable,
   NamespaceSelectable,
-  UUIDString,
 } from "./index";
 
 // Sanity check: verify typecheck catches errors
@@ -23,17 +20,15 @@ describe("typecheck sanity", () => {
 type TestNamespace = {
   testNs: {
     Receipt: {
-      id: Generated<UUIDString>;
-      // 1. plain date
-      receiptDate: DateString;
-      // 2. plain timestamp
-      createdAt: Timestamp;
-      // 3. timestamp inside object
+      id: Generated<string>;
+      // 1. plain timestamp
+      receiptDate: Timestamp;
+      // 2. timestamp inside object
       dueSchedule: ObjectColumnType<{
         dueDate: Timestamp;
         reminderAt?: Timestamp | null;
       }>;
-      // 4. timestamp inside object x array
+      // 3. timestamp inside object x array
       metadata: ArrayColumnType<
         ObjectColumnType<{
           created: Timestamp;
@@ -41,19 +36,18 @@ type TestNamespace = {
           version: number;
         }>
       >;
-      // 5. timestamp array
+      // 4. timestamp array
       eventDates: ArrayColumnType<Timestamp>;
     };
   };
 };
 
 describe("NamespaceInsertable", () => {
-  test("should accept strict date strings and datetimes on insert", () => {
+  test("should accept Date and string for nested datetime on insert", () => {
     type ReceiptInsertable = NamespaceInsertable<TestNamespace, "Receipt">;
 
     assertType<ReceiptInsertable>({
-      receiptDate: "2024-01-01",
-      createdAt: new Date(),
+      receiptDate: new Date(),
       dueSchedule: {
         dueDate: new Date(),
       },
@@ -63,49 +57,37 @@ describe("NamespaceInsertable", () => {
 
     assertType<ReceiptInsertable>({
       receiptDate: "2024-01-01",
-      createdAt: "2024-01-01T00:00:00Z",
       dueSchedule: {
-        dueDate: "2024-01-01T00:00:00Z",
+        dueDate: "2024-01-01",
       },
-      metadata: [{ created: "2024-01-01T00:00:00Z", version: 1 }],
-      eventDates: ["2024-01-01T00:00:00Z"],
+      metadata: [{ created: "2024-01-01", version: 1 }],
+      eventDates: ["2024-01-01"],
     });
   });
 });
 
 describe("NamespaceSelectable", () => {
-  test("should return strict date strings and datetimes", () => {
+  test("should return Date for both top-level and nested datetime", () => {
     type ReceiptSelectable = NamespaceSelectable<TestNamespace, "Receipt">;
 
-    expectTypeOf<ReceiptSelectable["receiptDate"]>().toEqualTypeOf<DateString>();
-    expectTypeOf<ReceiptSelectable["createdAt"]>().toEqualTypeOf<Date | DateTimeString>();
-    expectTypeOf<ReceiptSelectable["dueSchedule"]["dueDate"]>().toEqualTypeOf<
-      Date | DateTimeString
-    >();
+    expectTypeOf<ReceiptSelectable["receiptDate"]>().toEqualTypeOf<Date>();
+    expectTypeOf<ReceiptSelectable["dueSchedule"]["dueDate"]>().toEqualTypeOf<Date>();
     // Nullable nested fields should be required in select
-    expectTypeOf<ReceiptSelectable["dueSchedule"]["reminderAt"]>().toEqualTypeOf<
-      Date | DateTimeString | null
-    >();
+    expectTypeOf<ReceiptSelectable["dueSchedule"]["reminderAt"]>().toEqualTypeOf<Date | null>();
   });
 
   test("should return array of resolved objects for ObjectArrayColumnType", () => {
     type ReceiptSelectable = NamespaceSelectable<TestNamespace, "Receipt">;
 
     expectTypeOf<ReceiptSelectable["metadata"]>().toEqualTypeOf<
-      {
-        created: Date | DateTimeString;
-        lastUpdated: Date | DateTimeString | null;
-        version: number;
-      }[]
+      { created: Date; lastUpdated: Date | null; version: number }[]
     >();
-    expectTypeOf<ReceiptSelectable["metadata"][0]["created"]>().toEqualTypeOf<
-      Date | DateTimeString
-    >();
+    expectTypeOf<ReceiptSelectable["metadata"][0]["created"]>().toEqualTypeOf<Date>();
   });
 
-  test("should return datetime arrays for timestamp array", () => {
+  test("should return Date[] for timestamp array", () => {
     type ReceiptSelectable = NamespaceSelectable<TestNamespace, "Receipt">;
 
-    expectTypeOf<ReceiptSelectable["eventDates"]>().toEqualTypeOf<(Date | DateTimeString)[]>();
+    expectTypeOf<ReceiptSelectable["eventDates"]>().toEqualTypeOf<Date[]>();
   });
 });
