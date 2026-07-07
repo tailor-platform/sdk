@@ -2770,7 +2770,8 @@ function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSch
     const fields = createSnapshotRecord<SnapshotFieldConfig>();
     for (const [fieldName, field] of Object.entries(type.fields)) {
       if (SYSTEM_FIELDS.has(fieldName)) continue;
-      fields[fieldName] = field;
+      const { hooks: _hooks, validate: _validate, default: _default, ...rest } = field;
+      fields[fieldName] = rest;
     }
     types[typeName] = { ...type, fields };
   }
