@@ -15,14 +15,6 @@ import {
 } from "./snapshot";
 import type { MigrationDiff } from "./diff-calculator";
 
-type UsedUtilityType =
-  | "Timestamp"
-  | "Serial"
-  | "DateString"
-  | "DateTimeString"
-  | "DecimalString"
-  | "TimeString";
-
 /**
  * Information about enum value changes
  */
@@ -140,37 +132,26 @@ function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationD
       };
 
   // Track which utility types are used
-  const usedUtilityTypes = new Set<UsedUtilityType>();
+  const usedUtilityTypes = new Set<"Timestamp" | "Serial">();
 
   // Generate type definitions
   const typeDefinitions: string[] = [];
   for (const type of types) {
     const result = generateTableType(type, breakingChangeFields);
-    for (const utilityType of result.usedUtilityTypes) {
-      usedUtilityTypes.add(utilityType);
-    }
+    if (result.usedTimestamp) usedUtilityTypes.add("Timestamp");
     typeDefinitions.push(result.typeDef);
   }
 
   // Build imports
   // ColumnType is always needed for Generated and Timestamp utility types
-  const imports: string[] = [
-    "type ColumnType",
-    "type Transaction as KyselyTransaction",
-    "type UUIDString",
-  ];
-  if (usedUtilityTypes.has("DateString")) imports.push("type DateString");
-  if (usedUtilityTypes.has("DateTimeString")) imports.push("type DateTimeString");
-  if (usedUtilityTypes.has("DecimalString")) imports.push("type DecimalString");
-  if (usedUtilityTypes.has("TimeString")) imports.push("type TimeString");
+  const imports: string[] = ["type ColumnType", "type Transaction as KyselyTransaction"];
 
   // Build utility type declarations
   const utilityTypeDeclarations: string[] = [];
   if (usedUtilityTypes.has("Timestamp")) {
     utilityTypeDeclarations.push(
-      "type Timestamp = ColumnType<Date | DateTimeString, Date | DateTimeString, Date | DateTimeString>;",
+      "type Timestamp = ColumnType<Date, Date | string, Date | string>;",
     );
-    if (!usedUtilityTypes.has("DateTimeString")) imports.push("type DateTimeString");
   }
   utilityTypeDeclarations.push(
     "type Generated<T> = T extends ColumnType<infer S, infer I, infer U>\n  ? ColumnType<S, I | undefined, U>\n  : ColumnType<T, T | undefined, T>;",
@@ -243,22 +224,22 @@ function generateEmptyDbTypes(namespace: string): string {
  * Generate table type definition from a snapshot type
  * @param {TailorDBSnapshotType} type - Snapshot type
  * @param {BreakingChangeFieldInfo} breakingChangeFields - Breaking change field info
- * @returns Generated type and utility type usage
+ * @returns {{ typeDef: string; usedTimestamp: boolean; usedColumnType: boolean }} Generated type and utility type usage
  */
 function generateTableType(
   type: TailorDBSnapshotType,
   breakingChangeFields: BreakingChangeFieldInfo,
 ): {
   typeDef: string;
-  usedUtilityTypes: Set<UsedUtilityType>;
+  usedTimestamp: boolean;
   usedColumnType: boolean;
 } {
   const fieldLines: string[] = [];
-  const usedUtilityTypes = new Set<UsedUtilityType>();
+  let usedTimestamp = false;
   let usedColumnType = false;
 
   // Add id field first
-  fieldLines.push("    id: Generated<UUIDString>;");
+  fieldLines.push("    id: Generated<string>;");
 
   // Get fields that are changing from optional to required for this type
   const optionalToRequiredFields =
@@ -277,9 +258,7 @@ function generateTableType(
     const enumValueChange = enumValueChangesForType.get(fieldName);
     const result = generateFieldType(fieldConfig, isOptionalToRequired, enumValueChange);
     fieldLines.push(`    ${fieldName}: ${result.type};`);
-    for (const utilityType of result.usedUtilityTypes) {
-      usedUtilityTypes.add(utilityType);
-    }
+    usedTimestamp = usedTimestamp || result.usedTimestamp;
     usedColumnType = usedColumnType || result.usedColumnType;
   }
 
@@ -289,43 +268,37 @@ function generateTableType(
     // Treat as optional→required change (isOptionalToRequired: true)
     const result = generateFieldType(fieldConfig, true, undefined);
     fieldLines.push(`    ${fieldName}: ${result.type};`);
-    for (const utilityType of result.usedUtilityTypes) {
-      usedUtilityTypes.add(utilityType);
-    }
+    usedTimestamp = usedTimestamp || result.usedTimestamp;
     usedColumnType = usedColumnType || result.usedColumnType;
   }
 
   const typeDef = `  ${type.name}: {\n${fieldLines.join("\n")}\n  }`;
 
-  return { typeDef, usedUtilityTypes, usedColumnType };
+  return { typeDef, usedTimestamp, usedColumnType };
 }
 
 function mapToTsType(fieldType: string): {
   type: string;
-  usedUtilityTypes: Set<UsedUtilityType>;
+  usedTimestamp: boolean;
 } {
   switch (fieldType) {
     case "uuid":
-      return { type: "UUIDString", usedUtilityTypes: new Set() };
     case "string":
-      return { type: "string", usedUtilityTypes: new Set() };
     case "decimal":
-      return { type: "DecimalString", usedUtilityTypes: new Set(["DecimalString"]) };
+      return { type: "string", usedTimestamp: false };
     case "integer":
     case "float":
     case "number":
-      return { type: "number", usedUtilityTypes: new Set() };
+      return { type: "number", usedTimestamp: false };
     case "date":
-      return { type: "DateString", usedUtilityTypes: new Set(["DateString"]) };
+      return { type: "string", usedTimestamp: false };
     case "datetime":
-      return { type: "Timestamp", usedUtilityTypes: new Set(["Timestamp"]) };
-    case "time":
-      return { type: "TimeString", usedUtilityTypes: new Set(["TimeString"]) };
+      return { type: "Timestamp", usedTimestamp: true };
     case "bool":
     case "boolean":
-      return { type: "boolean", usedUtilityTypes: new Set() };
+      return { type: "boolean", usedTimestamp: false };
     default:
-      return { type: "string", usedUtilityTypes: new Set() };
+      return { type: "string", usedTimestamp: false };
   }
 }
 
@@ -353,36 +326,22 @@ function generateEnumChangeColumnType(
   return `ColumnType<${selectType}, ${afterType}, ${afterType}>`;
 }
 
-function generateOptionalToRequiredDateColumnType(
-  config: SnapshotFieldConfig,
-): { type: string; usedUtilityTypes: Set<UsedUtilityType> } | null {
+function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): string | null {
   if (config.type !== "date" && config.type !== "datetime") return null;
 
   if (config.type === "date") {
     if (config.array) {
-      return {
-        type: "ColumnType<DateString[] | null, DateString[], DateString[]>",
-        usedUtilityTypes: new Set(["DateString"]),
-      };
+      return "ColumnType<string[] | null, string[], string[]>";
     }
 
-    return {
-      type: "ColumnType<DateString | null, DateString, DateString>",
-      usedUtilityTypes: new Set(["DateString"]),
-    };
+    return "ColumnType<string | null, string, string>";
   }
 
   if (config.array) {
-    return {
-      type: "ColumnType<(Date | DateTimeString)[] | null, (Date | DateTimeString)[], (Date | DateTimeString)[]>",
-      usedUtilityTypes: new Set(["DateTimeString"]),
-    };
+    return "ColumnType<Date[] | null, (Date | string)[], (Date | string)[]>";
   }
 
-  return {
-    type: "ColumnType<Date | DateTimeString | null, Date | DateTimeString, Date | DateTimeString>",
-    usedUtilityTypes: new Set(["DateTimeString"]),
-  };
+  return "ColumnType<Date | null, Date | string, Date | string>";
 }
 
 /**
@@ -390,7 +349,7 @@ function generateOptionalToRequiredDateColumnType(
  * @param {SnapshotFieldConfig} config - Field configuration
  * @param {boolean} isOptionalToRequired - Whether this field is changing from optional to required
  * @param {EnumValueChange} [enumValueChange] - Enum value change info if applicable
- * @returns Generated type string and utility type usage
+ * @returns {{ type: string; usedTimestamp: boolean; usedColumnType: boolean }} Generated type string and utility type usage
  */
 function generateFieldType(
   config: SnapshotFieldConfig,
@@ -398,21 +357,21 @@ function generateFieldType(
   enumValueChange?: EnumValueChange,
 ): {
   type: string;
-  usedUtilityTypes: Set<UsedUtilityType>;
+  usedTimestamp: boolean;
   usedColumnType: boolean;
 } {
   // Handle enum value changes specially
   if (enumValueChange) {
     return {
       type: generateEnumChangeColumnType(enumValueChange, config),
-      usedUtilityTypes: new Set(),
+      usedTimestamp: false,
       usedColumnType: true,
     };
   }
 
   // Get base type
   let baseType: string;
-  let usedUtilityTypes = new Set<UsedUtilityType>();
+  let usedTimestamp = false;
 
   if (config.type === "enum") {
     const enumValues = config.allowedValues?.map((v) => v.value) ?? [];
@@ -420,7 +379,7 @@ function generateFieldType(
   } else {
     const mapped = mapToTsType(config.type);
     baseType = mapped.type;
-    usedUtilityTypes = mapped.usedUtilityTypes;
+    usedTimestamp = mapped.usedTimestamp;
   }
 
   // Apply array modifier
@@ -436,8 +395,8 @@ function generateFieldType(
     const dateColumnType = generateOptionalToRequiredDateColumnType(config);
     if (dateColumnType) {
       return {
-        type: dateColumnType.type,
-        usedUtilityTypes: dateColumnType.usedUtilityTypes,
+        type: dateColumnType,
+        usedTimestamp: false,
         usedColumnType: true,
       };
     }
@@ -447,7 +406,7 @@ function generateFieldType(
     // INSERT/UPDATE requires T (must provide a value)
     return {
       type: `ColumnType<${type} | null, ${type}, ${type}>`,
-      usedUtilityTypes,
+      usedTimestamp,
       usedColumnType: true,
     };
   }
@@ -456,7 +415,7 @@ function generateFieldType(
     type = `${type} | null`;
   }
 
-  return { type, usedUtilityTypes, usedColumnType: false };
+  return { type, usedTimestamp, usedColumnType: false };
 }
 
 /**

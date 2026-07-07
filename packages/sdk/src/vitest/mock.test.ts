@@ -583,28 +583,19 @@ describe("mock", () => {
     test("records calls with method, args, namespace", async () => {
       using idp = mockIdp();
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
-      await client.user("11111111-1111-4111-8111-111111111111");
-      expect(idp.calls).toEqual([
-        { method: "user", args: ["11111111-1111-4111-8111-111111111111"], namespace: "ns" },
-      ]);
+      await client.user("u-1");
+      expect(idp.calls).toEqual([{ method: "user", args: ["u-1"], namespace: "ns" }]);
     });
 
     test("enqueueResults provides ordered responses", async () => {
       using idp = mockIdp();
-      idp.enqueueResults(
-        { id: "11111111-1111-4111-8111-111111111111", name: "alice", disabled: false },
-        true,
-      );
+      idp.enqueueResults({ id: "u-1", name: "alice", disabled: false }, true);
 
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
-      const user = await client.user("11111111-1111-4111-8111-111111111111");
-      expect(user).toEqual({
-        id: "11111111-1111-4111-8111-111111111111",
-        name: "alice",
-        disabled: false,
-      });
+      const user = await client.user("u-1");
+      expect(user).toEqual({ id: "u-1", name: "alice", disabled: false });
 
-      const deleted = await client.deleteUser("11111111-1111-4111-8111-111111111111");
+      const deleted = await client.deleteUser("u-1");
       expect(deleted).toBe(true);
     });
 
@@ -613,7 +604,7 @@ describe("mock", () => {
       idp.setResolver((method) => {
         if (method === "users")
           return {
-            users: [{ id: "11111111-1111-4111-8111-111111111111", name: "bob", disabled: false }],
+            users: [{ id: "u-1", name: "bob", disabled: false }],
             nextPageToken: null,
             totalCount: 1,
           };
@@ -628,7 +619,7 @@ describe("mock", () => {
     test("reset clears state", async () => {
       using idp = mockIdp();
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
-      await client.user("11111111-1111-4111-8111-111111111111");
+      await client.user("u-1");
       idp.reset();
       expect(idp.calls).toHaveLength(0);
     });

@@ -1,7 +1,6 @@
 import {
   createGetDB,
   type Generated,
-  type UUIDString,
   type Timestamp,
   type ObjectColumnType,
   type Serial,
@@ -17,7 +16,7 @@ import {
 export interface Namespace {
   "tailordb": {
     Customer: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       name: string;
       email: string;
       phone: string | null;
@@ -32,9 +31,9 @@ export interface Namespace {
     }
 
     Invoice: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       invoiceNumber: Serial<string>;
-      salesOrderID: UUIDString;
+      salesOrderID: string;
       amount: number | null;
       sequentialId: Serial<number>;
       status: "draft" | "sent" | "paid" | "cancelled" | null;
@@ -43,7 +42,7 @@ export interface Namespace {
     }
 
     NestedProfile: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       userInfo: ObjectColumnType<{
         name: string;
         age?: number | null;
@@ -62,13 +61,13 @@ export interface Namespace {
     }
 
     PurchaseOrder: {
-      id: Generated<UUIDString>;
-      supplierID: UUIDString;
+      id: Generated<string>;
+      supplierID: string;
       totalPrice: number;
       discount: number | null;
       status: string;
       attachedFiles: {
-        id: UUIDString;
+        id: string;
         name: string;
         size: number;
         type: "text" | "image";
@@ -78,9 +77,9 @@ export interface Namespace {
     }
 
     SalesOrder: {
-      id: Generated<UUIDString>;
-      customerID: UUIDString;
-      approvedByUserIDs: UUIDString[] | null;
+      id: Generated<string>;
+      customerID: string;
+      approvedByUserIDs: string[] | null;
       totalPrice: number | null;
       discount: number | null;
       status: string | null;
@@ -91,22 +90,22 @@ export interface Namespace {
     }
 
     SalesOrderCreated: {
-      id: Generated<UUIDString>;
-      salesOrderID: UUIDString;
-      customerID: UUIDString;
+      id: Generated<string>;
+      salesOrderID: string;
+      customerID: string;
       totalPrice: number | null;
       status: string | null;
     }
 
     Selfie: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       name: string;
-      parentID: UUIDString | null;
-      dependId: UUIDString | null;
+      parentID: string | null;
+      dependId: string | null;
     }
 
     Supplier: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       name: string;
       phone: string;
       fax: string | null;
@@ -120,7 +119,7 @@ export interface Namespace {
     }
 
     User: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       name: string;
       email: string;
       status: string | null;
@@ -131,24 +130,24 @@ export interface Namespace {
     }
 
     UserLog: {
-      id: Generated<UUIDString>;
-      userID: UUIDString;
+      id: Generated<string>;
+      userID: string;
       message: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }
 
     UserSetting: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       language: "jp" | "en";
-      userID: UUIDString;
+      userID: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }
   },
   "analyticsdb": {
     Event: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       name: "CLICK" | "VIEW" | "PURCHASE";
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
