@@ -95,12 +95,12 @@ type WithDBFieldSerial<Defined> = Defined & {
   serial: true;
   hooks: { create: false; update: false };
 };
-type WithDBFieldCloneOptions<
-  Defined extends DefinedDBFieldMetadata,
-  NewOpt extends FieldOptions,
-> = Omit<Defined, "array"> & {
-  array: NewOpt extends { array: true } ? true : Defined["array"];
-};
+type WithDBFieldCloneOptions<Defined extends DefinedDBFieldMetadata, NewOpt extends FieldOptions> =
+  IsAny<Defined> extends true
+    ? Defined
+    : Omit<Defined, "array"> & {
+        array: NewOpt extends { array: true } ? true : Defined["array"];
+      };
 type FileKeyConflictError<
   Fields extends Record<string, TailorAnyDBField>,
   User extends object,
@@ -159,17 +159,21 @@ type DBFieldIndexMethod<Defined extends DefinedDBFieldMetadata, Output> =
     ? DBFieldIndexFn<Defined, Output>
     : Defined extends { index: unknown }
       ? TypeLevelError<".index() has already been set">
-      : Defined extends { array: true }
-        ? TypeLevelError<"index cannot be set on array fields">
-        : DBFieldIndexFn<Defined, Output>;
+      : boolean extends Defined["array"]
+        ? DBFieldIndexFn<Defined, Output> | TypeLevelError<"index cannot be set on array fields">
+        : Defined extends { array: true }
+          ? TypeLevelError<"index cannot be set on array fields">
+          : DBFieldIndexFn<Defined, Output>;
 type DBFieldUniqueMethod<Defined extends DefinedDBFieldMetadata, Output> =
   IsAny<Defined> extends true
     ? DBFieldUniqueFn<Defined, Output>
     : Defined extends { unique: unknown }
       ? TypeLevelError<".unique() has already been set">
-      : Defined extends { array: true }
-        ? TypeLevelError<"unique cannot be set on array fields">
-        : DBFieldUniqueFn<Defined, Output>;
+      : boolean extends Defined["array"]
+        ? DBFieldUniqueFn<Defined, Output> | TypeLevelError<"unique cannot be set on array fields">
+        : Defined extends { array: true }
+          ? TypeLevelError<"unique cannot be set on array fields">
+          : DBFieldUniqueFn<Defined, Output>;
 type DBFieldVectorMethod<Defined extends DefinedDBFieldMetadata, Output> =
   IsAny<Defined> extends true
     ? DBFieldVectorFn<Defined, Output>
@@ -336,12 +340,7 @@ export interface TailorDBType<
     options: Opt,
   ): {
     [P in K]: Fields[P] extends TailorDBField<infer D, infer _O>
-      ? TailorDBField<
-          Omit<D, "array"> & {
-            array: Opt extends { array: true } ? true : D["array"];
-          },
-          FieldOutput<TailorToTs[D["type"]], Opt>
-        >
+      ? TailorDBField<WithDBFieldCloneOptions<D, Opt>, FieldOutput<TailorToTs[D["type"]], Opt>>
       : never;
   };
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
