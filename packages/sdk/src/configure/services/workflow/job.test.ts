@@ -111,7 +111,7 @@ describe("WorkflowJob type inference", () => {
     });
     try {
       const invoker: TailorPrincipal = {
-        id: "11111111-1111-4111-8111-111111111111",
+        id: "principal-1",
         type: "user",
         workspaceId: "workspace-1",
         attributes: {},
@@ -127,9 +127,7 @@ describe("WorkflowJob type inference", () => {
       });
 
       await withRegisteredJobRuntime(async () => {
-        await expect(parent.body(undefined, { env: {}, invoker })).resolves.toBe(
-          "11111111-1111-4111-8111-111111111111",
-        );
+        await expect(parent.body(undefined, { env: {}, invoker })).resolves.toBe("principal-1");
       });
     } finally {
       if (descriptor) {
@@ -142,7 +140,7 @@ describe("WorkflowJob type inference", () => {
 
   test("direct body calls propagate invoker to triggered child jobs", async () => {
     const invoker: TailorPrincipal = {
-      id: "11111111-1111-4111-8111-111111111111",
+      id: "principal-1",
       type: "user",
       workspaceId: "workspace-1",
       attributes: { role: "ADMIN" },
@@ -158,22 +156,20 @@ describe("WorkflowJob type inference", () => {
     });
 
     await withRegisteredJobRuntime(async () => {
-      await expect(parent.body(undefined, { env: {}, invoker })).resolves.toBe(
-        "11111111-1111-4111-8111-111111111111",
-      );
+      await expect(parent.body(undefined, { env: {}, invoker })).resolves.toBe("principal-1");
     });
   });
 
   test("concurrent direct body calls isolate invokers for child triggers", async () => {
     const firstInvoker: TailorPrincipal = {
-      id: "11111111-1111-4111-8111-111111111111",
+      id: "principal-1",
       type: "user",
       workspaceId: "workspace-1",
       attributes: {},
       attributeList: [],
     };
     const secondInvoker: TailorPrincipal = {
-      id: "22222222-2222-4222-8222-222222222222",
+      id: "principal-2",
       type: "machine_user",
       workspaceId: "workspace-1",
       attributes: {},
@@ -208,9 +204,9 @@ describe("WorkflowJob type inference", () => {
       const second = parent.body({ gate: "second" }, { env: {}, invoker: secondInvoker });
 
       releaseFirst();
-      await expect(first).resolves.toBe("11111111-1111-4111-8111-111111111111");
+      await expect(first).resolves.toBe("principal-1");
       releaseSecond();
-      await expect(second).resolves.toBe("22222222-2222-4222-8222-222222222222");
+      await expect(second).resolves.toBe("principal-2");
     });
   });
 

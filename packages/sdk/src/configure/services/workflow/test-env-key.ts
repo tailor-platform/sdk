@@ -59,7 +59,7 @@ export function withWorkflowTestInvoker<T>(invoker: TailorPrincipal | null, run:
 }
 
 type RuntimeInvoker = {
-  id: TailorPrincipal["id"];
+  id: string;
   type: "user" | "machine_user";
   workspaceId: string;
   attributes?: string[] | TailorPrincipal["attributes"];

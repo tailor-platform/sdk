@@ -69,14 +69,14 @@ describe("buildExecutorArgsExpr", () => {
           namespaceName: "app",
           actor: {
             userType: "USER_TYPE_USER",
-            userId: "11111111-1111-4111-8111-111111111111",
+            userId: "user-1",
             workspaceId: "workspace-1",
             attributeMap: { role: "admin" },
             attributes: ["role"],
           },
         }).actor,
       ).toEqual({
-        id: "11111111-1111-4111-8111-111111111111",
+        id: "user-1",
         type: "user",
         workspaceId: "workspace-1",
         attributes: { role: "admin" },
@@ -89,7 +89,7 @@ describe("buildExecutorArgsExpr", () => {
       const actors = [
         null,
         undefined,
-        { userType: "USER_TYPE_UNSPECIFIED", userId: "11111111-1111-4111-8111-111111111111" },
+        { userType: "USER_TYPE_UNSPECIFIED", userId: "user-1" },
         { userType: "USER_TYPE_USER", userId: nilUuid },
         { userType: "USER_TYPE_USER" },
       ];
@@ -210,7 +210,7 @@ describe("buildResolverOperationHookExpr", () => {
     const users = [
       null,
       undefined,
-      { type: "USER_TYPE_UNSPECIFIED", id: "11111111-1111-4111-8111-111111111111" },
+      { type: "USER_TYPE_UNSPECIFIED", id: "user-1" },
       { type: "USER_TYPE_USER", id: nilUuid },
     ];
     for (const user of users) {
@@ -223,14 +223,14 @@ describe("INVOKER_EXPR", () => {
   test("maps invoker payloads to TailorPrincipal shape", () => {
     expect(
       runInvokerExpr({
-        id: "11111111-1111-4111-8111-111111111111",
+        id: "user-1",
         type: "user",
         workspaceId: "workspace-1",
         attributeMap: { role: "member" },
         attributes: ["role"],
       }),
     ).toEqual({
-      id: "11111111-1111-4111-8111-111111111111",
+      id: "user-1",
       type: "user",
       workspaceId: "workspace-1",
       attributes: { role: "member" },
