@@ -161,7 +161,7 @@ describe("parser schemas", () => {
     const result = TailorFieldSchema.safeParse({
       type: "string",
       metadata: {
-        validate: [() => true, [() => true, "Invalid value"]],
+        validate: [() => true, () => "Invalid value"],
       },
       fields: {},
       builderProperty: true,
