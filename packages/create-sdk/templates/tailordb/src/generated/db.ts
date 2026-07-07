@@ -1,7 +1,6 @@
 import {
   createGetDB,
   type Generated,
-  type UUIDString,
   type Timestamp,
   type ObjectColumnType,
   type NamespaceDB,
@@ -16,17 +15,17 @@ import {
 export interface Namespace {
   "main-db": {
     Category: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       name: string;
       description: string | null;
-      parentCategoryId: UUIDString | null;
+      parentCategoryId: string | null;
     }
 
     Comment: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       body: string;
-      taskId: UUIDString;
-      authorId: UUIDString;
+      taskId: string;
+      authorId: string;
       metadata: ObjectColumnType<{
         source: string;
         editedAt?: Timestamp | null;
@@ -37,21 +36,21 @@ export interface Namespace {
     }
 
     Task: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       title: string;
       description: string | null;
       status: "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED";
       priority: number;
       dueDate: Timestamp | null;
-      assigneeId: UUIDString | null;
-      categoryId: UUIDString | null;
+      assigneeId: string | null;
+      categoryId: string | null;
       isArchived: Generated<boolean>;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }
 
     User: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       name: string;
       email: string;
       role: "ADMIN" | "MEMBER" | "VIEWER";

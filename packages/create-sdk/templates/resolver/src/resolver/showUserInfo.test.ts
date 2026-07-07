@@ -19,7 +19,7 @@ describe("showUserInfo resolver", () => {
 
   test("returns custom user info", async () => {
     const customCaller = {
-      id: "123e4567-e89b-12d3-a456-426614174000",
+      id: "user-123",
       type: "machine_user" as const,
       workspaceId: "ws-456",
       attributes: { role: "admin" },
@@ -32,7 +32,7 @@ describe("showUserInfo resolver", () => {
       env: { appName: "Resolver Template", version: 1 },
     });
     expect(result).toEqual({
-      userId: "123e4567-e89b-12d3-a456-426614174000",
+      userId: "user-123",
       userType: "machine_user",
       workspaceId: "ws-456",
     });

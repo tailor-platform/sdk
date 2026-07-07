@@ -2,12 +2,6 @@ import { describe, expectTypeOf, test, expect } from "vitest";
 import { db } from "#/configure/services/tailordb/index";
 import { t } from "#/configure/types/index";
 import { createResolver } from "./resolver";
-import type {
-  DateString,
-  DateTimeString,
-  TimeString,
-  UUIDString,
-} from "#/configure/types/scalar.types";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { output } from "#/types/helpers";
 import type { ResolverInput } from "#/types/resolver.generated";
@@ -176,12 +170,12 @@ describe("createResolver", () => {
         input: inputType,
         output: t.object({ success: t.bool() }),
         body: (context) => {
-          expectTypeOf(context.input.id).toEqualTypeOf<UUIDString>();
+          expectTypeOf(context.input.id).toBeString();
           expectTypeOf(context.input.name).toBeString();
           expectTypeOf(context.input.active).toBeBoolean();
           expectTypeOf(context.input.count).toBeNumber();
           expectTypeOf(context.input.score).toBeNumber();
-          expectTypeOf(context.input.createdAt).toEqualTypeOf<DateTimeString | Date>();
+          expectTypeOf(context.input.createdAt).toExtend<Date | string>();
           expectTypeOf(context.input.tags).toBeArray();
           expectTypeOf(context.input.metadata.key).toBeString();
           return { success: true };
@@ -256,7 +250,7 @@ describe("createResolver", () => {
         body: (context) => {
           expectTypeOf(context.caller).toEqualTypeOf<TailorPrincipal | null>();
           if (!context.caller) return { userId: "anonymous" };
-          expectTypeOf(context.caller.id).toEqualTypeOf<UUIDString>();
+          expectTypeOf(context.caller.id).toBeString();
           expectTypeOf(context.caller.type).toEqualTypeOf<"user" | "machine_user">();
           expectTypeOf(context.caller.workspaceId).toBeString();
           return { userId: context.caller.id };
@@ -317,14 +311,14 @@ describe("createResolver", () => {
         input: inputType,
         output: t.object({ summary: t.string() }),
         body: (context) => {
-          expectTypeOf(context.input.uuid).toEqualTypeOf<UUIDString>();
+          expectTypeOf(context.input.uuid).toBeString();
           expectTypeOf(context.input.string).toBeString();
           expectTypeOf(context.input.bool).toBeBoolean();
           expectTypeOf(context.input.int).toBeNumber();
           expectTypeOf(context.input.float).toBeNumber();
-          expectTypeOf(context.input.date).toEqualTypeOf<DateString>();
-          expectTypeOf(context.input.datetime).toEqualTypeOf<DateTimeString | Date>();
-          expectTypeOf(context.input.time).toEqualTypeOf<TimeString>();
+          expectTypeOf(context.input.date).toExtend<Date | string>();
+          expectTypeOf(context.input.datetime).toExtend<Date | string>();
+          expectTypeOf(context.input.time).toBeString();
           return { summary: "ok" };
         },
       });

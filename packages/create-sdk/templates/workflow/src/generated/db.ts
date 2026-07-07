@@ -1,7 +1,6 @@
 import {
   createGetDB,
   type Generated,
-  type UUIDString,
   type Timestamp,
   type NamespaceDB,
   type NamespaceInsertable,
@@ -15,7 +14,7 @@ import {
 export interface Namespace {
   "main-db": {
     Order: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       customerName: string;
       amount: number;
       status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
@@ -24,7 +23,7 @@ export interface Namespace {
     }
 
     User: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       name: string;
       email: string;
       age: number;

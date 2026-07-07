@@ -2,38 +2,7 @@ import multiline from "#/utils/multiline";
 import { type KyselyNamespaceMetadata, type KyselyTypeMetadata } from "./types";
 import type { OperatorFieldConfig, TailorDBType } from "#/parser/service/tailordb/types";
 
-type UsedUtilityTypes = {
-  Timestamp: boolean;
-  Serial: boolean;
-  DateString: boolean;
-  DecimalString: boolean;
-  TimeString: boolean;
-};
-
-function createUsedUtilityTypes(): UsedUtilityTypes {
-  return {
-    Timestamp: false,
-    Serial: false,
-    DateString: false,
-    DecimalString: false,
-    TimeString: false,
-  };
-}
-
-function mergeUsedUtilityTypes(
-  results: { usedUtilityTypes: UsedUtilityTypes }[],
-): UsedUtilityTypes {
-  return results.reduce(
-    (acc, result) => ({
-      Timestamp: acc.Timestamp || result.usedUtilityTypes.Timestamp,
-      Serial: acc.Serial || result.usedUtilityTypes.Serial,
-      DateString: acc.DateString || result.usedUtilityTypes.DateString,
-      DecimalString: acc.DecimalString || result.usedUtilityTypes.DecimalString,
-      TimeString: acc.TimeString || result.usedUtilityTypes.TimeString,
-    }),
-    createUsedUtilityTypes(),
-  );
-}
+type UsedUtilityTypes = { Timestamp: boolean; Serial: boolean };
 
 type FieldTypeResult = {
   type: string;
@@ -69,7 +38,7 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
   if (!fields || typeof fields !== "object") {
     return {
       type: "string",
-      usedUtilityTypes: createUsedUtilityTypes(),
+      usedUtilityTypes: { Timestamp: false, Serial: false },
     };
   }
 
@@ -82,7 +51,13 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     };
   });
 
-  const aggregatedUtilityTypes = mergeUsedUtilityTypes(fieldResults);
+  const aggregatedUtilityTypes = fieldResults.reduce(
+    (acc, result) => ({
+      Timestamp: acc.Timestamp || result.usedUtilityTypes.Timestamp,
+      Serial: acc.Serial || result.usedUtilityTypes.Serial,
+    }),
+    { Timestamp: false, Serial: false },
+  );
 
   const fieldTypes = fieldResults.map((r) => r.fieldType);
   const obj = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
@@ -101,35 +76,25 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
  */
 function getBaseType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
   const fieldType = fieldConfig.type;
-  const usedUtilityTypes = createUsedUtilityTypes();
+  const usedUtilityTypes = { Timestamp: false, Serial: false };
 
   let type: string;
   switch (fieldType) {
     case "uuid":
-      type = "UUIDString";
-      break;
     case "string":
-      type = "string";
-      break;
     case "decimal":
-      usedUtilityTypes.DecimalString = true;
-      type = "DecimalString";
+      type = "string";
       break;
     case "integer":
     case "float":
       type = "number";
       break;
+    case "date":
+      type = "string";
+      break;
     case "datetime":
       usedUtilityTypes.Timestamp = true;
       type = "Timestamp";
-      break;
-    case "date":
-      usedUtilityTypes.DateString = true;
-      type = "DateString";
-      break;
-    case "time":
-      usedUtilityTypes.TimeString = true;
-      type = "TimeString";
       break;
     case "bool":
     case "boolean":
@@ -210,11 +175,18 @@ function generateTableInterface(type: TailorDBType): {
   }));
 
   const fields = [
-    "id: Generated<UUIDString>;",
+    "id: Generated<string>;",
     ...fieldResults.map((result) => `${result.fieldName}: ${result.type};`),
   ];
 
-  const aggregatedUtilityTypes = mergeUsedUtilityTypes(fieldResults);
+  const aggregatedUtilityTypes = fieldResults.reduce(
+    (acc, result) => ({
+      Timestamp: acc.Timestamp || result.usedUtilityTypes.Timestamp,
+
+      Serial: acc.Serial || result.usedUtilityTypes.Serial,
+    }),
+    { Timestamp: false, Serial: false },
+  );
 
   const typeDef = multiline /* ts */ `
     ${type.name}: {
@@ -255,25 +227,13 @@ export function generateUnifiedKyselyTypes(namespaceData: KyselyNamespaceMetadat
     (acc, ns) => ({
       Timestamp: acc.Timestamp || ns.usedUtilityTypes.Timestamp,
       Serial: acc.Serial || ns.usedUtilityTypes.Serial,
-      DateString: acc.DateString || ns.usedUtilityTypes.DateString,
-      DecimalString: acc.DecimalString || ns.usedUtilityTypes.DecimalString,
-      TimeString: acc.TimeString || ns.usedUtilityTypes.TimeString,
     }),
-    createUsedUtilityTypes(),
+    { Timestamp: false, Serial: false },
   );
 
-  const utilityTypeImports: string[] = ["type Generated", "type UUIDString"];
+  const utilityTypeImports: string[] = ["type Generated"];
   if (globalUsedUtilityTypes.Timestamp) {
     utilityTypeImports.push("type Timestamp");
-  }
-  if (globalUsedUtilityTypes.DateString) {
-    utilityTypeImports.push("type DateString");
-  }
-  if (globalUsedUtilityTypes.DecimalString) {
-    utilityTypeImports.push("type DecimalString");
-  }
-  if (globalUsedUtilityTypes.TimeString) {
-    utilityTypeImports.push("type TimeString");
   }
   const hasObjectColumnType = namespaceData.some((ns) =>
     ns.types.some((t) => t.typeDef.includes("ObjectColumnType<")),

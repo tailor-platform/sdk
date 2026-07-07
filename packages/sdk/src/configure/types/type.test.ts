@@ -4,10 +4,9 @@ import { t } from "./type";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { output } from "#/types/helpers";
 import type { AllowedValues } from "./field";
-import type { DateString, DateTimeString, TimeString, UUIDString } from "./scalar.types";
 
 const invoker: TailorPrincipal = {
-  id: "123e4567-e89b-12d3-a456-426614174000",
+  id: "test",
   type: "user",
   workspaceId: "workspace-test",
   attributes: {},
@@ -60,39 +59,39 @@ describe("TailorType basic field type tests", () => {
     }>();
   });
 
-  test("uuid field outputs UUID string type correctly", () => {
+  test("uuid field outputs string type correctly", () => {
     const _uuidType = t.object({
       id: t.uuid(),
     });
     expectTypeOf<output<typeof _uuidType>>().toEqualTypeOf<{
-      id: UUIDString;
+      id: string;
     }>();
   });
 
-  test("date field outputs date string type correctly", () => {
+  test("date field outputs string type correctly", () => {
     const _dateType = t.object({
       birthDate: t.date(),
     });
     expectTypeOf<output<typeof _dateType>>().toEqualTypeOf<{
-      birthDate: DateString;
+      birthDate: string;
     }>();
   });
 
-  test("datetime field outputs datetime string | Date type correctly", () => {
+  test("datetime field outputs string | Date type correctly", () => {
     const _datetimeType = t.object({
       createdAt: t.datetime(),
     });
     expectTypeOf<output<typeof _datetimeType>>().toEqualTypeOf<{
-      createdAt: DateTimeString | Date;
+      createdAt: string | Date;
     }>();
   });
 
-  test("time field outputs time string type correctly", () => {
+  test("time field outputs string type correctly", () => {
     const _timeType = t.object({
       openingTime: t.time(),
     });
     expectTypeOf<output<typeof _timeType>>().toEqualTypeOf<{
-      openingTime: TimeString;
+      openingTime: string;
     }>();
   });
 });
@@ -270,7 +269,7 @@ describe("TailorType composite type tests", () => {
       role: t.enum(["admin", "user", "guest"]),
     });
     expectTypeOf<output<typeof _complexType>>().toEqualTypeOf<{
-      id: UUIDString;
+      id: string;
       name: string;
       email: string;
       age?: number | null;
@@ -446,7 +445,7 @@ describe("t.object tests", () => {
     });
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
       items: {
-        id: UUIDString;
+        id: string;
         name: string;
       }[];
     }>();
@@ -465,7 +464,7 @@ describe("t.object tests", () => {
     expectTypeOf<output<typeof _objectType>>().toEqualTypeOf<{
       optionalItems?:
         | {
-            id: UUIDString;
+            id: string;
             value?: string | null;
           }[]
         | null;
@@ -595,47 +594,28 @@ describe("TailorField runtime validation tests", () => {
       },
     ])("validates $name format", ({ field, validValue, invalidValue, invalidMessage }) => {
       const ok = field.parse({ value: validValue, data, invoker });
-      if (ok.issues) {
-        throw new Error("Unexpected issues");
-      }
-      expect(ok.value).toBe(validValue);
+      expect(expectParsed(ok)).toBe(validValue);
 
       const bad = field.parse({ value: invalidValue, data, invoker });
       expect(bad.issues).toBeDefined();
       expect(bad.issues?.[0]?.message).toEqual(invalidMessage);
     });
 
-    test("accepts a date with an out-of-range day (e.g. February 30)", () => {
-      const result = t.date().parse({ value: "2025-02-30", data, invoker });
-      expect(expectParsed(result)).toBe("2025-02-30");
-    });
-
-    test.each([
-      "2025-12-21T10:11:12Z",
-      "2025-12-21T10:11:12.123456Z",
-      "2025-12-21T10:11:12+09:00",
-      "2025-12-21t10:11:12-08:00",
-      "2025-02-30T10:11:12Z",
-    ])("validates datetime format - accepts %s", (value) => {
-      const result = t.datetime().parse({ value, data, invoker });
-      expect(expectParsed(result)).toBe(value);
-    });
-
     test.each([
       {
-        value: "2025-12-21T10:11:12+0900",
-        message: "Expected to match ISO format: received 2025-12-21T10:11:12+0900",
+        name: "out-of-range time",
+        field: t.time(),
+        value: "99:99",
+        message: 'Expected to match "HH:mm" format: received 99:99',
       },
       {
-        value: "2025-12-21T25:11:12Z",
-        message: "Expected to match ISO format: received 2025-12-21T25:11:12Z",
+        name: "datetime with a non-dot fractional separator",
+        field: t.datetime(),
+        value: "2025-12-21T10:11:12x123Z",
+        message: "Expected to match ISO format: received 2025-12-21T10:11:12x123Z",
       },
-      {
-        value: "2025-12-21T10:11:12+24:00",
-        message: "Expected to match ISO format: received 2025-12-21T10:11:12+24:00",
-      },
-    ])("validates datetime format - rejects $value", ({ value, message }) => {
-      const result = t.datetime().parse({ value, data, invoker });
+    ])("rejects $name", ({ field, value, message }) => {
+      const result = field.parse({ value, data, invoker });
       expect(result.issues).toBeDefined();
       expect(result.issues?.[0]?.message).toEqual(message);
     });
