@@ -64,7 +64,7 @@ export const ExecutionPolicyNameSchema = z
   .string()
   .regex(
     /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/,
-    "Invalid execution_policy_name: must match [a-z0-9-] (3-63 chars; must start and end with [a-z0-9])",
+    "Invalid execution policy name: must match [a-z0-9-] (3-63 chars; must start and end with [a-z0-9])",
   )
   .describe("Workspace-unique execution policy name embedded in the resource TRN");
 
@@ -72,7 +72,7 @@ export const ExecutionPolicyKeySchema = z
   .string()
   .regex(
     /^[a-z0-9][a-z0-9_:.-]{0,62}[a-z0-9*]$/,
-    "Invalid execution_policy_key: must match [a-z0-9_:.-] (2-64 chars; must start with [a-z0-9] and end with [a-z0-9] or a trailing '*')",
+    "Invalid execution policy key: must match [a-z0-9_:.-] (2-64 chars; must start with [a-z0-9] and end with [a-z0-9] or a trailing '*')",
   )
   .describe("Execution policy key passed to triggerJobFunction's executionPolicyKey option");
 
