@@ -134,13 +134,13 @@ function buildValidateStatements(
 }
 
 function wrapHook(objectExpr: string): string {
-  return `(() => { const ${NOW} = new Date(); return ${objectExpr}; })()`;
+  return `((_invoker) => { const ${NOW} = new Date(); return ${objectExpr}; })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
 }
 
 function wrapValidate(statements: string[], typeValidateExpr?: string): string {
   const issuesFn = typeValidateExpr ? " const __issues = (f, m) => { __errs[f] = m; };" : "";
   const typeValidateStmt = typeValidateExpr ? ` ${typeValidateExpr};` : "";
-  return `(() => { const __errs = {};${issuesFn} ${statements.join(" ")}${typeValidateStmt} return __errs; })()`;
+  return `((_invoker) => { const __errs = {};${issuesFn} ${statements.join(" ")}${typeValidateStmt} return __errs; })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
 }
 
 /**
