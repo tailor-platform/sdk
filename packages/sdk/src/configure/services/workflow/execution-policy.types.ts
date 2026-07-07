@@ -12,17 +12,18 @@ export interface ExecutionPolicyConcurrency {
  *
  * `name` is the workspace-unique identifier (`[a-z0-9-]`). `key` is the
  * runtime lookup value the workflow passes through the `executionPolicyKey`
- * option on `.trigger()`; it may contain characters not permitted in a
- * `name` (e.g., `:`, `.`, or a trailing `*` for wildcard policies).
+ * option on `tailor.workflow.triggerJobFunction()`; it may contain
+ * characters not permitted in a `name` (e.g., `:`, `.`, or a trailing `*`
+ * for wildcard policies).
  */
 export interface ExecutionPolicyInstance {
   /** Workspace-unique name for this policy. */
   readonly name: string;
   /**
    * Runtime lookup key. For exact-match policies, pass this value as the
-   * `executionPolicyKey` option on `.trigger()`. For wildcard policies (key
-   * ending with `*`), construct the concrete key at runtime (e.g.,
-   * `` `tenant-api.${tenantId}` ``).
+   * `executionPolicyKey` option on `tailor.workflow.triggerJobFunction()`.
+   * For wildcard policies (key ending with `*`), construct the concrete key
+   * at runtime (e.g., `` `tenant-api.${tenantId}` ``).
    */
   readonly key: string;
   /** Optional per-key concurrency cap. */
