@@ -464,15 +464,9 @@ describe("TailorDBField type error message tests", () => {
   });
 
   test("field types stay assignable when a module helper erases fields via an unresolved generic", () => {
-    // Mirrors a module-authoring pattern (`ReturnType<typeof genericFn>` with no
-    // explicit type args) used to describe a helper's return shape without
-    // pinning its optional custom-fields generic. With no type argument, the
-    // generic resolves to its constraint (`Record<string, TailorAnyDBField>`),
-    // which widens `array` from a literal to `boolean` and erases concrete
-    // field metadata to `any` in nested positions (pickFields/clone). A type
-    // built this way must stay assignable from a concrete instantiation of the
-    // same helper, or every consumer using this pattern for module wiring
-    // breaks the moment one of its fields is an array.
+    // Reading a generic's shape via `ReturnType<typeof genericFn>` with no type
+    // args resolves the generic to its constraint, which widens `array` from a
+    // literal to `boolean` and erases field metadata to `any` inside pickFields/clone.
     function withCustomFields<
       const F extends Record<string, TailorAnyDBField> = Record<string, never>,
     >(fields?: F) {
@@ -485,8 +479,7 @@ describe("TailorDBField type error message tests", () => {
     type GenericDefaultShape = ReturnType<typeof withCustomFields>;
     const concrete = withCustomFields({ name: db.string() });
 
-    const accepts: (value: GenericDefaultShape) => void = () => {};
-    accepts(concrete);
+    expectTypeOf(concrete).toExtend<GenericDefaultShape>();
   });
 });
 

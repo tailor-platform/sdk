@@ -154,26 +154,29 @@ type DBFieldRelationMethod<Defined extends DefinedDBFieldMetadata, Output> =
     : Defined extends { relation: unknown }
       ? TypeLevelError<".relation() has already been set">
       : DBFieldRelationFn<Defined, Output>;
+type DBFieldArrayCheck<A extends boolean, Ok, Msg extends string> = A extends true
+  ? TypeLevelError<Msg>
+  : Ok;
 type DBFieldIndexMethod<Defined extends DefinedDBFieldMetadata, Output> =
   IsAny<Defined> extends true
     ? DBFieldIndexFn<Defined, Output>
     : Defined extends { index: unknown }
       ? TypeLevelError<".index() has already been set">
-      : boolean extends Defined["array"]
-        ? DBFieldIndexFn<Defined, Output> | TypeLevelError<"index cannot be set on array fields">
-        : Defined extends { array: true }
-          ? TypeLevelError<"index cannot be set on array fields">
-          : DBFieldIndexFn<Defined, Output>;
+      : DBFieldArrayCheck<
+          Defined["array"],
+          DBFieldIndexFn<Defined, Output>,
+          "index cannot be set on array fields"
+        >;
 type DBFieldUniqueMethod<Defined extends DefinedDBFieldMetadata, Output> =
   IsAny<Defined> extends true
     ? DBFieldUniqueFn<Defined, Output>
     : Defined extends { unique: unknown }
       ? TypeLevelError<".unique() has already been set">
-      : boolean extends Defined["array"]
-        ? DBFieldUniqueFn<Defined, Output> | TypeLevelError<"unique cannot be set on array fields">
-        : Defined extends { array: true }
-          ? TypeLevelError<"unique cannot be set on array fields">
-          : DBFieldUniqueFn<Defined, Output>;
+      : DBFieldArrayCheck<
+          Defined["array"],
+          DBFieldUniqueFn<Defined, Output>,
+          "unique cannot be set on array fields"
+        >;
 type DBFieldVectorMethod<Defined extends DefinedDBFieldMetadata, Output> =
   IsAny<Defined> extends true
     ? DBFieldVectorFn<Defined, Output>
