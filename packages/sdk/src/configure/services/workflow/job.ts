@@ -116,8 +116,13 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
           "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",
         );
       }
-    : async (args?: unknown, options?: TriggerJobFunctionOptions) =>
-        (await dispatchTriggerJob(config.name, args, options)) as Awaited<O>;
+    : // Preserve arity: only forward `options` when the caller supplied it, so
+      // `dispatchTriggerJob` (and downstream mocks) sees the same shape as the
+      // bundler rewrite of `.trigger(args)` vs `.trigger(args, options)`.
+      async (args?: unknown, options?: TriggerJobFunctionOptions) =>
+        (options === undefined
+          ? await dispatchTriggerJob(config.name, args)
+          : await dispatchTriggerJob(config.name, args, options)) as Awaited<O>;
 
   return brandValue(
     { name: config.name, trigger, body } as WorkflowJob<Name, I, Awaited<O>>,

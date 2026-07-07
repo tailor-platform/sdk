@@ -2,6 +2,7 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import type { ContextInvoker } from "#/runtime/context";
 import type { TailorInvoker } from "#/runtime/types";
+import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 type QueryResolver = (query: string, params: unknown[]) => unknown[];
@@ -26,7 +27,11 @@ interface TailordbGlobal {
   };
   tailor?: {
     workflow: {
-      triggerJobFunction: (jobName: string, args: unknown, options?: unknown) => unknown;
+      triggerJobFunction: (
+        jobName: string,
+        args: unknown,
+        options?: TriggerJobFunctionOptions,
+      ) => unknown;
       wait?: (key: string, payload?: unknown) => unknown;
       resolve?: (
         executionId: string,

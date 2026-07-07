@@ -126,13 +126,20 @@ export async function runRegisteredWorkflow(name: string, args?: unknown): Promi
 
 // `.trigger()` routes through the installed `tailor.workflow` shim, falling back
 // to running the registered body/workflow locally when none is installed.
+// Preserve arity: the shim sees a 2-argument call when the caller supplied no
+// options, and a 3-argument call otherwise, mirroring the bundler rewrite so
+// mocks observe the same shape in local execution and in bundled workflows.
 export function dispatchTriggerJob(
   name: string,
   args?: unknown,
   options?: TriggerJobFunctionOptions,
 ): unknown {
   const workflow = currentPlatformWorkflow();
-  return workflow ? workflow.triggerJobFunction(name, args, options) : runRegisteredJob(name, args);
+  if (!workflow) return runRegisteredJob(name, args);
+  // oxlint-disable-next-line prefer-rest-params
+  return arguments.length >= 3
+    ? workflow.triggerJobFunction(name, args, options)
+    : workflow.triggerJobFunction(name, args);
 }
 
 export function dispatchTriggerWorkflow(
