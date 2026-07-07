@@ -55,7 +55,7 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
    * }
    */
   trigger: [Input] extends [undefined]
-    ? (options?: TriggerJobFunctionOptions) => Promise<Awaited<Output>>
+    ? (input?: undefined, options?: TriggerJobFunctionOptions) => Promise<Awaited<Output>>
     : (input: Input, options?: TriggerJobFunctionOptions) => Promise<Awaited<Output>>;
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
