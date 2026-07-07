@@ -1,5 +1,25 @@
 # @tailor-platform/sdk
 
+## 1.74.1
+
+### Patch Changes
+
+- [#1669](https://github.com/tailor-platform/sdk/pull/1669) [`6313353`](https://github.com/tailor-platform/sdk/commit/6313353a81642a8d52d4559dc37044c9365ca241) Thanks [@dqn](https://github.com/dqn)! - Preserve special characters when exporting TailorDB ERD viewer HTML and generated seed scripts.
+
+- [#1670](https://github.com/tailor-platform/sdk/pull/1670) [`8c18c3b`](https://github.com/tailor-platform/sdk/commit/8c18c3bc1ee3a37e3258def1d15b9cc05b33aec4) Thanks [@dqn](https://github.com/dqn)! - Keep resolver and TailorDB field parsing behavior aligned.
+
+- [#1682](https://github.com/tailor-platform/sdk/pull/1682) [`1e9ef08`](https://github.com/tailor-platform/sdk/commit/1e9ef0874f4ccea99874baf160d70d9ad8ad9688) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix a type error introduced in a previous release where an array field's `.index()`/`.unique()`/`.clone()`/`pickFields()` typing could become incompatible with itself when a field's shape flowed through an unresolved generic (e.g. a module-authoring helper's `ReturnType<typeof genericFn>` with no explicit type arguments). This could surface as a spurious `TS2322`/`TS2345` type error when wiring a `db.type()` result produced by one generic helper into another.
+
+- [#1668](https://github.com/tailor-platform/sdk/pull/1668) [`abcdca5`](https://github.com/tailor-platform/sdk/commit/abcdca5808e487547030ac6163bf4429d976bb54) Thanks [@dqn](https://github.com/dqn)! - Remove the obsolete `MigrationInfo` type export from `@tailor-platform/sdk/cli`.
+
+- [#1661](https://github.com/tailor-platform/sdk/pull/1661) [`3ccbae3`](https://github.com/tailor-platform/sdk/commit/3ccbae3f02cdaddbacd8849a8c097101e3c8a050) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.22.5
+
+- [#1666](https://github.com/tailor-platform/sdk/pull/1666) [`1d61fed`](https://github.com/tailor-platform/sdk/commit/1d61fed82e6433dd90f2137dbd2049bc3c74b706) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @opentelemetry
+
+- [#1667](https://github.com/tailor-platform/sdk/pull/1667) [`2110fd1`](https://github.com/tailor-platform/sdk/commit/2110fd1f4e27733934179f02af503efc175ee280) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8.6.0
+
+- [#1675](https://github.com/tailor-platform/sdk/pull/1675) [`15e721c`](https://github.com/tailor-platform/sdk/commit/15e721c610123395ccd0fa44c4bf8895d84b6584) Thanks [@dqn](https://github.com/dqn)! - Refactor Vitest mock helpers without changing their public APIs or behavior.
+
 ## 1.74.0
 
 ### Minor Changes
