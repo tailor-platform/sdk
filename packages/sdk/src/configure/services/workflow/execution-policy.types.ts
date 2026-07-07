@@ -38,7 +38,7 @@ export interface ExecutionPolicyInstance {
  * trailing `*`.
  */
 export interface ExecutionPolicyDefInput {
-  /** Overrides the property-name-derived `name`. Grammar: `[a-z0-9-]{3,63}`. */
+  /** Overrides the property-name-derived `name`. 3-63 characters from `[a-z0-9-]`; must start and end with `[a-z0-9]`. */
   name?: string;
   /** Overrides the property-name-derived `key`. Required when the key contains `:`, `.`, or a trailing `*`. */
   key?: string;

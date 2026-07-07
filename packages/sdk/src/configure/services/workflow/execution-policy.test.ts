@@ -21,6 +21,27 @@ describe("defineWorkflowExecutionPolicies", () => {
     expect(policies.legacyPipelineJob.concurrencyPolicy).toBeUndefined();
   });
 
+  test("splits acronym boundaries in the property name", () => {
+    const policies = defineWorkflowExecutionPolicies((define) => ({
+      tenantAPIJob: define(),
+      httpAPI: define(),
+      HTTPServer: define(),
+      myXMLParser: define(),
+    }));
+
+    expect(policies.tenantAPIJob.name).toBe("tenant-api-job");
+    expect(policies.tenantAPIJob.key).toBe("tenant-api-job");
+
+    expect(policies.httpAPI.name).toBe("http-api");
+    expect(policies.httpAPI.key).toBe("http-api");
+
+    expect(policies.HTTPServer.name).toBe("http-server");
+    expect(policies.HTTPServer.key).toBe("http-server");
+
+    expect(policies.myXMLParser.name).toBe("my-xml-parser");
+    expect(policies.myXMLParser.key).toBe("my-xml-parser");
+  });
+
   test("explicit key overrides the property-name-derived key without affecting name", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
       tenantApi: define({

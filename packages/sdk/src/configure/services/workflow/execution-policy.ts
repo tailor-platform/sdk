@@ -17,11 +17,16 @@ interface ExecutionPolicyWithSetters {
   setKey: ((key: string) => void) | undefined;
 }
 
-// camelCase → kebab-case. Leaves already-kebab-case identifiers unchanged.
+// camelCase → kebab-case with acronym-aware boundaries. Splits at every
+// lower-to-upper transition and at the tail of an uppercase run when the next
+// letter starts a new lowercase word, so `tenantAPIJob` yields
+// `tenant-api-job` instead of `tenant-apijob`. Already-kebab-case identifiers
+// pass through unchanged.
 function camelToKebab(input: string): string {
-  return input.replace(/[A-Z]+/g, (m, offset: number) =>
-    offset === 0 ? m.toLowerCase() : `-${m.toLowerCase()}`,
-  );
+  return input
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .toLowerCase();
 }
 
 function createExecutionPolicyInstance(
