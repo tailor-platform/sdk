@@ -11,15 +11,13 @@ import {
   writeWorkflowTestEnv,
 } from "../../configure/services/workflow/test-env-key";
 import { tailorRoot, withDispose } from "./shared";
+import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
 import type { TailorEnv } from "../../runtime/types";
 
 type JobHandler = (jobName: string, args: unknown, options?: TriggerJobFunctionOptions) => unknown;
 
 type TriggerWorkflowOptions = {
   authInvoker?: { namespace: string; machineUserName: string };
-};
-type TriggerJobFunctionOptions = {
-  executionPolicyKey?: string;
 };
 type TriggerHandlerFn = (
   workflowName: string,
