@@ -10,19 +10,19 @@ export interface ExecutionPolicyConcurrency {
 /**
  * A workflow job function execution policy declaration.
  *
- * `name` is the workspace-unique identifier embedded in the resource TRN
- * (`[a-z0-9-]`). `key` is the runtime lookup value passed to
- * `TailorWorkflowAPI.triggerJobFunction` through the `executionPolicyKey`
- * option; it may contain characters not permitted in a `name` (e.g., `:`,
- * `.`, or a trailing `*` for wildcard policies).
+ * `name` is the workspace-unique identifier (`[a-z0-9-]`). `key` is the
+ * runtime lookup value the workflow passes through the `executionPolicyKey`
+ * option on `.trigger()`; it may contain characters not permitted in a
+ * `name` (e.g., `:`, `.`, or a trailing `*` for wildcard policies).
  */
 export interface ExecutionPolicyInstance {
-  /** Workspace-unique name embedded in the resource TRN. */
+  /** Workspace-unique name for this policy. */
   readonly name: string;
   /**
-   * Runtime lookup key. For exact-match policies, pass this value directly to
-   * `triggerJobFunction`. For wildcard policies (key ending with `*`),
-   * construct the concrete key at runtime (e.g., `` `tenant-api.${tenantId}` ``).
+   * Runtime lookup key. For exact-match policies, pass this value as the
+   * `executionPolicyKey` option on `.trigger()`. For wildcard policies (key
+   * ending with `*`), construct the concrete key at runtime (e.g.,
+   * `` `tenant-api.${tenantId}` ``).
    */
   readonly key: string;
   /** Optional per-key concurrency cap. */

@@ -357,7 +357,7 @@ Execution policies apply a per-key concurrency cap to workflow job function disp
 
 ### Declaring Policies
 
-Use `defineWorkflowExecutionPolicies` with a builder callback. Property names supply the workspace-unique TRN name and default runtime key verbatim, matching the mental model of `defineWaitPoints`. Override `name` or `key` in the body when the property identifier is not valid execution policy grammar or the runtime key needs to differ.
+Use `defineWorkflowExecutionPolicies` with a builder callback. Property names supply the workspace-unique name and default runtime key verbatim, matching the mental model of `defineWaitPoints`. Override `name` or `key` in the body when the property identifier is not valid execution policy grammar or the runtime key needs to differ.
 
 ```typescript
 import { defineWorkflowExecutionPolicies } from "@tailor-platform/sdk";

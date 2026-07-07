@@ -32,8 +32,8 @@ export interface TriggerWorkflowOptions {
 /** Options for {@link triggerJobFunction}. */
 export interface TriggerJobFunctionOptions {
   /**
-   * Execution policy key resolved by the platform against declared
-   * `workflow_job_function_execution_policy` resources.
+   * Execution policy key matched by the platform against the policies
+   * declared with `defineWorkflowExecutionPolicies` in `tailor.config.ts`.
    */
   executionPolicyKey?: string;
 }
