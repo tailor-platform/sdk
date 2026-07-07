@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
-import { defineCommand, runMain } from "politty";
+import { dirname, resolve } from "pathe";
+import { resolvePackageJSON } from "pkg-types";
+import { defineCommand, runCommand, runMain, type AnyCommand } from "politty";
 import { withCompletionCommand } from "politty/completion";
+import { withSkillCommand } from "politty/skill";
 import { z } from "zod";
 import { apiCommand } from "./commands/api";
 import { authCommand } from "./commands/auth";
@@ -24,7 +27,6 @@ import { removeCommand } from "./commands/remove";
 import { secretCommand } from "./commands/secret";
 import { setupCommand } from "./commands/setup";
 import { showCommand } from "./commands/show";
-import { skillsCommand } from "./commands/skills";
 import { staticwebsiteCommand } from "./commands/staticwebsite";
 import { tailordbCommand } from "./commands/tailordb";
 import { upgradeCommand } from "./commands/upgrade";
@@ -50,8 +52,73 @@ initCrashReporting();
 
 const packageJson = await readPackageJson();
 const cliName = Object.keys(packageJson.bin ?? {})[0] || "tailor";
+const packageName = packageJson.name ?? "@tailor-platform/sdk";
+const packageJsonPath = await resolvePackageJSON(import.meta.url);
+const bundledSkillsDir = resolve(dirname(packageJsonPath), "agent-skills");
 
-export const mainCommand = withCompletionCommand(
+type CommandArgShape = Record<string, z.ZodType>;
+
+function replaceCommandArgs(command: AnyCommand, removals: string[] = []): AnyCommand {
+  const args = command.args as { shape?: CommandArgShape } | undefined;
+  if (!args?.shape) {
+    return command;
+  }
+  const shape = { ...args.shape };
+  for (const name of removals) {
+    delete shape[name];
+  }
+  return {
+    ...command,
+    args: z.strictObject({
+      ...shape,
+    }),
+  };
+}
+
+function removeCommandAliases(command: AnyCommand): AnyCommand {
+  const next = { ...command };
+  delete next.aliases;
+  return next;
+}
+
+function alignSkillCommand(command: AnyCommand): AnyCommand {
+  const subCommands = command.subCommands ?? {};
+  const add = {
+    ...removeCommandAliases(replaceCommandArgs(subCommands.add as AnyCommand, ["verbose"])),
+    description: "Install Tailor SDK agent skills.",
+  };
+  const list = {
+    ...replaceCommandArgs(subCommands.list as AnyCommand, ["json"]),
+    description: "List Tailor SDK agent skills.",
+  };
+  const remove = {
+    ...removeCommandAliases(replaceCommandArgs(subCommands.remove as AnyCommand)),
+    description: "Remove installed Tailor SDK agent skills.",
+  };
+  const sync = {
+    ...replaceCommandArgs(subCommands.sync as AnyCommand, ["verbose"]),
+    description: "Remove and reinstall Tailor SDK agent skills.",
+  };
+  return {
+    ...command,
+    description: "Manage Tailor SDK agent skills.",
+    async run() {
+      const result = await runCommand(add, []);
+      if (!result.success) {
+        throw result.error;
+      }
+    },
+    subCommands: {
+      ...subCommands,
+      add,
+      list,
+      remove,
+      sync,
+    },
+  };
+}
+
+const commandWithSkills = withSkillCommand(
   defineCommand({
     name: cliName,
     description:
@@ -81,7 +148,6 @@ Run \`${cliName} plugin list\` to see which plugins are installed and where they
       secret: secretCommand,
       setup: setupCommand,
       show: showCommand,
-      skills: skillsCommand,
       staticwebsite: staticwebsiteCommand,
       tailordb: tailordbCommand,
       upgrade: upgradeCommand,
@@ -90,7 +156,22 @@ Run \`${cliName} plugin list\` to see which plugins are installed and where they
       workspace: workspaceCommand,
     },
   }),
+  {
+    sourceDir: bundledSkillsDir,
+    package: packageName,
+    mode: "copy",
+    descriptionAppend: false,
+  },
 );
+const commandWithSkillsSubCommands = commandWithSkills.subCommands ?? {};
+
+export const mainCommand = withCompletionCommand({
+  ...commandWithSkills,
+  subCommands: {
+    ...commandWithSkillsSubCommands,
+    skills: alignSkillCommand(commandWithSkillsSubCommands.skills as AnyCommand),
+  },
+});
 
 runMain(mainCommand, {
   version: packageJson.version,
