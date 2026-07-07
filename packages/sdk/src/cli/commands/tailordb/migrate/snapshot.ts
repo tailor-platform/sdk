@@ -2763,6 +2763,18 @@ export function compareRemoteWithSnapshot(
   );
 }
 
+function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig {
+  const { hooks: _hooks, validate: _validate, default: _default, ...rest } = field;
+  if (rest.fields) {
+    const nested = createSnapshotRecord<SnapshotFieldConfig>();
+    for (const [name, f] of Object.entries(rest.fields)) {
+      nested[name] = stripFieldScriptProps(f);
+    }
+    return { ...rest, fields: nested };
+  }
+  return rest;
+}
+
 function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
   const types = createSnapshotRecord<TailorDBSnapshotType>();
 
@@ -2770,8 +2782,7 @@ function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSch
     const fields = createSnapshotRecord<SnapshotFieldConfig>();
     for (const [fieldName, field] of Object.entries(type.fields)) {
       if (SYSTEM_FIELDS.has(fieldName)) continue;
-      const { hooks: _hooks, validate: _validate, default: _default, ...rest } = field;
-      fields[fieldName] = rest;
+      fields[fieldName] = stripFieldScriptProps(field);
     }
     types[typeName] = { ...type, fields };
   }
