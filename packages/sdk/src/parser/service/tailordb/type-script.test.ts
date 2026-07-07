@@ -171,4 +171,30 @@ describe("buildTypeScripts", () => {
     expect(buildTypeScripts({})).toEqual({});
     expect(buildTypeScripts({}, undefined)).toEqual({});
   });
+
+  test("captures _invoker safely so scripts work when Platform does not inject it", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      createdAt: {
+        type: "datetime",
+        hooks: { create: { expr: "_now" } },
+      },
+    };
+    const typeHookExpr = {
+      create: "(({ input }) => ({ computed: input.a }))({ input: _input, invoker: _invoker })",
+    };
+
+    const { typeHook } = buildTypeScripts(fields, { typeHookExpr });
+
+    const hookExpr = typeHook?.create?.expr ?? "";
+    expect(hookExpr).toMatch(/^\(\(_invoker\) =>/);
+    expect(hookExpr).toContain('typeof _invoker !== "undefined" ? _invoker : undefined');
+
+    const validateExpr =
+      buildTypeScripts(
+        { x: { type: "string", validate: [{ script: { expr: "true" }, errorMessage: "" }] } },
+        { typeValidateExpr: "fn(_invoker)" },
+      ).typeValidate?.create?.expr ?? "";
+    expect(validateExpr).toMatch(/^\(\(_invoker\) =>/);
+    expect(validateExpr).toContain('typeof _invoker !== "undefined" ? _invoker : undefined');
+  });
 });
