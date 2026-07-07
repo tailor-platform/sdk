@@ -1384,8 +1384,9 @@ export type AuthConfigInput =
                   update?: Function | undefined;
                 }
               | undefined;
-            validate?: (Function | [Function, string])[] | undefined;
+            validate?: Function[] | undefined;
             typeName?: string | undefined;
+            default?: unknown;
           };
           fields: any;
         };
@@ -2679,8 +2680,9 @@ export type AuthConfig =
                   update?: Function | undefined;
                 }
               | undefined;
-            validate?: (Function | [Function, string])[] | undefined;
+            validate?: Function[] | undefined;
             typeName?: string | undefined;
+            default?: unknown;
           };
           fields: any;
         };

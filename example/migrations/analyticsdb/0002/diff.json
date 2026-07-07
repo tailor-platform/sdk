@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "namespace": "analyticsdb",
+  "createdAt": "2026-07-07T01:12:32.475Z",
+  "changes": [
+    {
+      "kind": "field_modified",
+      "typeName": "Event",
+      "fieldName": "createdAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record creation timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(({ value, now }) => value ?? now)({ value: _value, oldValue: _oldValue, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user), now: _now })"
+          }
+        }
+      }
+    },
+    {
+      "kind": "field_modified",
+      "typeName": "Event",
+      "fieldName": "updatedAt",
+      "before": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record update timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(({ value }) => value ?? /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+          },
+          "update": {
+            "expr": "(() => /* @__PURE__ */ new Date())({ value: _value, data: _data, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) })"
+          }
+        }
+      },
+      "after": {
+        "type": "datetime",
+        "required": true,
+        "description": "Record update timestamp",
+        "hooks": {
+          "create": {
+            "expr": "(({ value, now }) => value ?? now)({ value: _value, oldValue: _oldValue, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user), now: _now })"
+          },
+          "update": {
+            "expr": "(({ now }) => now)({ value: _value, oldValue: _oldValue, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user), now: _now })"
+          }
+        }
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "hasWarnings": false,
+  "warnings": [],
+  "requiresMigrationScript": false
+}
