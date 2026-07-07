@@ -7,7 +7,7 @@ import * as path from "pathe";
 // to the new subcommand. `[ \t]+` (not `\s+`) prevents the optional-install
 // alternative from greedily reaching across newlines into the next command.
 const SHIM_PATTERN = /\btailor-sdk-skills(?:@[^\s'"`]+)?(?:[ \t]+install)?\b(?!-)/g;
-const REPLACEMENT = "tailor-sdk skills install";
+const REPLACEMENT = "tailor skills add";
 
 function replaceShim(value: string): string {
   return value.replace(SHIM_PATTERN, REPLACEMENT);
@@ -48,10 +48,10 @@ function transformPackageJson(source: string): string | null {
 }
 
 /**
- * Replace `tailor-sdk-skills` invocations with `tailor-sdk skills install`.
+ * Replace `tailor-sdk-skills` invocations with `tailor skills add`.
  *
  * The standalone `tailor-sdk-skills` binary is removed in v2; users must call
- * the subcommand on the main `tailor-sdk` CLI instead.
+ * the subcommand on the main `tailor` CLI instead.
  * @param source - File contents
  * @param filePath - Absolute path to the file (used to dispatch package.json vs text)
  * @returns Transformed source or null when nothing matched.

@@ -2,7 +2,7 @@
 politty:
   index:
     title: "Skills Commands"
-    description: "Commands for installing Tailor SDK agent skills."
+    description: "Commands for managing Tailor SDK agent skills."
 ---
 
 {{politty:command:skills}}
