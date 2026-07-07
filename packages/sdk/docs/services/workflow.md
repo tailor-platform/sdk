@@ -357,7 +357,7 @@ Execution policies apply a per-key concurrency cap to workflow job function disp
 
 ### Declaring Policies
 
-Use `defineWorkflowExecutionPolicies` with a builder callback. Property names supply the workspace-unique TRN name (camelCase auto-converts to kebab-case, so `tenantApi` becomes `tenant-api`). Provide an explicit `key` in the body when the runtime lookup value must contain `:` or a trailing `*` that a property name cannot express.
+Use `defineWorkflowExecutionPolicies` with a builder callback. Property names supply the workspace-unique TRN name and default runtime key verbatim, matching the mental model of `defineWaitPoints`. Override `name` or `key` in the body when the property identifier is not valid execution policy grammar or the runtime key needs to differ.
 
 ```typescript
 import { defineWorkflowExecutionPolicies } from "@tailor-platform/sdk";
@@ -367,6 +367,7 @@ export const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
   premium: define({ concurrencyPolicy: { maxConcurrentExecutions: 5 } }),
   /** Per-tenant cap: one pool per resolved tenant key. */
   tenantApi: define({
+    name: "tenant-api",
     key: "tenant-api*",
     concurrencyPolicy: { maxConcurrentExecutions: 3 },
   }),

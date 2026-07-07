@@ -296,6 +296,7 @@ import { defineWorkflowExecutionPolicies } from "@tailor-platform/sdk";
 const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
   premium: define({ concurrencyPolicy: { maxConcurrentExecutions: 5 } }),
   tenantApi: define({
+    name: "tenant-api",
     key: "tenant-api*",
     concurrencyPolicy: { maxConcurrentExecutions: 3 },
   }),

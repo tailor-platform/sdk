@@ -33,9 +33,10 @@ export interface ExecutionPolicyInstance {
  * Body of an execution policy declaration.
  *
  * When both `name` and `key` are omitted in the `defineWorkflowExecutionPolicies`
- * builder, the property name (camelCase → kebab-case) is used for both.
- * Provide `key` explicitly when the runtime key must contain `:`, `.`, or a
- * trailing `*`.
+ * builder, the property name is used verbatim for both (like
+ * `defineWaitPoints`). Provide `name` when the property identifier is not
+ * valid execution policy grammar, and provide `key` when the runtime key
+ * must contain `:`, `.`, or a trailing `*`.
  */
 export interface ExecutionPolicyDefInput {
   /** Overrides the property-name-derived `name`. 3-63 characters from `[a-z0-9-]`; must start and end with `[a-z0-9]`. */

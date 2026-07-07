@@ -17,18 +17,6 @@ interface ExecutionPolicyWithSetters {
   setKey: ((key: string) => void) | undefined;
 }
 
-// camelCase → kebab-case with acronym-aware boundaries. Splits at every
-// lower-to-upper transition and at the tail of an uppercase run when the next
-// letter starts a new lowercase word, so `tenantAPIJob` yields
-// `tenant-api-job` instead of `tenant-apijob`. Already-kebab-case identifiers
-// pass through unchanged.
-function camelToKebab(input: string): string {
-  return input
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
-    .toLowerCase();
-}
-
 function createExecutionPolicyInstance(
   initialName: string,
   initialKey: string,
@@ -84,8 +72,10 @@ export function defineWorkflowExecutionPolicy(
 
 /**
  * Define a group of workflow job function execution policies. Property names
- * become the TRN `name` (camelCase → kebab-case) and default `key` unless
- * overridden via `name` / `key` in the body.
+ * become the TRN `name` and default `key` verbatim, matching the mental model
+ * of {@link defineWaitPoints}. Provide `name` / `key` explicitly to override
+ * the property-name default (for example, when the property name is not valid
+ * for the execution policy grammar or when the runtime key needs to differ).
  *
  * The return type mirrors the builder's return type so JSDoc on each property
  * is preserved in IDE autocompletion.
@@ -94,7 +84,7 @@ export function defineWorkflowExecutionPolicy(
  * @example
  * export const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
  *   premium: define({ concurrencyPolicy: { maxConcurrentExecutions: 5 } }),
- *   tenantApi: define({
+ *   "tenant-api": define({
  *     key: "tenant-api*",
  *     concurrencyPolicy: { maxConcurrentExecutions: 3 },
  *   }),
@@ -131,9 +121,8 @@ export function defineWorkflowExecutionPolicies<T extends Record<string, Executi
 
   for (const propName of Object.keys(result)) {
     const instance = result[propName] as ExecutionPolicyInstance;
-    const derived = camelToKebab(propName);
-    nameSetters.get(instance)?.(derived);
-    keySetters.get(instance)?.(derived);
+    nameSetters.get(instance)?.(propName);
+    keySetters.get(instance)?.(propName);
   }
 
   return result;

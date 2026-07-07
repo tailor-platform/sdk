@@ -2,79 +2,51 @@ import { describe, expect, test } from "vitest";
 import { defineWorkflowExecutionPolicies, defineWorkflowExecutionPolicy } from "./execution-policy";
 
 describe("defineWorkflowExecutionPolicies", () => {
-  test("derives name and key from the property name (camelCase → kebab-case)", () => {
+  test("uses the property name verbatim for both name and key", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
       premium: define({ concurrencyPolicy: { maxConcurrentExecutions: 5 } }),
-      tenantApi: define({ concurrencyPolicy: { maxConcurrentExecutions: 3 } }),
-      legacyPipelineJob: define(),
+      "tenant-api": define(),
     }));
 
     expect(policies.premium.name).toBe("premium");
     expect(policies.premium.key).toBe("premium");
     expect(policies.premium.concurrencyPolicy).toEqual({ maxConcurrentExecutions: 5 });
 
-    expect(policies.tenantApi.name).toBe("tenant-api");
-    expect(policies.tenantApi.key).toBe("tenant-api");
-
-    expect(policies.legacyPipelineJob.name).toBe("legacy-pipeline-job");
-    expect(policies.legacyPipelineJob.key).toBe("legacy-pipeline-job");
-    expect(policies.legacyPipelineJob.concurrencyPolicy).toBeUndefined();
+    expect(policies["tenant-api"].name).toBe("tenant-api");
+    expect(policies["tenant-api"].key).toBe("tenant-api");
+    expect(policies["tenant-api"].concurrencyPolicy).toBeUndefined();
   });
 
-  test("splits acronym boundaries in the property name", () => {
+  test("explicit name overrides the property-name-derived name without touching the key", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
-      tenantAPIJob: define(),
-      httpAPI: define(),
-      HTTPServer: define(),
-      myXMLParser: define(),
+      tenantApi: define({ name: "tenant-api" }),
     }));
 
-    expect(policies.tenantAPIJob.name).toBe("tenant-api-job");
-    expect(policies.tenantAPIJob.key).toBe("tenant-api-job");
-
-    expect(policies.httpAPI.name).toBe("http-api");
-    expect(policies.httpAPI.key).toBe("http-api");
-
-    expect(policies.HTTPServer.name).toBe("http-server");
-    expect(policies.HTTPServer.key).toBe("http-server");
-
-    expect(policies.myXMLParser.name).toBe("my-xml-parser");
-    expect(policies.myXMLParser.key).toBe("my-xml-parser");
+    expect(policies.tenantApi.name).toBe("tenant-api");
+    // key still defaults to the property name; overriding `name` alone does not
+    // rewrite the runtime lookup key.
+    expect(policies.tenantApi.key).toBe("tenantApi");
   });
 
-  test("explicit key overrides the property-name-derived key without affecting name", () => {
+  test("explicit key overrides the property-name-derived key without touching the name", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
-      tenantApi: define({
-        key: "tenant-api*",
+      premium: define({
+        key: "premium-users",
         concurrencyPolicy: { maxConcurrentExecutions: 3 },
       }),
-      legacyPipeline: define({ key: "legacy:pipeline" }),
     }));
 
-    expect(policies.tenantApi.name).toBe("tenant-api");
-    expect(policies.tenantApi.key).toBe("tenant-api*");
-
-    expect(policies.legacyPipeline.name).toBe("legacy-pipeline");
-    expect(policies.legacyPipeline.key).toBe("legacy:pipeline");
-  });
-
-  test("explicit name overrides property-name-derived name without affecting key", () => {
-    const policies = defineWorkflowExecutionPolicies((define) => ({
-      shorthand: define({ name: "custom-name" }),
-    }));
-
-    expect(policies.shorthand.name).toBe("custom-name");
-    // key defaults to the property name (kebab-case), not the explicit name.
-    expect(policies.shorthand.key).toBe("shorthand");
+    expect(policies.premium.name).toBe("premium");
+    expect(policies.premium.key).toBe("premium-users");
   });
 
   test("explicit name and key are both preserved when provided", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
-      any: define({ name: "per-tenant", key: "tenant-api*" }),
+      perTenant: define({ name: "per-tenant", key: "tenant-api*" }),
     }));
 
-    expect(policies.any.name).toBe("per-tenant");
-    expect(policies.any.key).toBe("tenant-api*");
+    expect(policies.perTenant.name).toBe("per-tenant");
+    expect(policies.perTenant.key).toBe("tenant-api*");
   });
 
   test("returns instances that carry the SDK brand", () => {
