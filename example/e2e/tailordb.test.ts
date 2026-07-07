@@ -47,13 +47,11 @@ describe("controlplane", () => {
             type: "datetime",
             required: true,
             array: false,
-            hooks: expect.any(Object),
           },
           updatedAt: {
             type: "datetime",
             required: true,
             array: false,
-            hooks: expect.any(Object),
           },
         },
         indexes: {
@@ -548,7 +546,7 @@ describe("dataplane", () => {
               postalCode: "12345"
               address: "123 Main St"
               city: "Los Angeles"
-              fullAddress: "placeholder"
+              fullAddress: "12345 123 Main St Los Angeles"
               state: "California"
             }
           ) {
