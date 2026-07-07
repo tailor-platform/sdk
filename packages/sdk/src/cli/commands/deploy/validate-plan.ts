@@ -536,7 +536,12 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   creates(
     CreateWorkflowJobFunctionExecutionPolicyRequestSchema,
     "Workflow execution policy",
-    workflowExecutionPolicy.changeSet.creates.map((item) => ({
+    // Replaces re-create the resource after deleting it (execution_policy_key is
+    // immutable), so their Create-shaped request must clear validation too.
+    [
+      ...workflowExecutionPolicy.changeSet.creates,
+      ...workflowExecutionPolicy.changeSet.replaces,
+    ].map((item) => ({
       name: item.name,
       request: {
         workspaceId: item.workspaceId,

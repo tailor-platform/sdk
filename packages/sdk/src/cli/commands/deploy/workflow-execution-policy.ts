@@ -34,6 +34,13 @@ type DeletePolicy = {
   workspaceId: string;
 };
 
+type ReplacePolicy = {
+  name: string;
+  workspaceId: string;
+  policy: ExecutionPolicyInstance;
+  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+};
+
 function toConcurrencyPolicyInit(
   policy: ExecutionPolicyInstance["concurrencyPolicy"],
 ): MessageInitShape<typeof ConcurrencyPolicySchema> | undefined {
@@ -79,7 +86,7 @@ export async function planWorkflowJobFunctionExecutionPolicy(
   appId: string | undefined,
   declared: Record<string, ExecutionPolicyInstance>,
 ) {
-  const changeSet = createChangeSet<CreatePolicy, UpdatePolicy, DeletePolicy>(
+  const changeSet = createChangeSet<CreatePolicy, UpdatePolicy, DeletePolicy, ReplacePolicy>(
     "Workflow execution policies",
   );
   const conflicts: OwnerConflict[] = [];
@@ -146,9 +153,10 @@ export async function planWorkflowJobFunctionExecutionPolicy(
       if (unchanged) {
         changeSet.unchanged.push({ name: policy.name });
       } else if (remoteKey !== policy.key) {
-        // execution_policy_key is immutable after create; recreate to switch it.
-        changeSet.deletes.push({ name: policy.name, workspaceId });
-        changeSet.creates.push({ name: policy.name, workspaceId, policy, metaRequest });
+        // execution_policy_key is immutable after create; the platform requires
+        // a delete-then-create in the same apply pass. Handled as `replaces`
+        // (not delete + create) so the create phase does not race the delete.
+        changeSet.replaces.push({ name: policy.name, workspaceId, policy, metaRequest });
       } else {
         changeSet.updates.push({ name: policy.name, workspaceId, policy, metaRequest });
       }
@@ -190,6 +198,22 @@ export async function applyWorkflowJobFunctionExecutionPolicy(
   const { changeSet } = plan;
   if (phase === "create-update") {
     await Promise.all([
+      // Replacements delete-then-create the same name (execution_policy_key is
+      // immutable); each replace runs sequentially so the create never races
+      // its own delete and hits AlreadyExists.
+      ...changeSet.replaces.map(async (replace) => {
+        await client.deleteWorkflowJobFunctionExecutionPolicy({
+          workspaceId: replace.workspaceId,
+          executionPolicyName: replace.name,
+        });
+        await client.createWorkflowJobFunctionExecutionPolicy({
+          workspaceId: replace.workspaceId,
+          executionPolicyName: replace.policy.name,
+          executionPolicyKey: replace.policy.key,
+          concurrencyPolicy: toConcurrencyPolicyInit(replace.policy.concurrencyPolicy),
+        });
+        await client.setMetadata(replace.metaRequest);
+      }),
       ...changeSet.creates.map(async (create) => {
         await client.createWorkflowJobFunctionExecutionPolicy({
           workspaceId: create.workspaceId,
