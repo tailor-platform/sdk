@@ -403,6 +403,26 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.typeValidate?.update?.expr).toBe(validateExpr);
     });
 
+    test("marks required fields optionalOnCreate when user type-level create hook exists", () => {
+      const snapshotType = createTestSnapshotType("Customer", {
+        fields: {
+          id: { type: "uuid", required: true },
+          name: { type: "string", required: true },
+          fullAddress: { type: "string", required: true },
+          phone: { type: "string", required: false },
+        },
+        typeHookExpr: {
+          create:
+            '((_input, _oldRecord, _invoker, _now) => ({ fullAddress: "computed" }))(_input, null, _invoker, _now)',
+        },
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+      expect(manifest.schema?.fields?.name?.optionalOnCreate).toBe(true);
+      expect(manifest.schema?.fields?.fullAddress?.optionalOnCreate).toBe(true);
+      expect(manifest.schema?.fields?.phone?.optionalOnCreate).toBeUndefined();
+    });
+
     test("handles serial configuration", () => {
       const snapshotType = createTestSnapshotType("Order", {
         fields: {

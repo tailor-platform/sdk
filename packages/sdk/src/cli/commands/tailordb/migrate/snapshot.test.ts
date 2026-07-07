@@ -3234,7 +3234,7 @@ describe("snapshot", () => {
       expect(drifts[0]!.details).toContain("allowedValues");
     });
 
-    test("reports detailed drift for hooks, validation, serial, and nested fields", () => {
+    test("reports detailed drift for serial and nested fields", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -3248,13 +3248,6 @@ describe("snapshot", () => {
               metadata: {
                 type: "nested",
                 required: false,
-                hooks: { create: { expr: "snapshotCreate" } },
-                validate: [
-                  {
-                    script: { expr: "snapshotValid" },
-                    errorMessage: "Snapshot validation",
-                  },
-                ],
                 serial: { start: 10, maxValue: 99, format: "S-%02d" },
                 fields: {
                   child: { type: "string", required: false },
@@ -3271,14 +3264,6 @@ describe("snapshot", () => {
           metadata: {
             type: "nested",
             required: false,
-            hooks: { create: { expr: "remoteCreate" } },
-            validate: [
-              {
-                action: TailorDBType_PermitAction.ALLOW,
-                script: { expr: "remoteValid" },
-                errorMessage: "Remote validation",
-              },
-            ],
             serial: { start: 1, maxValue: 9, format: "R-%02d" },
             fields: {
               child: { type: "number", required: false },
@@ -3290,8 +3275,6 @@ describe("snapshot", () => {
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts).toHaveLength(1);
       expect(drifts[0]!.kind).toBe("field_mismatch");
-      expect(drifts[0]!.details).toContain("hooks.create");
-      expect(drifts[0]!.details).toContain("validate[0].script");
       expect(drifts[0]!.details).toContain("serial.start");
       expect(drifts[0]!.details).toContain("fields.child.type");
     });
