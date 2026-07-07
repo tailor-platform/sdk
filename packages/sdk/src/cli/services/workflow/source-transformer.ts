@@ -222,7 +222,8 @@ export function transformWorkflowSource(
 
     const jobName = jobNameMap.get(call.identifierName);
     if (jobName) {
-      const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}))()`;
+      const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
+      const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}${optionsPart}))()`;
       replacements.push({
         start: call.callRange.start,
         end: call.callRange.end,

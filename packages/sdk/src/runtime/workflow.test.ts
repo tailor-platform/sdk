@@ -61,6 +61,18 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
     expect(wf.triggeredJobs).toEqual([{ jobName: "my-job", args: { id: 1 } }]);
   });
 
+  test("triggerJobFunction forwards executionPolicyKey option", () => {
+    using wf = mockWorkflow();
+    wf.enqueueResult({ ok: true });
+
+    workflow.triggerJobFunction("my-job", { id: 1 }, { executionPolicyKey: "premium" });
+
+    expect(wf.triggeredJobs).toEqual([
+      { jobName: "my-job", args: { id: 1 }, options: { executionPolicyKey: "premium" } },
+    ]);
+    expect(wf.triggerJobFunction.mock.calls[0]?.[2]).toEqual({ executionPolicyKey: "premium" });
+  });
+
   test("wait records the call and returns the configured result", () => {
     using wf = mockWorkflow();
     wf.setWaitHandler({ resumed: true });

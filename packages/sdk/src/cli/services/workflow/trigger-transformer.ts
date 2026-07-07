@@ -16,7 +16,8 @@ interface ExtendedTriggerCall {
   identifierName: string;
   callRange: { start: number; end: number };
   argsText: string;
-  // For workflow triggers, source text of the options argument if present
+  // Source text of the options argument if present. For workflow triggers this
+  // carries `authInvoker`; for job triggers it carries `executionPolicyKey`.
   optionsText?: string;
 }
 
@@ -249,6 +250,7 @@ function detectExtendedTriggerCalls(
           identifierName: triggerCall.identifierName,
           callRange: triggerCall.callRange,
           argsText: triggerCall.argsText,
+          optionsText: triggerCall.optionsText,
         });
       }
     }
@@ -393,7 +395,8 @@ export function transformFunctionTriggers(
     } else {
       const jobName = jobNameMap.get(call.identifierName);
       if (jobName) {
-        const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}))()`;
+        const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
+        const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}${optionsPart}))()`;
 
         replacements.push({
           start: call.callRange.start,

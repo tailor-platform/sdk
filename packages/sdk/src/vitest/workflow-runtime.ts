@@ -4,7 +4,7 @@
 import { runRegisteredJob, runRegisteredWorkflow } from "../configure/services/workflow/registry";
 
 export interface DefaultWorkflowRuntime {
-  triggerJobFunction: (name: string, args?: unknown) => unknown;
+  triggerJobFunction: (name: string, args?: unknown, options?: unknown) => unknown;
   triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
   resumeWorkflow: (executionId: string) => Promise<string>;
   wait: (key: string, payload?: unknown) => unknown;

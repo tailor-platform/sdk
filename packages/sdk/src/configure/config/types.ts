@@ -8,6 +8,7 @@ import type { IdPConfig } from "#/configure/services/idp/types";
 import type { SecretsConfig } from "#/configure/services/secrets/types";
 import type { StaticWebsiteConfig } from "#/configure/services/staticwebsite/types";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
+import type { ExecutionPolicyInstance } from "#/configure/services/workflow/execution-policy.types";
 import type { LogLevelEnum } from "#/types/app-config.generated";
 
 export type LogLevel = LogLevelEnum;
@@ -83,6 +84,8 @@ export interface AppConfig<
   executor?: ExecutorServiceInput;
   /** Workflow service configuration with workflow files. */
   workflow?: WorkflowServiceInput;
+  /** Workspace-level execution policies for workflow job functions. */
+  workflowExecutionPolicies?: Record<string, ExecutionPolicyInstance>;
   /** HTTP adapter service configuration with adapter files. */
   httpAdapter?: HttpAdapterServiceInput;
   /** Static website configurations. Must be an array, e.g. `[website]`. */

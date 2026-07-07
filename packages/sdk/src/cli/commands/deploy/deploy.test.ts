@@ -110,6 +110,10 @@ function emptyResults(): PlanResults {
       appName: "my-app",
       appId: undefined,
     },
+    workflowExecutionPolicy: {
+      changeSet: createChangeSet("Workflow execution policies"),
+      ...emptyOwnership(),
+    },
     secretManager: {
       vaultChangeSet: createChangeSet("Vaults"),
       secretChangeSet: createChangeSet("Secrets"),

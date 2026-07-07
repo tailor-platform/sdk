@@ -57,8 +57,10 @@ import {
   UpdateTailorDBTypeRequestSchema,
 } from "@tailor-platform/tailor-proto/tailordb_pb";
 import {
+  CreateWorkflowJobFunctionExecutionPolicyRequestSchema,
   CreateWorkflowJobFunctionRequestSchema,
   CreateWorkflowRequestSchema,
+  UpdateWorkflowJobFunctionExecutionPolicyRequestSchema,
   UpdateWorkflowRequestSchema,
 } from "@tailor-platform/tailor-proto/workflow_pb";
 import { logger, styles } from "#/cli/shared/logger";
@@ -75,6 +77,7 @@ import type { planSecretManager } from "./secret-manager";
 import type { planStaticWebsite } from "./staticwebsite";
 import type { planTailorDB } from "./tailordb/index";
 import type { planWorkflow } from "./workflow";
+import type { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 
 /** Plan results passed to validatePlan. */
 export type ValidatePlanInput = {
@@ -87,6 +90,7 @@ export type ValidatePlanInput = {
   app: Awaited<ReturnType<typeof planApplication>>;
   executor: Awaited<ReturnType<typeof planExecutor>>;
   workflow: Awaited<ReturnType<typeof planWorkflow>>;
+  workflowExecutionPolicy: Awaited<ReturnType<typeof planWorkflowJobFunctionExecutionPolicy>>;
   secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
@@ -157,8 +161,18 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * @param input - Plan results from the plan phase
  */
 export async function validatePlan(input: ValidatePlanInput): Promise<void> {
-  const { tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager } =
-    input;
+  const {
+    tailorDB,
+    staticWebsite,
+    idp,
+    auth,
+    pipeline,
+    app,
+    executor,
+    workflow,
+    workflowExecutionPolicy,
+    secretManager,
+  } = input;
 
   const validator = createValidator();
   const violations: ViolationEntry[] = [];
@@ -518,6 +532,40 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
       })),
     );
   }
+
+  creates(
+    CreateWorkflowJobFunctionExecutionPolicyRequestSchema,
+    "Workflow execution policy",
+    workflowExecutionPolicy.changeSet.creates.map((item) => ({
+      name: item.name,
+      request: {
+        workspaceId: item.workspaceId,
+        executionPolicyName: item.policy.name,
+        executionPolicyKey: item.policy.key,
+        ...(item.policy.concurrencyPolicy && {
+          concurrencyPolicy: {
+            maxConcurrentExecutions: item.policy.concurrencyPolicy.maxConcurrentExecutions,
+          },
+        }),
+      },
+    })),
+  );
+  updates(
+    UpdateWorkflowJobFunctionExecutionPolicyRequestSchema,
+    "Workflow execution policy",
+    workflowExecutionPolicy.changeSet.updates.map((item) => ({
+      name: item.name,
+      request: {
+        workspaceId: item.workspaceId,
+        executionPolicyName: item.policy.name,
+        ...(item.policy.concurrencyPolicy && {
+          concurrencyPolicy: {
+            maxConcurrentExecutions: item.policy.concurrencyPolicy.maxConcurrentExecutions,
+          },
+        }),
+      },
+    })),
+  );
 
   creates(
     CreateSecretManagerVaultRequestSchema,

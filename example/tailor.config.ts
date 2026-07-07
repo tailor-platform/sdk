@@ -11,6 +11,7 @@ import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";
 import { user } from "./tailordb/user";
+import { executionPolicies } from "./workflows/execution-policies";
 
 const website = defineStaticWebSite("my-frontend", {
   description: "my frontend application",
@@ -140,6 +141,7 @@ export default defineConfig({
   workflow: {
     files: ["./workflows/**/*.ts"],
   },
+  workflowExecutionPolicies: executionPolicies,
   httpAdapter: {
     files: ["./adapters/**/*.ts"],
   },

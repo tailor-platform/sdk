@@ -39,6 +39,9 @@ const mocks = vi.hoisted(() => {
     applyWorkflow: vi.fn(async (_client, result, phase) => {
       calls.push(`workflow:${marker(result)}:${String(phase)}`);
     }),
+    applyWorkflowJobFunctionExecutionPolicy: vi.fn(async (_client, result, phase) => {
+      calls.push(`workflowExecutionPolicy:${marker(result)}:${String(phase)}`);
+    }),
   };
 });
 
@@ -53,6 +56,9 @@ vi.mock("./resolver", () => ({ applyPipeline: mocks.applyPipeline }));
 vi.mock("./application", () => ({ applyApplication: mocks.applyApplication }));
 vi.mock("./executor", () => ({ applyExecutor: mocks.applyExecutor }));
 vi.mock("./workflow", () => ({ applyWorkflow: mocks.applyWorkflow }));
+vi.mock("./workflow-execution-policy", () => ({
+  applyWorkflowJobFunctionExecutionPolicy: mocks.applyWorkflowJobFunctionExecutionPolicy,
+}));
 
 function deployment(name: string): PlannedDeployment {
   const plan = (kind: string) => ({ marker: `${name}-${kind}` });
@@ -68,6 +74,7 @@ function deployment(name: string): PlannedDeployment {
     app: plan("application"),
     executor: plan("executor"),
     workflow: plan("workflow"),
+    workflowExecutionPolicy: plan("workflowExecutionPolicy"),
     secretManager: plan("secret"),
   } as unknown as PlannedDeployment;
 }
@@ -110,10 +117,14 @@ describe("applyDeploymentPlans", () => {
       "application:buyer-application:create-update",
       "executor:supplier-executor:create-update",
       "executor:buyer-executor:create-update",
+      "workflowExecutionPolicy:supplier-workflowExecutionPolicy:create-update",
+      "workflowExecutionPolicy:buyer-workflowExecutionPolicy:create-update",
       "workflow:supplier-workflow:create-update",
       "workflow:buyer-workflow:create-update",
       "workflow:supplier-workflow:delete",
       "workflow:buyer-workflow:delete",
+      "workflowExecutionPolicy:supplier-workflowExecutionPolicy:delete",
+      "workflowExecutionPolicy:buyer-workflowExecutionPolicy:delete",
       "executor:supplier-executor:delete",
       "executor:buyer-executor:delete",
       "staticwebsite:supplier-staticwebsite:delete",

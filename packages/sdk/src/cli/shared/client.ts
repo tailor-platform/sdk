@@ -339,6 +339,7 @@ export const RETRY_SAFE_CREATE_METHODS: ReadonlySet<string> = new Set([
   "CreateTenantConfig",
   "CreateUserProfileConfig",
   "CreateWorkflow",
+  "CreateWorkflowJobFunctionExecutionPolicy",
 ]);
 
 /**

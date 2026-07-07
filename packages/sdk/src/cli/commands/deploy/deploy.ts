@@ -66,6 +66,7 @@ import { planStaticWebsite } from "./staticwebsite";
 import { formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
 import { validatePlan } from "./validate-plan";
 import { formatWorkflowChangeEntries, planWorkflow } from "./workflow";
+import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 import type { PlanContext } from "./types";
 
 export interface DeployOptions {
@@ -493,6 +494,10 @@ function buildPlanReport(results: PlanResults): PlanReport {
     results.workflow.changeSet,
     results.functionRegistry.workflowJobChanges,
   );
+  const workflowExecutionPolicyEntries = formatChangeSetEntries(
+    results.workflowExecutionPolicy.changeSet,
+    ["executionPolicy"],
+  );
   const authHookEntries = formatAuthHookChangeEntries(
     results.auth.changeSet.authHook,
     results.functionRegistry.authHookFunctionChanges,
@@ -556,6 +561,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
     ...pipelineEntries,
     ...executorEntries,
     ...workflowEntries,
+    ...workflowExecutionPolicyEntries,
     ...idpEntries,
     ...authEntries,
   ];
@@ -1106,6 +1112,7 @@ async function planDeploymentTarget(
       app,
       executor,
       workflow,
+      workflowExecutionPolicy,
       secretManager,
     ] = await Promise.all([
       withSpan("plan.tailorDB", () => planTailorDB(ctx)),
@@ -1127,6 +1134,15 @@ async function planDeploymentTarget(
           unchangedWorkflowJobs,
         ),
       ),
+      withSpan("plan.workflowExecutionPolicy", () =>
+        planWorkflowJobFunctionExecutionPolicy(
+          client,
+          workspaceId,
+          application.name,
+          application.id,
+          config.workflowExecutionPolicies ?? {},
+        ),
+      ),
       withSpan("plan.secretManager", () => planSecretManager(ctx)),
     ]);
 
@@ -1142,6 +1158,7 @@ async function planDeploymentTarget(
       app,
       executor,
       workflow,
+      workflowExecutionPolicy,
       secretManager,
     };
   });
@@ -1178,6 +1195,7 @@ function collectOwnerConflicts(results: PlanResults): OwnerConflict[] {
     ...results.pipeline.conflicts,
     ...results.executor.conflicts,
     ...results.workflow.conflicts,
+    ...results.workflowExecutionPolicy.conflicts,
     ...results.secretManager.conflicts,
   ];
 }
@@ -1193,6 +1211,7 @@ function collectUnmanagedResources(results: PlanResults): UnmanagedResource[] {
     ...results.pipeline.unmanaged,
     ...results.executor.unmanaged,
     ...results.workflow.unmanaged,
+    ...results.workflowExecutionPolicy.unmanaged,
     ...results.secretManager.unmanaged,
   ];
 }
@@ -1208,6 +1227,7 @@ function collectResourceOwners(results: PlanResults): Set<string> {
     ...results.pipeline.resourceOwners,
     ...results.executor.resourceOwners,
     ...results.workflow.resourceOwners,
+    ...results.workflowExecutionPolicy.resourceOwners,
     ...results.secretManager.resourceOwners,
   ]);
 }

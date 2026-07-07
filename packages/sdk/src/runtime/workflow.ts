@@ -29,6 +29,15 @@ export interface TriggerWorkflowOptions {
   authInvoker?: AuthInvoker;
 }
 
+/** Options for {@link triggerJobFunction}. */
+export interface TriggerJobFunctionOptions {
+  /**
+   * Execution policy key resolved by the platform against declared
+   * `workflow_job_function_execution_policy` resources.
+   */
+  executionPolicyKey?: string;
+}
+
 /**
  * Platform API surface for `tailor.workflow`. Describes the shape the platform
  * runtime injects on `globalThis.tailor.workflow`.
@@ -62,9 +71,10 @@ export interface TailorWorkflowAPI {
    * Triggers a job function and returns its result.
    * @param jobName - Job name as defined in the workflow
    * @param args - Arguments forwarded to the job
+   * @param options - Optional trigger options (e.g. `executionPolicyKey`)
    * @returns The job's return value
    */
-  triggerJobFunction(jobName: string, args?: any): any;
+  triggerJobFunction(jobName: string, args?: any, options?: TriggerJobFunctionOptions): any;
 
   /**
    * Suspends the current workflow execution and waits for an external signal to resume.

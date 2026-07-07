@@ -26,7 +26,7 @@ interface TailordbGlobal {
   };
   tailor?: {
     workflow: {
-      triggerJobFunction: (jobName: string, args: unknown) => unknown;
+      triggerJobFunction: (jobName: string, args: unknown, options?: unknown) => unknown;
       wait?: (key: string, payload?: unknown) => unknown;
       resolve?: (
         executionId: string,

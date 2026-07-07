@@ -13,10 +13,13 @@ import {
 import { tailorRoot, withDispose } from "./shared";
 import type { TailorEnv } from "../../runtime/types";
 
-type JobHandler = (jobName: string, args: unknown) => unknown;
+type JobHandler = (jobName: string, args: unknown, options?: TriggerJobFunctionOptions) => unknown;
 
 type TriggerWorkflowOptions = {
   authInvoker?: { namespace: string; machineUserName: string };
+};
+type TriggerJobFunctionOptions = {
+  executionPolicyKey?: string;
 };
 type TriggerHandlerFn = (
   workflowName: string,
@@ -43,6 +46,7 @@ type SetWaitHandler = {
 interface TriggeredJob {
   jobName: string;
   args: unknown;
+  options?: TriggerJobFunctionOptions;
 }
 
 // ---------------------------------------------------------------------------
@@ -71,7 +75,11 @@ export function mockWorkflow() {
 
   // Default impls (also restored by reset): run the registered body by name so a
   // `.trigger()` with no handler/result executes the real job locally.
-  const defaultTriggerJob = (jobName: string, args?: unknown): unknown => {
+  const defaultTriggerJob = (
+    jobName: string,
+    args?: unknown,
+    _options?: TriggerJobFunctionOptions,
+  ): unknown => {
     const body = getRegisteredJob(jobName);
     return body ? body(args, buildJobContext()) : null;
   };
@@ -81,7 +89,10 @@ export function mockWorkflow() {
     _options?: TriggerWorkflowOptions,
   ): Promise<string> => {
     const wf = getRegisteredWorkflow(workflowName);
-    if (wf) await installedTriggerJobFunction(wf.mainJobName, args);
+    if (wf) {
+      const out = triggerJobFunction(wf.mainJobName, platformSerialize(args));
+      if (out instanceof Promise) await out;
+    }
     return TRIGGER_DEFAULT;
   };
   const defaultResumeWorkflow = async (executionId: string): Promise<string> => executionId;
@@ -101,13 +112,18 @@ export function mockWorkflow() {
     ): Promise<void> => {},
   );
 
-  const installedTriggerJobFunction = (jobName: string, args?: unknown): unknown => {
-    const out = triggerJobFunction(jobName, platformSerialize(args));
-    return out instanceof Promise ? out.then((v) => platformSerialize(v)) : platformSerialize(out);
-  };
-
   root.workflow = {
-    triggerJobFunction: installedTriggerJobFunction,
+    // Preserve arity: recording `undefined` as the third element only when the
+    // caller supplied it, mirroring `.triggerJobFunction(name, args, options)`.
+    triggerJobFunction: (...call: [string, unknown?, TriggerJobFunctionOptions?]) => {
+      const out =
+        call.length >= 3
+          ? triggerJobFunction(call[0], platformSerialize(call[1]), call[2])
+          : triggerJobFunction(call[0], platformSerialize(call[1]));
+      return out instanceof Promise
+        ? out.then((v) => platformSerialize(v))
+        : platformSerialize(out);
+    },
     // Preserve arity so a forwarded third `options` arg — even `undefined` — is
     // recorded, matching the real `.trigger(args, options)` call shape.
     triggerWorkflow: (...call: [string, unknown?, TriggerWorkflowOptions?]) =>
@@ -139,10 +155,10 @@ export function mockWorkflow() {
 
     /**
      * Set a fallback job handler. Called when the enqueue queue is empty.
-     * @param handler - Function returning a result for a job name and args
+     * @param handler - Function returning a result for a job name, args, and options
      */
     setJobHandler(handler: JobHandler): void {
-      triggerJobFunction.mockImplementation((name, args) => handler(name, args));
+      triggerJobFunction.mockImplementation((name, args, options) => handler(name, args, options));
     },
 
     /**
@@ -169,9 +185,10 @@ export function mockWorkflow() {
      * @returns Triggered jobs array
      */
     get triggeredJobs(): TriggeredJob[] {
-      return triggerJobFunction.mock.calls.map(([jobName, args]) => ({
+      return triggerJobFunction.mock.calls.map(([jobName, args, options]) => ({
         jobName: jobName as string,
         args,
+        ...(options !== undefined && { options: options as TriggerJobFunctionOptions }),
       }));
     },
 

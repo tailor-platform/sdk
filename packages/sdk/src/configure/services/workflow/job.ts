@@ -1,6 +1,7 @@
 import { brandValue } from "#/utils/brand";
 import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
 import type { TailorEnv, TailorInvoker } from "#/runtime/types";
+import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
 import type { JsonCompatible, TypeLevelError } from "#/types/helpers";
 
 /**
@@ -42,17 +43,20 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
   name: Name;
   /**
    * Trigger this job with the given input. Returns a Promise that resolves
-   * to the job's output value.
+   * to the job's output value. Accepts an optional second argument to pass
+   * `executionPolicyKey` for platform-side concurrency enforcement.
    * @example
    * body: async (input) => {
    *   const a = await jobA.trigger({ id: input.id });
-   *   const b = await jobB.trigger({ id: input.id });
+   *   const b = await jobB.trigger({ id: input.id }, {
+   *     executionPolicyKey: `tenant-api.${input.tenantId}`,
+   *   });
    *   return { a, b };
    * }
    */
   trigger: [Input] extends [undefined]
-    ? () => Promise<Awaited<Output>>
-    : (input: Input) => Promise<Awaited<Output>>;
+    ? (options?: TriggerJobFunctionOptions) => Promise<Awaited<Output>>
+    : (input: Input, options?: TriggerJobFunctionOptions) => Promise<Awaited<Output>>;
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
 
@@ -112,7 +116,8 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
           "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",
         );
       }
-    : async (args?: unknown) => (await dispatchTriggerJob(config.name, args)) as Awaited<O>;
+    : async (args?: unknown, options?: TriggerJobFunctionOptions) =>
+        (await dispatchTriggerJob(config.name, args, options)) as Awaited<O>;
 
   return brandValue(
     { name: config.name, trigger, body } as WorkflowJob<Name, I, Awaited<O>>,
