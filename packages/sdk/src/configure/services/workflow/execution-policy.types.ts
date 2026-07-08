@@ -42,7 +42,7 @@ export interface ExecutionPolicyInstance {
 export interface ExecutionPolicyDefInput {
   /** Overrides the property-name-derived `name`. 3-63 characters from `[a-z0-9-]`; must start and end with `[a-z0-9]`. */
   name?: string;
-  /** Overrides the property-name-derived `key`. Required when the key contains `:`, `.`, or a trailing `*`. */
+  /** Overrides the property-name-derived `key`. Provide when the runtime lookup value should differ from the property name — for example, when using a JS-identifier property (`tenantApi`) but the runtime key needs `:`, `.`, or a trailing `*`. */
   key?: string;
   /** Optional per-key concurrency cap. */
   concurrencyPolicy?: ExecutionPolicyConcurrency;
