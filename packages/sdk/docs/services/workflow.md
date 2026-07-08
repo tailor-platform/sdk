@@ -395,13 +395,13 @@ export default defineConfig({
 
 ### Key Grammar
 
-`key` accepts `[a-z0-9_:.-]`, must start with `[a-z0-9]`, and is 2 to 64 characters long (excluding the trailing `*` the platform appends when `enableSuffix` is set). `foo:bar` is a valid exact key; `tenant-api` with `enableSuffix: true` registers `tenant-api*` as a wildcard prefix.
+`key` accepts `[a-z0-9_:.-]`, must start with `[a-z0-9]`, and the platform-registered key is 2 to 64 characters long, including the trailing `*` appended when `enableSuffix` is set — so a wildcard prefix must be at most 63 characters. `foo:bar` is a valid exact key; `tenant-api` with `enableSuffix: true` registers `tenant-api*` as a wildcard prefix.
 
 An exact-key policy applies to dispatches whose runtime key equals the policy key. A wildcard policy applies to every dispatch whose runtime key begins with the prefix; each concrete resolved key gets its own independent pool of the declared size (a `cap = 3` wildcard yields three concurrent dispatches per resolved key, not three across every match). The longest matching prefix wins when a dispatch could match more than one wildcard.
 
 ### Referencing a Policy from a Workflow
 
-Pass the runtime key through the `executionPolicyKey` option on `job.trigger()` or `tailor.workflow.triggerJobFunction()`. For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`enableSuffix: true`), `<policy>.key` is not itself a valid dispatch key — call `<policy>.forKey(suffix)` to build the concrete key (joined with `.`).
+Pass the runtime key through the `executionPolicyKey` option on `job.trigger()` or `tailor.workflow.triggerJobFunction()`. For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`enableSuffix: true`), `<policy>.key` is not itself a valid dispatch key — call `<policy>.forKey(suffix)` to build the concrete key (joined with `.` by default; set `separator` in the declaration to use a different one).
 
 ```typescript
 import { createWorkflowJob } from "@tailor-platform/sdk";

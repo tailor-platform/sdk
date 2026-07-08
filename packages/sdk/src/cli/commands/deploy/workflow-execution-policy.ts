@@ -72,6 +72,11 @@ export function toPlatformExecutionPolicyKey(policy: ExecutionPolicyInstance): s
  * @param policy - Declared policy from the config
  */
 function validatePolicy(policy: ExecutionPolicyInstance): void {
+  if (policy.key.endsWith("*")) {
+    throw new Error(
+      `Invalid workflow execution policy "${policy.name}": key must not end with '*'; set enableSuffix to declare a wildcard prefix instead.`,
+    );
+  }
   const parsed = WorkflowJobFunctionExecutionPolicySchema.safeParse({
     name: policy.name,
     key: toPlatformExecutionPolicyKey(policy),

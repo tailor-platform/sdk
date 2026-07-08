@@ -60,7 +60,9 @@ export interface ExecutionPolicyWildcardInstance<
   readonly enableSuffix: true;
   /**
    * Build a concrete runtime key by appending `suffix` after this policy's
-   * declared `key` prefix, separated by `.`.
+   * declared `key` prefix, separated by the declaration's `separator`
+   * (`.` unless overridden — see
+   * {@link ExecutionPolicyDefInput.separator}).
    * @param suffix - Value appended after the wildcard prefix
    * @returns The concrete key to pass as `executionPolicyKey`
    * @example
@@ -103,6 +105,11 @@ export interface ExecutionPolicyDefInput {
    * instead of a directly-usable `key`.
    */
   enableSuffix?: boolean;
+  /**
+   * Separator `forKey(suffix)` inserts between the declared `key` prefix and
+   * `suffix`. Defaults to `.`. Only meaningful when `enableSuffix` is set.
+   */
+  separator?: string;
   /** Optional per-key concurrency cap. */
   concurrencyPolicy?: ExecutionPolicyConcurrency;
 }

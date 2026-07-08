@@ -37,6 +37,7 @@ function createExecutionPolicyInstance(
   initialKey: string,
   concurrencyPolicy: ExecutionPolicyConcurrency | undefined,
   enableSuffix: boolean,
+  separator: string,
   allowNameSetter: boolean,
   allowKeySetter: boolean,
 ): ExecutionPolicyWithSetters {
@@ -53,7 +54,7 @@ function createExecutionPolicyInstance(
     ...(concurrencyPolicy && { concurrencyPolicy }),
     // Reads raw.key (not the initialKey param) so a property-name-derived
     // key patched in later via setKey is reflected too.
-    ...(enableSuffix && { forKey: (suffix: string) => `${raw.key}.${suffix}` }),
+    ...(enableSuffix && { forKey: (suffix: string) => `${raw.key}${separator}${suffix}` }),
   };
   const instance = brandValue(raw, "execution-policy") as ExecutionPolicyInstance;
   return {
@@ -102,6 +103,7 @@ export function defineWorkflowExecutionPolicy<
     def?.key ?? name,
     def?.concurrencyPolicy,
     def?.enableSuffix ?? false,
+    def?.separator ?? ".",
     false,
     false,
   ).instance as ResolvedExecutionPolicyInstance<ResolveKey<D, N>, ResolveEnableSuffix<D>>;
@@ -162,8 +164,12 @@ export function defineWorkflowExecutionPolicies<T extends Record<string, Executi
       explicitKey ?? explicitName ?? "__pending__",
       def?.concurrencyPolicy,
       def?.enableSuffix ?? false,
+      def?.separator ?? ".",
       explicitName === undefined,
-      explicitKey === undefined,
+      // Only fall back to the property name when neither `name` nor `key`
+      // was given — an explicit `name` already resolved `key` above and
+      // must not be overwritten by the property name.
+      explicitKey === undefined && explicitName === undefined,
     );
     if (setName) nameSetters.set(instance, setName);
     if (setKey) keySetters.set(instance, setKey);

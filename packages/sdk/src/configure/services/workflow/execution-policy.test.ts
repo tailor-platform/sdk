@@ -19,15 +19,15 @@ describe("defineWorkflowExecutionPolicies", () => {
     expect(policies["tenant-api"].concurrencyPolicy).toBeUndefined();
   });
 
-  test("explicit name overrides the property-name-derived name without touching the key", () => {
+  test("explicit name overrides the property-name-derived name and the key follows it", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
       tenantApi: define({ name: "tenant-api" }),
     }));
 
     expect(policies.tenantApi.name).toBe("tenant-api");
-    // key still defaults to the property name; overriding `name` alone does not
-    // rewrite the runtime lookup key.
-    expect(policies.tenantApi.key).toBe("tenantApi");
+    // key defaults to the resolved `name` (not the property name) when `key`
+    // itself is omitted.
+    expect(policies.tenantApi.key).toBe("tenant-api");
   });
 
   test("explicit key overrides the property-name-derived key without touching the name", () => {
@@ -74,6 +74,14 @@ describe("defineWorkflowExecutionPolicies", () => {
 
     expect(policies.tenantApi.key).toBe("tenant_api");
     expect(policies.tenantApi.forKey("acme")).toBe("tenant_api.acme");
+  });
+
+  test("separator overrides the default `.` used by forKey", () => {
+    const policies = defineWorkflowExecutionPolicies((define) => ({
+      "tenant-api": define({ enableSuffix: true, separator: ":" }),
+    }));
+
+    expect(policies["tenant-api"].forKey("acme")).toBe("tenant-api:acme");
   });
 
   test("an exact-match key (enableSuffix not set) is branded and usable directly as executionPolicyKey", () => {
@@ -138,6 +146,14 @@ describe("defineWorkflowExecutionPolicy", () => {
       enableSuffix: true,
     });
     expect(policy.forKey("acme")).toBe("tenant_api.acme");
+  });
+
+  test("separator overrides the default `.` used by forKey", () => {
+    const policy = defineWorkflowExecutionPolicy("tenant-api", {
+      enableSuffix: true,
+      separator: ":",
+    });
+    expect(policy.forKey("acme")).toBe("tenant-api:acme");
   });
 
   test("without enableSuffix, a policy has no forKey() at the type or value level", () => {
