@@ -97,6 +97,20 @@ function assignmentValue(node: SgNode): SgNode | null {
   return children.slice(equalsIndex + 1).find((child) => child.kind() !== "comment") ?? null;
 }
 
+function parameterDefaultTarget(node: SgNode): SgNode | null {
+  const children = node.children();
+  const equalsIndex = children.findIndex((child) => child.kind() === "=");
+  if (equalsIndex === -1) return null;
+  return children.slice(0, equalsIndex).find((child) => isBindingPatternKind(child.kind())) ?? null;
+}
+
+function parameterDefaultValue(node: SgNode): SgNode | null {
+  const children = node.children();
+  const equalsIndex = children.findIndex((child) => child.kind() === "=");
+  if (equalsIndex === -1) return null;
+  return children.slice(equalsIndex + 1).find((child) => child.kind() !== "comment") ?? null;
+}
+
 function addShadowedRange(
   shadowedRanges: Map<string, Array<{ start: number; end: number }>>,
   name: string,
@@ -530,6 +544,23 @@ export function reviewFindings(
       line: lineForIndex(source, assignment.range().start.index),
       message: "Review SDK db alias usage and migrate db.type builder calls to db.table.",
       excerpt: excerptAtIndex(source, assignment.range().start.index),
+    });
+  }
+
+  for (const param of root.findAll({
+    rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
+  })) {
+    const target = parameterDefaultTarget(param);
+    if (target?.kind() !== "identifier") continue;
+    const value = parameterDefaultValue(param);
+    if (!isSdkDbMember(value, dbNames, namespaceNames, shadowedRanges)) continue;
+    if (!hasTypeBuilderUse(root, target.text(), param.range().end.index)) continue;
+
+    findings.push({
+      file: relativePath,
+      line: lineForIndex(source, param.range().start.index),
+      message: "Review SDK db alias usage and migrate db.type builder calls to db.table.",
+      excerpt: excerptAtIndex(source, param.range().start.index),
     });
   }
 

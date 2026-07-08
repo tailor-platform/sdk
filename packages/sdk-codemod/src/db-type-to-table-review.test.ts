@@ -226,4 +226,51 @@ describe("db-type-to-table review findings", () => {
       }),
     ]);
   });
+
+  test("reports default parameter SDK db aliases for LLM review", async () => {
+    tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "db-type-review-test-"));
+    await fs.promises.writeFile(
+      path.join(tmpDir, "tailordb.ts"),
+      [
+        'import { db } from "@tailor-platform/sdk";',
+        'import * as sdk from "@tailor-platform/sdk";',
+        "",
+        "export function makeUser(schema = db) {",
+        '  return schema.type("User", {',
+        "    name: schema.string(),",
+        "  });",
+        "}",
+        "",
+        "export const makeTeam = (schema = sdk.db) =>",
+        '  schema.type("Team", {',
+        "    name: schema.string(),",
+        "  });",
+        "",
+      ].join("\n"),
+      "utf-8",
+    );
+
+    const result = await runCodemods([dbTypeToTableEntry], tmpDir, false);
+
+    expect(result.llmReviews).toEqual([
+      expect.objectContaining({
+        codemodId: "v2/db-type-to-table",
+        files: ["tailordb.ts"],
+        findings: [
+          {
+            file: "tailordb.ts",
+            line: 4,
+            message: "Review SDK db alias usage and migrate db.type builder calls to db.table.",
+            excerpt: "export function makeUser(schema = db) {",
+          },
+          {
+            file: "tailordb.ts",
+            line: 10,
+            message: "Review SDK db alias usage and migrate db.type builder calls to db.table.",
+            excerpt: "export const makeTeam = (schema = sdk.db) =>",
+          },
+        ],
+      }),
+    ]);
+  });
 });
