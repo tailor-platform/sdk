@@ -114,6 +114,10 @@ type LoadMachineUserNameOptions = {
   machineUser?: string;
   profile?: string;
 };
+type ExplicitMachineUser = {
+  source: "option" | "env";
+  value: string;
+};
 
 function platformConfigPath() {
   if (!xdgConfig) {
@@ -551,7 +555,16 @@ export async function loadMachineUserName(
     });
   }
 
-  const explicit = opts?.machineUser || process.env.TAILOR_PLATFORM_MACHINE_USER_NAME || undefined;
+  const envMachineUser = process.env.TAILOR_PLATFORM_MACHINE_USER_NAME || undefined;
+  const explicitMachineUser: ExplicitMachineUser | undefined = opts?.machineUser
+    ? {
+        source: opts.machineUser === envMachineUser ? "env" : "option",
+        value: opts.machineUser,
+      }
+    : envMachineUser
+      ? { source: "env", value: envMachineUser }
+      : undefined;
+  const explicit = explicitMachineUser?.value;
 
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
   if (!profile) return explicit;
@@ -565,10 +578,14 @@ export async function loadMachineUserName(
 
   if (entry.machine_user && entry.machine_user_override === "deny") {
     if (explicit && explicit !== entry.machine_user) {
+      const details =
+        explicitMachineUser.source === "env"
+          ? `The machine user is being set to "${explicit}" via the TAILOR_PLATFORM_MACHINE_USER_NAME environment variable, which conflicts with this profile's pinned machine user "${entry.machine_user}".`
+          : `This profile fixes the machine user to "${entry.machine_user}" for application-data commands.`;
       throw CLIError({
         code: "PROFILE_MACHINE_USER_OVERRIDE_DENIED",
         message: `Profile "${profile}" denies overriding the machine user.`,
-        details: `This profile fixes the machine user to "${entry.machine_user}" for application-data commands.`,
+        details,
         suggestion: `Omit the machine user option, unset TAILOR_PLATFORM_MACHINE_USER_NAME, or run 'tailor-sdk profile update ${profile} --machine-user-override allow'.`,
       });
     }

@@ -430,6 +430,22 @@ describe("loadMachineUserName", () => {
       const err = await loadMachineUserName({ profile: "locked" }).catch((e: unknown) => e);
       expect(isCLIError(err)).toBe(true);
       expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+      expect((err as { details?: string }).details).toBe(
+        'The machine user is being set to "other-bot" via the TAILOR_PLATFORM_MACHINE_USER_NAME environment variable, which conflicts with this profile\'s pinned machine user "profile-bot".',
+      );
+    });
+
+    test("reports env var source when the env fallback is passed as opts.machineUser", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "other-bot");
+      const err = await loadMachineUserName({
+        machineUser: "other-bot",
+        profile: "locked",
+      }).catch((e: unknown) => e);
+      expect(isCLIError(err)).toBe(true);
+      expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+      expect((err as { details?: string }).details).toBe(
+        'The machine user is being set to "other-bot" via the TAILOR_PLATFORM_MACHINE_USER_NAME environment variable, which conflicts with this profile\'s pinned machine user "profile-bot".',
+      );
     });
 
     test("resolves when opts.machineUser matches profile's machine_user", async () => {
