@@ -238,14 +238,15 @@ const validCases: Case<undefined>[] = [
     expected: undefined,
   },
   {
-    name: "(n) workflow execution policy with wildcard trailing `*` in key passes",
+    name: "(n) workflow execution policy with enableSuffix (registers a trailing `*`) passes",
     mutate: (input) => {
       input.workflowExecutionPolicy.changeSet.creates.push({
         name: "tenant-api",
         workspaceId: WS_ID,
         policy: {
           name: "tenant-api",
-          key: "tenant-api*",
+          key: "tenant-api",
+          enableSuffix: true,
           concurrencyPolicy: { maxConcurrentExecutions: 3 },
         },
         metaRequest: METADATA,

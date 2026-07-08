@@ -56,12 +56,27 @@ function normalizeComparableConcurrency(
 }
 
 /**
+ * The literal key the platform registers for a declared policy: `key` with a
+ * trailing `*` appended when `enableSuffix` is set.
+ * @param policy - Declared policy from the config
+ * @returns The platform-facing execution policy key
+ */
+export function toPlatformExecutionPolicyKey(policy: ExecutionPolicyInstance): string {
+  return policy.enableSuffix ? `${policy.key}*` : policy.key;
+}
+
+/**
  * Validate a declared execution policy against the parser schema. Throws with
- * a descriptive error when `name` or `key` violates the platform grammar.
+ * a descriptive error when `name` or the platform-facing key violates the
+ * platform grammar.
  * @param policy - Declared policy from the config
  */
 function validatePolicy(policy: ExecutionPolicyInstance): void {
-  const parsed = WorkflowJobFunctionExecutionPolicySchema.safeParse(policy);
+  const parsed = WorkflowJobFunctionExecutionPolicySchema.safeParse({
+    name: policy.name,
+    key: toPlatformExecutionPolicyKey(policy),
+    concurrencyPolicy: policy.concurrencyPolicy,
+  });
   if (!parsed.success) {
     throw new Error(
       `Invalid workflow execution policy "${policy.name}": ${parsed.error.issues.map((issue) => issue.message).join("; ")}`,
@@ -142,17 +157,18 @@ export async function planWorkflowJobFunctionExecutionPolicy(
       });
 
       const remoteKey = found.resource.executionPolicyKey;
+      const desiredKey = toPlatformExecutionPolicyKey(policy);
       const remoteConcurrency = normalizeComparableConcurrency(found.resource.concurrencyPolicy);
       const desiredConcurrency = normalizeComparableConcurrency(policy.concurrencyPolicy);
       const unchanged =
         owned &&
         hasMatchingSdkVersion(found.allLabels, metaRequest.labels) &&
-        remoteKey === policy.key &&
+        remoteKey === desiredKey &&
         areNormalizedEqual(remoteConcurrency, desiredConcurrency);
 
       if (unchanged) {
         changeSet.unchanged.push({ name: policy.name });
-      } else if (remoteKey !== policy.key) {
+      } else if (remoteKey !== desiredKey) {
         // execution_policy_key is immutable after create; the platform requires
         // a delete-then-create in the same apply pass. Handled as `replaces`
         // (not delete + create) so the create phase does not race the delete.
@@ -209,7 +225,7 @@ export async function applyWorkflowJobFunctionExecutionPolicy(
         await client.createWorkflowJobFunctionExecutionPolicy({
           workspaceId: replace.workspaceId,
           executionPolicyName: replace.policy.name,
-          executionPolicyKey: replace.policy.key,
+          executionPolicyKey: toPlatformExecutionPolicyKey(replace.policy),
           concurrencyPolicy: toConcurrencyPolicyInit(replace.policy.concurrencyPolicy),
         });
         await client.setMetadata(replace.metaRequest);
@@ -218,7 +234,7 @@ export async function applyWorkflowJobFunctionExecutionPolicy(
         await client.createWorkflowJobFunctionExecutionPolicy({
           workspaceId: create.workspaceId,
           executionPolicyName: create.policy.name,
-          executionPolicyKey: create.policy.key,
+          executionPolicyKey: toPlatformExecutionPolicyKey(create.policy),
           concurrencyPolicy: toConcurrencyPolicyInit(create.policy.concurrencyPolicy),
         });
         await client.setMetadata(create.metaRequest);
