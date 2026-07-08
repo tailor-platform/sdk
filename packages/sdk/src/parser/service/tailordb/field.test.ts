@@ -128,7 +128,7 @@ describe("parseFieldConfig validator expressions", () => {
         return [value].map((v) => v.includes("@"))[0] ?? false;
       },
     };
-    const type = db.type("User", {
+    const type = db.table("User", {
       email: db.string().validate(validators.isValid),
     });
 
@@ -150,7 +150,7 @@ describe("parseFieldConfig script expression validation", () => {
         return value ?? "generated";
       },
     };
-    const type = db.type("User", {
+    const type = db.table("User", {
       email: db.string().hooks({ create: hooks[key] }),
     });
 
@@ -165,7 +165,7 @@ describe("parseFieldConfig script expression validation", () => {
     const check = function check({ value }: { value: string }) {
       return value.length > 0;
     }.bind(null);
-    const type = db.type("User", {
+    const type = db.table("User", {
       email: db.string().validate(check),
     });
 
@@ -180,7 +180,7 @@ describe("parseFieldConfig script expression validation", () => {
     const check = function check({ value }: { value: string }) {
       return value.length > 0;
     }.bind(null);
-    const type = db.type("User", {
+    const type = db.table("User", {
       email: db.string().validate(check),
     });
 

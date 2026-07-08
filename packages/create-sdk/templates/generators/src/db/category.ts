@@ -1,7 +1,7 @@
 import { db } from "@tailor-platform/sdk";
 
 export const category = db
-  .type("Category", {
+  .table("Category", {
     name: db.string(),
     slug: db.string().unique(),
     parentCategoryId: db.uuid({ optional: true }).relation({

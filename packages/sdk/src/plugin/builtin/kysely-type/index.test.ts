@@ -13,7 +13,7 @@ function parseTailorDBType(type: TailorDBTypeSchemaOutput): TailorDBType {
   return types[type.name]!;
 }
 
-const mockBasicType = db.type("User", {
+const mockBasicType = db.table("User", {
   name: db.string().description("User name"),
   email: db.string().description("User email"),
   age: db.int({ optional: true }),
@@ -25,12 +25,12 @@ const mockBasicType = db.type("User", {
   ...db.fields.timestamps(),
 });
 
-const mockEnumType = db.type("Status", {
+const mockEnumType = db.table("Status", {
   status: db.enum([{ value: "active" }, { value: "inactive" }, { value: "pending" }]),
   priority: db.enum([{ value: "high" }, { value: "medium" }, { value: "low" }], { optional: true }),
 });
 
-const mockNestedType = db.type("ComplexUser", {
+const mockNestedType = db.table("ComplexUser", {
   profile: db.object({
     firstName: db.string(),
     lastName: db.string(),
@@ -121,7 +121,7 @@ describe("KyselyTypePlugin integration tests", () => {
     });
 
     test("correctly processes required/optional fields", async () => {
-      const testType = db.type("TestRequired", {
+      const testType = db.table("TestRequired", {
         requiredField: db.string(),
         optionalField: db.string({ optional: true }),
         undefinedRequiredField: db.string({ optional: true }),
@@ -135,7 +135,7 @@ describe("KyselyTypePlugin integration tests", () => {
     });
 
     test("correctly processes array types", async () => {
-      const arrayType = db.type("ArrayTest", {
+      const arrayType = db.table("ArrayTest", {
         stringArray: db.string({ array: true }),
         optionalIntArray: db.int({ optional: true, array: true }),
       });
@@ -214,7 +214,7 @@ describe("KyselyTypePlugin integration tests", () => {
     });
 
     test("processes unknown type definitions as string type", async () => {
-      const unknownType = db.type("UnknownType", {
+      const unknownType = db.table("UnknownType", {
         unknownField: db.string(),
       });
 
@@ -226,8 +226,8 @@ describe("KyselyTypePlugin integration tests", () => {
 
   describe("multiple namespace support", () => {
     test("aggregates types from multiple namespaces", async () => {
-      const userType = db.type("User", { name: db.string() });
-      const eventType = db.type("Event", { timestamp: db.datetime() });
+      const userType = db.table("User", { name: db.string() });
+      const eventType = db.table("Event", { timestamp: db.datetime() });
 
       const result = await runOnTailorDBReady([
         {
@@ -252,7 +252,7 @@ describe("KyselyTypePlugin integration tests", () => {
     });
 
     test("includes only necessary utility types", async () => {
-      const simpleType = db.type("Simple", { name: db.string() });
+      const simpleType = db.table("Simple", { name: db.string() });
 
       const result = await runOnTailorDBReady([
         {

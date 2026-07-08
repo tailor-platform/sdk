@@ -24,7 +24,7 @@ The key question for choosing a level: **How does this change affect SDK users?*
 
 SDK users must modify their code or configuration to upgrade.
 
-- Removing or renaming a public API (`defineConfig`, `db.type`, `createResolver`, etc.)
+- Removing or renaming a public API (`defineConfig`, `db.table`, `createResolver`, etc.)
 - Changing the signature or behavior of an existing API in an incompatible way
 - Changing `tailor.config.ts` format in a way that requires migration
 - Raising the minimum Node.js version

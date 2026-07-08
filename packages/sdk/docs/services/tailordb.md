@@ -29,7 +29,7 @@ Define TailorDB Types in files matching glob patterns specified in `tailor.confi
 import { db } from "@tailor-platform/sdk";
 
 // Export both value and type
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   age: db.int(),
@@ -38,7 +38,7 @@ export const user = db.type("User", {
 export type user = typeof user;
 
 // You can define multiple types in the same file
-export const role = db.type("Role", {
+export const role = db.table("Role", {
   name: db.string().unique(),
 });
 export type role = typeof role;
@@ -47,7 +47,7 @@ export type role = typeof role;
 Specify plural form by passing an array as first argument:
 
 ```typescript
-db.type(["User", "UserList"], {
+db.table(["User", "UserList"], {
   name: db.string(),
 });
 ```
@@ -55,7 +55,7 @@ db.type(["User", "UserList"], {
 Pass a description as second argument:
 
 ```typescript
-db.type("User", "User in the system", {
+db.table("User", "User in the system", {
   name: db.string(),
 });
 ```
@@ -174,11 +174,11 @@ db.string().unique();
 Add a relation to field with automatic index and foreign key constraint:
 
 ```typescript
-const role = db.type("Role", {
+const role = db.table("Role", {
   name: db.string(),
 });
 
-const user = db.type("User", {
+const user = db.table("User", {
   name: db.string(),
   roleId: db.uuid().relation({
     type: "n-1",
@@ -190,7 +190,7 @@ const user = db.type("User", {
 For one-to-one relations, use `type: "1-1"`:
 
 ```typescript
-const userProfile = db.type("UserProfile", {
+const userProfile = db.table("UserProfile", {
   userId: db.uuid().relation({
     type: "1-1",
     toward: { type: user },
@@ -202,7 +202,7 @@ const userProfile = db.type("UserProfile", {
 For foreign key constraint without creating a relation, use `type: "keyOnly"`:
 
 ```typescript
-const user = db.type("User", {
+const user = db.table("User", {
   roleId: db.uuid().relation({
     type: "keyOnly",
     toward: { type: role },
@@ -213,11 +213,11 @@ const user = db.type("User", {
 Create relations against different fields using `toward.key`:
 
 ```typescript
-const user = db.type("User", {
+const user = db.table("User", {
   email: db.string().unique(),
 });
 
-const userProfile = db.type("UserProfile", {
+const userProfile = db.table("UserProfile", {
   userEmail: db.string().relation({
     type: "1-1",
     toward: { type: user, key: "email" },
@@ -228,7 +228,7 @@ const userProfile = db.type("UserProfile", {
 Customize relation names using `toward.as` / `backward` options:
 
 ```typescript
-const userProfile = db.type("UserProfile", {
+const userProfile = db.table("UserProfile", {
   userId: db.uuid().relation({
     type: "1-1",
     toward: { type: user, as: "base" },
@@ -260,7 +260,7 @@ on the same type point to the same target type, because their default forward na
 from the target type name:
 
 ```typescript
-const post = db.type("Post", {
+const post = db.table("Post", {
   authorID: db.uuid().relation({
     type: "n-1",
     toward: { type: user, as: "author" },
@@ -300,11 +300,11 @@ db.string().hooks({
 
 #### Type-level Hooks
 
-Set hooks for multiple fields at once using `db.type().hooks()`:
+Set hooks for multiple fields at once using `db.table().hooks()`:
 
 ```typescript
 export const customer = db
-  .type("Customer", {
+  .table("Customer", {
     firstName: db.string(),
     lastName: db.string(),
     fullName: db.string(),
@@ -322,7 +322,7 @@ export const customer = db
 ```typescript
 // Compile error - cannot set hooks on the same field twice
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string().hooks({ create: ({ data }) => data.firstName }), // Field-level
   })
   .hooks({
@@ -331,7 +331,7 @@ export const user = db
 
 // OK - set hooks on different fields
 export const user = db
-  .type("User", {
+  .table("User", {
     firstName: db.string().hooks({ create: () => "John" }), // Field-level on firstName
     lastName: db.string(),
   })
@@ -363,11 +363,11 @@ db.string().validate(
 
 #### Type-level Validation
 
-Set validators for multiple fields at once using `db.type().validate()`:
+Set validators for multiple fields at once using `db.table().validate()`:
 
 ```typescript
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string(),
     email: db.string(),
   })
@@ -385,7 +385,7 @@ export const user = db
 ```typescript
 // Compile error - cannot set validation on the same field twice
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string().validate(({ value }) => value.length > 0), // Field-level
   })
   .validate({
@@ -394,7 +394,7 @@ export const user = db
 
 // OK - set validation on different fields
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string().validate(({ value }) => value.length > 0), // Field-level on name
     email: db.string(),
   })
@@ -426,7 +426,7 @@ db.string().serial({
 ### Common Fields
 
 ```typescript
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   ...db.fields.timestamps(),
 });
@@ -439,7 +439,7 @@ export const user = db.type("User", {
 ### Composite Indexes
 
 ```typescript
-db.type("User", {
+db.table("User", {
   firstName: db.string(),
   lastName: db.string(),
 }).indexes({
@@ -452,7 +452,7 @@ db.type("User", {
 ### File Fields
 
 ```typescript
-db.type("User", {
+db.table("User", {
   name: db.string(),
 }).files({
   avatar: "profile image",
@@ -462,7 +462,7 @@ db.type("User", {
 ### Features
 
 ```typescript
-db.type("User", {
+db.table("User", {
   name: db.string(),
 }).features({
   aggregation: true,
@@ -475,7 +475,7 @@ db.type("User", {
 Enable event publishing for a type to trigger executors on record changes:
 
 ```typescript
-db.type("User", {
+db.table("User", {
   name: db.string(),
 }).features({
   publishEvents: true,
@@ -494,7 +494,7 @@ db.type("User", {
 
    ```typescript
    // publishEvents is automatically enabled because an executor uses this type
-   export const order = db.type("Order", {
+   export const order = db.table("Order", {
      status: db.string(),
    });
 
@@ -508,7 +508,7 @@ db.type("User", {
 2. **Manual enable**: Enable event publishing for external consumers or debugging
 
    ```typescript
-   db.type("AuditLog", {
+   db.table("AuditLog", {
      action: db.string(),
    }).features({
      publishEvents: true, // Enable even without executor triggers
@@ -518,7 +518,7 @@ db.type("User", {
 3. **Explicit disable**: Disable event publishing for a type that doesn't need it (error if executor uses it)
 
    ```typescript
-   db.type("TempData", {
+   db.table("TempData", {
      data: db.string(),
    }).features({
      publishEvents: false, // Explicitly disable
@@ -534,7 +534,7 @@ Extract subsets of fields from a `TailorDBType` for reuse in resolvers, executor
 Select specific fields and optionally modify their properties:
 
 ```typescript
-const user = db.type("User", {
+const user = db.table("User", {
   id: db.uuid(),
   name: db.string(),
   email: db.string().unique(),
@@ -604,7 +604,7 @@ Configure Permission and GQLPermission. For details, see the [TailorDB Permissio
 **Important**: Following the secure-by-default principle, all operations are denied if permissions are not configured. You must explicitly grant permissions for each operation (create, read, update, delete).
 
 ```typescript
-db.type("User", {
+db.table("User", {
   name: db.string(),
   role: db.enum(["admin", "user"]).index(),
 })
@@ -634,7 +634,7 @@ import {
   unsafeAllowAllGqlPermission,
 } from "@tailor-platform/sdk";
 
-db.type("User", {
+db.table("User", {
   name: db.string(),
 })
   .permission(unsafeAllowAllTypePermission)

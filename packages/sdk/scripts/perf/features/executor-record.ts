@@ -12,7 +12,7 @@ import {
   db,
 } from "../../../src/configure";
 
-const dummyType = db.type("DummyType", { name: db.string() });
+const dummyType = db.table("DummyType", { name: db.string() });
 
 export const executor0 = createExecutor({
   name: "executor0",

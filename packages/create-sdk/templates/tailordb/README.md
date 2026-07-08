@@ -1,6 +1,6 @@
 # TailorDB Template
 
-Comprehensive TailorDB type definitions demonstrating all features of `db.type()`.
+Comprehensive TailorDB type definitions demonstrating all features of `db.table()`.
 
 ## Features
 
