@@ -94,7 +94,7 @@ export function toPlatformExecutionPolicyKey(policy: ExecutionPolicyInstance): s
 function validatePolicy(policy: ExecutionPolicyInstance): void {
   if (declaredKey(policy).endsWith("*")) {
     throw new Error(
-      `Invalid workflow execution policy "${policy.name}": key must not end with '*'; set matchType: "prefix" to declare a wildcard prefix instead.`,
+      `Invalid workflow execution policy "${policy.name}": key must not end with '*'; omit the '*' and set matchType: "prefix" for wildcard policies (the SDK appends '*' automatically).`,
     );
   }
   const parsed = WorkflowJobFunctionExecutionPolicySchema.safeParse({
