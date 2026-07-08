@@ -256,8 +256,37 @@ function isSdkDbMember(
   );
 }
 
+function typeStringLiteral(node: SgNode | null): SgNode | null {
+  if (node?.kind() !== "string") return null;
+  const fragments = node.children().filter((child) => child.kind() === "string_fragment");
+  return fragments.length === 1 && fragments[0]!.text() === "type" ? node : null;
+}
+
+function replaceStringLiteralValue(node: SgNode, value: string): Edit {
+  const quote = node.text().startsWith("'") ? "'" : '"';
+  return node.replace(`${quote}${value}${quote}`);
+}
+
+function hasTypeBuilderUse(root: SgNode, name: string, afterIndex: number): boolean {
+  for (const member of root.findAll({ rule: { kind: "member_expression" } })) {
+    if (member.range().start.index <= afterIndex) continue;
+    if (member.field("property")?.text() !== "type") continue;
+    const object = member.field("object");
+    if (object?.kind() === "identifier" && object.text() === name) return true;
+  }
+
+  for (const subscript of root.findAll({ rule: { kind: "subscript_expression" } })) {
+    if (subscript.range().start.index <= afterIndex) continue;
+    if (!typeStringLiteral(subscript.field("index"))) continue;
+    const object = subscript.field("object");
+    if (object?.kind() === "identifier" && object.text() === name) return true;
+  }
+
+  return false;
+}
+
 export default function transform(source: string, filePath: string): string | null {
-  if (!source.includes(".type") || !source.includes(SDK_MODULE)) return null;
+  if (!source.includes("type") || !source.includes(SDK_MODULE)) return null;
 
   let root: SgNode;
   try {
@@ -290,6 +319,14 @@ export default function transform(source: string, filePath: string): string | nu
     if (property?.text() !== "type") continue;
     if (!isSdkDbMember(member.field("object"), dbNames, namespaceNames, shadowedRanges)) continue;
     edits.push(property.replace("table"));
+  }
+  for (const subscript of root.findAll({ rule: { kind: "subscript_expression" } })) {
+    const index = typeStringLiteral(subscript.field("index"));
+    if (!index) continue;
+    if (!isSdkDbMember(subscript.field("object"), dbNames, namespaceNames, shadowedRanges)) {
+      continue;
+    }
+    edits.push(replaceStringLiteralValue(index, "table"));
   }
 
   return edits.length > 0 ? root.commitEdits(edits) : null;
@@ -362,6 +399,21 @@ export function reviewFindings(
       file: relativePath,
       line: lineForIndex(source, binding.range().start.index),
       message: "Review destructured db.type builder usage and migrate it to db.table.",
+      excerpt: excerptAtIndex(source, binding.range().start.index),
+    });
+  }
+
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const binding = firstDeclaratorChild(decl);
+    if (binding?.kind() !== "identifier") continue;
+    const value = declaratorValue(decl);
+    if (!isSdkDbMember(value, dbNames, namespaceNames, shadowedRanges)) continue;
+    if (!hasTypeBuilderUse(root, binding.text(), decl.range().end.index)) continue;
+
+    findings.push({
+      file: relativePath,
+      line: lineForIndex(source, binding.range().start.index),
+      message: "Review SDK db alias usage and migrate db.type builder calls to db.table.",
       excerpt: excerptAtIndex(source, binding.range().start.index),
     });
   }
