@@ -22,6 +22,18 @@ export const optionalTeam = sdk.db.type?.("OptionalTeam", {
   label: sdk.db.string(),
 });
 
+export const computedUser = db["type"]("ComputedUser", {
+  label: db.string(),
+});
+
+export const computedProject = schema["type"]("ComputedProject", {
+  label: schema.string(),
+});
+
+export const computedTeam = sdk.db["type"]("ComputedTeam", {
+  label: sdk.db.string(),
+});
+
 const local = {
   type: (name: string) => name,
 };
