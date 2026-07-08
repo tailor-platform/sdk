@@ -59,7 +59,7 @@ function normalizeComparableConcurrency(
  * The declared key prefix, regardless of variant. `ExecutionPolicyWildcardInstance`
  * omits `key` from its public type to force callers through `keyFor()`, but
  * the underlying value always carries it when produced by
- * `defineWorkflowExecutionPolicy(Policies)()`.
+ * `defineWorkflowExecutionPolicy()` or `defineWorkflowExecutionPolicies()`.
  * @param policy - Declared policy from the config
  * @returns The declared key prefix
  */

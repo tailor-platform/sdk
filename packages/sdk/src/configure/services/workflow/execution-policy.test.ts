@@ -1,6 +1,10 @@
 import { describe, expect, expectTypeOf, test } from "vitest";
 import { defineWorkflowExecutionPolicies, defineWorkflowExecutionPolicy } from "./execution-policy";
 import type { ExecutionPolicyKey } from "#/runtime/workflow";
+import type {
+  ExecutionPolicyExactInstance,
+  ExecutionPolicyWildcardInstance,
+} from "./execution-policy.types";
 
 describe("defineWorkflowExecutionPolicies", () => {
   test("uses the property name verbatim for both name and key", () => {
@@ -177,5 +181,13 @@ describe("defineWorkflowExecutionPolicy", () => {
   test("keyFor throws when the built key violates the grammar (e.g. an empty suffix)", () => {
     const policy = defineWorkflowExecutionPolicy("tenant-api", { enableSuffix: true });
     expect(() => policy.keyFor("")).toThrow(/must match \[a-z0-9_:\.-\]/);
+  });
+
+  test("a non-literal enableSuffix resolves to the union type instead of unsoundly narrowing", () => {
+    const flag: boolean = Math.random() > 0.5;
+    const policy = defineWorkflowExecutionPolicy("tenant-api", { enableSuffix: flag });
+    expectTypeOf(policy).toEqualTypeOf<
+      ExecutionPolicyExactInstance<"tenant-api"> | ExecutionPolicyWildcardInstance
+    >();
   });
 });

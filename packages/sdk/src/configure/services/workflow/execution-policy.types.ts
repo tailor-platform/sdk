@@ -64,13 +64,20 @@ export type ExecutionPolicyInstance<Key extends string = string> =
 
 /**
  * Resolves to {@link ExecutionPolicyWildcardInstance} when `EnableSuffix` is
- * known at the type level to be `true`, otherwise to
- * {@link ExecutionPolicyExactInstance}.
+ * known at the type level to be `true`, to {@link ExecutionPolicyExactInstance}
+ * when it's known to be `false`, or to their union when `EnableSuffix` is the
+ * unnarrowed `boolean` (e.g. a caller passed a non-literal `enableSuffix`) —
+ * narrowing to one branch in that case would claim a `key` or `keyFor` that
+ * may not exist on the actual runtime instance.
  */
 export type ResolvedExecutionPolicyInstance<
   Key extends string,
   EnableSuffix extends boolean,
-> = EnableSuffix extends true ? ExecutionPolicyWildcardInstance : ExecutionPolicyExactInstance<Key>;
+> = boolean extends EnableSuffix
+  ? ExecutionPolicyExactInstance<Key> | ExecutionPolicyWildcardInstance
+  : EnableSuffix extends true
+    ? ExecutionPolicyWildcardInstance
+    : ExecutionPolicyExactInstance<Key>;
 
 /**
  * Body of an execution policy declaration.
