@@ -1,5 +1,4 @@
-import { Code, ConnectError } from "@connectrpc/connect";
-import { fetchAll } from "#/cli/shared/client";
+import { fetchAll, isNotFoundError } from "#/cli/shared/client";
 import { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
 import type { TypeSourceInfo, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
 
@@ -133,7 +132,7 @@ export async function fetchExternalTailorDBTypeNameSources(
           });
           return [tailordbTypes, nextPageToken ?? ""];
         } catch (error) {
-          if (error instanceof ConnectError && error.code === Code.NotFound) {
+          if (isNotFoundError(error)) {
             return [[], ""];
           }
           throw error;

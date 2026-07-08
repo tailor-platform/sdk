@@ -1,5 +1,4 @@
-import { Code, ConnectError } from "@connectrpc/connect";
-import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
@@ -180,21 +179,14 @@ export async function planSecretManager(context: PlanContext) {
       // Fetch existing secrets in this vault
       let existingSecrets: string[] = [];
       if (existing) {
-        const secrets = await fetchAll(async (pageToken, maxPageSize) => {
-          try {
-            const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
-              workspaceId,
-              secretmanagerVaultName: vaultName,
-              pageToken,
-              pageSize: maxPageSize,
-            });
-            return [secrets, nextPageToken];
-          } catch (error) {
-            if (error instanceof ConnectError && error.code === Code.NotFound) {
-              return [[], ""];
-            }
-            throw error;
-          }
+        const secrets = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+          const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
+            workspaceId,
+            secretmanagerVaultName: vaultName,
+            pageToken,
+            pageSize: maxPageSize,
+          });
+          return [secrets, nextPageToken];
         });
         existingSecrets = secrets.map((s) => s.name);
       }
@@ -258,21 +250,14 @@ export async function planSecretManager(context: PlanContext) {
     });
     if (owned) {
       // Delete secrets inside the vault before deleting the vault itself
-      const secrets = await fetchAll(async (pageToken, maxPageSize) => {
-        try {
-          const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
-            workspaceId,
-            secretmanagerVaultName: name,
-            pageToken,
-            pageSize: maxPageSize,
-          });
-          return [secrets, nextPageToken];
-        } catch (error) {
-          if (error instanceof ConnectError && error.code === Code.NotFound) {
-            return [[], ""];
-          }
-          throw error;
-        }
+      const secrets = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+        const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
+          workspaceId,
+          secretmanagerVaultName: name,
+          pageToken,
+          pageSize: maxPageSize,
+        });
+        return [secrets, nextPageToken];
       });
       for (const secret of secrets) {
         secretChangeSet.deletes.push({
