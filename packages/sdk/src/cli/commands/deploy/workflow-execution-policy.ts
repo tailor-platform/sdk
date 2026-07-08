@@ -58,12 +58,20 @@ function normalizeComparableConcurrency(
 /**
  * The declared key prefix, regardless of variant. `ExecutionPolicyWildcardInstance`
  * omits `key` from its public type to force callers through `keyFor()`, but
- * the underlying value always carries it.
+ * the underlying value always carries it when produced by
+ * `defineWorkflowExecutionPolicy(Policies)()`.
  * @param policy - Declared policy from the config
  * @returns The declared key prefix
  */
 function declaredKey(policy: ExecutionPolicyInstance): string {
-  return policy.enableSuffix ? (policy as unknown as { key: string }).key : policy.key;
+  if (!policy.enableSuffix) return policy.key;
+  const key = (policy as unknown as { key?: string }).key;
+  if (typeof key !== "string") {
+    throw new Error(
+      `Invalid workflow execution policy "${policy.name}": wildcard policies must be created via defineWorkflowExecutionPolicy() or defineWorkflowExecutionPolicies(), not a hand-constructed object.`,
+    );
+  }
+  return key;
 }
 
 /**

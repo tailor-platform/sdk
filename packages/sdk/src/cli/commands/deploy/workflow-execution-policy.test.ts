@@ -38,4 +38,16 @@ describe("planWorkflowJobFunctionExecutionPolicy", () => {
       }),
     ).rejects.toThrow(/key must not end with '\*'/);
   });
+
+  test("rejects a hand-constructed wildcard policy missing the internal key", async () => {
+    // ExecutionPolicyWildcardInstance's public type has no `key`, so nothing
+    // stops a caller from hand-constructing one that skips the builder and
+    // genuinely lacks the internal prefix.
+    const policy = { name: "tenant-api", enableSuffix: true, keyFor: () => "" } as never;
+    await expect(
+      planWorkflowJobFunctionExecutionPolicy({} as never, "ws-id", "app", undefined, {
+        tenantApi: policy,
+      }),
+    ).rejects.toThrow(/must be created via defineWorkflowExecutionPolicy/);
+  });
 });
