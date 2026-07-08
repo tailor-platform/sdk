@@ -536,7 +536,6 @@ export const allCodemods: CodemodPackage[] = [
       "Rename TailorDB schema builder calls from `db.type()` to `db.table()`. TailorDB schema definitions now use table terminology in SDK projects.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_2,
     scriptPath: "v2/db-type-to-table/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     legacyPatterns: ["db.type"],
