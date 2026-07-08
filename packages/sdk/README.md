@@ -53,16 +53,16 @@ For more details, see the [Quickstart Guide](./docs/quickstart.md).
 Install the `tailor` skill from the locally installed SDK package:
 
 ```bash
-npx tailor skills install
+npx tailor skills add
 
-# Example: install to Codex in non-interactive mode
-npx tailor skills install -a codex -y
+# Or refresh all skills owned by this CLI
+npx tailor skills sync
 ```
 
-This uses the `skills` CLI under the hood, sourcing the skill from
-`node_modules/@tailor-platform/sdk/agent-skills` so the skill version always matches
-the installed SDK version. Files are copied (not symlinked) so they survive
-`pnpm install` wiping `node_modules`.
+This sources the skill from `node_modules/@tailor-platform/sdk/agent-skills`
+so the skill version always matches the installed SDK version. Files are copied
+into the current project under `.agents/skills` and `.claude/skills`, so rerun
+`skills sync` after upgrading the SDK.
 
 ## Learn More
 

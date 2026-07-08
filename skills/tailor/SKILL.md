@@ -1,6 +1,8 @@
 ---
 name: tailor
 description: Use this skill when working with @tailor-platform/sdk projects, including service configuration, CLI usage, and docs navigation.
+metadata:
+  politty-cli: "@tailor-platform/sdk:tailor"
 ---
 
 # Tailor SDK Knowledge
