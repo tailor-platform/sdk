@@ -85,7 +85,7 @@ describe("WorkflowJobFunctionExecutionPolicySchema", () => {
 
   test("rejects invalid key grammar", () => {
     const result = WorkflowJobFunctionExecutionPolicySchema.safeParse({
-      name: "ok",
+      name: "premium",
       key: "!bad",
     });
     expect(result.success).toBe(false);
