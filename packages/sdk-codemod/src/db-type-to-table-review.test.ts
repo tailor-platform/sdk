@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
+import dbTypeToTableTransform from "../codemods/v2/db-type-to-table/scripts/transform";
 import { allCodemods } from "./registry";
 import { runCodemods } from "./runner";
 
@@ -26,6 +27,50 @@ describe("db-type-to-table review findings", () => {
       await fs.promises.rm(tmpDir, { recursive: true, force: true });
       tmpDir = undefined;
     }
+  });
+
+  test("does not let switch-case local db declarations shadow imported db outside the switch", () => {
+    const input = [
+      'import { db } from "@tailor-platform/sdk";',
+      "",
+      'export const beforeSwitch = db.type("BeforeSwitch", {',
+      "  name: db.string(),",
+      "});",
+      "",
+      "switch (kind) {",
+      '  case "local":',
+      "    const db = { type: (name: string) => name };",
+      '    db.type("NoChange");',
+      "    break;",
+      "}",
+      "",
+      'export const afterSwitch = db.type("AfterSwitch", {',
+      "  name: db.string(),",
+      "});",
+      "",
+    ].join("\n");
+
+    const expected = [
+      'import { db } from "@tailor-platform/sdk";',
+      "",
+      'export const beforeSwitch = db.table("BeforeSwitch", {',
+      "  name: db.string(),",
+      "});",
+      "",
+      "switch (kind) {",
+      '  case "local":',
+      "    const db = { type: (name: string) => name };",
+      '    db.type("NoChange");',
+      "    break;",
+      "}",
+      "",
+      'export const afterSwitch = db.table("AfterSwitch", {',
+      "  name: db.string(),",
+      "});",
+      "",
+    ].join("\n");
+
+    expect(dbTypeToTableTransform(input, "tailordb.ts")).toBe(expected);
   });
 
   test("reports destructured db.type builders for LLM review", async () => {
