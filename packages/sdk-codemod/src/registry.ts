@@ -96,6 +96,7 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
 );
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
+const V2_NEXT_3 = "2.0.0-next.3";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -536,6 +537,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rename TailorDB schema builder calls from `db.type()` to `db.table()`. TailorDB schema definitions now use table terminology in SDK projects.",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_3,
     scriptPath: "v2/db-type-to-table/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     legacyPatterns: ["db.type"],

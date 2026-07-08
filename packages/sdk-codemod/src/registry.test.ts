@@ -47,6 +47,14 @@ describe("getApplicableCodemods", () => {
     expect(prereleaseIds).not.toContain("v2/node-minimum-22-15-0");
   });
 
+  test("returns db.type to db.table codemod for the prerelease that removes db.type", () => {
+    const prereleaseIds = getApplicableCodemods("1.67.1", "2.0.0-next.3").map(
+      (codemod) => codemod.id,
+    );
+
+    expect(prereleaseIds).toContain("v2/db-type-to-table");
+  });
+
   test("returns empty when both versions are before the codemod boundary", () => {
     expect(getApplicableCodemods("1.0.0", "1.5.0")).toEqual([]);
   });
