@@ -73,6 +73,32 @@ describe("db-type-to-table review findings", () => {
     expect(dbTypeToTableTransform(input, "tailordb.ts")).toBe(expected);
   });
 
+  test("rewrites type-only db imports and namespace type queries", () => {
+    const input = [
+      'import type { db as schema } from "@tailor-platform/sdk";',
+      'import * as sdk from "@tailor-platform/sdk";',
+      'import type * as sdkTypes from "@tailor-platform/sdk";',
+      "",
+      "type NamedBuilder = typeof schema.type;",
+      "type NamespaceBuilder = typeof sdk.db.type;",
+      "type TypeNamespaceBuilder = typeof sdkTypes.db.type;",
+      "",
+    ].join("\n");
+
+    const expected = [
+      'import type { db as schema } from "@tailor-platform/sdk";',
+      'import * as sdk from "@tailor-platform/sdk";',
+      'import type * as sdkTypes from "@tailor-platform/sdk";',
+      "",
+      "type NamedBuilder = typeof schema.table;",
+      "type NamespaceBuilder = typeof sdk.db.table;",
+      "type TypeNamespaceBuilder = typeof sdkTypes.db.table;",
+      "",
+    ].join("\n");
+
+    expect(dbTypeToTableTransform(input, "tailordb.ts")).toBe(expected);
+  });
+
   test("reports destructured db.type builders for LLM review", async () => {
     tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "db-type-review-test-"));
     await fs.promises.writeFile(
