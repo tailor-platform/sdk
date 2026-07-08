@@ -1466,6 +1466,13 @@ const DEPLOY_MANAGED_RESOURCE_DEFINITIONS: ReadonlyArray<DeployManagedResourceDe
     changeSetOf: (results) => results.workflow.changeSet,
   },
   {
+    resourceLabel: "Workflow execution policy",
+    resourceType: "workflow_job_function_execution_policy",
+    namesOf: (target) =>
+      Object.values(target.config.workflow?.executionPolicies ?? {}).map((policy) => policy.name),
+    changeSetOf: (results) => results.workflowExecutionPolicy.changeSet,
+  },
+  {
     resourceLabel: "Auth connection",
     resourceType: "auth.connection",
     namespaceFields: MANAGED_RESOURCE_NAMESPACE_FIELDS,
