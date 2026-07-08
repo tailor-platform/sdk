@@ -285,13 +285,16 @@ function isSdkDbMember(
 }
 
 function typeStringLiteral(node: SgNode | null): SgNode | null {
-  if (node?.kind() !== "string") return null;
+  if (!node) return null;
+  const kind = node.kind();
+  if (kind !== "string" && kind !== "template_string") return null;
   const fragments = node.children().filter((child) => child.kind() === "string_fragment");
   return fragments.length === 1 && fragments[0]!.text() === "type" ? node : null;
 }
 
 function replaceStringLiteralValue(node: SgNode, value: string): Edit {
-  const quote = node.text().startsWith("'") ? "'" : '"';
+  const text = node.text();
+  const quote = text.startsWith("'") ? "'" : text.startsWith("`") ? "`" : '"';
   return node.replace(`${quote}${value}${quote}`);
 }
 
