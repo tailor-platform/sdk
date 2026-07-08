@@ -386,8 +386,10 @@ import { defineConfig } from "@tailor-platform/sdk";
 import { executionPolicies } from "./workflows/policies";
 
 export default defineConfig({
-  workflow: { files: ["workflows/**/*.ts"] },
-  workflowExecutionPolicies: executionPolicies,
+  workflow: {
+    files: ["workflows/**/*.ts"],
+    executionPolicies,
+  },
 });
 ```
 

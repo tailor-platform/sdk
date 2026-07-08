@@ -1140,7 +1140,7 @@ async function planDeploymentTarget(
           workspaceId,
           application.name,
           application.id,
-          config.workflowExecutionPolicies ?? {},
+          config.workflow?.executionPolicies ?? {},
         ),
       ),
       withSpan("plan.secretManager", () => planSecretManager(ctx)),

@@ -30,6 +30,8 @@ export type WorkflowServiceConfig = {
   job_files?: string[];
   ignores?: string[];
   job_ignores?: string[];
+  /** Workspace-level execution policies for workflow job functions. */
+  executionPolicies?: Record<string, ExecutionPolicyInstance>;
 };
 export type WorkflowServiceInput = WorkflowServiceConfig;
 
@@ -84,8 +86,6 @@ export interface AppConfig<
   executor?: ExecutorServiceInput;
   /** Workflow service configuration with workflow files. */
   workflow?: WorkflowServiceInput;
-  /** Workspace-level execution policies for workflow job functions. */
-  workflowExecutionPolicies?: Record<string, ExecutionPolicyInstance>;
   /** HTTP adapter service configuration with adapter files. */
   httpAdapter?: HttpAdapterServiceInput;
   /** Static website configurations. Must be an array, e.g. `[website]`. */

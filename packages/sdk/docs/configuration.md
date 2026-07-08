@@ -303,8 +303,10 @@ const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
 }));
 
 export default defineConfig({
-  workflow: { files: ["workflows/**/*.ts"] },
-  workflowExecutionPolicies: executionPolicies,
+  workflow: {
+    files: ["workflows/**/*.ts"],
+    executionPolicies,
+  },
 });
 ```
 

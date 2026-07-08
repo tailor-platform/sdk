@@ -140,8 +140,8 @@ export default defineConfig({
   executor: { files: ["./executors/*.ts"] },
   workflow: {
     files: ["./workflows/**/*.ts"],
+    executionPolicies,
   },
-  workflowExecutionPolicies: executionPolicies,
   httpAdapter: {
     files: ["./adapters/**/*.ts"],
   },
