@@ -1,11 +1,10 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   AuthConnection_Status,
   AuthConnection_Type,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { type AuthService } from "#/cli/services/auth/service";
-import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import { buildMetaRequest, resourceTrn, sdkNameLabelKey, type WithLabel } from "./label";
@@ -131,20 +130,13 @@ export async function planAuthConnections(
     }
   }
 
-  const existingList = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
-      const { connections, nextPageToken } = await client.listAuthConnections({
-        workspaceId,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [connections, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+  const existingList = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+    const { connections, nextPageToken } = await client.listAuthConnections({
+      workspaceId,
+      pageToken,
+      pageSize: maxPageSize,
+    });
+    return [connections, nextPageToken];
   });
 
   const existingConnections: WithLabel<AuthConnection> = {};

@@ -1,3 +1,5 @@
+# pinact:skip-file — this workflow's action versions are pinned deliberately;
+# changesets/action's `next` prereleases have repeatedly broken releases.
 name: Release
 
 on:
@@ -25,9 +27,11 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-          # ensure-github-releases.sh diffs package.json against HEAD^ to
-          # tell whether a version was introduced at this commit.
-          fetch-depth: 2
+          # Full history: changesets/action's changelog generation walks
+          # commit history to attribute changesets, deepening a shallow
+          # clone on demand if needed. That on-demand deepening is prone to
+          # git-level races, so give it full history instead.
+          fetch-depth: 0
 
       - name: Install Deps
         uses: ./.github/actions/install-deps

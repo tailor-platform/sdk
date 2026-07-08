@@ -1,5 +1,4 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type AddCustomDomainRequestSchema,
   type CreateStaticWebsiteRequestSchema,
@@ -7,7 +6,7 @@ import {
   type RemoveCustomDomainRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
 } from "@tailor-platform/tailor-proto/staticwebsite_pb";
-import { type OperatorClient } from "#/cli/shared/client";
+import { getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
@@ -276,12 +275,12 @@ export async function planStaticWebsite(context: PlanContext) {
   );
   await Promise.all(
     websitesToFetchDomains.map(async (name) => {
-      try {
+      const domainsWithLabels = await getOrNull(async () => {
         const { customDomains } = await client.listCustomDomains({
           workspaceId,
           staticWebsiteName: name,
         });
-        const domainsWithLabels = await Promise.all(
+        return await Promise.all(
           customDomains.map(async (d) => {
             const { metadata } = await client.getMetadata({
               trn: customDomainTrn(workspaceId, name, d.domain),
@@ -292,12 +291,9 @@ export async function planStaticWebsite(context: PlanContext) {
             };
           }),
         );
+      });
+      if (domainsWithLabels) {
         existingDomainsByWebsite.set(name, domainsWithLabels);
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return;
-        }
-        throw error;
       }
     }),
   );
