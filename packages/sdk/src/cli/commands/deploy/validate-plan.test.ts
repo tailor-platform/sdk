@@ -238,7 +238,7 @@ const validCases: Case<undefined>[] = [
     expected: undefined,
   },
   {
-    name: "(n) workflow execution policy with enableSuffix (registers a trailing `*`) passes",
+    name: "(n) workflow execution policy with matchType: 'prefix' (registers a trailing `*`) passes",
     mutate: (input) => {
       input.workflowExecutionPolicy.changeSet.creates.push({
         name: "tenant-api",
@@ -248,7 +248,7 @@ const validCases: Case<undefined>[] = [
           // Deliberately different from `name` (and using `_`, which `name`'s
           // grammar disallows) to show `key` is validated independently.
           key: "tenant_api",
-          enableSuffix: true,
+          matchType: "prefix",
           concurrencyPolicy: { maxConcurrentExecutions: 3 },
         },
         metaRequest: METADATA,

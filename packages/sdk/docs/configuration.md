@@ -297,7 +297,7 @@ const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
   premium: define({ concurrencyPolicy: { maxConcurrentExecutions: 5 } }),
   tenantApi: define({
     name: "tenant-api",
-    enableSuffix: true,
+    matchType: "prefix",
     concurrencyPolicy: { maxConcurrentExecutions: 3 },
   }),
 }));

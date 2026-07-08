@@ -15,7 +15,7 @@ describe("defineWorkflowExecutionPolicies", () => {
 
     expect(policies.premium.name).toBe("premium");
     expect(policies.premium.key).toBe("premium");
-    expect(policies.premium.enableSuffix).toBe(false);
+    expect(policies.premium.matchType).toBe("exact");
     expect(policies.premium.concurrencyPolicy).toEqual({ maxConcurrentExecutions: 5 });
 
     expect(policies["tenant-api"].name).toBe("tenant-api");
@@ -55,25 +55,25 @@ describe("defineWorkflowExecutionPolicies", () => {
     expect(policies.perTenant.key).toBe("tenant-api");
   });
 
-  test("enableSuffix on a property-name-derived key gets a keyFor() builder returning a branded key", () => {
+  test("matchType: 'prefix' on a property-name-derived key gets a keyFor() builder returning a branded key", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
-      "tenant-api": define({ enableSuffix: true }),
+      "tenant-api": define({ matchType: "prefix" }),
     }));
 
-    expect(policies["tenant-api"].enableSuffix).toBe(true);
+    expect(policies["tenant-api"].matchType).toBe("prefix");
     expect(policies["tenant-api"].keyFor("acme")).toBe("tenant-api.acme");
     expectTypeOf(policies["tenant-api"].keyFor).toEqualTypeOf<
       (suffix: string) => ExecutionPolicyKey
     >();
-    // enableSuffix hides the raw prefix from the public type — keyFor() is
-    // the only way to get a dispatchable key.
+    // matchType: "prefix" hides the raw prefix from the public type —
+    // keyFor() is the only way to get a dispatchable key.
     expectTypeOf(policies["tenant-api"]).not.toHaveProperty("key");
   });
 
-  test("enableSuffix combines with an explicit key (not mutually exclusive)", () => {
+  test("matchType: 'prefix' combines with an explicit key (not mutually exclusive)", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
       // key deliberately differs from name to show it's used independently.
-      tenantApi: define({ name: "tenant-api", key: "tenant_api", enableSuffix: true }),
+      tenantApi: define({ name: "tenant-api", key: "tenant_api", matchType: "prefix" }),
     }));
 
     expect(policies.tenantApi.keyFor("acme")).toBe("tenant_api.acme");
@@ -81,7 +81,7 @@ describe("defineWorkflowExecutionPolicies", () => {
 
   test("keyFor throws when the built key violates the grammar (e.g. an empty suffix)", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
-      "tenant-api": define({ enableSuffix: true }),
+      "tenant-api": define({ matchType: "prefix" }),
     }));
 
     expect(() => policies["tenant-api"].keyFor("")).toThrow(/must match \[a-z0-9_:\.-\]/);
@@ -90,8 +90,8 @@ describe("defineWorkflowExecutionPolicies", () => {
   test("the second argument's separator overrides the default `.` for every policy in the group", () => {
     const policies = defineWorkflowExecutionPolicies(
       (define) => ({
-        "tenant-api": define({ enableSuffix: true }),
-        "billing-api": define({ enableSuffix: true }),
+        "tenant-api": define({ matchType: "prefix" }),
+        "billing-api": define({ matchType: "prefix" }),
       }),
       { separator: ":" },
     );
@@ -100,16 +100,16 @@ describe("defineWorkflowExecutionPolicies", () => {
     expect(policies["billing-api"].keyFor("acme")).toBe("billing-api:acme");
   });
 
-  test("an exact-match key (enableSuffix not set) is branded and usable directly as executionPolicyKey", () => {
+  test("an exact-match key (matchType not set) is branded and usable directly as executionPolicyKey", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
       premium: define({ concurrencyPolicy: { maxConcurrentExecutions: 5 } }),
     }));
 
-    expect(policies.premium.enableSuffix).toBe(false);
+    expect(policies.premium.matchType).toBe("exact");
     expectTypeOf(policies.premium.key).toExtend<ExecutionPolicyKey>();
   });
 
-  test("without enableSuffix, a policy has no keyFor() at the type or value level", () => {
+  test("without matchType: 'prefix', a policy has no keyFor() at the type or value level", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
       premium: define({ key: "premium-users" }),
     }));
@@ -135,7 +135,7 @@ describe("defineWorkflowExecutionPolicy", () => {
     const policy = defineWorkflowExecutionPolicy("per-tenant");
     expect(policy.name).toBe("per-tenant");
     expect(policy.key).toBe("per-tenant");
-    expect(policy.enableSuffix).toBe(false);
+    expect(policy.matchType).toBe("exact");
     expect(policy.concurrencyPolicy).toBeUndefined();
   });
 
@@ -149,43 +149,43 @@ describe("defineWorkflowExecutionPolicy", () => {
     expect(policy.concurrencyPolicy).toEqual({ maxConcurrentExecutions: 3 });
   });
 
-  test("enableSuffix gets a keyFor() builder returning a branded key", () => {
-    const policy = defineWorkflowExecutionPolicy("tenant-api", { enableSuffix: true });
+  test("matchType: 'prefix' gets a keyFor() builder returning a branded key", () => {
+    const policy = defineWorkflowExecutionPolicy("tenant-api", { matchType: "prefix" });
     expect(policy.keyFor("acme")).toBe("tenant-api.acme");
     expectTypeOf(policy.keyFor).toEqualTypeOf<(suffix: string) => ExecutionPolicyKey>();
   });
 
-  test("enableSuffix combines with an explicit key (not mutually exclusive)", () => {
+  test("matchType: 'prefix' combines with an explicit key (not mutually exclusive)", () => {
     // key deliberately differs from name to show it's used independently.
     const policy = defineWorkflowExecutionPolicy("tenant-api", {
       key: "tenant_api",
-      enableSuffix: true,
+      matchType: "prefix",
     });
     expect(policy.keyFor("acme")).toBe("tenant_api.acme");
   });
 
   test("separator overrides the default `.` used by keyFor", () => {
     const policy = defineWorkflowExecutionPolicy("tenant-api", {
-      enableSuffix: true,
+      matchType: "prefix",
       separator: ":",
     });
     expect(policy.keyFor("acme")).toBe("tenant-api:acme");
   });
 
-  test("without enableSuffix, a policy has no keyFor() at the type or value level", () => {
+  test("without matchType: 'prefix', a policy has no keyFor() at the type or value level", () => {
     const policy = defineWorkflowExecutionPolicy("per-tenant");
     expect((policy as { keyFor?: unknown }).keyFor).toBeUndefined();
     expectTypeOf(policy).not.toHaveProperty("keyFor");
   });
 
   test("keyFor throws when the built key violates the grammar (e.g. an empty suffix)", () => {
-    const policy = defineWorkflowExecutionPolicy("tenant-api", { enableSuffix: true });
+    const policy = defineWorkflowExecutionPolicy("tenant-api", { matchType: "prefix" });
     expect(() => policy.keyFor("")).toThrow(/must match \[a-z0-9_:\.-\]/);
   });
 
-  test("a non-literal enableSuffix resolves to the union type instead of unsoundly narrowing", () => {
-    const flag: boolean = Math.random() > 0.5;
-    const policy = defineWorkflowExecutionPolicy("tenant-api", { enableSuffix: flag });
+  test("a non-literal matchType resolves to the union type instead of unsoundly narrowing", () => {
+    const matchType: "exact" | "prefix" = Math.random() > 0.5 ? "exact" : "prefix";
+    const policy = defineWorkflowExecutionPolicy("tenant-api", { matchType });
     expectTypeOf(policy).toEqualTypeOf<
       ExecutionPolicyExactInstance<"tenant-api"> | ExecutionPolicyWildcardInstance
     >();

@@ -6,12 +6,12 @@ export const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
   /**
    * Per-tenant wildcard cap. Runtime keys look like `tenant-api.<tenantId>`,
    * built via `.keyFor(tenantId)`. Explicit `name` because `tenant-api` is
-   * not a valid JS identifier; `enableSuffix` registers `tenant-api` as a
-   * wildcard prefix.
+   * not a valid JS identifier; `matchType: "prefix"` registers `tenant-api`
+   * as a wildcard prefix.
    */
   tenantApi: define({
     name: "tenant-api",
-    enableSuffix: true,
+    matchType: "prefix",
     concurrencyPolicy: { maxConcurrentExecutions: 3 },
   }),
 }));

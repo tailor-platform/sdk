@@ -29,10 +29,13 @@ type ResolveKey<Def, Fallback extends string> = Def extends { key: infer K exten
   ? K
   : Fallback;
 
-// Resolves to the literal type of `Def["enableSuffix"]`, defaulting to
-// `false`. Always known from `def` directly — never derived from a property
-// name — so it resolves the same way regardless of where `key` comes from.
-type ResolveEnableSuffix<Def> = Def extends { enableSuffix: infer E extends boolean } ? E : false;
+// Resolves to the literal type of `Def["matchType"]`, defaulting to
+// `"exact"`. Always known from `def` directly — never derived from a
+// property name — so it resolves the same way regardless of where `key`
+// comes from.
+type ResolveMatchType<Def> = Def extends { matchType: infer M extends "exact" | "prefix" }
+  ? M
+  : "exact";
 
 interface ExecutionPolicyWithSetters {
   instance: ExecutionPolicyInstance;
@@ -44,25 +47,26 @@ function createExecutionPolicyInstance(
   initialName: string,
   initialKey: string,
   concurrencyPolicy: ExecutionPolicyConcurrency | undefined,
-  enableSuffix: boolean,
+  matchType: "exact" | "prefix",
   separator: string,
   allowNameSetter: boolean,
   allowKeySetter: boolean,
 ): ExecutionPolicyWithSetters {
+  const isPrefix = matchType === "prefix";
   const raw: {
     name: string;
     key: string;
-    enableSuffix: boolean;
+    matchType: "exact" | "prefix";
     concurrencyPolicy?: ExecutionPolicyConcurrency;
     keyFor?: (suffix: string) => string;
   } = {
     name: initialName,
     key: initialKey,
-    enableSuffix,
+    matchType,
     ...(concurrencyPolicy && { concurrencyPolicy }),
     // Reads raw.key (not the initialKey param) so a property-name-derived
     // key patched in later via setKey is reflected too.
-    ...(enableSuffix && {
+    ...(isPrefix && {
       keyFor: (suffix: string) => {
         const key = `${raw.key}${separator}${suffix}`;
         if (!EXECUTION_POLICY_EXACT_KEY_REGEX.test(key)) {
@@ -74,7 +78,7 @@ function createExecutionPolicyInstance(
       },
     }),
   };
-  // `raw` always carries `key`, including for wildcard policies — it backs
+  // `raw` always carries `key`, including for prefix policies — it backs
   // keyFor()'s closure — but ExecutionPolicyWildcardInstance omits it from
   // its public type, so this cast can't go directly to the union.
   const instance = brandValue(raw, "execution-policy") as unknown as ExecutionPolicyInstance;
@@ -101,14 +105,14 @@ function createExecutionPolicyInstance(
  * runtime key prefix needs to differ from the corresponding workspace-unique
  * name.
  *
- * When `enableSuffix` is set, the returned instance has `keyFor(suffix)`
+ * When `matchType: "prefix"` is set, the returned instance has `keyFor(suffix)`
  * instead of a directly-usable `key` (see {@link ExecutionPolicyWildcardInstance}).
  * @param name - Workspace-unique name. Must match `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`.
- * @param def - Optional overrides for `key` (defaults to `name`), `enableSuffix`, `separator` (the `keyFor` join character, defaults to `.`), and concurrency
+ * @param def - Optional overrides for `key` (defaults to `name`), `matchType`, `separator` (the `keyFor` join character, defaults to `.`), and concurrency
  * @returns An execution policy instance
  * @example
  * export const perTenant = defineWorkflowExecutionPolicy("tenant-api", {
- *   enableSuffix: true,
+ *   matchType: "prefix",
  *   concurrencyPolicy: { maxConcurrentExecutions: 3 },
  * });
  *
@@ -119,16 +123,16 @@ export function defineWorkflowExecutionPolicy<
   const N extends string,
   const D extends (Omit<ExecutionPolicyDefInput, "name"> & { separator?: string }) | undefined =
     undefined,
->(name: N, def?: D): ResolvedExecutionPolicyInstance<ResolveKey<D, N>, ResolveEnableSuffix<D>> {
+>(name: N, def?: D): ResolvedExecutionPolicyInstance<ResolveKey<D, N>, ResolveMatchType<D>> {
   return createExecutionPolicyInstance(
     name,
     def?.key ?? name,
     def?.concurrencyPolicy,
-    def?.enableSuffix ?? false,
+    def?.matchType ?? "exact",
     def?.separator ?? ".",
     false,
     false,
-  ).instance as ResolvedExecutionPolicyInstance<ResolveKey<D, N>, ResolveEnableSuffix<D>>;
+  ).instance as ResolvedExecutionPolicyInstance<ResolveKey<D, N>, ResolveMatchType<D>>;
 }
 
 /**
@@ -139,21 +143,21 @@ export function defineWorkflowExecutionPolicy<
  * is not valid for the execution policy grammar or when the runtime key
  * prefix needs to differ).
  *
- * When `enableSuffix` is set, the returned instance has `keyFor(suffix)`
+ * When `matchType: "prefix"` is set, the returned instance has `keyFor(suffix)`
  * instead of a directly-usable `key` (see {@link ExecutionPolicyWildcardInstance}).
- * `enableSuffix` can be combined with an explicit `key`, or left to apply to
+ * `matchType` can be combined with an explicit `key`, or left to apply to
  * the property-name-derived prefix.
  *
  * The return type mirrors the builder's return type so JSDoc on each property
  * is preserved in IDE autocompletion.
  * @param builder - Callback that receives a `define` factory and returns a record of policies
- * @param options - Group-wide options; `separator` overrides the `.` `keyFor` uses to join the prefix and suffix for every wildcard policy in the group
+ * @param options - Group-wide options; `separator` overrides the `.` `keyFor` uses to join the prefix and suffix for every prefix policy in the group
  * @returns The same object returned by the builder (with `name` / `key` resolved on each instance)
  * @example
  * export const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
  *   premium: define({ concurrencyPolicy: { maxConcurrentExecutions: 5 } }),
  *   "tenant-api": define({
- *     enableSuffix: true,
+ *     matchType: "prefix",
  *     concurrencyPolicy: { maxConcurrentExecutions: 3 },
  *   }),
  * }));
@@ -171,7 +175,7 @@ export function defineWorkflowExecutionPolicies<T extends Record<string, Executi
   builder: (
     define: <const D extends ExecutionPolicyDefInput | undefined = undefined>(
       def?: D,
-    ) => ResolvedExecutionPolicyInstance<ResolveKey<D, string>, ResolveEnableSuffix<D>>,
+    ) => ResolvedExecutionPolicyInstance<ResolveKey<D, string>, ResolveMatchType<D>>,
   ) => T,
   options?: ExecutionPolicyGroupOptions,
 ): T {
@@ -181,14 +185,14 @@ export function defineWorkflowExecutionPolicies<T extends Record<string, Executi
 
   const define = <const D extends ExecutionPolicyDefInput | undefined = undefined>(
     def?: D,
-  ): ResolvedExecutionPolicyInstance<ResolveKey<D, string>, ResolveEnableSuffix<D>> => {
+  ): ResolvedExecutionPolicyInstance<ResolveKey<D, string>, ResolveMatchType<D>> => {
     const explicitName = def?.name;
     const explicitKey = def?.key;
     const { instance, setName, setKey } = createExecutionPolicyInstance(
       explicitName ?? "__pending__",
       explicitKey ?? explicitName ?? "__pending__",
       def?.concurrencyPolicy,
-      def?.enableSuffix ?? false,
+      def?.matchType ?? "exact",
       separator,
       explicitName === undefined,
       // Only fall back to the property name when neither `name` nor `key`
@@ -198,10 +202,7 @@ export function defineWorkflowExecutionPolicies<T extends Record<string, Executi
     );
     if (setName) nameSetters.set(instance, setName);
     if (setKey) keySetters.set(instance, setKey);
-    return instance as ResolvedExecutionPolicyInstance<
-      ResolveKey<D, string>,
-      ResolveEnableSuffix<D>
-    >;
+    return instance as ResolvedExecutionPolicyInstance<ResolveKey<D, string>, ResolveMatchType<D>>;
   };
 
   const result = builder(define);

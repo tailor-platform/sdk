@@ -14,22 +14,22 @@ describe("toPlatformExecutionPolicyKey", () => {
     expect(toPlatformExecutionPolicyKey(policy)).toBe("premium");
   });
 
-  test("appends a trailing `*` for a policy declared with enableSuffix", () => {
-    const policy = defineWorkflowExecutionPolicy("tenant-api", { enableSuffix: true });
+  test("appends a trailing `*` for a policy declared with matchType: 'prefix'", () => {
+    const policy = defineWorkflowExecutionPolicy("tenant-api", { matchType: "prefix" });
     expect(toPlatformExecutionPolicyKey(policy)).toBe("tenant-api*");
   });
 
-  test("appends a trailing `*` when enableSuffix is combined with an explicit key", () => {
+  test("appends a trailing `*` when matchType: 'prefix' is combined with an explicit key", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
       // key deliberately differs from name to show it's used independently.
-      tenantApi: define({ name: "tenant-api", key: "tenant_api", enableSuffix: true }),
+      tenantApi: define({ name: "tenant-api", key: "tenant_api", matchType: "prefix" }),
     }));
     expect(toPlatformExecutionPolicyKey(policies.tenantApi)).toBe("tenant_api*");
   });
 });
 
 describe("planWorkflowJobFunctionExecutionPolicy", () => {
-  test("rejects a declared key that already ends with '*', regardless of enableSuffix", async () => {
+  test("rejects a declared key that already ends with '*', regardless of matchType", async () => {
     const policy = defineWorkflowExecutionPolicy("tenant-api", { key: "tenant-api*" });
     await expect(
       // Validation runs before the client is touched, so an empty stub suffices.
@@ -39,11 +39,11 @@ describe("planWorkflowJobFunctionExecutionPolicy", () => {
     ).rejects.toThrow(/key must not end with '\*'/);
   });
 
-  test("rejects a hand-constructed wildcard policy missing the internal key", async () => {
+  test("rejects a hand-constructed prefix policy missing the internal key", async () => {
     // ExecutionPolicyWildcardInstance's public type has no `key`, so nothing
     // stops a caller from hand-constructing one that skips the builder and
     // genuinely lacks the internal prefix.
-    const policy = { name: "tenant-api", enableSuffix: true, keyFor: () => "" } as never;
+    const policy = { name: "tenant-api", matchType: "prefix", keyFor: () => "" } as never;
     await expect(
       planWorkflowJobFunctionExecutionPolicy({} as never, "ws-id", "app", undefined, {
         tenantApi: policy,
