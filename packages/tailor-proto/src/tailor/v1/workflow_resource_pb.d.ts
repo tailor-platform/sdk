@@ -55,6 +55,43 @@ export declare type WorkflowJobFunction = Message<"tailor.v1.WorkflowJobFunction
 export declare const WorkflowJobFunctionSchema: GenMessage<WorkflowJobFunction>;
 
 /**
+ * WorkflowJobFunctionSummary is the lightweight projection of WorkflowJobFunction
+ * returned by list endpoints. Field tags are intentionally aligned with
+ * WorkflowJobFunction so clients generated against either message can decode
+ * the other on the wire. The heavy `script` (tag 3) and `script_ref` (tag 6)
+ * fields are omitted; callers that need them must use the Get* endpoints.
+ *
+ * @generated from message tailor.v1.WorkflowJobFunctionSummary
+ */
+export declare type WorkflowJobFunctionSummary = Message<"tailor.v1.WorkflowJobFunctionSummary"> & {
+  /**
+   * @generated from field: string id = 1;
+   */
+  id: string;
+
+  /**
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * @generated from field: int64 version = 4;
+   */
+  version: bigint;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp created_at = 5;
+   */
+  createdAt?: Timestamp;
+};
+
+/**
+ * Describes the message tailor.v1.WorkflowJobFunctionSummary.
+ * Use `create(WorkflowJobFunctionSummarySchema)` to create a new message.
+ */
+export declare const WorkflowJobFunctionSummarySchema: GenMessage<WorkflowJobFunctionSummary>;
+
+/**
  * @generated from message tailor.v1.ConcurrencyPolicy
  */
 export declare type ConcurrencyPolicy = Message<"tailor.v1.ConcurrencyPolicy"> & {
@@ -190,6 +227,14 @@ export declare type WorkflowJobFunctionExecutionPolicy = Message<"tailor.v1.Work
    * @generated from field: optional tailor.v1.ConcurrencyPolicy concurrency_policy = 5;
    */
   concurrencyPolicy?: ConcurrencyPolicy;
+
+  /**
+   * Distinct from execution_policy_key. Future policy shapes with
+   * wildcard-like keys can still expose a well-formed name here.
+   *
+   * @generated from field: string name = 6;
+   */
+  name: string;
 };
 
 /**

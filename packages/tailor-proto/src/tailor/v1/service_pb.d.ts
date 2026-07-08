@@ -3252,7 +3252,7 @@ export declare const OperatorService: GenService<{
     output: typeof DeleteWorkflowJobFunctionExecutionPolicyResponseSchema;
   },
   /**
-   * GetWorkflowJobFunctionExecutionPolicy returns a workflow job function execution policy.
+   * GetWorkflowJobFunctionExecutionPolicy returns a workflow job function execution policy by name.
    *
    * [Errors]
    * - Unauthenticated: token is missing, expired, or invalid

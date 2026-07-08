@@ -110,6 +110,12 @@ function emptyInput(): ValidatePlanInput {
       appName: "my-app",
       appId: undefined,
     },
+    workflowExecutionPolicy: {
+      changeSet: createChangeSet("Workflow execution policies"),
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set(),
+    },
     secretManager: {
       vaultChangeSet: createChangeSet("Vaults"),
       secretChangeSet: createChangeSet("Secrets"),
@@ -228,6 +234,37 @@ const validCases: Case<undefined>[] = [
     name: "(m2) invalid name in unchangedWorkflowJobNames is NOT validated when there are no workflow creates/updates",
     mutate: (input) => {
       input.workflow.unchangedWorkflowJobNames.add("camelCaseJobFromUnchanged");
+    },
+    expected: undefined,
+  },
+  {
+    name: "(n) workflow execution policy with matchType: 'prefix' (registers a trailing `*`) passes",
+    mutate: (input) => {
+      input.workflowExecutionPolicy.changeSet.creates.push({
+        name: "tenant-api",
+        workspaceId: WS_ID,
+        policy: {
+          name: "tenant-api",
+          // Deliberately different from `name` (and using `_`, which `name`'s
+          // grammar disallows) to show `key` is validated independently.
+          key: "tenant_api",
+          matchType: "prefix",
+          concurrencyPolicy: { maxConcurrentExecutions: 3 },
+        },
+        metaRequest: METADATA,
+      } as never);
+    },
+    expected: undefined,
+  },
+  {
+    name: "(n2) workflow execution policy with `:` in key passes",
+    mutate: (input) => {
+      input.workflowExecutionPolicy.changeSet.creates.push({
+        name: "legacy-pipeline",
+        workspaceId: WS_ID,
+        policy: { name: "legacy-pipeline", key: "legacy:pipeline" },
+        metaRequest: METADATA,
+      } as never);
     },
     expected: undefined,
   },

@@ -9,6 +9,7 @@ export type SdkBrandKind =
   | "workflow"
   | "workflow-job"
   | "wait-point"
+  | "execution-policy"
   | "http-adapter";
 
 /**

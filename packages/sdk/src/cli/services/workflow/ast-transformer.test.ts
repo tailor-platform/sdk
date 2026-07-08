@@ -423,6 +423,39 @@ const mainJob = createWorkflowJob({
       expect(result).not.toContain("const fetchData");
     });
 
+    test("forwards a second options argument to triggerJobFunction", () => {
+      const source = `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+const fetchData = createWorkflowJob({
+  name: "fetch-data",
+  body: async () => ({ data: "test" })
+});
+
+const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (input) => {
+    return await fetchData.trigger({ id: input.id }, { executionPolicyKey: "premium" });
+  }
+});
+`;
+      const allJobsMap = new Map<string, string>([
+        ["fetchData", "fetch-data"],
+        ["mainJob", "main-job"],
+      ]);
+      const result = transformWorkflowSource(
+        source,
+        "main-job",
+        "mainJob",
+        ["fetchData"],
+        allJobsMap,
+      );
+
+      expect(result).toContain(
+        '(async () => tailor.workflow.triggerJobFunction("fetch-data", { id: input.id }, { executionPolicyKey: "premium" }))()',
+      );
+    });
+
     test("completely removes other job declarations", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
@@ -977,6 +1010,36 @@ const result = await simpleJob.trigger();
       const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.triggerJobFunction("simple-job", undefined)');
+    });
+
+    test("forwards a second options argument to triggerJobFunction", () => {
+      const source = `
+const result = await fetchCustomer.trigger({ id: "123" }, { executionPolicyKey: "premium" });
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
+
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+
+      expect(result).toContain(
+        'tailor.workflow.triggerJobFunction("fetch-customer", { id: "123" }, { executionPolicyKey: "premium" })',
+      );
+    });
+
+    test("omits the options argument when the caller passes only args", () => {
+      const source = `
+const result = await fetchCustomer.trigger({ id: "123" });
+`;
+      const workflowNameMap = new Map<string, string>();
+      const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
+
+      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+
+      // Args only, no trailing options argument.
+      expect(result).toContain(
+        'tailor.workflow.triggerJobFunction("fetch-customer", { id: "123" }))()',
+      );
+      expect(result).not.toContain('{ id: "123" }, ');
     });
   });
 

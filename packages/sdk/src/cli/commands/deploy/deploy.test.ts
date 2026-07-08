@@ -110,6 +110,10 @@ function emptyResults(): PlanResults {
       appName: "my-app",
       appId: undefined,
     },
+    workflowExecutionPolicy: {
+      changeSet: createChangeSet("Workflow execution policies"),
+      ...emptyOwnership(),
+    },
     secretManager: {
       vaultChangeSet: createChangeSet("Vaults"),
       secretChangeSet: createChangeSet("Secrets"),
@@ -513,6 +517,23 @@ describe("dropCrossDeploymentManagedDeletes", () => {
     ]);
   });
 
+  test("drops workflow execution policy deletes claimed by another deployment", () => {
+    const previousOwner = emptyResults();
+    previousOwner.workflowExecutionPolicy.changeSet.deletes.push({ name: "premium" } as never);
+    const deletes = previousOwner.workflowExecutionPolicy.changeSet.deletes;
+
+    const nextOwner = emptyResults();
+    nextOwner.workflowExecutionPolicy.changeSet.unchanged.push({ name: "premium" } as never);
+
+    dropCrossDeploymentManagedDeletes([
+      plannedDeployment("previous", previousOwner),
+      plannedDeployment("next", nextOwner),
+    ]);
+
+    expect(previousOwner.workflowExecutionPolicy.changeSet.deletes).toBe(deletes);
+    expect(previousOwner.workflowExecutionPolicy.changeSet.deletes).toEqual([]);
+  });
+
   test("drops an app delete claimed by another deployment that creates that app", () => {
     const previousOwner = emptyResults();
     previousOwner.app.deletes.push({
@@ -777,6 +798,7 @@ type FakeBundledScripts = {
   aiGatewayNames?: string[];
   vaultNames?: string[];
   workflowNames?: string[];
+  executionPolicyNames?: string[];
 };
 
 let fakeTargetSequence = 0;
@@ -815,6 +837,13 @@ function fakeTarget(
       })),
       aiGatewayServices: (bundles.aiGatewayNames ?? []).map((name) => ({ name })),
       secrets: (bundles.vaultNames ?? []).map((vaultName) => ({ vaultName })),
+    },
+    config: {
+      workflow: {
+        executionPolicies: Object.fromEntries(
+          (bundles.executionPolicyNames ?? []).map((name) => [name, { name }]),
+        ),
+      },
     },
     bundledScripts: {
       resolvers: new Map(Object.entries(bundles.resolvers ?? {})),
@@ -1106,6 +1135,17 @@ describe("assertUniqueGlobalResourceNames", () => {
       ]),
     ).toThrow(
       'Duplicate Workflow name "order-processing" across config files. Workflow names must be unique across all configs in a single deploy.',
+    );
+  });
+
+  test("throws when two configs define the same workflow execution policy name", () => {
+    expect(() =>
+      assertUniqueGlobalResourceNames([
+        fakeTarget({ executionPolicyNames: ["premium"] }),
+        fakeTarget({ executionPolicyNames: ["premium"] }),
+      ]),
+    ).toThrow(
+      'Duplicate Workflow execution policy name "premium" across config files. Workflow execution policy names must be unique across all configs in a single deploy.',
     );
   });
 
