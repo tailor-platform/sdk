@@ -100,6 +100,7 @@ function nearestScope(node: SgNode): SgNode {
     if (
       kind === "statement_block" ||
       kind === "program" ||
+      kind === "switch_body" ||
       kind === "for_statement" ||
       kind === "for_in_statement"
     ) {
@@ -240,7 +241,8 @@ function unwrapExpression(node: SgNode | null): SgNode | null {
   while (current) {
     const kind = current.kind();
     if (kind === "parenthesized_expression") {
-      current = current.children().find((child) => child.kind() !== "(" && child.kind() !== ")");
+      current =
+        current.children().find((child) => child.kind() !== "(" && child.kind() !== ")") ?? null;
       continue;
     }
     if (
@@ -252,7 +254,7 @@ function unwrapExpression(node: SgNode | null): SgNode | null {
       continue;
     }
     if (kind === "type_assertion") {
-      current = current.children().find((child) => child.kind() !== "type_arguments");
+      current = current.children().find((child) => child.kind() !== "type_arguments") ?? null;
       continue;
     }
     return current;
