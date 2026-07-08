@@ -32,6 +32,13 @@ function useLocalDb(db: { type: (name: string) => string }) {
   return db.type("NoChange");
 }
 
+function useVarShadow(localDb: { type: (name: string) => string }) {
+  if (localDb) {
+    var db = localDb;
+  }
+  return db.type("NoChange");
+}
+
 const useBareArrowDb = (db) => db.type("NoChange");
 
 const useBareArrowNamespace = (sdk) => sdk.db.type("NoChange");

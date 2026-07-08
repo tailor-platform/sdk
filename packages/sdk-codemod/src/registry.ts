@@ -552,6 +552,8 @@ export const allCodemods: CodemodPackage[] = [
       "In Tailor SDK v2, TailorDB schema definitions use db.table(...) instead of",
       "db.type(...). The codemod rewrites member accesses on db imported from",
       "@tailor-platform/sdk, including aliases such as `import { db as schema }`.",
+      "It flags destructured builder aliases such as `const { type } = db` for",
+      "manual review because the local alias may require call-site renaming.",
       "Review any remaining db.type references and rename SDK TailorDB schema builder",
       "calls to db.table. Leave unrelated local objects with a .type() method unchanged.",
     ].join("\n"),
