@@ -401,7 +401,7 @@ An exact-key policy applies to dispatches whose runtime key equals the policy ke
 
 ### Referencing a Policy from a Workflow
 
-Pass the runtime key through the `executionPolicyKey` option on `job.trigger()` or `tailor.workflow.triggerJobFunction()`. For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`enableSuffix: true`), `<policy>.key` is not itself a valid dispatch key — call `<policy>.forKey(suffix)` to build the concrete key (joined with `.` by default; set `separator` in the declaration to use a different one).
+Pass the runtime key through the `executionPolicyKey` option on `job.trigger()` or `tailor.workflow.triggerJobFunction()`. For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`enableSuffix: true`), `<policy>.key` is not itself a valid dispatch key — call `<policy>.forKey(suffix)` to build the concrete key. `forKey` joins the prefix and suffix with `.` by default; override it with `separator` — the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group), or a `def` field on a single `defineWorkflowExecutionPolicy`.
 
 ```typescript
 import { createWorkflowJob } from "@tailor-platform/sdk";

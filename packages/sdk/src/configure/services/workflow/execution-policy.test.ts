@@ -76,12 +76,17 @@ describe("defineWorkflowExecutionPolicies", () => {
     expect(policies.tenantApi.forKey("acme")).toBe("tenant_api.acme");
   });
 
-  test("separator overrides the default `.` used by forKey", () => {
-    const policies = defineWorkflowExecutionPolicies((define) => ({
-      "tenant-api": define({ enableSuffix: true, separator: ":" }),
-    }));
+  test("the second argument's separator overrides the default `.` for every policy in the group", () => {
+    const policies = defineWorkflowExecutionPolicies(
+      (define) => ({
+        "tenant-api": define({ enableSuffix: true }),
+        "billing-api": define({ enableSuffix: true }),
+      }),
+      { separator: ":" },
+    );
 
     expect(policies["tenant-api"].forKey("acme")).toBe("tenant-api:acme");
+    expect(policies["billing-api"].forKey("acme")).toBe("billing-api:acme");
   });
 
   test("an exact-match key (enableSuffix not set) is branded and usable directly as executionPolicyKey", () => {

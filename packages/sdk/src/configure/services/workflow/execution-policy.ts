@@ -2,6 +2,7 @@ import { brandValue } from "#/utils/brand";
 import type {
   ExecutionPolicyConcurrency,
   ExecutionPolicyDefInput,
+  ExecutionPolicyGroupOptions,
   ExecutionPolicyInstance,
   ResolvedExecutionPolicyInstance,
 } from "./execution-policy.types";
@@ -10,6 +11,7 @@ export type {
   ExecutionPolicyConcurrency,
   ExecutionPolicyDefInput,
   ExecutionPolicyExactInstance,
+  ExecutionPolicyGroupOptions,
   ExecutionPolicyInstance,
   ExecutionPolicyWildcardInstance,
   ResolvedExecutionPolicyInstance,
@@ -83,7 +85,7 @@ function createExecutionPolicyInstance(
  * When `enableSuffix` is set, the returned instance has `forKey(suffix)`
  * instead of a directly-usable `key` (see {@link ExecutionPolicyWildcardInstance}).
  * @param name - Workspace-unique name. Must match `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`.
- * @param def - Optional overrides for `key` (defaults to `name`), `enableSuffix`, and concurrency
+ * @param def - Optional overrides for `key` (defaults to `name`), `enableSuffix`, `separator` (the `forKey` join character, defaults to `.`), and concurrency
  * @returns An execution policy instance
  * @example
  * export const perTenant = defineWorkflowExecutionPolicy("tenant-api", {
@@ -96,7 +98,8 @@ function createExecutionPolicyInstance(
 /* @__NO_SIDE_EFFECTS__ */
 export function defineWorkflowExecutionPolicy<
   const N extends string,
-  const D extends Omit<ExecutionPolicyDefInput, "name"> | undefined = undefined,
+  const D extends (Omit<ExecutionPolicyDefInput, "name"> & { separator?: string }) | undefined =
+    undefined,
 >(name: N, def?: D): ResolvedExecutionPolicyInstance<ResolveKey<D, N>, ResolveEnableSuffix<D>> {
   return createExecutionPolicyInstance(
     name,
@@ -125,6 +128,7 @@ export function defineWorkflowExecutionPolicy<
  * The return type mirrors the builder's return type so JSDoc on each property
  * is preserved in IDE autocompletion.
  * @param builder - Callback that receives a `define` factory and returns a record of policies
+ * @param options - Group-wide options; `separator` overrides the `.` `forKey` uses to join the prefix and suffix for every wildcard policy in the group
  * @returns The same object returned by the builder (with `name` / `key` resolved on each instance)
  * @example
  * export const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
@@ -150,7 +154,9 @@ export function defineWorkflowExecutionPolicies<T extends Record<string, Executi
       def?: D,
     ) => ResolvedExecutionPolicyInstance<ResolveKey<D, string>, ResolveEnableSuffix<D>>,
   ) => T,
+  options?: ExecutionPolicyGroupOptions,
 ): T {
+  const separator = options?.separator ?? ".";
   const nameSetters = new Map<ExecutionPolicyInstance, (name: string) => void>();
   const keySetters = new Map<ExecutionPolicyInstance, (key: string) => void>();
 
@@ -164,7 +170,7 @@ export function defineWorkflowExecutionPolicies<T extends Record<string, Executi
       explicitKey ?? explicitName ?? "__pending__",
       def?.concurrencyPolicy,
       def?.enableSuffix ?? false,
-      def?.separator ?? ".",
+      separator,
       explicitName === undefined,
       // Only fall back to the property name when neither `name` nor `key`
       // was given — an explicit `name` already resolved `key` above and
