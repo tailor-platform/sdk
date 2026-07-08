@@ -8,6 +8,7 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
+import { type MachineUserInputSource } from "./args";
 import {
   defaultPlatformBaseUrl,
   getConsoleBaseUrl,
@@ -112,10 +113,11 @@ type LoadConsoleBaseUrlOptions = {
 };
 type LoadMachineUserNameOptions = {
   machineUser?: string;
+  machineUserSource?: MachineUserInputSource;
   profile?: string;
 };
 type ExplicitMachineUser = {
-  source: "option" | "env";
+  source: MachineUserInputSource;
   value: string;
 };
 
@@ -558,7 +560,7 @@ export async function loadMachineUserName(
   const envMachineUser = process.env.TAILOR_PLATFORM_MACHINE_USER_NAME || undefined;
   const explicitMachineUser: ExplicitMachineUser | undefined = opts?.machineUser
     ? {
-        source: opts.machineUser === envMachineUser ? "env" : "option",
+        source: opts.machineUserSource ?? "option",
         value: opts.machineUser,
       }
     : envMachineUser

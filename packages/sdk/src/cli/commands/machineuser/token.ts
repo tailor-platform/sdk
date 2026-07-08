@@ -1,6 +1,10 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs } from "#/cli/shared/args";
+import {
+  deploymentArgs,
+  resolveMachineUserInputSource,
+  type MachineUserInputSource,
+} from "#/cli/shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -9,6 +13,7 @@ import { logger } from "#/cli/shared/logger";
 
 export interface GetMachineUserTokenOptions {
   name?: string;
+  nameSource?: MachineUserInputSource;
   workspaceId?: string;
   profile?: string;
   configPath?: string;
@@ -29,7 +34,11 @@ export async function getMachineUserToken(
   options: GetMachineUserTokenOptions,
 ): Promise<MachineUserTokenInfo> {
   // Load and validate options
-  const name = await loadMachineUserName({ machineUser: options.name, profile: options.profile });
+  const name = await loadMachineUserName({
+    machineUser: options.name,
+    machineUserSource: options.nameSource,
+    profile: options.profile,
+  });
   if (!name) {
     throw new Error(
       "Machine user is required. Provide the NAME positional argument, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
@@ -98,6 +107,7 @@ export const tokenCommand = defineAppCommand({
     // Execute machineuser token logic
     const token = await getMachineUserToken({
       name: args.name,
+      nameSource: resolveMachineUserInputSource(args.name),
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,

@@ -56,6 +56,7 @@ describe("getMachineUserToken", () => {
 
     expect(loadMachineUserName).toHaveBeenCalledWith({
       machineUser: "flag-bot",
+      machineUserSource: undefined,
       profile: undefined,
     });
     expect(getAuthMachineUserMock).toHaveBeenCalledWith(

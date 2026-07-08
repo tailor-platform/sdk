@@ -3,7 +3,14 @@ import * as os from "node:os";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
 import { describe, expect, beforeEach, afterEach, test, vi } from "vitest";
-import { loadEnvFiles, durationArg, parseDuration, positiveIntArg, toPageDirection } from "./args";
+import {
+  loadEnvFiles,
+  durationArg,
+  parseDuration,
+  positiveIntArg,
+  resolveMachineUserInputSource,
+  toPageDirection,
+} from "./args";
 
 describe("loadEnvFiles", () => {
   const originalEnv = process.env;
@@ -196,5 +203,43 @@ describe("toPageDirection", () => {
 
   test("maps desc to PageDirection.DESC", () => {
     expect(toPageDirection("desc")).toBe(PageDirection.DESC);
+  });
+});
+
+describe("resolveMachineUserInputSource", () => {
+  beforeEach(() => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", undefined);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("returns undefined when no machine user value was parsed", () => {
+    expect(resolveMachineUserInputSource(undefined, ["query"])).toBeUndefined();
+  });
+
+  test.each([
+    ["long option", ["query", "--machine-user", "bot"]],
+    ["long option with value", ["query", "--machine-user=bot"]],
+    ["camel-case long option", ["query", "--machineUser", "bot"]],
+    ["hidden alias", ["query", "--machineuser", "bot"]],
+    ["short option", ["query", "-m", "bot"]],
+    ["short option with value", ["query", "-m=bot"]],
+  ])("reports option source for %s", (_label, argv) => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "bot");
+    expect(resolveMachineUserInputSource("bot", argv)).toBe("option");
+  });
+
+  test("reports env source when value matches env and no flag is present", () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "bot");
+    expect(resolveMachineUserInputSource("bot", ["query"])).toBe("env");
+  });
+
+  test("does not scan arguments after --", () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "bot");
+    expect(resolveMachineUserInputSource("bot", ["query", "--", "--machine-user", "bot"])).toBe(
+      "env",
+    );
   });
 });

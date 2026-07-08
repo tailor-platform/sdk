@@ -11,7 +11,11 @@ import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_p
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { workspaceArgs } from "#/cli/shared/args";
+import {
+  resolveMachineUserInputSource,
+  type MachineUserInputSource,
+  workspaceArgs,
+} from "#/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -87,6 +91,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     const authNamespace = resolveAuthNamespace(config.auth);
     const machineUserName = await resolveMachineUserName({
       cliMachineUser: args["machine-user"],
+      cliMachineUserSource: resolveMachineUserInputSource(args["machine-user"]),
       profile: args.profile,
       authConfig: config.auth,
     });
@@ -243,6 +248,7 @@ function resolveAuthNamespace(
 
 type ResolveMachineUserNameOptions = {
   cliMachineUser: string | undefined;
+  cliMachineUserSource: MachineUserInputSource | undefined;
   profile: string | undefined;
   authConfig:
     | { name: string; external?: boolean; machineUsers?: Record<string, unknown> }
@@ -256,9 +262,13 @@ type ResolveMachineUserNameOptions = {
  * @returns Resolved machine user name
  */
 async function resolveMachineUserName(options: ResolveMachineUserNameOptions): Promise<string> {
-  const { cliMachineUser, profile, authConfig } = options;
+  const { cliMachineUser, cliMachineUserSource, profile, authConfig } = options;
 
-  const resolved = await loadMachineUserName({ machineUser: cliMachineUser, profile });
+  const resolved = await loadMachineUserName({
+    machineUser: cliMachineUser,
+    machineUserSource: cliMachineUserSource,
+    profile,
+  });
   if (resolved) {
     return resolved;
   }
