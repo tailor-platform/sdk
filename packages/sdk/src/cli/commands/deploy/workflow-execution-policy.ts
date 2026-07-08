@@ -56,12 +56,52 @@ function normalizeComparableConcurrency(
 }
 
 /**
+ * The declared key prefix, regardless of variant. `ExecutionPolicyWildcardInstance`
+ * omits `key` from its public type to force callers through `keyFor()`, but
+ * the underlying value always carries it when produced by
+ * `defineWorkflowExecutionPolicy()` or `defineWorkflowExecutionPolicies()`.
+ * @param policy - Declared policy from the config
+ * @returns The declared key prefix
+ */
+function declaredKey(policy: ExecutionPolicyInstance): string {
+  if (policy.matchType === "exact") return policy.key;
+  const key = (policy as unknown as { key?: string }).key;
+  if (typeof key !== "string") {
+    throw new Error(
+      `Invalid workflow execution policy "${policy.name}": prefix policies must be created via defineWorkflowExecutionPolicy() or defineWorkflowExecutionPolicies(), not a hand-constructed object.`,
+    );
+  }
+  return key;
+}
+
+/**
+ * The literal key the platform registers for a declared policy: `key` with a
+ * trailing `*` appended when `matchType` is `"prefix"`.
+ * @param policy - Declared policy from the config
+ * @returns The platform-facing execution policy key
+ */
+export function toPlatformExecutionPolicyKey(policy: ExecutionPolicyInstance): string {
+  const key = declaredKey(policy);
+  return policy.matchType === "prefix" ? `${key}*` : key;
+}
+
+/**
  * Validate a declared execution policy against the parser schema. Throws with
- * a descriptive error when `name` or `key` violates the platform grammar.
+ * a descriptive error when `name` or the platform-facing key violates the
+ * platform grammar.
  * @param policy - Declared policy from the config
  */
 function validatePolicy(policy: ExecutionPolicyInstance): void {
-  const parsed = WorkflowJobFunctionExecutionPolicySchema.safeParse(policy);
+  if (declaredKey(policy).endsWith("*")) {
+    throw new Error(
+      `Invalid workflow execution policy "${policy.name}": key must not end with '*'; set matchType: "prefix" to declare a wildcard prefix instead.`,
+    );
+  }
+  const parsed = WorkflowJobFunctionExecutionPolicySchema.safeParse({
+    name: policy.name,
+    key: toPlatformExecutionPolicyKey(policy),
+    concurrencyPolicy: policy.concurrencyPolicy,
+  });
   if (!parsed.success) {
     throw new Error(
       `Invalid workflow execution policy "${policy.name}": ${parsed.error.issues.map((issue) => issue.message).join("; ")}`,
@@ -142,17 +182,18 @@ export async function planWorkflowJobFunctionExecutionPolicy(
       });
 
       const remoteKey = found.resource.executionPolicyKey;
+      const desiredKey = toPlatformExecutionPolicyKey(policy);
       const remoteConcurrency = normalizeComparableConcurrency(found.resource.concurrencyPolicy);
       const desiredConcurrency = normalizeComparableConcurrency(policy.concurrencyPolicy);
       const unchanged =
         owned &&
         hasMatchingSdkVersion(found.allLabels, metaRequest.labels) &&
-        remoteKey === policy.key &&
+        remoteKey === desiredKey &&
         areNormalizedEqual(remoteConcurrency, desiredConcurrency);
 
       if (unchanged) {
         changeSet.unchanged.push({ name: policy.name });
-      } else if (remoteKey !== policy.key) {
+      } else if (remoteKey !== desiredKey) {
         // execution_policy_key is immutable after create; the platform requires
         // a delete-then-create in the same apply pass. Handled as `replaces`
         // (not delete + create) so the create phase does not race the delete.
@@ -209,7 +250,7 @@ export async function applyWorkflowJobFunctionExecutionPolicy(
         await client.createWorkflowJobFunctionExecutionPolicy({
           workspaceId: replace.workspaceId,
           executionPolicyName: replace.policy.name,
-          executionPolicyKey: replace.policy.key,
+          executionPolicyKey: toPlatformExecutionPolicyKey(replace.policy),
           concurrencyPolicy: toConcurrencyPolicyInit(replace.policy.concurrencyPolicy),
         });
         await client.setMetadata(replace.metaRequest);
@@ -218,7 +259,7 @@ export async function applyWorkflowJobFunctionExecutionPolicy(
         await client.createWorkflowJobFunctionExecutionPolicy({
           workspaceId: create.workspaceId,
           executionPolicyName: create.policy.name,
-          executionPolicyKey: create.policy.key,
+          executionPolicyKey: toPlatformExecutionPolicyKey(create.policy),
           concurrencyPolicy: toConcurrencyPolicyInit(create.policy.concurrencyPolicy),
         });
         await client.setMetadata(create.metaRequest);

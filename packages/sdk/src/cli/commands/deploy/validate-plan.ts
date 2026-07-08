@@ -67,6 +67,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
 import { buildWorkflowValidationShape } from "./workflow";
+import { toPlatformExecutionPolicyKey } from "./workflow-execution-policy";
 import type { planApplication } from "./application";
 import type { planAuth } from "./auth";
 import type { planExecutor } from "./executor";
@@ -546,7 +547,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
       request: {
         workspaceId: item.workspaceId,
         executionPolicyName: item.policy.name,
-        executionPolicyKey: item.policy.key,
+        executionPolicyKey: toPlatformExecutionPolicyKey(item.policy),
         ...(item.policy.concurrencyPolicy && {
           concurrencyPolicy: {
             maxConcurrentExecutions: item.policy.concurrencyPolicy.maxConcurrentExecutions,

@@ -29,13 +29,23 @@ export interface TriggerWorkflowOptions {
   authInvoker?: AuthInvoker;
 }
 
+declare const executionPolicyKeyBrand: unique symbol;
+
+/**
+ * A concrete runtime key produced by an execution policy instance — either an
+ * exact-match policy's `.key`, or a wildcard policy's `.keyFor(suffix)` (see
+ * `defineWorkflowExecutionPolicies`). Branded so an arbitrary string that
+ * wasn't derived from a declared policy can't be passed as `executionPolicyKey`.
+ */
+export type ExecutionPolicyKey = string & { readonly [executionPolicyKeyBrand]: never };
+
 /** Options for {@link triggerJobFunction}. */
 export interface TriggerJobFunctionOptions {
   /**
    * Execution policy key matched by the platform against the policies
    * declared with `defineWorkflowExecutionPolicies` in `tailor.config.ts`.
    */
-  executionPolicyKey?: string;
+  executionPolicyKey?: ExecutionPolicyKey;
 }
 
 /**

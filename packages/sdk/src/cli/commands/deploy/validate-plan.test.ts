@@ -238,14 +238,17 @@ const validCases: Case<undefined>[] = [
     expected: undefined,
   },
   {
-    name: "(n) workflow execution policy with wildcard trailing `*` in key passes",
+    name: "(n) workflow execution policy with matchType: 'prefix' (registers a trailing `*`) passes",
     mutate: (input) => {
       input.workflowExecutionPolicy.changeSet.creates.push({
         name: "tenant-api",
         workspaceId: WS_ID,
         policy: {
           name: "tenant-api",
-          key: "tenant-api*",
+          // Deliberately different from `name` (and using `_`, which `name`'s
+          // grammar disallows) to show `key` is validated independently.
+          key: "tenant_api",
+          matchType: "prefix",
           concurrencyPolicy: { maxConcurrentExecutions: 3 },
         },
         metaRequest: METADATA,

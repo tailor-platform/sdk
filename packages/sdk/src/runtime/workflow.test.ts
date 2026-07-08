@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as workflow from "#/runtime/workflow";
 import { cleanupMocks, injectMocks, mockWorkflow } from "#/vitest/mock";
+import type { ExecutionPolicyKey } from "#/runtime/workflow";
 
 describe("@tailor-platform/sdk/runtime/workflow", () => {
   beforeEach(() => {
@@ -65,7 +66,8 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
     using wf = mockWorkflow();
     wf.enqueueResult({ ok: true });
 
-    workflow.triggerJobFunction("my-job", { id: 1 }, { executionPolicyKey: "premium" });
+    const policyKey = "premium" as ExecutionPolicyKey;
+    workflow.triggerJobFunction("my-job", { id: 1 }, { executionPolicyKey: policyKey });
 
     expect(wf.triggeredJobs).toEqual([
       { jobName: "my-job", args: { id: 1 }, options: { executionPolicyKey: "premium" } },
