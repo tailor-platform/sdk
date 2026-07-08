@@ -235,19 +235,45 @@ function isShadowed(
   return ranges.some((range) => position >= range.start && position < range.end);
 }
 
+function unwrapExpression(node: SgNode | null): SgNode | null {
+  let current = node;
+  while (current) {
+    const kind = current.kind();
+    if (kind === "parenthesized_expression") {
+      current = current.children().find((child) => child.kind() !== "(" && child.kind() !== ")");
+      continue;
+    }
+    if (
+      kind === "as_expression" ||
+      kind === "satisfies_expression" ||
+      kind === "non_null_expression"
+    ) {
+      current = current.children()[0] ?? null;
+      continue;
+    }
+    if (kind === "type_assertion") {
+      current = current.children().find((child) => child.kind() !== "type_arguments");
+      continue;
+    }
+    return current;
+  }
+  return null;
+}
+
 function isSdkDbMember(
   object: SgNode | null,
   dbNames: Set<string>,
   namespaceNames: Set<string>,
   shadowedRanges: Map<string, Array<{ start: number; end: number }>>,
 ) {
-  if (!object) return false;
-  if (object.kind() === "identifier")
-    return dbNames.has(object.text()) && !isShadowed(object, shadowedRanges);
-  if (object.kind() !== "member_expression") return false;
+  const unwrapped = unwrapExpression(object);
+  if (!unwrapped) return false;
+  if (unwrapped.kind() === "identifier")
+    return dbNames.has(unwrapped.text()) && !isShadowed(unwrapped, shadowedRanges);
+  if (unwrapped.kind() !== "member_expression") return false;
 
-  const base = object.field("object");
-  const property = object.field("property");
+  const base = unwrapExpression(unwrapped.field("object"));
+  const property = unwrapped.field("property");
   return (
     base?.kind() === "identifier" &&
     namespaceNames.has(base.text()) &&
@@ -271,14 +297,14 @@ function hasTypeBuilderUse(root: SgNode, name: string, afterIndex: number): bool
   for (const member of root.findAll({ rule: { kind: "member_expression" } })) {
     if (member.range().start.index <= afterIndex) continue;
     if (member.field("property")?.text() !== "type") continue;
-    const object = member.field("object");
+    const object = unwrapExpression(member.field("object"));
     if (object?.kind() === "identifier" && object.text() === name) return true;
   }
 
   for (const subscript of root.findAll({ rule: { kind: "subscript_expression" } })) {
     if (subscript.range().start.index <= afterIndex) continue;
     if (!typeStringLiteral(subscript.field("index"))) continue;
-    const object = subscript.field("object");
+    const object = unwrapExpression(subscript.field("object"));
     if (object?.kind() === "identifier" && object.text() === name) return true;
   }
 

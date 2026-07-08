@@ -34,6 +34,14 @@ export const computedTeam = sdk.db["table"]("ComputedTeam", {
   label: sdk.db.string(),
 });
 
+export const parenthesizedUser = (db).table("ParenthesizedUser", {
+  label: db.string(),
+});
+
+export const assertedUser = (db as any).table("AssertedUser", {
+  label: db.string(),
+});
+
 const local = {
   type: (name: string) => name,
 };
