@@ -245,7 +245,9 @@ const validCases: Case<undefined>[] = [
         workspaceId: WS_ID,
         policy: {
           name: "tenant-api",
-          key: "tenant-api",
+          // Deliberately different from `name` (and using `_`, which `name`'s
+          // grammar disallows) to show `key` is validated independently.
+          key: "tenant_api",
           enableSuffix: true,
           concurrencyPolicy: { maxConcurrentExecutions: 3 },
         },

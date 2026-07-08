@@ -68,11 +68,12 @@ describe("defineWorkflowExecutionPolicies", () => {
 
   test("enableSuffix combines with an explicit key (not mutually exclusive)", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
-      tenantApi: define({ name: "tenant-api", key: "tenant-api", enableSuffix: true }),
+      // key deliberately differs from name to show it's used independently.
+      tenantApi: define({ name: "tenant-api", key: "tenant_api", enableSuffix: true }),
     }));
 
-    expect(policies.tenantApi.key).toBe("tenant-api");
-    expect(policies.tenantApi.forKey("acme")).toBe("tenant-api.acme");
+    expect(policies.tenantApi.key).toBe("tenant_api");
+    expect(policies.tenantApi.forKey("acme")).toBe("tenant_api.acme");
   });
 
   test("an exact-match key (enableSuffix not set) is branded and usable directly as executionPolicyKey", () => {
@@ -131,11 +132,12 @@ describe("defineWorkflowExecutionPolicy", () => {
   });
 
   test("enableSuffix combines with an explicit key (not mutually exclusive)", () => {
+    // key deliberately differs from name to show it's used independently.
     const policy = defineWorkflowExecutionPolicy("tenant-api", {
-      key: "tenant-api",
+      key: "tenant_api",
       enableSuffix: true,
     });
-    expect(policy.forKey("acme")).toBe("tenant-api.acme");
+    expect(policy.forKey("acme")).toBe("tenant_api.acme");
   });
 
   test("without enableSuffix, a policy has no forKey() at the type or value level", () => {

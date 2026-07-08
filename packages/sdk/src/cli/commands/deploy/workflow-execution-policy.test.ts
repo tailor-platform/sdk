@@ -18,8 +18,9 @@ describe("toPlatformExecutionPolicyKey", () => {
 
   test("appends a trailing `*` when enableSuffix is combined with an explicit key", () => {
     const policies = defineWorkflowExecutionPolicies((define) => ({
-      tenantApi: define({ name: "tenant-api", key: "tenant-api", enableSuffix: true }),
+      // key deliberately differs from name to show it's used independently.
+      tenantApi: define({ name: "tenant-api", key: "tenant_api", enableSuffix: true }),
     }));
-    expect(toPlatformExecutionPolicyKey(policies.tenantApi)).toBe("tenant-api*");
+    expect(toPlatformExecutionPolicyKey(policies.tenantApi)).toBe("tenant_api*");
   });
 });
