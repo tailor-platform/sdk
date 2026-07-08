@@ -42,6 +42,9 @@ describe("packaged skills", () => {
       expect(frontmatter?.name).toBe(name);
       expect(typeof frontmatter?.description).toBe("string");
       expect((frontmatter?.description as string).trim().length).toBeGreaterThan(0);
+      expect(frontmatter?.metadata).toMatchObject({
+        "politty-cli": "@tailor-platform/sdk:tailor",
+      });
     });
 
     test("references existing SDK files for every node_modules/@tailor-platform/sdk path", () => {

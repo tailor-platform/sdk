@@ -170,9 +170,8 @@ export const allCodemods: CodemodPackage[] = [
   },
   {
     id: "v2/sdk-skills-shim",
-    name: "tailor-sdk-skills → tailor-sdk skills install",
-    description:
-      "Replace deprecated `tailor-sdk-skills` invocations with `tailor-sdk skills install`",
+    name: "tailor-sdk-skills → tailor skills add",
+    description: "Replace deprecated `tailor-sdk-skills` invocations with `tailor skills add`",
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_1,
@@ -183,14 +182,14 @@ export const allCodemods: CodemodPackage[] = [
       {
         lang: "sh",
         before: "npx tailor-sdk-skills",
-        after: "tailor-sdk skills install",
+        after: "tailor skills add",
       },
     ],
     prompt: [
-      "The standalone tailor-sdk-skills binary is removed in v2; call the skills install",
-      "subcommand on the main tailor-sdk CLI instead. Replace any remaining",
+      "The standalone tailor-sdk-skills binary is removed in v2; call the skills add",
+      "subcommand on the main tailor CLI instead. Replace any remaining",
       "tailor-sdk-skills invocations the codemod did not rewrite with",
-      "`tailor-sdk skills install`.",
+      "`tailor skills add`.",
     ].join("\n"),
   },
   {
