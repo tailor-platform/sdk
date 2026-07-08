@@ -4,6 +4,7 @@ import {
   importBindings,
   importSource,
 } from "../../../../src/ast-grep-helpers";
+import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const SDK_MODULE = "@tailor-platform/sdk";
@@ -75,6 +76,13 @@ function firstDeclaratorChild(node: SgNode): SgNode | null {
   return node.children().find((child) => child.kind() !== "=") ?? null;
 }
 
+function declaratorValue(node: SgNode): SgNode | null {
+  const children = node.children();
+  const equalsIndex = children.findIndex((child) => child.kind() === "=");
+  if (equalsIndex === -1) return null;
+  return children.slice(equalsIndex + 1).find((child) => child.kind() !== "comment") ?? null;
+}
+
 function addShadowedRange(
   shadowedRanges: Map<string, Array<{ start: number; end: number }>>,
   name: string,
@@ -100,6 +108,30 @@ function nearestScope(node: SgNode): SgNode {
     current = current.parent();
   }
   return node;
+}
+
+function functionScope(node: SgNode): SgNode {
+  let current: SgNode | null = node.parent();
+  while (current) {
+    const kind = current.kind();
+    if (
+      kind === "function_declaration" ||
+      kind === "function_expression" ||
+      kind === "arrow_function" ||
+      kind === "method_definition" ||
+      kind === "program"
+    ) {
+      return current;
+    }
+    current = current.parent();
+  }
+  return node;
+}
+
+function variableDeclarationScope(node: SgNode): SgNode {
+  const declaration = node.parent();
+  if (/^var\b/.test(declaration?.text().trimStart() ?? "")) return functionScope(node);
+  return nearestScope(node);
 }
 
 function parameterScope(node: SgNode): SgNode {
@@ -131,7 +163,7 @@ function buildShadowedRanges(root: SgNode, names: Set<string>) {
     const binding = firstDeclaratorChild(decl);
     if (!binding) continue;
     for (const name of bindingNodes(binding, names)) {
-      addShadowedRange(shadowedRanges, name.text(), nearestScope(decl));
+      addShadowedRange(shadowedRanges, name.text(), variableDeclarationScope(decl));
     }
   }
 
@@ -261,4 +293,78 @@ export default function transform(source: string, filePath: string): string | nu
   }
 
   return edits.length > 0 ? root.commitEdits(edits) : null;
+}
+
+function lineForIndex(source: string, index: number): number {
+  return source.slice(0, index).split(/\r\n|\r|\n/).length;
+}
+
+function excerptAtIndex(source: string, index: number): string {
+  const lineStart = Math.max(source.lastIndexOf("\n", index - 1) + 1, 0);
+  const lineEnd = source.indexOf("\n", index);
+  return source.slice(lineStart, lineEnd === -1 ? source.length : lineEnd).trim();
+}
+
+function objectPatternHasTypeProperty(pattern: SgNode): boolean {
+  return pattern
+    .findAll({
+      rule: {
+        any: [
+          { kind: "property_identifier", regex: "^type$" },
+          { kind: "shorthand_property_identifier_pattern", regex: "^type$" },
+        ],
+      },
+    })
+    .some((node) => node.text() === "type");
+}
+
+export function reviewFindings(
+  source: string,
+  filePath: string,
+  relativePath: string,
+): LlmReviewFinding[] {
+  if (!source.includes("type") || !source.includes(SDK_MODULE)) return [];
+
+  let root: SgNode;
+  try {
+    root = parse(sourceLang(filePath, source), source).root();
+  } catch {
+    return [];
+  }
+
+  const imports = findImportStatements(root).filter(
+    (importStmt) => importSource(importStmt) === SDK_MODULE,
+  );
+  if (imports.length === 0) return [];
+
+  const dbNames = new Set<string>();
+  const namespaceNames = new Set<string>();
+  for (const importStmt of imports) {
+    for (const binding of importBindings(importStmt)) {
+      if (binding.importedName === "db" && !binding.typeOnly) dbNames.add(binding.localName);
+    }
+    for (const name of namespaceImportNames(importStmt)) {
+      namespaceNames.add(name);
+    }
+  }
+  if (dbNames.size === 0 && namespaceNames.size === 0) return [];
+
+  const shadowedRanges = buildShadowedRanges(root, new Set([...dbNames, ...namespaceNames]));
+  const findings: LlmReviewFinding[] = [];
+
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const binding = firstDeclaratorChild(decl);
+    if (binding?.kind() !== "object_pattern" || !objectPatternHasTypeProperty(binding)) continue;
+    const value = declaratorValue(decl);
+    if (!isSdkDbMember(value, dbNames, namespaceNames, shadowedRanges)) continue;
+
+    findings.push({
+      file: relativePath,
+      line: lineForIndex(source, binding.range().start.index),
+      message: "Review destructured db.type builder usage and migrate it to db.table.",
+      excerpt: excerptAtIndex(source, binding.range().start.index),
+    });
+  }
+
+  return findings;
 }
