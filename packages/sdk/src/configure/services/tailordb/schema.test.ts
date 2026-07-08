@@ -490,7 +490,7 @@ describe("TailorDBField type error message tests", () => {
     function withCustomFields<
       const F extends Record<string, TailorAnyDBField> = Record<string, never>,
     >(fields?: F) {
-      return db.type("WithCustomFields", {
+      return db.table("WithCustomFields", {
         tags: db.string({ array: true }).description("array field to catch array-widening bugs"),
         ...(fields ?? ({} as F)),
       });
