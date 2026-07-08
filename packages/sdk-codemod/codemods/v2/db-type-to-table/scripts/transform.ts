@@ -386,6 +386,35 @@ function objectPatternHasTypeProperty(pattern: SgNode): boolean {
     .some((node) => node.text() === "type");
 }
 
+function namespaceDbAliasBindings(pattern: SgNode): SgNode[] {
+  const aliases: SgNode[] = [];
+  for (const child of pattern.children()) {
+    if (child.kind() === "shorthand_property_identifier_pattern" && child.text() === "db") {
+      aliases.push(child);
+      continue;
+    }
+    if (child.kind() !== "pair_pattern") continue;
+    const key = child.field("key");
+    if (key?.text() !== "db") continue;
+    const value = child.field("value");
+    if (value?.kind() === "identifier") aliases.push(value);
+  }
+  return aliases;
+}
+
+function isSdkNamespaceMember(
+  node: SgNode | null,
+  namespaceNames: Set<string>,
+  shadowedRanges: Map<string, Array<{ start: number; end: number }>>,
+): boolean {
+  const unwrapped = unwrapExpression(node);
+  return (
+    unwrapped?.kind() === "identifier" &&
+    namespaceNames.has(unwrapped.text()) &&
+    !isShadowed(unwrapped, shadowedRanges)
+  );
+}
+
 export function reviewFindings(
   source: string,
   filePath: string,
@@ -432,6 +461,23 @@ export function reviewFindings(
       message: "Review destructured db.type builder usage and migrate it to db.table.",
       excerpt: excerptAtIndex(source, binding.range().start.index),
     });
+  }
+
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const binding = firstDeclaratorChild(decl);
+    if (binding?.kind() !== "object_pattern") continue;
+    const value = declaratorValue(decl);
+    if (!isSdkNamespaceMember(value, namespaceNames, shadowedRanges)) continue;
+
+    for (const alias of namespaceDbAliasBindings(binding)) {
+      if (!hasTypeBuilderUse(root, alias.text(), decl.range().end.index)) continue;
+      findings.push({
+        file: relativePath,
+        line: lineForIndex(source, binding.range().start.index),
+        message: "Review SDK db alias usage and migrate db.type builder calls to db.table.",
+        excerpt: excerptAtIndex(source, binding.range().start.index),
+      });
+    }
   }
 
   for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
