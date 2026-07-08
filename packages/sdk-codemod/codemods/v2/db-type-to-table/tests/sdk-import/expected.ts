@@ -14,6 +14,14 @@ export const team = sdk.db.table("Team", {
   label: sdk.db.string(),
 });
 
+export const optional = db.table?.("Optional", {
+  label: db.string(),
+});
+
+export const optionalTeam = sdk.db.table?.("OptionalTeam", {
+  label: sdk.db.string(),
+});
+
 const local = {
   type: (name: string) => name,
 };
@@ -24,11 +32,36 @@ function useLocalDb(db: { type: (name: string) => string }) {
   return db.type("NoChange");
 }
 
+const useBareArrowDb = (db) => db.type("NoChange");
+
+const useBareArrowNamespace = (sdk) => sdk.db.type("NoChange");
+
 {
   const schema = {
     type: (name: string) => name,
   };
   schema.type("NoChange");
+}
+
+{
+  const { db } = {
+    db: {
+      type: (name: string) => name,
+    },
+  };
+  db.type("NoChange");
+}
+
+for (const db of [{ type: (name: string) => name }]) {
+  db.type("NoChange");
+}
+
+try {
+  throw {
+    type: (name: string) => name,
+  };
+} catch (db) {
+  db.type("NoChange");
 }
 
 defineConfig({});

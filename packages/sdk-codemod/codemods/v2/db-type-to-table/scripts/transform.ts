@@ -30,6 +30,51 @@ function isInsideImportStatement(node: SgNode): boolean {
   return false;
 }
 
+function isBindingLeafKind(kind: ReturnType<SgNode["kind"]>): boolean {
+  return kind === "identifier" || kind === "shorthand_property_identifier_pattern";
+}
+
+function isBindingPatternKind(kind: ReturnType<SgNode["kind"]>): boolean {
+  return (
+    isBindingLeafKind(kind) ||
+    kind === "object_pattern" ||
+    kind === "array_pattern" ||
+    kind === "rest_pattern"
+  );
+}
+
+function collectBindingNodes(node: SgNode, names: Set<string>, result: SgNode[]): void {
+  if (isBindingLeafKind(node.kind())) {
+    if (names.has(node.text())) result.push(node);
+    return;
+  }
+
+  for (const child of node.children()) {
+    if (child.kind() === "property_identifier") continue;
+    if (child.kind() === "=") break;
+    collectBindingNodes(child, names, result);
+  }
+}
+
+function bindingNodes(node: SgNode, names: Set<string>): SgNode[] {
+  const result: SgNode[] = [];
+  collectBindingNodes(node, names, result);
+  return result;
+}
+
+function directBindingNodes(node: SgNode, names: Set<string>): SgNode[] {
+  const result: SgNode[] = [];
+  for (const child of node.children()) {
+    if (child.kind() === "=") break;
+    if (isBindingPatternKind(child.kind())) collectBindingNodes(child, names, result);
+  }
+  return result;
+}
+
+function firstDeclaratorChild(node: SgNode): SgNode | null {
+  return node.children().find((child) => child.kind() !== "=") ?? null;
+}
+
 function addShadowedRange(
   shadowedRanges: Map<string, Array<{ start: number; end: number }>>,
   name: string,
@@ -44,7 +89,12 @@ function nearestScope(node: SgNode): SgNode {
   let current: SgNode | null = node.parent();
   while (current) {
     const kind = current.kind();
-    if (kind === "statement_block" || kind === "program" || kind === "for_statement") {
+    if (
+      kind === "statement_block" ||
+      kind === "program" ||
+      kind === "for_statement" ||
+      kind === "for_in_statement"
+    ) {
       return current;
     }
     current = current.parent();
@@ -76,10 +126,24 @@ function parameterScope(node: SgNode): SgNode {
 function buildShadowedRanges(root: SgNode, names: Set<string>) {
   const shadowedRanges = new Map<string, Array<{ start: number; end: number }>>();
 
-  for (const decl of root.findAll({
-    rule: { any: [{ kind: "function_declaration" }, { kind: "variable_declarator" }] },
-  })) {
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
     if (isInsideImportStatement(decl)) continue;
+    const binding = firstDeclaratorChild(decl);
+    if (!binding) continue;
+    for (const name of bindingNodes(binding, names)) {
+      addShadowedRange(shadowedRanges, name.text(), nearestScope(decl));
+    }
+  }
+
+  for (const decl of root.findAll({
+    rule: {
+      any: [
+        { kind: "function_declaration" },
+        { kind: "class_declaration" },
+        { kind: "enum_declaration" },
+      ],
+    },
+  })) {
     const name = decl
       .children()
       .find((child) => child.kind() === "identifier" && names.has(child.text()));
@@ -89,10 +153,41 @@ function buildShadowedRanges(root: SgNode, names: Set<string>) {
   for (const param of root.findAll({
     rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
   })) {
-    const name = param
-      .children()
-      .find((child) => child.kind() === "identifier" && names.has(child.text()));
-    if (name) addShadowedRange(shadowedRanges, name.text(), parameterScope(param));
+    for (const name of directBindingNodes(param, names)) {
+      addShadowedRange(shadowedRanges, name.text(), parameterScope(param));
+    }
+  }
+
+  for (const arrow of root.findAll({ rule: { kind: "arrow_function" } })) {
+    const children = arrow.children();
+    const arrowIndex = children.findIndex((child) => child.kind() === "=>");
+    if (arrowIndex === -1) continue;
+    for (const child of children.slice(0, arrowIndex)) {
+      if (child.kind() === "=") break;
+      if (!isBindingPatternKind(child.kind())) continue;
+      for (const name of bindingNodes(child, names)) {
+        addShadowedRange(shadowedRanges, name.text(), arrow);
+      }
+    }
+  }
+
+  for (const catchClause of root.findAll({ rule: { kind: "catch_clause" } })) {
+    for (const name of directBindingNodes(catchClause, names)) {
+      addShadowedRange(shadowedRanges, name.text(), catchClause);
+    }
+  }
+
+  for (const loop of root.findAll({ rule: { kind: "for_in_statement" } })) {
+    const children = loop.children();
+    const keywordIndex = children.findIndex(
+      (child) => child.kind() === "in" || child.kind() === "of",
+    );
+    if (keywordIndex === -1) continue;
+    for (const child of children.slice(0, keywordIndex)) {
+      for (const name of bindingNodes(child, names)) {
+        addShadowedRange(shadowedRanges, name.text(), loop);
+      }
+    }
   }
 
   return shadowedRanges;
