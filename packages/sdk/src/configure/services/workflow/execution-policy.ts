@@ -17,6 +17,12 @@ export type {
   ResolvedExecutionPolicyInstance,
 } from "./execution-policy.types";
 
+// Mirrors the non-wildcard branch of ExecutionPolicyKeySchema's grammar
+// (parser/service/workflow/schema.ts). Duplicated, not imported, because
+// configure code must stay zod-free — it ships inside the same runtime
+// bundle as user workflow job functions.
+const EXECUTION_POLICY_EXACT_KEY_REGEX = /^[a-z0-9][a-z0-9_:.-]{0,62}[a-z0-9]$/;
+
 // Resolves to the literal type of `Def["key"]` when the caller passed an
 // explicit `key`, otherwise to `Fallback`.
 type ResolveKey<Def, Fallback extends string> = Def extends { key: infer K extends string }
@@ -48,7 +54,7 @@ function createExecutionPolicyInstance(
     key: string;
     enableSuffix: boolean;
     concurrencyPolicy?: ExecutionPolicyConcurrency;
-    forKey?: (suffix: string) => string;
+    keyFor?: (suffix: string) => string;
   } = {
     name: initialName,
     key: initialKey,
@@ -56,9 +62,22 @@ function createExecutionPolicyInstance(
     ...(concurrencyPolicy && { concurrencyPolicy }),
     // Reads raw.key (not the initialKey param) so a property-name-derived
     // key patched in later via setKey is reflected too.
-    ...(enableSuffix && { forKey: (suffix: string) => `${raw.key}${separator}${suffix}` }),
+    ...(enableSuffix && {
+      keyFor: (suffix: string) => {
+        const key = `${raw.key}${separator}${suffix}`;
+        if (!EXECUTION_POLICY_EXACT_KEY_REGEX.test(key)) {
+          throw new Error(
+            `Invalid execution policy key "${key}" built by keyFor("${suffix}"): must match [a-z0-9_:.-] (2-64 chars; must start and end with [a-z0-9]).`,
+          );
+        }
+        return key;
+      },
+    }),
   };
-  const instance = brandValue(raw, "execution-policy") as ExecutionPolicyInstance;
+  // `raw` always carries `key`, including for wildcard policies — it backs
+  // keyFor()'s closure — but ExecutionPolicyWildcardInstance omits it from
+  // its public type, so this cast can't go directly to the union.
+  const instance = brandValue(raw, "execution-policy") as unknown as ExecutionPolicyInstance;
   return {
     instance,
     setName: allowNameSetter
@@ -82,10 +101,10 @@ function createExecutionPolicyInstance(
  * runtime key prefix needs to differ from the corresponding workspace-unique
  * name.
  *
- * When `enableSuffix` is set, the returned instance has `forKey(suffix)`
+ * When `enableSuffix` is set, the returned instance has `keyFor(suffix)`
  * instead of a directly-usable `key` (see {@link ExecutionPolicyWildcardInstance}).
  * @param name - Workspace-unique name. Must match `^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$`.
- * @param def - Optional overrides for `key` (defaults to `name`), `enableSuffix`, `separator` (the `forKey` join character, defaults to `.`), and concurrency
+ * @param def - Optional overrides for `key` (defaults to `name`), `enableSuffix`, `separator` (the `keyFor` join character, defaults to `.`), and concurrency
  * @returns An execution policy instance
  * @example
  * export const perTenant = defineWorkflowExecutionPolicy("tenant-api", {
@@ -93,7 +112,7 @@ function createExecutionPolicyInstance(
  *   concurrencyPolicy: { maxConcurrentExecutions: 3 },
  * });
  *
- * perTenant.forKey(tenantId); // "tenant-api.<tenantId>"
+ * perTenant.keyFor(tenantId); // "tenant-api.<tenantId>"
  */
 /* @__NO_SIDE_EFFECTS__ */
 export function defineWorkflowExecutionPolicy<
@@ -120,7 +139,7 @@ export function defineWorkflowExecutionPolicy<
  * is not valid for the execution policy grammar or when the runtime key
  * prefix needs to differ).
  *
- * When `enableSuffix` is set, the returned instance has `forKey(suffix)`
+ * When `enableSuffix` is set, the returned instance has `keyFor(suffix)`
  * instead of a directly-usable `key` (see {@link ExecutionPolicyWildcardInstance}).
  * `enableSuffix` can be combined with an explicit `key`, or left to apply to
  * the property-name-derived prefix.
@@ -128,7 +147,7 @@ export function defineWorkflowExecutionPolicy<
  * The return type mirrors the builder's return type so JSDoc on each property
  * is preserved in IDE autocompletion.
  * @param builder - Callback that receives a `define` factory and returns a record of policies
- * @param options - Group-wide options; `separator` overrides the `.` `forKey` uses to join the prefix and suffix for every wildcard policy in the group
+ * @param options - Group-wide options; `separator` overrides the `.` `keyFor` uses to join the prefix and suffix for every wildcard policy in the group
  * @returns The same object returned by the builder (with `name` / `key` resolved on each instance)
  * @example
  * export const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
@@ -144,7 +163,7 @@ export function defineWorkflowExecutionPolicy<
  *   executionPolicyKey: executionPolicies.premium.key,
  * });
  * await tailor.workflow.triggerJobFunction("worker", args, {
- *   executionPolicyKey: executionPolicies["tenant-api"].forKey(input.tenantId),
+ *   executionPolicyKey: executionPolicies["tenant-api"].keyFor(input.tenantId),
  * });
  */
 /* @__NO_SIDE_EFFECTS__ */

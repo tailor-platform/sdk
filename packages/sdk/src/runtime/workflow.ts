@@ -33,7 +33,7 @@ declare const executionPolicyKeyBrand: unique symbol;
 
 /**
  * A concrete runtime key produced by an execution policy instance — either an
- * exact-match policy's `.key`, or a wildcard policy's `.forKey(suffix)` (see
+ * exact-match policy's `.key`, or a wildcard policy's `.keyFor(suffix)` (see
  * `defineWorkflowExecutionPolicies`). Branded so an arbitrary string that
  * wasn't derived from a declared policy can't be passed as `executionPolicyKey`.
  */

@@ -56,13 +56,25 @@ function normalizeComparableConcurrency(
 }
 
 /**
+ * The declared key prefix, regardless of variant. `ExecutionPolicyWildcardInstance`
+ * omits `key` from its public type to force callers through `keyFor()`, but
+ * the underlying value always carries it.
+ * @param policy - Declared policy from the config
+ * @returns The declared key prefix
+ */
+function declaredKey(policy: ExecutionPolicyInstance): string {
+  return policy.enableSuffix ? (policy as unknown as { key: string }).key : policy.key;
+}
+
+/**
  * The literal key the platform registers for a declared policy: `key` with a
  * trailing `*` appended when `enableSuffix` is set.
  * @param policy - Declared policy from the config
  * @returns The platform-facing execution policy key
  */
 export function toPlatformExecutionPolicyKey(policy: ExecutionPolicyInstance): string {
-  return policy.enableSuffix ? `${policy.key}*` : policy.key;
+  const key = declaredKey(policy);
+  return policy.enableSuffix ? `${key}*` : key;
 }
 
 /**
@@ -72,7 +84,7 @@ export function toPlatformExecutionPolicyKey(policy: ExecutionPolicyInstance): s
  * @param policy - Declared policy from the config
  */
 function validatePolicy(policy: ExecutionPolicyInstance): void {
-  if (policy.key.endsWith("*")) {
+  if (declaredKey(policy).endsWith("*")) {
     throw new Error(
       `Invalid workflow execution policy "${policy.name}": key must not end with '*'; set enableSuffix to declare a wildcard prefix instead.`,
     );
