@@ -9,7 +9,7 @@ import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
 
 // Define userType for type inference
-const userType = db.type("User", {
+const userType = db.table("User", {
   email: db.string().unique(),
   role: db.string(),
   isActive: db.bool(),

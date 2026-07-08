@@ -1,7 +1,7 @@
 import { db } from "@tailor-platform/sdk";
 
 export const auditLog = db
-  .type("AuditLog", "Records system events for auditing", {
+  .table("AuditLog", "Records system events for auditing", {
     action: db.string(),
     entityType: db.string(),
     entityId: db.uuid(),

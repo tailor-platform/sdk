@@ -20,7 +20,7 @@ async function getTypeDef(type: TailorAnyDBType) {
 describe("Kysely TypeProcessor", () => {
   describe("basic types", () => {
     test("should propagate the type name into the result", async () => {
-      const type = db.type("User", {
+      const type = db.table("User", {
         name: db.string(),
       });
 
@@ -32,7 +32,7 @@ describe("Kysely TypeProcessor", () => {
     test.each([
       {
         name: "string types",
-        type: db.type("User", {
+        type: db.table("User", {
           name: db.string(),
           nickname: db.string({ optional: true }),
         }),
@@ -40,7 +40,7 @@ describe("Kysely TypeProcessor", () => {
       },
       {
         name: "number types",
-        type: db.type("Product", {
+        type: db.table("Product", {
           quantity: db.int(),
           price: db.float(),
           discount: db.float({ optional: true }),
@@ -49,7 +49,7 @@ describe("Kysely TypeProcessor", () => {
       },
       {
         name: "boolean types",
-        type: db.type("Feature", {
+        type: db.table("Feature", {
           enabled: db.bool(),
           beta: db.bool({ optional: true }),
         }),
@@ -57,7 +57,7 @@ describe("Kysely TypeProcessor", () => {
       },
       {
         name: "date and datetime types",
-        type: db.type("Event", {
+        type: db.table("Event", {
           startDate: db.date(),
           endDate: db.datetime(),
           cancelledAt: db.datetime({ optional: true }),
@@ -66,7 +66,7 @@ describe("Kysely TypeProcessor", () => {
       },
       {
         name: "uuid types",
-        type: db.type("Session", {
+        type: db.table("Session", {
           userId: db.uuid(),
           deviceId: db.uuid({ optional: true }),
         }),
@@ -81,7 +81,7 @@ describe("Kysely TypeProcessor", () => {
   describe("array types", () => {
     test("should handle array fields", async () => {
       const typeDef = await getTypeDef(
-        db.type("Post", {
+        db.table("Post", {
           tags: db.string({ array: true }),
           scores: db.int({ array: true, optional: true }),
         }),
@@ -93,7 +93,7 @@ describe("Kysely TypeProcessor", () => {
 
     test("should use ArrayColumnType for datetime array fields", async () => {
       const typeDef = await getTypeDef(
-        db.type("Event", {
+        db.table("Event", {
           eventDates: db.datetime({ array: true }),
           optionalDates: db.date({ array: true, optional: true }),
         }),
@@ -107,7 +107,7 @@ describe("Kysely TypeProcessor", () => {
   describe("enum types", () => {
     test("should handle enum types", async () => {
       const typeDef = await getTypeDef(
-        db.type("User", {
+        db.table("User", {
           role: db.enum([{ value: "admin" }, { value: "user" }]),
           status: db.enum([{ value: "active" }, { value: "inactive" }], {
             optional: true,
@@ -121,7 +121,7 @@ describe("Kysely TypeProcessor", () => {
 
     test("should handle enum array types", async () => {
       const typeDef = await getTypeDef(
-        db.type("Article", {
+        db.table("Article", {
           categories: db.enum(["tech", "health", "finance"], { array: true }),
           authors: db.enum(["alice", "bob"], { array: true, optional: true }),
         }),
@@ -134,7 +134,7 @@ describe("Kysely TypeProcessor", () => {
 
   describe("nested objects", () => {
     test("should handle single level nested objects", async () => {
-      const simpleNestedType = db.type("SimpleUser", {
+      const simpleNestedType = db.table("SimpleUser", {
         profile: db.object({
           name: db.string(),
           email: db.string({ optional: true }),
@@ -152,7 +152,7 @@ describe("Kysely TypeProcessor", () => {
     });
 
     test("should handle multi-level nested objects", async () => {
-      const deepNestedType = db.type("Company", {
+      const deepNestedType = db.table("Company", {
         details: db.object({
           // @ts-expect-error: Nested objects have complex type inference
           address: db.object({
@@ -181,7 +181,7 @@ describe("Kysely TypeProcessor", () => {
     });
 
     test("should use Date | string instead of Timestamp for date fields inside nested objects", async () => {
-      const type = db.type("Receipt", {
+      const type = db.table("Receipt", {
         receiptDate: db.date(),
         dueSchedule: db.object({
           dueDate: db.date(),
@@ -201,7 +201,7 @@ describe("Kysely TypeProcessor", () => {
 
     test("should wrap nested object arrays with ArrayColumnType<ObjectColumnType<>>", async () => {
       const typeDef = await getTypeDef(
-        db.type("Profile", {
+        db.table("Profile", {
           metadata: db.object(
             {
               created: db.datetime(),
@@ -219,7 +219,7 @@ describe("Kysely TypeProcessor", () => {
 
     test("should handle optional nested object arrays", async () => {
       const typeDef = await getTypeDef(
-        db.type("Profile", {
+        db.table("Profile", {
           tags: db.object(
             {
               name: db.string(),
@@ -236,7 +236,7 @@ describe("Kysely TypeProcessor", () => {
 
     test("should use plain array syntax for nested objects without ColumnType fields", async () => {
       const typeDef = await getTypeDef(
-        db.type("Profile", {
+        db.table("Profile", {
           tags: db.object(
             {
               name: db.string(),
@@ -254,7 +254,7 @@ describe("Kysely TypeProcessor", () => {
 
     test("should handle optional nested objects", async () => {
       const typeDef = await getTypeDef(
-        db.type("User", {
+        db.table("User", {
           settings: db.object(
             {
               theme: db.string(),
@@ -272,7 +272,7 @@ describe("Kysely TypeProcessor", () => {
 
   describe("special fields", () => {
     test("should process timestamp fields through normal field processing", async () => {
-      const typeWithTimestamps = db.type("UserWithTimestamp", {
+      const typeWithTimestamps = db.table("UserWithTimestamp", {
         name: db.string(),
         ...db.fields.timestamps(),
       });
@@ -288,7 +288,7 @@ describe("Kysely TypeProcessor", () => {
 
     test("should always include Generated<string> for id field", async () => {
       const typeDef = await getTypeDef(
-        db.type("User", {
+        db.table("User", {
           name: db.string(),
         }),
       );
@@ -299,25 +299,25 @@ describe("Kysely TypeProcessor", () => {
     test.each([
       {
         name: "basic types only",
-        type: db.type("User", { name: db.string(), age: db.int() }),
+        type: db.table("User", { name: db.string(), age: db.int() }),
         timestamp: false,
         serial: false,
       },
       {
         name: "Timestamp",
-        type: db.type("User", { name: db.string(), ...db.fields.timestamps() }),
+        type: db.table("User", { name: db.string(), ...db.fields.timestamps() }),
         timestamp: true,
         serial: false,
       },
       {
         name: "Serial",
-        type: db.type("Invoice", { invoiceNumber: db.string().serial({ start: 1000 }) }),
+        type: db.table("Invoice", { invoiceNumber: db.string().serial({ start: 1000 }) }),
         timestamp: false,
         serial: true,
       },
       {
         name: "both",
-        type: db.type("Order", {
+        type: db.table("Order", {
           orderNumber: db.string().serial({ start: 1000 }),
           ...db.fields.timestamps(),
         }),

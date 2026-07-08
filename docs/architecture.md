@@ -16,7 +16,7 @@ The main `packages/sdk` has four core modules:
 
 ```
 src/
-├── configure/   User-facing API (defineConfig, db.type, createResolver, ...)
+├── configure/   User-facing API (defineConfig, db.table, createResolver, ...)
 ├── parser/      Validation & transformation layer (Zod schemas → internal types)
 ├── cli/         CLI commands, bundling, deployment
 └── plugin/      Plugin system (manager + built-in plugins)
