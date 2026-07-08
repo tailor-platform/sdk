@@ -395,7 +395,7 @@ export default defineConfig({
 
 ### Key Grammar
 
-`key` accepts `[a-z0-9_:.-]`, must start with `[a-z0-9]`, and the platform-registered key is 2 to 64 characters long, including the trailing `*` appended when `enableSuffix` is set — so a wildcard prefix must be at most 63 characters. `foo:bar` is a valid exact key; `tenant-api` with `enableSuffix: true` registers `tenant-api*` as a wildcard prefix.
+`key` accepts `[a-z0-9_:.-]` and must start with `[a-z0-9]`. An exact key must also end with `[a-z0-9]`; a wildcard prefix (`enableSuffix: true`) may end with any of those characters, since the platform appends a trailing `*` after it. The platform-registered key — including that trailing `*` when wildcarded — is 2 to 64 characters long, so a wildcard prefix must be at most 63 characters. `foo:bar` is a valid exact key; `tenant-api` with `enableSuffix: true` registers `tenant-api*` as a wildcard prefix.
 
 An exact-key policy applies to dispatches whose runtime key equals the policy key. A wildcard policy applies to every dispatch whose runtime key begins with the prefix; each concrete resolved key gets its own independent pool of the declared size (a `cap = 3` wildcard yields three concurrent dispatches per resolved key, not three across every match). The longest matching prefix wins when a dispatch could match more than one wildcard.
 
