@@ -289,13 +289,22 @@ function isSdkDbMember(
   if (unwrapped.kind() !== "member_expression") return false;
 
   const base = unwrapExpression(unwrapped.field("object"));
-  const property = unwrapped.field("property");
+  const property = memberProperty(unwrapped);
   return (
     base?.kind() === "identifier" &&
     namespaceNames.has(base.text()) &&
     !isShadowed(base, shadowedRanges) &&
     property?.text() === "db"
   );
+}
+
+function memberProperty(member: SgNode): SgNode | null {
+  const children = member.children();
+  for (let index = children.length - 1; index >= 0; index -= 1) {
+    const child = children[index]!;
+    if (child.kind() === "property_identifier") return child;
+  }
+  return member.field("property");
 }
 
 function typeStringLiteral(node: SgNode | null): SgNode | null {
@@ -315,7 +324,7 @@ function replaceStringLiteralValue(node: SgNode, value: string): Edit {
 function hasTypeBuilderUse(root: SgNode, name: string, afterIndex: number): boolean {
   for (const member of root.findAll({ rule: { kind: "member_expression" } })) {
     if (member.range().start.index <= afterIndex) continue;
-    if (member.field("property")?.text() !== "type") continue;
+    if (memberProperty(member)?.text() !== "type") continue;
     const object = unwrapExpression(member.field("object"));
     if (object?.kind() === "identifier" && object.text() === name) return true;
   }
@@ -349,7 +358,7 @@ export default function transform(source: string, filePath: string): string | nu
   const namespaceNames = new Set<string>();
   for (const importStmt of imports) {
     for (const binding of importBindings(importStmt)) {
-      if (binding.importedName === "db" && !binding.typeOnly) dbNames.add(binding.localName);
+      if (binding.importedName === "db") dbNames.add(binding.localName);
     }
     for (const name of namespaceImportNames(importStmt)) {
       namespaceNames.add(name);
@@ -360,7 +369,7 @@ export default function transform(source: string, filePath: string): string | nu
   const shadowedRanges = buildShadowedRanges(root, new Set([...dbNames, ...namespaceNames]));
   const edits: Edit[] = [];
   for (const member of root.findAll({ rule: { kind: "member_expression" } })) {
-    const property = member.field("property");
+    const property = memberProperty(member);
     if (property?.text() !== "type") continue;
     if (!isSdkDbMember(member.field("object"), dbNames, namespaceNames, shadowedRanges)) continue;
     edits.push(property.replace("table"));
@@ -452,7 +461,7 @@ export function reviewFindings(
   const namespaceNames = new Set<string>();
   for (const importStmt of imports) {
     for (const binding of importBindings(importStmt)) {
-      if (binding.importedName === "db" && !binding.typeOnly) dbNames.add(binding.localName);
+      if (binding.importedName === "db") dbNames.add(binding.localName);
     }
     for (const name of namespaceImportNames(importStmt)) {
       namespaceNames.add(name);
