@@ -226,6 +226,12 @@
 
 - [#1421](https://github.com/tailor-platform/sdk/pull/1421) [`b933f47`](https://github.com/tailor-platform/sdk/commit/b933f474d65f8dfed56f3991aae3a52589368b10) Thanks [@dqn](https://github.com/dqn)! - Corrupted or hand-edited TailorDB migration snapshot/diff files now fail with a clear validation error when loaded, instead of causing undefined behavior later.
 
+## 1.75.0
+
+### Minor Changes
+
+- [#1679](https://github.com/tailor-platform/sdk/pull/1679) [`4ff2b23`](https://github.com/tailor-platform/sdk/commit/4ff2b23d84c5dd5f1692cc3b3f7b32b273b4d550) Thanks [@k1LoW](https://github.com/k1LoW)! - Add workflow job function execution policies. Declare them with `defineWorkflowExecutionPolicies` (or the single-key `defineWorkflowExecutionPolicy`), register them via `workflow.executionPolicies` on `defineConfig`, and pass the policy's `key` (or, for wildcard policies declared with `matchType: "prefix"`, the value returned by `keyFor(suffix)`) through the new `executionPolicyKey` option on `triggerJobFunction` / `job.trigger()` to apply the platform-side concurrency cap. `executionPolicyKey` only accepts values produced by a declared policy. `keyFor` joins the prefix and suffix with `.` by default; override it with `separator`, passed as the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group) or as a `def` field on a single `defineWorkflowExecutionPolicy`.
+
 ## 1.74.1
 
 ### Patch Changes

@@ -8,6 +8,10 @@ import { assertDefined } from "#/utils/assert";
 import { logger } from "./logger";
 
 type ArgsShape = Record<string, z.ZodType>;
+export type MachineUserInputSource = "option" | "env";
+type ResolveMachineUserInputSourceOptions = {
+  valueIsExplicit?: boolean;
+};
 
 // ============================================================================
 // Validators
@@ -87,6 +91,39 @@ export type Order = z.infer<typeof orderArg>;
 export function toPageDirection(order: Order | undefined): PageDirection | undefined {
   if (order === undefined) return undefined;
   return order === "asc" ? PageDirection.ASC : PageDirection.DESC;
+}
+
+function hasMachineUserFlag(argv: readonly string[]): boolean {
+  const optionArgs = argv.slice(0, argv.indexOf("--") === -1 ? argv.length : argv.indexOf("--"));
+  return optionArgs.some(
+    (token) =>
+      token === "-m" ||
+      token.startsWith("-m=") ||
+      token === "--machine-user" ||
+      token.startsWith("--machine-user=") ||
+      token === "--machineUser" ||
+      token.startsWith("--machineUser=") ||
+      token === "--machineuser" ||
+      token.startsWith("--machineuser="),
+  );
+}
+
+/**
+ * Resolve whether a parsed machine user value came from an explicit CLI option or env fallback.
+ * @param machineUser - Parsed machine user value
+ * @param argv - Raw CLI argv, excluding the executable and script path
+ * @param options - Source resolution options
+ * @returns Machine user input source, or undefined when no value was parsed
+ */
+export function resolveMachineUserInputSource(
+  machineUser: string | undefined,
+  argv: readonly string[] = process.argv.slice(2),
+  options: ResolveMachineUserInputSourceOptions = {},
+): MachineUserInputSource | undefined {
+  if (machineUser === undefined) return undefined;
+  if (options.valueIsExplicit) return "option";
+  if (hasMachineUserFlag(argv)) return "option";
+  return process.env.TAILOR_PLATFORM_MACHINE_USER_NAME === machineUser ? "env" : "option";
 }
 
 // ============================================================================

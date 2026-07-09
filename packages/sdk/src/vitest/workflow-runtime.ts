@@ -3,9 +3,14 @@
 // realm where `vi` is unavailable, hence relative imports only (no `@/` alias).
 import { TRIGGER_DEFAULT } from "../configure/services/workflow/registry";
 import { platformSerialize } from "../utils/test/platform-serialize";
+import type { TriggerJobFunctionOptions } from "../runtime/workflow";
 
 export interface DefaultWorkflowRuntime {
-  triggerJobFunction: (name: string, args?: unknown) => unknown;
+  triggerJobFunction: (
+    name: string,
+    args?: unknown,
+    options?: TriggerJobFunctionOptions,
+  ) => unknown;
   triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
   resumeWorkflow: (executionId: string) => Promise<string>;
   wait: (key: string, payload?: unknown) => unknown;
