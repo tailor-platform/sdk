@@ -89,7 +89,7 @@ export interface TailorIconvAPI {
 }
 
 const api = (): TailorIconvAPI =>
-  (globalThis as { tailor: { iconv: TailorIconvAPI } }).tailor.iconv;
+  (globalThis as unknown as { tailor: { iconv: TailorIconvAPI } }).tailor.iconv;
 
 const convert: TailorIconvAPI["convert"] = (...args) => api().convert(...args);
 
@@ -123,14 +123,14 @@ class Iconv {
 }
 
 /** Runtime wrapper namespace for `tailor.iconv`. */
-export const iconv = {
+export const iconv: TailorIconvAPI = {
   convert,
   convertBuffer,
   decode,
   encode,
   encodings,
   Iconv,
-} as const satisfies TailorIconvAPI;
+};
 
 type RuntimeIconvInstance = IconvInstance;
 type RuntimeIconvConstructor = IconvConstructor;
