@@ -28,6 +28,7 @@ import {
   renderTailorSetupAction,
   TEMPLATE_VERSION,
   type CoordinateApp,
+  type CoordinateAppGroup,
   type CoordinateKind,
   type PackageManager,
   type RenderResult,
@@ -90,7 +91,7 @@ export type SetupTargetOptions =
 export type CoordinateSetupOptions = {
   coordinatorName: string;
   coordinateKind: CoordinateKind;
-  /** Action names (without tailor- prefix), in deploy order. */
+  /** Action names or comma-separated action groups (without tailor- prefix), in deploy order. */
   actions: string[];
   branch?: string;
   tagPattern?: string;
@@ -100,6 +101,30 @@ export type CoordinateSetupOptions = {
   /** Injectable git runner, for testing. */
   gitRunner?: GitRunner;
 };
+
+function actionName(input: string): string {
+  return input.startsWith("tailor-") ? input.slice("tailor-".length) : input;
+}
+
+function splitActionGroup(input: string): string[] {
+  const names = input.split(",").map((entry) => actionName(entry.trim()));
+  if (names.some((name) => name.length === 0)) {
+    throw new Error("--action must contain one or more non-empty action names.");
+  }
+  return names;
+}
+
+function uniqueGroupId(names: readonly string[], usedIds: Set<string>): string {
+  const base = names.join("-");
+  let id = base;
+  let suffix = 2;
+  while (usedIds.has(id)) {
+    id = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  usedIds.add(id);
+  return id;
+}
 
 async function defaultLoadConfigName(configPath: string): Promise<string | undefined> {
   const { config } = await loadConfig(configPath);
@@ -442,7 +467,7 @@ type Decision =
 // normalise the content before hashing so that custom build commands do not
 // trigger false hand-edit drift.
 const BUILD_SITE_RUN_RE =
-  /([ \t]*- id: build-site\n[ \t]+shell: bash\n[ \t]+run: \|)([\s\S]*?)(\n[ \t]*- |\n*$)/;
+  /([ \t]*- id: build-site\n(?:[ \t]+if: [^\n]+\n)?[ \t]+shell: bash\n[ \t]+run: \|)([\s\S]*?)(\n[ \t]*- |\n*$)/;
 
 /**
  * Strip the mutable run: body of the build-site step before hashing.
@@ -751,31 +776,49 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
     );
   }
 
+  const actionTargets = new Map(
+    lock.targets.filter((t) => t.kind === "action").map((target) => [target.workspaceName, target]),
+  );
+
   // Resolve each action name to its lock entry to get the working directory.
   const seenNames = new Set<string>();
-  const apps: CoordinateApp[] = actions.map((actionName) => {
-    const name = actionName.startsWith("tailor-") ? actionName.slice("tailor-".length) : actionName;
-    if (seenNames.has(name)) {
-      throw new Error(
-        `Duplicate --action "${name}". Each composite action can only appear once in a coordinator.`,
-      );
-    }
-    seenNames.add(name);
-    const entry = lock.targets.find((t) => t.kind === "action" && t.workspaceName === name);
-    if (!entry) {
-      throw new Error(
-        `Action target "${name}" not found in .github/tailor-sdk.lock. ` +
-          `Run \`tailor-sdk setup action --name ${name}\` first.`,
-      );
-    }
-    validateDir(entry.inputs.dir);
-    return { name, dir: entry.inputs.dir };
+  const usedGroupIds = new Set<string>();
+  const actionGroups: CoordinateAppGroup[] = actions.map((actionGroup) => {
+    const names = splitActionGroup(actionGroup);
+    const apps: CoordinateApp[] = names.map((name) => {
+      if (seenNames.has(name)) {
+        throw new Error(
+          `Duplicate --action "${name}". Each composite action can only appear once in a coordinator.`,
+        );
+      }
+      seenNames.add(name);
+      const entry = actionTargets.get(name);
+      if (!entry) {
+        throw new Error(
+          `Action target "${name}" not found in .github/tailor-sdk.lock. ` +
+            `Run \`tailor-sdk setup action --name ${name}\` first.`,
+        );
+      }
+      if (names.length > 1 && entry.templateVersion < TEMPLATE_VERSION) {
+        throw new Error(
+          `Action target "${name}" was generated with an older setup template. ` +
+            `Run \`tailor-sdk setup action --name ${name} --force\` before grouping it in setup coordinate.`,
+        );
+      }
+      validateDir(entry.inputs.dir);
+      return {
+        name,
+        dir: entry.inputs.dir,
+        hasStaticWebsites: entry.inputs.hasStaticWebsites,
+      };
+    });
+    return { id: uniqueGroupId(names, usedGroupIds), apps };
   });
 
   const render = renderCoordinateWorkflow({
     coordinatorName,
     kind: coordinateKind,
-    apps,
+    actionGroups,
     branch: branch ?? undefined,
     tagPattern: coordinateKind === "tag" ? tagPattern : undefined,
     environment,
@@ -822,7 +865,7 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
       environment,
       dir: ".",
       packageManager,
-      actionDirs: apps.map((a) => a.dir),
+      actionDirs: actionGroups.flatMap((group) => group.apps.map((a) => a.dir)),
     },
     generatedIds: render.generatedIds,
     ejectedIds: existing?.ejectedIds ?? [],
@@ -856,9 +899,9 @@ export async function setupCoordinate(options: CoordinateSetupOptions): Promise<
   logger.log(`   gh secret set TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET --env ${environment}`);
   logger.newline();
   logger.log(
-    `2. Provision each workspace and set TAILOR_PLATFORM_WORKSPACE_ID on the "${environment}" environment:`,
+    `2. Provision the target workspace and set TAILOR_PLATFORM_WORKSPACE_ID on the "${environment}" environment:`,
   );
-  logger.log("   tailor-sdk workspace create   # one per app; copy the id");
+  logger.log("   tailor-sdk workspace create   # if it does not exist yet; copy the id");
   logger.log(`   gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env ${environment}`);
   logger.newline();
   logger.log("3. Commit the generated files:");

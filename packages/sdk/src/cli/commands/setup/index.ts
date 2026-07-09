@@ -35,7 +35,7 @@ const coordinateCommand = defineAppCommand({
       }),
       action: arg(z.array(z.string().min(1)).min(1), {
         description:
-          "Composite action to include (can be specified multiple times). tailor- prefix optional.",
+          "Composite action to include. Repeat for separate deploy steps, or use commas to deploy actions as one multi-config group. tailor- prefix optional.",
       }),
       branch: arg(z.string().min(1).optional(), {
         description:

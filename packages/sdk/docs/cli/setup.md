@@ -100,14 +100,14 @@ tailor-sdk setup coordinate [options]
 
 **Options**
 
-| Option                        | Alias | Description                                                                             | Required | Default |
-| ----------------------------- | ----- | --------------------------------------------------------------------------------------- | -------- | ------- |
-| `--name <NAME>`               | `-n`  | Coordinator name (used in the generated workflow file name and job names)               | Yes      | -       |
-| `--action <ACTION>`           | -     | Composite action to include (can be specified multiple times). tailor- prefix optional. | Yes      | -       |
-| `--branch <BRANCH>`           | -     | Branch target: deploy trigger branch (defaults to the detected default branch)          | No       | -       |
-| `--tag`                       | -     | Generate a tag target coordinator                                                       | No       | `false` |
-| `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs                                             | No       | -       |
-| `--force`                     | -     | Discard hand edits and regenerate                                                       | No       | `false` |
+| Option                        | Alias | Description                                                                                                                                        | Required | Default |
+| ----------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
+| `--name <NAME>`               | `-n`  | Coordinator name (used in the generated workflow file name and job names)                                                                          | Yes      | -       |
+| `--action <ACTION>`           | -     | Composite action to include. Repeat for separate deploy steps, or use commas to deploy actions as one multi-config group. tailor- prefix optional. | Yes      | -       |
+| `--branch <BRANCH>`           | -     | Branch target: deploy trigger branch (defaults to the detected default branch)                                                                     | No       | -       |
+| `--tag`                       | -     | Generate a tag target coordinator                                                                                                                  | No       | `false` |
+| `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs                                                                                                        | No       | -       |
+| `--force`                     | -     | Discard hand edits and regenerate                                                                                                                  | No       | `false` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

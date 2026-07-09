@@ -9,7 +9,7 @@ import tagTemplate from "./tag.workflow.yml";
 // Bump on material template-structure changes (managed step ids, placeholders)
 // so old/new generations stay distinguishable in the lock.
 /** Template schema version, tracked per target in the lock file. */
-export const TEMPLATE_VERSION = 6;
+export const TEMPLATE_VERSION = 7;
 
 export type PackageManager = "pnpm" | "yarn" | "npm" | "bun";
 
@@ -80,6 +80,15 @@ export type CoordinateApp = {
   name: string;
   /** App directory relative to repo root (e.g. "apps/ims"). */
   dir: string;
+  /** Whether the app action contains the user-owned build-site slot. */
+  hasStaticWebsites?: boolean;
+};
+
+export type CoordinateAppGroup = {
+  /** Stable step id suffix for this group. */
+  id: string;
+  /** Actions deployed together in one apply invocation. */
+  apps: CoordinateApp[];
 };
 
 export type CoordinateKind = "branch" | "tag";
@@ -87,7 +96,7 @@ export type CoordinateKind = "branch" | "tag";
 export type RenderCoordinateParams = {
   coordinatorName: string;
   kind: CoordinateKind;
-  apps: CoordinateApp[];
+  actionGroups: CoordinateAppGroup[];
   branch?: string;
   tagPattern?: string;
   environment: string;
@@ -419,7 +428,7 @@ const ACTIONS_SHA = "e74173d4bdd931d036ad359cf5f7729fc6aa7067"; // v1.5.1
  * @returns Rendered YAML and the list of managed job/step ids
  */
 export function renderCoordinateWorkflow(params: RenderCoordinateParams): RenderResult {
-  const { coordinatorName, kind, apps, environment, packageManager } = params;
+  const { coordinatorName, kind, actionGroups, environment, packageManager } = params;
   const isTag = kind === "tag";
   const branch = params.branch;
   const tagPattern = params.tagPattern ?? "v*";
@@ -479,45 +488,118 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
     `  with:`,
     `    package-manager: ${packageManager}`,
   ].join("\n");
-  const perAppPlanSteps = apps
-    .flatMap((app) => {
-      const wd = app.dir !== "." ? app.dir : undefined;
-      const wdLine = wd ? `\n    working-directory: ${wd}` : "";
-      return [
-        `- id: tailor-generate-check-${app.name}`,
-        `  uses: tailor-platform/actions/generate-check@${ACTIONS_SHA} # v1.5.1`,
-        `  with:`,
-        `    package-manager: ${packageManager}${wdLine}`,
-        `- id: tailor-plan-${app.name}`,
-        `  if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork`,
-        `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # v1.5.1`,
-        `  with:`,
-        `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
-        `    package-manager: ${packageManager}${wdLine}`,
-        `    label: ${coordinatorName}/${app.name}`,
-        `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
-        `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
-        `    github-token: \${{ secrets.GITHUB_TOKEN }}`,
-      ];
+  const configPath = (app: CoordinateApp) =>
+    app.dir === "." ? "tailor.config.ts" : `${app.dir}/tailor.config.ts`;
+  const groupConfigPath = (group: CoordinateAppGroup) => group.apps.map(configPath).join(",");
+  const firstApp = (group: CoordinateAppGroup) => {
+    const [app] = group.apps;
+    if (!app) {
+      throw new Error("Coordinate action groups must contain at least one app.");
+    }
+    return app;
+  };
+  const singleAppPlanStep = (group: CoordinateAppGroup, app: CoordinateApp) => {
+    const wd = app.dir !== "." ? app.dir : undefined;
+    const wdLine = wd ? `\n    working-directory: ${wd}` : "";
+    return [
+      `- id: tailor-plan-${group.id}`,
+      `  if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork`,
+      `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # v1.5.1`,
+      `  with:`,
+      `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
+      `    package-manager: ${packageManager}${wdLine}`,
+      `    label: ${coordinatorName}/${app.name}`,
+      `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
+      `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
+      `    github-token: \${{ secrets.GITHUB_TOKEN }}`,
+    ];
+  };
+  const multiConfigPlanStep = (group: CoordinateAppGroup) => [
+    `- id: tailor-plan-${group.id}`,
+    `  if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork`,
+    `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # v1.5.1`,
+    `  env:`,
+    `    TAILOR_PLATFORM_SDK_CONFIG_PATH: ${groupConfigPath(group)}`,
+    `  with:`,
+    `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
+    `    package-manager: ${packageManager}`,
+    `    label: ${coordinatorName}/${group.id}`,
+    `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
+    `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
+    `    github-token: \${{ secrets.GITHUB_TOKEN }}`,
+  ];
+  const perAppPlanSteps = actionGroups
+    .flatMap((group) => {
+      const generateCheckSteps = group.apps.flatMap((app) => {
+        const wd = app.dir !== "." ? app.dir : undefined;
+        const wdLine = wd ? `\n    working-directory: ${wd}` : "";
+        return [
+          `- id: tailor-generate-check-${app.name}`,
+          `  uses: tailor-platform/actions/generate-check@${ACTIONS_SHA} # v1.5.1`,
+          `  with:`,
+          `    package-manager: ${packageManager}${wdLine}`,
+        ];
+      });
+      const planStep =
+        group.apps.length === 1
+          ? singleAppPlanStep(group, firstApp(group))
+          : multiConfigPlanStep(group);
+      return [...generateCheckSteps, ...planStep];
     })
     .join("\n");
   out = line(out, "PER_APP_PLAN_STEPS", `${driftCheckStep}\n${perAppPlanSteps}`);
 
-  const deploySteps = apps
-    .flatMap((app) => [
-      `- id: tailor-deploy-${app.name}`,
-      `  uses: ./.github/actions/tailor-${app.name}`,
-      `  with:`,
-      `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
-      `    name: ${app.name}`,
-      `    working-directory: ${app.dir}`,
-      `    package-manager: ${packageManager}`,
-      `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
-      `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
-      `    slack-token: \${{ secrets.TAILOR_SLACK_BOT_TOKEN }}`,
-      `    slack-channel-id: \${{ vars.TAILOR_SLACK_CHANNEL_ID }}`,
-      `    # editable: api-url:`,
-    ])
+  const singleAppDeployStep = (group: CoordinateAppGroup, app: CoordinateApp) => [
+    `- id: tailor-deploy-${group.id}`,
+    `  uses: ./.github/actions/tailor-${app.name}`,
+    `  with:`,
+    `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
+    `    name: ${app.name}`,
+    `    working-directory: ${app.dir}`,
+    `    package-manager: ${packageManager}`,
+    `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
+    `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
+    `    slack-token: \${{ secrets.TAILOR_SLACK_BOT_TOKEN }}`,
+    `    slack-channel-id: \${{ vars.TAILOR_SLACK_CHANNEL_ID }}`,
+    `    # editable: api-url:`,
+  ];
+  const buildSiteStep = (app: CoordinateApp) => [
+    `- id: tailor-build-site-${app.name}`,
+    `  uses: ./.github/actions/tailor-${app.name}`,
+    `  with:`,
+    `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
+    `    name: ${app.name}`,
+    `    working-directory: ${app.dir}`,
+    `    deploy: "false"`,
+    `    package-manager: ${packageManager}`,
+    `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
+    `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
+    `    slack-token: \${{ secrets.TAILOR_SLACK_BOT_TOKEN }}`,
+    `    slack-channel-id: \${{ vars.TAILOR_SLACK_CHANNEL_ID }}`,
+  ];
+  const multiConfigDeployStep = (group: CoordinateAppGroup) => [
+    ...group.apps.filter((app) => app.hasStaticWebsites).flatMap(buildSiteStep),
+    `- id: tailor-deploy-${group.id}`,
+    `  uses: ./.github/actions/tailor-${firstApp(group).name}`,
+    `  with:`,
+    `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
+    `    name: ${coordinatorName}/${group.id}`,
+    `    working-directory: .`,
+    `    config: ${groupConfigPath(group)}`,
+    `    build-site: "false"`,
+    `    package-manager: ${packageManager}`,
+    `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
+    `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
+    `    slack-token: \${{ secrets.TAILOR_SLACK_BOT_TOKEN }}`,
+    `    slack-channel-id: \${{ vars.TAILOR_SLACK_CHANNEL_ID }}`,
+    `    # editable: api-url:`,
+  ];
+  const deploySteps = actionGroups
+    .flatMap((group) =>
+      group.apps.length === 1
+        ? singleAppDeployStep(group, firstApp(group))
+        : multiConfigDeployStep(group),
+    )
     .join("\n");
   out = line(out, "PER_APP_DEPLOY_STEPS", deploySteps);
 
@@ -546,15 +628,20 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
     "tailor-plan/tailor-setup",
     "tailor-plan/tailor-drift-check",
   );
-  for (const app of apps) {
-    generatedIds.push(
-      `tailor-plan/tailor-generate-check-${app.name}`,
-      `tailor-plan/tailor-plan-${app.name}`,
-    );
+  for (const group of actionGroups) {
+    for (const app of group.apps) {
+      generatedIds.push(`tailor-plan/tailor-generate-check-${app.name}`);
+    }
+    generatedIds.push(`tailor-plan/tailor-plan-${group.id}`);
   }
   generatedIds.push("tailor-deploy", "tailor-deploy/tailor-checkout", "tailor-deploy/tailor-setup");
-  for (const app of apps) {
-    generatedIds.push(`tailor-deploy/tailor-deploy-${app.name}`);
+  for (const group of actionGroups) {
+    for (const app of group.apps) {
+      if (group.apps.length > 1 && app.hasStaticWebsites) {
+        generatedIds.push(`tailor-deploy/tailor-build-site-${app.name}`);
+      }
+    }
+    generatedIds.push(`tailor-deploy/tailor-deploy-${group.id}`);
   }
 
   return { content: out, generatedIds };

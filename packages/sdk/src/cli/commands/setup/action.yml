@@ -15,6 +15,18 @@ inputs:
     description: App directory relative to the repository root
     required: false
     default: "."
+  config:
+    description: SDK config path, or comma-separated config paths for multi-config deploys
+    required: false
+    default: "tailor.config.ts"
+  deploy:
+    description: Whether to run the Tailor deploy step after build steps
+    required: false
+    default: "true"
+  build-site:
+    description: Whether to run the static website build slot when present
+    required: false
+    default: "true"
   platform-client-id:
     description: Machine-user client id
     required: true
@@ -45,6 +57,7 @@ runs:
   steps:
     # __STATIC_WEBSITE_BUILD_START__
     - id: build-site
+      if: inputs.build-site == 'true'
       shell: bash
       run: |
         # Replace with your static website build command.
@@ -55,7 +68,10 @@ runs:
         true
     # __STATIC_WEBSITE_BUILD_END__
     - id: tailor-apply
+      if: inputs.deploy == 'true'
       uses: tailor-platform/actions/deploy@e74173d4bdd931d036ad359cf5f7729fc6aa7067 # v1.5.1
+      env:
+        TAILOR_PLATFORM_SDK_CONFIG_PATH: ${{ inputs.config }}
       with:
         workspace-id: ${{ inputs.workspace-id }}
         working-directory: ${{ inputs.working-directory }}
