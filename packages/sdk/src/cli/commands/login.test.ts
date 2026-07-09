@@ -84,6 +84,12 @@ describe("login --profile", () => {
     expect((result as { error?: Error }).error?.message).toContain(
       "tailor-sdk profile update 'dev' --user 'machine-client'",
     );
+    expect((result as { error?: Error }).error?.message).toContain(
+      "Then retry the original machine-user login command.",
+    );
+    expect((result as { error?: Error }).error?.message).not.toContain(
+      "tailor-sdk login --profile 'dev'",
+    );
 
     const pfConfig = await readPlatformConfig();
     expect(pfConfig.profiles.dev?.user).toBe("u@example.com");
@@ -129,7 +135,7 @@ describe("login --profile", () => {
       "tailor-sdk profile update 'dev profile' --user 'machine client; echo nope'",
     );
     expect((result as { error?: Error }).error?.message).toContain(
-      "tailor-sdk login --profile 'dev profile'",
+      "Then retry the original machine-user login command.",
     );
   });
 
@@ -158,7 +164,61 @@ describe("login --profile", () => {
         "tailor-sdk profile update dev --user machine-client",
       );
       expect((result as { error?: Error }).error?.message).toContain(
+        "Then retry the original machine-user login command.",
+      );
+      expect((result as { error?: Error }).error?.message).not.toContain(
         "tailor-sdk login --profile dev",
+      );
+    } finally {
+      if (platformDescriptor) {
+        Object.defineProperty(process, "platform", platformDescriptor);
+      }
+    }
+  });
+
+  test("avoids copy-paste recovery commands for unsafe Windows arguments", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        "%USERNAME%": {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "dev-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "win32" });
+
+    try {
+      const result = await runCommand(loginCommand, [
+        "--profile",
+        "%USERNAME%",
+        "--machine-user",
+        "--client-id",
+        "machine-client",
+        "--client-secret",
+        "secret",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect((result as { error?: Error }).error?.message).toContain(
+        "tailor-sdk profile update <profile> --user <authenticated-user>",
+      );
+      expect((result as { error?: Error }).error?.message).toContain('profile = "%USERNAME%"');
+      expect((result as { error?: Error }).error?.message).toContain(
+        'authenticated user = "machine-client"',
+      );
+      expect((result as { error?: Error }).error?.message).not.toContain(
+        "tailor-sdk profile update %USERNAME% --user machine-client",
       );
     } finally {
       if (platformDescriptor) {

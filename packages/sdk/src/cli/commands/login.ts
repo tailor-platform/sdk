@@ -31,11 +31,13 @@ type ProfileLoginOptions = {
   profileUser?: string;
   platformConfig?: PlatformClientConfig;
   updateCurrentUser?: boolean;
+  loginMode?: "user" | "machine-user";
 };
 type ProfileUserMismatch = {
   profile: string;
   oldUser: string;
   authenticatedUser: string;
+  loginMode: "user" | "machine-user";
 };
 
 function randomState() {
@@ -49,7 +51,12 @@ function getProfileUserMismatch(
   if (!args.profile || !args.profileUser || authenticatedUser === args.profileUser) {
     return undefined;
   }
-  return { profile: args.profile, oldUser: args.profileUser, authenticatedUser };
+  return {
+    profile: args.profile,
+    oldUser: args.profileUser,
+    authenticatedUser,
+    loginMode: args.loginMode ?? "user",
+  };
 }
 
 function quoteCommandArg(value: string, platform: NodeJS.Platform = process.platform) {
@@ -57,21 +64,43 @@ function quoteCommandArg(value: string, platform: NodeJS.Platform = process.plat
     if (/^[A-Za-z0-9_./:@+=,-]+$/.test(value)) {
       return value;
     }
-    return `"${value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, "$1$1")}"`;
+    return undefined;
   }
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
-function profileUserMismatchError(mismatch: ProfileUserMismatch) {
+function profileUpdateCommand(mismatch: ProfileUserMismatch) {
   const profileArg = quoteCommandArg(mismatch.profile);
   const userArg = quoteCommandArg(mismatch.authenticatedUser);
-  const updateCommand = `tailor-sdk profile update ${profileArg} --user ${userArg}`;
+  if (profileArg && userArg) {
+    return `tailor-sdk profile update ${profileArg} --user ${userArg}`;
+  }
+  return [
+    "tailor-sdk profile update <profile> --user <authenticated-user>",
+    `profile = ${JSON.stringify(mismatch.profile)}`,
+    `authenticated user = ${JSON.stringify(mismatch.authenticatedUser)}`,
+  ].join("\n");
+}
+
+function retryInstruction(mismatch: ProfileUserMismatch) {
+  if (mismatch.loginMode === "machine-user") {
+    return "Then retry the original machine-user login command.";
+  }
+  const profileArg = quoteCommandArg(mismatch.profile);
+  if (!profileArg) {
+    return "Then retry the browser login with the same profile value.";
+  }
+  return `Then run:\n  tailor-sdk login --profile ${profileArg}`;
+}
+
+function profileUserMismatchError(mismatch: ProfileUserMismatch) {
+  const updateCommand = profileUpdateCommand(mismatch);
+  const nextStep = retryInstruction(mismatch);
   return new Error(ml`
     Profile "${mismatch.profile}" is configured for "${mismatch.oldUser}", but login authenticated "${mismatch.authenticatedUser}".
     The authenticated user has been saved. To use it with this profile, run:
       ${updateCommand}
-    Then run:
-      tailor-sdk login --profile ${profileArg}
+    ${nextStep}
   `);
 }
 
@@ -268,6 +297,7 @@ export const loginCommand = defineAppCommand({
           profileUser,
           platformConfig,
           updateCurrentUser,
+          loginMode: "machine-user",
         });
       } else {
         await startAuthServer({
@@ -275,6 +305,7 @@ export const loginCommand = defineAppCommand({
           profileUser,
           platformConfig,
           updateCurrentUser,
+          loginMode: "user",
         });
       }
       logger.success("Successfully logged in to Tailor Platform.");
