@@ -8,9 +8,9 @@ import {
   closeConnectionPool,
   fetchPlatformMachineUserToken,
   fetchUserInfo,
-  getPlatformBaseUrl,
   initOAuth2Client,
   isDefaultPlatform,
+  normalizeBaseUrl,
   type PlatformClientConfig,
 } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -56,6 +56,11 @@ function getProfileUserUpdate(
   return { profile: args.profile, oldUser: args.profileUser, newUser: authenticatedUser };
 }
 
+function storedPlatformScope(profile: Parameters<typeof platformConfigFromProfile>[0]) {
+  const platformUrl = platformConfigFromProfile(profile)?.platformUrl;
+  return platformUrl ? normalizeBaseUrl(platformUrl) : undefined;
+}
+
 async function confirmProfileUserUpdate(
   args: ProfileLoginOptions,
   authenticatedUser: string,
@@ -81,12 +86,12 @@ async function applyProfileUserUpdate(
   if (!profileEntry) {
     throw new Error(`Profile "${update.profile}" not found`);
   }
-  const profilePlatformBaseUrl = getPlatformBaseUrl(platformConfigFromProfile(profileEntry));
+  const profilePlatformScope = storedPlatformScope(profileEntry);
   const otherProfiles = Object.entries(config.profiles).filter(
     ([name, profile]) =>
       name !== update.profile &&
       profile?.user === update.oldUser &&
-      getPlatformBaseUrl(platformConfigFromProfile(profile)) === profilePlatformBaseUrl,
+      storedPlatformScope(profile) === profilePlatformScope,
   );
   profileEntry.user = update.newUser;
   if (otherProfiles.length === 0) return;

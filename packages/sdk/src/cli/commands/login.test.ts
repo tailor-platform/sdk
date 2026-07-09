@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { runCommand } from "politty";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { fetchPlatformMachineUserToken } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { prompt } from "#/cli/shared/prompt";
@@ -44,6 +44,10 @@ beforeAll(() => {
 
 afterAll(() => {
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("login --profile", () => {
@@ -169,6 +173,49 @@ describe("login --profile", () => {
     expect(pfConfig.profiles.dev?.user).toBe("machine-client");
     expect(pfConfig.profiles.qa?.user).toBe("machine-client");
     expect(pfConfig.profiles.prod?.user).toBe("u@example.com");
+  });
+
+  test("skips unscoped profiles when the selected profile has a platform URL", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+        default: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+        },
+      },
+      current_user: null,
+    });
+    vi.stubEnv("TAILOR_PLATFORM_URL", "not-a-url");
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "dev-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+
+    const result = await runCommand(loginCommand, [
+      "--profile",
+      "dev",
+      "--machine-user",
+      "--client-id",
+      "machine-client",
+      "--client-secret",
+      "secret",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(prompt.confirm).toHaveBeenCalledTimes(1);
+    const pfConfig = await readPlatformConfig();
+    expect(pfConfig.profiles.dev?.user).toBe("machine-client");
+    expect(pfConfig.profiles.default?.user).toBe("u@example.com");
   });
 
   test("keeps current user when machine-user login targets a non-default platform profile", async () => {
