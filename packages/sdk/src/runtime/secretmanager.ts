@@ -38,7 +38,8 @@ export interface TailorSecretmanagerAPI {
 }
 
 const api = (): TailorSecretmanagerAPI =>
-  (globalThis as { tailor: { secretmanager: TailorSecretmanagerAPI } }).tailor.secretmanager;
+  (globalThis as unknown as { tailor: { secretmanager: TailorSecretmanagerAPI } }).tailor
+    .secretmanager;
 
 const getSecrets: TailorSecretmanagerAPI["getSecrets"] = (...args) => api().getSecrets(...args);
 

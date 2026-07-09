@@ -39,7 +39,7 @@ export interface TailorAigatewayAPI {
 }
 
 const api = (): TailorAigatewayAPI =>
-  (globalThis as { tailor: { aigateway: TailorAigatewayAPI } }).tailor.aigateway;
+  (globalThis as unknown as { tailor: { aigateway: TailorAigatewayAPI } }).tailor.aigateway;
 
 const get: TailorAigatewayAPI["get"] = (...args) => api().get(...args);
 
