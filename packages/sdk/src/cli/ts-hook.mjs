@@ -12,6 +12,7 @@ const JS_TO_TS = new Map([
   [".js", ".ts"],
   [".mjs", ".mts"],
 ]);
+const KNOWN_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".mjs", ".json"];
 
 // --- tsconfig paths resolution ---
 
@@ -175,7 +176,7 @@ export async function resolve(specifier, context, nextResolve) {
     }
 
     const lastSegment = specifier.split("/").pop() ?? "";
-    if (!lastSegment.includes(".")) {
+    if (!KNOWN_EXTENSIONS.some((ext) => lastSegment.endsWith(ext))) {
       for (const ext of TS_EXTENSIONS) {
         try {
           return await nextResolve(specifier + ext, context);
@@ -259,7 +260,7 @@ export function resolveSync(specifier, context, nextResolve) {
     }
 
     const lastSegment = specifier.split("/").pop() ?? "";
-    if (!lastSegment.includes(".")) {
+    if (!KNOWN_EXTENSIONS.some((ext) => lastSegment.endsWith(ext))) {
       for (const ext of TS_EXTENSIONS) {
         try {
           return nextResolve(specifier + ext, context);
