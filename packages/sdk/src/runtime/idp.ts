@@ -144,7 +144,9 @@ class Client {
   #impl: IdpClientInstance;
 
   constructor(config: ClientConfig) {
-    this.#impl = new (globalThis as { tailor: { idp: TailorIdpAPI } }).tailor.idp.Client(config);
+    this.#impl = new (globalThis as unknown as { tailor: { idp: TailorIdpAPI } }).tailor.idp.Client(
+      config,
+    );
   }
 
   /**
@@ -221,7 +223,7 @@ class Client {
 }
 
 /** Runtime wrapper namespace for `tailor.idp`. */
-export const idp = { Client } as const satisfies TailorIdpAPI;
+export const idp: TailorIdpAPI = { Client };
 
 type RuntimeClientConfig = ClientConfig;
 type RuntimeUser = User;
