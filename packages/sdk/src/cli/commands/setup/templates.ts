@@ -580,6 +580,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
   const multiConfigDeployStep = (group: CoordinateAppGroup) => [
     ...group.apps.filter((app) => app.hasStaticWebsites).flatMap(buildSiteStep),
     `- id: tailor-deploy-${group.id}`,
+    // Grouped deploys reuse one app action; keep action.yml parameterized by config/deploy/build-site inputs.
     `  uses: ./.github/actions/tailor-${firstApp(group).name}`,
     `  with:`,
     `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
