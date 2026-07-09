@@ -1,5 +1,6 @@
 import { parse, Lang } from "@ast-grep/napi";
 import {
+  collectBindingNames,
   findImportStatements,
   importBindings,
   importSource,
@@ -607,21 +608,148 @@ function literalModuleSource(node: SgNode): string | null {
   return text.startsWith("`") && text.endsWith("`") ? text.slice(1, -1) : null;
 }
 
-function dynamicImportCallFor(sourceNode: SgNode): SgNode | null {
-  let current = sourceNode.parent();
+function isSourceScopeNode(node: SgNode): boolean {
+  const kind = node.kind();
+  return (
+    kind === "program" ||
+    kind === "statement_block" ||
+    kind === "function_declaration" ||
+    kind === "arrow_function" ||
+    kind === "method_definition"
+  );
+}
+
+function nearestSourceScope(node: SgNode): SgNode | null {
+  let current = node.parent();
   while (current) {
-    if (current.kind() === "import_statement" || current.kind() === "export_statement") {
-      return null;
-    }
-    if (
-      current.kind() === "call_expression" &&
-      current.children().some((child) => child.kind() === "import")
-    ) {
-      return current;
+    if (isSourceScopeNode(current)) return current;
+    current = current.parent();
+  }
+  return null;
+}
+
+function sameRange(left: SgNode | null, right: SgNode): boolean {
+  if (!left) return false;
+  const leftRange = left.range();
+  const rightRange = right.range();
+  return (
+    leftRange.start.index === rightRange.start.index && leftRange.end.index === rightRange.end.index
+  );
+}
+
+function isConstVariableDeclarator(node: SgNode): boolean {
+  return (
+    node
+      .parent()
+      ?.children()
+      .some((child) => child.kind() === "const") ?? false
+  );
+}
+
+function sourceConstInitializerContent(node: SgNode): string | null {
+  const directValue = literalModuleSource(node);
+  if (directValue != null) return directValue;
+  if (
+    node.kind() !== "as_expression" &&
+    node.kind() !== "satisfies_expression" &&
+    node.kind() !== "parenthesized_expression"
+  ) {
+    return null;
+  }
+  for (const child of node.children()) {
+    const childValue = sourceConstInitializerContent(child);
+    if (childValue != null) return childValue;
+  }
+  return null;
+}
+
+function sourceConstVariableDeclaratorContent(node: SgNode, name: string): string | null {
+  if (!isConstVariableDeclarator(node)) return null;
+  const names = new Set<string>();
+  collectBindingNames(node, names);
+  if (!names.has(name)) return null;
+
+  const initializer = node
+    .children()
+    .findLast((child) => sourceConstInitializerContent(child) != null);
+  return initializer == null ? null : sourceConstInitializerContent(initializer);
+}
+
+function bindingNames(node: SgNode): Set<string> {
+  const names = new Set<string>();
+  collectBindingNames(node, names);
+  return names;
+}
+
+function sourceStringVariableInScope(
+  scope: SgNode,
+  name: string,
+  before: number,
+): string | null | undefined {
+  const bindings = scope
+    .findAll({
+      rule: {
+        any: [
+          { kind: "variable_declarator" },
+          { kind: "required_parameter" },
+          { kind: "optional_parameter" },
+          { kind: "catch_clause" },
+        ],
+      },
+    })
+    .filter(
+      (node) => node.range().start.index < before && sameRange(nearestSourceScope(node), scope),
+    )
+    .toSorted((a, b) => b.range().start.index - a.range().start.index);
+
+  for (const binding of bindings) {
+    if (!bindingNames(binding).has(name)) continue;
+    return binding.kind() === "variable_declarator"
+      ? sourceConstVariableDeclaratorContent(binding, name)
+      : null;
+  }
+
+  return undefined;
+}
+
+function sourceScopedStringVariableContent(identifier: SgNode): string | null {
+  const name = identifier.text();
+  const before = identifier.range().start.index;
+  let current = identifier.parent();
+  while (current) {
+    if (isSourceScopeNode(current)) {
+      const value = sourceStringVariableInScope(current, name, before);
+      if (value !== undefined) return value;
     }
     current = current.parent();
   }
   return null;
+}
+
+function isDynamicImportCall(node: SgNode): boolean {
+  return (
+    node.kind() === "call_expression" && node.children().some((child) => child.kind() === "import")
+  );
+}
+
+function isArgumentSyntaxNode(node: SgNode): boolean {
+  const kind = node.kind();
+  return kind === "(" || kind === ")" || kind === "," || kind === "comment";
+}
+
+function firstCallArgument(callExpression: SgNode): SgNode | null {
+  const args = callExpression.children().find((child) => child.kind() === "arguments");
+  return args?.children().find((child) => !isArgumentSyntaxNode(child)) ?? null;
+}
+
+function dynamicImportSourceName(callExpression: SgNode): string | null {
+  const sourceArg = firstCallArgument(callExpression);
+  if (!sourceArg) return null;
+
+  const sourceName = literalModuleSource(sourceArg);
+  if (sourceName != null) return sourceName;
+
+  return sourceArg.kind() === "identifier" ? sourceScopedStringVariableContent(sourceArg) : null;
 }
 
 function dynamicImportExcerptNode(callExpression: SgNode): SgNode {
@@ -643,13 +771,10 @@ function dynamicImportExcerptNode(callExpression: SgNode): SgNode {
 
 function dynamicRuntimeImportFindings(root: SgNode, relativePath: string): LlmReviewFinding[] {
   const findings: LlmReviewFinding[] = [];
-  for (const sourceNode of root.findAll({
-    rule: { any: [{ kind: "string" }, { kind: "template_string" }] },
-  })) {
-    const sourceName = literalModuleSource(sourceNode);
+  for (const callExpression of root.findAll({ rule: { kind: "call_expression" } })) {
+    if (!isDynamicImportCall(callExpression)) continue;
+    const sourceName = dynamicImportSourceName(callExpression);
     if (!sourceName || !MODULES_BY_SOURCE.has(sourceName)) continue;
-    const callExpression = dynamicImportCallFor(sourceNode);
-    if (!callExpression) continue;
     const excerptNode = dynamicImportExcerptNode(callExpression);
     findings.push({
       file: relativePath,

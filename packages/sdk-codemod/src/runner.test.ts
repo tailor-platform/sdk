@@ -1087,6 +1087,14 @@ describe("runCodemods", () => {
           "",
         ].join("\n"),
       );
+      await fs.promises.writeFile(
+        path.join(dir, "dynamic-const.ts"),
+        [
+          'const runtimeModule = "@tailor-platform/sdk/runtime/aigateway";',
+          "const getGateway = (await import(runtimeModule)).get;",
+          "",
+        ].join("\n"),
+      );
 
       const result = await runCodemods([{ codemod, scriptPath }], dir, true);
 
@@ -1096,6 +1104,7 @@ describe("runCodemods", () => {
           codemodId: "v2/runtime-subpath-namespace",
           prompt: codemod.prompt,
           files: [
+            "dynamic-const.ts",
             "dynamic-template.ts",
             "dynamic.ts",
             "exports.ts",
@@ -1104,6 +1113,11 @@ describe("runCodemods", () => {
             "reexport.ts",
           ],
           findings: [
+            expect.objectContaining({
+              file: "dynamic-const.ts",
+              line: 2,
+              excerpt: "(await import(runtimeModule)).get",
+            }),
             expect.objectContaining({
               file: "dynamic-template.ts",
               line: 1,
