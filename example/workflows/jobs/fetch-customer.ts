@@ -1,14 +1,9 @@
 import { createWorkflowJob } from "@tailor-platform/sdk";
 import { getDB } from "../../generated/tailordb";
-import type { DateTimeString, UUIDString } from "@tailor-platform/sdk";
-
-function serializeDateTime(value: Date | DateTimeString): string {
-  return value instanceof Date ? value.toISOString() : value;
-}
 
 export const fetchCustomer = createWorkflowJob({
   name: "fetch-customer",
-  body: async (input: { customerId: UUIDString }) => {
+  body: async (input: { customerId: string }) => {
     const db = getDB("tailordb");
     const customer = await db
       .selectFrom("Customer")
@@ -18,8 +13,8 @@ export const fetchCustomer = createWorkflowJob({
     if (!customer) return undefined;
     return {
       ...customer,
-      createdAt: serializeDateTime(customer.createdAt),
-      updatedAt: serializeDateTime(customer.updatedAt),
+      createdAt: customer.createdAt.toISOString(),
+      updatedAt: customer.updatedAt.toISOString(),
     };
   },
 });

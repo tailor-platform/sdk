@@ -1,6 +1,5 @@
 import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateIdPClientRequestSchema,
   type CreateIdPServiceRequestSchema,
@@ -18,7 +17,12 @@ import {
   type IdPPermissionSchema as ProtoIdPPermissionSchema,
   type IdPService as ProtoIdPService,
 } from "@tailor-platform/tailor-proto/idp_resource_pb";
-import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "#/cli/shared/client";
+import {
+  fetchAllTolerant,
+  getOrNull,
+  resolveStaticWebsiteUrls,
+  type OperatorClient,
+} from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp/permission";
 import { assertDefined } from "#/utils/assert";
@@ -153,17 +157,13 @@ export async function applyIdP(
         // Ensure the vault and secret exist
         const vaultName = idpClientVaultName(update.namespaceName, update.name);
         const secretName = idpClientSecretName(update.namespaceName, update.name);
-        try {
-          await client.getSecretManagerVault({
+        const vault = await getOrNull(async () => {
+          return await client.getSecretManagerVault({
             workspaceId: update.workspaceId,
             secretmanagerVaultName: vaultName,
           });
-          return;
-        } catch (error) {
-          if (!(error instanceof ConnectError && error.code === Code.NotFound)) {
-            throw error;
-          }
-        }
+        });
+        if (vault) return;
         await client.createSecretManagerVault({
           workspaceId: update.workspaceId,
           secretmanagerVaultName: vaultName,
@@ -584,21 +584,14 @@ async function planClients(
   const changeSet = createChangeSet<CreateClient, UpdateClient, DeleteClient>("IdP clients");
 
   const fetchClients = (namespaceName: string) => {
-    return fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { clients, nextPageToken } = await client.listIdPClients({
-          workspaceId,
-          namespaceName,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [clients, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
-        }
-        throw error;
-      }
+    return fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { clients, nextPageToken } = await client.listIdPClients({
+        workspaceId,
+        namespaceName,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [clients, nextPageToken];
     });
   };
 

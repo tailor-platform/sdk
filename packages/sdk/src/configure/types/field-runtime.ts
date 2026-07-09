@@ -1,10 +1,3 @@
-import {
-  isValidDateString,
-  isValidDateTimeString,
-  isValidDecimalString,
-  isValidTimeString,
-  isValidUUIDString,
-} from "#/configure/types/field-format";
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
@@ -40,6 +33,15 @@ type FieldValidateValueArgs<T extends TailorFieldType> = {
 type FieldParseRuntimeArgs<T extends TailorFieldType> = FieldParseInternalArgs & {
   field: FieldRuntime<T>;
 };
+
+const regex = {
+  uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
+  time: /^(?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d)$/,
+  datetime:
+    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})[Tt](?<hour>[01]\d|2[0-3]):(?<minute>[0-5]\d):(?<second>[0-5]\d|60)(\.(?<fraction>\d+))?(?<offset>[Zz]|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/,
+  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
+} as const;
 
 function validateValue<T extends TailorFieldType>(
   args: FieldValidateValueArgs<T>,
@@ -86,7 +88,7 @@ function validateValue<T extends TailorFieldType>(
       break;
 
     case "uuid":
-      if (typeof value !== "string" || !isValidUUIDString(value)) {
+      if (typeof value !== "string" || !regex.uuid.test(value)) {
         issues.push({
           message: `Expected a valid UUID: received ${String(value)}`,
           path,
@@ -94,7 +96,7 @@ function validateValue<T extends TailorFieldType>(
       }
       break;
     case "date":
-      if (typeof value !== "string" || !isValidDateString(value)) {
+      if (typeof value !== "string" || !regex.date.test(value)) {
         issues.push({
           message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
           path,
@@ -102,7 +104,7 @@ function validateValue<T extends TailorFieldType>(
       }
       break;
     case "datetime":
-      if (typeof value !== "string" || !isValidDateTimeString(value)) {
+      if (typeof value !== "string" || !regex.datetime.test(value)) {
         issues.push({
           message: `Expected to match ISO format: received ${String(value)}`,
           path,
@@ -110,7 +112,7 @@ function validateValue<T extends TailorFieldType>(
       }
       break;
     case "time":
-      if (typeof value !== "string" || !isValidTimeString(value)) {
+      if (typeof value !== "string" || !regex.time.test(value)) {
         issues.push({
           message: `Expected to match "HH:mm" format: received ${String(value)}`,
           path,
@@ -118,7 +120,7 @@ function validateValue<T extends TailorFieldType>(
       }
       break;
     case "decimal":
-      if (typeof value !== "string" || !isValidDecimalString(value)) {
+      if (typeof value !== "string" || !regex.decimal.test(value)) {
         issues.push({
           message: `Expected a decimal string: received ${String(value)}`,
           path,

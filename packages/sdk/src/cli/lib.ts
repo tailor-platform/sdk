@@ -193,7 +193,6 @@ export {
   type NormalizedSchemaSnapshot,
   type TailorDBSnapshotType,
   type SnapshotFieldConfig,
-  type MigrationInfo,
 } from "./commands/tailordb/migrate/snapshot";
 export { MIGRATION_LABEL_KEY } from "./commands/tailordb/migrate/types";
 

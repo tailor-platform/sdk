@@ -23,7 +23,7 @@ describe("@tailor-platform/sdk/runtime/context", () => {
 
   test("getInvoker exposes SDK shape (attributes map + attributeList array)", () => {
     using _invokerSpy = vi.spyOn(globalThis.tailor.context, "getInvoker").mockReturnValue({
-      id: "11111111-1111-4111-8111-111111111111",
+      id: "u-1",
       type: "machine_user",
       workspaceId: "ws-1",
       attributes: ["role"],
@@ -33,7 +33,7 @@ describe("@tailor-platform/sdk/runtime/context", () => {
     const invoker = context.getInvoker();
 
     expect(invoker).toEqual({
-      id: "11111111-1111-4111-8111-111111111111",
+      id: "u-1",
       type: "machine_user",
       workspaceId: "ws-1",
       attributes: { role: "MANAGER" },

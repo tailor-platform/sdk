@@ -8,9 +8,6 @@ export interface KyselyTypeMetadata {
   usedUtilityTypes: {
     Timestamp: boolean;
     Serial: boolean;
-    DateString: boolean;
-    DecimalString: boolean;
-    TimeString: boolean;
   };
 }
 
@@ -20,8 +17,5 @@ export interface KyselyNamespaceMetadata {
   usedUtilityTypes: {
     Timestamp: boolean;
     Serial: boolean;
-    DateString: boolean;
-    DecimalString: boolean;
-    TimeString: boolean;
   };
 }

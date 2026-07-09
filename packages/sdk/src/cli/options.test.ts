@@ -86,7 +86,7 @@ async function walkMainCommands(visit: (command: AnyCommand, path: string[]) => 
   const subCommands = mainCommand.subCommands;
   expect(subCommands).toBeDefined();
 
-  for (const [name, cmd] of Object.entries(subCommands ?? {})) {
+  for (const [name, cmd] of Object.entries(subCommands)) {
     await walkCommand(cmd, visit, [name]);
   }
 }
@@ -120,7 +120,7 @@ describe("CLI options", () => {
     // `plugin list` uses BUILTIN_COMMAND_NAMES (a leaf module, to avoid an
     // import cycle) to flag shadowed plugins. Exclude the wrapper-added
     // `completion` command and any internal `__`-prefixed commands.
-    const registered = Object.keys(mainCommand.subCommands ?? {}).filter(
+    const registered = Object.keys(mainCommand.subCommands).filter(
       (name) => !name.startsWith("__") && name !== "completion",
     );
     expect(new Set(registered)).toEqual(new Set(BUILTIN_COMMAND_NAMES));

@@ -1,7 +1,6 @@
 import {
   createGetDB,
   type Generated,
-  type UUIDString,
   type Timestamp,
   type NamespaceDB,
   type NamespaceInsertable,
@@ -15,16 +14,16 @@ import {
 export interface Namespace {
   "main-db": {
     Category: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       name: string;
       slug: string;
-      parentCategoryId: UUIDString | null;
+      parentCategoryId: string | null;
     }
 
     Order: {
-      id: Generated<UUIDString>;
-      productId: UUIDString;
-      userId: UUIDString;
+      id: Generated<string>;
+      productId: string;
+      userId: string;
       quantity: number;
       totalPrice: number;
       status: "PENDING" | "CONFIRMED" | "SHIPPED" | "DELIVERED" | "CANCELLED";
@@ -33,18 +32,18 @@ export interface Namespace {
     }
 
     Product: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       name: string;
       description: string | null;
       price: number;
       status: "DRAFT" | "ACTIVE" | "DISCONTINUED";
-      categoryId: UUIDString | null;
+      categoryId: string | null;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }
 
     User: {
-      id: Generated<UUIDString>;
+      id: Generated<string>;
       name: string;
       email: string;
       role: "ADMIN" | "MEMBER" | "VIEWER";
