@@ -330,6 +330,62 @@ function existingSelfNamespaceImport(
   return null;
 }
 
+function flatImportsFor(importStmt: SgNode, mod: RuntimeModule): FlatImport[] {
+  const statementTypeOnly = isTypeOnlyImport(importStmt);
+  const flatImports: FlatImport[] = [];
+  for (const spec of importStmt.findAll({ rule: { kind: "import_specifier" } })) {
+    const names = importSpecNames(spec);
+    if (!names) continue;
+    const memberName = mod.members[names.importedName];
+    if (!memberName) continue;
+    flatImports.push({
+      localName: names.localName,
+      memberName,
+      typeOnly: statementTypeOnly || names.typeOnly,
+    });
+  }
+  return flatImports;
+}
+
+function plannedValueNamespaceLocal(
+  importStmt: SgNode,
+  mod: RuntimeModule,
+  root: SgNode,
+  imports: SgNode[],
+): string | null {
+  const source = importSource(importStmt);
+  if (!source) return null;
+
+  for (const candidate of imports) {
+    if (sameNode(candidate, importStmt)) continue;
+    if (importSource(candidate) !== source || isTypeOnlyImport(candidate)) continue;
+
+    const namespaceName = namespaceImportName(candidate);
+    if (namespaceName) return namespaceName;
+
+    const defaultName = defaultImportName(candidate);
+    if (defaultName) return defaultName;
+
+    const existingSelf = existingSelfNamespaceImport(candidate, mod, false);
+    if (existingSelf && !existingSelf.typeOnly) return existingSelf.localName;
+
+    const valueFlatImports = flatImportsFor(candidate, mod).filter((binding) => !binding.typeOnly);
+    if (valueFlatImports.length === 0) continue;
+
+    const removedNames = new Set(valueFlatImports.map((binding) => binding.localName));
+    const declaredNames = new Set([
+      ...localDeclarationNames(root),
+      ...localTypeScopeDeclarationNames(root),
+    ]);
+    if (valueFlatImports.some((binding) => declaredNames.has(binding.localName))) continue;
+    if (hasExportSpecifierReference(root, removedNames)) continue;
+
+    return uniqueNamespaceLocal(mod, root, imports, removedNames);
+  }
+
+  return null;
+}
+
 function buildImportReplacement(
   importStmt: SgNode,
   mod: RuntimeModule,
@@ -393,12 +449,16 @@ function buildImportReplacement(
   const flatImportsAreTypeOnly = flatImports.every((binding) => binding.typeOnly);
   const canUseExistingSelf =
     existingSelf != null && (!existingSelf.typeOnly || flatImportsAreTypeOnly);
+  const plannedValueLocal = flatImportsAreTypeOnly
+    ? plannedValueNamespaceLocal(importStmt, mod, root, imports)
+    : null;
   const namespaceLocal =
-    !statementTypeOnly && defaultName
+    plannedValueLocal ??
+    (!statementTypeOnly && defaultName
       ? defaultName
       : canUseExistingSelf
         ? existingSelf.localName
-        : uniqueNamespaceLocal(mod, root, imports, removedNames);
+        : uniqueNamespaceLocal(mod, root, imports, removedNames));
   const namespaceSpecifierKey = [
     source,
     namespaceLocal,
@@ -406,7 +466,9 @@ function buildImportReplacement(
   ].join("\0");
   const namespaceAlreadyEmitted = emittedNamespaceSpecifiers.has(namespaceSpecifierKey);
   const needsNamespaceSpecifier =
-    !((!statementTypeOnly && defaultName) || canUseExistingSelf) && !namespaceAlreadyEmitted;
+    plannedValueLocal == null &&
+    !((!statementTypeOnly && defaultName) || canUseExistingSelf) &&
+    !namespaceAlreadyEmitted;
   if (needsNamespaceSpecifier) emittedNamespaceSpecifiers.add(namespaceSpecifierKey);
   const namespaceSpecifier =
     flatImportsAreTypeOnly && !statementTypeOnly
