@@ -1068,6 +1068,14 @@ describe("runCodemods", () => {
         path.join(dir, "reexport-all.ts"),
         ['export * from "@tailor-platform/sdk/runtime/aigateway";', ""].join("\n"),
       );
+      await fs.promises.writeFile(
+        path.join(dir, "dynamic.ts"),
+        [
+          'type ClientRef = import("@tailor-platform/sdk/runtime/idp").Client;',
+          'const getGateway = (await import("@tailor-platform/sdk/runtime/aigateway")).get;',
+          "",
+        ].join("\n"),
+      );
 
       const result = await runCodemods([{ codemod, scriptPath }], dir, true);
 
@@ -1076,8 +1084,18 @@ describe("runCodemods", () => {
         {
           codemodId: "v2/runtime-subpath-namespace",
           prompt: codemod.prompt,
-          files: ["exports.ts", "reexport-all.ts", "reexport.ts"],
+          files: ["dynamic.ts", "exports.ts", "reexport-all.ts", "reexport.ts"],
           findings: [
+            expect.objectContaining({
+              file: "dynamic.ts",
+              line: 1,
+              excerpt: 'import("@tailor-platform/sdk/runtime/idp").Client',
+            }),
+            expect.objectContaining({
+              file: "dynamic.ts",
+              line: 2,
+              excerpt: '(await import("@tailor-platform/sdk/runtime/aigateway")).get',
+            }),
             expect.objectContaining({
               file: "exports.ts",
               line: 1,
