@@ -93,7 +93,7 @@ interface Plugin<TypeConfig = unknown, PluginConfig = unknown> {
 onTypeLoaded(context) {
   const { type, typeConfig, namespace } = context;
   return {
-    types: { archive: db.type(`Deleted_${type.name}`, { ... }) },
+    types: { archive: db.table(`Deleted_${type.name}`, { ... }) },
     extends: { fields: { deletedAt: db.datetime({ optional: true }) } },
     executors: [{ name: `${type.name}-on-delete`, resolve: async () => await import("./on-delete"), context: { sourceType: type, namespace } }],
   };
@@ -122,7 +122,7 @@ Same as `TypePluginOutput` but without `extends` (namespace plugins cannot exten
 ```typescript
 onNamespaceLoaded(context) {
   return {
-    types: { auditLog: db.type("AuditLog", { action: db.string(), ... }) },
+    types: { auditLog: db.table("AuditLog", { action: db.string(), ... }) },
   };
 },
 ```
@@ -343,7 +343,7 @@ function processSoftDelete(
 
   // Generate archive type
   const archiveType = db
-    .type(`${prefix}${type.name}`, {
+    .table(`${prefix}${type.name}`, {
       originalId: db.uuid().description("ID of the deleted record"),
       originalData: db.string().description("JSON snapshot of deleted record"),
       deletedAt: db.datetime().description("When the record was deleted"),
@@ -450,7 +450,7 @@ export const plugins = definePlugins(
 
 // tailordb/customer.ts
 export const customer = db
-  .type("Customer", {
+  .table("Customer", {
     name: db.string(),
     email: db.string(),
   })

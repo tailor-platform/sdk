@@ -4,7 +4,7 @@ import { rolePermission, roleGqlPermission } from "./permission";
 import { user } from "./user";
 
 export const task = db
-  .type("Task", "A task with comprehensive features", {
+  .table("Task", "A task with comprehensive features", {
     title: db
       .string()
       .validate(

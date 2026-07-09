@@ -6,7 +6,7 @@
  */
 import { db } from "../../../src/configure";
 
-export const type0 = db.type("Type0", {
+export const type0 = db.table("Type0", {
   stringField: db.string(),
   intField: db.int(),
   boolField: db.bool(),
@@ -17,7 +17,7 @@ export const type0 = db.type("Type0", {
   timeField: db.time(),
 });
 
-export const type1 = db.type("Type1", {
+export const type1 = db.table("Type1", {
   stringField: db.string(),
   intField: db.int(),
   boolField: db.bool(),
@@ -28,7 +28,7 @@ export const type1 = db.type("Type1", {
   timeField: db.time(),
 });
 
-export const type2 = db.type("Type2", {
+export const type2 = db.table("Type2", {
   stringField: db.string(),
   intField: db.int(),
   boolField: db.bool(),
@@ -39,7 +39,7 @@ export const type2 = db.type("Type2", {
   timeField: db.time(),
 });
 
-export const type3 = db.type("Type3", {
+export const type3 = db.table("Type3", {
   stringField: db.string(),
   intField: db.int(),
   boolField: db.bool(),
@@ -50,7 +50,7 @@ export const type3 = db.type("Type3", {
   timeField: db.time(),
 });
 
-export const type4 = db.type("Type4", {
+export const type4 = db.table("Type4", {
   stringField: db.string(),
   intField: db.int(),
   boolField: db.bool(),
@@ -61,7 +61,7 @@ export const type4 = db.type("Type4", {
   timeField: db.time(),
 });
 
-export const type5 = db.type("Type5", {
+export const type5 = db.table("Type5", {
   stringField: db.string(),
   intField: db.int(),
   boolField: db.bool(),
@@ -72,7 +72,7 @@ export const type5 = db.type("Type5", {
   timeField: db.time(),
 });
 
-export const type6 = db.type("Type6", {
+export const type6 = db.table("Type6", {
   stringField: db.string(),
   intField: db.int(),
   boolField: db.bool(),
@@ -83,7 +83,7 @@ export const type6 = db.type("Type6", {
   timeField: db.time(),
 });
 
-export const type7 = db.type("Type7", {
+export const type7 = db.table("Type7", {
   stringField: db.string(),
   intField: db.int(),
   boolField: db.bool(),
@@ -94,7 +94,7 @@ export const type7 = db.type("Type7", {
   timeField: db.time(),
 });
 
-export const type8 = db.type("Type8", {
+export const type8 = db.table("Type8", {
   stringField: db.string(),
   intField: db.int(),
   boolField: db.bool(),
@@ -105,7 +105,7 @@ export const type8 = db.type("Type8", {
   timeField: db.time(),
 });
 
-export const type9 = db.type("Type9", {
+export const type9 = db.table("Type9", {
   stringField: db.string(),
   intField: db.int(),
   boolField: db.bool(),

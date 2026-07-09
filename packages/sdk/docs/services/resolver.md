@@ -108,7 +108,7 @@ Define input/output schemas using methods of `t` object. Basic usage and support
 You can reuse fields defined with `db` object, but note that unsupported options will be ignored:
 
 ```typescript
-const user = db.type("User", {
+const user = db.table("User", {
   name: db.string().unique(),
   age: db.int(),
 });

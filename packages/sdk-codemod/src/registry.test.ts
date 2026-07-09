@@ -41,9 +41,18 @@ describe("getApplicableCodemods", () => {
         .map((codemod) => codemod.id),
     );
     expect(prereleaseIds).not.toContain("v2/auth-attributes-rename");
+    expect(prereleaseIds).not.toContain("v2/db-type-to-table");
     expect(prereleaseIds).not.toContain("v2/env-var-rename");
     expect(prereleaseIds).not.toContain("v2/rename-bin");
     expect(prereleaseIds).not.toContain("v2/node-minimum-22-15-0");
+  });
+
+  test("returns db.type to db.table codemod for the prerelease that removes db.type", () => {
+    const prereleaseIds = getApplicableCodemods("1.67.1", "2.0.0-next.3").map(
+      (codemod) => codemod.id,
+    );
+
+    expect(prereleaseIds).toContain("v2/db-type-to-table");
   });
 
   test("returns empty when both versions are before the codemod boundary", () => {
@@ -91,6 +100,7 @@ describe("getApplicableCodemods", () => {
     const ids = getApplicableCodemods("2.0.0-next.2", "2.0.0").map((codemod) => codemod.id);
 
     expect(ids).toContain("v2/auth-attributes-rename");
+    expect(ids).toContain("v2/db-type-to-table");
     expect(ids).toContain("v2/env-var-rename");
     expect(ids).toContain("v2/rename-bin");
     expect(ids).toContain("v2/node-minimum-22-15-0");

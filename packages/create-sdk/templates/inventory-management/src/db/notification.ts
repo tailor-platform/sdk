@@ -2,7 +2,7 @@ import { db } from "@tailor-platform/sdk";
 import { loggedIn, managerRole, permissionManager } from "./common/permission";
 
 export const notification = db
-  .type("Notification", {
+  .table("Notification", {
     message: db.string().description("Notification message"),
     ...db.fields.timestamps(),
   })
