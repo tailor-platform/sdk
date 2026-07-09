@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Prompt to update profiles that still reference an old user identifier when `tailor-sdk login --profile` authenticates a different user.
+Show the `profile update --user` recovery command when `tailor-sdk login --profile` authenticates a different user than the profile references.
