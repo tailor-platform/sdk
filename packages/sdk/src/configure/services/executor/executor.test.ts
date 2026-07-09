@@ -20,7 +20,7 @@ import type { TailorPrincipal } from "#/runtime/types";
 import type { Operation } from "./operation";
 
 const createUserType = () =>
-  db.type("User", {
+  db.table("User", {
     name: db.string(),
     age: db.int(),
   });

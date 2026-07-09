@@ -975,18 +975,18 @@ function createTailorDBType<
 
 const idField = uuid();
 type idField = typeof idField;
-type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = TailorDBInstance<
+type DBTable<F extends { id?: never } & Record<string, TailorAnyDBField>> = TailorDBInstance<
   { id: idField } & F
 >;
 
 /**
- * Creates a new database type with the specified fields.
- * An `id` field (UUID) is automatically added to every type.
- * @param name - The name of the type, or a tuple of [name, pluralForm]
- * @param fields - The field definitions for the type
- * @returns A new TailorDBType instance
+ * Creates a new database table with the specified fields.
+ * An `id` field (UUID) is automatically added to every table.
+ * @param name - The name of the table, or a tuple of [name, pluralForm]
+ * @param fields - The field definitions for the table
+ * @returns A new TailorDB table instance
  * @example
- * export const user = db.type("User", {
+ * export const user = db.table("User", {
  *   name: db.string(),
  *   email: db.string(),
  *   age: db.int({ optional: true }),
@@ -996,28 +996,28 @@ type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = Tailo
  * // Always export both the value and type:
  * export type user = typeof user;
  */
-function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
+function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
   fields: F,
-): DBType<F>;
+): DBTable<F>;
 /**
- * Creates a new database type with the specified fields and description.
- * An `id` field (UUID) is automatically added to every type.
- * @param name - The name of the type, or a tuple of [name, pluralForm]
- * @param description - A description of the type
- * @param fields - The field definitions for the type
- * @returns A new TailorDBType instance
+ * Creates a new database table with the specified fields and description.
+ * An `id` field (UUID) is automatically added to every table.
+ * @param name - The name of the table, or a tuple of [name, pluralForm]
+ * @param description - A description of the table
+ * @param fields - The field definitions for the table
+ * @returns A new TailorDB table instance
  */
-function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
+function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
   description: string,
   fields: F,
-): DBType<F>;
-function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
+): DBTable<F>;
+function dbTable<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
   fieldsOrDescription: string | F,
   fields?: F,
-): DBType<F> {
+): DBTable<F> {
   const typeName = Array.isArray(name) ? name[0] : name;
   const pluralForm = Array.isArray(name) ? name[1] : undefined;
 
@@ -1036,12 +1036,12 @@ function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField
       ...fieldDef,
     },
     { pluralForm, description },
-  ) as DBType<F>;
+  ) as DBTable<F>;
 }
 
-/** TailorDB schema builder utilities for defining types and fields. */
+/** TailorDB schema builder utilities for defining tables and fields. */
 export const db = {
-  type: dbType,
+  table: dbTable,
   uuid,
   string,
   bool,
@@ -1061,7 +1061,7 @@ export const db = {
      * historical records); the current time is used only when the value is omitted.
      * @returns An object with createdAt and updatedAt fields
      * @example
-     * const model = db.type("Model", {
+     * const model = db.table("Model", {
      *   name: db.string(),
      *   ...db.fields.timestamps(),
      * });

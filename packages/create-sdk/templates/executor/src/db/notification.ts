@@ -2,7 +2,7 @@ import { db } from "@tailor-platform/sdk";
 import { user } from "./user";
 
 export const notification = db
-  .type("Notification", {
+  .table("Notification", {
     userId: db.uuid().relation({
       type: "n-1",
       toward: { type: user },

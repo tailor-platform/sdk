@@ -509,7 +509,7 @@ export class PluginManager {
 
   /**
    * Extend a TailorDB type with new fields.
-   * This method handles the `db.type()` call and metadata copying internally.
+   * This method handles the `db.table()` call and metadata copying internally.
    * @param params - Parameters for type extension
    * @returns The extended TailorDB type
    */
@@ -536,7 +536,7 @@ export class PluginManager {
     const typeName = pluralForm
       ? ([originalType.name, pluralForm] as [string, string])
       : originalType.name;
-    const extendedType = db.type(typeName, fieldsWithoutId);
+    const extendedType = db.table(typeName, fieldsWithoutId);
     return copyMetadataToExtendedType(originalType, extendedType);
   }
 }

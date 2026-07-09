@@ -106,7 +106,7 @@ function generateTypeFileContent(info: PluginGeneratedTypeInfo): string {
      */
     import { db } from "@tailor-platform/sdk";
 
-    export const ${variableName} = db.type(${JSON.stringify(type.name)}, ${fieldsCode});
+    export const ${variableName} = db.table(${JSON.stringify(type.name)}, ${fieldsCode});
 
     export type ${type.name} = typeof ${variableName};
   `;

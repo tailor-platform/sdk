@@ -4,7 +4,7 @@ import { rolePermission, roleGqlPermission } from "./permission";
 import { user } from "./user";
 
 export const task = db
-  .type("Task", "A task with comprehensive features", {
+  .table("Task", "A task with comprehensive features", {
     title: db.string().validate(
       ({ value }) => (value.length >= 3 ? undefined : "Title must be at least 3 characters"),
       ({ value }) => (value.length <= 200 ? undefined : "Title must be at most 200 characters"),

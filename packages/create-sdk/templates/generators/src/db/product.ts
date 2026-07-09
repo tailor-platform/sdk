@@ -2,7 +2,7 @@ import { db } from "@tailor-platform/sdk";
 import { category } from "./category";
 
 export const product = db
-  .type("Product", {
+  .table("Product", {
     name: db.string(),
     description: db.string({ optional: true }),
     price: db.float(),

@@ -4,5 +4,5 @@ createResolver({
   name: "orders",
   operation: "query",
   invoker: "kiosk",
-  body: () => db.type("Order"),
+  body: () => db.table("Order"),
 });

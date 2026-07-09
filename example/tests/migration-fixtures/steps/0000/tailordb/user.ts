@@ -2,7 +2,7 @@ import { db } from "@tailor-platform/sdk";
 import { defaultGqlPermission, defaultPermission } from "../permissions";
 
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string(),
     email: db.string(),
     ...db.fields.timestamps(),
