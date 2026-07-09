@@ -283,17 +283,22 @@ Add hooks to execute functions during data creation or update.
 
 #### Field-level Hooks
 
-Set hooks directly on individual fields. Each hook receives:
+Set hooks directly on individual fields.
 
-- `value`: The field value from the input (null on create when not provided)
-- `oldValue`: The previous field value (null on create)
+Create hooks receive:
+
+- `value`: The field value from the input (null when not provided)
 - `invoker`: Principal performing the operation
 - `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
+
+Update hooks receive the same arguments plus:
+
+- `oldValue`: The previous field value (may be null)
 
 ```typescript
 db.string().hooks({
   create: ({ invoker }) => invoker?.id ?? "",
-  update: ({ value }) => value,
+  update: ({ value, oldValue }) => value ?? oldValue,
 });
 ```
 
@@ -301,14 +306,17 @@ Field-level hooks operate on a single field and cannot access other fields. Use 
 
 #### Type-level Hooks
 
-Set hooks across multiple fields using `db.type().hooks()`. Each hook receives:
+Set hooks across multiple fields using `db.type().hooks()`. The hook returns an object with the fields to override.
+
+Create hooks receive:
 
 - `input`: The submitted record data (pre-hook values)
-- `oldRecord`: The existing record (null on create)
 - `invoker`: Principal performing the operation
 - `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
 
-The hook returns an object with the fields to override:
+Update hooks receive the same arguments plus:
+
+- `oldRecord`: The existing record (non-null)
 
 ```typescript
 export const customer = db
@@ -321,7 +329,7 @@ export const customer = db
     create: ({ input }) => ({
       fullName: `${input.firstName} ${input.lastName}`,
     }),
-    update: ({ input }) => ({
+    update: ({ input, oldRecord }) => ({
       fullName: `${input.firstName} ${input.lastName}`,
     }),
   });
@@ -374,6 +382,21 @@ export const user = db
       issues("email", "Must contain @");
     }
   });
+```
+
+### Defaults
+
+Set a default value for a required field on create. The field becomes optional in the create input — the default fills in when no value is provided:
+
+```typescript
+db.int().default(0);
+db.string().default("pending");
+```
+
+For datetime/date/time fields, pass `"now"` to use the operation timestamp:
+
+```typescript
+db.datetime().default("now");
 ```
 
 ### Vector Search
