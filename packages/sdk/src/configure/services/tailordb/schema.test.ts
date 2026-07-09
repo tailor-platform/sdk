@@ -495,7 +495,9 @@ describe("TailorDBType type error message tests", () => {
     const hooked = db.type("HookedUser", { name: db.string() }).hooks({
       name: { create: () => "created" },
     });
-    expectTypeOf(hooked.hooks).toEqualTypeOf<TypeLevelError<".hooks() has already been set">>();
+    expectTypeOf<Parameters<typeof hooked.hooks>[0]>().toEqualTypeOf<
+      TypeLevelError<".hooks() has already been set">
+    >();
     expect(() => {
       // @ts-expect-error hooks() cannot be called after hooks() has already been called
       hooked.hooks({ name: { update: () => "updated" } });
@@ -504,7 +506,7 @@ describe("TailorDBType type error message tests", () => {
     const validated = db.type("ValidatedUser", { name: db.string() }).validate({
       name: ({ value }) => value.length > 0,
     });
-    expectTypeOf(validated.validate).toEqualTypeOf<
+    expectTypeOf<Parameters<typeof validated.validate>[0]>().toEqualTypeOf<
       TypeLevelError<".validate() has already been set">
     >();
     expect(() => {
@@ -515,7 +517,7 @@ describe("TailorDBType type error message tests", () => {
     const featured = db.type("FeaturedUser", { name: db.string() }).features({
       aggregation: true,
     });
-    expectTypeOf(featured.features).toEqualTypeOf<
+    expectTypeOf<Parameters<typeof featured.features>[0]>().toEqualTypeOf<
       TypeLevelError<".features() has already been set">
     >();
     expect(() => {
@@ -526,7 +528,7 @@ describe("TailorDBType type error message tests", () => {
     const indexed = db.type("IndexedUser", { name: db.string() }).indexes({
       fields: ["id", "name"],
     });
-    expectTypeOf(indexed.indexes).toEqualTypeOf<
+    expectTypeOf<Parameters<typeof indexed.indexes>[0]>().toEqualTypeOf<
       TypeLevelError<".indexes() has already been set">
     >();
     expect(() => {
@@ -540,21 +542,22 @@ describe("TailorDBType type error message tests", () => {
       update: [],
       delete: [],
     });
-    expectTypeOf(permitted.permission).toEqualTypeOf<
+    expectTypeOf<Parameters<typeof permitted.permission>[0]>().toEqualTypeOf<
       TypeLevelError<".permission() has already been set">
     >();
+    const duplicatePermission = {
+      create: [],
+      read: [],
+      update: [],
+      delete: [],
+    };
     expect(() => {
       // @ts-expect-error permission() cannot be called after permission() has already been called
-      permitted.permission({
-        create: [],
-        read: [],
-        update: [],
-        delete: [],
-      });
+      permitted.permission(duplicatePermission);
     }).toThrowError(".permission() has already been set");
 
     const gqlPermitted = db.type("GqlPermittedUser", { name: db.string() }).gqlPermission([]);
-    expectTypeOf(gqlPermitted.gqlPermission).toEqualTypeOf<
+    expectTypeOf<Parameters<typeof gqlPermitted.gqlPermission>[0]>().toEqualTypeOf<
       TypeLevelError<".gqlPermission() has already been set">
     >();
     expect(() => {
@@ -565,7 +568,9 @@ describe("TailorDBType type error message tests", () => {
     const withFiles = db.type("UserWithFiles", { name: db.string() }).files({
       avatar: "profile image",
     });
-    expectTypeOf(withFiles.files).toEqualTypeOf<TypeLevelError<".files() has already been set">>();
+    expectTypeOf<Parameters<typeof withFiles.files>[0]>().toEqualTypeOf<
+      TypeLevelError<".files() has already been set">
+    >();
     expect(() => {
       // @ts-expect-error files() cannot be called after files() has already been called
       withFiles.files({ document: "user document" });
@@ -575,9 +580,24 @@ describe("TailorDBType type error message tests", () => {
       .type("DescribedAfterHooksUser", { name: db.string() })
       .hooks({ name: { create: () => "created" } })
       .description("user with hooks");
-    expectTypeOf(describedAfterHooks.hooks).toEqualTypeOf<
+    expectTypeOf<Parameters<typeof describedAfterHooks.hooks>[0]>().toEqualTypeOf<
       TypeLevelError<".hooks() has already been set">
     >();
+  });
+
+  test("type modifiers preserve conditional reassignment compatibility", () => {
+    function getFiles(): Record<string, string> | undefined {
+      return { avatar: "profile image" };
+    }
+
+    let conditional = db.type("ConditionallyFileUser", { name: db.string() });
+    const files = getFiles();
+
+    if (files) {
+      conditional = conditional.files(files);
+    }
+
+    expect(conditional.metadata.files).toEqual({ avatar: "profile image" });
   });
 
   test("duplicate type modifiers throw after type state is erased", () => {
