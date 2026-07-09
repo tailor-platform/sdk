@@ -1,5 +1,64 @@
 # @tailor-platform/sdk-codemod
 
+## 0.3.0-next.3
+
+### Patch Changes
+
+- [#1559](https://github.com/tailor-platform/sdk/pull/1559) [`ff8ef1c`](https://github.com/tailor-platform/sdk/commit/ff8ef1c1323daf81812c182e146fd53da20e676e) Thanks [@dqn](https://github.com/dqn)! - Rename auth attribute module augmentation from `AttributeMap` to `Attributes`.
+
+- [#1584](https://github.com/tailor-platform/sdk/pull/1584) [`7faff07`](https://github.com/tailor-platform/sdk/commit/7faff07982909b63b87185dc1186e2919a06d4bb) Thanks [@dqn](https://github.com/dqn)! - Report the codemod runner identity in the JSON summary, including the source checkout commit and local build command when run from a branch build, so prerelease migration validation can distinguish exact npm packages from branch-head behavior.
+
+- [#1599](https://github.com/tailor-platform/sdk/pull/1599) [`b88f6a2`](https://github.com/tailor-platform/sdk/commit/b88f6a2e1c6d8e25a797bec6ca90428f5be3b1b9) Thanks [@dqn](https://github.com/dqn)! - Apply the v2 `rename-bin` codemod to SDK CLI command strings in TypeScript and JavaScript source files.
+
+- [#1578](https://github.com/tailor-platform/sdk/pull/1578) [`579cb47`](https://github.com/tailor-platform/sdk/commit/579cb4705cb295c1fcf9bff948d205fb245ff4e5) Thanks [@dqn](https://github.com/dqn)! - Run v2 codemods when the target version is a v2 prerelease.
+
+- [#1686](https://github.com/tailor-platform/sdk/pull/1686) [`aecaf8c`](https://github.com/tailor-platform/sdk/commit/aecaf8c1bb7813a32e998ea7d034684541cb1c85) Thanks [@dqn](https://github.com/dqn)! - Replace `tailor skills install` with project-local `tailor skills add`, `list`, `remove`, and `sync` commands for bundled Tailor SDK agent skills.
+
+- [#1585](https://github.com/tailor-platform/sdk/pull/1585) [`1c1ca49`](https://github.com/tailor-platform/sdk/commit/1c1ca499b4fd55a616b1531ec7ab280ceed531d3) Thanks [@dqn](https://github.com/dqn)! - Report precise file-local findings for `principal-unify` review follow-ups, including nullable caller call sites and `context.user` helper adapters.
+
+- [#1601](https://github.com/tailor-platform/sdk/pull/1601) [`144f3e3`](https://github.com/tailor-platform/sdk/commit/144f3e30f2b0c5dac1a3288ff65c9dc5ca82c13b) Thanks [@dqn](https://github.com/dqn)! - Fix `v2/principal-unify` review findings for nested SDK field parser invoker values and destructured context helper messages.
+
+- [#1622](https://github.com/tailor-platform/sdk/pull/1622) [`0fe8bad`](https://github.com/tailor-platform/sdk/commit/0fe8bad9afbb7702bc067ac9635b77c0438497a6) Thanks [@dqn](https://github.com/dqn)! - Remove the deprecated `auth.getConnectionToken()` helper from values returned by `defineAuth()`. Use `authconnection.getConnectionToken(...)` from `@tailor-platform/sdk/runtime` in resolvers, executors, and workflows instead. The v2 codemod rewrites direct `auth.getConnectionToken(...)` calls when the `auth` binding is imported from `tailor.config`.
+
+- [#1557](https://github.com/tailor-platform/sdk/pull/1557) [`7ff575f`](https://github.com/tailor-platform/sdk/commit/7ff575fdfa15c00b5fc6282b28c0cb50bfdf927b) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename the CLI binary from `tailor-sdk` to `tailor`.
+  
+  The output directory default changes from `.tailor-sdk` to `.tailor`, and the GitHub Actions lock file path changes from `.github/tailor-sdk.lock` to `.github/tailor.lock`.
+  
+  Run the `v2/rename-bin` codemod to migrate `tailor-sdk` invocations in package.json scripts, shell scripts, CI workflows, and documentation:
+  
+  ```sh
+  npx @tailor-platform/sdk-codemod --from 1.x --to 2.0.0
+  ```
+
+- [#1563](https://github.com/tailor-platform/sdk/pull/1563) [`501e8bf`](https://github.com/tailor-platform/sdk/commit/501e8bfdd2bca7201a1c9b036bf72087476da416) Thanks [@dqn](https://github.com/dqn)! - Standardize SDK-owned environment variables on the `TAILOR_*` namespace.
+  
+  Replace the removed SDK-specific environment variables with their new names: `TAILOR_CONFIG_PATH`, `TAILOR_DTS_PATH`, `TAILOR_CI_ALLOW_ID_INJECTION`, `TAILOR_DEPLOY_BUILD_ONLY`, `TAILOR_BUILD_OUTPUT_DIR`, `TAILOR_SKILLS_SOURCE`, `TAILOR_TEMPLATE_SDK_VERSION`, `TAILOR_PLATFORM_URL`, `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`, `TAILOR_INLINE_SOURCEMAP`, `TAILOR_QUERY_NEWLINE_ON_ENTER`, and `TAILOR_APP_LOG_LEVEL`. The deprecated `TAILOR_TOKEN` fallback is removed; use `TAILOR_PLATFORM_TOKEN`. The v2 codemod rewrites unambiguous removed SDK environment variable names and flags generic names such as `LOG_LEVEL` and `PLATFORM_URL` for manual review.
+
+- [#1684](https://github.com/tailor-platform/sdk/pull/1684) [`de3ef5e`](https://github.com/tailor-platform/sdk/commit/de3ef5e7421a998624154df5e90da62e17664524) Thanks [@dqn](https://github.com/dqn)! - Restore Tailor field outputs for UUID, date, datetime, time, and decimal fields to plain string-compatible types and remove the strict scalar string migration guidance.
+
+- [#1582](https://github.com/tailor-platform/sdk/pull/1582) [`b8b48a3`](https://github.com/tailor-platform/sdk/commit/b8b48a379a73314c26fbf53c74c2181e77f0565b) Thanks [@dqn](https://github.com/dqn)! - Flag JavaScript files and embedded code strings that still reference ambient Tailor runtime globals during v2 migration review.
+
+- [#1583](https://github.com/tailor-platform/sdk/pull/1583) [`006a588`](https://github.com/tailor-platform/sdk/commit/006a5884583f23fc6852714c41e58a7ab6d65a5a) Thanks [@dqn](https://github.com/dqn)! - Automatically migrate simple direct `tailor.idp.Client` runtime global usage to the typed `idp.Client` wrapper during v2 upgrades.
+
+- [#1639](https://github.com/tailor-platform/sdk/pull/1639) [`6616674`](https://github.com/tailor-platform/sdk/commit/6616674eb41a53619138603405a4498e3f09d70b) Thanks [@dqn](https://github.com/dqn)! - Keep v2 codemods from reusing type-only runtime helper imports when adding runtime value imports.
+
+- [#1581](https://github.com/tailor-platform/sdk/pull/1581) [`79780bc`](https://github.com/tailor-platform/sdk/commit/79780bce19864a238602f4dd7a82fcc84e9f8501) Thanks [@dqn](https://github.com/dqn)! - Add the `v2/tailor-output-ignore-dir` codemod so SDK upgrades rewrite exact `.tailor-sdk/` ignore-file entries to `.tailor/` while leaving other `.tailor-sdk` paths unchanged.
+
+- [#1556](https://github.com/tailor-platform/sdk/pull/1556) [`645949e`](https://github.com/tailor-platform/sdk/commit/645949ed64bda8b82fc44c0db54928698b12a2eb) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename `defineWaitPoint` and `defineWaitPoints` to `createWaitPoint` and `createWaitPoints`.
+  
+  These functions create runtime instances with `.wait()` and `.resolve()` methods that call the platform API at runtime, so the `create*` prefix is more accurate. Update any usages:
+  
+  ```diff
+  -import { defineWaitPoint, defineWaitPoints } from "@tailor-platform/sdk";
+  +import { createWaitPoint, createWaitPoints } from "@tailor-platform/sdk";
+  
+  -export const approval = defineWaitPoint<Payload, Result>("approval");
+  +export const approval = createWaitPoint<Payload, Result>("approval");
+  
+  -export const waitPoints = defineWaitPoints((define) => ({ ... }));
+  +export const waitPoints = createWaitPoints((define) => ({ ... }));
+  ```
+
 ## 0.3.0-next.2
 ### Minor Changes
 
