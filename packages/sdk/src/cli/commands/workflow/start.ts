@@ -59,13 +59,16 @@ type StartWorkflowArgOption<W extends WorkflowLike> = W extends WorkflowLike
 export interface StartWorkflowOptions {
   name: string;
   machineUser?: string;
-  machineUserSource?: MachineUserInputSource;
   arg?: Jsonifiable;
   workspaceId?: string;
   profile?: string;
   configPath?: string;
   interval?: number;
 }
+
+type StartWorkflowByNameOptions = StartWorkflowOptions & {
+  machineUserSource?: MachineUserInputSource;
+};
 
 type StartWorkflowTypedBaseOptions<W extends WorkflowLike> = {
   workflow: W;
@@ -145,7 +148,7 @@ async function startWorkflowCore(
 }
 
 async function startWorkflowByName(
-  options: StartWorkflowOptions,
+  options: StartWorkflowByNameOptions,
 ): Promise<StartWorkflowResultWithWait> {
   const machineUser = await loadMachineUserName({
     machineUser: options.machineUser,

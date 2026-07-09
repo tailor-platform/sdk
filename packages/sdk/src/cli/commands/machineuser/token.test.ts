@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { runCommand } from "politty";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { fetchMachineUserToken, initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
-import { getMachineUserToken } from "./token";
+import { getMachineUserToken, tokenCommand } from "./token";
 
 vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
@@ -49,6 +50,10 @@ describe("getMachineUserToken", () => {
     });
   });
 
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   test("forwards the name option to machine user resolution", async () => {
     vi.mocked(loadMachineUserName).mockResolvedValue("flag-bot");
 
@@ -80,5 +85,19 @@ describe("getMachineUserToken", () => {
 
     await expect(getMachineUserToken({})).rejects.toThrow("Machine user is required");
     expect(vi.mocked(initOperatorClient)).not.toHaveBeenCalled();
+  });
+
+  test("treats a positional name as an option source when it matches the env fallback", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "manager-bot");
+    vi.mocked(loadMachineUserName).mockResolvedValue("manager-bot");
+    using _stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+
+    await runCommand(tokenCommand, ["manager-bot"]);
+
+    expect(loadMachineUserName).toHaveBeenCalledWith({
+      machineUser: "manager-bot",
+      machineUserSource: "option",
+      profile: undefined,
+    });
   });
 });

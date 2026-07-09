@@ -236,6 +236,15 @@ describe("resolveMachineUserInputSource", () => {
     expect(resolveMachineUserInputSource("bot", ["query"])).toBe("env");
   });
 
+  test("reports option source when a positional value was explicitly provided", () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "bot");
+    expect(
+      resolveMachineUserInputSource("bot", ["machineuser", "token", "bot"], {
+        valueIsExplicit: true,
+      }),
+    ).toBe("option");
+  });
+
   test("does not scan arguments after --", () => {
     vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "bot");
     expect(resolveMachineUserInputSource("bot", ["query", "--", "--machine-user", "bot"])).toBe(

@@ -13,11 +13,14 @@ import { logger } from "#/cli/shared/logger";
 
 export interface GetMachineUserTokenOptions {
   name?: string;
-  nameSource?: MachineUserInputSource;
   workspaceId?: string;
   profile?: string;
   configPath?: string;
 }
+
+type GetMachineUserTokenInternalOptions = GetMachineUserTokenOptions & {
+  nameSource?: MachineUserInputSource;
+};
 
 export interface MachineUserTokenInfo {
   accessToken: string;
@@ -25,13 +28,8 @@ export interface MachineUserTokenInfo {
   expiresAt: string;
 }
 
-/**
- * Get a machine user access token for the current application.
- * @param options - Token retrieval options
- * @returns Machine user token info
- */
-export async function getMachineUserToken(
-  options: GetMachineUserTokenOptions,
+async function getMachineUserTokenInternal(
+  options: GetMachineUserTokenInternalOptions,
 ): Promise<MachineUserTokenInfo> {
   // Load and validate options
   const name = await loadMachineUserName({
@@ -90,6 +88,17 @@ export async function getMachineUserToken(
   };
 }
 
+/**
+ * Get a machine user access token for the current application.
+ * @param options - Token retrieval options
+ * @returns Machine user token info
+ */
+export async function getMachineUserToken(
+  options: GetMachineUserTokenOptions,
+): Promise<MachineUserTokenInfo> {
+  return await getMachineUserTokenInternal(options);
+}
+
 export const tokenCommand = defineAppCommand({
   name: "token",
   description: "Get an access token for a machine user.",
@@ -98,16 +107,18 @@ export const tokenCommand = defineAppCommand({
       ...deploymentArgs,
       name: arg(z.string().optional(), {
         positional: true,
-        description: "Machine user name. Falls back to the active profile's default machine user.",
-        env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
+        description:
+          "Machine user name. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user.",
       }),
     })
     .strict(),
   run: async (args) => {
     // Execute machineuser token logic
-    const token = await getMachineUserToken({
+    const token = await getMachineUserTokenInternal({
       name: args.name,
-      nameSource: resolveMachineUserInputSource(args.name),
+      nameSource: resolveMachineUserInputSource(args.name, process.argv.slice(2), {
+        valueIsExplicit: args.name !== undefined,
+      }),
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,
