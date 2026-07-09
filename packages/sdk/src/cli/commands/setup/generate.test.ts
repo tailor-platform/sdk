@@ -1030,6 +1030,25 @@ describe("setupCoordinate", () => {
     expect(wfContent).toContain("tailor-deploy-api-worker");
   });
 
+  test("keeps plan labels unique when group ids collide", async () => {
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
+    writeAppConfig("api-worker", "apps/api-worker");
+    await setupTarget(actionOpts("api", "apps/api"));
+    await setupTarget(actionOpts("worker", "apps/worker"));
+    await setupTarget(actionOpts("api-worker", "apps/api-worker"));
+
+    await setupCoordinate(coordinateOpts({ actions: ["api,worker", "api-worker"] }));
+
+    const wf = path.join(testDir, ".github/workflows/tailor-coordinate-main.yml");
+    const wfContent = fs.readFileSync(wf, "utf-8");
+    expect(() => parseYAML(wfContent)).not.toThrow();
+    expect(wfContent).toContain("tailor-plan-api-worker");
+    expect(wfContent).toContain("tailor-plan-api-worker-2");
+    expect([...wfContent.matchAll(/^\s+label: main\/api-worker$/gm)]).toHaveLength(1);
+    expect([...wfContent.matchAll(/^\s+label: main\/api-worker-2$/gm)]).toHaveLength(1);
+  });
+
   test("errors when a multi-config group includes an older action template", async () => {
     writeAppConfig("api", "apps/api");
     writeAppConfig("worker", "apps/worker");

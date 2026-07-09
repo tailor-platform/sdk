@@ -508,7 +508,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
       `  with:`,
       `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
       `    package-manager: ${packageManager}${wdLine}`,
-      `    label: ${coordinatorName}/${app.name}`,
+      `    label: ${coordinatorName}/${group.id}`,
       `    platform-client-id: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID }}`,
       `    platform-client-secret: \${{ secrets.TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET }}`,
       `    github-token: \${{ secrets.GITHUB_TOKEN }}`,
