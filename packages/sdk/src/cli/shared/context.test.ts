@@ -402,6 +402,9 @@ describe("loadMachineUserName", () => {
   });
 
   describe("machine_user_override: deny", () => {
+    const envOverrideDetails =
+      'The machine user is being set to "other-bot" via the TAILOR_PLATFORM_MACHINE_USER_NAME environment variable, which conflicts with this profile\'s pinned machine user "profile-bot".';
+
     beforeEach(() => {
       writePlatformConfig(
         v2Config({
@@ -430,6 +433,32 @@ describe("loadMachineUserName", () => {
       const err = await loadMachineUserName({ profile: "locked" }).catch((e: unknown) => e);
       expect(isCLIError(err)).toBe(true);
       expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+      expect((err as { details?: string }).details).toBe(envOverrideDetails);
+    });
+
+    test("reports env var source when the env fallback is passed as opts.machineUser", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "other-bot");
+      const err = await loadMachineUserName({
+        machineUser: "other-bot",
+        machineUserSource: "env",
+        profile: "locked",
+      }).catch((e: unknown) => e);
+      expect(isCLIError(err)).toBe(true);
+      expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+      expect((err as { details?: string }).details).toBe(envOverrideDetails);
+    });
+
+    test("does not report env var source when opts.machineUser matches env without env source", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "other-bot");
+      const err = await loadMachineUserName({
+        machineUser: "other-bot",
+        profile: "locked",
+      }).catch((e: unknown) => e);
+      expect(isCLIError(err)).toBe(true);
+      expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+      expect((err as { details?: string }).details).toBe(
+        'This profile fixes the machine user to "profile-bot" for application-data commands.',
+      );
     });
 
     test("resolves when opts.machineUser matches profile's machine_user", async () => {

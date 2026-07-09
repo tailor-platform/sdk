@@ -3,7 +3,12 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs, parseDuration } from "#/cli/shared/args";
+import {
+  deploymentArgs,
+  parseDuration,
+  resolveMachineUserInputSource,
+  type MachineUserInputSource,
+} from "#/cli/shared/args";
 import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -60,6 +65,10 @@ export interface StartWorkflowOptions {
   configPath?: string;
   interval?: number;
 }
+
+type StartWorkflowByNameOptions = StartWorkflowOptions & {
+  machineUserSource?: MachineUserInputSource;
+};
 
 type StartWorkflowTypedBaseOptions<W extends WorkflowLike> = {
   workflow: W;
@@ -139,10 +148,11 @@ async function startWorkflowCore(
 }
 
 async function startWorkflowByName(
-  options: StartWorkflowOptions,
+  options: StartWorkflowByNameOptions,
 ): Promise<StartWorkflowResultWithWait> {
   const machineUser = await loadMachineUserName({
     machineUser: options.machineUser,
+    machineUserSource: options.machineUserSource,
     profile: options.profile,
   });
   if (!machineUser) {
@@ -244,6 +254,7 @@ export const startCommand = defineAppCommand({
     const { executionId, wait } = await startWorkflowByName({
       name: args.name,
       machineUser: args["machine-user"],
+      machineUserSource: resolveMachineUserInputSource(args["machine-user"]),
       arg: args.arg,
       workspaceId: args["workspace-id"],
       profile: args.profile,

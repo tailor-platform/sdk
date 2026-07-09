@@ -226,6 +226,13 @@ describe("startWorkflow API types", () => {
     });
 
     acceptsDeprecatedOptions({
+      name: "legacy-workflow",
+      machineUser: "admin",
+      // @ts-expect-error - source tracking is internal to CLI commands
+      machineUserSource: "option",
+    });
+
+    acceptsDeprecatedOptions({
       // @ts-expect-error - deprecated options must keep legacy name/machineUser shape
       workflow: calculationWorkflow,
       authInvoker: auth.invoker("admin"),
