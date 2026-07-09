@@ -306,7 +306,7 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinate
 
   const COORD_COMMON = {
     coordinatorName: "main",
-    apps: [{ name: "api", dir: "." }],
+    actionGroups: [{ id: "api", apps: [{ name: "api", dir: "." }] }],
     environment: "production",
     packageManager: "pnpm" as PackageManager,
   };

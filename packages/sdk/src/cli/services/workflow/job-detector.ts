@@ -22,6 +22,7 @@ export interface TriggerCall {
   identifierName: string;
   callRange: { start: number; end: number };
   argsText: string;
+  optionsText?: string;
 }
 
 /**
@@ -143,6 +144,7 @@ export function detectTriggerCalls(program: Program, sourceText: string): Trigge
         identifierName: triggerCall.identifierName,
         callRange: triggerCall.callRange,
         argsText: triggerCall.argsText,
+        optionsText: triggerCall.optionsText,
       });
     }
 

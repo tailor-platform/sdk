@@ -122,7 +122,7 @@ describe("function test-run --json", () => {
     await runCommand(testRunCommand, [scriptPath, "--machine-user", "flag-bot"]);
 
     expect(loadMachineUserName).toHaveBeenCalledWith(
-      expect.objectContaining({ machineUser: "flag-bot" }),
+      expect.objectContaining({ machineUser: "flag-bot", machineUserSource: "option" }),
     );
     expect(getAuthMachineUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ name: "flag-or-profile-bot" }),

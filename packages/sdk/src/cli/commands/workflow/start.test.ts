@@ -234,6 +234,7 @@ describe("startWorkflow runtime overload", () => {
 
     expect(loadMachineUserName).toHaveBeenCalledWith({
       machineUser: undefined,
+      machineUserSource: undefined,
       profile: undefined,
     });
     expect(testStartWorkflowMock).toHaveBeenCalledWith(
@@ -248,6 +249,7 @@ describe("startWorkflow runtime overload", () => {
 
     expect(loadMachineUserName).toHaveBeenCalledWith({
       machineUser: "flag-bot",
+      machineUserSource: undefined,
       profile: undefined,
     });
   });
