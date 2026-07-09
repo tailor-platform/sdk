@@ -51,12 +51,4 @@ export const secretmanager = {
   getSecret,
 } as const satisfies TailorSecretmanagerAPI;
 
-type SecretmanagerTailorSecretmanagerAPI = TailorSecretmanagerAPI;
-
-// Type-only namespace merge preserves namespace type access without restoring flat value exports.
-// oxlint-disable-next-line typescript/no-namespace
-export namespace secretmanager {
-  export type TailorSecretmanagerAPI = SecretmanagerTailorSecretmanagerAPI;
-}
-
 export default secretmanager;

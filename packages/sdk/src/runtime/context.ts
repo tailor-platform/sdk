@@ -71,16 +71,4 @@ function getInvoker(): Invoker | null {
 /** Runtime wrapper namespace for `tailor.context`. */
 export const context = { getInvoker } as const;
 
-type ContextInvokerResult = Invoker;
-type RuntimeContextInvoker = ContextInvoker;
-type ContextTailorContextAPI = TailorContextAPI;
-
-// Type-only namespace merge preserves namespace type access without restoring flat value exports.
-// oxlint-disable-next-line typescript/no-namespace
-export namespace context {
-  export type Invoker = ContextInvokerResult;
-  export type ContextInvoker = RuntimeContextInvoker;
-  export type TailorContextAPI = ContextTailorContextAPI;
-}
-
 export default context;
