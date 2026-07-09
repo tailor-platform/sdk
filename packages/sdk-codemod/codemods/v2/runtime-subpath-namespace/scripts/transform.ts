@@ -196,6 +196,52 @@ function isInsideTypeQuery(node: SgNode): boolean {
   return false;
 }
 
+function sameNode(left: SgNode | null | undefined, right: SgNode): boolean {
+  if (!left) return false;
+  const leftRange = left.range();
+  const rightRange = right.range();
+  return (
+    leftRange.start.index === rightRange.start.index && leftRange.end.index === rightRange.end.index
+  );
+}
+
+function typeParameterName(typeParameter: SgNode): SgNode | null {
+  return typeParameter.children().find((child) => child.kind() === "type_identifier") ?? null;
+}
+
+function typeParametersDeclare(typeParameters: SgNode, name: string): boolean {
+  return typeParameters
+    .children()
+    .some(
+      (child) => child.kind() === "type_parameter" && typeParameterName(child)?.text() === name,
+    );
+}
+
+function isTypeParameterScoped(node: SgNode): boolean {
+  let current = node.parent();
+  while (current) {
+    if (current.kind() === "type_parameter" && sameNode(typeParameterName(current), node)) {
+      return true;
+    }
+
+    const typeParameters = current.children().find((child) => child.kind() === "type_parameters");
+    if (typeParameters && typeParametersDeclare(typeParameters, node.text())) return true;
+
+    current = current.parent();
+  }
+  return false;
+}
+
+function isNestedTypeMember(node: SgNode): boolean {
+  const parent = node.parent();
+  if (parent?.kind() !== "nested_type_identifier") return false;
+
+  const firstNamedChild = parent
+    .children()
+    .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
+  return !sameNode(firstNamedChild, node);
+}
+
 function hasExportSpecifierReference(root: SgNode, names: Set<string>): boolean {
   return root
     .findAll({ rule: { kind: "export_specifier" } })
@@ -392,6 +438,8 @@ function referenceEdits(root: SgNode, replacements: ImportReplacement[]): Edit[]
   for (const node of root.findAll({ rule: { kind: "type_identifier" } })) {
     if (isInsideImportStatement(node)) continue;
     if (isInsideExportSpecifier(node)) continue;
+    if (isTypeParameterScoped(node)) continue;
+    if (isNestedTypeMember(node)) continue;
     const replacement = replacementFor(node.text());
     if (!replacement) continue;
     edits.push(node.replace(replacement));
