@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { runCommand } from "politty";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { fetchPlatformMachineUserToken } from "#/cli/shared/client";
+import { closeConnectionPool, fetchPlatformMachineUserToken } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { loginCommand } from "./login";
@@ -91,6 +91,7 @@ describe("login --profile", () => {
     expect(pfConfig.users["https://api.dev.tailor.tech|machine-client"]).toMatchObject({
       access_token: "dev-token",
     });
+    expect(closeConnectionPool).toHaveBeenCalledTimes(1);
   });
 
   test("keeps current user when machine-user login targets a non-default platform profile", async () => {

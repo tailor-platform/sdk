@@ -234,36 +234,39 @@ export const loginCommand = defineAppCommand({
       .describe("Machine User Login"),
   ]),
   run: async (args) => {
-    let platformConfig: PlatformClientConfig | undefined;
-    let profileUser: string | undefined;
-    if ("profile" in args && args.profile) {
-      const pfConfig = await readPlatformConfig();
-      const profileEntry = pfConfig.profiles[args.profile];
-      if (!profileEntry) {
-        throw new Error(`Profile "${args.profile}" not found`);
+    try {
+      let platformConfig: PlatformClientConfig | undefined;
+      let profileUser: string | undefined;
+      if ("profile" in args && args.profile) {
+        const pfConfig = await readPlatformConfig();
+        const profileEntry = pfConfig.profiles[args.profile];
+        if (!profileEntry) {
+          throw new Error(`Profile "${args.profile}" not found`);
+        }
+        platformConfig = platformConfigFromProfile(profileEntry);
+        profileUser = profileEntry.user;
       }
-      platformConfig = platformConfigFromProfile(profileEntry);
-      profileUser = profileEntry.user;
+      const updateCurrentUser = shouldUpdateCurrentUser(args.profile, platformConfig);
+      if ("machine-user" in args) {
+        await loginAsMachineUser({
+          clientId: args.clientId,
+          clientSecret: args.clientSecret,
+          profile: args.profile,
+          profileUser,
+          platformConfig,
+          updateCurrentUser,
+        });
+      } else {
+        await startAuthServer({
+          profile: args.profile,
+          profileUser,
+          platformConfig,
+          updateCurrentUser,
+        });
+      }
+      logger.success("Successfully logged in to Tailor Platform.");
+    } finally {
+      await closeConnectionPool();
     }
-    const updateCurrentUser = shouldUpdateCurrentUser(args.profile, platformConfig);
-    if ("machine-user" in args) {
-      await loginAsMachineUser({
-        clientId: args.clientId,
-        clientSecret: args.clientSecret,
-        profile: args.profile,
-        profileUser,
-        platformConfig,
-        updateCurrentUser,
-      });
-    } else {
-      await startAuthServer({
-        profile: args.profile,
-        profileUser,
-        platformConfig,
-        updateCurrentUser,
-      });
-    }
-    logger.success("Successfully logged in to Tailor Platform.");
-    await closeConnectionPool();
   },
 });
