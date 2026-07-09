@@ -82,7 +82,7 @@ describe("login --profile", () => {
       'Profile "dev" is configured for "u@example.com", but login authenticated "machine-client".',
     );
     expect((result as { error?: Error }).error?.message).toContain(
-      "tailor-sdk profile update dev --user machine-client",
+      "tailor-sdk profile update 'dev' --user 'machine-client'",
     );
 
     const pfConfig = await readPlatformConfig();
@@ -92,6 +92,45 @@ describe("login --profile", () => {
       access_token: "dev-token",
     });
     expect(closeConnectionPool).toHaveBeenCalledTimes(1);
+  });
+
+  test("quotes dynamic profile update command arguments", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        "dev profile": {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "dev-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+
+    const result = await runCommand(loginCommand, [
+      "--profile",
+      "dev profile",
+      "--machine-user",
+      "--client-id",
+      "machine client; echo nope",
+      "--client-secret",
+      "secret",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect((result as { error?: Error }).error?.message).toContain(
+      "tailor-sdk profile update 'dev profile' --user 'machine client; echo nope'",
+    );
+    expect((result as { error?: Error }).error?.message).toContain(
+      "tailor-sdk login --profile 'dev profile'",
+    );
   });
 
   test("keeps current user when machine-user login targets a non-default platform profile", async () => {

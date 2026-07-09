@@ -52,13 +52,20 @@ function getProfileUserMismatch(
   return { profile: args.profile, oldUser: args.profileUser, authenticatedUser };
 }
 
+function quoteShellArg(value: string) {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 function profileUserMismatchError(mismatch: ProfileUserMismatch) {
-  const updateCommand = `tailor-sdk profile update ${mismatch.profile} --user ${mismatch.authenticatedUser}`;
+  const profileArg = quoteShellArg(mismatch.profile);
+  const userArg = quoteShellArg(mismatch.authenticatedUser);
+  const updateCommand = `tailor-sdk profile update ${profileArg} --user ${userArg}`;
   return new Error(ml`
     Profile "${mismatch.profile}" is configured for "${mismatch.oldUser}", but login authenticated "${mismatch.authenticatedUser}".
     The authenticated user has been saved. To use it with this profile, run:
       ${updateCommand}
-    Then run 'tailor-sdk login --profile ${mismatch.profile}' again.
+    Then run:
+      tailor-sdk login --profile ${profileArg}
   `);
 }
 
