@@ -1041,6 +1041,45 @@ describe("runCodemods", () => {
       ]);
     });
 
+    test("flags runtime subpath imports left after conservative skips", async () => {
+      const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-subpath-namespace");
+      if (!codemod?.scriptPath) throw new Error("runtime subpath codemod missing script");
+      const scriptPath = path.resolve(
+        __dirname,
+        "../codemods",
+        codemod.scriptPath.replace(/\.js$/, ".ts"),
+      );
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-runtime-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "exports.ts"),
+        [
+          'import { get } from "@tailor-platform/sdk/runtime/aigateway";',
+          "",
+          "export { get };",
+          "",
+        ].join("\n"),
+      );
+
+      const result = await runCodemods([{ codemod, scriptPath }], dir, true);
+
+      expect(result.changed).toBe(false);
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "v2/runtime-subpath-namespace",
+          prompt: codemod.prompt,
+          files: ["exports.ts"],
+          findings: [
+            expect.objectContaining({
+              file: "exports.ts",
+              line: 1,
+              excerpt: 'import { get } from "@tailor-platform/sdk/runtime/aigateway";',
+            }),
+          ],
+        },
+      ]);
+    });
+
     test("flags unresolved auth connection token helper usages for LLM review", async () => {
       const codemod = allCodemods.find((entry) => entry.id === "v2/auth-connection-token-helper");
       if (!codemod?.scriptPath) throw new Error("auth connection token codemod missing script");

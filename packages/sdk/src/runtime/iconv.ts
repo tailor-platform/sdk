@@ -132,4 +132,18 @@ export const iconv = {
   Iconv,
 } as const satisfies TailorIconvAPI;
 
+type RuntimeIconvInstance = IconvInstance;
+type RuntimeIconvConstructor = IconvConstructor;
+type RuntimeTailorIconvAPI = TailorIconvAPI;
+type RuntimeIconv = InstanceType<RuntimeIconvConstructor>;
+
+// Type-only namespace merge preserves namespace type access without restoring flat value exports.
+// oxlint-disable-next-line typescript/no-namespace
+export namespace iconv {
+  export type IconvInstance = RuntimeIconvInstance;
+  export type IconvConstructor = RuntimeIconvConstructor;
+  export type TailorIconvAPI = RuntimeTailorIconvAPI;
+  export type Iconv = RuntimeIconv;
+}
+
 export default iconv;
