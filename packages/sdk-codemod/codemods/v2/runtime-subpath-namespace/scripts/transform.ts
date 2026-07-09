@@ -427,6 +427,58 @@ function isExportStar(node: SgNode): boolean {
   return node.children().some((child) => child.kind() === "*");
 }
 
+function dynamicImportCallFor(sourceNode: SgNode): SgNode | null {
+  let current = sourceNode.parent();
+  while (current) {
+    if (current.kind() === "import_statement" || current.kind() === "export_statement") {
+      return null;
+    }
+    if (
+      current.kind() === "call_expression" &&
+      current.children().some((child) => child.kind() === "import")
+    ) {
+      return current;
+    }
+    current = current.parent();
+  }
+  return null;
+}
+
+function dynamicImportExcerptNode(callExpression: SgNode): SgNode {
+  let current = callExpression;
+  while (current.parent()) {
+    const parent = current.parent();
+    if (!parent) break;
+    if (
+      parent.kind() !== "await_expression" &&
+      parent.kind() !== "parenthesized_expression" &&
+      parent.kind() !== "member_expression"
+    ) {
+      break;
+    }
+    current = parent;
+  }
+  return current;
+}
+
+function dynamicRuntimeImportFindings(root: SgNode, relativePath: string): LlmReviewFinding[] {
+  const findings: LlmReviewFinding[] = [];
+  for (const sourceNode of root.findAll({ rule: { kind: "string" } })) {
+    const sourceName = importSource(sourceNode);
+    if (!sourceName || !MODULES_BY_SOURCE.has(sourceName)) continue;
+    const callExpression = dynamicImportCallFor(sourceNode);
+    if (!callExpression) continue;
+    const excerptNode = dynamicImportExcerptNode(callExpression);
+    findings.push({
+      file: relativePath,
+      line: excerptNode.range().start.line + 1,
+      message: "Dynamic runtime subpath import may still access a removed flat value export.",
+      excerpt: excerptNode.text().trim(),
+    });
+  }
+  return findings;
+}
+
 export function reviewFindings(
   source: string,
   filePath: string,
@@ -436,6 +488,7 @@ export function reviewFindings(
 
   const root = parse(sourceLang(filePath, source), source).root();
   const findings: LlmReviewFinding[] = [];
+  findings.push(...dynamicRuntimeImportFindings(root, relativePath));
 
   for (const importStmt of findImportStatements(root)) {
     const sourceName = importSource(importStmt);
