@@ -153,7 +153,13 @@ type HookArgs<TData> =
     ? { readonly [K in keyof TData]?: TData[K] | null | undefined }
     : unknown;
 
-type HookFn<TValue, TReturn> = (args: {
+type CreateHookFn<TValue, TReturn> = (args: {
+  value: TValue;
+  invoker: TailorPrincipal | null;
+  now: Date;
+}) => TReturn;
+
+type UpdateHookFn<TValue, TReturn> = (args: {
   value: TValue;
   oldValue: TValue | null;
   invoker: TailorPrincipal | null;
@@ -161,8 +167,8 @@ type HookFn<TValue, TReturn> = (args: {
 }) => TReturn;
 
 export type Hook<TReturn, TCreateReturn = TReturn> = {
-  create?: HookFn<TReturn | null, TCreateReturn>;
-  update?: HookFn<TReturn | null, TReturn>;
+  create?: CreateHookFn<TReturn | null, TCreateReturn>;
+  update?: UpdateHookFn<TReturn | null, TReturn>;
 };
 
 type DottedPaths<T, Prefix extends string = ""> =
@@ -184,19 +190,26 @@ export type TypeValidateFn<
   issues: (field: DottedPaths<Omit<TData, "id">>, message: string) => void,
 ) => void;
 
-export type TypeHookFn<
+type TypeCreateHookFn<
+  F extends Record<string, TailorAnyDBField>,
+  TData = { [K in keyof F]: output<F[K]> },
+> = (args: { input: HookArgs<TData>; invoker: TailorPrincipal | null; now: Date }) => {
+  [K in Exclude<keyof TData & string, "id">]?: TData[K] | null | undefined;
+};
+
+type TypeUpdateHookFn<
   F extends Record<string, TailorAnyDBField>,
   TData = { [K in keyof F]: output<F[K]> },
 > = (args: {
   input: HookArgs<TData>;
-  oldRecord: HookArgs<TData> | null;
+  oldRecord: HookArgs<TData>;
   invoker: TailorPrincipal | null;
   now: Date;
 }) => { [K in Exclude<keyof TData & string, "id">]?: TData[K] | null | undefined };
 
 export type TypeHook<F extends Record<string, TailorAnyDBField>> = {
-  create?: TypeHookFn<F>;
-  update?: TypeHookFn<F>;
+  create?: TypeCreateHookFn<F>;
+  update?: TypeUpdateHookFn<F>;
 };
 
 // --- Field helper types ---
