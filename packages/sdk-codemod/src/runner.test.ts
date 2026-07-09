@@ -1069,10 +1069,21 @@ describe("runCodemods", () => {
         ['export * from "@tailor-platform/sdk/runtime/aigateway";', ""].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "reexport-namespace.ts"),
+        ['export * as aigateway from "@tailor-platform/sdk/runtime/aigateway";', ""].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "dynamic.ts"),
         [
           'type ClientRef = import("@tailor-platform/sdk/runtime/idp").Client;',
           'const getGateway = (await import("@tailor-platform/sdk/runtime/aigateway")).get;',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "dynamic-template.ts"),
+        [
+          "const getGateway = (await import(`@tailor-platform/sdk/runtime/aigateway`)).get;",
           "",
         ].join("\n"),
       );
@@ -1084,8 +1095,20 @@ describe("runCodemods", () => {
         {
           codemodId: "v2/runtime-subpath-namespace",
           prompt: codemod.prompt,
-          files: ["dynamic.ts", "exports.ts", "reexport-all.ts", "reexport.ts"],
+          files: [
+            "dynamic-template.ts",
+            "dynamic.ts",
+            "exports.ts",
+            "reexport-all.ts",
+            "reexport-namespace.ts",
+            "reexport.ts",
+          ],
           findings: [
+            expect.objectContaining({
+              file: "dynamic-template.ts",
+              line: 1,
+              excerpt: "(await import(`@tailor-platform/sdk/runtime/aigateway`)).get",
+            }),
             expect.objectContaining({
               file: "dynamic.ts",
               line: 1,
@@ -1105,6 +1128,11 @@ describe("runCodemods", () => {
               file: "reexport-all.ts",
               line: 1,
               excerpt: 'export * from "@tailor-platform/sdk/runtime/aigateway";',
+            }),
+            expect.objectContaining({
+              file: "reexport-namespace.ts",
+              line: 1,
+              excerpt: 'export * as aigateway from "@tailor-platform/sdk/runtime/aigateway";',
             }),
             expect.objectContaining({
               file: "reexport.ts",
