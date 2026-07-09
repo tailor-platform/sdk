@@ -8,6 +8,7 @@ import {
   closeConnectionPool,
   fetchPlatformMachineUserToken,
   fetchUserInfo,
+  getPlatformBaseUrl,
   initOAuth2Client,
   isDefaultPlatform,
   type PlatformClientConfig,
@@ -80,8 +81,12 @@ async function applyProfileUserUpdate(
   if (!profileEntry) {
     throw new Error(`Profile "${update.profile}" not found`);
   }
+  const profilePlatformBaseUrl = getPlatformBaseUrl(platformConfigFromProfile(profileEntry));
   const otherProfiles = Object.entries(config.profiles).filter(
-    ([name, profile]) => name !== update.profile && profile?.user === update.oldUser,
+    ([name, profile]) =>
+      name !== update.profile &&
+      profile?.user === update.oldUser &&
+      getPlatformBaseUrl(platformConfigFromProfile(profile)) === profilePlatformBaseUrl,
   );
   profileEntry.user = update.newUser;
   if (otherProfiles.length === 0) return;

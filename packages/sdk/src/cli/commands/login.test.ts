@@ -135,9 +135,9 @@ describe("login --profile", () => {
           platform_url: "https://api.dev.tailor.tech",
         },
         prod: {
-          user: "other@example.com",
+          user: "u@example.com",
           workspace_id: validUUID,
-          platform_url: "https://api.dev.tailor.tech",
+          platform_url: "https://api.prod.tailor.tech",
         },
       },
       current_user: null,
@@ -168,7 +168,7 @@ describe("login --profile", () => {
     const pfConfig = await readPlatformConfig();
     expect(pfConfig.profiles.dev?.user).toBe("machine-client");
     expect(pfConfig.profiles.qa?.user).toBe("machine-client");
-    expect(pfConfig.profiles.prod?.user).toBe("other@example.com");
+    expect(pfConfig.profiles.prod?.user).toBe("u@example.com");
   });
 
   test("keeps current user when machine-user login targets a non-default platform profile", async () => {
