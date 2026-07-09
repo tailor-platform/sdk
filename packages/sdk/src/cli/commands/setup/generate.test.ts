@@ -916,6 +916,14 @@ describe("setupCoordinate", () => {
   );
   const writeConfig = (content: string) =>
     fs.writeFileSync(path.join(testDir, "tailor.config.ts"), content);
+  const writeAppConfig = (name: string, dir: string) => {
+    const absDir = path.join(testDir, dir);
+    fs.mkdirSync(absDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(absDir, "tailor.config.ts"),
+      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "${name}" });\n`,
+    );
+  };
 
   const actionOpts = (
     name: string,
@@ -976,16 +984,8 @@ describe("setupCoordinate", () => {
   });
 
   test("groups comma-separated --action values into one multi-config plan and deploy step", async () => {
-    fs.mkdirSync(path.join(testDir, "apps", "api"), { recursive: true });
-    fs.mkdirSync(path.join(testDir, "apps", "worker"), { recursive: true });
-    fs.writeFileSync(
-      path.join(testDir, "apps", "api", "tailor.config.ts"),
-      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "api" });\n`,
-    );
-    fs.writeFileSync(
-      path.join(testDir, "apps", "worker", "tailor.config.ts"),
-      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "worker" });\n`,
-    );
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
     await setupTarget(actionOpts("api", "apps/api"));
     await setupTarget(actionOpts("worker", "apps/worker"));
 
@@ -1013,16 +1013,8 @@ describe("setupCoordinate", () => {
   });
 
   test("builds static websites before a multi-config deploy", async () => {
-    fs.mkdirSync(path.join(testDir, "apps", "api"), { recursive: true });
-    fs.mkdirSync(path.join(testDir, "apps", "worker"), { recursive: true });
-    fs.writeFileSync(
-      path.join(testDir, "apps", "api", "tailor.config.ts"),
-      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "api" });\n`,
-    );
-    fs.writeFileSync(
-      path.join(testDir, "apps", "worker", "tailor.config.ts"),
-      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "worker" });\n`,
-    );
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
     await setupTarget(actionOpts("api", "apps/api", true));
     await setupTarget(actionOpts("worker", "apps/worker"));
 
@@ -1039,16 +1031,8 @@ describe("setupCoordinate", () => {
   });
 
   test("errors when a multi-config group includes an older action template", async () => {
-    fs.mkdirSync(path.join(testDir, "apps", "api"), { recursive: true });
-    fs.mkdirSync(path.join(testDir, "apps", "worker"), { recursive: true });
-    fs.writeFileSync(
-      path.join(testDir, "apps", "api", "tailor.config.ts"),
-      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "api" });\n`,
-    );
-    fs.writeFileSync(
-      path.join(testDir, "apps", "worker", "tailor.config.ts"),
-      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "worker" });\n`,
-    );
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
     await setupTarget(actionOpts("api", "apps/api"));
     await setupTarget(actionOpts("worker", "apps/worker"));
 
