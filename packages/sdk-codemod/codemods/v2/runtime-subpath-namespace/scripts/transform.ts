@@ -28,6 +28,11 @@ interface ImportReplacement {
   namespaceLocal: string;
 }
 
+interface SelfNamespaceImport {
+  localName: string;
+  typeOnly: boolean;
+}
+
 const RUNTIME_MODULES: RuntimeModule[] = [
   {
     namespace: "iconv",
@@ -227,11 +232,19 @@ function selfNamespaceSpec(mod: RuntimeModule, localName: string): string {
   return localName === mod.namespace ? mod.namespace : `${mod.namespace} as ${localName}`;
 }
 
-function existingSelfNamespaceLocal(importStmt: SgNode, mod: RuntimeModule): string | null {
+function typeOnlySelfNamespaceSpec(mod: RuntimeModule, localName: string): string {
+  return `type ${selfNamespaceSpec(mod, localName)}`;
+}
+
+function existingSelfNamespaceImport(
+  importStmt: SgNode,
+  mod: RuntimeModule,
+  statementTypeOnly: boolean,
+): SelfNamespaceImport | null {
   for (const spec of importStmt.findAll({ rule: { kind: "import_specifier" } })) {
     const names = importSpecNames(spec);
-    if (!names || names.typeOnly || names.importedName !== mod.namespace) continue;
-    return names.localName;
+    if (!names || names.importedName !== mod.namespace) continue;
+    return { localName: names.localName, typeOnly: statementTypeOnly || names.typeOnly };
   }
   return null;
 }
@@ -263,7 +276,7 @@ function buildImportReplacement(
   const defaultName = defaultImportName(importStmt);
   if (statementTypeOnly && defaultName) return null;
 
-  const existingSelfLocal = existingSelfNamespaceLocal(importStmt, mod);
+  const existingSelf = existingSelfNamespaceImport(importStmt, mod, statementTypeOnly);
   const flatImports: FlatImport[] = [];
   const keptSpecs: string[] = [];
 
@@ -291,14 +304,21 @@ function buildImportReplacement(
   if (flatImports.some((binding) => declaredNames.has(binding.localName))) return null;
   if (hasExportSpecifierReference(root, removedNames)) return null;
 
+  const flatImportsAreTypeOnly = flatImports.every((binding) => binding.typeOnly);
+  const canUseExistingSelf =
+    existingSelf != null && (!existingSelf.typeOnly || flatImportsAreTypeOnly);
   const namespaceLocal =
     !statementTypeOnly && defaultName
       ? defaultName
-      : (existingSelfLocal ?? uniqueNamespaceLocal(mod, root, imports, removedNames));
-  const nextNamedSpecs =
-    (!statementTypeOnly && defaultName) || existingSelfLocal
-      ? keptSpecs
-      : [selfNamespaceSpec(mod, namespaceLocal), ...keptSpecs];
+      : canUseExistingSelf
+        ? existingSelf.localName
+        : uniqueNamespaceLocal(mod, root, imports, removedNames);
+  const needsNamespaceSpecifier = !((!statementTypeOnly && defaultName) || canUseExistingSelf);
+  const namespaceSpecifier =
+    flatImportsAreTypeOnly && !statementTypeOnly
+      ? typeOnlySelfNamespaceSpec(mod, namespaceLocal)
+      : selfNamespaceSpec(mod, namespaceLocal);
+  const nextNamedSpecs = needsNamespaceSpecifier ? [namespaceSpecifier, ...keptSpecs] : keptSpecs;
 
   return {
     edit: importStmt.replace(
@@ -403,6 +423,10 @@ function hasRemovedFlatSpecifier(node: SgNode, mod: RuntimeModule): boolean {
     });
 }
 
+function isExportStar(node: SgNode): boolean {
+  return node.children().some((child) => child.kind() === "*");
+}
+
 export function reviewFindings(
   source: string,
   filePath: string,
@@ -435,7 +459,7 @@ export function reviewFindings(
     const sourceName = importSource(exportStmt);
     if (!sourceName) continue;
     const mod = MODULES_BY_SOURCE.get(sourceName);
-    if (!mod || !hasRemovedFlatSpecifier(exportStmt, mod)) continue;
+    if (!mod || (!hasRemovedFlatSpecifier(exportStmt, mod) && !isExportStar(exportStmt))) continue;
 
     findings.push({
       file: relativePath,
