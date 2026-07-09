@@ -556,6 +556,14 @@ describe("TailorDBType type error message tests", () => {
     expectTypeOf(withFiles.files).toEqualTypeOf<TypeLevelError<".files() has already been set">>();
     // @ts-expect-error files() cannot be called after files() has already been called
     withFiles.files({ document: "user document" });
+
+    const describedAfterHooks = db
+      .type("DescribedAfterHooksUser", { name: db.string() })
+      .hooks({ name: { create: () => "created" } })
+      .description("user with hooks");
+    expectTypeOf(describedAfterHooks.hooks).toEqualTypeOf<
+      TypeLevelError<".hooks() has already been set">
+    >();
   });
 });
 

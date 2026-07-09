@@ -110,15 +110,10 @@ type DefinedDBTypeMetadata = {
   permission?: true;
   gqlPermission?: true;
 };
-type WithDBTypeHooks<Defined extends DefinedDBTypeMetadata> = Defined & { hooks: true };
-type WithDBTypeValidate<Defined extends DefinedDBTypeMetadata> = Defined & { validate: true };
-type WithDBTypeFeatures<Defined extends DefinedDBTypeMetadata> = Defined & { features: true };
-type WithDBTypeIndexes<Defined extends DefinedDBTypeMetadata> = Defined & { indexes: true };
-type WithDBTypeFiles<Defined extends DefinedDBTypeMetadata> = Defined & { files: true };
-type WithDBTypePermission<Defined extends DefinedDBTypeMetadata> = Defined & { permission: true };
-type WithDBTypeGqlPermission<Defined extends DefinedDBTypeMetadata> = Defined & {
-  gqlPermission: true;
-};
+type WithDBTypeMetadata<
+  Defined extends DefinedDBTypeMetadata,
+  Key extends keyof DefinedDBTypeMetadata,
+> = Defined & Record<Key, true>;
 type DBTypeDuplicateGuard<
   Defined extends DefinedDBTypeMetadata,
   Key extends keyof DefinedDBTypeMetadata,
@@ -253,14 +248,16 @@ type DBTypeHooksFn<
   User extends object,
   Defined extends DefinedDBTypeMetadata,
 > = {
-  hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User, WithDBTypeHooks<Defined>>;
+  hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "hooks">>;
 }["hooks"];
 type DBTypeValidateFn<
   Fields extends Record<string, TailorAnyDBField>,
   User extends object,
   Defined extends DefinedDBTypeMetadata,
 > = {
-  validate(validators: Validators<Fields>): TailorDBType<Fields, User, WithDBTypeValidate<Defined>>;
+  validate(
+    validators: Validators<Fields>,
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "validate">>;
 }["validate"];
 type DBTypeFeaturesFn<
   Fields extends Record<string, TailorAnyDBField>,
@@ -269,7 +266,7 @@ type DBTypeFeaturesFn<
 > = {
   features(
     features: Omit<TypeFeatures, "pluralForm">,
-  ): TailorDBType<Fields, User, WithDBTypeFeatures<Defined>>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "features">>;
 }["features"];
 type DBTypeIndexesFn<
   Fields extends Record<string, TailorAnyDBField>,
@@ -278,7 +275,7 @@ type DBTypeIndexesFn<
 > = {
   indexes(
     ...indexes: IndexDef<TailorDBType<Fields, User, Defined>>[]
-  ): TailorDBType<Fields, User, WithDBTypeIndexes<Defined>>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "indexes">>;
 }["indexes"];
 type DBTypeFilesFn<
   Fields extends Record<string, TailorAnyDBField>,
@@ -287,7 +284,7 @@ type DBTypeFilesFn<
 > = {
   files<const F extends string>(
     files: Record<F, string> & FileKeyConflictError<Fields, User>,
-  ): TailorDBType<Fields, User, WithDBTypeFiles<Defined>>;
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "files">>;
 }["files"];
 type DBTypePermissionFn<
   Fields extends Record<string, TailorAnyDBField>,
@@ -300,7 +297,7 @@ type DBTypePermissionFn<
       TailorTypePermission<U, output<TailorDBType<Fields, User, Defined>>>,
   >(
     permission: P,
-  ): TailorDBType<Fields, U, WithDBTypePermission<Defined>>;
+  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "permission">>;
 }["permission"];
 type DBTypeGqlPermissionFn<
   Fields extends Record<string, TailorAnyDBField>,
@@ -312,7 +309,7 @@ type DBTypeGqlPermissionFn<
     P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
   >(
     permission: P,
-  ): TailorDBType<Fields, U, WithDBTypeGqlPermission<Defined>>;
+  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "gqlPermission">>;
 }["gqlPermission"];
 type DBTypeHooksMethod<
   Fields extends Record<string, TailorAnyDBField>,
