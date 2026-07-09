@@ -38,7 +38,7 @@ function collectPathsInto(out, configFilePath, content, visited) {
 
   const opts = content.compilerOptions ?? {};
   const rawPaths = opts.paths;
-  const baseUrl = opts.baseUrl ?? ".";
+  const baseUrl = typeof opts.baseUrl === "string" ? opts.baseUrl : ".";
   if (rawPaths) {
     const absBase = resolvePath(baseDir, baseUrl);
     for (const [alias, targets] of Object.entries(rawPaths)) {
