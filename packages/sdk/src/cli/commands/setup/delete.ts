@@ -63,8 +63,8 @@ function warnCoordinatorReferences(
     ) {
       logger.warn(
         `Coordinator "${coordinator.workspaceName}" still references this action's directory ` +
-          `(${match.target.inputs.dir}). Re-run \`tailor-sdk setup coordinate\` without ` +
-          `--action ${match.target.workspaceName} to remove it there too.`,
+          `(${match.target.inputs.dir}). Remove \`${match.target.workspaceName}\` from the ` +
+          `relevant \`--action\` value and re-run \`tailor-sdk setup coordinate\` to update it.`,
       );
     }
   }
