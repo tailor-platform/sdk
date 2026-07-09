@@ -131,6 +131,17 @@ describe("resolve", () => {
     expect(nextResolve).toHaveBeenCalledTimes(1);
   });
 
+  test("retries with .ts extension for extensionless specifier whose basename contains a dot", async () => {
+    const resolved = { url: "file:///path/to/permissions.generated.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockRejectedValueOnce(notFound("./permissions.generated"))
+      .mockResolvedValueOnce(resolved);
+    const result = await resolve("./permissions.generated", {}, nextResolve);
+    expect(result).toEqual(resolved);
+    expect(nextResolve).toHaveBeenCalledWith("./permissions.generated.ts", {});
+  });
+
   test("rethrows ERR_MODULE_NOT_FOUND for non-relative specifiers without retrying", async () => {
     const nextResolve = vi.fn().mockRejectedValue(notFound("some-package"));
     await expect(resolve("some-package", {}, nextResolve)).rejects.toMatchObject({
@@ -315,6 +326,19 @@ describe("resolveSync", () => {
     });
     expect(() => resolveSync("./foo.ts", {}, nextResolve)).toThrow("Cannot find './foo.ts'");
     expect(nextResolve).toHaveBeenCalledTimes(1);
+  });
+
+  test("retries with .ts extension for extensionless specifier whose basename contains a dot", () => {
+    const resolved = { url: "file:///path/to/permissions.generated.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw notFound("./permissions.generated");
+      })
+      .mockReturnValueOnce(resolved);
+    const result = resolveSync("./permissions.generated", {}, nextResolve);
+    expect(result).toEqual(resolved);
+    expect(nextResolve).toHaveBeenCalledWith("./permissions.generated.ts", {});
   });
 
   test("resolves non-relative specifier via tsconfig path alias", () => {
