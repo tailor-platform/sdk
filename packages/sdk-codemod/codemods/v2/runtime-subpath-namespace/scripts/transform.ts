@@ -531,7 +531,18 @@ function hasRemovedFlatSpecifier(node: SgNode, mod: RuntimeModule): boolean {
 }
 
 function isExportStar(node: SgNode): boolean {
-  return node.children().some((child) => child.kind() === "*");
+  if (node.children().some((child) => child.kind() === "*")) return true;
+  const namespaceExport = node.children().find((child) => child.kind() === "namespace_export");
+  return namespaceExport?.children().some((child) => child.kind() === "*") ?? false;
+}
+
+function literalModuleSource(node: SgNode): string | null {
+  if (node.kind() === "string") return importSource(node);
+  if (node.kind() !== "template_string") return null;
+  if (node.children().some((child) => child.kind() === "template_substitution")) return null;
+
+  const text = node.text();
+  return text.startsWith("`") && text.endsWith("`") ? text.slice(1, -1) : null;
 }
 
 function dynamicImportCallFor(sourceNode: SgNode): SgNode | null {
@@ -570,8 +581,10 @@ function dynamicImportExcerptNode(callExpression: SgNode): SgNode {
 
 function dynamicRuntimeImportFindings(root: SgNode, relativePath: string): LlmReviewFinding[] {
   const findings: LlmReviewFinding[] = [];
-  for (const sourceNode of root.findAll({ rule: { kind: "string" } })) {
-    const sourceName = importSource(sourceNode);
+  for (const sourceNode of root.findAll({
+    rule: { any: [{ kind: "string" }, { kind: "template_string" }] },
+  })) {
+    const sourceName = literalModuleSource(sourceNode);
     if (!sourceName || !MODULES_BY_SOURCE.has(sourceName)) continue;
     const callExpression = dynamicImportCallFor(sourceNode);
     if (!callExpression) continue;
