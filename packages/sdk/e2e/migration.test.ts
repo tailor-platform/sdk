@@ -453,7 +453,7 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       // Update type to add optional field
       updateTypeFile(`import { db } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   role: db.string({ optional: true }),
@@ -504,7 +504,7 @@ export type user = typeof user;
       // Update type to add required field (breaking change)
       updateTypeFile(`import { db } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   role: db.string({ optional: true }),
@@ -634,7 +634,7 @@ export type user = typeof user;
       // Update User type to remove requiredField
       updateTypeFile(`import { db } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   role: db.string({ optional: true }),
@@ -686,7 +686,7 @@ export type user = typeof user;
     test("generates the breaking migration whose script will fail", async () => {
       updateTypeFile(`import { db } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   role: db.string({ optional: true }),

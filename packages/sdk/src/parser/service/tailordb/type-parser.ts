@@ -352,7 +352,7 @@ function validatePluralFormUniqueness(
       const location = formatTypeSourceLocation(sourceInfo);
       errors.push(
         `Type "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
-          `Use db.type(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
+          `Use db.table(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
       );
     }
   }

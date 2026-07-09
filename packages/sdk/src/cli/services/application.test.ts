@@ -8,7 +8,7 @@ import { defineApplication } from "./application";
 
 describe("defineAuth parse wiring", () => {
   test("preserves an explicit userProfile.namespace through AuthConfigSchema.parse", async () => {
-    const userType = db.type("User", {
+    const userType = db.table("User", {
       email: db.string().unique(),
       role: db.string(),
     });

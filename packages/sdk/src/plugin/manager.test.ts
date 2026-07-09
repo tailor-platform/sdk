@@ -3,7 +3,7 @@ import { db } from "#/configure/services/tailordb/index";
 import { PluginManager } from "#/plugin/manager";
 import type { Plugin } from "#/plugin/types";
 
-const orderType = () => db.type("Order", { name: db.string() });
+const orderType = () => db.table("Order", { name: db.string() });
 
 describe("PluginManager", () => {
   test("collects namespace plugin-generated types", async () => {
@@ -13,7 +13,7 @@ describe("PluginManager", () => {
       importPath: "@example/namespace",
       onNamespaceLoaded: () => ({
         types: {
-          auditLog: db.type("AuditLog", {
+          auditLog: db.table("AuditLog", {
             message: db.string(),
           }),
         },
@@ -42,7 +42,7 @@ describe("PluginManager", () => {
       importPath: "@example/namespace",
       onNamespaceLoaded: () => ({
         types: {
-          auditLog: db.type("AuditLog", {
+          auditLog: db.table("AuditLog", {
             message: db.string(),
           }),
         },
@@ -67,7 +67,7 @@ describe("PluginManager", () => {
   test("preserves pluralForm and plugin attachments when extending types", () => {
     const manager = new PluginManager();
     const original = db
-      .type(["Person", "People"], {
+      .table(["Person", "People"], {
         name: db.string(),
       })
       // PluginConfigs is open; use cast to attach plugin config in tests.
@@ -116,7 +116,7 @@ describe("PluginManager", () => {
       importPath: "@example/schema-less",
       onTypeLoaded: (_context: Parameters<NonNullable<Plugin["onTypeLoaded"]>>[0]) => ({
         types: {
-          derived: db.type("Derived", {
+          derived: db.table("Derived", {
             sourceId: db.uuid(),
             customValue: db.string(),
           }),

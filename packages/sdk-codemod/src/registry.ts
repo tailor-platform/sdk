@@ -96,6 +96,7 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
 );
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
+const V2_NEXT_3 = "2.0.0-next.3";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -526,6 +527,37 @@ export const allCodemods: CodemodPackage[] = [
       'Also add `import "@tailor-platform/sdk/runtime/globals"` at the top of each file',
       "that contains any tailordb.* type reference — v2 no longer activates ambient",
       "declarations automatically on SDK import.",
+    ].join("\n"),
+  },
+  {
+    id: "v2/db-type-to-table",
+    name: "db.type() → db.table()",
+    description:
+      "Rename TailorDB schema builder calls from `db.type()` to `db.table()`. TailorDB schema definitions now use table terminology in SDK projects.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_3,
+    scriptPath: "v2/db-type-to-table/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    legacyPatterns: ["db.type"],
+    examples: [
+      {
+        before:
+          'import { db } from "@tailor-platform/sdk";\n\nexport const user = db.type("User", {\n  name: db.string(),\n});',
+        after:
+          'import { db } from "@tailor-platform/sdk";\n\nexport const user = db.table("User", {\n  name: db.string(),\n});',
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2, TailorDB schema definitions use db.table(...) instead of",
+      "db.type(...). The codemod rewrites member accesses on db imported from",
+      "@tailor-platform/sdk, including aliases such as `import { db as schema }`.",
+      "It flags destructured builder aliases such as `const { type } = db` and",
+      "local builder aliases such as `const schema = db`, `schema = db`, or",
+      "`function make(schema = db) { ... }` for manual review because the local",
+      "alias may require call-site renaming.",
+      "Review any remaining db.type references and rename SDK TailorDB schema builder",
+      "calls to db.table. Leave unrelated local objects with a .type() method unchanged.",
     ].join("\n"),
   },
   {

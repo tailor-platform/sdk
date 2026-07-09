@@ -9,7 +9,7 @@ describe("parseFieldConfig precompiled expressions", () => {
     const createHook = ({ value }: { value: string | null }) => value ?? "fallback";
     setPrecompiledScriptExpr(createHook, "PRECOMPILED_HOOK_EXPR");
 
-    const type = db.type("User", {
+    const type = db.table("User", {
       email: db.string().hooks({ create: createHook }),
     });
 
@@ -23,7 +23,7 @@ describe("parseFieldConfig precompiled expressions", () => {
     const validator = ({ value }: { value: string }) => value.length > 0;
     setPrecompiledScriptExpr(validator, "PRECOMPILED_VALIDATE_EXPR");
 
-    const type = db.type("User", {
+    const type = db.table("User", {
       email: db.string().validate(validator),
     });
 

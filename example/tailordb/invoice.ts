@@ -3,7 +3,7 @@ import { defaultGqlPermission, defaultPermission } from "./permissions";
 import { salesOrder } from "./salesOrder";
 
 export const invoice = db
-  .type("Invoice", {
+  .table("Invoice", {
     invoiceNumber: db.string().serial({
       start: 1000,
       format: "INV-%05d",

@@ -1,7 +1,7 @@
 import { db } from "@tailor-platform/sdk";
 
 export const event = db
-  .type("Event", {
+  .table("Event", {
     name: db.enum(["CLICK", "VIEW", "PURCHASE"]),
     ...db.fields.timestamps(),
   })
