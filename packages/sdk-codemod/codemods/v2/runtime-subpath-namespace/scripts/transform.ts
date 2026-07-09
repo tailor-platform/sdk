@@ -154,6 +154,19 @@ function formatImport(
   return "";
 }
 
+function replaceImportStatement(importStmt: SgNode, nextText: string, sourceText: string): Edit {
+  if (nextText !== "") return importStmt.replace(nextText);
+
+  const range = importStmt.range();
+  let endPos = range.end.index;
+  if (sourceText[endPos] === "\r" && sourceText[endPos + 1] === "\n") {
+    endPos += 2;
+  } else if (sourceText[endPos] === "\n") {
+    endPos += 1;
+  }
+  return { startPos: range.start.index, endPos, insertedText: "" };
+}
+
 function isInsideImportStatement(node: SgNode): boolean {
   let current = node.parent();
   while (current) {
@@ -254,6 +267,8 @@ function buildImportReplacement(
   mod: RuntimeModule,
   root: SgNode,
   imports: SgNode[],
+  sourceText: string,
+  emittedNamespaceSpecifiers: Set<string>,
 ): ImportReplacement | null {
   const source = importSource(importStmt);
   if (!source) return null;
@@ -313,7 +328,15 @@ function buildImportReplacement(
       : canUseExistingSelf
         ? existingSelf.localName
         : uniqueNamespaceLocal(mod, root, imports, removedNames);
-  const needsNamespaceSpecifier = !((!statementTypeOnly && defaultName) || canUseExistingSelf);
+  const namespaceSpecifierKey = [
+    source,
+    namespaceLocal,
+    flatImportsAreTypeOnly ? "type" : "value",
+  ].join("\0");
+  const namespaceAlreadyEmitted = emittedNamespaceSpecifiers.has(namespaceSpecifierKey);
+  const needsNamespaceSpecifier =
+    !((!statementTypeOnly && defaultName) || canUseExistingSelf) && !namespaceAlreadyEmitted;
+  if (needsNamespaceSpecifier) emittedNamespaceSpecifiers.add(namespaceSpecifierKey);
   const namespaceSpecifier =
     flatImportsAreTypeOnly && !statementTypeOnly
       ? typeOnlySelfNamespaceSpec(mod, namespaceLocal)
@@ -321,13 +344,15 @@ function buildImportReplacement(
   const nextNamedSpecs = needsNamespaceSpecifier ? [namespaceSpecifier, ...keptSpecs] : keptSpecs;
 
   return {
-    edit: importStmt.replace(
+    edit: replaceImportStatement(
+      importStmt,
       formatImport(
         source,
         statementTypeOnly ? null : defaultName,
         nextNamedSpecs,
         statementTypeOnly,
       ),
+      sourceText,
     ),
     flatImports,
     namespaceLocal,
@@ -393,6 +418,7 @@ export default function transform(source: string, filePath: string): string | nu
   const root = parse(sourceLang(filePath, source), source).root();
   const imports = findImportStatements(root);
   const replacements: ImportReplacement[] = [];
+  const emittedNamespaceSpecifiers = new Set<string>();
 
   for (const importStmt of imports) {
     const sourceName = importSource(importStmt);
@@ -400,7 +426,14 @@ export default function transform(source: string, filePath: string): string | nu
     const mod = MODULES_BY_SOURCE.get(sourceName);
     if (!mod) continue;
 
-    const replacement = buildImportReplacement(importStmt, mod, root, imports);
+    const replacement = buildImportReplacement(
+      importStmt,
+      mod,
+      root,
+      imports,
+      source,
+      emittedNamespaceSpecifiers,
+    );
     if (replacement) replacements.push(replacement);
   }
 
