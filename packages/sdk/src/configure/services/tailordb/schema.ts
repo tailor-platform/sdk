@@ -934,6 +934,14 @@ function createTailorDBType<
   const _permissions: RawPermissions = {};
   let _files: Record<string, string> = {};
   const _plugins: PluginAttachment[] = [];
+  const _definedMethods = new Set<keyof DefinedDBTypeMetadata>();
+
+  function assertMethodUnset(method: keyof DefinedDBTypeMetadata) {
+    if (_definedMethods.has(method)) {
+      throw new Error(`.${method}() has already been set`);
+    }
+    _definedMethods.add(method);
+  }
 
   if (options.pluralForm) {
     if (name === options.pluralForm) {
@@ -973,6 +981,7 @@ function createTailorDBType<
     },
 
     hooks(hooks: Hooks<Fields>) {
+      assertMethodUnset("hooks");
       // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
       // oxlint-disable-next-line no-explicit-any
       Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
@@ -986,6 +995,7 @@ function createTailorDBType<
     },
 
     validate(validators: Validators<Fields>) {
+      assertMethodUnset("validate");
       Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
         const field = this.fields[fieldName] as TailorAnyDBField;
 
@@ -1013,6 +1023,7 @@ function createTailorDBType<
     },
 
     features(features: Omit<TypeFeatures, "pluralForm">) {
+      assertMethodUnset("features");
       _settings = {
         ..._settings,
         ...features,
@@ -1021,11 +1032,13 @@ function createTailorDBType<
     },
 
     indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]) {
+      assertMethodUnset("indexes");
       _indexes = indexes;
       return this;
     },
 
     files<const F extends string>(files: Record<F, string> & FileKeyConflictError<Fields, User>) {
+      assertMethodUnset("files");
       _files = files;
       return this;
     },
@@ -1037,6 +1050,7 @@ function createTailorDBType<
         output<TailorDBType<Fields, User>>
       >,
     >(permission: P) {
+      assertMethodUnset("permission");
       const ret = this as TailorDBType<Fields, U>;
       _permissions.record = permission as RawPermissions["record"];
       return ret;
@@ -1046,6 +1060,7 @@ function createTailorDBType<
       U extends object = User,
       P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
     >(permission: P) {
+      assertMethodUnset("gqlPermission");
       const ret = this as TailorDBType<Fields, U>;
       _permissions.gql = permission as RawPermissions["gql"];
       return ret;
