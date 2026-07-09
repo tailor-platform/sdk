@@ -1095,6 +1095,23 @@ describe("runCodemods", () => {
           "",
         ].join("\n"),
       );
+      await fs.promises.writeFile(
+        path.join(dir, "require.cjs"),
+        [
+          'const { get } = require("@tailor-platform/sdk/runtime/aigateway");',
+          "module.exports = get;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "import-equals.cts"),
+        [
+          'import iconv = require("@tailor-platform/sdk/runtime/iconv");',
+          "",
+          "export const encode = iconv.encode;",
+          "",
+        ].join("\n"),
+      );
 
       const result = await runCodemods([{ codemod, scriptPath }], dir, true);
 
@@ -1108,9 +1125,11 @@ describe("runCodemods", () => {
             "dynamic-template.ts",
             "dynamic.ts",
             "exports.ts",
+            "import-equals.cts",
             "reexport-all.ts",
             "reexport-namespace.ts",
             "reexport.ts",
+            "require.cjs",
           ],
           findings: [
             expect.objectContaining({
@@ -1139,6 +1158,11 @@ describe("runCodemods", () => {
               excerpt: 'import { get } from "@tailor-platform/sdk/runtime/aigateway";',
             }),
             expect.objectContaining({
+              file: "import-equals.cts",
+              line: 1,
+              excerpt: 'import iconv = require("@tailor-platform/sdk/runtime/iconv");',
+            }),
+            expect.objectContaining({
               file: "reexport-all.ts",
               line: 1,
               excerpt: 'export * from "@tailor-platform/sdk/runtime/aigateway";',
@@ -1152,6 +1176,11 @@ describe("runCodemods", () => {
               file: "reexport.ts",
               line: 1,
               excerpt: 'export { get } from "@tailor-platform/sdk/runtime/aigateway";',
+            }),
+            expect.objectContaining({
+              file: "require.cjs",
+              line: 1,
+              excerpt: 'require("@tailor-platform/sdk/runtime/aigateway")',
             }),
           ],
         },

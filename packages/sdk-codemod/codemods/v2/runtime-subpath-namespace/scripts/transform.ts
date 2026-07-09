@@ -747,6 +747,13 @@ function isDynamicImportCall(node: SgNode): boolean {
   );
 }
 
+function isRequireCall(node: SgNode): boolean {
+  return (
+    node.kind() === "call_expression" &&
+    node.children().some((child) => child.kind() === "identifier" && child.text() === "require")
+  );
+}
+
 function isArgumentSyntaxNode(node: SgNode): boolean {
   const kind = node.kind();
   return kind === "(" || kind === ")" || kind === "," || kind === "comment";
@@ -757,7 +764,7 @@ function firstCallArgument(callExpression: SgNode): SgNode | null {
   return args?.children().find((child) => !isArgumentSyntaxNode(child)) ?? null;
 }
 
-function dynamicImportSourceName(callExpression: SgNode): string | null {
+function moduleCallSourceName(callExpression: SgNode): string | null {
   const sourceArg = firstCallArgument(callExpression);
   if (!sourceArg) return null;
 
@@ -765,6 +772,10 @@ function dynamicImportSourceName(callExpression: SgNode): string | null {
   if (sourceName != null) return sourceName;
 
   return sourceArg.kind() === "identifier" ? sourceScopedStringVariableContent(sourceArg) : null;
+}
+
+function dynamicImportSourceName(callExpression: SgNode): string | null {
+  return moduleCallSourceName(callExpression);
 }
 
 function dynamicImportExcerptNode(callExpression: SgNode): SgNode {
@@ -801,6 +812,27 @@ function dynamicRuntimeImportFindings(root: SgNode, relativePath: string): LlmRe
   return findings;
 }
 
+function runtimeRequireFindings(root: SgNode, relativePath: string): LlmReviewFinding[] {
+  const findings: LlmReviewFinding[] = [];
+  for (const callExpression of root.findAll({ rule: { kind: "call_expression" } })) {
+    if (isInsideImportStatement(callExpression)) continue;
+    if (!isRequireCall(callExpression)) continue;
+    const sourceName = moduleCallSourceName(callExpression);
+    if (!sourceName || !MODULES_BY_SOURCE.has(sourceName)) continue;
+    findings.push({
+      file: relativePath,
+      line: callExpression.range().start.line + 1,
+      message: "CommonJS runtime subpath require may still access a removed flat value export.",
+      excerpt: callExpression.text().trim(),
+    });
+  }
+  return findings;
+}
+
+function isImportRequireStatement(importStmt: SgNode): boolean {
+  return importStmt.children().some((child) => child.kind() === "import_require_clause");
+}
+
 export function reviewFindings(
   source: string,
   filePath: string,
@@ -811,6 +843,7 @@ export function reviewFindings(
   const root = parse(sourceLang(filePath, source), source).root();
   const findings: LlmReviewFinding[] = [];
   findings.push(...dynamicRuntimeImportFindings(root, relativePath));
+  findings.push(...runtimeRequireFindings(root, relativePath));
 
   for (const importStmt of findImportStatements(root)) {
     const sourceName = importSource(importStmt);
@@ -818,14 +851,17 @@ export function reviewFindings(
     const mod = MODULES_BY_SOURCE.get(sourceName);
     if (!mod) continue;
 
+    const hasImportRequire = isImportRequireStatement(importStmt);
     const hasNamespaceImport = namespaceImportName(importStmt) != null;
     const hasRemovedFlatImport = hasRemovedFlatSpecifier(importStmt, mod);
-    if (!hasNamespaceImport && !hasRemovedFlatImport) continue;
+    if (!hasImportRequire && !hasNamespaceImport && !hasRemovedFlatImport) continue;
 
     findings.push({
       file: relativePath,
       line: importStmt.range().start.line + 1,
-      message: "Runtime subpath import still uses a removed namespace-star or flat value import.",
+      message: hasImportRequire
+        ? "TypeScript runtime subpath import-equals may still access a removed flat value export."
+        : "Runtime subpath import still uses a removed namespace-star or flat value import.",
       excerpt: importStmt.text().trim(),
     });
   }
