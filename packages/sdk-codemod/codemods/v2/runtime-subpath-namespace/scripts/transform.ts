@@ -146,13 +146,26 @@ function formatImport(
   defaultName: string | null,
   namedSpecs: string[],
   typeOnly = false,
+  attributeText = "",
 ): string {
   const importKeyword = typeOnly ? "import type" : "import";
   const named = namedSpecs.length > 0 ? `{ ${namedSpecs.join(", ")} }` : null;
-  if (defaultName && named) return `${importKeyword} ${defaultName}, ${named} from "${source}";`;
-  if (defaultName) return `${importKeyword} ${defaultName} from "${source}";`;
-  if (named) return `${importKeyword} ${named} from "${source}";`;
+  const attributes = attributeText === "" ? "" : ` ${attributeText}`;
+  if (defaultName && named) {
+    return `${importKeyword} ${defaultName}, ${named} from "${source}"${attributes};`;
+  }
+  if (defaultName) return `${importKeyword} ${defaultName} from "${source}"${attributes};`;
+  if (named) return `${importKeyword} ${named} from "${source}"${attributes};`;
   return "";
+}
+
+function importAttributeText(importStmt: SgNode): string {
+  return (
+    importStmt
+      .children()
+      .find((child) => child.kind() === "import_attribute")
+      ?.text() ?? ""
+  );
 }
 
 function replaceImportStatement(importStmt: SgNode, nextText: string, sourceText: string): Edit {
@@ -399,13 +412,14 @@ function buildImportReplacement(
   if (!source) return null;
 
   const statementTypeOnly = isTypeOnlyImport(importStmt);
+  const attributes = importAttributeText(importStmt);
   const namespaceName = namespaceImportName(importStmt);
   if (namespaceName) {
     const edit = statementTypeOnly
       ? importStmt.replace(
-          formatImport(source, null, [selfNamespaceSpec(mod, namespaceName)], true),
+          formatImport(source, null, [selfNamespaceSpec(mod, namespaceName)], true, attributes),
         )
-      : importStmt.replace(formatImport(source, namespaceName, []));
+      : importStmt.replace(formatImport(source, namespaceName, [], false, attributes));
     return {
       edit,
       flatImports: [],
@@ -485,6 +499,7 @@ function buildImportReplacement(
         statementTypeOnly ? null : defaultName,
         nextNamedSpecs,
         statementTypeOnly,
+        attributes,
       ),
       sourceText,
     ),
