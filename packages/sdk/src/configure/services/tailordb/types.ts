@@ -140,7 +140,7 @@ export interface TailorDBType<
 export type TailorAnyDBType = TailorDBType<any, any>;
 
 export type TailorDBInstance<
-  // Default kept loose for convenience; callers still get fully inferred types from `db.type()`.
+  // Default kept loose for convenience; callers still get fully inferred types from `db.table()`.
   // oxlint-disable-next-line no-explicit-any
   Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributes,

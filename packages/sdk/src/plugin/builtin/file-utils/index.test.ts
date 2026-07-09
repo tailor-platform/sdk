@@ -55,7 +55,7 @@ describe("FileUtilsPlugin", () => {
       ],
       ["should return empty array when no files are present", "User", undefined, []],
     ])("%s", async (_name, typeName, files, expectedFields) => {
-      let type = db.type(typeName, { name: db.string() });
+      let type = db.table(typeName, { name: db.string() });
       if (files) type = type.files(files);
 
       const result = await processFileType(parseTailorDBType(toSchemaOutput(type)));
@@ -145,7 +145,7 @@ describe("FileUtilsPlugin", () => {
   describe("onTailorDBReady integration", () => {
     test("should generate file utils for types with file fields", async () => {
       const userType = db
-        .type("User", {
+        .table("User", {
           name: db.string(),
         })
         .files({
@@ -153,7 +153,7 @@ describe("FileUtilsPlugin", () => {
         });
 
       const salesOrderType = db
-        .type("SalesOrder", {
+        .table("SalesOrder", {
           name: db.string(),
         })
         .files({
@@ -184,7 +184,7 @@ describe("FileUtilsPlugin", () => {
     });
 
     test("should return empty files when no types have file fields", async () => {
-      const userType = db.type("User", {
+      const userType = db.table("User", {
         name: db.string(),
       });
 
@@ -205,7 +205,7 @@ describe("FileUtilsPlugin", () => {
 
     test("should handle multiple namespaces", async () => {
       const userType = db
-        .type("User", {
+        .table("User", {
           name: db.string(),
         })
         .files({
@@ -213,7 +213,7 @@ describe("FileUtilsPlugin", () => {
         });
 
       const customerType = db
-        .type("Customer", {
+        .table("Customer", {
           name: db.string(),
         })
         .files({

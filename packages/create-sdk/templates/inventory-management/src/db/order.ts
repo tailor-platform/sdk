@@ -3,7 +3,7 @@ import { contact } from "./contact";
 import { gqlPermissionLoggedIn, permissionLoggedIn } from "./common/permission";
 
 export const order = db
-  .type("Order", {
+  .table("Order", {
     name: db.string().description("Name of the order"),
     description: db.string({ optional: true }).description("Description of the order"),
     orderDate: db.datetime().description("Date of the order"),

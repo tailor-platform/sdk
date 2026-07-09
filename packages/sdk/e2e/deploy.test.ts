@@ -210,7 +210,7 @@ describe("E2E: Service deletion order", () => {
       `
 import { db } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string(),
   role: db.string({ optional: true }),
@@ -232,7 +232,7 @@ export type user = typeof user;
       `
 import { db } from "@tailor-platform/sdk";
 
-export const extraUser = db.type("ExtraUser", {
+export const extraUser = db.table("ExtraUser", {
   name: db.string(),
   email: db.string(),
 });
@@ -547,7 +547,7 @@ export default defineConfig({
       `
 import { db } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string(),
   role: db.string({ optional: true }),
@@ -602,7 +602,7 @@ export default defineConfig({
       `
 import { db } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
   email: db.string(),
   role: db.string({ optional: true }),

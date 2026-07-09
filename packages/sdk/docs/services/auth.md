@@ -86,7 +86,7 @@ Example TailorDB type for user profile:
 // tailordb/user.ts
 import { db } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   email: db.string().unique(), // usernameField must have unique constraint
   role: db.enum(["admin", "user"]),
   ...db.fields.timestamps(),
@@ -130,7 +130,7 @@ Example TailorDB type with UUID fields for attribute list:
 // tailordb/user.ts
 import { db } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   email: db.string().unique(),
   role: db.enum(["admin", "user"]),
   organizationId: db.uuid(), // Can be used in attributeList

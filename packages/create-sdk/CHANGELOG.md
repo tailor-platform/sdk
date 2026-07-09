@@ -1,5 +1,34 @@
 # @tailor-platform/create-sdk
 
+## 2.0.0-next.3
+
+### Major Changes
+
+- [#1684](https://github.com/tailor-platform/sdk/pull/1684) [`de3ef5e`](https://github.com/tailor-platform/sdk/commit/de3ef5e7421a998624154df5e90da62e17664524) Thanks [@dqn](https://github.com/dqn)! - Restore Tailor field outputs for UUID, date, datetime, time, and decimal fields to plain string-compatible types and remove the strict scalar string migration guidance.
+
+- [#1556](https://github.com/tailor-platform/sdk/pull/1556) [`645949e`](https://github.com/tailor-platform/sdk/commit/645949ed64bda8b82fc44c0db54928698b12a2eb) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename `defineWaitPoint` and `defineWaitPoints` to `createWaitPoint` and `createWaitPoints`.
+  
+  These functions create runtime instances with `.wait()` and `.resolve()` methods that call the platform API at runtime, so the `create*` prefix is more accurate. Update any usages:
+  
+  ```diff
+  -import { defineWaitPoint, defineWaitPoints } from "@tailor-platform/sdk";
+  +import { createWaitPoint, createWaitPoints } from "@tailor-platform/sdk";
+  
+  -export const approval = defineWaitPoint<Payload, Result>("approval");
+  +export const approval = createWaitPoint<Payload, Result>("approval");
+  
+  -export const waitPoints = defineWaitPoints((define) => ({ ... }));
+  +export const waitPoints = createWaitPoints((define) => ({ ... }));
+  ```
+
+### Patch Changes
+
+- [#1559](https://github.com/tailor-platform/sdk/pull/1559) [`ff8ef1c`](https://github.com/tailor-platform/sdk/commit/ff8ef1c1323daf81812c182e146fd53da20e676e) Thanks [@dqn](https://github.com/dqn)! - Rename auth attribute module augmentation from `AttributeMap` to `Attributes`.
+
+- [#1563](https://github.com/tailor-platform/sdk/pull/1563) [`501e8bf`](https://github.com/tailor-platform/sdk/commit/501e8bfdd2bca7201a1c9b036bf72087476da416) Thanks [@dqn](https://github.com/dqn)! - Standardize SDK-owned environment variables on the `TAILOR_*` namespace.
+  
+  Replace the removed SDK-specific environment variables with their new names: `TAILOR_CONFIG_PATH`, `TAILOR_DTS_PATH`, `TAILOR_CI_ALLOW_ID_INJECTION`, `TAILOR_DEPLOY_BUILD_ONLY`, `TAILOR_BUILD_OUTPUT_DIR`, `TAILOR_SKILLS_SOURCE`, `TAILOR_TEMPLATE_SDK_VERSION`, `TAILOR_PLATFORM_URL`, `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`, `TAILOR_INLINE_SOURCEMAP`, `TAILOR_QUERY_NEWLINE_ON_ENTER`, and `TAILOR_APP_LOG_LEVEL`. The deprecated `TAILOR_TOKEN` fallback is removed; use `TAILOR_PLATFORM_TOKEN`. The v2 codemod rewrites unambiguous removed SDK environment variable names and flags generic names such as `LOG_LEVEL` and `PLATFORM_URL` for manual review.
+
 ## 2.0.0-next.2
 ### Major Changes
 

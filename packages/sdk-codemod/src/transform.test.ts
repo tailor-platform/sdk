@@ -130,4 +130,8 @@ describe("codemod transforms", () => {
   test("v2/wait-point-rename transforms correctly", async () => {
     await expect(runFixtureCases("v2/wait-point-rename")).resolves.toBeUndefined();
   });
+
+  test("v2/db-type-to-table transforms correctly", async () => {
+    await expect(runFixtureCases("v2/db-type-to-table")).resolves.toBeUndefined();
+  });
 });

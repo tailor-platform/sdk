@@ -2,7 +2,7 @@ import { db } from "@tailor-platform/sdk";
 import { defaultGqlPermission, defaultPermission } from "./permissions";
 
 export const selfie = db
-  .type("Selfie", {
+  .table("Selfie", {
     name: db.string(),
     parentID: db.uuid({ optional: true }).relation({
       type: "n-1",

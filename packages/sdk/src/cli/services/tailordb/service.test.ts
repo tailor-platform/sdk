@@ -33,7 +33,7 @@ describe("createTailorDBService.loadTypes", () => {
       "user.ts",
       `
 import { db } from "@tailor-platform/sdk";
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
 });
 `,
@@ -42,7 +42,7 @@ export const user = db.type("User", {
       "account.ts",
       `
 import { db } from "@tailor-platform/sdk";
-export const account = db.type("User", {
+export const account = db.table("User", {
   email: db.string(),
 });
 `,
@@ -64,7 +64,7 @@ export const account = db.type("User", {
       "object-prototype.ts",
       `
 import { db } from "@tailor-platform/sdk";
-export const objectPrototype = db.type("toString", {
+export const objectPrototype = db.table("toString", {
   value: db.string(),
 });
 `,
@@ -85,7 +85,7 @@ export const objectPrototype = db.type("toString", {
       "proto.ts",
       `
 import { db } from "@tailor-platform/sdk";
-export const proto = db.type("__proto__", {
+export const proto = db.table("__proto__", {
   value: db.string(),
 });
 `,
@@ -107,7 +107,7 @@ export const proto = db.type("__proto__", {
       "overlapping-glob.ts",
       `
 import { db } from "@tailor-platform/sdk";
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
 });
 `,
@@ -130,7 +130,7 @@ export const user = db.type("User", {
       importPath: "@example/namespace",
       onNamespaceLoaded: () => ({
         types: {
-          auditLog: db.type("AuditLog", {
+          auditLog: db.table("AuditLog", {
             message: db.string(),
           }),
         },

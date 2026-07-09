@@ -93,7 +93,7 @@ const reviewer = t.string();
 const zodLike = { parse: (arg: unknown) => arg };
 
 export const user = db
-  .type("User", {
+  .table("User", {
     role,
     note: db.string(),
   })
@@ -119,7 +119,7 @@ export const user = db
   });
 
 export const audit = db
-  .type("Audit", {
+  .table("Audit", {
     create: db.string(),
     update: db.string(),
   })

@@ -1,7 +1,7 @@
 import { db } from "@tailor-platform/sdk";
 
 export const order = db
-  .type("Order", {
+  .table("Order", {
     customerName: db.string(),
     amount: db.int(),
     status: db.enum(["PENDING", "PROCESSING", "COMPLETED", "FAILED"]),

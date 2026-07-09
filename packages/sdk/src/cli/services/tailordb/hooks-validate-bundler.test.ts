@@ -125,7 +125,7 @@ describe("collectSourceBindings", () => {
         `import { db } from "@tailor-platform/sdk";`,
         `import { formatAddress } from "./helpers";`,
         `const MAX = 100;`,
-        `export const customer = db.type("Customer", {`,
+        `export const customer = db.table("Customer", {`,
         `  name: db.string(),`,
         `}).hooks({ fullAddress: { create: ({ data }) => formatAddress(data) } });`,
         ``,

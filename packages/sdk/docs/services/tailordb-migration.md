@@ -69,7 +69,7 @@ A typical change cycle:
 
    ```typescript
    // tailordb/user.ts
-   export const user = db.type("User", {
+   export const user = db.table("User", {
      name: db.string(),
      email: db.string(), // ← new required field
      ...db.fields.timestamps(),

@@ -23,12 +23,12 @@ describe("loadTypeFieldOrder", () => {
     return file;
   }
 
-  test("loads field order from db.type builder outputs", async () => {
+  test("loads field order from db.table builder outputs", async () => {
     const typeFile = writeTypeFile(
       "user.ts",
       `
 import { db } from "@tailor-platform/sdk";
-export const user = db.type("User", {
+export const user = db.table("User", {
   firstName: db.string(),
   lastName: db.string(),
 });

@@ -4,7 +4,7 @@ import { product } from "./product";
 import { gqlPermissionLoggedIn, permissionLoggedIn } from "./common/permission";
 
 export const orderItem = db
-  .type("OrderItem", {
+  .table("OrderItem", {
     orderId: db
       .uuid()
       .description("ID of the order")

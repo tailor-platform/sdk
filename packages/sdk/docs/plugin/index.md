@@ -43,7 +43,7 @@ Use the `.plugin()` method to attach plugins to specific types:
 import { db } from "@tailor-platform/sdk";
 
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string(),
     email: db.string(),
   })
@@ -58,7 +58,7 @@ Some plugins accept per-type configuration:
 
 ```typescript
 export const customer = db
-  .type("Customer", {
+  .table("Customer", {
     name: db.string(),
     // ...
   })

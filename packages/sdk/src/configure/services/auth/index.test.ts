@@ -11,7 +11,7 @@ import type {
 } from "#/configure/services/auth/types";
 import type { JsonObject } from "type-fest";
 
-const userType = db.type("User", {
+const userType = db.table("User", {
   email: db.string().unique(),
   role: db.string(),
   isActive: db.bool(),
