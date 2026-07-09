@@ -235,7 +235,7 @@ describe("setupDelete", () => {
       message.includes('Coordinator "main"'),
     )?.[0];
     expect(warning).toContain("Remove `api` from the relevant `--action` value");
-    expect(warning).not.toContain("without `--action api`");
+    expect(warning).not.toContain("without --action api");
     warnSpy.mockRestore();
   });
 
