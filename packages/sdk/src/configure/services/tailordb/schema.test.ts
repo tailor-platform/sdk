@@ -594,6 +594,22 @@ describe("TailorDBType type error message tests", () => {
       erased.files({ document: "user document" });
     }).toThrowError(".files() has already been set");
   });
+
+  test("failed duplicate-guarded calls can be retried", () => {
+    const retryable = db.type("RetryableHookedUser", { name: db.string() });
+    const invalidHooks = {
+      missing: { create: () => "created" },
+    } as unknown as Parameters<typeof retryable.hooks>[0];
+
+    expect(() => {
+      retryable.hooks(invalidHooks);
+    }).toThrowError("field not found: missing");
+
+    retryable.hooks({ name: { create: () => "created" } });
+    expect(() => {
+      retryable.hooks({ name: { update: () => "updated" } });
+    }).toThrowError(".hooks() has already been set");
+  });
 });
 
 describe("TailorDBField relation modifier tests", () => {

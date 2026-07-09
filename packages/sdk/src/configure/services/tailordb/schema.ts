@@ -936,11 +936,13 @@ function createTailorDBType<
   const _plugins: PluginAttachment[] = [];
   const _definedMethods = new Set<keyof DefinedDBTypeMetadata>();
 
-  function assertMethodUnset(method: keyof DefinedDBTypeMetadata) {
+  function runMethodOnce<T>(method: keyof DefinedDBTypeMetadata, action: () => T): T {
     if (_definedMethods.has(method)) {
       throw new Error(`.${method}() has already been set`);
     }
+    const result = action();
     _definedMethods.add(method);
+    return result;
   }
 
   if (options.pluralForm) {
@@ -981,66 +983,71 @@ function createTailorDBType<
     },
 
     hooks(hooks: Hooks<Fields>) {
-      assertMethodUnset("hooks");
-      // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
-      // oxlint-disable-next-line no-explicit-any
-      Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-        const field = this.fields[fieldName];
-        if (field === undefined) throw new Error(`field not found: ${fieldName}`);
-        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = (
-          field as TailorAnyDBField
-        ).hooks(fieldHooks);
+      return runMethodOnce("hooks", () => {
+        // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
+        // oxlint-disable-next-line no-explicit-any
+        Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
+          const field = this.fields[fieldName];
+          if (field === undefined) throw new Error(`field not found: ${fieldName}`);
+          (this.fields as Record<string, TailorAnyDBField>)[fieldName] = (
+            field as TailorAnyDBField
+          ).hooks(fieldHooks);
+        });
+        return this;
       });
-      return this;
     },
 
     validate(validators: Validators<Fields>) {
-      assertMethodUnset("validate");
-      Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
-        const field = this.fields[fieldName] as TailorAnyDBField;
+      return runMethodOnce("validate", () => {
+        Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
+          const field = this.fields[fieldName] as TailorAnyDBField;
 
-        const validators = fieldValidators as
-          | FieldValidateInput<unknown>
-          | FieldValidateInput<unknown>[];
+          const validators = fieldValidators as
+            | FieldValidateInput<unknown>
+            | FieldValidateInput<unknown>[];
 
-        const isValidateConfig = (v: unknown): v is ValidateConfig<unknown> => {
-          return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
-        };
+          const isValidateConfig = (v: unknown): v is ValidateConfig<unknown> => {
+            return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
+          };
 
-        let updatedField: TailorAnyDBField;
-        if (Array.isArray(validators)) {
-          if (isValidateConfig(validators)) {
-            updatedField = field.validate(validators);
+          let updatedField: TailorAnyDBField;
+          if (Array.isArray(validators)) {
+            if (isValidateConfig(validators)) {
+              updatedField = field.validate(validators);
+            } else {
+              updatedField = field.validate(...validators);
+            }
           } else {
-            updatedField = field.validate(...validators);
+            updatedField = field.validate(validators);
           }
-        } else {
-          updatedField = field.validate(validators);
-        }
-        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
+          (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
+        });
+        return this;
       });
-      return this;
     },
 
     features(features: Omit<TypeFeatures, "pluralForm">) {
-      assertMethodUnset("features");
-      _settings = {
-        ..._settings,
-        ...features,
-      };
-      return this;
+      return runMethodOnce("features", () => {
+        _settings = {
+          ..._settings,
+          ...features,
+        };
+        return this;
+      });
     },
 
     indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]) {
-      assertMethodUnset("indexes");
-      _indexes = indexes;
-      return this;
+      return runMethodOnce("indexes", () => {
+        _indexes = indexes;
+        return this;
+      });
     },
 
     files<const F extends string>(files: Record<F, string> & FileKeyConflictError<Fields, User>) {
-      assertMethodUnset("files");
-      _files = files;
-      return this;
+      return runMethodOnce("files", () => {
+        _files = files;
+        return this;
+      });
     },
 
     permission<
@@ -1050,20 +1057,22 @@ function createTailorDBType<
         output<TailorDBType<Fields, User>>
       >,
     >(permission: P) {
-      assertMethodUnset("permission");
-      const ret = this as TailorDBType<Fields, U>;
-      _permissions.record = permission as RawPermissions["record"];
-      return ret;
+      return runMethodOnce("permission", () => {
+        const ret = this as TailorDBType<Fields, U>;
+        _permissions.record = permission as RawPermissions["record"];
+        return ret;
+      });
     },
 
     gqlPermission<
       U extends object = User,
       P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
     >(permission: P) {
-      assertMethodUnset("gqlPermission");
-      const ret = this as TailorDBType<Fields, U>;
-      _permissions.gql = permission as RawPermissions["gql"];
-      return ret;
+      return runMethodOnce("gqlPermission", () => {
+        const ret = this as TailorDBType<Fields, U>;
+        _permissions.gql = permission as RawPermissions["gql"];
+        return ret;
+      });
     },
 
     description(description: string) {
