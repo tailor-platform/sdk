@@ -96,6 +96,7 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
 );
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
+const V2_NEXT_3 = "2.0.0-next.3";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [

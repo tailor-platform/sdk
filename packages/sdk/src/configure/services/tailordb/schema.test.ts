@@ -576,6 +576,28 @@ describe("TailorDBField hooks modifier tests", () => {
     const _hooks = db.string({ optional: true }).hooks;
     expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<string | null>>();
   });
+
+  test("create hook args omit oldValue, update hook args include it", () => {
+    db.string().hooks({
+      create: (args) => {
+        expectTypeOf(args).toEqualTypeOf<{
+          value: string | null;
+          invoker: TailorPrincipal | null;
+          now: Date;
+        }>();
+        return args.value ?? "default";
+      },
+      update: (args) => {
+        expectTypeOf(args).toEqualTypeOf<{
+          value: string | null;
+          oldValue: string | null;
+          invoker: TailorPrincipal | null;
+          now: Date;
+        }>();
+        return args.oldValue ?? args.value ?? "default";
+      },
+    });
+  });
 });
 
 describe("TailorDBField validate modifier tests", () => {
@@ -1090,12 +1112,24 @@ describe("TailorDBType hooks modifier tests", () => {
     });
   });
 
-  test("type hook input args receive correct types", () => {
+  test("type create hook input args receive correct types (no oldRecord)", () => {
     db.type("Test", { name: db.string(), age: db.int({ optional: true }) }).hooks({
-      create: ({ input, oldRecord, invoker, now }) => {
+      create: ({ input, invoker, now }) => {
         expectTypeOf(input.name).toEqualTypeOf<string | null | undefined>();
         expectTypeOf(input.age).toEqualTypeOf<number | null | undefined>();
-        expectTypeOf(oldRecord).toBeNullable();
+        expectTypeOf(invoker).toBeNullable();
+        expectTypeOf(now).toEqualTypeOf<Date>();
+        return {};
+      },
+    });
+  });
+
+  test("type update hook input args include oldRecord", () => {
+    db.type("Test", { name: db.string(), age: db.int({ optional: true }) }).hooks({
+      update: ({ input, oldRecord, invoker, now }) => {
+        expectTypeOf(input.name).toEqualTypeOf<string | null | undefined>();
+        expectTypeOf(oldRecord.name).toEqualTypeOf<string | null | undefined>();
+        expectTypeOf(oldRecord.age).toEqualTypeOf<number | null | undefined>();
         expectTypeOf(invoker).toBeNullable();
         expectTypeOf(now).toEqualTypeOf<Date>();
         return {};
