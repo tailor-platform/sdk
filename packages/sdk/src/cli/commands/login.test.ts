@@ -218,6 +218,51 @@ describe("login --profile", () => {
     expect(pfConfig.profiles.default?.user).toBe("u@example.com");
   });
 
+  test("updates unscoped profiles with an explicit default-platform profile", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        defaultUrl: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.tailor.tech",
+        },
+        unscoped: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+        },
+      },
+      current_user: null,
+    });
+    vi.mocked(prompt.confirm).mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "default-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+
+    const result = await runCommand(loginCommand, [
+      "--profile",
+      "defaultUrl",
+      "--machine-user",
+      "--client-id",
+      "machine-client",
+      "--client-secret",
+      "secret",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(prompt.confirm).toHaveBeenCalledTimes(2);
+    const pfConfig = await readPlatformConfig();
+    expect(pfConfig.profiles.defaultUrl?.user).toBe("machine-client");
+    expect(pfConfig.profiles.unscoped?.user).toBe("machine-client");
+    expect(pfConfig.users["machine-client"]).toMatchObject({
+      access_token: "default-token",
+    });
+  });
+
   test("keeps current user when machine-user login targets a non-default platform profile", async () => {
     writePlatformConfig({
       version: 2,

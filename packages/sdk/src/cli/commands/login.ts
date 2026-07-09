@@ -8,9 +8,9 @@ import {
   closeConnectionPool,
   fetchPlatformMachineUserToken,
   fetchUserInfo,
+  getPlatformBaseUrl,
   initOAuth2Client,
   isDefaultPlatform,
-  normalizeBaseUrl,
   type PlatformClientConfig,
 } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
@@ -57,8 +57,15 @@ function getProfileUserUpdate(
 }
 
 function storedPlatformScope(profile: Parameters<typeof platformConfigFromProfile>[0]) {
-  const platformUrl = platformConfigFromProfile(profile)?.platformUrl;
-  return platformUrl ? normalizeBaseUrl(platformUrl) : undefined;
+  const platformConfig = platformConfigFromProfile(profile);
+  if (platformConfig?.platformUrl) {
+    return getPlatformBaseUrl(platformConfig);
+  }
+  try {
+    return getPlatformBaseUrl();
+  } catch {
+    return undefined;
+  }
 }
 
 async function confirmProfileUserUpdate(
