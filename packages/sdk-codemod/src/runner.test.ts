@@ -1096,6 +1096,24 @@ describe("runCodemods", () => {
         ].join("\n"),
       );
       await fs.promises.writeFile(
+        path.join(dir, "type-reference.ts"),
+        [
+          'import type { Client } from "@tailor-platform/sdk/runtime/idp";',
+          "",
+          "type RuntimeClient = Client;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "namespace-type.ts"),
+        [
+          'import * as idp from "@tailor-platform/sdk/runtime/idp";',
+          "",
+          "type RuntimeConfig = idp.ClientConfig;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
         path.join(dir, "require.cjs"),
         [
           'const { get } = require("@tailor-platform/sdk/runtime/aigateway");',
@@ -1126,10 +1144,12 @@ describe("runCodemods", () => {
             "dynamic.ts",
             "exports.ts",
             "import-equals.cts",
+            "namespace-type.ts",
             "reexport-all.ts",
             "reexport-namespace.ts",
             "reexport.ts",
             "require.cjs",
+            "type-reference.ts",
           ],
           findings: [
             expect.objectContaining({
@@ -1163,6 +1183,11 @@ describe("runCodemods", () => {
               excerpt: 'import iconv = require("@tailor-platform/sdk/runtime/iconv");',
             }),
             expect.objectContaining({
+              file: "namespace-type.ts",
+              line: 1,
+              excerpt: 'import * as idp from "@tailor-platform/sdk/runtime/idp";',
+            }),
+            expect.objectContaining({
               file: "reexport-all.ts",
               line: 1,
               excerpt: 'export * from "@tailor-platform/sdk/runtime/aigateway";',
@@ -1181,6 +1206,11 @@ describe("runCodemods", () => {
               file: "require.cjs",
               line: 1,
               excerpt: 'require("@tailor-platform/sdk/runtime/aigateway")',
+            }),
+            expect.objectContaining({
+              file: "type-reference.ts",
+              line: 1,
+              excerpt: 'import type { Client } from "@tailor-platform/sdk/runtime/idp";',
             }),
           ],
         },

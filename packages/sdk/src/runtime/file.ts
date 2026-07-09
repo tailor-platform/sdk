@@ -282,34 +282,4 @@ export const file = {
   uploadStream,
 } as const satisfies TailorDBFileAPI & { deleteFile: TailorDBFileAPI["delete"] };
 
-type FileUploadMetadata = UploadMetadata;
-type FileDownloadMetadata = DownloadMetadata;
-type RuntimeFileMetadata = FileMetadata;
-type RuntimeFileUploadOptions = FileUploadOptions;
-type RuntimeFileUploadStreamOptions = FileUploadStreamOptions;
-type RuntimeFileUploadResponse = FileUploadResponse;
-type RuntimeFileDownloadResponse = FileDownloadResponse;
-type RuntimeFileDownloadAsBase64Response = FileDownloadAsBase64Response;
-type RuntimeFileDownloadStreamResponse = FileDownloadStreamResponse;
-type RuntimeTailorDBFileErrorCode = TailorDBFileErrorCode;
-type RuntimeTailorDBFileError = TailorDBFileError;
-type RuntimeTailorDBFileAPI = TailorDBFileAPI;
-
-// Type-only namespace merge preserves namespace type access without restoring flat value exports.
-// oxlint-disable-next-line typescript/no-namespace
-export namespace file {
-  export type UploadMetadata = FileUploadMetadata;
-  export type DownloadMetadata = FileDownloadMetadata;
-  export type FileMetadata = RuntimeFileMetadata;
-  export type FileUploadOptions = RuntimeFileUploadOptions;
-  export type FileUploadStreamOptions = RuntimeFileUploadStreamOptions;
-  export type FileUploadResponse = RuntimeFileUploadResponse;
-  export type FileDownloadResponse = RuntimeFileDownloadResponse;
-  export type FileDownloadAsBase64Response = RuntimeFileDownloadAsBase64Response;
-  export type FileDownloadStreamResponse = RuntimeFileDownloadStreamResponse;
-  export type TailorDBFileErrorCode = RuntimeTailorDBFileErrorCode;
-  export type TailorDBFileError = RuntimeTailorDBFileError;
-  export type TailorDBFileAPI = RuntimeTailorDBFileAPI;
-}
-
 export default file;

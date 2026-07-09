@@ -46,14 +46,4 @@ const get: TailorAigatewayAPI["get"] = (...args) => api().get(...args);
 /** Runtime wrapper namespace for `tailor.aigateway`. */
 export const aigateway = { get } as const satisfies TailorAigatewayAPI;
 
-type AigatewayGetAIGatewayResult = GetAIGatewayResult;
-type AigatewayTailorAigatewayAPI = TailorAigatewayAPI;
-
-// Type-only namespace merge preserves namespace type access without restoring flat value exports.
-// oxlint-disable-next-line typescript/no-namespace
-export namespace aigateway {
-  export type GetAIGatewayResult = AigatewayGetAIGatewayResult;
-  export type TailorAigatewayAPI = AigatewayTailorAigatewayAPI;
-}
-
 export default aigateway;

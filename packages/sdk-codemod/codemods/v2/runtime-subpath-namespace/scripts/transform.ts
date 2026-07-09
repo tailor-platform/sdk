@@ -288,6 +288,26 @@ function hasExportSpecifierReference(root: SgNode, names: Set<string>): boolean 
     );
 }
 
+function hasNonTypeQueryTypeReference(root: SgNode, names: Set<string>): boolean {
+  return root.findAll({ rule: { kind: "type_identifier" } }).some((node) => {
+    if (!names.has(node.text())) return false;
+    if (isInsideImportStatement(node)) return false;
+    if (isInsideExportSpecifier(node)) return false;
+    if (isTypeParameterScoped(node)) return false;
+    if (isNestedTypeMember(node)) return false;
+    return !isInsideTypeQuery(node);
+  });
+}
+
+function hasNamespaceTypeMemberReference(root: SgNode, namespaceLocal: string): boolean {
+  return root.findAll({ rule: { kind: "nested_type_identifier" } }).some((node) => {
+    const firstNamedChild = node
+      .children()
+      .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
+    return firstNamedChild?.text() === namespaceLocal;
+  });
+}
+
 function findExportStatements(root: SgNode): SgNode[] {
   return root
     .findAll({ rule: { kind: "export_statement" } })
@@ -415,6 +435,7 @@ function buildImportReplacement(
   const attributes = importAttributeText(importStmt);
   const namespaceName = namespaceImportName(importStmt);
   if (namespaceName) {
+    if (hasNamespaceTypeMemberReference(root, namespaceName)) return null;
     const edit = statementTypeOnly
       ? importStmt.replace(
           formatImport(source, null, [selfNamespaceSpec(mod, namespaceName)], true, attributes),
@@ -460,6 +481,7 @@ function buildImportReplacement(
   ]);
   if (flatImports.some((binding) => declaredNames.has(binding.localName))) return null;
   if (hasExportSpecifierReference(root, removedNames)) return null;
+  if (hasNonTypeQueryTypeReference(root, removedNames)) return null;
 
   const flatImportsAreTypeOnly = flatImports.every((binding) => binding.typeOnly);
   const canUseExistingSelf =
@@ -542,6 +564,7 @@ function referenceEdits(root: SgNode, replacements: ImportReplacement[]): Edit[]
   for (const node of root.findAll({ rule: { kind: "type_identifier" } })) {
     if (isInsideImportStatement(node)) continue;
     if (isInsideExportSpecifier(node)) continue;
+    if (!isInsideTypeQuery(node)) continue;
     if (isTypeParameterScoped(node)) continue;
     if (isNestedTypeMember(node)) continue;
     const replacement = replacementFor(node.text());

@@ -84,7 +84,7 @@ export interface TailorIconvAPI {
    */
   encodings(): string[];
 
-  /** Constructor for the stateful {@link Iconv} converter. */
+  /** Constructor for the stateful converter. */
   Iconv: IconvConstructor;
 }
 
@@ -122,7 +122,8 @@ class Iconv {
   }
 }
 
-/** Runtime wrapper namespace for `tailor.iconv`. */
+// Keep the object typed to the public API so the private wrapper class does not leak into d.ts.
+/** Runtime API for `tailor.iconv`. */
 export const iconv: TailorIconvAPI = {
   convert,
   convertBuffer,
@@ -131,19 +132,5 @@ export const iconv: TailorIconvAPI = {
   encodings,
   Iconv,
 };
-
-type RuntimeIconvInstance = IconvInstance;
-type RuntimeIconvConstructor = IconvConstructor;
-type RuntimeTailorIconvAPI = TailorIconvAPI;
-type RuntimeIconv = InstanceType<RuntimeIconvConstructor>;
-
-// Type-only namespace merge preserves namespace type access without restoring flat value exports.
-// oxlint-disable-next-line typescript/no-namespace
-export namespace iconv {
-  export type IconvInstance = RuntimeIconvInstance;
-  export type IconvConstructor = RuntimeIconvConstructor;
-  export type TailorIconvAPI = RuntimeTailorIconvAPI;
-  export type Iconv = RuntimeIconv;
-}
 
 export default iconv;

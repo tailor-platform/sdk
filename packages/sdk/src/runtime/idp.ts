@@ -11,7 +11,7 @@
  * const { users } = await client.users({ first: 10 });
  */
 
-/** Configuration object for {@link Client}. */
+/** Configuration object for `idp.Client`. */
 export interface ClientConfig {
   namespace: string;
 }
@@ -29,12 +29,12 @@ export interface User {
   mfaEnrolled: boolean;
   /**
    * Enrolled MFA second factor IDs. Pass an entry into
-   * {@link Client.unenrollMfa} to remove that factor.
+   * `idp.Client.unenrollMfa()` to remove that factor.
    */
   mfaFactorIds: string[];
 }
 
-/** Filter options for {@link Client.users}. */
+/** Filter options for `idp.Client.users()`. */
 export interface UserQuery {
   /** Filter by user IDs */
   ids?: string[];
@@ -42,7 +42,7 @@ export interface UserQuery {
   names?: string[];
 }
 
-/** Pagination/filter options for {@link Client.users}. */
+/** Pagination/filter options for `idp.Client.users()`. */
 export interface ListUsersOptions {
   /** Maximum number of users to return */
   first?: number;
@@ -52,14 +52,14 @@ export interface ListUsersOptions {
   query?: UserQuery;
 }
 
-/** Response shape for {@link Client.users}. */
+/** Response shape for `idp.Client.users()`. */
 export interface ListUsersResponse {
   users: User[];
   nextPageToken: string | null;
   totalCount: number;
 }
 
-/** Input for {@link Client.createUser}. */
+/** Input for `idp.Client.createUser()`. */
 export interface CreateUserInput {
   /** The user's name (typically email) */
   name: string;
@@ -69,7 +69,7 @@ export interface CreateUserInput {
   disabled?: boolean;
 }
 
-/** Input for {@link Client.updateUser}. */
+/** Input for `idp.Client.updateUser()`. */
 export interface UpdateUserInput {
   /** The user's ID */
   id: string;
@@ -83,7 +83,7 @@ export interface UpdateUserInput {
   disabled?: boolean;
 }
 
-/** Input for {@link Client.sendPasswordResetEmail}. */
+/** Input for `idp.Client.sendPasswordResetEmail()`. */
 export interface SendPasswordResetEmailInput {
   /** The ID of the user */
   userId: string;
@@ -95,7 +95,7 @@ export interface SendPasswordResetEmailInput {
   subject?: string;
 }
 
-/** Input for {@link Client.unenrollMfa}. */
+/** Input for `idp.Client.unenrollMfa()`. */
 export interface UnenrollMfaInput {
   /** The ID of the user whose factor will be unenrolled. */
   userId: string;
@@ -222,39 +222,8 @@ class Client {
   }
 }
 
-/** Runtime wrapper namespace for `tailor.idp`. */
+// Keep the object typed to the public API so the private wrapper class does not leak into d.ts.
+/** Runtime API for `tailor.idp`. */
 export const idp: TailorIdpAPI = { Client };
-
-type RuntimeClientConfig = ClientConfig;
-type RuntimeUser = User;
-type RuntimeUserQuery = UserQuery;
-type RuntimeListUsersOptions = ListUsersOptions;
-type RuntimeListUsersResponse = ListUsersResponse;
-type RuntimeCreateUserInput = CreateUserInput;
-type RuntimeUpdateUserInput = UpdateUserInput;
-type RuntimeSendPasswordResetEmailInput = SendPasswordResetEmailInput;
-type RuntimeUnenrollMfaInput = UnenrollMfaInput;
-type RuntimeIdpClientInstance = IdpClientInstance;
-type RuntimeIdpClientConstructor = IdpClientConstructor;
-type RuntimeTailorIdpAPI = TailorIdpAPI;
-type RuntimeClient = InstanceType<RuntimeIdpClientConstructor>;
-
-// Type-only namespace merge preserves namespace type access without restoring flat value exports.
-// oxlint-disable-next-line typescript/no-namespace
-export namespace idp {
-  export type ClientConfig = RuntimeClientConfig;
-  export type User = RuntimeUser;
-  export type UserQuery = RuntimeUserQuery;
-  export type ListUsersOptions = RuntimeListUsersOptions;
-  export type ListUsersResponse = RuntimeListUsersResponse;
-  export type CreateUserInput = RuntimeCreateUserInput;
-  export type UpdateUserInput = RuntimeUpdateUserInput;
-  export type SendPasswordResetEmailInput = RuntimeSendPasswordResetEmailInput;
-  export type UnenrollMfaInput = RuntimeUnenrollMfaInput;
-  export type IdpClientInstance = RuntimeIdpClientInstance;
-  export type IdpClientConstructor = RuntimeIdpClientConstructor;
-  export type TailorIdpAPI = RuntimeTailorIdpAPI;
-  export type Client = RuntimeClient;
-}
 
 export default idp;

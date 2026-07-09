@@ -42,12 +42,4 @@ const getConnectionToken: TailorAuthconnectionAPI["getConnectionToken"] = (...ar
 /** Runtime wrapper namespace for `tailor.authconnection`. */
 export const authconnection = { getConnectionToken } as const satisfies TailorAuthconnectionAPI;
 
-type AuthconnectionTailorAuthconnectionAPI = TailorAuthconnectionAPI;
-
-// Type-only namespace merge preserves namespace type access without restoring flat value exports.
-// oxlint-disable-next-line typescript/no-namespace
-export namespace authconnection {
-  export type TailorAuthconnectionAPI = AuthconnectionTailorAuthconnectionAPI;
-}
-
 export default authconnection;
