@@ -1,15 +1,27 @@
 import * as fs from "node:fs";
 import { runCommand } from "politty";
 import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { closeConnectionPool, fetchPlatformMachineUserToken } from "#/cli/shared/client";
+import {
+  closeConnectionPool,
+  fetchPlatformMachineUserToken,
+  fetchUserInfo,
+  initOAuth2Client,
+} from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { loginCommand } from "./login";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-login-${Date.now()}-${Math.random()}`);
+const openMock = vi.hoisted(() => vi.fn());
+const getAuthorizeUriMock = vi.hoisted(() => vi.fn());
+const getTokenFromCodeRedirectMock = vi.hoisted(() => vi.fn());
 
 vi.mock("xdg-basedir", () => ({
   xdgConfig: xdgTempDir,
+}));
+
+vi.mock("open", () => ({
+  default: openMock,
 }));
 
 vi.mock("@napi-rs/keyring", () => ({
@@ -26,6 +38,13 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
   closeConnectionPool: vi.fn(),
   fetchPlatformMachineUserToken: vi.fn(),
+  fetchUserInfo: vi.fn(),
+  initOAuth2Client: vi.fn(() => ({
+    authorizationCode: {
+      getAuthorizeUri: getAuthorizeUriMock,
+      getTokenFromCodeRedirect: getTokenFromCodeRedirectMock,
+    },
+  })),
 }));
 
 const validUUID = "12345678-1234-4abc-8def-123456789012";
@@ -96,6 +115,58 @@ describe("login --profile", () => {
     expect(pfConfig.current_user).toBeNull();
     expect(pfConfig.users["https://api.dev.tailor.tech|machine-client"]).toMatchObject({
       access_token: "dev-token",
+    });
+    expect(closeConnectionPool).toHaveBeenCalledTimes(1);
+  });
+
+  test("rejects a browser profile user mismatch with a profile update command", async () => {
+    getAuthorizeUriMock.mockResolvedValue("https://auth.example.test/authorize");
+    getTokenFromCodeRedirectMock.mockResolvedValue({
+      accessToken: "browser-token",
+      refreshToken: "browser-refresh-token",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+    vi.mocked(fetchUserInfo).mockResolvedValue({ email: "browser@example.com" });
+    openMock.mockImplementation(async () => {
+      await fetch("http://localhost:8085/callback?code=browser-code&state=browser-state");
+    });
+
+    const result = await runCommand(loginCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(false);
+    expect(initOAuth2Client).toHaveBeenCalledWith({
+      platformUrl: "https://api.dev.tailor.tech",
+    });
+    expect(getTokenFromCodeRedirectMock).toHaveBeenCalledWith(
+      "http://localhost:8085/callback?code=browser-code&state=browser-state",
+      {
+        redirectUri: "http://localhost:8085/callback",
+        state: expect.any(String),
+        codeVerifier: expect.any(String),
+      },
+    );
+    expect(fetchUserInfo).toHaveBeenCalledWith("browser-token", {
+      platformUrl: "https://api.dev.tailor.tech",
+    });
+    expect((result as { error?: Error }).error?.message).toContain(
+      'Profile "dev" is configured for "u@example.com", but login authenticated "browser@example.com".',
+    );
+    expect((result as { error?: Error }).error?.message).toContain(
+      "tailor-sdk profile update --user 'browser@example.com' -- 'dev'",
+    );
+    expect((result as { error?: Error }).error?.message).toContain(
+      "Then run:\n  tailor-sdk login --profile 'dev'",
+    );
+    expect((result as { error?: Error }).error?.message).not.toContain(
+      "Then retry the original machine-user login command.",
+    );
+
+    const pfConfig = await readPlatformConfig();
+    expect(pfConfig.profiles.dev?.user).toBe("u@example.com");
+    expect(pfConfig.current_user).toBeNull();
+    expect(pfConfig.users["https://api.dev.tailor.tech|browser@example.com"]).toMatchObject({
+      access_token: "browser-token",
+      refresh_token: "browser-refresh-token",
     });
     expect(closeConnectionPool).toHaveBeenCalledTimes(1);
   });
