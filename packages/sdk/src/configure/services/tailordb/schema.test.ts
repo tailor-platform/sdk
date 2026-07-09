@@ -528,7 +528,16 @@ describe("TailorDBType type error message tests", () => {
     const indexed = db.type("IndexedUser", { name: db.string() }).indexes({
       fields: ["id", "name"],
     });
+    expectTypeOf<Parameters<typeof indexed.indexes>>().toEqualTypeOf<
+      [
+        TypeLevelError<".indexes() has already been set">,
+        ...TypeLevelError<".indexes() has already been set">[],
+      ]
+    >();
     expectTypeOf<Parameters<typeof indexed.indexes>[0]>().toEqualTypeOf<
+      TypeLevelError<".indexes() has already been set">
+    >();
+    expectTypeOf<Parameters<typeof indexed.indexes>[1]>().toEqualTypeOf<
       TypeLevelError<".indexes() has already been set">
     >();
     expect(() => {
@@ -575,6 +584,26 @@ describe("TailorDBType type error message tests", () => {
       // @ts-expect-error files() cannot be called after files() has already been called
       withFiles.files({ document: "user document" });
     }).toThrowError(".files() has already been set");
+
+    const described = db.type("DescribedUser", { name: db.string() }).description("first");
+    expectTypeOf<Parameters<typeof described.description>[0]>().toEqualTypeOf<
+      TypeLevelError<".description() has already been set">
+    >();
+    expect(() => {
+      // @ts-expect-error description() cannot be called after description() has already been called
+      described.description("second");
+    }).toThrowError(".description() has already been set");
+
+    const describedInTypeCall = db.type("DescribedInTypeCallUser", "first", {
+      name: db.string(),
+    });
+    expectTypeOf<Parameters<typeof describedInTypeCall.description>[0]>().toEqualTypeOf<
+      TypeLevelError<".description() has already been set">
+    >();
+    expect(() => {
+      // @ts-expect-error description() cannot be called after the type description has already been set
+      describedInTypeCall.description("second");
+    }).toThrowError(".description() has already been set");
 
     const describedAfterHooks = db
       .type("DescribedAfterHooksUser", { name: db.string() })

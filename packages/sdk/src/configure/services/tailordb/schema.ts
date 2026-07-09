@@ -109,6 +109,7 @@ type DefinedDBTypeMetadata = {
   files?: true;
   permission?: true;
   gqlPermission?: true;
+  description?: true;
 };
 type WithDBTypeMetadata<
   Defined extends DefinedDBTypeMetadata,
@@ -134,7 +135,7 @@ type DBTypeDuplicateRestGuard<
   IsAny<Defined> extends true
     ? Input
     : Defined extends Record<Key, unknown>
-      ? [TypeLevelError<Message>]
+      ? [TypeLevelError<Message>, ...TypeLevelError<Message>[]]
       : Input;
 type FileKeyConflictError<
   Fields extends Record<string, TailorAnyDBField>,
@@ -410,7 +411,14 @@ export interface TailorDBType<
       ".gqlPermission() has already been set"
     >,
   ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "gqlPermission">>;
-  description(description: string): TailorDBType<Fields, User, Defined>;
+  description(
+    description: DBTypeDuplicateInputGuard<
+      Defined,
+      "description",
+      string,
+      ".description() has already been set"
+    >,
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "description">>;
   pickFields<K extends keyof Fields>(keys: K[]): Pick<Fields, K>;
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
     keys: K[],
@@ -863,6 +871,9 @@ function createTailorDBType<
   let _files: Record<string, string> = {};
   const _plugins: PluginAttachment[] = [];
   const _definedMethods = new Set<keyof DefinedDBTypeMetadata>();
+  if (options.description !== undefined) {
+    _definedMethods.add("description");
+  }
 
   function runMethodOnce<T>(method: keyof DefinedDBTypeMetadata, action: () => T): T {
     if (_definedMethods.has(method)) {
@@ -872,6 +883,15 @@ function createTailorDBType<
     _definedMethods.add(method);
     return result;
   }
+  type TypeAfter<Key extends keyof DefinedDBTypeMetadata> = TailorDBType<
+    Fields,
+    User,
+    WithDBTypeMetadata<DefinedDBTypeMetadata, Key>
+  >;
+  type TypeAfterUser<
+    NextUser extends object,
+    Key extends keyof DefinedDBTypeMetadata,
+  > = TailorDBType<Fields, NextUser, WithDBTypeMetadata<DefinedDBTypeMetadata, Key>>;
 
   if (options.pluralForm) {
     if (name === options.pluralForm) {
@@ -880,7 +900,7 @@ function createTailorDBType<
     _settings.pluralForm = options.pluralForm;
   }
 
-  const dbType: TailorDBType<Fields, User, AnyBuilderMethod> = {
+  const dbType: TailorDBType<Fields, User, DefinedDBTypeMetadata> = {
     name,
     fields: { ...fields },
     _output: null as unknown as InferFieldsOutput<Fields>,
@@ -910,7 +930,7 @@ function createTailorDBType<
       };
     },
 
-    hooks(hooks: Hooks<Fields>) {
+    hooks(hooks: Hooks<Fields>): TypeAfter<"hooks"> {
       return runMethodOnce("hooks", () => {
         // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
         // oxlint-disable-next-line no-explicit-any
@@ -921,11 +941,11 @@ function createTailorDBType<
             field as TailorAnyDBField
           ).hooks(fieldHooks);
         });
-        return this;
+        return this as TypeAfter<"hooks">;
       });
     },
 
-    validate(validators: Validators<Fields>) {
+    validate(validators: Validators<Fields>): TypeAfter<"validate"> {
       return runMethodOnce("validate", () => {
         Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
           const field = this.fields[fieldName] as TailorAnyDBField;
@@ -950,43 +970,45 @@ function createTailorDBType<
           }
           (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
         });
-        return this;
+        return this as TypeAfter<"validate">;
       });
     },
 
-    features(features: Omit<TypeFeatures, "pluralForm">) {
+    features(features: Omit<TypeFeatures, "pluralForm">): TypeAfter<"features"> {
       return runMethodOnce("features", () => {
         _settings = {
           ..._settings,
           ...features,
         };
-        return this;
+        return this as TypeAfter<"features">;
       });
     },
 
-    indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]) {
+    indexes(
+      ...indexes: IndexDef<TailorDBType<Fields, User, DefinedDBTypeMetadata>>[]
+    ): TypeAfter<"indexes"> {
       return runMethodOnce("indexes", () => {
         _indexes = indexes;
-        return this;
+        return this as TypeAfter<"indexes">;
       });
     },
 
-    files<const F extends string>(files: Record<F, string> & FileKeyConflictError<Fields, User>) {
+    files<const F extends string>(
+      files: Record<F, string> & FileKeyConflictError<Fields, User>,
+    ): TypeAfter<"files"> {
       return runMethodOnce("files", () => {
         _files = files;
-        return this;
+        return this as TypeAfter<"files">;
       });
     },
 
     permission<
       U extends object = User,
-      P extends TailorTypePermission<U, output<TailorDBType<Fields, User>>> = TailorTypePermission<
-        U,
-        output<TailorDBType<Fields, User>>
-      >,
-    >(permission: P) {
+      P extends TailorTypePermission<U, output<TailorDBType<Fields, User, DefinedDBTypeMetadata>>> =
+        TailorTypePermission<U, output<TailorDBType<Fields, User, DefinedDBTypeMetadata>>>,
+    >(permission: P): TypeAfterUser<U, "permission"> {
       return runMethodOnce("permission", () => {
-        const ret = this as TailorDBType<Fields, U>;
+        const ret = this as unknown as TypeAfterUser<U, "permission">;
         _permissions.record = permission as RawPermissions["record"];
         return ret;
       });
@@ -995,18 +1017,20 @@ function createTailorDBType<
     gqlPermission<
       U extends object = User,
       P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
-    >(permission: P) {
+    >(permission: P): TypeAfterUser<U, "gqlPermission"> {
       return runMethodOnce("gqlPermission", () => {
-        const ret = this as TailorDBType<Fields, U>;
+        const ret = this as unknown as TypeAfterUser<U, "gqlPermission">;
         _permissions.gql = permission as RawPermissions["gql"];
         return ret;
       });
     },
 
-    description(description: string) {
-      _description = description;
-      this._description = description;
-      return this;
+    description(description: string): TypeAfter<"description"> {
+      return runMethodOnce("description", () => {
+        _description = description;
+        this._description = description;
+        return this as TypeAfter<"description">;
+      });
     },
 
     pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options?: Opt) {
@@ -1053,11 +1077,10 @@ function createTailorDBType<
 
 const idField = uuid();
 type idField = typeof idField;
-type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = TailorDBInstance<
-  { id: idField } & F,
-  InferredAttributeMap,
-  DefinedDBTypeMetadata
->;
+type DBType<
+  F extends { id?: never } & Record<string, TailorAnyDBField>,
+  Defined extends DefinedDBTypeMetadata = DefinedDBTypeMetadata,
+> = TailorDBInstance<{ id: idField } & F, InferredAttributeMap, Defined>;
 
 /**
  * Creates a new database type with the specified fields.
@@ -1092,12 +1115,12 @@ function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField
   name: string | [string, string],
   description: string,
   fields: F,
-): DBType<F>;
+): DBType<F, WithDBTypeMetadata<DefinedDBTypeMetadata, "description">>;
 function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
   fieldsOrDescription: string | F,
   fields?: F,
-): DBType<F> {
+): DBType<F> | DBType<F, WithDBTypeMetadata<DefinedDBTypeMetadata, "description">> {
   const typeName = Array.isArray(name) ? name[0] : name;
   const pluralForm = Array.isArray(name) ? name[1] : undefined;
 
