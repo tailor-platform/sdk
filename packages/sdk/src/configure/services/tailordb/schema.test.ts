@@ -490,6 +490,75 @@ describe("TailorDBField type error message tests", () => {
   });
 });
 
+describe("TailorDBType type error message tests", () => {
+  test("duplicate type modifiers expose type-level error messages", () => {
+    const hooked = db.type("HookedUser", { name: db.string() }).hooks({
+      name: { create: () => "created" },
+    });
+    expectTypeOf(hooked.hooks).toEqualTypeOf<TypeLevelError<".hooks() has already been set">>();
+    // @ts-expect-error hooks() cannot be called after hooks() has already been called
+    hooked.hooks({ name: { update: () => "updated" } });
+
+    const validated = db.type("ValidatedUser", { name: db.string() }).validate({
+      name: ({ value }) => value.length > 0,
+    });
+    expectTypeOf(validated.validate).toEqualTypeOf<
+      TypeLevelError<".validate() has already been set">
+    >();
+    // @ts-expect-error validate() cannot be called after validate() has already been called
+    validated.validate({ name: ({ value }) => value.length > 1 });
+
+    const featured = db.type("FeaturedUser", { name: db.string() }).features({
+      aggregation: true,
+    });
+    expectTypeOf(featured.features).toEqualTypeOf<
+      TypeLevelError<".features() has already been set">
+    >();
+    // @ts-expect-error features() cannot be called after features() has already been called
+    featured.features({ bulkUpsert: true });
+
+    const indexed = db.type("IndexedUser", { name: db.string() }).indexes({
+      fields: ["id", "name"],
+    });
+    expectTypeOf(indexed.indexes).toEqualTypeOf<
+      TypeLevelError<".indexes() has already been set">
+    >();
+    // @ts-expect-error indexes() cannot be called after indexes() has already been called
+    indexed.indexes({ fields: ["id", "name"] });
+
+    const permitted = db.type("PermittedUser", { name: db.string() }).permission({
+      create: [],
+      read: [],
+      update: [],
+      delete: [],
+    });
+    expectTypeOf(permitted.permission).toEqualTypeOf<
+      TypeLevelError<".permission() has already been set">
+    >();
+    // @ts-expect-error permission() cannot be called after permission() has already been called
+    permitted.permission({
+      create: [],
+      read: [],
+      update: [],
+      delete: [],
+    });
+
+    const gqlPermitted = db.type("GqlPermittedUser", { name: db.string() }).gqlPermission([]);
+    expectTypeOf(gqlPermitted.gqlPermission).toEqualTypeOf<
+      TypeLevelError<".gqlPermission() has already been set">
+    >();
+    // @ts-expect-error gqlPermission() cannot be called after gqlPermission() has already been called
+    gqlPermitted.gqlPermission([]);
+
+    const withFiles = db.type("UserWithFiles", { name: db.string() }).files({
+      avatar: "profile image",
+    });
+    expectTypeOf(withFiles.files).toEqualTypeOf<TypeLevelError<".files() has already been set">>();
+    // @ts-expect-error files() cannot be called after files() has already been called
+    withFiles.files({ document: "user document" });
+  });
+});
+
 describe("TailorDBField relation modifier tests", () => {
   test("relation does not create reference type", () => {
     const _userType = db.type("User", {

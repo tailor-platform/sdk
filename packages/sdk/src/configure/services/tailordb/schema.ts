@@ -64,7 +64,7 @@ export type TailorAnyDBField = Omit<
 
 // Helper alias
 // oxlint-disable-next-line no-explicit-any
-export type TailorAnyDBType = TailorDBType<any, any>;
+export type TailorAnyDBType = TailorDBType<any, any, any>;
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
 type DBFieldTypeNameMethod<Defined extends DefinedDBFieldMetadata> =
@@ -101,6 +101,35 @@ type WithDBFieldCloneOptions<Defined extends DefinedDBFieldMetadata, NewOpt exte
     : Omit<Defined, "array"> & {
         array: NewOpt extends { array: true } ? true : Defined["array"];
       };
+type DefinedDBTypeMetadata = {
+  hooks?: true;
+  validate?: true;
+  features?: true;
+  indexes?: true;
+  files?: true;
+  permission?: true;
+  gqlPermission?: true;
+};
+type WithDBTypeHooks<Defined extends DefinedDBTypeMetadata> = Defined & { hooks: true };
+type WithDBTypeValidate<Defined extends DefinedDBTypeMetadata> = Defined & { validate: true };
+type WithDBTypeFeatures<Defined extends DefinedDBTypeMetadata> = Defined & { features: true };
+type WithDBTypeIndexes<Defined extends DefinedDBTypeMetadata> = Defined & { indexes: true };
+type WithDBTypeFiles<Defined extends DefinedDBTypeMetadata> = Defined & { files: true };
+type WithDBTypePermission<Defined extends DefinedDBTypeMetadata> = Defined & { permission: true };
+type WithDBTypeGqlPermission<Defined extends DefinedDBTypeMetadata> = Defined & {
+  gqlPermission: true;
+};
+type DBTypeDuplicateGuard<
+  Defined extends DefinedDBTypeMetadata,
+  Key extends keyof DefinedDBTypeMetadata,
+  Fn,
+  Message extends string,
+> =
+  IsAny<Defined> extends true
+    ? Fn
+    : Defined extends Record<Key, unknown>
+      ? TypeLevelError<Message>
+      : Fn;
 type FileKeyConflictError<
   Fields extends Record<string, TailorAnyDBField>,
   User extends object,
@@ -219,6 +248,142 @@ type DBFieldSerialMethod<Defined extends DefinedDBFieldMetadata, Output> =
             : Defined extends { type: "integer" | "string"; array: false }
               ? DBFieldSerialFn<Defined, Output>
               : TypeLevelError<"serial can only be set on non-array integer or string fields">;
+type DBTypeHooksFn<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = {
+  hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User, WithDBTypeHooks<Defined>>;
+}["hooks"];
+type DBTypeValidateFn<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = {
+  validate(validators: Validators<Fields>): TailorDBType<Fields, User, WithDBTypeValidate<Defined>>;
+}["validate"];
+type DBTypeFeaturesFn<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = {
+  features(
+    features: Omit<TypeFeatures, "pluralForm">,
+  ): TailorDBType<Fields, User, WithDBTypeFeatures<Defined>>;
+}["features"];
+type DBTypeIndexesFn<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = {
+  indexes(
+    ...indexes: IndexDef<TailorDBType<Fields, User, Defined>>[]
+  ): TailorDBType<Fields, User, WithDBTypeIndexes<Defined>>;
+}["indexes"];
+type DBTypeFilesFn<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = {
+  files<const F extends string>(
+    files: Record<F, string> & FileKeyConflictError<Fields, User>,
+  ): TailorDBType<Fields, User, WithDBTypeFiles<Defined>>;
+}["files"];
+type DBTypePermissionFn<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = {
+  permission<
+    U extends object = User,
+    P extends TailorTypePermission<U, output<TailorDBType<Fields, User, Defined>>> =
+      TailorTypePermission<U, output<TailorDBType<Fields, User, Defined>>>,
+  >(
+    permission: P,
+  ): TailorDBType<Fields, U, WithDBTypePermission<Defined>>;
+}["permission"];
+type DBTypeGqlPermissionFn<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = {
+  gqlPermission<
+    U extends object = User,
+    P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
+  >(
+    permission: P,
+  ): TailorDBType<Fields, U, WithDBTypeGqlPermission<Defined>>;
+}["gqlPermission"];
+type DBTypeHooksMethod<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = DBTypeDuplicateGuard<
+  Defined,
+  "hooks",
+  DBTypeHooksFn<Fields, User, Defined>,
+  ".hooks() has already been set"
+>;
+type DBTypeValidateMethod<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = DBTypeDuplicateGuard<
+  Defined,
+  "validate",
+  DBTypeValidateFn<Fields, User, Defined>,
+  ".validate() has already been set"
+>;
+type DBTypeFeaturesMethod<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = DBTypeDuplicateGuard<
+  Defined,
+  "features",
+  DBTypeFeaturesFn<Fields, User, Defined>,
+  ".features() has already been set"
+>;
+type DBTypeIndexesMethod<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = DBTypeDuplicateGuard<
+  Defined,
+  "indexes",
+  DBTypeIndexesFn<Fields, User, Defined>,
+  ".indexes() has already been set"
+>;
+type DBTypeFilesMethod<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = DBTypeDuplicateGuard<
+  Defined,
+  "files",
+  DBTypeFilesFn<Fields, User, Defined>,
+  ".files() has already been set"
+>;
+type DBTypePermissionMethod<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = DBTypeDuplicateGuard<
+  Defined,
+  "permission",
+  DBTypePermissionFn<Fields, User, Defined>,
+  ".permission() has already been set"
+>;
+type DBTypeGqlPermissionMethod<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+  Defined extends DefinedDBTypeMetadata,
+> = DBTypeDuplicateGuard<
+  Defined,
+  "gqlPermission",
+  DBTypeGqlPermissionFn<Fields, User, Defined>,
+  ".gqlPermission() has already been set"
+>;
 
 /**
  * Full TailorDBField interface with builder methods.
@@ -308,32 +473,19 @@ export interface TailorDBType<
   // oxlint-disable-next-line no-explicit-any
   Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
+  // oxlint-disable-next-line no-explicit-any
+  Defined extends DefinedDBTypeMetadata = any,
 > extends TailorDBTypeBase<Fields, User> {
   _description?: string;
 
-  hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User>;
-  validate(validators: Validators<Fields>): TailorDBType<Fields, User>;
-  features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User>;
-  indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]): TailorDBType<Fields, User>;
-  files<const F extends string>(
-    files: Record<F, string> & FileKeyConflictError<Fields, User>,
-  ): TailorDBType<Fields, User>;
-  permission<
-    U extends object = User,
-    P extends TailorTypePermission<U, output<TailorDBType<Fields, User>>> = TailorTypePermission<
-      U,
-      output<TailorDBType<Fields, User>>
-    >,
-  >(
-    permission: P,
-  ): TailorDBType<Fields, U>;
-  gqlPermission<
-    U extends object = User,
-    P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
-  >(
-    permission: P,
-  ): TailorDBType<Fields, U>;
-  description(description: string): TailorDBType<Fields, User>;
+  hooks: DBTypeHooksMethod<Fields, User, Defined>;
+  validate: DBTypeValidateMethod<Fields, User, Defined>;
+  features: DBTypeFeaturesMethod<Fields, User, Defined>;
+  indexes: DBTypeIndexesMethod<Fields, User, Defined>;
+  files: DBTypeFilesMethod<Fields, User, Defined>;
+  permission: DBTypePermissionMethod<Fields, User, Defined>;
+  gqlPermission: DBTypeGqlPermissionMethod<Fields, User, Defined>;
+  description(description: string): TailorDBType<Fields, User, Defined>;
   pickFields<K extends keyof Fields>(keys: K[]): Pick<Fields, K>;
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
     keys: K[],
@@ -346,14 +498,16 @@ export interface TailorDBType<
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
   plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
     [K in P]: PluginConfigs<keyof Fields & string>[K];
-  }): TailorDBType<Fields, User>;
+  }): TailorDBType<Fields, User, Defined>;
 }
 
 export type TailorDBInstance<
   // oxlint-disable-next-line no-explicit-any
   Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
-> = TailorDBType<Fields, User>;
+  // oxlint-disable-next-line no-explicit-any
+  Defined extends DefinedDBTypeMetadata = any,
+> = TailorDBType<Fields, User, Defined>;
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
@@ -776,10 +930,10 @@ function createTailorDBType<
   name: string,
   fields: Fields,
   options: { pluralForm?: string; description?: string },
-): TailorDBType<Fields, User> {
+): TailorDBType<Fields, User, DefinedDBTypeMetadata> {
   let _description = options.description;
   let _settings: TypeFeatures = {};
-  let _indexes: IndexDef<TailorDBType<Fields, User>>[] = [];
+  let _indexes: IndexDef<TailorDBType<Fields, User, DefinedDBTypeMetadata>>[] = [];
   const _permissions: RawPermissions = {};
   let _files: Record<string, string> = {};
   const _plugins: PluginAttachment[] = [];
@@ -791,7 +945,7 @@ function createTailorDBType<
     _settings.pluralForm = options.pluralForm;
   }
 
-  const dbType: TailorDBType<Fields, User> = {
+  const dbType: TailorDBType<Fields, User, AnyBuilderMethod> = {
     name,
     fields: { ...fields },
     _output: null as unknown as InferFieldsOutput<Fields>,
@@ -937,7 +1091,7 @@ function createTailorDBType<
 
     plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
       [K in P]: PluginConfigs<keyof Fields & string>[K];
-    }): TailorDBType<Fields, User> {
+    }): TailorDBType<Fields, User, AnyBuilderMethod> {
       for (const [pluginId, pluginConfig] of Object.entries(config)) {
         _plugins.push({ pluginId, config: pluginConfig });
       }
@@ -951,7 +1105,9 @@ function createTailorDBType<
 const idField = uuid();
 type idField = typeof idField;
 type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = TailorDBInstance<
-  { id: idField } & F
+  { id: idField } & F,
+  InferredAttributeMap,
+  DefinedDBTypeMetadata
 >;
 
 /**
