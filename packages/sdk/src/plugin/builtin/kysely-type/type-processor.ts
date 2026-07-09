@@ -90,8 +90,6 @@ function getBaseType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
       type = "number";
       break;
     case "date":
-      type = "string";
-      break;
     case "datetime":
       usedUtilityTypes.Timestamp = true;
       type = "Timestamp";
