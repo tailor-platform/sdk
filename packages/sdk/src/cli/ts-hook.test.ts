@@ -172,6 +172,28 @@ describe("resolve", () => {
     vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
   });
 
+  test("resolves non-relative specifier via tsconfig path alias without baseUrl", async () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: { paths: { "@/*": ["./*"] } },
+    });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      if (String(path).endsWith("tsconfig.json")) return tsconfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const resolved = { url: "file:///alias-project-no-baseurl/tailordb/user.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockRejectedValueOnce(notFound("@/tailordb/user"))
+      .mockResolvedValueOnce(resolved);
+    const result = await resolve(
+      "@/tailordb/user",
+      { parentURL: "file:///alias-project-no-baseurl/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual(resolved);
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
+
   test("resolves tsconfig path alias when parentURL has tailorImportNonce query string", async () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./*"] } },
