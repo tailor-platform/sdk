@@ -55,7 +55,9 @@ export interface TailorContextAPI {
  * @returns Invoker details, or `null` when the call is anonymous
  */
 function getInvoker(): Invoker | null {
-  const raw = (globalThis as { tailor: { context: TailorContextAPI } }).tailor.context.getInvoker();
+  const raw = (
+    globalThis as unknown as { tailor: { context: TailorContextAPI } }
+  ).tailor.context.getInvoker();
   if (!raw) return null;
   return {
     id: raw.id,

@@ -33,7 +33,8 @@ export interface TailorAuthconnectionAPI {
 }
 
 const api = (): TailorAuthconnectionAPI =>
-  (globalThis as { tailor: { authconnection: TailorAuthconnectionAPI } }).tailor.authconnection;
+  (globalThis as unknown as { tailor: { authconnection: TailorAuthconnectionAPI } }).tailor
+    .authconnection;
 
 const getConnectionToken: TailorAuthconnectionAPI["getConnectionToken"] = (...args) =>
   api().getConnectionToken(...args);

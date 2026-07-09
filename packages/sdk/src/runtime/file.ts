@@ -217,7 +217,7 @@ export interface TailorDBFileAPI {
 }
 
 const api = (): TailorDBFileAPI =>
-  (globalThis as { tailordb: { file: TailorDBFileAPI } }).tailordb.file;
+  (globalThis as unknown as { tailordb: { file: TailorDBFileAPI } }).tailordb.file;
 
 /**
  * See {@link TailorDBFileAPI.upload}.

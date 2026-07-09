@@ -85,7 +85,7 @@ export interface TailorWorkflowAPI {
 }
 
 const api = (): TailorWorkflowAPI =>
-  (globalThis as { tailor: { workflow: TailorWorkflowAPI } }).tailor.workflow;
+  (globalThis as unknown as { tailor: { workflow: TailorWorkflowAPI } }).tailor.workflow;
 
 function triggerWorkflow(
   workflowName: string,
