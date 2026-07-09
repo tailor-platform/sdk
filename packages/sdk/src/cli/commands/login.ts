@@ -31,16 +31,72 @@ type ProfileLoginOptions = {
   platformConfig?: PlatformClientConfig;
   updateCurrentUser?: boolean;
 };
+type ProfileUserUpdate = {
+  profile: string;
+  oldUser: string;
+  newUser: string;
+};
 
 function randomState() {
   return crypto.randomBytes(32).toString("base64url");
 }
 
-function assertProfileLoginUser(args: ProfileLoginOptions, authenticatedUser: string) {
-  if (args.profile && args.profileUser && authenticatedUser !== args.profileUser) {
-    throw new Error(
-      `Profile "${args.profile}" is configured for "${args.profileUser}", but login authenticated "${authenticatedUser}".`,
-    );
+function profileUserMismatchMessage(update: ProfileUserUpdate) {
+  return `Profile "${update.profile}" is configured for "${update.oldUser}", but login authenticated "${update.newUser}".`;
+}
+
+function getProfileUserUpdate(
+  args: ProfileLoginOptions,
+  authenticatedUser: string,
+): ProfileUserUpdate | undefined {
+  if (!args.profile || !args.profileUser || authenticatedUser === args.profileUser) {
+    return undefined;
+  }
+  return { profile: args.profile, oldUser: args.profileUser, newUser: authenticatedUser };
+}
+
+async function confirmProfileUserUpdate(
+  args: ProfileLoginOptions,
+  authenticatedUser: string,
+): Promise<ProfileUserUpdate | undefined> {
+  const update = getProfileUserUpdate(args, authenticatedUser);
+  if (!update) return undefined;
+
+  const accepted = await prompt.confirm({
+    message: `${profileUserMismatchMessage(update)} Update this profile to use "${update.newUser}"?`,
+    default: false,
+  });
+  if (!accepted) {
+    throw new Error(profileUserMismatchMessage(update));
+  }
+  return update;
+}
+
+async function applyProfileUserUpdate(
+  config: Awaited<ReturnType<typeof readPlatformConfig>>,
+  update: ProfileUserUpdate,
+) {
+  const profileEntry = config.profiles[update.profile];
+  if (!profileEntry) {
+    throw new Error(`Profile "${update.profile}" not found`);
+  }
+  const otherProfiles = Object.entries(config.profiles).filter(
+    ([name, profile]) => name !== update.profile && profile?.user === update.oldUser,
+  );
+  profileEntry.user = update.newUser;
+  if (otherProfiles.length === 0) return;
+
+  const profileLabel = otherProfiles.length === 1 ? "profile" : "profiles";
+  const accepted = await prompt.confirm({
+    message: `Update ${otherProfiles.length} other ${profileLabel} configured for "${update.oldUser}" to use "${update.newUser}"?`,
+    default: false,
+  });
+  if (!accepted) return;
+
+  for (const [, profile] of otherProfiles) {
+    if (profile) {
+      profile.user = update.newUser;
+    }
   }
 }
 
@@ -72,7 +128,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
           },
         );
         const userInfo = await fetchUserInfo(tokens.accessToken, args.platformConfig);
-        assertProfileLoginUser(args, userInfo.email);
+        const profileUserUpdate = await confirmProfileUserUpdate(args, userInfo.email);
 
         const pfConfig = await readPlatformConfig();
         await saveUserTokens(
@@ -87,6 +143,9 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
           ).toISOString(),
           args.platformConfig,
         );
+        if (profileUserUpdate) {
+          await applyProfileUserUpdate(pfConfig, profileUserUpdate);
+        }
         if (args.updateCurrentUser ?? true) {
           pfConfig.current_user = userInfo.email;
         }
@@ -146,7 +205,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
 async function loginAsMachineUser(
   args: { clientId: string; clientSecret?: string } & ProfileLoginOptions,
 ) {
-  assertProfileLoginUser(args, args.clientId);
+  const profileUserUpdate = await confirmProfileUserUpdate(args, args.clientId);
   const clientSecret = args.clientSecret ?? (await prompt.password({ message: "Client secret" }));
   const tokens = await fetchPlatformMachineUserToken(
     args.clientId,
@@ -162,6 +221,9 @@ async function loginAsMachineUser(
     new Date(assertDefined(tokens.expiresAt, "token response missing expiresAt")).toISOString(),
     args.platformConfig,
   );
+  if (profileUserUpdate) {
+    await applyProfileUserUpdate(pfConfig, profileUserUpdate);
+  }
   if (args.updateCurrentUser ?? true) {
     pfConfig.current_user = args.clientId;
   }
