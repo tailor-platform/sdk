@@ -41,6 +41,15 @@ describe("setupDelete", () => {
     loadHasStaticWebsites: async () => false,
   });
 
+  const writeAppConfig = (name: string, dir: string) => {
+    const absDir = path.join(testDir, dir);
+    fs.mkdirSync(absDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(absDir, "tailor.config.ts"),
+      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "${name}" });\n`,
+    );
+  };
+
   const coordinateOpts = (
     overrides: Partial<CoordinateSetupOptions> = {},
   ): CoordinateSetupOptions => ({
@@ -205,6 +214,28 @@ describe("setupDelete", () => {
     const lock = readLock(testDir);
     expect(lock?.targets.some((t) => t.kind === "action")).toBe(false);
     expect(lock?.targets.some((t) => t.kind === "coordinate")).toBe(true);
+    warnSpy.mockRestore();
+  });
+
+  test("warns with grouped action guidance when deleting one action from a coordinator group", async () => {
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
+    await setupTarget(actionOpts("api", "apps/api"));
+    await setupTarget(actionOpts("worker", "apps/worker"));
+    await setupCoordinate(coordinateOpts({ actions: ["api,worker"] }));
+    const warnSpy = vi.spyOn((await import("#/cli/shared/logger")).logger, "warn");
+
+    await setupDelete({
+      files: [".github/actions/tailor-api/action.yml"],
+      yes: true,
+      outputDir: testDir,
+    });
+
+    const warning = warnSpy.mock.calls.find(([message]) =>
+      message.includes('Coordinator "main"'),
+    )?.[0];
+    expect(warning).toContain("Remove `api` from the relevant `--action` value");
+    expect(warning).not.toContain("without `--action api`");
     warnSpy.mockRestore();
   });
 
