@@ -107,6 +107,10 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/auth-connection-token-helper")).resolves.toBeUndefined();
   });
 
+  test("v2/runtime-subpath-namespace transforms correctly", async () => {
+    await expect(runFixtureCases("v2/runtime-subpath-namespace")).resolves.toBeUndefined();
+  });
+
   test("v2/tailordb-namespace transforms correctly", async () => {
     await expect(runFixtureCases("v2/tailordb-namespace")).resolves.toBeUndefined();
   });

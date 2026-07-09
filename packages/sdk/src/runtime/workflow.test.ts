@@ -2,7 +2,7 @@
  * Tests for `@tailor-platform/sdk/runtime/workflow` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
-import * as workflow from "#/runtime/workflow";
+import defaultWorkflow, { workflow } from "#/runtime/workflow";
 import { cleanupMocks, injectMocks, mockWorkflow } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/workflow", () => {
@@ -12,6 +12,10 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
 
   afterEach(() => {
     cleanupMocks(globalThis);
+  });
+
+  test("exports matching default and named namespace objects", () => {
+    expect(defaultWorkflow).toBe(workflow);
   });
 
   test("triggerWorkflow forwards args and returns Promise<string>", async () => {

@@ -2,7 +2,7 @@
  * Tests for `@tailor-platform/sdk/runtime/context` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
-import * as context from "#/runtime/context";
+import defaultContext, { context, type Invoker } from "#/runtime/context";
 import { cleanupMocks, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/context", () => {
@@ -14,10 +14,14 @@ describe("@tailor-platform/sdk/runtime/context", () => {
     cleanupMocks(globalThis);
   });
 
+  test("exports matching default and named namespace objects", () => {
+    expect(defaultContext).toBe(context);
+  });
+
   test("getInvoker returns null for anonymous invocations", () => {
     const result = context.getInvoker();
 
-    expectTypeOf(result).toEqualTypeOf<context.Invoker | null>();
+    expectTypeOf(result).toEqualTypeOf<Invoker | null>();
     expect(result).toBeNull();
   });
 

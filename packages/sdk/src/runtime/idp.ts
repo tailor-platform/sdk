@@ -140,7 +140,7 @@ export interface TailorIdpAPI {
  *
  * Wraps the platform-provided `tailor.idp.Client` and exposes the same surface.
  */
-export class Client {
+class Client {
   #impl: IdpClientInstance;
 
   constructor(config: ClientConfig) {
@@ -219,3 +219,8 @@ export class Client {
     return this.#impl.unenrollMfa(input);
   }
 }
+
+/** Runtime wrapper namespace for `tailor.idp`. */
+export const idp = { Client } as const satisfies TailorIdpAPI;
+
+export default idp;

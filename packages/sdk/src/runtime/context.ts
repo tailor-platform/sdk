@@ -54,7 +54,7 @@ export interface TailorContextAPI {
  * or `null` for anonymous invocations.
  * @returns Invoker details, or `null` when the call is anonymous
  */
-export function getInvoker(): Invoker | null {
+function getInvoker(): Invoker | null {
   const raw = (globalThis as { tailor: { context: TailorContextAPI } }).tailor.context.getInvoker();
   if (!raw) return null;
   return {
@@ -65,3 +65,8 @@ export function getInvoker(): Invoker | null {
     attributeList: raw.attributes as Invoker["attributeList"],
   };
 }
+
+/** Runtime wrapper namespace for `tailor.context`. */
+export const context = { getInvoker } as const;
+
+export default context;

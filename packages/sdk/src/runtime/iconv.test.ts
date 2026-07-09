@@ -6,7 +6,7 @@
  * `string`, otherwise `Uint8Array`) holds at the type level.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
-import * as iconv from "#/runtime/iconv";
+import defaultIconv, { iconv } from "#/runtime/iconv";
 import { cleanupMocks, mockIconv, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/iconv", () => {
@@ -16,6 +16,10 @@ describe("@tailor-platform/sdk/runtime/iconv", () => {
 
   afterEach(() => {
     cleanupMocks(globalThis);
+  });
+
+  test("exports matching default and named namespace objects", () => {
+    expect(defaultIconv).toBe(iconv);
   });
 
   test("convert forwards args and returns string for UTF-8 target", () => {
