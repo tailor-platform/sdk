@@ -15,10 +15,6 @@
 /**
  * Platform API surface for `tailor.secretmanager`. Describes the shape the
  * platform runtime injects on `globalThis.tailor.secretmanager`.
- *
- * Each method below is also re-exported as a top-level named export from this
- * module so callers can either `import * as secretmanager from
- * "@tailor-platform/sdk/runtime/secretmanager"` or pick individual methods.
  */
 export interface TailorSecretmanagerAPI {
   /**
@@ -44,17 +40,14 @@ export interface TailorSecretmanagerAPI {
 const api = (): TailorSecretmanagerAPI =>
   (globalThis as { tailor: { secretmanager: TailorSecretmanagerAPI } }).tailor.secretmanager;
 
-/**
- * See {@link TailorSecretmanagerAPI.getSecrets}.
- * @param args - Forwarded to {@link TailorSecretmanagerAPI.getSecrets}
- * @returns Partial record keyed by the requested names
- */
-export const getSecrets: TailorSecretmanagerAPI["getSecrets"] = (...args) =>
-  api().getSecrets(...args);
+const getSecrets: TailorSecretmanagerAPI["getSecrets"] = (...args) => api().getSecrets(...args);
 
-/**
- * See {@link TailorSecretmanagerAPI.getSecret}.
- * @param args - Forwarded to {@link TailorSecretmanagerAPI.getSecret}
- * @returns The secret value, or `undefined` if not present
- */
-export const getSecret: TailorSecretmanagerAPI["getSecret"] = (...args) => api().getSecret(...args);
+const getSecret: TailorSecretmanagerAPI["getSecret"] = (...args) => api().getSecret(...args);
+
+/** Runtime wrapper namespace for `tailor.secretmanager`. */
+export const secretmanager = {
+  getSecrets,
+  getSecret,
+} as const satisfies TailorSecretmanagerAPI;
+
+export default secretmanager;

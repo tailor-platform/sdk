@@ -24,14 +24,14 @@ import type { TailorIdpAPI } from "./idp";
 import type { TailorSecretmanagerAPI } from "./secretmanager";
 import type { TailorWorkflowAPI } from "./workflow";
 
-export * as iconv from "./iconv";
-export * as secretmanager from "./secretmanager";
-export * as authconnection from "./authconnection";
-export * as idp from "./idp";
-export * as workflow from "./workflow";
-export * as context from "./context";
-export * as file from "./file";
-export * as aigateway from "./aigateway";
+export { iconv } from "./iconv";
+export { secretmanager } from "./secretmanager";
+export { authconnection } from "./authconnection";
+export { idp } from "./idp";
+export { workflow } from "./workflow";
+export { context } from "./context";
+export { file } from "./file";
+export { aigateway } from "./aigateway";
 
 /** SQL command type recorded on a {@link TailordbQueryResult}. */
 export type TailordbCommandType =

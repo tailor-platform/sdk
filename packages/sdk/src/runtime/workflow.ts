@@ -36,10 +36,6 @@ export interface PlatformTriggerWorkflowOptions {
 /**
  * Platform API surface for `tailor.workflow`. Describes the shape the platform
  * runtime injects on `globalThis.tailor.workflow`.
- *
- * Each method below is also re-exported as a top-level named export from this
- * module so callers can either `import * as workflow from
- * "@tailor-platform/sdk/runtime/workflow"` or pick individual methods.
  */
 export interface TailorWorkflowAPI {
   /**
@@ -91,14 +87,7 @@ export interface TailorWorkflowAPI {
 const api = (): TailorWorkflowAPI =>
   (globalThis as { tailor: { workflow: TailorWorkflowAPI } }).tailor.workflow;
 
-/**
- * See {@link TailorWorkflowAPI.triggerWorkflow}.
- * @param workflowName - Workflow name as defined in tailor.config
- * @param args - Arguments forwarded to the workflow's main job
- * @param options - Optional trigger options
- * @returns The execution ID of the triggered workflow
- */
-export function triggerWorkflow(
+function triggerWorkflow(
   workflowName: string,
   args?: any,
   options?: TriggerWorkflowOptions,
@@ -109,32 +98,23 @@ export function triggerWorkflow(
   return api().triggerWorkflow(workflowName, args, { authInvoker: options.invoker });
 }
 
-/**
- * See {@link TailorWorkflowAPI.resumeWorkflow}.
- * @param args - Forwarded to {@link TailorWorkflowAPI.resumeWorkflow}
- * @returns The execution ID of the resumed workflow
- */
-export const resumeWorkflow: TailorWorkflowAPI["resumeWorkflow"] = (...args) =>
+const resumeWorkflow: TailorWorkflowAPI["resumeWorkflow"] = (...args) =>
   api().resumeWorkflow(...args);
 
-/**
- * See {@link TailorWorkflowAPI.triggerJobFunction}.
- * @param args - Forwarded to {@link TailorWorkflowAPI.triggerJobFunction}
- * @returns The job's return value
- */
-export const triggerJobFunction: TailorWorkflowAPI["triggerJobFunction"] = (...args) =>
+const triggerJobFunction: TailorWorkflowAPI["triggerJobFunction"] = (...args) =>
   api().triggerJobFunction(...args);
 
-/**
- * See {@link TailorWorkflowAPI.wait}.
- * @param args - Forwarded to {@link TailorWorkflowAPI.wait}
- * @returns The payload supplied by the corresponding `resolve` call
- */
-export const wait: TailorWorkflowAPI["wait"] = (...args) => api().wait(...args);
+const wait: TailorWorkflowAPI["wait"] = (...args) => api().wait(...args);
 
-/**
- * See {@link TailorWorkflowAPI.resolve}.
- * @param args - Forwarded to {@link TailorWorkflowAPI.resolve}
- * @returns A promise that resolves once the resolve has been recorded
- */
-export const resolve: TailorWorkflowAPI["resolve"] = (...args) => api().resolve(...args);
+const resolve: TailorWorkflowAPI["resolve"] = (...args) => api().resolve(...args);
+
+/** Runtime wrapper namespace for `tailor.workflow`. */
+export const workflow = {
+  triggerWorkflow,
+  resumeWorkflow,
+  triggerJobFunction,
+  wait,
+  resolve,
+} as const;
+
+export default workflow;

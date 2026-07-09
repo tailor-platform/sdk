@@ -5,7 +5,7 @@
  * `tailor.idp.Client` and records calls with method, args, and namespace.
  */
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import * as idp from "#/runtime/idp";
+import defaultIdp, { idp } from "#/runtime/idp";
 import { cleanupMocks, mockIdp, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/idp", () => {
@@ -15,6 +15,10 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
 
   afterEach(() => {
     cleanupMocks(globalThis);
+  });
+
+  test("exports matching default and named namespace objects", () => {
+    expect(defaultIdp).toBe(idp);
   });
 
   test("Client.user forwards args and namespace", async () => {

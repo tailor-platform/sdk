@@ -502,6 +502,50 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/runtime-subpath-namespace",
+    name: "Runtime subpath imports use namespace objects",
+    description:
+      "Rewrite `@tailor-platform/sdk/runtime/*` namespace-star imports and flat value imports to the v2 default or self-named namespace object imports.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_3,
+    scriptPath: "v2/runtime-subpath-namespace/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    legacyPatterns: [
+      "@tailor-platform/sdk/runtime/iconv",
+      "@tailor-platform/sdk/runtime/secretmanager",
+      "@tailor-platform/sdk/runtime/authconnection",
+      "@tailor-platform/sdk/runtime/idp",
+      "@tailor-platform/sdk/runtime/workflow",
+      "@tailor-platform/sdk/runtime/context",
+      "@tailor-platform/sdk/runtime/file",
+      "@tailor-platform/sdk/runtime/aigateway",
+    ],
+    examples: [
+      {
+        before:
+          'import * as iconv from "@tailor-platform/sdk/runtime/iconv";\niconv.convert(value, "UTF-8", "Shift_JIS");',
+        after:
+          'import iconv from "@tailor-platform/sdk/runtime/iconv";\niconv.convert(value, "UTF-8", "Shift_JIS");',
+      },
+      {
+        before:
+          'import { get } from "@tailor-platform/sdk/runtime/aigateway";\nconst gateway = await get("main");',
+        after:
+          'import { aigateway } from "@tailor-platform/sdk/runtime/aigateway";\nconst gateway = await aigateway.get("main");',
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2, runtime subpath modules export a default namespace object and",
+      "a self-named namespace object (for example, `iconv` from",
+      "`@tailor-platform/sdk/runtime/iconv`). Flat value imports such as",
+      '`import { get } from "@tailor-platform/sdk/runtime/aigateway"` are removed.',
+      "The codemod rewrites straightforward namespace-star imports and flat named value",
+      "imports. Review any remaining runtime subpath imports manually, especially when",
+      "a local binding or nested scope shadows the imported flat value.",
+    ].join("\n"),
+  },
+  {
     id: "v2/tailordb-namespace",
     name: "Tailordb → tailordb (lowercase ambient namespace)",
     description:

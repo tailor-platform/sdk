@@ -45,8 +45,8 @@ const { url } = await aigateway.get("my-aigateway");
 Each namespace can also be imported individually so you only pull what you need:
 
 ```ts
-import * as iconv from "@tailor-platform/sdk/runtime/iconv";
-import type { ListUsersResponse, ClientConfig } from "@tailor-platform/sdk/runtime/idp";
+import iconv from "@tailor-platform/sdk/runtime/iconv";
+import { idp, type ListUsersResponse, type ClientConfig } from "@tailor-platform/sdk/runtime/idp";
 ```
 
 ## Activating the global types
