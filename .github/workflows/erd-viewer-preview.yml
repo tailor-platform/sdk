@@ -97,12 +97,14 @@ jobs:
             TAILOR_PLATFORM_SDK_DTS_PATH="$RUNNER_TEMP/erd-dts/base-$NAMESPACE.d.ts" \
               "$GITHUB_WORKSPACE/node_modules/.bin/tailor" tailordb erd export --namespace "$NAMESPACE" --output "$base_output"
           ) >"$base_log" 2>&1; then
+            cat "$base_log"
             if grep -q 'not found in local config.db' "$base_log"; then
-              cat "$base_log"
               echo "Base ERD namespace '$NAMESPACE' not found; rendering current objects as added."
               base_missing="true"
+            elif grep -qE 'Failed to load type|Invalid input' "$base_log"; then
+              echo "::warning::Base schema is incompatible with the current parser (likely a breaking change). Rendering current objects as added."
+              base_missing="true"
             else
-              cat "$base_log"
               exit 1
             fi
           elif [ -s "$base_log" ]; then
