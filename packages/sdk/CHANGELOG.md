@@ -1,5 +1,81 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.3
+
+### Major Changes
+
+- [#1559](https://github.com/tailor-platform/sdk/pull/1559) [`ff8ef1c`](https://github.com/tailor-platform/sdk/commit/ff8ef1c1323daf81812c182e146fd53da20e676e) Thanks [@dqn](https://github.com/dqn)! - Rename auth attribute module augmentation from `AttributeMap` to `Attributes`.
+
+- [#1529](https://github.com/tailor-platform/sdk/pull/1529) [`9ecb380`](https://github.com/tailor-platform/sdk/commit/9ecb380acdc1b37578c23c628ab46958663b4001) Thanks [@dqn](https://github.com/dqn)! - Reject unknown keys in SDK parser schemas instead of silently dropping them from application definitions.
+
+- [#1686](https://github.com/tailor-platform/sdk/pull/1686) [`aecaf8c`](https://github.com/tailor-platform/sdk/commit/aecaf8c1bb7813a32e998ea7d034684541cb1c85) Thanks [@dqn](https://github.com/dqn)! - Replace `tailor skills install` with project-local `tailor skills add`, `list`, `remove`, and `sync` commands for bundled Tailor SDK agent skills.
+
+- [#1622](https://github.com/tailor-platform/sdk/pull/1622) [`0fe8bad`](https://github.com/tailor-platform/sdk/commit/0fe8bad9afbb7702bc067ac9635b77c0438497a6) Thanks [@dqn](https://github.com/dqn)! - Remove the deprecated `auth.getConnectionToken()` helper from values returned by `defineAuth()`. Use `authconnection.getConnectionToken(...)` from `@tailor-platform/sdk/runtime` in resolvers, executors, and workflows instead. The v2 codemod rewrites direct `auth.getConnectionToken(...)` calls when the `auth` binding is imported from `tailor.config`.
+
+- [#1620](https://github.com/tailor-platform/sdk/pull/1620) [`1d71a52`](https://github.com/tailor-platform/sdk/commit/1d71a528ac57dd6fc0de2ab9b898b538608ac13e) Thanks [@dqn](https://github.com/dqn)! - Stop importing credentials and profiles from legacy `~/.tailorctl/config` when the platform config is missing. New CLI configs now start empty in the current platform config format.
+
+- [#1536](https://github.com/tailor-platform/sdk/pull/1536) [`84d9aba`](https://github.com/tailor-platform/sdk/commit/84d9aba843f14e8a7a43f0baff92dfc8afdf2821) Thanks [@toiroakr](https://github.com/toiroakr)! - Minimum Node.js version raised to 22.15.0; TypeScript loading switched from tsx to amaro
+  
+  Removes `tsx` (which pulled in esbuild's native binaries, ~10.5 MB) from
+  `dependencies` and replaces it with `amaro` (~3.8 MB, zero transitive deps).
+  
+  A small `ts-hook.mjs` provides the Node.js module hook with both a resolver
+  and a load hook (`amaro` for full TypeScript support including enums).
+  The resolver handles `.ts` extension fallback, directory barrel imports
+  (`./models` → `./models/index.ts`), and tsconfig `paths` aliases (reads
+  `tsconfig.json` following `extends` chains).
+  Dev-only scripts now use `node --experimental-strip-types` instead.
+  
+  Raises the minimum Node.js version to 22.15.0 (from >=22) to use
+  `module.registerHooks()`, which allows synchronous hook registration directly
+  in the main thread without a worker thread.
+
+- [#1557](https://github.com/tailor-platform/sdk/pull/1557) [`7ff575f`](https://github.com/tailor-platform/sdk/commit/7ff575fdfa15c00b5fc6282b28c0cb50bfdf927b) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename the CLI binary from `tailor-sdk` to `tailor`.
+  
+  The output directory default changes from `.tailor-sdk` to `.tailor`, and the GitHub Actions lock file path changes from `.github/tailor-sdk.lock` to `.github/tailor.lock`.
+  
+  Run the `v2/rename-bin` codemod to migrate `tailor-sdk` invocations in package.json scripts, shell scripts, CI workflows, and documentation:
+  
+  ```sh
+  npx @tailor-platform/sdk-codemod --from 1.x --to 2.0.0
+  ```
+
+- [#1563](https://github.com/tailor-platform/sdk/pull/1563) [`501e8bf`](https://github.com/tailor-platform/sdk/commit/501e8bfdd2bca7201a1c9b036bf72087476da416) Thanks [@dqn](https://github.com/dqn)! - Standardize SDK-owned environment variables on the `TAILOR_*` namespace.
+  
+  Replace the removed SDK-specific environment variables with their new names: `TAILOR_CONFIG_PATH`, `TAILOR_DTS_PATH`, `TAILOR_CI_ALLOW_ID_INJECTION`, `TAILOR_DEPLOY_BUILD_ONLY`, `TAILOR_BUILD_OUTPUT_DIR`, `TAILOR_SKILLS_SOURCE`, `TAILOR_TEMPLATE_SDK_VERSION`, `TAILOR_PLATFORM_URL`, `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`, `TAILOR_INLINE_SOURCEMAP`, `TAILOR_QUERY_NEWLINE_ON_ENTER`, and `TAILOR_APP_LOG_LEVEL`. The deprecated `TAILOR_TOKEN` fallback is removed; use `TAILOR_PLATFORM_TOKEN`. The v2 codemod rewrites unambiguous removed SDK environment variable names and flags generic names such as `LOG_LEVEL` and `PLATFORM_URL` for manual review.
+
+- [#1684](https://github.com/tailor-platform/sdk/pull/1684) [`de3ef5e`](https://github.com/tailor-platform/sdk/commit/de3ef5e7421a998624154df5e90da62e17664524) Thanks [@dqn](https://github.com/dqn)! - Restore Tailor field outputs for UUID, date, datetime, time, and decimal fields to plain string-compatible types and remove the strict scalar string migration guidance.
+
+- [#1556](https://github.com/tailor-platform/sdk/pull/1556) [`645949e`](https://github.com/tailor-platform/sdk/commit/645949ed64bda8b82fc44c0db54928698b12a2eb) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename `defineWaitPoint` and `defineWaitPoints` to `createWaitPoint` and `createWaitPoints`.
+  
+  These functions create runtime instances with `.wait()` and `.resolve()` methods that call the platform API at runtime, so the `create*` prefix is more accurate. Update any usages:
+  
+  ```diff
+  -import { defineWaitPoint, defineWaitPoints } from "@tailor-platform/sdk";
+  +import { createWaitPoint, createWaitPoints } from "@tailor-platform/sdk";
+  
+  -export const approval = defineWaitPoint<Payload, Result>("approval");
+  +export const approval = createWaitPoint<Payload, Result>("approval");
+  
+  -export const waitPoints = defineWaitPoints((define) => ({ ... }));
+  +export const waitPoints = createWaitPoints((define) => ({ ... }));
+  ```
+
+### Minor Changes
+
+- [#1501](https://github.com/tailor-platform/sdk/pull/1501) [`1e34d7a`](https://github.com/tailor-platform/sdk/commit/1e34d7a07acb5792f8e41b92b90cc339bf8cc73a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add CLI plugin support (beta). Running `tailor <name>` for an unknown subcommand now executes an external `tailor-<name>` executable found on your PATH or in `node_modules/.bin` (project-local takes precedence), forwarding all following arguments. This also works for unknown subcommands nested under a known command — e.g. `tailor tailordb erd` dispatches to `tailor-tailordb-erd`. Builtins always take precedence, matching stops at the first unknown segment, and a command that takes its own arguments is never replaced by a plugin. The plugin receives the current Tailor Platform context via environment variables (`TAILOR_PLATFORM_TOKEN`, `TAILOR_PLATFORM_URL`, `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`, `TAILOR_PLATFORM_WORKSPACE_ID`, `TAILOR_PLATFORM_USER`, `TAILOR_CONFIG_PATH`, `TAILOR_VERSION`, `TAILOR_BIN`); token, workspace, and user are best-effort, so auth-free plugins still run when you are not logged in.
+  
+  Also adds:
+  
+  - `tailor auth token` — print a valid access token (refreshing it if expired) for use by plugins and scripts.
+  - `tailor plugin list` — list discovered plugins and their executable paths.
+
+### Patch Changes
+
+- [`ee35251`](https://github.com/tailor-platform/sdk/commit/ee35251e9211b35ce68f2ae5376c630f97662ddb) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove the `openDownloadStream` method from `mockFile()` (`@tailor-platform/sdk/vitest`), matching the runtime file API, which no longer exposes it. Use `downloadStream` instead.
+
+- [#1629](https://github.com/tailor-platform/sdk/pull/1629) [`a0bc8e7`](https://github.com/tailor-platform/sdk/commit/a0bc8e7fe66147b5492bba358d7d2ec9b47c09be) Thanks [@dqn](https://github.com/dqn)! - Validate auth user profile TailorDB types with the strict TailorDB parser schema.
+
 ## 2.0.0-next.2
 ### Major Changes
 
