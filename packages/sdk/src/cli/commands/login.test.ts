@@ -133,6 +133,40 @@ describe("login --profile", () => {
     );
   });
 
+  test("uses Windows-compatible recovery command arguments on Windows", async () => {
+    vi.mocked(fetchPlatformMachineUserToken).mockResolvedValue({
+      accessToken: "dev-token",
+      refreshToken: "",
+      expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
+    });
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "win32" });
+
+    try {
+      const result = await runCommand(loginCommand, [
+        "--profile",
+        "dev",
+        "--machine-user",
+        "--client-id",
+        "machine-client",
+        "--client-secret",
+        "secret",
+      ]);
+
+      expect(result.success).toBe(false);
+      expect((result as { error?: Error }).error?.message).toContain(
+        "tailor-sdk profile update dev --user machine-client",
+      );
+      expect((result as { error?: Error }).error?.message).toContain(
+        "tailor-sdk login --profile dev",
+      );
+    } finally {
+      if (platformDescriptor) {
+        Object.defineProperty(process, "platform", platformDescriptor);
+      }
+    }
+  });
+
   test("keeps current user when machine-user login targets a non-default platform profile", async () => {
     writePlatformConfig({
       version: 2,

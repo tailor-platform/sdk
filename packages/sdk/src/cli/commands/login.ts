@@ -52,13 +52,19 @@ function getProfileUserMismatch(
   return { profile: args.profile, oldUser: args.profileUser, authenticatedUser };
 }
 
-function quoteShellArg(value: string) {
+function quoteCommandArg(value: string, platform: NodeJS.Platform = process.platform) {
+  if (platform === "win32") {
+    if (/^[A-Za-z0-9_./:@+=,-]+$/.test(value)) {
+      return value;
+    }
+    return `"${value.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, "$1$1")}"`;
+  }
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
 function profileUserMismatchError(mismatch: ProfileUserMismatch) {
-  const profileArg = quoteShellArg(mismatch.profile);
-  const userArg = quoteShellArg(mismatch.authenticatedUser);
+  const profileArg = quoteCommandArg(mismatch.profile);
+  const userArg = quoteCommandArg(mismatch.authenticatedUser);
   const updateCommand = `tailor-sdk profile update ${profileArg} --user ${userArg}`;
   return new Error(ml`
     Profile "${mismatch.profile}" is configured for "${mismatch.oldUser}", but login authenticated "${mismatch.authenticatedUser}".
