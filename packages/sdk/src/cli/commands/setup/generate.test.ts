@@ -11,8 +11,9 @@ import {
   type CoordinateSetupOptions,
 } from "./generate";
 import { detectDefaultBranch } from "./git";
-import { hashContent, readLock } from "./lock";
+import { hashContent, readLock, writeLock } from "./lock";
 import {
+  TEMPLATE_VERSION,
   detectPackageManager,
   renderBranchWorkflow,
   renderTagWorkflow,
@@ -915,8 +916,20 @@ describe("setupCoordinate", () => {
   );
   const writeConfig = (content: string) =>
     fs.writeFileSync(path.join(testDir, "tailor.config.ts"), content);
+  const writeAppConfig = (name: string, dir: string) => {
+    const absDir = path.join(testDir, dir);
+    fs.mkdirSync(absDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(absDir, "tailor.config.ts"),
+      `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "${name}" });\n`,
+    );
+  };
 
-  const actionOpts = (name: string, dir = "."): Parameters<typeof setupTarget>[0] => ({
+  const actionOpts = (
+    name: string,
+    dir = ".",
+    hasStaticWebsites = false,
+  ): Parameters<typeof setupTarget>[0] => ({
     kind: "action",
     workspaceName: name,
     dir,
@@ -924,7 +937,7 @@ describe("setupCoordinate", () => {
     outputDir: testDir,
     gitRunner: () => "origin/main",
     loadConfigName: async () => name,
-    loadHasStaticWebsites: async () => false,
+    loadHasStaticWebsites: async () => hasStaticWebsites,
   });
 
   const coordinateOpts = (
@@ -967,6 +980,96 @@ describe("setupCoordinate", () => {
     const lock = readLock(testDir);
     expect(lock?.targets.some((t) => t.kind === "coordinate" && t.workspaceName === "main")).toBe(
       true,
+    );
+  });
+
+  test("groups comma-separated --action values into one multi-config plan and deploy step", async () => {
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
+    await setupTarget(actionOpts("api", "apps/api"));
+    await setupTarget(actionOpts("worker", "apps/worker"));
+
+    await setupCoordinate(coordinateOpts({ actions: ["api,worker"] }));
+
+    const wf = path.join(testDir, ".github/workflows/tailor-coordinate-main.yml");
+    const wfContent = fs.readFileSync(wf, "utf-8");
+    expect(() => parseYAML(wfContent)).not.toThrow();
+    expect(wfContent).toContain("tailor-generate-check-api");
+    expect(wfContent).toContain("tailor-generate-check-worker");
+    expect(wfContent).toContain("tailor-plan-api-worker");
+    expect(wfContent).not.toContain("tailor-plan-api\n");
+    expect(wfContent).not.toContain("tailor-plan-worker\n");
+    expect(wfContent).toContain("tailor-deploy-api-worker");
+    expect(wfContent).not.toContain("tailor-deploy-api\n");
+    expect(wfContent).not.toContain("tailor-deploy-worker\n");
+    expect(wfContent).toContain(
+      "TAILOR_PLATFORM_SDK_CONFIG_PATH: apps/api/tailor.config.ts,apps/worker/tailor.config.ts",
+    );
+    expect(wfContent).toContain("label: main/api-worker");
+
+    const lock = readLock(testDir);
+    const target = lock?.targets.find((t) => t.kind === "coordinate" && t.workspaceName === "main");
+    expect(target?.inputs.actionDirs).toEqual(["apps/api", "apps/worker"]);
+  });
+
+  test("builds static websites before a multi-config deploy", async () => {
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
+    await setupTarget(actionOpts("api", "apps/api", true));
+    await setupTarget(actionOpts("worker", "apps/worker"));
+
+    await setupCoordinate(coordinateOpts({ actions: ["api,worker"] }));
+
+    const wf = path.join(testDir, ".github/workflows/tailor-coordinate-main.yml");
+    const wfContent = fs.readFileSync(wf, "utf-8");
+    expect(() => parseYAML(wfContent)).not.toThrow();
+    expect(wfContent).toContain("tailor-build-site-api");
+    expect(wfContent).not.toContain("tailor-build-site-worker");
+    expect(wfContent).toContain('deploy: "false"');
+    expect(wfContent).toContain('build-site: "false"');
+    expect(wfContent).toContain("tailor-deploy-api-worker");
+  });
+
+  test("keeps plan labels unique when group ids collide", async () => {
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
+    writeAppConfig("api-worker", "apps/api-worker");
+    await setupTarget(actionOpts("api", "apps/api"));
+    await setupTarget(actionOpts("worker", "apps/worker"));
+    await setupTarget(actionOpts("api-worker", "apps/api-worker"));
+
+    await setupCoordinate(coordinateOpts({ actions: ["api,worker", "api-worker"] }));
+
+    const wf = path.join(testDir, ".github/workflows/tailor-coordinate-main.yml");
+    const wfContent = fs.readFileSync(wf, "utf-8");
+    expect(() => parseYAML(wfContent)).not.toThrow();
+    expect(wfContent).toContain("tailor-plan-api-worker");
+    expect(wfContent).toContain("tailor-plan-api-worker-2");
+    expect([...wfContent.matchAll(/^\s+label: main\/api-worker$/gm)]).toHaveLength(1);
+    expect([...wfContent.matchAll(/^\s+label: main\/api-worker-2$/gm)]).toHaveLength(1);
+  });
+
+  test("errors when a multi-config group includes an older action template", async () => {
+    writeAppConfig("api", "apps/api");
+    writeAppConfig("worker", "apps/worker");
+    await setupTarget(actionOpts("api", "apps/api"));
+    await setupTarget(actionOpts("worker", "apps/worker"));
+
+    const lock = readLock(testDir);
+    if (!lock) {
+      throw new Error("Expected setup action to create a lock file.");
+    }
+    writeLock(testDir, {
+      ...lock,
+      targets: lock.targets.map((target) =>
+        target.kind === "action" && target.workspaceName === "api"
+          ? { ...target, templateVersion: TEMPLATE_VERSION - 1 }
+          : target,
+      ),
+    });
+
+    await expect(setupCoordinate(coordinateOpts({ actions: ["api,worker"] }))).rejects.toThrow(
+      /older setup template/,
     );
   });
 
