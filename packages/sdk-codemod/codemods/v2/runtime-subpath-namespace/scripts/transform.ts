@@ -196,6 +196,15 @@ function isInsideTypeQuery(node: SgNode): boolean {
   return false;
 }
 
+function isJsxTagName(node: SgNode): boolean {
+  const parentKind = node.parent()?.kind();
+  return (
+    parentKind === "jsx_opening_element" ||
+    parentKind === "jsx_self_closing_element" ||
+    parentKind === "jsx_closing_element"
+  );
+}
+
 function sameNode(left: SgNode | null | undefined, right: SgNode): boolean {
   if (!left) return false;
   const leftRange = left.range();
@@ -240,6 +249,19 @@ function isNestedTypeMember(node: SgNode): boolean {
     .children()
     .find((child) => child.kind() === "identifier" || child.kind() === "type_identifier");
   return !sameNode(firstNamedChild, node);
+}
+
+function localTypeScopeDeclarationNames(root: SgNode): Set<string> {
+  const names = new Set<string>();
+  for (const node of root.findAll({
+    rule: {
+      any: [{ kind: "type_parameter" }, { kind: "infer_type" }, { kind: "mapped_type_clause" }],
+    },
+  })) {
+    const name = node.children().find((child) => child.kind() === "type_identifier");
+    if (name) names.add(name.text());
+  }
+  return names;
 }
 
 function hasExportSpecifierReference(root: SgNode, names: Set<string>): boolean {
@@ -361,7 +383,10 @@ function buildImportReplacement(
   if (flatImports.length === 0) return null;
 
   const removedNames = new Set(flatImports.map((binding) => binding.localName));
-  const declaredNames = localDeclarationNames(root);
+  const declaredNames = new Set([
+    ...localDeclarationNames(root),
+    ...localTypeScopeDeclarationNames(root),
+  ]);
   if (flatImports.some((binding) => declaredNames.has(binding.localName))) return null;
   if (hasExportSpecifierReference(root, removedNames)) return null;
 
@@ -429,6 +454,7 @@ function referenceEdits(root: SgNode, replacements: ImportReplacement[]): Edit[]
   for (const node of root.findAll({ rule: { kind: "identifier" } })) {
     if (isInsideImportStatement(node)) continue;
     if (isInsideExportSpecifier(node)) continue;
+    if (isJsxTagName(node)) continue;
     if (byLocalName.get(node.text())?.typeOnly && !isInsideTypeQuery(node)) continue;
     const replacement = replacementFor(node.text());
     if (!replacement) continue;
