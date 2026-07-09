@@ -7,6 +7,7 @@ import {
   isTypeOnlyImport,
   localDeclarationNames,
 } from "../../../../src/ast-grep-helpers";
+import type { LlmReviewFinding } from "../../../../src/types";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 interface RuntimeModule {
@@ -18,6 +19,7 @@ interface RuntimeModule {
 interface FlatImport {
   localName: string;
   memberName: string;
+  typeOnly: boolean;
 }
 
 interface ImportReplacement {
@@ -133,11 +135,17 @@ function namespaceImportName(importStmt: SgNode): string | null {
   );
 }
 
-function formatImport(source: string, defaultName: string | null, namedSpecs: string[]): string {
+function formatImport(
+  source: string,
+  defaultName: string | null,
+  namedSpecs: string[],
+  typeOnly = false,
+): string {
+  const importKeyword = typeOnly ? "import type" : "import";
   const named = namedSpecs.length > 0 ? `{ ${namedSpecs.join(", ")} }` : null;
-  if (defaultName && named) return `import ${defaultName}, ${named} from "${source}";`;
-  if (defaultName) return `import ${defaultName} from "${source}";`;
-  if (named) return `import ${named} from "${source}";`;
+  if (defaultName && named) return `${importKeyword} ${defaultName}, ${named} from "${source}";`;
+  if (defaultName) return `${importKeyword} ${defaultName} from "${source}";`;
+  if (named) return `${importKeyword} ${named} from "${source}";`;
   return "";
 }
 
@@ -148,6 +156,26 @@ function isInsideImportStatement(node: SgNode): boolean {
     current = current.parent();
   }
   return false;
+}
+
+function isInsideExportSpecifier(node: SgNode): boolean {
+  let current = node.parent();
+  while (current) {
+    if (current.kind() === "export_specifier") return true;
+    if (current.kind() === "export_statement") return false;
+    current = current.parent();
+  }
+  return false;
+}
+
+function hasExportSpecifierReference(root: SgNode, names: Set<string>): boolean {
+  return root
+    .findAll({ rule: { kind: "export_specifier" } })
+    .some((specifier) =>
+      specifier
+        .children()
+        .some((child) => child.kind() === "identifier" && names.has(child.text())),
+    );
 }
 
 function usedNames(root: SgNode, imports: SgNode[], removedNames: Set<string>): Set<string> {
@@ -198,18 +226,26 @@ function buildImportReplacement(
   imports: SgNode[],
 ): ImportReplacement | null {
   const source = importSource(importStmt);
-  if (!source || isTypeOnlyImport(importStmt)) return null;
+  if (!source) return null;
 
+  const statementTypeOnly = isTypeOnlyImport(importStmt);
   const namespaceName = namespaceImportName(importStmt);
   if (namespaceName) {
+    const edit = statementTypeOnly
+      ? importStmt.replace(
+          formatImport(source, null, [selfNamespaceSpec(mod, namespaceName)], true),
+        )
+      : importStmt.replace(formatImport(source, namespaceName, []));
     return {
-      edit: importStmt.replace(formatImport(source, namespaceName, [])),
+      edit,
       flatImports: [],
       namespaceLocal: namespaceName,
     };
   }
 
   const defaultName = defaultImportName(importStmt);
+  if (statementTypeOnly && defaultName) return null;
+
   const existingSelfLocal = existingSelfNamespaceLocal(importStmt, mod);
   const flatImports: FlatImport[] = [];
   const keptSpecs: string[] = [];
@@ -219,8 +255,12 @@ function buildImportReplacement(
     if (!names) continue;
 
     const memberName = mod.members[names.importedName];
-    if (!names.typeOnly && memberName) {
-      flatImports.push({ localName: names.localName, memberName });
+    if (memberName) {
+      flatImports.push({
+        localName: names.localName,
+        memberName,
+        typeOnly: statementTypeOnly || names.typeOnly,
+      });
       continue;
     }
 
@@ -232,28 +272,42 @@ function buildImportReplacement(
   const removedNames = new Set(flatImports.map((binding) => binding.localName));
   const declaredNames = localDeclarationNames(root);
   if (flatImports.some((binding) => declaredNames.has(binding.localName))) return null;
+  if (hasExportSpecifierReference(root, removedNames)) return null;
 
   const namespaceLocal =
-    defaultName ?? existingSelfLocal ?? uniqueNamespaceLocal(mod, root, imports, removedNames);
+    !statementTypeOnly && defaultName
+      ? defaultName
+      : (existingSelfLocal ?? uniqueNamespaceLocal(mod, root, imports, removedNames));
   const nextNamedSpecs =
-    defaultName || existingSelfLocal
+    (!statementTypeOnly && defaultName) || existingSelfLocal
       ? keptSpecs
       : [selfNamespaceSpec(mod, namespaceLocal), ...keptSpecs];
 
   return {
-    edit: importStmt.replace(formatImport(source, defaultName, nextNamedSpecs)),
+    edit: importStmt.replace(
+      formatImport(
+        source,
+        statementTypeOnly ? null : defaultName,
+        nextNamedSpecs,
+        statementTypeOnly,
+      ),
+    ),
     flatImports,
     namespaceLocal,
   };
 }
 
 function referenceEdits(root: SgNode, replacements: ImportReplacement[]): Edit[] {
-  const byLocalName = new Map<string, { namespaceLocal: string; memberName: string }>();
+  const byLocalName = new Map<
+    string,
+    { namespaceLocal: string; memberName: string; typeOnly: boolean }
+  >();
   for (const replacement of replacements) {
     for (const binding of replacement.flatImports) {
       byLocalName.set(binding.localName, {
         namespaceLocal: replacement.namespaceLocal,
         memberName: binding.memberName,
+        typeOnly: binding.typeOnly,
       });
     }
   }
@@ -266,12 +320,23 @@ function referenceEdits(root: SgNode, replacements: ImportReplacement[]): Edit[]
 
   for (const node of root.findAll({ rule: { kind: "identifier" } })) {
     if (isInsideImportStatement(node)) continue;
+    if (isInsideExportSpecifier(node)) continue;
+    if (byLocalName.get(node.text())?.typeOnly) continue;
+    const replacement = replacementFor(node.text());
+    if (!replacement) continue;
+    edits.push(node.replace(replacement));
+  }
+
+  for (const node of root.findAll({ rule: { kind: "type_identifier" } })) {
+    if (isInsideImportStatement(node)) continue;
+    if (isInsideExportSpecifier(node)) continue;
     const replacement = replacementFor(node.text());
     if (!replacement) continue;
     edits.push(node.replace(replacement));
   }
 
   for (const node of root.findAll({ rule: { kind: "shorthand_property_identifier" } })) {
+    if (byLocalName.get(node.text())?.typeOnly) continue;
     const replacement = replacementFor(node.text());
     if (!replacement) continue;
     edits.push(node.replace(`${node.text()}: ${replacement}`));
@@ -310,4 +375,40 @@ export default function transform(source: string, filePath: string): string | nu
   ];
   const result = root.commitEdits(edits);
   return result === source ? null : result;
+}
+
+export function reviewFindings(
+  source: string,
+  filePath: string,
+  relativePath: string,
+): LlmReviewFinding[] {
+  if (!quickFilter(source)) return [];
+
+  const root = parse(sourceLang(filePath, source), source).root();
+  const findings: LlmReviewFinding[] = [];
+
+  for (const importStmt of findImportStatements(root)) {
+    const sourceName = importSource(importStmt);
+    if (!sourceName) continue;
+    const mod = MODULES_BY_SOURCE.get(sourceName);
+    if (!mod) continue;
+
+    const hasNamespaceImport = namespaceImportName(importStmt) != null;
+    const hasRemovedFlatImport = importStmt
+      .findAll({ rule: { kind: "import_specifier" } })
+      .some((spec) => {
+        const names = importSpecNames(spec);
+        return names != null && mod.members[names.importedName] != null;
+      });
+    if (!hasNamespaceImport && !hasRemovedFlatImport) continue;
+
+    findings.push({
+      file: relativePath,
+      line: importStmt.range().start.line + 1,
+      message: "Runtime subpath import still uses a removed namespace-star or flat value import.",
+      excerpt: importStmt.text().trim(),
+    });
+  }
+
+  return findings;
 }

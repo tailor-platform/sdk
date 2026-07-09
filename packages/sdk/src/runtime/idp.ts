@@ -223,4 +223,36 @@ class Client {
 /** Runtime wrapper namespace for `tailor.idp`. */
 export const idp = { Client } as const satisfies TailorIdpAPI;
 
+type RuntimeClientConfig = ClientConfig;
+type RuntimeUser = User;
+type RuntimeUserQuery = UserQuery;
+type RuntimeListUsersOptions = ListUsersOptions;
+type RuntimeListUsersResponse = ListUsersResponse;
+type RuntimeCreateUserInput = CreateUserInput;
+type RuntimeUpdateUserInput = UpdateUserInput;
+type RuntimeSendPasswordResetEmailInput = SendPasswordResetEmailInput;
+type RuntimeUnenrollMfaInput = UnenrollMfaInput;
+type RuntimeIdpClientInstance = IdpClientInstance;
+type RuntimeIdpClientConstructor = IdpClientConstructor;
+type RuntimeTailorIdpAPI = TailorIdpAPI;
+type RuntimeClient = InstanceType<RuntimeIdpClientConstructor>;
+
+// Type-only namespace merge preserves namespace type access without restoring flat value exports.
+// oxlint-disable-next-line typescript/no-namespace
+export namespace idp {
+  export type ClientConfig = RuntimeClientConfig;
+  export type User = RuntimeUser;
+  export type UserQuery = RuntimeUserQuery;
+  export type ListUsersOptions = RuntimeListUsersOptions;
+  export type ListUsersResponse = RuntimeListUsersResponse;
+  export type CreateUserInput = RuntimeCreateUserInput;
+  export type UpdateUserInput = RuntimeUpdateUserInput;
+  export type SendPasswordResetEmailInput = RuntimeSendPasswordResetEmailInput;
+  export type UnenrollMfaInput = RuntimeUnenrollMfaInput;
+  export type IdpClientInstance = RuntimeIdpClientInstance;
+  export type IdpClientConstructor = RuntimeIdpClientConstructor;
+  export type TailorIdpAPI = RuntimeTailorIdpAPI;
+  export type Client = RuntimeClient;
+}
+
 export default idp;

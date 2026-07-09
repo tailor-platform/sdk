@@ -117,4 +117,18 @@ export const workflow = {
   resolve,
 } as const;
 
+type WorkflowInvoker = Invoker;
+type WorkflowTriggerWorkflowOptions = TriggerWorkflowOptions;
+type WorkflowPlatformTriggerWorkflowOptions = PlatformTriggerWorkflowOptions;
+type WorkflowTailorWorkflowAPI = TailorWorkflowAPI;
+
+// Type-only namespace merge preserves namespace type access without restoring flat value exports.
+// oxlint-disable-next-line typescript/no-namespace
+export namespace workflow {
+  export type Invoker = WorkflowInvoker;
+  export type TriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
+  export type PlatformTriggerWorkflowOptions = WorkflowPlatformTriggerWorkflowOptions;
+  export type TailorWorkflowAPI = WorkflowTailorWorkflowAPI;
+}
+
 export default workflow;
