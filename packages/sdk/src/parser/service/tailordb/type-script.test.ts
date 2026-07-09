@@ -113,7 +113,7 @@ describe("buildTypeScripts", () => {
     expect(createExpr).toContain('"label": _input["label"] ?? "now"');
   });
 
-  test("builds a validate script with ?? chain and typeof string check", () => {
+  test("builds a validate script that runs all validators and collects all errors", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       age: {
         type: "integer",
@@ -132,7 +132,8 @@ describe("buildTypeScripts", () => {
     expect(createExpr).toContain("const __errs = {}");
     expect(createExpr).toContain('const _value = _newRecord["age"]');
     expect(createExpr).not.toContain("_oldValue");
-    expect(createExpr).toContain("(_value >= 0) ?? (_value < 200)");
+    expect(createExpr).toContain("(_value >= 0)");
+    expect(createExpr).toContain("(_value < 200)");
     expect(createExpr).toContain('if (typeof __r === "string") { __errs["age"] = __r; }');
     expect(createExpr).toContain("return __errs");
     expect(createExpr).not.toContain("new Date()");

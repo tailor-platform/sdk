@@ -2,6 +2,13 @@
 "@tailor-platform/sdk": minor
 ---
 
-Add a `now` argument to TailorDB hooks. `now` is the operation timestamp and is shared across every field hooked in the same create/update, so multiple fields can be stamped with an identical `Date`. Hooks and validators are now applied per type rather than per field, which is what makes the shared timestamp possible.
+Redesign TailorDB hooks and validators with several breaking changes (pre-release):
 
-As part of this, all of a type's hooks now run together and observe the same submitted input: a type-level hook's `input` reflects what the client sent and does not include other fields' hook results.
+- Add shared `now` timestamp to all hooks — multiple fields stamped with the same `Date`
+- Field-level hooks: `{ value, data, invoker }` → create `{ value, invoker, now }` / update `{ value, oldValue, invoker, now }` (`data` removed, `oldValue` added for update only)
+- Type-level hooks: per-field mapping (`Hooks<F>`) → single `{ create, update }` object (`TypeHook<F>`) returning partial field overrides
+- Type-level create hooks no longer receive `oldRecord`; update hooks receive non-nullable `oldRecord`
+- Field-level validators: return type changed from `boolean` to `string | void` (return error message or void to pass); `[fn, message]` tuple form removed
+- Type-level validators: `Validators<F>` per-field record → `TypeValidateFn<F>` single function with `issues(field, message)` callback
+- Add `.default(value)` on fields to set a create-time default (makes required fields optional in create input)
+- Remove exported types: `Hooks<F>`, `Validators<F>`, `ValidateConfig`

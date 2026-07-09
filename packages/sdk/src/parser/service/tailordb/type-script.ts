@@ -97,8 +97,8 @@ function buildHookObject(
 
 /**
  * Build validation statements for one record level.
- * Each leaf field with validators contributes a block that records the first
- * failing message keyed by its dotted field path.
+ * Each leaf field with validators contributes a block that runs every
+ * validator and records all failing messages keyed by dotted field path.
  * @param {Record<string, ScriptFieldConfig>} fields - Field configurations
  * @param {string} accessExpr - JS expression to access the parent object
  * @param {string} keyPrefix - Dotted path prefix for error keys
@@ -122,11 +122,13 @@ function buildValidateStatements(
 
     const validators = (config.validate ?? []).filter((v) => v.script?.expr);
     if (validators.length > 0) {
-      const chain = validators.map((v) => `(${v.script?.expr})`).join(" ?? ");
-      statements.push(
-        `{ const _value = ${access};` +
-          ` const __r = ${chain}; if (typeof __r === "string") { __errs[${key(fieldPath)}] = __r; } }`,
-      );
+      const checks = validators
+        .map(
+          (v) =>
+            `{ const __r = (${v.script?.expr}); if (typeof __r === "string") { __errs[${key(fieldPath)}] = __r; } }`,
+        )
+        .join(" ");
+      statements.push(`{ const _value = ${access}; ${checks} }`);
     }
   }
 
