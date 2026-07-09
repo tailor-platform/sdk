@@ -11,7 +11,7 @@ describe("onUserCreated executor", () => {
     }
     await onUserCreated.operation.body({
       newRecord: {
-        id: "11111111-1111-4111-8111-111111111111",
+        id: "user-1",
         name: "Alice",
         email: "alice@example.com",
         role: "ADMIN",
@@ -23,7 +23,7 @@ describe("onUserCreated executor", () => {
     expect(createAuditLog).toHaveBeenCalledExactlyOnceWith({
       action: "USER_CREATED",
       entityType: "User",
-      entityId: "11111111-1111-4111-8111-111111111111",
+      entityId: "user-1",
       message: "Admin user created: Alice (alice@example.com)",
     });
   });

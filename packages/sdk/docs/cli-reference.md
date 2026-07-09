@@ -396,12 +396,15 @@ Commands for upgrading SDK versions with automated code migration.
 
 ### [Skills Commands](./cli/skills.md)
 
-Commands for installing Tailor SDK agent skills.
+Commands for managing Tailor SDK agent skills.
 
-| Command                                          | Description                                                    |
-| ------------------------------------------------ | -------------------------------------------------------------- |
-| [skills](./cli/skills.md#skills)                 | Manage Tailor SDK agent skills.                                |
-| [skills install](./cli/skills.md#skills-install) | Install the tailor agent skill from the installed SDK package. |
+| Command                                        | Description                                   |
+| ---------------------------------------------- | --------------------------------------------- |
+| [skills](./cli/skills.md#skills)               | Manage Tailor SDK agent skills.               |
+| [skills add](./cli/skills.md#skills-add)       | Install Tailor SDK agent skills.              |
+| [skills list](./cli/skills.md#skills-list)     | List Tailor SDK agent skills.                 |
+| [skills remove](./cli/skills.md#skills-remove) | Remove installed Tailor SDK agent skills.     |
+| [skills sync](./cli/skills.md#skills-sync)     | Remove and reinstall Tailor SDK agent skills. |
 
 ### [Plugin Commands](./cli/plugin.md)
 

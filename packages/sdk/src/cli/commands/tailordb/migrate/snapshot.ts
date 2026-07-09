@@ -36,7 +36,6 @@ import {
 import { formatMigrationNumber } from "./migration-number";
 import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
 import type {
-  ParsedField,
   TailorDBType,
   OperatorFieldConfig,
   StandardActionPermission,
@@ -208,22 +207,6 @@ export type {
  */
 export type MigrationFileType = "schema" | "diff" | "migrate" | "db";
 
-/**
- * Information about a migration
- */
-export interface MigrationInfo {
-  /** Migration number (e.g., 1, 2, 3) */
-  number: number;
-  /** Migration number as 4-digit string (e.g., "0001", "0002") */
-  numberStr: string;
-  /** Migration file type */
-  type: MigrationFileType;
-  /** Path to migration file */
-  path: string;
-  /** Parsed content (schema snapshot or diff) */
-  content: SchemaSnapshot | MigrationDiff;
-}
-
 // ============================================================================
 // Migration Number Helpers
 // ============================================================================
@@ -235,22 +218,6 @@ export interface MigrationInfo {
  */
 export function isValidMigrationNumber(numberStr: string): boolean {
   return MIGRATION_NUMBER_PATTERN.test(numberStr);
-}
-
-/**
- * Parse migration number from file name
- * @param {string} fileName - File name (e.g., "0001_schema.json")
- * @returns {number | null} Parsed number or null if invalid
- */
-export function parseMigrationNumber(fileName: string): number | null {
-  const match = fileName.match(/^(\d{4})_/);
-  if (!match) return null;
-  const [, digits] = match;
-  const num = parseInt(
-    assertDefined(digits, "parseMigrationNumber: regex capture group missing"),
-    10,
-  );
-  return isNaN(num) ? null : num;
 }
 
 // ============================================================================
@@ -299,78 +266,7 @@ export function getMigrationFilePath(
 // ============================================================================
 
 /**
- * Create a snapshot field config from a parsed field
- * @param {ParsedField} field - Parsed field definition
- * @returns {SnapshotFieldConfig} Snapshot field configuration
- */
-function createSnapshotFieldConfig(field: ParsedField): SnapshotFieldConfig {
-  // Note: Use `!== false` to match generateParsedTailorDBTypeManifest behavior
-  // where undefined defaults to true (required by default in SDK)
-  const config: SnapshotFieldConfig = {
-    type: field.config.type,
-    required: field.config.required !== false,
-  };
-
-  if (field.config.array) config.array = true;
-  if (field.config.index) config.index = true;
-  if (field.config.unique) config.unique = true;
-
-  if (field.config.allowedValues && field.config.allowedValues.length > 0) {
-    config.allowedValues = field.config.allowedValues.map((v) => ({
-      value: v.value,
-      ...(v.description && { description: v.description }),
-    }));
-  }
-
-  if (field.config.foreignKey) {
-    config.foreignKey = true;
-    if (field.config.foreignKeyType) config.foreignKeyType = field.config.foreignKeyType;
-    if (field.config.foreignKeyField) config.foreignKeyField = field.config.foreignKeyField;
-  }
-
-  if (field.config.description) config.description = field.config.description;
-  if (field.config.vector) config.vector = true;
-
-  if (field.config.hooks) {
-    config.hooks = {};
-    if (field.config.hooks.create) {
-      config.hooks.create = { expr: field.config.hooks.create.expr };
-    }
-    if (field.config.hooks.update) {
-      config.hooks.update = { expr: field.config.hooks.update.expr };
-    }
-  }
-
-  if (field.config.validate && field.config.validate.length > 0) {
-    config.validate = field.config.validate.map((v) => ({
-      script: { expr: v.script.expr },
-      errorMessage: v.errorMessage,
-    }));
-  }
-
-  if (field.config.serial) {
-    config.serial = {
-      start: field.config.serial.start,
-      ...(field.config.serial.maxValue !== undefined && { maxValue: field.config.serial.maxValue }),
-      ...(field.config.serial.format && { format: field.config.serial.format }),
-    };
-  }
-
-  if (field.config.scale !== undefined) config.scale = field.config.scale;
-  if (field.config.default !== undefined) config.default = field.config.default;
-
-  if (field.config.fields && Object.keys(field.config.fields).length > 0) {
-    config.fields = {};
-    for (const [nestedName, nestedConfig] of Object.entries(field.config.fields)) {
-      config.fields[nestedName] = createSnapshotFieldConfigFromOperatorConfig(nestedConfig);
-    }
-  }
-
-  return normalizeSnapshotField(config);
-}
-
-/**
- * Create a snapshot field config from an OperatorFieldConfig (for nested fields)
+ * Create a snapshot field config from an OperatorFieldConfig.
  * @param {import("#/parser/service/tailordb/types").OperatorFieldConfig} fieldConfig - Field configuration
  * @returns {SnapshotFieldConfig} Snapshot field configuration
  */
@@ -450,7 +346,7 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
   const fields = createSnapshotRecord<SnapshotFieldConfig>();
 
   for (const [fieldName, field] of Object.entries(type.fields)) {
-    fields[fieldName] = createSnapshotFieldConfig(field);
+    fields[fieldName] = createSnapshotFieldConfigFromOperatorConfig(field.config);
   }
 
   const snapshotType: TailorDBSnapshotType = {

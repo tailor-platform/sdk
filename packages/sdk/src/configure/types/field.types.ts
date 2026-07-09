@@ -3,14 +3,6 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
-import type {
-  DateString,
-  DateTimeString,
-  DecimalString,
-  TimeString,
-  UUIDString,
-} from "./scalar.types";
-
 export interface EnumValue {
   value: string;
   description?: string;
@@ -29,25 +21,16 @@ export type TailorFieldType =
   | "time"
   | "nested";
 
-export type {
-  DateString,
-  DateTimeString,
-  DecimalString,
-  TimeString,
-  TimeZoneOffsetString,
-  UUIDString,
-} from "./scalar.types";
-
 export type TailorToTs = {
   string: string;
   integer: number;
   float: number;
-  decimal: DecimalString;
+  decimal: string;
   boolean: boolean;
-  uuid: UUIDString;
-  date: DateString;
-  datetime: DateTimeString | Date;
-  time: TimeString;
+  uuid: string;
+  date: string;
+  datetime: string | Date;
+  time: string;
   enum: string;
   object: Record<string, unknown>;
   nested: Record<string, unknown>;
