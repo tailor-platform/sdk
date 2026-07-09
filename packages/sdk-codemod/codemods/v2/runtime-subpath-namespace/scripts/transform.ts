@@ -259,11 +259,22 @@ function referenceEdits(root: SgNode, replacements: ImportReplacement[]): Edit[]
   }
 
   const edits: Edit[] = [];
+  const replacementFor = (name: string): string | null => {
+    const binding = byLocalName.get(name);
+    return binding ? `${binding.namespaceLocal}.${binding.memberName}` : null;
+  };
+
   for (const node of root.findAll({ rule: { kind: "identifier" } })) {
     if (isInsideImportStatement(node)) continue;
-    const binding = byLocalName.get(node.text());
-    if (!binding) continue;
-    edits.push(node.replace(`${binding.namespaceLocal}.${binding.memberName}`));
+    const replacement = replacementFor(node.text());
+    if (!replacement) continue;
+    edits.push(node.replace(replacement));
+  }
+
+  for (const node of root.findAll({ rule: { kind: "shorthand_property_identifier" } })) {
+    const replacement = replacementFor(node.text());
+    if (!replacement) continue;
+    edits.push(node.replace(`${node.text()}: ${replacement}`));
   }
   return edits;
 }
