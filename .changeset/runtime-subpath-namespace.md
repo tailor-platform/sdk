@@ -1,6 +1,7 @@
 ---
 "@tailor-platform/sdk": major
 "@tailor-platform/sdk-codemod": patch
+"@tailor-platform/create-sdk": patch
 ---
 
 Remove flat value exports from `@tailor-platform/sdk/runtime/*` subpath modules. Import each subpath through its default export or self-named namespace export instead, for example `import iconv from "@tailor-platform/sdk/runtime/iconv"` or `import { iconv } from "@tailor-platform/sdk/runtime/iconv"`.

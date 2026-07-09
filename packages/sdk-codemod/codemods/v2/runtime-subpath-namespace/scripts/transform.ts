@@ -168,6 +168,16 @@ function isInsideExportSpecifier(node: SgNode): boolean {
   return false;
 }
 
+function isInsideTypeQuery(node: SgNode): boolean {
+  let current = node.parent();
+  while (current) {
+    if (current.kind() === "type_query") return true;
+    if (current.kind() === "statement_block" || current.kind() === "program") return false;
+    current = current.parent();
+  }
+  return false;
+}
+
 function hasExportSpecifierReference(root: SgNode, names: Set<string>): boolean {
   return root
     .findAll({ rule: { kind: "export_specifier" } })
@@ -176,6 +186,13 @@ function hasExportSpecifierReference(root: SgNode, names: Set<string>): boolean 
         .children()
         .some((child) => child.kind() === "identifier" && names.has(child.text())),
     );
+}
+
+function findExportStatements(root: SgNode): SgNode[] {
+  return root
+    .findAll({ rule: { kind: "export_statement" } })
+    .filter((stmt) => stmt.parent()?.kind() === "program")
+    .toSorted((a, b) => a.range().start.index - b.range().start.index);
 }
 
 function usedNames(root: SgNode, imports: SgNode[], removedNames: Set<string>): Set<string> {
@@ -321,7 +338,7 @@ function referenceEdits(root: SgNode, replacements: ImportReplacement[]): Edit[]
   for (const node of root.findAll({ rule: { kind: "identifier" } })) {
     if (isInsideImportStatement(node)) continue;
     if (isInsideExportSpecifier(node)) continue;
-    if (byLocalName.get(node.text())?.typeOnly) continue;
+    if (byLocalName.get(node.text())?.typeOnly && !isInsideTypeQuery(node)) continue;
     const replacement = replacementFor(node.text());
     if (!replacement) continue;
     edits.push(node.replace(replacement));
@@ -377,6 +394,15 @@ export default function transform(source: string, filePath: string): string | nu
   return result === source ? null : result;
 }
 
+function hasRemovedFlatSpecifier(node: SgNode, mod: RuntimeModule): boolean {
+  return node
+    .findAll({ rule: { any: [{ kind: "import_specifier" }, { kind: "export_specifier" }] } })
+    .some((spec) => {
+      const names = importSpecNames(spec);
+      return names != null && mod.members[names.importedName] != null;
+    });
+}
+
 export function reviewFindings(
   source: string,
   filePath: string,
@@ -394,12 +420,7 @@ export function reviewFindings(
     if (!mod) continue;
 
     const hasNamespaceImport = namespaceImportName(importStmt) != null;
-    const hasRemovedFlatImport = importStmt
-      .findAll({ rule: { kind: "import_specifier" } })
-      .some((spec) => {
-        const names = importSpecNames(spec);
-        return names != null && mod.members[names.importedName] != null;
-      });
+    const hasRemovedFlatImport = hasRemovedFlatSpecifier(importStmt, mod);
     if (!hasNamespaceImport && !hasRemovedFlatImport) continue;
 
     findings.push({
@@ -407,6 +428,20 @@ export function reviewFindings(
       line: importStmt.range().start.line + 1,
       message: "Runtime subpath import still uses a removed namespace-star or flat value import.",
       excerpt: importStmt.text().trim(),
+    });
+  }
+
+  for (const exportStmt of findExportStatements(root)) {
+    const sourceName = importSource(exportStmt);
+    if (!sourceName) continue;
+    const mod = MODULES_BY_SOURCE.get(sourceName);
+    if (!mod || !hasRemovedFlatSpecifier(exportStmt, mod)) continue;
+
+    findings.push({
+      file: relativePath,
+      line: exportStmt.range().start.line + 1,
+      message: "Runtime subpath re-export still uses a removed flat value export.",
+      excerpt: exportStmt.text().trim(),
     });
   }
 
