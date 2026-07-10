@@ -81,100 +81,51 @@ describe("repository ERD schema workflow", () => {
     );
   });
 
-  test("triggers on the erd command, example project, workflow file and its scripts for both push and pull_request", () => {
+  test("triggers on the example project and the workflow file for both push and pull_request", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     expect(content.match(/- example\/\*\*/g)?.length).toBe(2);
-    expect(content.match(/- \.github\/scripts\/erd-\*\.mjs/g)?.length).toBe(2);
     expect(content.match(/- \.github\/workflows\/erd-schema\.yml/g)?.length).toBe(2);
   });
 
-  test("uploads a per-namespace schema artifact on pushes to main", () => {
+  test("delegates to the shared tailor-platform/actions ERD building blocks instead of in-repo scripts", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toMatch(/uses: tailor-platform\/actions\/erd-schema-export@[0-9a-f]{40} # v\d/);
+    expect(content).toMatch(
+      /uses: tailor-platform\/actions\/erd-schema-preview@[0-9a-f]{40} # v\d/,
+    );
+    expect(content).toMatch(
+      /uses: tailor-platform\/actions\/erd-schema-comment@[0-9a-f]{40} # v\d/,
+    );
+    expect(content).not.toContain(".github/scripts/erd-");
+  });
+
+  test("exports on push to main, uploading a per-namespace artifact for the preview job to reuse", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     expect(content).toContain("branches: [main]");
-    expect(content).toContain("name: erd-schema-${{ matrix.namespace }}");
-    expect(content).toContain("tailordb erd export --namespace");
-    expect(content).toContain("if-no-files-found: ignore");
-    expect(content).toContain("retention-days: 90");
+    expect(content).toContain("artifact-name: erd-schema-${{ matrix.namespace }}");
+    expect(content).toContain('retention-days: "90"');
   });
 
-  test("fails loudly instead of silently uploading nothing when erd export produces no file", () => {
+  test("previews on pull_request at the PR's true fork point via base-ref/sha-base/sha-head", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    expect(
-      content.match(/ERD export for namespace '\$NAMESPACE' produced no output file/g)?.length,
-    ).toBe(2);
-    expect(content).toContain(
-      'if [ ! -s "$RUNNER_TEMP/erd-export/$NAMESPACE/dist/index.html" ]; then',
-    );
-    expect(content).toContain(
-      'if [ ! -s "$RUNNER_TEMP/erd-head/$NAMESPACE/dist/index.html" ]; then',
-    );
+    expect(content).toContain("sha-base: ${{ github.event.pull_request.base.sha }}");
+    expect(content).toContain("sha-head: ${{ github.event.pull_request.head.sha }}");
+    expect(content).toContain("base-ref: ${{ github.event.pull_request.base.ref }}");
+    expect(content).toContain("export-workflow-file: erd-schema.yml");
+    expect(content).toContain("base-artifact-name: erd-schema-${{ matrix.namespace }}");
+    expect(content).toContain("preview-artifact-name: ${{ matrix.namespace }}.html");
   });
 
-  test("delegates relevance filtering to erd-relevance.mjs in the preview job only, always uploading a successful export", () => {
+  test("passes both the static config path and the erd viewer implementation as always-relevant", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    expect(content.match(/run: node \.github\/scripts\/erd-relevance\.mjs/g)?.length).toBe(1);
-    // Export job: uploads whenever the export itself succeeded, regardless of relevance,
-    // so the preview job can pick any ancestor run as a base without checking which ones have it.
-    expect(content).toMatch(/name: Upload ERD schema\s*\n\s*if: steps\.export\.outputs\.exported/);
-    // Preview job: always runs (no `if:` between `id:` and `env:`), since it must compute
-    // the fork point even when head is missing.
-    expect(content).toContain("SHA_BASE: ${{ github.event.pull_request.base.sha }}");
-    expect(content.match(/id: relevance/g)?.length).toBe(1);
-    expect(content).toMatch(/id: relevance\s*\n\s*env:/);
-  });
-
-  test("reuses the export job's recorded schema via erd-find-base-run.mjs instead of rebuilding the base side", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
-
-    expect(content).not.toContain("name: Checkout base branch");
-    expect(content).not.toContain("name: Install base deps");
-    expect(content).not.toContain("pnpm install --frozen-lockfile");
-    expect(content).toContain("run: node .github/scripts/erd-find-base-run.mjs");
-    expect(content).toContain("gh run download");
-    expect(content).toContain("actions: read # look up and download the export job's artifacts");
-  });
-
-  test("sets found=false explicitly when the base schema download fails", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
-
-    expect(content).toContain('echo "found=true" >>"$GITHUB_OUTPUT"');
-    expect(content).toContain('echo "found=false" >>"$GITHUB_OUTPUT"');
-  });
-
-  test("looks up the schema at the PR's actual fork point, not just base's moving tip", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
-
-    expect(content).toContain("FORK_SHA: ${{ steps.relevance.outputs.fork_sha }}");
-    expect(content).toContain(
-      "if: steps.relevance.outputs.relevant != 'false' && steps.find-base-run.outputs.run_id != ''",
-    );
-  });
-
-  test("searches the PR's actual base branch for export runs instead of assuming main", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
-
-    expect(content).toContain("BASE_REF: ${{ github.event.pull_request.base.ref }}");
-  });
-
-  test("renders a diff even when no base schema export can be found", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
-
-    expect(content).toContain('base_missing="true"');
-    expect(content).toContain("rendering current objects as added");
-    expect(content).toContain('diff_args=(--namespace "$NAMESPACE"');
-    expect(content).toContain('diff_args+=(--base-html "$RUNNER_TEMP/erd-base/index.html")');
-    expect(content).toContain("pnpm exec tailor-sdk tailordb erd diff");
-  });
-
-  test("fails loudly instead of silently uploading nothing when a relevant diff render produces no file", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
-
-    expect(content).toContain('if [ ! -s "$RUNNER_TEMP/erd-preview/$NAMESPACE.html" ]; then');
-    expect(content).toContain("ERD diff render for namespace '$NAMESPACE' produced no output file");
+    expect(content).toContain("example/tailor.config.ts");
+    expect(content).toContain("packages/sdk/src/cli/commands/tailordb/erd/");
+    expect(content).toContain("relevant-path-prefix: example/");
   });
 
   test("groups each job's concurrency so a fast-follow push/PR update cannot cancel or race a run", () => {
@@ -186,30 +137,31 @@ describe("repository ERD schema workflow", () => {
     expect(content).toContain("cancel-in-progress: true");
   });
 
-  test("uploads preview artifacts unzipped, with names matched by the sticky comment script", () => {
+  test("grants actions:read for the base-run lookup and pull-requests:write for the comment", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    expect(content).toContain("name: ${{ matrix.namespace }}.html");
-    expect(content).toContain("archive: false");
-    expect(content).toContain("retention-days: 7");
-  });
-
-  test("posts the sticky preview comment via erd-upsert-comment.mjs, skipping fork PRs", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
-
-    expect(content).toContain("run: node .github/scripts/erd-upsert-comment.mjs");
+    expect(content).toContain("actions: read # look up and download the export job's artifacts");
     expect(content).toContain("pull-requests: write # upsert the sticky preview comment");
-    expect(content).toContain("RUN_ID: ${{ github.run_id }}");
+    expect(content).toContain("actions: read # required to list the run's artifacts");
   });
 
-  test("checks out the repository in every job that runs an erd-*.mjs script", () => {
+  test("posts the sticky preview comment once per PR, skipping fork PRs", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("needs: preview");
+    expect(content).toContain("pr-number: ${{ github.event.pull_request.number }}");
+  });
+
+  test("checks out the repository before every tailor-platform/actions/erd-schema-* step", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     const jobBodies = content.split(/^ {2}[a-z]+:\n/m).slice(1);
-    const scriptJobs = jobBodies.filter((job) => job.includes("run: node .github/scripts/erd-"));
+    const actionJobs = jobBodies.filter((job) =>
+      job.includes("tailor-platform/actions/erd-schema-"),
+    );
 
-    expect(scriptJobs.length).toBeGreaterThan(0);
-    expect(scriptJobs.every((job) => job.includes("uses: actions/checkout@"))).toBe(true);
+    expect(actionJobs.length).toBe(3);
+    expect(actionJobs.every((job) => job.includes("uses: actions/checkout@"))).toBe(true);
   });
 
   test.skipIf(!actionlintAvailable)("passes actionlint", () => {

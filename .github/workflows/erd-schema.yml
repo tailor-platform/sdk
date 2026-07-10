@@ -7,13 +7,11 @@ on:
       - packages/sdk/src/cli/commands/tailordb/erd/**
       - example/**
       - .github/workflows/erd-schema.yml
-      - .github/scripts/erd-*.mjs
   pull_request:
     paths:
       - packages/sdk/src/cli/commands/tailordb/erd/**
       - example/**
       - .github/workflows/erd-schema.yml
-      - .github/scripts/erd-*.mjs
 
 permissions: {}
 
@@ -42,46 +40,13 @@ jobs:
 
       - uses: ./.github/actions/install-deps
 
-      # Stores this commit's ERD schema so the preview job below can reuse it
-      # instead of rebuilding the base side itself.
-      - name: Export ERD schema
-        id: export
-        env:
-          NAMESPACE: ${{ matrix.namespace }}
-        run: |
-          set -euo pipefail
-          log="$RUNNER_TEMP/erd-export-$NAMESPACE.log"
-          echo "log_file=$log" >>"$GITHUB_OUTPUT"
-          if ! (
-            cd example
-            pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-export"
-          ) >"$log" 2>&1; then
-            cat "$log"
-            if grep -q 'not found in local config.db' "$log"; then
-              echo "ERD namespace '$NAMESPACE' not found; skipping export."
-              echo "exported=false" >>"$GITHUB_OUTPUT"
-              exit 0
-            fi
-            exit 1
-          elif [ -s "$log" ]; then
-            cat "$log"
-          fi
-
-          if [ ! -s "$RUNNER_TEMP/erd-export/$NAMESPACE/dist/index.html" ]; then
-            echo "::error::ERD export for namespace '$NAMESPACE' produced no output file."
-            exit 1
-          fi
-
-      # Always uploaded when the export succeeds, so the preview job can pick
-      # any ancestor run as a base without checking which ones have it.
-      - name: Upload ERD schema
-        if: steps.export.outputs.exported != 'false'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: tailor-platform/actions/erd-schema-export@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
         with:
-          name: erd-schema-${{ matrix.namespace }}
-          path: ${{ runner.temp }}/erd-export/${{ matrix.namespace }}/dist/index.html
-          if-no-files-found: ignore
-          retention-days: 90
+          namespace: ${{ matrix.namespace }}
+          package-manager: pnpm
+          working-directory: example
+          artifact-name: erd-schema-${{ matrix.namespace }}
+          retention-days: "90"
 
   preview:
     if: github.event_name == 'pull_request'
@@ -111,125 +76,22 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - name: Export head ERD schema
-        id: head-export
-        env:
-          NAMESPACE: ${{ matrix.namespace }}
-        run: |
-          set -euo pipefail
-          log="$RUNNER_TEMP/erd-head-$NAMESPACE.log"
-          echo "log_file=$log" >>"$GITHUB_OUTPUT"
-          if ! (
-            cd example
-            pnpm exec tailor-sdk tailordb erd export --namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-head"
-          ) >"$log" 2>&1; then
-            cat "$log"
-            if grep -q 'not found in local config.db' "$log"; then
-              echo "Head ERD namespace '$NAMESPACE' not found; rendering base objects as removed."
-              echo "exported=false" >>"$GITHUB_OUTPUT"
-              exit 0
-            fi
-            exit 1
-          elif [ -s "$log" ]; then
-            cat "$log"
-          fi
-
-          if [ ! -s "$RUNNER_TEMP/erd-head/$NAMESPACE/dist/index.html" ]; then
-            echo "::error::ERD export for namespace '$NAMESPACE' produced no output file."
-            exit 1
-          fi
-
-      # Always runs (even when head is missing, since removing a namespace
-      # is inherently relevant) to compute both the relevance verdict and the
-      # PR's fork point (compare's merge_base_commit) for the next step. See
-      # erd-relevance.mjs.
-      - name: Check relevance
-        id: relevance
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA_BASE: ${{ github.event.pull_request.base.sha }}
-          SHA_HEAD: ${{ github.event.pull_request.head.sha }}
-          LOG_FILE: ${{ steps.head-export.outputs.log_file }}
-        run: node .github/scripts/erd-relevance.mjs
-
-      # Reuses the schema the export job recorded for this PR's actual fork
-      # point on its base branch (not just the base's moving tip, which would
-      # mix in unrelated changes), instead of rebuilding the base side here.
-      # See erd-find-base-run.mjs.
-      - name: Find base run
-        id: find-base-run
-        if: steps.relevance.outputs.relevant != 'false'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          FORK_SHA: ${{ steps.relevance.outputs.fork_sha }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: node .github/scripts/erd-find-base-run.mjs
-
-      - name: Download base schema
-        id: base
-        if: steps.relevance.outputs.relevant != 'false' && steps.find-base-run.outputs.run_id != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RUN_ID: ${{ steps.find-base-run.outputs.run_id }}
-        run: |
-          set -euo pipefail
-          run_id="$RUN_ID"
-          if gh run download "$run_id" --repo "${{ github.repository }}" \
-            --name "erd-schema-${{ matrix.namespace }}" --dir "$RUNNER_TEMP/erd-base"; then
-            echo "found=true" >>"$GITHUB_OUTPUT"
-          else
-            echo "found=false" >>"$GITHUB_OUTPUT"
-            echo "ERD schema export run $run_id has no artifact for namespace '${{ matrix.namespace }}'; rendering current objects as added."
-          fi
-
-      - name: Render diff
-        if: steps.relevance.outputs.relevant != 'false'
-        env:
-          NAMESPACE: ${{ matrix.namespace }}
-          HEAD_MISSING: ${{ steps.head-export.outputs.exported == 'false' }}
-          BASE_FOUND: ${{ steps.base.outputs.found }}
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/erd-preview"
-
-          base_missing="true"
-          [ "$BASE_FOUND" = "true" ] && base_missing="false"
-
-          if [ "$HEAD_MISSING" = "true" ] && [ "$base_missing" = "true" ]; then
-            echo "::error::ERD namespace '$NAMESPACE' was not found in head or the base export."
-            exit 1
-          fi
-
-          diff_args=(--namespace "$NAMESPACE" --output "$RUNNER_TEMP/erd-preview/$NAMESPACE.html")
-          if [ "$HEAD_MISSING" = "false" ]; then
-            diff_args+=(--head-html "$RUNNER_TEMP/erd-head/$NAMESPACE/dist/index.html")
-          fi
-          if [ "$base_missing" = "false" ]; then
-            diff_args+=(--base-html "$RUNNER_TEMP/erd-base/index.html")
-          fi
-
-          cd example
-          pnpm exec tailor-sdk tailordb erd diff "${diff_args[@]}"
-
-          if [ ! -s "$RUNNER_TEMP/erd-preview/$NAMESPACE.html" ]; then
-            echo "::error::ERD diff render for namespace '$NAMESPACE' produced no output file."
-            exit 1
-          fi
-
-      # archive: false (upload-artifact v7+) keeps the file unzipped so the HTML
-      # can be viewed directly in the browser from the run's artifact list. Only
-      # a single file may be uploaded per artifact when archive is false.
-      # https://github.blog/changelog/2026-02-26-github-actions-now-supports-uploading-and-downloading-non-zipped-artifacts/
-      - name: Upload ERD viewer preview
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: tailor-platform/actions/erd-schema-preview@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
         with:
-          name: ${{ matrix.namespace }}.html
-          path: ${{ runner.temp }}/erd-preview/${{ matrix.namespace }}.html
-          if-no-files-found: ignore
-          archive: false
-          retention-days: 7
+          namespace: ${{ matrix.namespace }}
+          package-manager: pnpm
+          working-directory: example
+          sha-base: ${{ github.event.pull_request.base.sha }}
+          sha-head: ${{ github.event.pull_request.head.sha }}
+          base-ref: ${{ github.event.pull_request.base.ref }}
+          export-workflow-file: erd-schema.yml
+          base-artifact-name: erd-schema-${{ matrix.namespace }}
+          preview-artifact-name: ${{ matrix.namespace }}.html
+          always-relevant-paths: |
+            example/tailor.config.ts
+            packages/sdk/src/cli/commands/tailordb/erd/
+          relevant-path-prefix: example/
+          github-token: ${{ github.token }}
 
   comment:
     name: Post preview links
@@ -248,12 +110,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Upsert sticky preview comment
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-          SERVER_URL: ${{ github.server_url }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: node .github/scripts/erd-upsert-comment.mjs
+      - uses: tailor-platform/actions/erd-schema-comment@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        with:
+          base-ref: ${{ github.event.pull_request.base.ref }}
+          github-token: ${{ github.token }}
+          pr-number: ${{ github.event.pull_request.number }}
