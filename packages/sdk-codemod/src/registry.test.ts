@@ -74,6 +74,14 @@ describe("getApplicableCodemods", () => {
     expect(aliasPattern).toBeInstanceOf(RegExp);
     expect((aliasPattern as RegExp).test("const relation = db.uuid().relation;")).toBe(true);
     expect((aliasPattern as RegExp).test("db.uuid().relation({ type, toward });")).toBe(false);
+
+    const aliasPatterns = codemod?.suspiciousPatterns as RegExp[];
+    expect(aliasPatterns.some((pattern) => pattern.test("const { relation } = db.uuid();"))).toBe(
+      true,
+    );
+    expect(
+      aliasPatterns.some((pattern) => pattern.test('db.uuid()["relation"]({ type, toward })')),
+    ).toBe(true);
   });
 
   test("returns empty when both versions are before the codemod boundary", () => {
