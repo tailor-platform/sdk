@@ -64,7 +64,9 @@ type ResolverReturn<
  * original caller, unaffected by `authInvoker`) before `body` runs. Omitted (default):
  * unchanged, anonymous callers can reach the resolver. `"public"`: explicitly documents that
  * anonymous callers are allowed. An array of `{ conditions, permit }` policies (in the same
- * style as TailorDB's `.permission()`) rejects callers that don't match any allow policy.
+ * style as TailorDB's `.permission()`) rejects non-matching callers: with no `permit: true`
+ * policy it's a blocklist (only `permit: false` matches are denied), with at least one it's
+ * an allow-list (denied unless a `permit: true` policy matches).
  * @template Input
  * @template Output
  * @param config - Resolver configuration

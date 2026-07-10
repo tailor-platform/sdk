@@ -142,6 +142,9 @@ function resolverPermissionPolicyExpr(policy: ResolverAuthPolicy): string {
   const conditions = isSingleResolverCondition(policy.conditions)
     ? [policy.conditions]
     : policy.conditions;
+  if (conditions.length === 0) {
+    throw new Error("Resolver auth policy must have at least one condition, got an empty array.");
+  }
   return conditions.map(resolverPermissionConditionExpr).join(" && ");
 }
 
@@ -160,6 +163,9 @@ function resolverPermissionPolicyExpr(policy: ResolverAuthPolicy): string {
 export function buildResolverAuthGuardExpr(auth: Resolver["auth"]): string | undefined {
   if (!auth || auth === "public") {
     return undefined;
+  }
+  if (auth.length === 0) {
+    throw new Error("Resolver auth must have at least one policy, got an empty array.");
   }
   const denyPolicies = auth.filter((policy) => policy.permit === false);
   const allowPolicies = auth.filter((policy) => policy.permit !== false);

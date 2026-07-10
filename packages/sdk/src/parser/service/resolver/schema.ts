@@ -26,14 +26,23 @@ const ResolverPermissionConditionSchema = z
 const ResolverPermissionPolicySchema = z.object({
   conditions: z.union([
     ResolverPermissionConditionSchema,
-    z.array(ResolverPermissionConditionSchema).readonly(),
+    z
+      .array(ResolverPermissionConditionSchema)
+      .min(1, "Resolver auth policy must have at least one condition")
+      .readonly(),
   ]),
   permit: z.boolean(),
   description: z.string().optional(),
 });
 
 export const ResolverAuthSchema = z
-  .union([z.array(ResolverPermissionPolicySchema).readonly(), z.literal("public")])
+  .union([
+    z
+      .array(ResolverPermissionPolicySchema)
+      .min(1, "Resolver auth must have at least one policy")
+      .readonly(),
+    z.literal("public"),
+  ])
   .describe(
     "Access requirement for this resolver, evaluated against the original caller " +
       '(unaffected by `authInvoker`) before `body` runs. "public" documents that anonymous ' +

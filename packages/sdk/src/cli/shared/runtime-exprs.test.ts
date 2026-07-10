@@ -230,4 +230,13 @@ describe("buildResolverAuthGuardExpr", () => {
     ] as const;
     expect(() => runGuard(auth, { type: "" })).toThrow(/must be logged in/);
   });
+
+  test("throws at bundle time on an empty auth array (schema should reject this, but guard defensively too)", () => {
+    expect(() => buildResolverAuthGuardExpr([])).toThrow(/at least one policy/);
+  });
+
+  test("throws at bundle time on a policy with an empty conditions array (schema should reject this, but guard defensively too)", () => {
+    const auth = [{ conditions: [], permit: true }] as const;
+    expect(() => buildResolverAuthGuardExpr(auth)).toThrow(/at least one condition/);
+  });
 });
