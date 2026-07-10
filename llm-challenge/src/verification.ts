@@ -343,15 +343,27 @@ async function readBoundedContentFile(
       throw new Error("content evidence limit rejected a non-regular file");
     }
     const buffer = Buffer.alloc(CONTENT_FILE_BYTES_LIMIT + 1);
-    const { bytesRead } = await file.read(buffer, 0, buffer.length, 0);
-    if (bytesRead > CONTENT_FILE_BYTES_LIMIT) {
+    let byteLength = 0;
+    while (byteLength < buffer.length) {
+      const { bytesRead } = await file.read(
+        buffer,
+        byteLength,
+        buffer.length - byteLength,
+        byteLength,
+      );
+      if (bytesRead === 0) {
+        break;
+      }
+      byteLength += bytesRead;
+    }
+    if (byteLength > CONTENT_FILE_BYTES_LIMIT) {
       throw new Error(
         `content evidence limit exceeded: file exceeds ${CONTENT_FILE_BYTES_LIMIT} bytes`,
       );
     }
     return {
-      text: buffer.subarray(0, bytesRead).toString("utf8"),
-      byteLength: bytesRead,
+      text: buffer.subarray(0, byteLength).toString("utf8"),
+      byteLength,
     };
   } finally {
     await file.close();
