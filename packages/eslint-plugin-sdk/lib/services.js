@@ -4,5 +4,3 @@ export const DEPLOYABLE_SERVICES = new Map([
   ["createHttpAdapter", "HTTP adapter"],
   ["createWorkflow", "workflow"],
 ]);
-
-export const DEPLOYABLE_SERVICE_FACTORIES = new Set(DEPLOYABLE_SERVICES.keys());

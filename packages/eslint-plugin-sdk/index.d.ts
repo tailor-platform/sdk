@@ -3,8 +3,6 @@ import type { ESLint, Linter, Rule } from "eslint";
 export type TailorSdkRuleName =
   | "no-api-prefix-in-path-pattern"
   | "no-deprecated-api"
-  | "no-resume-after-resolve"
-  | "one-service-per-file"
   | "require-named-workflow-job-export"
   | "require-service-default-export";
 

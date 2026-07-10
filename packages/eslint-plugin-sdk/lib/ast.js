@@ -53,36 +53,6 @@ export function bindingIdentifierForCall(call) {
   return null;
 }
 
-export function directStatementList(node) {
-  let current = node;
-  while (current.parent) {
-    const parent = current.parent;
-    if (parent.type === "BlockStatement" || parent.type === "Program") {
-      return current.type === "ExpressionStatement" ||
-        current.type === "VariableDeclaration" ||
-        current.type === "ReturnStatement"
-        ? parent
-        : null;
-    }
-    const isVariableInitializer = parent.type === "VariableDeclarator" && parent.init === current;
-    const isReturnedExpression = parent.type === "ReturnStatement" && parent.argument === current;
-    const isAssignedExpression = parent.type === "AssignmentExpression" && parent.right === current;
-    if (
-      parent.type !== "AwaitExpression" &&
-      parent.type !== "ExpressionStatement" &&
-      parent.type !== "VariableDeclaration" &&
-      !isVariableInitializer &&
-      !isReturnedExpression &&
-      !isAssignedExpression &&
-      !isExpressionWrapper(parent)
-    ) {
-      return null;
-    }
-    current = parent;
-  }
-  return null;
-}
-
 export function nodeStart(node) {
   if (Array.isArray(node.range)) return node.range[0];
   return typeof node.start === "number" ? node.start : 0;

@@ -2,8 +2,6 @@ import { memberName, nodeStart, unwrapExpression } from "./ast.js";
 
 export const SDK_CONFIGURE_MODULE = "@tailor-platform/sdk";
 export const SDK_CLI_MODULE = "@tailor-platform/sdk/cli";
-export const SDK_RUNTIME_MODULE = "@tailor-platform/sdk/runtime";
-export const SDK_WORKFLOW_RUNTIME_MODULE = "@tailor-platform/sdk/runtime/workflow";
 
 function findVariable(sourceCode, node) {
   let scope = sourceCode.getScope(node);
@@ -108,8 +106,4 @@ export function configureImportTracker(context) {
 
 export function cliImportTracker(context) {
   return createImportTracker(context, new Set([SDK_CLI_MODULE]));
-}
-
-export function workflowRuntimeImportTracker(context) {
-  return createImportTracker(context, new Set([SDK_RUNTIME_MODULE, SDK_WORKFLOW_RUNTIME_MODULE]));
 }
