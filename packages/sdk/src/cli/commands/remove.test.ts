@@ -179,7 +179,18 @@ describe("remove command", () => {
       workspaceId: "workspace-id",
       executionPolicyName: "premium",
     });
-    expect(logger.success).toHaveBeenLastCalledWith(
+    expect(mocks.applyWorkflow.mock.invocationCallOrder[0]!).toBeLessThan(
+      client.deleteWorkflowJobFunctionExecutionPolicy.mock.invocationCallOrder[0]!,
+    );
+    expect(
+      client.deleteWorkflowJobFunctionExecutionPolicy.mock.invocationCallOrder[0]!,
+    ).toBeLessThan(mocks.applyExecutor.mock.invocationCallOrder[0]!);
+    expect(logger.success).toHaveBeenNthCalledWith(
+      1,
+      "Removing all resources (--yes flag specified)...",
+    );
+    expect(logger.success).toHaveBeenNthCalledWith(
+      2,
       'Successfully removed all resources managed by "my-app".',
     );
   });
