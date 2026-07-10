@@ -185,7 +185,7 @@ const validCases: Case<undefined>[] = [
           workspaceId: WS_ID,
           aigatewayName: "my-gateway",
           authNamespace: "my-auth",
-          cors: ["https://__PLACEHOLDER__"],
+          cors: ["my-frontend:url"],
         },
         metaRequest: METADATA,
       } as never);

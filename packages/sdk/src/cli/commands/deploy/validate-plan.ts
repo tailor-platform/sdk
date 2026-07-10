@@ -131,10 +131,11 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * Application cors, AIGateway cors, and IdP userAuthPolicy.allowedReturnOrigins receive
  * special handling: static-website URL placeholders are resolved at apply time, so the
  * relevant origin/URL constraints would false-positive on `<name>:url` entries
- * here. Application cors and AIGateway cors are dropped entirely (no other constraint
- * to lose); IdP `allowedReturnOrigins` substitutes placeholder entries with a dummy
- * origin so the per-item regex and the cross-field `enable_mfa requires ≥1 origin`
- * rule still get exercised on the rest of the payload.
+ * here. Application cors and AIGateway cors are dropped entirely, forgoing their
+ * per-item URL/origin constraints for the whole list rather than substituting
+ * placeholders; IdP `allowedReturnOrigins` instead substitutes placeholder entries
+ * with a dummy origin so the per-item regex and the cross-field `enable_mfa requires
+ * ≥1 origin` rule still get exercised on the rest of the payload.
  * Workflow jobFunctions map excluded: versions are registered at apply time (registerJobFunctions)
  * and the map field carries no min_items constraint. Job names are validated separately via
  * CreateWorkflowJobFunctionRequestSchema using usedJobNames from the workflow change set.
