@@ -39,10 +39,17 @@ export type VerificationSummary = {
   checks: VerificationCheckResult[];
 };
 
-const TYPESCRIPT_NO_EMIT_COMMAND =
-  "podman run [isolated verifier] node /verifier/typescript/bin/tsc --noEmit --incremental false --pretty false";
-const TYPESCRIPT_VERIFIER_SCRIPT =
-  "exec node /verifier/typescript/bin/tsc --noEmit --incremental false --pretty false";
+const TYPESCRIPT_COMPILER_ARGS = [
+  "--noEmit",
+  "--incremental",
+  "true",
+  "--tsBuildInfoFile",
+  "/tmp/verification.tsbuildinfo",
+  "--pretty",
+  "false",
+];
+const TYPESCRIPT_NO_EMIT_COMMAND = `podman run [isolated verifier] node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
+const TYPESCRIPT_VERIFIER_SCRIPT = `exec node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
 const TYPECHECK_TIMEOUT_MS = 120_000;
 const PROCESS_OUTPUT_LIMIT_BYTES = 1024 * 1024;
 const CONTENT_FILE_LIMIT = 100;
@@ -71,6 +78,7 @@ export async function writeVerificationSummary(options: {
   problem: Problem;
   runIndex: number;
   worktreePath: string;
+  verifierImage?: string;
   verificationSummaryPath: string;
   verificationStdoutPath: string;
   verificationStderrPath: string;
@@ -96,7 +104,7 @@ export async function writeVerificationSummary(options: {
   for (const check of checks) {
     completedChecks.push(
       check.kind === "command"
-        ? await runCommandCheck(check, options.worktreePath, {
+        ? await runCommandCheck(check, options.worktreePath, options.verifierImage, {
             stdoutPath: options.verificationStdoutPath,
             stderrPath: options.verificationStderrPath,
           })
@@ -375,6 +383,9 @@ async function matchContentInWorker(
   flags: string,
   contents: string[],
 ): Promise<number[]> {
+  if (contents.length === 0) {
+    return [];
+  }
   return await new Promise((resolve, reject) => {
     const worker = new Worker(CONTENT_WORKER_SOURCE, {
       eval: true,
@@ -448,6 +459,7 @@ function resolveWorkspaceEvidenceFile(
 async function runCommandCheck(
   check: VerificationCheckResult,
   worktreePath: string,
+  verifierImage: string | undefined,
   logPaths: { stdoutPath: string; stderrPath: string },
 ): Promise<VerificationCheckResult> {
   if (check.command === undefined) {
@@ -456,7 +468,7 @@ async function runCommandCheck(
   const startedAt = Date.now();
   const result = await runProcess(
     "podman",
-    typeScriptVerifierArgs(worktreePath),
+    typeScriptVerifierArgs(worktreePath, verifierImage),
     worktreePath,
     TYPECHECK_TIMEOUT_MS,
   );
@@ -477,7 +489,10 @@ async function runCommandCheck(
   };
 }
 
-function typeScriptVerifierArgs(worktreePath: string): string[] {
+function typeScriptVerifierArgs(
+  worktreePath: string,
+  verifierImage = DEFAULT_CODEX_IMAGE,
+): string[] {
   return [
     "run",
     "--rm",
@@ -495,7 +510,7 @@ function typeScriptVerifierArgs(worktreePath: string): string[] {
     "/workspace",
     "--entrypoint",
     "/bin/bash",
-    DEFAULT_CODEX_IMAGE,
+    verifierImage,
     "-lc",
     TYPESCRIPT_VERIFIER_SCRIPT,
   ];

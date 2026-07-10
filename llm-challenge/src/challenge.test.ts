@@ -1,4 +1,5 @@
 import { promises as fs } from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -780,6 +781,7 @@ describe("verification summary", () => {
         problem: makeProblem({ group: "cli" }),
         runIndex: 0,
         worktreePath,
+        verifierImage: "example.invalid/codex-verifier:test",
         verificationSummaryPath: path.join(dir, "verification-summary.json"),
         verificationStdoutPath: path.join(dir, "verification.stdout.log"),
         verificationStderrPath: path.join(dir, "verification.stderr.log"),
@@ -797,6 +799,10 @@ describe("verification summary", () => {
     expect(podmanArgs).toContain("--network=none");
     expect(podmanArgs).toContain("--cap-drop=all");
     expect(podmanArgs).toContain(`${worktreePath}:/workspace:ro,Z`);
+    expect(podmanArgs).toContain("example.invalid/codex-verifier:test");
+    expect(podmanArgs.at(-1)).toContain(
+      "--incremental true --tsBuildInfoFile /tmp/verification.tsbuildinfo",
+    );
     expect(podmanArgs.some((argument) => argument.includes("/verifier/typescript/bin/tsc"))).toBe(
       true,
     );
@@ -1137,6 +1143,9 @@ describe("workspace preparation", () => {
       "file:.challenge/tailor-platform-sdk.tgz",
     );
     expect(packageJson.devDependencies.tsx).toBe("4.21.1");
+    expect(packageJson.devDependencies.typescript).toBe(
+      (createRequire(import.meta.url)("typescript/package.json") as { version: string }).version,
+    );
     const tsconfig = JSON.parse(
       await fs.readFile(path.join(paths.worktreePath, "tsconfig.json"), "utf8"),
     ) as {
