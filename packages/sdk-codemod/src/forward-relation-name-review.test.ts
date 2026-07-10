@@ -94,6 +94,50 @@ const post = db.table("Post", {
     expect(findings).toHaveLength(3);
   });
 
+  test("flags relation calls that use computed member access", () => {
+    const source = `
+const authorId = db.uuid()["relation"]({
+  type: "n-1",
+  toward: { type: user },
+});
+`;
+
+    const findings = reviewFindings(source, "post.ts", "post.ts");
+
+    expect(findings).toHaveLength(1);
+  });
+
+  test("flags multiline destructured relation builder aliases", () => {
+    const source = `
+const {
+  relation: defineRelation,
+}: ReturnType<typeof db.uuid> = db.uuid();
+const authorId = defineRelation({
+  type: "n-1",
+  toward: { type: user },
+});
+`;
+
+    const findings = reviewFindings(source, "post.ts", "post.ts");
+
+    expect(findings).toHaveLength(1);
+  });
+
+  test("parses TypeScript extensions as TypeScript when strings contain closing tags", () => {
+    const source = `
+const marker = "</div>";
+const typed = <Foo>value;
+const authorId = db.uuid().relation({
+  type: "n-1",
+  toward: { type: user },
+});
+`;
+
+    const findings = reviewFindings(source, "post.ts", "post.ts");
+
+    expect(findings).toHaveLength(1);
+  });
+
   test("ignores malformed and unrelated relation-like calls", () => {
     const source = `
 client.relation({ toward: { type: user } });
