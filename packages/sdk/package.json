@@ -157,7 +157,7 @@
     "check:import-cycles": "tsx scripts/check-import-cycles.ts",
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "tsc --noEmit",
-    "typecheck:go": "tsgo",
+    "typecheck:go": "tsgo --tsBuildInfoFile ./.tsgo.tsbuildinfo",
     "perf:typecheck": "bash scripts/perf/exec.sh",
     "perf:runtime": "bash scripts/perf/runtime-perf.sh",
     "prepublish": "pnpm run build",
