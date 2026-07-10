@@ -38,6 +38,14 @@ const post = db.table("Post", {
     type: "keyOnly",
     toward: { type: user },
   }),
+  previousId: db.uuid().relation({
+    type: "n-1",
+    toward: { type: "self", as: "" },
+  }),
+  nextId: db.uuid().relation({
+    type: "n-1",
+    toward: { type: "self", as: maybeName },
+  }),
 });
 `;
 
@@ -107,6 +115,20 @@ const authorId = db.uuid()["relation"]({
     expect(findings).toHaveLength(1);
   });
 
+  test("flags relation calls that use dynamic computed member access", () => {
+    const source = `
+const relationMethod = "relation";
+const authorId = db.uuid()[relationMethod]({
+  type: "n-1",
+  toward: { type: user },
+});
+`;
+
+    const findings = reviewFindings(source, "post.ts", "post.ts");
+
+    expect(findings).toHaveLength(1);
+  });
+
   test("flags multiline destructured relation builder aliases", () => {
     const source = `
 const {
@@ -116,6 +138,21 @@ const authorId = defineRelation({
   type: "n-1",
   toward: { type: user },
 });
+`;
+
+    const findings = reviewFindings(source, "post.ts", "post.ts");
+
+    expect(findings).toHaveLength(1);
+  });
+
+  test("flags relation builder aliases destructured in function parameters", () => {
+    const source = `
+function apply({ relation }: ReturnType<typeof db.uuid>) {
+  return relation({
+    type: "n-1",
+    toward: { type: user },
+  });
+}
 `;
 
     const findings = reviewFindings(source, "post.ts", "post.ts");
@@ -138,9 +175,18 @@ const authorId = db.uuid().relation({
     expect(findings).toHaveLength(1);
   });
 
+  test("parses JavaScript extensions as TSX when they contain JSX", () => {
+    const source = `const view = <Widget />; const authorId = db.uuid().relation({ type: "n-1", toward: { type: user } });`;
+
+    const findings = reviewFindings(source, "post.js", "post.js");
+
+    expect(findings).toHaveLength(1);
+  });
+
   test("ignores malformed and unrelated relation-like calls", () => {
     const source = `
 client.relation({ toward: { type: user } });
+client["validate"]({ type: "n-1", toward: { type: user } });
 const relation = { type: "n-1", toward: { type: user } };
 `;
 

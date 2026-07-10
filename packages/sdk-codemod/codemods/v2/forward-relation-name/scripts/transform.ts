@@ -6,7 +6,7 @@ import type { SgNode } from "@ast-grep/napi";
 function sourceLang(filePath: string, source: string): Lang {
   const lowerPath = filePath.toLowerCase();
   if (/\.(?:ts|mts|cts)$/u.test(lowerPath)) return Lang.TypeScript;
-  if (/\.(?:tsx|jsx)$/u.test(lowerPath)) return Lang.Tsx;
+  if (/\.(?:tsx|jsx|js)$/u.test(lowerPath)) return Lang.Tsx;
   return source.includes("</") ? Lang.Tsx : Lang.TypeScript;
 }
 
@@ -15,7 +15,8 @@ function isRelationCall(call: SgNode, aliases: ReadonlySet<string>): boolean {
   if (!callee) return false;
   if (callee.kind() === "identifier") return aliases.has(callee.text());
   if (callee.kind() === "subscript_expression") {
-    return literalStringValue(callee.field("index")) === "relation";
+    const property = literalStringValue(callee.field("index"));
+    return property === null || property === "relation";
   }
   if (callee.kind() !== "member_expression") return false;
 
@@ -49,10 +50,8 @@ function relationBindingName(pattern: SgNode): string | null {
 
 function relationAliases(root: SgNode): Set<string> {
   const aliases = new Set<string>();
-  for (const declarator of root.findAll({ rule: { kind: "variable_declarator" } })) {
-    const binding = declarator.field("name");
-    if (!binding) continue;
-    const name = relationBindingName(binding);
+  for (const pattern of root.findAll({ rule: { kind: "object_pattern" } })) {
+    const name = relationBindingName(pattern);
     if (name) aliases.add(name);
   }
   return aliases;
@@ -117,15 +116,17 @@ function needsReview(call: SgNode): boolean {
   if (towardConfig?.kind() !== "object") return towardConfig != null;
   if (hasDynamicProperties(towardConfig)) return true;
 
+  const targetType = objectPair(towardConfig, "type");
+  if (targetType && literalStringValue(pairValue(targetType)) === "self") return false;
+
   const as = objectPair(towardConfig, "as");
   if (as) {
     const explicitName = literalStringValue(pairValue(as));
     return explicitName === null || explicitName.length === 0;
   }
 
-  const targetType = objectPair(towardConfig, "type");
   if (!targetType) return false;
-  return literalStringValue(pairValue(targetType)) !== "self";
+  return true;
 }
 
 export default function transform(_source: string, _filePath: string): null {
