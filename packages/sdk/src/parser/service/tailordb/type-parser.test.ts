@@ -276,29 +276,106 @@ describe("parseTypes", () => {
   });
 
   describe("forwardRelationships", () => {
+    test("should derive default forward relation names from field names", () => {
+      const unit = db.table("Unit", {
+        name: db.string(),
+      });
+
+      const inventoryExecutionLine = db.table("InventoryExecutionLine", {
+        unitId: db.uuid().relation({
+          type: "n-1",
+          toward: { type: unit },
+          backward: "inventoryExecutionLines",
+        }),
+        primaryUnitId: db.uuid().relation({
+          type: "n-1",
+          toward: { type: unit },
+          backward: "primaryInventoryExecutionLines",
+        }),
+      });
+
+      const result = parseTypes(
+        toSchemaOutputs({ Unit: unit, InventoryExecutionLine: inventoryExecutionLine }),
+        "test-namespace",
+      );
+
+      expect(result.InventoryExecutionLine!.forwardRelationships).toMatchObject({
+        unit: {
+          name: "unit",
+          targetType: "Unit",
+          targetField: "unitId",
+        },
+        primaryUnit: {
+          name: "primaryUnit",
+          targetType: "Unit",
+          targetField: "primaryUnitId",
+        },
+      });
+    });
+
+    test.each([
+      ["assigneeID", "assignee"],
+      ["assigneeId", "assignee"],
+      ["assigneeid", "assignee"],
+    ])("should strip a trailing ID suffix from %s", (fieldName, forwardName) => {
+      const user = db.table("User", {
+        name: db.string(),
+      });
+      const task = db.table("Task", {
+        [fieldName]: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "tasks",
+        }),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ User: user, Task: task }), "test-namespace");
+
+      expect(result.Task!.forwardRelationships[forwardName]).toMatchObject({
+        name: forwardName,
+        targetType: "User",
+        targetField: fieldName,
+      });
+    });
+
+    test("should require toward.as when a relation field has no ID suffix", () => {
+      const user = db.table("User", {
+        email: db.string().unique(),
+      });
+      const profile = db.table("Profile", {
+        userEmail: db.string().relation({
+          type: "1-1",
+          toward: { type: user, key: "email" },
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Profile: profile }), "test-namespace"),
+      ).toThrow(/Forward relation name "userEmail".*same as its own relation field/s);
+    });
+
     test("should throw error when forward relation names are duplicated", () => {
       const user = db.table("User", {
         name: db.string(),
       });
 
-      // Two fields referencing the same type without explicit forward names ("as")
-      // Both will generate "user" as the forward name
+      // Different supported ID suffixes can still normalize to the same name.
       const post = db.table("Post", {
-        authorID: db.uuid().relation({
+        authorId: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
           backward: "authoredPosts",
         }),
-        reviewerID: db.uuid().relation({
+        authorID: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
-          backward: "reviewedPosts",
+          backward: "reviewedAuthoredPosts",
         }),
       });
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
-      ).toThrow(/Forward relation name "user".*duplicated.*authorID.*reviewerID/s);
+      ).toThrow(/Forward relation name "author".*duplicated.*authorId.*authorID/s);
     });
 
     test("should not throw error when forward names are explicitly set to be unique", () => {
@@ -340,9 +417,9 @@ describe("parseTypes", () => {
         name: db.string(),
       });
 
-      // Post has a field named "user"
+      // Post has a field named "author"
       const post = db.table("Post", {
-        user: db.string(),
+        author: db.string(),
         authorID: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
@@ -351,7 +428,7 @@ describe("parseTypes", () => {
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
-      ).toThrow(/Forward relation name "user".*conflicts with existing field/s);
+      ).toThrow(/Forward relation name "author".*conflicts with existing field/s);
     });
 
     test("should throw error when conflicting field is defined after the relation field", () => {
@@ -359,18 +436,18 @@ describe("parseTypes", () => {
         name: db.string(),
       });
 
-      // The conflicting "user" field is defined after authorID in the object
+      // The conflicting "author" field is defined after authorID in the object
       const post = db.table("Post", {
         authorID: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
         }),
-        user: db.string(),
+        author: db.string(),
       });
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
-      ).toThrow(/Forward relation name "user".*conflicts with existing field/s);
+      ).toThrow(/Forward relation name "author".*conflicts with existing field/s);
     });
 
     test("should throw error when forward name equals its own relation field name", () => {
@@ -431,13 +508,13 @@ describe("parseTypes", () => {
         postID: db.uuid().relation({
           type: "n-1",
           toward: { type: post, as: "post" },
-          backward: "user",
+          backward: "author",
         }),
       });
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post, Comment: comment }), "test-namespace"),
-      ).toThrow(/Relation name "user" on type "Post".*forward.*backward/s);
+      ).toThrow(/Relation name "author" on type "Post".*forward.*backward/s);
     });
 
     test("should include source file information in forward conflict error message", () => {
@@ -446,15 +523,15 @@ describe("parseTypes", () => {
       });
 
       const post = db.table("Post", {
-        authorID: db.uuid().relation({
+        authorId: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
           backward: "authoredPosts",
         }),
-        reviewerID: db.uuid().relation({
+        authorID: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
-          backward: "reviewedPosts",
+          backward: "reviewedAuthoredPosts",
         }),
       });
 
@@ -467,7 +544,7 @@ describe("parseTypes", () => {
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace", typeSourceInfo),
-      ).toThrow(/Forward relation name "user".*\/path\/to\/post\.ts/s);
+      ).toThrow(/Forward relation name "author".*\/path\/to\/post\.ts/s);
     });
 
     test("should throw error when self relation forward name is empty", () => {
@@ -481,6 +558,22 @@ describe("parseTypes", () => {
       expect(() => parseTypes(toSchemaOutputs({ Node: node }), "test-namespace")).toThrow(
         /Forward relation name for field "ID" on type "Node" cannot be empty/s,
       );
+    });
+
+    test("should throw error when non-self relation forward name is empty", () => {
+      const user = db.table("User", {
+        name: db.string(),
+      });
+      const post = db.table("Post", {
+        ID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name for field "ID" on type "Post" cannot be empty/s);
     });
   });
 

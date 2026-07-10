@@ -220,10 +220,13 @@ const user = db.table("User", {
 const userProfile = db.table("UserProfile", {
   userEmail: db.string().relation({
     type: "1-1",
-    toward: { type: user, key: "email" },
+    toward: { type: user, key: "email", as: "user" },
   }),
 });
 ```
+
+`userEmail` does not end in `ID`, `Id`, or `id`, so this example specifies the forward relation
+name with `toward.as`.
 
 Customize relation names using `toward.as` / `backward` options:
 
@@ -255,27 +258,31 @@ type User {
 - `backward` - Customizes the field name for accessing this type from the related type
 
 Relation names share the same GraphQL field namespace as fields, files, and other relations on
-the type. The SDK rejects duplicate or empty relation names. Use `toward.as` when multiple fields
-on the same type point to the same target type, because their default forward names are derived
-from the target type name:
+the table. The SDK rejects duplicate or empty relation names. When `toward.as` is omitted, the
+default forward name comes from the relation field name with a trailing `ID`, `Id`, or `id`
+removed. This lets multiple fields point to the same target table with distinct forward names:
 
 ```typescript
 const post = db.table("Post", {
   authorID: db.uuid().relation({
     type: "n-1",
-    toward: { type: user, as: "author" },
+    toward: { type: user },
     backward: "authoredPosts",
   }),
   reviewerID: db.uuid().relation({
     type: "n-1",
-    toward: { type: user, as: "reviewer" },
+    toward: { type: user },
     backward: "reviewedPosts",
   }),
 });
 ```
 
+These fields generate the forward names `author` and `reviewer`. A relation field without one of
+the recognized ID suffixes needs an explicit `toward.as`, because its generated forward name
+would conflict with the field itself.
+
 Use `toward.as` or `backward` when a generated relation name would conflict with an existing
-field, files entry, or relation on the same type.
+field, files entry, or relation on the same table.
 
 ### Hooks
 

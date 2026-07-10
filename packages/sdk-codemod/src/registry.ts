@@ -97,6 +97,7 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_3 = "2.0.0-next.3";
+const V2_NEXT_4 = "2.0.0-next.4";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -613,6 +614,48 @@ export const allCodemods: CodemodPackage[] = [
       "alias may require call-site renaming.",
       "Review any remaining db.type references and rename SDK TailorDB schema builder",
       "calls to db.table. Leave unrelated local objects with a .type() method unchanged.",
+    ].join("\n"),
+  },
+  {
+    id: "v2/forward-relation-name",
+    name: "TailorDB forward relation names derive from field names",
+    description:
+      "Review TailorDB relations that omit `toward.as`. Their forward GraphQL field names now derive from the relation field name with a trailing `ID`, `Id`, or `id` removed, instead of from the target table name.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_4,
+    scriptPath: "v2/forward-relation-name/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    examples: [
+      {
+        caption: "Preserve the v1 GraphQL field name by making it explicit:",
+        before: [
+          "ownerId: db.uuid().relation({",
+          '  type: "n-1",',
+          "  toward: { type: user },",
+          "}),",
+        ].join("\n"),
+        after: [
+          "ownerId: db.uuid().relation({",
+          '  type: "n-1",',
+          '  toward: { type: user, as: "user" },',
+          "}),",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "Tailor SDK v2 derives a default forward GraphQL relation name from the source",
+      "field name by removing a trailing ID, Id, or id. V1 derived it from the target",
+      "table name. Review each reported non-self relation that omits toward.as.",
+      "",
+      "If consumers must keep using the v1 GraphQL field name, add toward.as with the",
+      "lower-camel-case target table name. Otherwise, update GraphQL operations and",
+      "consumer code to use the new field-based name. No change is needed when the old",
+      "and new names are identical. Relations with an explicit toward.as, self-relations,",
+      "and keyOnly relations are unchanged.",
+      "",
+      "A relation field without a trailing ID, Id, or id would default to its own scalar",
+      "field name and therefore conflict. Give that relation an explicit toward.as.",
     ].join("\n"),
   },
   {
