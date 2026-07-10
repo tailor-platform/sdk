@@ -1,4 +1,5 @@
 import { parse, Lang } from "@ast-grep/napi";
+import { stringValue } from "../../../../src/ast-grep-helpers";
 import type { LlmReviewFinding } from "../../../../src/types";
 import type { SgNode } from "@ast-grep/napi";
 
@@ -30,7 +31,7 @@ function callArgument(call: SgNode): SgNode | null {
 
 function pairKey(pair: SgNode): string | null {
   const key = pair.children()[0];
-  return key?.text().replace(/^['"]|['"]$/g, "") ?? null;
+  return stringValue(key ?? null);
 }
 
 function pairValue(pair: SgNode): SgNode | null {
@@ -46,38 +47,52 @@ function objectPair(object: SgNode, key: string): SgNode | null {
   );
 }
 
-function stringValue(node: SgNode | null): string | null {
+function literalStringValue(node: SgNode | null): string | null {
   if (node?.kind() !== "string") return null;
-  return node.text().replace(/^['"]|['"]$/g, "");
+  return stringValue(node);
+}
+
+function hasDynamicProperties(object: SgNode): boolean {
+  return object.children().some((child) => {
+    const kind = child.kind();
+    return kind === "spread_element" || kind === "shorthand_property_identifier";
+  });
 }
 
 function needsReview(call: SgNode): boolean {
   const config = callArgument(call);
   if (config?.kind() !== "object") return config != null;
+  if (hasDynamicProperties(config)) return true;
 
   const relationType = objectPair(config, "type");
   const toward = objectPair(config, "toward");
   if (!relationType || !toward) return false;
-  if (stringValue(pairValue(relationType)) === "keyOnly") return false;
+  if (literalStringValue(pairValue(relationType)) === "keyOnly") return false;
 
   const towardConfig = pairValue(toward);
   if (towardConfig?.kind() !== "object") return towardConfig != null;
-  if (objectPair(towardConfig, "as")) return false;
+  if (hasDynamicProperties(towardConfig)) return true;
+
+  const as = objectPair(towardConfig, "as");
+  if (as) {
+    const explicitName = literalStringValue(pairValue(as));
+    return explicitName === null || explicitName.length === 0;
+  }
 
   const targetType = objectPair(towardConfig, "type");
   if (!targetType) return false;
-  return stringValue(pairValue(targetType)) !== "self";
+  return literalStringValue(pairValue(targetType)) !== "self";
 }
 
 export default function transform(_source: string, _filePath: string): null {
   return null;
 }
 
-export async function reviewFindings(
+export function reviewFindings(
   source: string,
   filePath: string,
   relativePath: string,
-): Promise<LlmReviewFinding[]> {
+): LlmReviewFinding[] {
   if (!source.includes(".relation")) return [];
 
   const root = parse(sourceLang(filePath, source), source).root();
