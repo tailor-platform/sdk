@@ -154,13 +154,13 @@ type HookArgs<TData> =
     : unknown;
 
 type CreateHookFn<TValue, TReturn> = (args: {
-  value: TValue;
+  input: TValue;
   invoker: TailorPrincipal | null;
   now: Date;
 }) => TReturn;
 
 type UpdateHookFn<TValue, TReturn> = (args: {
-  value: TValue;
+  input: TValue;
   oldValue: TValue | null;
   invoker: TailorPrincipal | null;
   now: Date;
@@ -171,11 +171,16 @@ export type Hook<TReturn, TCreateReturn = TReturn> = {
   update?: UpdateHookFn<TReturn | null, TReturn>;
 };
 
-type DottedPaths<T, Prefix extends string = ""> =
-  T extends Record<string, unknown>
-    ? {
-        [K in keyof T & string]: `${Prefix}${K}` | DottedPaths<NonNullable<T[K]>, `${Prefix}${K}.`>;
-      }[keyof T & string]
+type DottedPaths<T, Prefix extends string = ""> = string extends keyof T
+  ? string
+  : T extends Record<string, unknown>
+    ?
+        | (string & {})
+        | {
+            [K in keyof T & string]:
+              | `${Prefix}${K}`
+              | DottedPaths<NonNullable<T[K]>, `${Prefix}${K}.`>;
+          }[keyof T & string]
     : never;
 
 export type TypeValidateFn<

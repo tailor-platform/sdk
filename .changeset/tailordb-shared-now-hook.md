@@ -1,5 +1,6 @@
 ---
 "@tailor-platform/sdk": minor
+"@tailor-platform/sdk-codemod": patch
 ---
 
 Redesign TailorDB hooks and validators with several breaking changes (pre-release):

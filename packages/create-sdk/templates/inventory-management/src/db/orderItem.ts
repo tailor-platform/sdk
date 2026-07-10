@@ -26,10 +26,12 @@ export const orderItem = db
   })
   .hooks({
     create: ({ input }) => ({
-      totalPrice: (input?.quantity ?? 0) * (input.unitPrice ?? 0),
+      totalPrice: (input?.quantity ?? 0) * (input?.unitPrice ?? 0),
     }),
-    update: ({ input }) => ({
-      totalPrice: (input?.quantity ?? 0) * (input.unitPrice ?? 0),
+    update: ({ input, oldRecord }) => ({
+      totalPrice:
+        (input?.quantity ?? oldRecord?.quantity ?? 0) *
+        (input?.unitPrice ?? oldRecord?.unitPrice ?? 0),
     }),
   })
   .permission(permissionLoggedIn)

@@ -81,7 +81,7 @@ describe("createTailorDBHook", () => {
       const type = db.table("Test", {
         user: db.object({
           name: db.string().hooks({
-            create: ({ value }) => `hooked:${value as string}`,
+            create: ({ input }) => `hooked:${input as string}`,
           }),
         }),
       });
@@ -122,9 +122,9 @@ describe("createTailorDBHook", () => {
         lines: db.object(
           {
             stamp: db.string().hooks({
-              create: ({ value }) => {
-                calls.push(value);
-                return `stamped:${value as string}`;
+              create: ({ input }) => {
+                calls.push(input);
+                return `stamped:${input as string}`;
               },
             }),
           },

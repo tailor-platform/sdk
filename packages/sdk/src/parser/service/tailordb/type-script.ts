@@ -115,11 +115,6 @@ function buildValidateStatements(
     const access = `${accessExpr}[${key(name)}]`;
     const fieldPath = keyPrefix ? `${keyPrefix}.${name}` : name;
 
-    if (isNestedType(config) && config.fields) {
-      statements.push(...buildValidateStatements(config.fields, `(${access} || {})`, fieldPath));
-      continue;
-    }
-
     const validators = (config.validate ?? []).filter((v) => v.script?.expr);
     if (validators.length > 0) {
       const checks = validators
@@ -129,6 +124,10 @@ function buildValidateStatements(
         )
         .join(" ");
       statements.push(`{ const _value = ${access}; ${checks} }`);
+    }
+
+    if (isNestedType(config) && config.fields) {
+      statements.push(...buildValidateStatements(config.fields, `(${access} || {})`, fieldPath));
     }
   }
 

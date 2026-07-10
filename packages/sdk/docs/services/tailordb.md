@@ -287,7 +287,7 @@ Set hooks directly on individual fields.
 
 Create hooks receive:
 
-- `value`: The field value from the input (null when not provided)
+- `input`: The field value from the input (null when not provided)
 - `invoker`: Principal performing the operation
 - `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
 
@@ -298,7 +298,7 @@ Update hooks receive the same arguments plus:
 ```typescript
 db.string().hooks({
   create: ({ invoker }) => invoker?.id ?? "",
-  update: ({ value, oldValue }) => value ?? oldValue,
+  update: ({ input, oldValue }) => input ?? oldValue,
 });
 ```
 
