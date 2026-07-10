@@ -416,6 +416,31 @@ describe("resolve", () => {
     vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
   });
 
+  test("falls back to a less specific alias when a more specific alias's targets are all malformed", async () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: {
+        baseUrl: ".",
+        paths: { "@app/foo/*": [123], "@app/*": ["./*"] },
+      },
+    });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      if (String(path).endsWith("tsconfig.json")) return tsconfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const resolved = { url: "file:///empty-target-fallback-project/foo/bar.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockRejectedValueOnce(notFound("@app/foo/bar"))
+      .mockResolvedValueOnce(resolved);
+    const result = await resolve(
+      "@app/foo/bar",
+      { parentURL: "file:///empty-target-fallback-project/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual(resolved);
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
+
   test("does not append extensions when tsconfig path target already has a .ts extension", async () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@/utils": ["./utils/index.ts"] } },
@@ -733,6 +758,33 @@ describe("resolveSync", () => {
     const result = resolveSync(
       "@parent/foo",
       { parentURL: "file:///malformed-child-paths-sync-project/tailor.config.ts" },
+      nextResolve,
+    );
+    expect(result).toEqual(resolved);
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
+
+  test("falls back to a less specific alias when a more specific alias's targets are all malformed", () => {
+    const tsconfig = JSON.stringify({
+      compilerOptions: {
+        baseUrl: ".",
+        paths: { "@app/foo/*": [123], "@app/*": ["./*"] },
+      },
+    });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      if (String(path).endsWith("tsconfig.json")) return tsconfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const resolved = { url: "file:///empty-target-fallback-sync-project/foo/bar.ts" };
+    const nextResolve = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw notFound("@app/foo/bar");
+      })
+      .mockReturnValueOnce(resolved);
+    const result = resolveSync(
+      "@app/foo/bar",
+      { parentURL: "file:///empty-target-fallback-sync-project/tailor.config.ts" },
       nextResolve,
     );
     expect(result).toEqual(resolved);
