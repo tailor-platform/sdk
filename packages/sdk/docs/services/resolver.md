@@ -362,7 +362,7 @@ import { createResolver, t } from "@tailor-platform/sdk";
 export default createResolver({
   name: "getMyOrders",
   operation: "query",
-  auth: { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+  auth: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
   output: t.object({ count: t.int() }),
   body: async (context) => {
     // context.user is guaranteed to be an authenticated caller here
@@ -371,15 +371,22 @@ export default createResolver({
 });
 ```
 
-`auth` uses the same `conditions`/`permit` notation as TailorDB's `.permission()`, restricted to `user` operands (a resolver has no associated record to compare against) with equality (`=`/`!=`) comparisons:
+`auth` uses the same `conditions`/`permit` notation as TailorDB's `.permission()` — an array of policies, restricted to `user` operands (a resolver has no associated record to compare against) with equality (`=`/`!=`) comparisons:
 
 - `{ user: "_loggedIn" }` — whether the caller is authenticated
 - `{ user: "id" }` — the caller's user ID
-- `{ user: "someAttribute" }` — any attribute enabled in `auth.userProfile.attributes`
+- `{ user: "someAttribute" }` — any attribute enabled in `auth.userProfile.attributes` (or `auth.machineUserAttributes` for machine users)
 
-Multiple conditions in the same `conditions` array are combined with AND. `permit` is required — `permit: true` denies callers that _don't_ match, `permit: false` denies callers that _do_ match.
+Multiple conditions within the same policy's `conditions` array are combined with AND. `permit` is required. A `permit: false` policy always denies matching callers. With no `permit: true` policy, `auth` is a pure blocklist (everyone else is allowed); with at least one `permit: true` policy, it becomes an allow-list (denied by default, granted only by a matching `permit: true` policy). This lets you express different eligibility paths, e.g. allowing machine-user callers unconditionally while gating regular users behind a role check:
 
-Besides a conditions object, `auth` also accepts:
+```typescript
+auth: [
+  { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
+  { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
+],
+```
+
+Besides a policy array, `auth` also accepts:
 
 - `"public"` — explicitly documents that anonymous callers are allowed. Behaves the same as omitting `auth`, but records the decision so it isn't mistaken for an oversight.
 - Omitted (default) — unchanged: anonymous callers can still reach the resolver.

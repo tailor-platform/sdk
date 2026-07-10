@@ -104,7 +104,8 @@ export function buildResolverOperationHookExpr(
   return `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`;
 }
 
-type ResolverAuthPolicy = Extract<NonNullable<Resolver["auth"]>, { conditions: unknown }>;
+type ResolverAuthPolicies = Extract<NonNullable<Resolver["auth"]>, readonly unknown[]>;
+type ResolverAuthPolicy = ResolverAuthPolicies[number];
 type ResolverPermissionOperand = string | boolean | { user: string };
 type ResolverPermissionCondition = readonly [
   ResolverPermissionOperand,
@@ -137,12 +138,22 @@ function resolverPermissionConditionExpr(condition: ResolverPermissionCondition)
   return `(${resolverPermissionOperandExpr(left)} ${jsOperator} ${resolverPermissionOperandExpr(right)})`;
 }
 
+function resolverPermissionPolicyExpr(policy: ResolverAuthPolicy): string {
+  const conditions = isSingleResolverCondition(policy.conditions)
+    ? [policy.conditions]
+    : policy.conditions;
+  return conditions.map(resolverPermissionConditionExpr).join(" && ");
+}
+
 /**
  * Build the auth guard statement injected at resolver entry.
  *
  * Rejects the call with `TailorErrorMessage` when the caller doesn't match
- * `auth`'s conditions, evaluated against `context.user` — the original caller,
- * unaffected by `authInvoker`.
+ * `auth`, evaluated against `context.user` — the original caller, unaffected
+ * by `authInvoker`. A `permit: false` policy always denies matching callers.
+ * With no `permit: true` policy, `auth` is a pure blocklist (everyone else is
+ * allowed); with at least one, it's an allow-list (deny by default, granted
+ * only by a matching `permit: true` policy).
  * @param auth - The resolver's `auth` config
  * @returns A JS `if (...) throw ...;` statement, or `undefined` when `auth` is omitted or `"public"`
  */
@@ -150,11 +161,24 @@ export function buildResolverAuthGuardExpr(auth: Resolver["auth"]): string | und
   if (!auth || auth === "public") {
     return undefined;
   }
-  const conditions = isSingleResolverCondition(auth.conditions)
-    ? [auth.conditions]
-    : auth.conditions;
-  const combined = conditions.map(resolverPermissionConditionExpr).join(" && ");
-  const denyExpr = auth.permit === false ? `(${combined})` : `!(${combined})`;
-  const message = auth.description ? `access denied: ${auth.description}` : "access denied";
+  const denyPolicies = auth.filter((policy) => policy.permit === false);
+  const allowPolicies = auth.filter((policy) => policy.permit !== false);
+
+  const deniedExpr =
+    denyPolicies.length > 0
+      ? denyPolicies.map((policy) => `(${resolverPermissionPolicyExpr(policy)})`).join(" || ")
+      : "false";
+
+  // With no allow policies, `auth` is a pure blocklist: deny only callers matching
+  // a deny policy, allow everyone else. With at least one allow policy, `auth` is
+  // an allow-list: deny anyone that doesn't match an allow policy (in addition to
+  // the deny-policy override above).
+  const denyExpr =
+    allowPolicies.length > 0
+      ? `(${deniedExpr}) || !(${allowPolicies.map((policy) => `(${resolverPermissionPolicyExpr(policy)})`).join(" || ")})`
+      : deniedExpr;
+  const descriptions = auth.map((policy) => policy.description).filter((d) => !!d);
+  const message =
+    descriptions.length > 0 ? `access denied: ${descriptions.join("; ")}` : "access denied";
   return `if (${denyExpr}) { throw new TailorErrorMessage(${JSON.stringify(message)}); }`;
 }

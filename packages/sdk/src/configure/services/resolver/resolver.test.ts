@@ -473,13 +473,12 @@ describe("createResolver", () => {
         operation: "query",
         output: outputType,
         body: () => ({ result: "ok" }),
-        auth: { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+        auth: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
       });
 
-      expect(resolver.auth).toEqual({
-        conditions: [[{ user: "_loggedIn" }, "=", true]],
-        permit: true,
-      });
+      expect(resolver.auth).toEqual([
+        { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+      ]);
     });
 
     test("creates resolver with auth: public", () => {

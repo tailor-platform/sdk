@@ -63,8 +63,8 @@ type ResolverReturn<
  * `auth` declares the resolver's access requirement, checked against `context.user` (the
  * original caller, unaffected by `authInvoker`) before `body` runs. Omitted (default):
  * unchanged, anonymous callers can reach the resolver. `"public"`: explicitly documents that
- * anonymous callers are allowed. A `{ conditions, permit }` policy (in the same style as
- * TailorDB's `.permission()`) rejects callers that don't match.
+ * anonymous callers are allowed. An array of `{ conditions, permit }` policies (in the same
+ * style as TailorDB's `.permission()`) rejects callers that don't match any allow policy.
  * @template Input
  * @template Output
  * @param config - Resolver configuration
@@ -75,7 +75,7 @@ type ResolverReturn<
  * export default createResolver({
  *   name: "getUser",
  *   operation: "query",
- *   auth: { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+ *   auth: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
  *   input: {
  *     id: t.string(),
  *   },

@@ -51,7 +51,7 @@ describe("bundleResolvers", () => {
       `export default {\n` +
         `  operation: "query",\n` +
         `  name: "protected",\n` +
-        `  auth: { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },\n` +
+        `  auth: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],\n` +
         `  body: async () => 1,\n` +
         `  output: { type: "integer", metadata: {}, fields: {} },\n` +
         `};\n`,

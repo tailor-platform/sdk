@@ -23,7 +23,7 @@ const ResolverPermissionConditionSchema = z
   ])
   .readonly();
 
-const ResolverPermissionSchema = z.object({
+const ResolverPermissionPolicySchema = z.object({
   conditions: z.union([
     ResolverPermissionConditionSchema,
     z.array(ResolverPermissionConditionSchema).readonly(),
@@ -33,7 +33,7 @@ const ResolverPermissionSchema = z.object({
 });
 
 export const ResolverAuthSchema = z
-  .union([ResolverPermissionSchema, z.literal("public")])
+  .union([z.array(ResolverPermissionPolicySchema).readonly(), z.literal("public")])
   .describe(
     "Access requirement for this resolver, evaluated against the original caller " +
       '(unaffected by `authInvoker`) before `body` runs. "public" documents that anonymous ' +

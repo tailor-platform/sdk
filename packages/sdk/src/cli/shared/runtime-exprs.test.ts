@@ -130,50 +130,54 @@ describe("buildResolverAuthGuardExpr", () => {
   });
 
   test("_loggedIn permit:true allows an authenticated user", () => {
-    const auth = { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true } as const;
+    const auth = [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }] as const;
     expect(() => runGuard(auth, { type: "user" })).not.toThrow();
   });
 
   test("_loggedIn permit:true rejects an anonymous user", () => {
-    const auth = { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true } as const;
+    const auth = [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }] as const;
     expect(() => runGuard(auth, { type: "" })).toThrow(TailorErrorMessage);
   });
 
   test("permit:false denies matching callers instead of allowing them", () => {
-    const auth = { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: false } as const;
+    const auth = [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: false }] as const;
     expect(() => runGuard(auth, { type: "user" })).toThrow(TailorErrorMessage);
     expect(() => runGuard(auth, { type: "" })).not.toThrow();
   });
 
   test("supports the != operator", () => {
-    const auth = { conditions: [[{ user: "role" }, "!=", "BANNED"]], permit: true } as const;
+    const auth = [{ conditions: [[{ user: "role" }, "!=", "BANNED"]], permit: true }] as const;
     expect(() => runGuard(auth, { attributes: { role: "MEMBER" } })).not.toThrow();
     expect(() => runGuard(auth, { attributes: { role: "BANNED" } })).toThrow(TailorErrorMessage);
   });
 
   test("supports the id operand", () => {
-    const auth = {
-      conditions: [[{ user: "id" }, "=", "11111111-1111-1111-1111-111111111111"]],
-      permit: true,
-    } as const;
+    const auth = [
+      {
+        conditions: [[{ user: "id" }, "=", "11111111-1111-1111-1111-111111111111"]],
+        permit: true,
+      },
+    ] as const;
     expect(() => runGuard(auth, { id: "11111111-1111-1111-1111-111111111111" })).not.toThrow();
     expect(() => runGuard(auth, { id: "other" })).toThrow(TailorErrorMessage);
   });
 
   test("supports arbitrary user attribute operands", () => {
-    const auth = { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true } as const;
+    const auth = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
     expect(() => runGuard(auth, { attributes: { role: "ADMIN" } })).not.toThrow();
     expect(() => runGuard(auth, { attributes: { role: "MEMBER" } })).toThrow(TailorErrorMessage);
   });
 
-  test("ANDs multiple conditions", () => {
-    const auth = {
-      conditions: [
-        [{ user: "_loggedIn" }, "=", true],
-        [{ user: "role" }, "=", "ADMIN"],
-      ],
-      permit: true,
-    } as const;
+  test("ANDs multiple conditions within a policy", () => {
+    const auth = [
+      {
+        conditions: [
+          [{ user: "_loggedIn" }, "=", true],
+          [{ user: "role" }, "=", "ADMIN"],
+        ],
+        permit: true,
+      },
+    ] as const;
     expect(() => runGuard(auth, { type: "user", attributes: { role: "ADMIN" } })).not.toThrow();
     expect(() => runGuard(auth, { type: "user", attributes: { role: "MEMBER" } })).toThrow(
       TailorErrorMessage,
@@ -183,12 +187,47 @@ describe("buildResolverAuthGuardExpr", () => {
     );
   });
 
+  test("ORs multiple allow policies", () => {
+    // Allow machine-user callers unconditionally, or regular users with role ADMIN
+    const auth = [
+      { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
+      { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
+    ] as const;
+    expect(() =>
+      runGuard(auth, { attributes: { isServiceAccount: true, role: "MEMBER" } }),
+    ).not.toThrow();
+    expect(() =>
+      runGuard(auth, { attributes: { isServiceAccount: false, role: "ADMIN" } }),
+    ).not.toThrow();
+    expect(() =>
+      runGuard(auth, { attributes: { isServiceAccount: false, role: "MEMBER" } }),
+    ).toThrow(TailorErrorMessage);
+  });
+
+  test("a deny policy overrides a matching allow policy", () => {
+    const auth = [
+      { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+      { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false },
+    ] as const;
+    expect(() => runGuard(auth, { type: "user", attributes: { role: "MEMBER" } })).not.toThrow();
+    expect(() => runGuard(auth, { type: "user", attributes: { role: "BANNED" } })).toThrow(
+      TailorErrorMessage,
+    );
+  });
+
+  test("denies by default when no allow policy matches", () => {
+    const auth = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
+    expect(() => runGuard(auth, { attributes: { role: "GUEST" } })).toThrow(TailorErrorMessage);
+  });
+
   test("includes description in the thrown message when present", () => {
-    const auth = {
-      conditions: [[{ user: "_loggedIn" }, "=", true]],
-      permit: true,
-      description: "must be logged in",
-    } as const;
+    const auth = [
+      {
+        conditions: [[{ user: "_loggedIn" }, "=", true]],
+        permit: true,
+        description: "must be logged in",
+      },
+    ] as const;
     expect(() => runGuard(auth, { type: "" })).toThrow(/must be logged in/);
   });
 });

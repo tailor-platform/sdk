@@ -42,17 +42,34 @@ export type ResolverPermissionCondition<User extends object = InferredAttributeM
   | BooleanEqualityCondition<User>;
 
 /**
- * Access requirement for a resolver, evaluated against the original caller
- * (`context.user`) before `body` runs — unaffected by `authInvoker`.
- * @example
- * const auth: ResolverPermission = {
- *   conditions: [[{ user: "_loggedIn" }, "=", true]],
- *   permit: true,
- * };
+ * A single access policy, in the same style as TailorDB's `.permission()`
+ * policies.
  */
-export type ResolverPermission<User extends object = InferredAttributeMap> = {
+export type ResolverPermissionPolicy<User extends object = InferredAttributeMap> = {
   conditions: ResolverPermissionCondition<User> | readonly ResolverPermissionCondition<User>[];
   /** Whether matching callers are granted (`true`) or denied (`false`) access. */
   permit: boolean;
   description?: string;
 };
+
+/**
+ * Access requirement for a resolver, evaluated against the original caller
+ * (`context.user`) before `body` runs — unaffected by `authInvoker`.
+ *
+ * A `permit: false` policy always denies matching callers. With no
+ * `permit: true` policy, this is a pure blocklist (everyone else is allowed);
+ * with at least one, it's an allow-list (deny by default, granted only by a
+ * matching `permit: true` policy).
+ * @example
+ * const auth: ResolverPermission = [
+ *   { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+ * ];
+ * @example
+ * // Allow machine-user callers unconditionally, gate regular users behind a role
+ * const auth: ResolverPermission = [
+ *   { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
+ *   { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
+ * ];
+ */
+export type ResolverPermission<User extends object = InferredAttributeMap> =
+  readonly ResolverPermissionPolicy<User>[];
