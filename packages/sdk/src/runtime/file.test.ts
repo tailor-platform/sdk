@@ -2,11 +2,7 @@
  * Tests for `@tailor-platform/sdk/runtime/file` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import defaultFile, {
-  file,
-  type TailorDBFileError,
-  type TailorDBFileErrorCode,
-} from "#/runtime/file";
+import { file, type TailorDBFileError, type TailorDBFileErrorCode } from "#/runtime/file";
 import { cleanupMocks, mockFile, injectMocks } from "#/vitest/mock";
 
 const args = ["ns", "Doc", "blob", "rec-1"] as const;
@@ -25,10 +21,6 @@ describe("@tailor-platform/sdk/runtime/file", () => {
 
   afterEach(() => {
     cleanupMocks(globalThis);
-  });
-
-  test("exports matching default and named namespace objects", () => {
-    expect(defaultFile).toBe(file);
   });
 
   test("upload forwards args and records the call", async () => {

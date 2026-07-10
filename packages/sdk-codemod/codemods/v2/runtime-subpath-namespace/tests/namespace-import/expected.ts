@@ -1,3 +1,3 @@
-import iconv from "@tailor-platform/sdk/runtime/iconv";
+import { iconv as runtimeIconv } from "@tailor-platform/sdk/runtime/iconv";
 
-const out = iconv.convert("a", "UTF-8", "Shift_JIS");
+const out = runtimeIconv.convert("a", "UTF-8", "Shift_JIS");

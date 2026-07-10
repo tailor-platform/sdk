@@ -50,5 +50,3 @@ export const secretmanager = {
   getSecrets,
   getSecret,
 } as const satisfies TailorSecretmanagerAPI;
-
-export default secretmanager;

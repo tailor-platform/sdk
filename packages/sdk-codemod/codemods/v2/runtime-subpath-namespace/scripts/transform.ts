@@ -100,11 +100,12 @@ const RUNTIME_MODULES: RuntimeModule[] = [
 ];
 
 const MODULES_BY_SOURCE = new Map(RUNTIME_MODULES.map((mod) => [mod.source, mod]));
+const AGGREGATE_RUNTIME_SOURCE = "@tailor-platform/sdk/runtime";
 const JSX_FILE_EXTENSIONS = new Set([".tsx", ".jsx"]);
 const JS_FILE_EXTENSIONS = new Set([".js", ".mjs", ".cjs"]);
 
 function quickFilter(source: string): boolean {
-  return source.includes("@tailor-platform/sdk/runtime/");
+  return source.includes(AGGREGATE_RUNTIME_SOURCE);
 }
 
 function sourceLang(filePath: string, source: string): Lang {
@@ -121,12 +122,11 @@ function importClause(importStmt: SgNode): SgNode | null {
   return importStmt.children().find((child) => child.kind() === "import_clause") ?? null;
 }
 
-function defaultImportName(importStmt: SgNode): string | null {
+function hasDefaultImport(importStmt: SgNode): boolean {
   return (
     importClause(importStmt)
       ?.children()
-      .find((child) => child.kind() === "identifier")
-      ?.text() ?? null
+      .some((child) => child.kind() === "identifier") ?? false
   );
 }
 
@@ -143,7 +143,6 @@ function namespaceImportName(importStmt: SgNode): string | null {
 
 function formatImport(
   source: string,
-  defaultName: string | null,
   namedSpecs: string[],
   typeOnly = false,
   attributeText = "",
@@ -151,10 +150,6 @@ function formatImport(
   const importKeyword = typeOnly ? "import type" : "import";
   const named = namedSpecs.length > 0 ? `{ ${namedSpecs.join(", ")} }` : null;
   const attributes = attributeText === "" ? "" : ` ${attributeText}`;
-  if (defaultName && named) {
-    return `${importKeyword} ${defaultName}, ${named} from "${source}"${attributes};`;
-  }
-  if (defaultName) return `${importKeyword} ${defaultName} from "${source}"${attributes};`;
   if (named) return `${importKeyword} ${named} from "${source}"${attributes};`;
   return "";
 }
@@ -315,6 +310,325 @@ function findExportStatements(root: SgNode): SgNode[] {
     .toSorted((a, b) => a.range().start.index - b.range().start.index);
 }
 
+function aggregateFileImportLocals(imports: SgNode[]): Set<string> {
+  const locals = new Set<string>();
+  for (const importStmt of imports) {
+    if (importSource(importStmt) !== AGGREGATE_RUNTIME_SOURCE) continue;
+    for (const binding of importBindings(importStmt)) {
+      if (!binding.typeOnly && binding.importedName === "file") locals.add(binding.localName);
+    }
+  }
+  return locals;
+}
+
+function isValueBindingLeafKind(kind: ReturnType<SgNode["kind"]>): boolean {
+  return kind === "identifier" || kind === "shorthand_property_identifier_pattern";
+}
+
+function isValueBindingPatternKind(kind: ReturnType<SgNode["kind"]>): boolean {
+  return (
+    isValueBindingLeafKind(kind) ||
+    kind === "object_pattern" ||
+    kind === "array_pattern" ||
+    kind === "rest_pattern"
+  );
+}
+
+function collectValueBindingNames(node: SgNode, names: Set<string>, result: Set<string>): void {
+  if (isValueBindingLeafKind(node.kind())) {
+    if (names.has(node.text())) result.add(node.text());
+    return;
+  }
+
+  for (const child of node.children()) {
+    if (child.kind() === "property_identifier") continue;
+    if (child.kind() === "=") break;
+    collectValueBindingNames(child, names, result);
+  }
+}
+
+function valueBindingNames(node: SgNode, names: Set<string>): Set<string> {
+  const result = new Set<string>();
+  collectValueBindingNames(node, names, result);
+  return result;
+}
+
+function directValueBindingNames(node: SgNode, names: Set<string>): Set<string> {
+  const result = new Set<string>();
+  for (const child of node.children()) {
+    if (child.kind() === "=") break;
+    if (isValueBindingPatternKind(child.kind())) {
+      collectValueBindingNames(child, names, result);
+    }
+  }
+  return result;
+}
+
+function firstDeclaratorChild(node: SgNode): SgNode | null {
+  return node.children().find((child) => child.kind() !== "=") ?? null;
+}
+
+type ShadowedRanges = Map<string, Array<{ start: number; end: number }>>;
+
+function addShadowedRange(ranges: ShadowedRanges, name: string, scope: SgNode): void {
+  const range = scope.range();
+  const existing = ranges.get(name) ?? [];
+  existing.push({ start: range.start.index, end: range.end.index });
+  ranges.set(name, existing);
+}
+
+function nearestValueScope(node: SgNode): SgNode {
+  let current = node.parent();
+  while (current) {
+    const kind = current.kind();
+    if (
+      kind === "statement_block" ||
+      kind === "program" ||
+      kind === "switch_body" ||
+      kind === "for_statement" ||
+      kind === "for_in_statement"
+    ) {
+      return current;
+    }
+    current = current.parent();
+  }
+  return node;
+}
+
+function functionValueScope(node: SgNode): SgNode {
+  let current = node.parent();
+  while (current) {
+    const kind = current.kind();
+    if (
+      kind === "function_declaration" ||
+      kind === "function_expression" ||
+      kind === "arrow_function" ||
+      kind === "method_definition" ||
+      kind === "program"
+    ) {
+      return current;
+    }
+    current = current.parent();
+  }
+  return node;
+}
+
+function variableValueScope(node: SgNode): SgNode {
+  const declaration = node.parent();
+  return /^var\b/.test(declaration?.text().trimStart() ?? "")
+    ? functionValueScope(node)
+    : nearestValueScope(node);
+}
+
+function parameterValueScope(node: SgNode): SgNode {
+  let current = node.parent();
+  while (current) {
+    const kind = current.kind();
+    if (kind === "formal_parameters") {
+      current = current.parent();
+      continue;
+    }
+    if (
+      kind === "function_declaration" ||
+      kind === "function_expression" ||
+      kind === "arrow_function" ||
+      kind === "method_definition"
+    ) {
+      return current;
+    }
+    break;
+  }
+  return nearestValueScope(node);
+}
+
+function buildShadowedRanges(root: SgNode, names: Set<string>): ShadowedRanges {
+  const ranges: ShadowedRanges = new Map();
+
+  for (const decl of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    if (isInsideImportStatement(decl)) continue;
+    const binding = firstDeclaratorChild(decl);
+    if (!binding) continue;
+    for (const name of valueBindingNames(binding, names)) {
+      addShadowedRange(ranges, name, variableValueScope(decl));
+    }
+  }
+
+  for (const decl of root.findAll({
+    rule: {
+      any: [
+        { kind: "function_declaration" },
+        { kind: "class_declaration" },
+        { kind: "enum_declaration" },
+      ],
+    },
+  })) {
+    const name = decl
+      .children()
+      .find((child) => child.kind() === "identifier" && names.has(child.text()));
+    if (name) addShadowedRange(ranges, name.text(), nearestValueScope(decl));
+  }
+
+  for (const expression of root.findAll({
+    rule: { any: [{ kind: "function_expression" }, { kind: "class" }] },
+  })) {
+    const name = expression
+      .children()
+      .find(
+        (child) =>
+          (child.kind() === "identifier" || child.kind() === "type_identifier") &&
+          names.has(child.text()),
+      );
+    if (name) addShadowedRange(ranges, name.text(), expression);
+  }
+
+  for (const param of root.findAll({
+    rule: { any: [{ kind: "required_parameter" }, { kind: "optional_parameter" }] },
+  })) {
+    for (const name of directValueBindingNames(param, names)) {
+      addShadowedRange(ranges, name, parameterValueScope(param));
+    }
+  }
+
+  for (const arrow of root.findAll({ rule: { kind: "arrow_function" } })) {
+    const children = arrow.children();
+    const arrowIndex = children.findIndex((child) => child.kind() === "=>");
+    if (arrowIndex === -1) continue;
+    for (const child of children.slice(0, arrowIndex)) {
+      if (child.kind() === "=") break;
+      if (!isValueBindingPatternKind(child.kind())) continue;
+      for (const name of valueBindingNames(child, names)) {
+        addShadowedRange(ranges, name, arrow);
+      }
+    }
+  }
+
+  for (const catchClause of root.findAll({ rule: { kind: "catch_clause" } })) {
+    for (const name of directValueBindingNames(catchClause, names)) {
+      addShadowedRange(ranges, name, catchClause);
+    }
+  }
+
+  for (const loop of root.findAll({ rule: { kind: "for_in_statement" } })) {
+    const children = loop.children();
+    const keywordIndex = children.findIndex(
+      (child) => child.kind() === "in" || child.kind() === "of",
+    );
+    if (keywordIndex === -1) continue;
+    for (const child of children.slice(0, keywordIndex)) {
+      for (const name of valueBindingNames(child, names)) {
+        addShadowedRange(ranges, name, loop);
+      }
+    }
+  }
+
+  return ranges;
+}
+
+function isShadowed(node: SgNode, ranges: ShadowedRanges): boolean {
+  const candidates = ranges.get(node.text());
+  if (!candidates) return false;
+  const position = node.range().start.index;
+  return candidates.some((range) => position >= range.start && position < range.end);
+}
+
+interface AggregateFileDeleteAccess {
+  node: SgNode;
+  property: SgNode;
+  computed: boolean;
+}
+
+function isAggregateFileReceiver(
+  node: SgNode | null,
+  fileLocals: Set<string>,
+  shadowedRanges: ShadowedRanges,
+): node is SgNode {
+  return (
+    node?.kind() === "identifier" &&
+    fileLocals.has(node.text()) &&
+    !isShadowed(node, shadowedRanges)
+  );
+}
+
+function aggregateFileDeleteAccesses(root: SgNode, imports: SgNode[]): AggregateFileDeleteAccess[] {
+  const fileLocals = aggregateFileImportLocals(imports);
+  if (fileLocals.size === 0) return [];
+  const shadowedRanges = buildShadowedRanges(root, fileLocals);
+  const accesses: AggregateFileDeleteAccess[] = [];
+
+  for (const member of root.findAll({ rule: { kind: "member_expression" } })) {
+    const receiver = member.field("object");
+    const property = member.children().find((child) => child.kind() === "property_identifier");
+    if (
+      isAggregateFileReceiver(receiver, fileLocals, shadowedRanges) &&
+      property?.text() === "deleteFile"
+    ) {
+      accesses.push({ node: member, property, computed: false });
+    }
+  }
+
+  for (const subscript of root.findAll({ rule: { kind: "subscript_expression" } })) {
+    const receiver = subscript.field("object");
+    const property = subscript.field("index");
+    if (
+      isAggregateFileReceiver(receiver, fileLocals, shadowedRanges) &&
+      property?.kind() === "string" &&
+      property.text().slice(1, -1) === "deleteFile"
+    ) {
+      accesses.push({ node: subscript, property, computed: true });
+    }
+  }
+
+  return accesses;
+}
+
+function aggregateFileDeleteEdits(root: SgNode, imports: SgNode[]): Edit[] {
+  return aggregateFileDeleteAccesses(root, imports).map(({ property, computed }) => {
+    if (!computed) return property.replace("delete");
+    const quote = property.text()[0] ?? '"';
+    return property.replace(`${quote}delete${quote}`);
+  });
+}
+
+function declaratorSides(node: SgNode): { binding: SgNode; value: SgNode } | null {
+  const children = node.children();
+  const equalsIndex = children.findIndex((child) => child.kind() === "=");
+  if (equalsIndex === -1) return null;
+  const binding = children.slice(0, equalsIndex).find((child) => child.kind() !== "comment");
+  const value = children.slice(equalsIndex + 1).find((child) => child.kind() !== "comment");
+  return binding && value ? { binding, value } : null;
+}
+
+function aggregateFileDeleteDestructures(root: SgNode, imports: SgNode[]): SgNode[] {
+  const fileLocals = aggregateFileImportLocals(imports);
+  if (fileLocals.size === 0) return [];
+  const shadowedRanges = buildShadowedRanges(root, fileLocals);
+
+  return root.findAll({ rule: { kind: "variable_declarator" } }).filter((declarator) => {
+    const sides = declaratorSides(declarator);
+    if (
+      !sides ||
+      sides.binding.kind() !== "object_pattern" ||
+      !isAggregateFileReceiver(sides.value, fileLocals, shadowedRanges)
+    ) {
+      return false;
+    }
+    return sides.binding
+      .findAll({
+        rule: {
+          any: [{ kind: "property_identifier" }, { kind: "shorthand_property_identifier_pattern" }],
+        },
+      })
+      .some((property) => property.text() === "deleteFile");
+  });
+}
+
+function aggregateFileDeleteFindingNodes(root: SgNode, imports: SgNode[]): SgNode[] {
+  return [
+    ...aggregateFileDeleteAccesses(root, imports).map((access) => access.node),
+    ...aggregateFileDeleteDestructures(root, imports),
+  ];
+}
+
 function usedNames(root: SgNode, imports: SgNode[], removedNames: Set<string>): Set<string> {
   const names = localDeclarationNames(root);
   for (const importStmt of imports) {
@@ -397,9 +711,6 @@ function plannedValueNamespaceLocal(
     const namespaceName = namespaceImportName(candidate);
     if (namespaceName) return namespaceName;
 
-    const defaultName = defaultImportName(candidate);
-    if (defaultName) return defaultName;
-
     const existingSelf = existingSelfNamespaceImport(candidate, mod, false);
     if (existingSelf && !existingSelf.typeOnly) return existingSelf.localName;
 
@@ -436,11 +747,9 @@ function buildImportReplacement(
   const namespaceName = namespaceImportName(importStmt);
   if (namespaceName) {
     if (hasNamespaceTypeMemberReference(root, namespaceName)) return null;
-    const edit = statementTypeOnly
-      ? importStmt.replace(
-          formatImport(source, null, [selfNamespaceSpec(mod, namespaceName)], true, attributes),
-        )
-      : importStmt.replace(formatImport(source, namespaceName, [], false, attributes));
+    const edit = importStmt.replace(
+      formatImport(source, [selfNamespaceSpec(mod, namespaceName)], statementTypeOnly, attributes),
+    );
     return {
       edit,
       flatImports: [],
@@ -448,8 +757,7 @@ function buildImportReplacement(
     };
   }
 
-  const defaultName = defaultImportName(importStmt);
-  if (statementTypeOnly && defaultName) return null;
+  if (hasDefaultImport(importStmt)) return null;
 
   const existingSelf = existingSelfNamespaceImport(importStmt, mod, statementTypeOnly);
   const flatImports: FlatImport[] = [];
@@ -491,11 +799,9 @@ function buildImportReplacement(
     : null;
   const namespaceLocal =
     plannedValueLocal ??
-    (!statementTypeOnly && defaultName
-      ? defaultName
-      : canUseExistingSelf
-        ? existingSelf.localName
-        : uniqueNamespaceLocal(mod, root, imports, removedNames));
+    (canUseExistingSelf
+      ? existingSelf.localName
+      : uniqueNamespaceLocal(mod, root, imports, removedNames));
   const namespaceSpecifierKey = [
     source,
     namespaceLocal,
@@ -503,9 +809,7 @@ function buildImportReplacement(
   ].join("\0");
   const namespaceAlreadyEmitted = emittedNamespaceSpecifiers.has(namespaceSpecifierKey);
   const needsNamespaceSpecifier =
-    plannedValueLocal == null &&
-    !((!statementTypeOnly && defaultName) || canUseExistingSelf) &&
-    !namespaceAlreadyEmitted;
+    plannedValueLocal == null && !canUseExistingSelf && !namespaceAlreadyEmitted;
   if (needsNamespaceSpecifier) emittedNamespaceSpecifiers.add(namespaceSpecifierKey);
   const namespaceSpecifier =
     flatImportsAreTypeOnly && !statementTypeOnly
@@ -516,13 +820,7 @@ function buildImportReplacement(
   return {
     edit: replaceImportStatement(
       importStmt,
-      formatImport(
-        source,
-        statementTypeOnly ? null : defaultName,
-        nextNamedSpecs,
-        statementTypeOnly,
-        attributes,
-      ),
+      formatImport(source, nextNamedSpecs, statementTypeOnly, attributes),
       sourceText,
     ),
     flatImports,
@@ -612,11 +910,13 @@ export default function transform(source: string, filePath: string): string | nu
     if (replacement) replacements.push(replacement);
   }
 
-  if (replacements.length === 0) return null;
+  const aggregateEdits = aggregateFileDeleteEdits(root, imports);
+  if (replacements.length === 0 && aggregateEdits.length === 0) return null;
 
   const edits = [
     ...replacements.map((replacement) => replacement.edit),
     ...referenceEdits(root, replacements),
+    ...aggregateEdits,
   ];
   const result = root.commitEdits(edits);
   return result === source ? null : result;
@@ -864,27 +1164,45 @@ export function reviewFindings(
   if (!quickFilter(source)) return [];
 
   const root = parse(sourceLang(filePath, source), source).root();
+  const imports = findImportStatements(root);
   const findings: LlmReviewFinding[] = [];
   findings.push(...dynamicRuntimeImportFindings(root, relativePath));
   findings.push(...runtimeRequireFindings(root, relativePath));
 
-  for (const importStmt of findImportStatements(root)) {
+  for (const access of aggregateFileDeleteFindingNodes(root, imports)) {
+    findings.push({
+      file: relativePath,
+      line: access.range().start.line + 1,
+      message: "Aggregate runtime file namespace still uses the removed deleteFile alias.",
+      excerpt: access.text().trim(),
+    });
+  }
+
+  for (const importStmt of imports) {
     const sourceName = importSource(importStmt);
     if (!sourceName) continue;
     const mod = MODULES_BY_SOURCE.get(sourceName);
     if (!mod) continue;
 
     const hasImportRequire = isImportRequireStatement(importStmt);
+    const hasRemovedDefaultImport = hasDefaultImport(importStmt);
     const hasNamespaceImport = namespaceImportName(importStmt) != null;
     const hasRemovedFlatImport = hasRemovedFlatSpecifier(importStmt, mod);
-    if (!hasImportRequire && !hasNamespaceImport && !hasRemovedFlatImport) continue;
+    if (
+      !hasImportRequire &&
+      !hasRemovedDefaultImport &&
+      !hasNamespaceImport &&
+      !hasRemovedFlatImport
+    ) {
+      continue;
+    }
 
     findings.push({
       file: relativePath,
       line: importStmt.range().start.line + 1,
       message: hasImportRequire
         ? "TypeScript runtime subpath import-equals may still access a removed flat value export."
-        : "Runtime subpath import still uses a removed namespace-star or flat value import.",
+        : "Runtime subpath import still uses a removed default, namespace-star, or flat value import.",
       excerpt: importStmt.text().trim(),
     });
   }

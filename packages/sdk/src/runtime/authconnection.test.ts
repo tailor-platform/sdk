@@ -2,7 +2,7 @@
  * Tests for `@tailor-platform/sdk/runtime/authconnection` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import defaultAuthconnection, { authconnection } from "#/runtime/authconnection";
+import { authconnection } from "#/runtime/authconnection";
 import { mockAuthconnection, cleanupMocks, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/authconnection", () => {
@@ -12,10 +12,6 @@ describe("@tailor-platform/sdk/runtime/authconnection", () => {
 
   afterEach(() => {
     cleanupMocks(globalThis);
-  });
-
-  test("exports matching default and named namespace objects", () => {
-    expect(defaultAuthconnection).toBe(authconnection);
   });
 
   test("getConnectionToken forwards to global and records call", async () => {

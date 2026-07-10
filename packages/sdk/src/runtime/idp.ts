@@ -225,5 +225,3 @@ class Client {
 // Keep the object typed to the public API so the private wrapper class does not leak into d.ts.
 /** Runtime API for `tailor.idp`. */
 export const idp: TailorIdpAPI = { Client };
-
-export default idp;

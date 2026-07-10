@@ -132,5 +132,3 @@ export const workflow = {
   wait,
   resolve,
 } as const satisfies TailorWorkflowAPI;
-
-export default workflow;

@@ -132,5 +132,3 @@ export const iconv: TailorIconvAPI = {
   encodings,
   Iconv,
 };
-
-export default iconv;

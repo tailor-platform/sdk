@@ -505,7 +505,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/runtime-subpath-namespace",
     name: "Runtime subpath imports use namespace objects",
     description:
-      "Rewrite `@tailor-platform/sdk/runtime/*` namespace-star imports and flat value imports to the v2 default or self-named namespace object imports.",
+      "Rewrite `@tailor-platform/sdk/runtime/*` namespace-star and flat value imports to self-named namespace imports, and aggregate `file.deleteFile` calls to `file.delete`. `TailorContextAPI` and `TailorWorkflowAPI` now describe SDK wrappers; direct platform globals use `PlatformContextAPI` and `PlatformWorkflowAPI`.",
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_3,
@@ -526,7 +526,7 @@ export const allCodemods: CodemodPackage[] = [
         before:
           'import * as iconv from "@tailor-platform/sdk/runtime/iconv";\niconv.convert(value, "UTF-8", "Shift_JIS");',
         after:
-          'import iconv from "@tailor-platform/sdk/runtime/iconv";\niconv.convert(value, "UTF-8", "Shift_JIS");',
+          'import { iconv } from "@tailor-platform/sdk/runtime/iconv";\niconv.convert(value, "UTF-8", "Shift_JIS");',
       },
       {
         before:
@@ -534,16 +534,26 @@ export const allCodemods: CodemodPackage[] = [
         after:
           'import { aigateway } from "@tailor-platform/sdk/runtime/aigateway";\nconst gateway = await aigateway.get("main");',
       },
+      {
+        before:
+          'import { file } from "@tailor-platform/sdk/runtime";\nawait file.deleteFile("ns", "Doc", "blob", "record-id");',
+        after:
+          'import { file } from "@tailor-platform/sdk/runtime";\nawait file.delete("ns", "Doc", "blob", "record-id");',
+      },
     ],
     prompt: [
-      "In Tailor SDK v2, runtime subpath modules export a default namespace object and",
-      "a self-named namespace object (for example, `iconv` from",
-      "`@tailor-platform/sdk/runtime/iconv`). Flat value imports such as",
+      "In Tailor SDK v2, runtime subpath modules export only a self-named namespace",
+      "object (for example, `iconv` from `@tailor-platform/sdk/runtime/iconv`).",
+      "Default and flat value imports such as",
       '`import { get } from "@tailor-platform/sdk/runtime/aigateway"` are removed.',
       "The codemod rewrites straightforward namespace-star imports and flat named value",
-      "imports. Review any remaining runtime subpath imports manually, especially when",
-      "a local binding or nested scope shadows the imported flat value, or when",
+      "imports. It also rewrites direct `file.deleteFile` calls on the aggregate runtime",
+      "namespace to `file.delete`. Destructured aggregate `deleteFile` references require",
+      "manual migration. Review any remaining runtime imports manually, especially when",
+      "a local binding or nested scope shadows an imported value, or when",
       "type-position namespace member references need explicit top-level type imports.",
+      "For direct platform globals, replace `TailorContextAPI` and `TailorWorkflowAPI`",
+      "type references with `PlatformContextAPI` and `PlatformWorkflowAPI` respectively.",
     ].join("\n"),
   },
   {
