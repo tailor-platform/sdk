@@ -98,24 +98,18 @@ export function transformWorkflowSource(
   const allDeclarations = findVariableDeclarationsByName(program);
 
   const replacements: Replacement[] = [];
-  const removedRanges: Array<{ start: number; end: number }> = [];
-
-  // Helper to track removed ranges (avoid duplicate/overlapping removals)
-  // Use start position only for comparison since end position may vary due to findStatementEnd
-  const isAlreadyMarkedForRemoval = (start: number) => {
-    return removedRanges.some((r) => r.start === start);
-  };
+  const removedStarts = new Set<number>();
 
   // Step 1: First, collect all ranges that will be removed (other job declarations)
-  // This must happen before trigger transformation to know which trigger calls to skip
+  // This runs before the trigger pass so calls inside sibling jobs are removed first.
   for (const job of detectedJobs) {
     if (job.name === targetJobName) {
       continue;
     }
 
-    if (job.statementRange && !isAlreadyMarkedForRemoval(job.statementRange.start)) {
+    if (job.statementRange && !removedStarts.has(job.statementRange.start)) {
       const endPos = findStatementEnd(source, job.statementRange.end);
-      removedRanges.push({ start: job.statementRange.start, end: endPos });
+      removedStarts.add(job.statementRange.start);
       replacements.push({
         start: job.statementRange.start,
         end: endPos,
@@ -123,7 +117,7 @@ export function transformWorkflowSource(
       });
     } else if (!job.statementRange) {
       // Fallback: replace body with empty function if we can't find the statement
-      removedRanges.push({ start: job.bodyValueRange.start, end: job.bodyValueRange.end });
+      removedStarts.add(job.bodyValueRange.start);
       replacements.push({
         start: job.bodyValueRange.start,
         end: job.bodyValueRange.end,
@@ -138,9 +132,9 @@ export function transformWorkflowSource(
       if (exportName === targetJobExportName) continue;
 
       const declRange = allDeclarations.get(exportName);
-      if (declRange && !isAlreadyMarkedForRemoval(declRange.start)) {
+      if (declRange && !removedStarts.has(declRange.start)) {
         const endPos = findStatementEnd(source, declRange.end);
-        removedRanges.push({ start: declRange.start, end: endPos });
+        removedStarts.add(declRange.start);
         replacements.push({
           start: declRange.start,
           end: endPos,
@@ -152,9 +146,9 @@ export function transformWorkflowSource(
 
   // Step 3: Remove createWorkflow default export (not needed in job bundles)
   const workflowExport = findWorkflowDefaultExport(program);
-  if (workflowExport && !isAlreadyMarkedForRemoval(workflowExport.start)) {
+  if (workflowExport && !removedStarts.has(workflowExport.start)) {
     const endPos = findStatementEnd(source, workflowExport.end);
-    removedRanges.push({ start: workflowExport.start, end: endPos });
+    removedStarts.add(workflowExport.start);
     replacements.push({
       start: workflowExport.start,
       end: endPos,
