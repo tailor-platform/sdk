@@ -2090,10 +2090,21 @@ describe("TailorDBField clone tests", () => {
     const scalar = db.string().validate(({ value }) => value.length > 0);
     const array = db.string({ array: true }).validate(({ value }) => value.length > 0);
     const type = db.type("ValidatedClone", { value: scalar });
+    const mixedType = db.type("MixedValidatedClone", {
+      validated: scalar,
+      plain: db.string(),
+    });
+    const arrayType = db.type("ValidatedArrayClone", { value: array });
 
     type ScalarCloneOptions = Parameters<typeof scalar.clone>[0];
     type ArrayCloneOptions = Parameters<typeof array.clone>[0];
     type InvalidPickOptions = Parameters<typeof type.pickFields<"value", { array: true }>>[1];
+    type InvalidMixedPickOptions = Parameters<
+      typeof mixedType.pickFields<"validated" | "plain", { array: true }>
+    >[1];
+    type AllowedArrayPickOptions = Parameters<
+      typeof arrayType.pickFields<"value", { array: true }>
+    >[1];
     type ArrayShapeError =
       TypeLevelError<"array cannot be changed on fields with custom validation">;
     type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
@@ -2105,6 +2116,10 @@ describe("TailorDBField clone tests", () => {
       Equal<ArrayCloneOptions, { optional?: boolean; array?: true } | undefined>
     >;
     type _InvalidPickOptions = Expect<Equal<InvalidPickOptions, { array: true } & ArrayShapeError>>;
+    type _InvalidMixedPickOptions = Expect<
+      Equal<InvalidMixedPickOptions, { array: true } & ArrayShapeError>
+    >;
+    type _AllowedArrayPickOptions = Expect<Equal<AllowedArrayPickOptions, { array: true }>>;
     const scalarClone = scalar.clone.bind(scalar) as (options?: FieldOptions) => unknown;
     const arrayClone = array.clone.bind(array) as (options?: FieldOptions) => unknown;
     const expectedError = "Cannot change the array option on a field with custom validation";
