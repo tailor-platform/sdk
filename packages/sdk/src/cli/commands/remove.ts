@@ -13,6 +13,10 @@ import { applySecretManager, planSecretManager } from "#/cli/commands/deploy/sec
 import { applyStaticWebsite, planStaticWebsite } from "#/cli/commands/deploy/staticwebsite";
 import { applyTailorDB, planTailorDB } from "#/cli/commands/deploy/tailordb/index";
 import { applyWorkflow, planWorkflow } from "#/cli/commands/deploy/workflow";
+import {
+  applyWorkflowJobFunctionExecutionPolicy,
+  planWorkflowJobFunctionExecutionPolicy,
+} from "#/cli/commands/deploy/workflow-execution-policy";
 import { type Application, defineApplication } from "#/cli/services/application";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
@@ -81,6 +85,13 @@ async function execRemove(
     {},
     {},
   );
+  const workflowExecutionPolicy = await planWorkflowJobFunctionExecutionPolicy(
+    client,
+    workspaceId,
+    application.name,
+    application.id,
+    {},
+  );
   const functionRegistry = await planFunctionRegistry(
     client,
     workspaceId,
@@ -103,6 +114,7 @@ async function execRemove(
     ...pipeline.changeSet.resolver.lines(),
     ...executor.changeSet.lines(),
     ...workflow.changeSet.lines(),
+    ...workflowExecutionPolicy.changeSet.lines(),
     ...idp.changeSet.service.lines(),
     ...idp.changeSet.client.lines(),
     ...auth.changeSet.service.lines(),
@@ -130,6 +142,7 @@ async function execRemove(
     app.deletes.length === 0 &&
     executor.changeSet.deletes.length === 0 &&
     workflow.changeSet.deletes.length === 0 &&
+    workflowExecutionPolicy.changeSet.deletes.length === 0 &&
     functionRegistry.changeSet.deletes.length === 0 &&
     secretManager.vaultChangeSet.deletes.length === 0 &&
     secretManager.secretChangeSet.deletes.length === 0
@@ -144,6 +157,7 @@ async function execRemove(
 
   // Apply deletions in reverse order of dependencies
   await applyWorkflow(client, workflow, "delete");
+  await applyWorkflowJobFunctionExecutionPolicy(client, workflowExecutionPolicy, "delete");
   await applyExecutor(client, executor, "delete");
   await applyStaticWebsite(client, staticWebsite, "delete");
   await applyAIGateway(client, aiGateway, "delete");
