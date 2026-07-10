@@ -646,8 +646,8 @@ export function transformFunctionTriggers(
     }
   }
 
-  // Remove default import declarations that became dead after trigger transformation.
-  // A default import is dead when it has no remaining references, either because
+  // Remove workflow import specifiers that became dead after trigger transformation.
+  // A workflow import is dead when it has no remaining references, either because
   // it was already unused or because all references to its local identifier were
   // .trigger() calls that have been rewritten above.
   // Single AST pass for all candidate names; scope-aware to ignore shadowed references.

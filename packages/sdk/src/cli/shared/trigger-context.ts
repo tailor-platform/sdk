@@ -92,7 +92,11 @@ function loadModuleResolution(searchPath: string): TriggerModuleResolution | und
     const compilerOptions = tsconfig.config.compilerOptions;
     if (!compilerOptions?.baseUrl && !compilerOptions?.paths) return undefined;
     return tsconfig;
-  } catch {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.warn(`Failed to load TypeScript module resolution from ${searchPath}: ${errorMessage}`, {
+      mode: "stream",
+    });
     return undefined;
   }
 }
