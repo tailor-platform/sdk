@@ -1,8 +1,14 @@
 import { spawn } from "node:child_process";
-import { promises as fs, readFileSync } from "node:fs";
+import { promises as fs, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
-import { isObject, pathExistsSync, tailText } from "./utils";
-import { listWorkspaceFiles } from "./workspace-files";
+import { tailText, toPosix } from "./utils";
+import {
+  BUILT_IN_VERIFICATION_CHECK_IDS,
+  parseVerificationSpec,
+  type VerifySpec,
+  type VerifySpecCheck,
+} from "./verification-spec";
+import { isExcludedWorkspacePath, listWorkspaceFiles } from "./workspace-files";
 import type { Problem } from "./types";
 
 export type VerificationOutcome = "satisfied" | "unsatisfied" | "skipped" | "error";
@@ -30,49 +36,6 @@ export type VerificationSummary = {
   checks: VerificationCheckResult[];
 };
 
-type VerifySpec = {
-  schemaVersion?: 1;
-  checks?: VerifySpecCheck[];
-};
-
-type ContentPatternCheckBase = {
-  id: string;
-  description?: string;
-  glob: string;
-  pattern: string;
-  flags?: string;
-};
-
-type ContentMatchCheck = ContentPatternCheckBase & {
-  kind: "content-match";
-  /**
-   * Minimum number of glob-matching files that must contain the pattern (default 1).
-   * Counts files, not occurrences: a single file with several matches counts once.
-   */
-  minMatches?: number;
-};
-
-type ContentAbsentCheck = ContentPatternCheckBase & {
-  kind: "content-absent";
-};
-
-type VerifySpecCheck =
-  | {
-      id: string;
-      kind: "file-exists";
-      description?: string;
-      path: string;
-    }
-  | {
-      id: string;
-      kind: "file-glob";
-      description?: string;
-      glob: string;
-      minCount?: number;
-    }
-  | ContentMatchCheck
-  | ContentAbsentCheck;
-
 const TYPESCRIPT_NO_EMIT_COMMAND = "node node_modules/typescript/bin/tsc --noEmit --pretty false";
 const TYPECHECK_TIMEOUT_MS = 120_000;
 
@@ -94,7 +57,9 @@ export async function writeVerificationSummary(options: {
     fs.writeFile(options.verificationStderrPath, ""),
   ]);
 
-  const files = await listWorkspaceFiles(options.worktreePath);
+  const files = (await listWorkspaceFiles(options.worktreePath)).filter(
+    (file) => resolveWorkspaceEvidenceFile(options.worktreePath, file) !== undefined,
+  );
   const checks = [
     ...commonChecks(options.problem, options.worktreePath, files),
     ...(await runProblemChecks(options.problem, options.worktreePath, files)),
@@ -129,12 +94,17 @@ function commonChecks(
   files: string[],
 ): VerificationCheckResult[] {
   const checks: VerificationCheckResult[] = [
-    fileExistsCheck("workspace-package-json", "package.json", worktreePath, "package.json exists"),
+    fileExistsCheck(
+      BUILT_IN_VERIFICATION_CHECK_IDS.workspacePackageJson,
+      "package.json",
+      worktreePath,
+      "package.json exists",
+    ),
   ];
   if (problem.group === "sdk-api") {
     checks.push(
       fileExistsCheck(
-        "sdk-api-tailor-config",
+        BUILT_IN_VERIFICATION_CHECK_IDS.sdkApiTailorConfig,
         "tailor.config.ts",
         worktreePath,
         "sdk-api workspace exposes a Tailor config file",
@@ -144,7 +114,7 @@ function commonChecks(
 
   if (files.some((file) => file.endsWith(".ts"))) {
     checks.push({
-      id: "typescript-no-emit",
+      id: BUILT_IN_VERIFICATION_CHECK_IDS.typescriptNoEmit,
       scope: "common",
       kind: "command",
       description: "TypeScript sources compile without emitting files",
@@ -153,7 +123,7 @@ function commonChecks(
     });
   } else {
     checks.push({
-      id: "typescript-no-emit",
+      id: BUILT_IN_VERIFICATION_CHECK_IDS.typescriptNoEmit,
       scope: "common",
       kind: "assertion",
       description: "TypeScript sources compile without emitting files",
@@ -174,23 +144,20 @@ async function runProblemChecks(
   }
   let spec: VerifySpec;
   try {
-    spec = JSON.parse(await fs.readFile(problem.verifyPath, "utf8")) as VerifySpec;
+    spec = parseVerificationSpec(await fs.readFile(problem.verifyPath, "utf8"));
   } catch (error) {
     return [
       {
-        id: "problem-verify-spec",
+        id: BUILT_IN_VERIFICATION_CHECK_IDS.problemVerifySpec,
         scope: "problem",
         kind: "assertion",
-        description: "Problem verification spec can be read",
+        description: "Problem verification spec can be read and validated",
         outcome: "error",
         error: error instanceof Error ? error.message : String(error),
       },
     ];
   }
 
-  if (!Array.isArray(spec.checks)) {
-    return [];
-  }
   return spec.checks.map((check) => evaluateProblemCheck(check, worktreePath, files));
 }
 
@@ -200,9 +167,6 @@ function evaluateProblemCheck(
   files: string[],
 ): VerificationCheckResult {
   try {
-    if (!isObject(check) || typeof check.id !== "string" || typeof check.kind !== "string") {
-      return invalidProblemCheck("unknown", "Problem check must include string id and kind");
-    }
     if (check.kind === "file-exists") {
       return fileExistsCheck(
         check.id,
@@ -221,8 +185,7 @@ function evaluateProblemCheck(
     if (check.kind === "content-absent") {
       return contentAbsentCheck(check, worktreePath, files);
     }
-    const unknownCheck = check as { id: string; kind: string };
-    return invalidProblemCheck(unknownCheck.id, `Unknown problem check kind: ${unknownCheck.kind}`);
+    throw new Error("Unsupported problem check kind");
   } catch (error) {
     return {
       id: typeof check.id === "string" ? check.id : "unknown",
@@ -242,13 +205,13 @@ function fileExistsCheck(
   description: string,
   scope: VerificationCheckResult["scope"] = "common",
 ): VerificationCheckResult {
-  const absolutePath = path.join(worktreePath, relativePath);
+  const absolutePath = resolveWorkspaceEvidenceFile(worktreePath, relativePath);
   return {
     id,
     scope,
     kind: "assertion",
     description,
-    outcome: pathExistsSync(absolutePath) ? "satisfied" : "unsatisfied",
+    outcome: absolutePath !== undefined ? "satisfied" : "unsatisfied",
     observations: [`path: ${relativePath}`],
   };
 }
@@ -304,7 +267,7 @@ function contentAbsentCheck(
 }
 
 function matchingContentFiles(
-  check: ContentPatternCheckBase,
+  check: Extract<VerifySpecCheck, { kind: "content-match" | "content-absent" }>,
   worktreePath: string,
   files: string[],
 ): string[] {
@@ -312,7 +275,11 @@ function matchingContentFiles(
   const globRegex = globToRegExp(check.glob);
   const matchedFiles: string[] = [];
   for (const file of files.filter((candidate) => globRegex.test(candidate))) {
-    const text = readFileSync(path.join(worktreePath, file), "utf8");
+    const absolutePath = resolveWorkspaceEvidenceFile(worktreePath, file);
+    if (absolutePath === undefined) {
+      continue;
+    }
+    const text = readFileSync(absolutePath, "utf8");
     regex.lastIndex = 0;
     if (regex.test(text)) {
       matchedFiles.push(file);
@@ -321,15 +288,32 @@ function matchingContentFiles(
   return matchedFiles;
 }
 
-function invalidProblemCheck(id: string, message: string): VerificationCheckResult {
-  return {
-    id,
-    scope: "problem",
-    kind: "assertion",
-    description: "Problem check is valid",
-    outcome: "error",
-    error: message,
-  };
+function resolveWorkspaceEvidenceFile(
+  worktreePath: string,
+  relativePath: string,
+): string | undefined {
+  const absolutePath = path.join(worktreePath, relativePath);
+  try {
+    const realWorktreePath = realpathSync(worktreePath);
+    const realAbsolutePath = realpathSync(absolutePath);
+    const resolvedRelativePath = path.relative(realWorktreePath, realAbsolutePath);
+    if (
+      resolvedRelativePath === ".." ||
+      resolvedRelativePath.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(resolvedRelativePath)
+    ) {
+      return undefined;
+    }
+    if (
+      isExcludedWorkspacePath(toPosix(resolvedRelativePath)) ||
+      !statSync(realAbsolutePath).isFile()
+    ) {
+      return undefined;
+    }
+    return realAbsolutePath;
+  } catch {
+    return undefined;
+  }
 }
 
 async function runCommandCheck(
