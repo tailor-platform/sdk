@@ -26,7 +26,8 @@ jobs:
     concurrency:
       # Grouped per commit (not per ref) so a rapid follow-up push cannot cancel
       # an in-flight run and leave that commit without its own schema snapshot.
-      group: erd-schema-export-${{ github.sha }}
+      # Namespace-scoped so the matrix entries run in parallel instead of queuing.
+      group: erd-schema-export-${{ github.sha }}-${{ matrix.namespace }}
       cancel-in-progress: false
     strategy:
       fail-fast: false
@@ -57,7 +58,9 @@ jobs:
       contents: read # checkout the repository
       actions: read # look up and download the export job's artifacts
     concurrency:
-      group: erd-schema-preview-${{ github.ref }}
+      # Namespace-scoped so the matrix entries run in parallel instead of
+      # racing each other for the same group and getting cancelled.
+      group: erd-schema-preview-${{ github.ref }}-${{ matrix.namespace }}
       cancel-in-progress: true
     strategy:
       fail-fast: false

@@ -128,12 +128,14 @@ describe("repository ERD schema workflow", () => {
     expect(content).toContain("relevant-path-prefix: example/");
   });
 
-  test("groups each job's concurrency so a fast-follow push/PR update cannot cancel or race a run", () => {
+  test("groups each job's concurrency per commit/ref and per namespace so matrix entries run in parallel without racing each other", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    expect(content).toContain("group: erd-schema-export-${{ github.sha }}");
+    expect(content).toContain("group: erd-schema-export-${{ github.sha }}-${{ matrix.namespace }}");
     expect(content).toContain("cancel-in-progress: false");
-    expect(content).toContain("group: erd-schema-preview-${{ github.ref }}");
+    expect(content).toContain(
+      "group: erd-schema-preview-${{ github.ref }}-${{ matrix.namespace }}",
+    );
     expect(content).toContain("cancel-in-progress: true");
   });
 
