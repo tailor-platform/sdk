@@ -597,6 +597,14 @@ describe("TailorDBField hooks modifier tests", () => {
       },
     });
   });
+
+  test("create hook allows nullable return when default is set", () => {
+    db.string()
+      .default("fallback")
+      .hooks({
+        create: ({ input }) => input?.trim(),
+      });
+  });
 });
 
 describe("TailorDBField validate modifier tests", () => {
@@ -762,7 +770,6 @@ describe("TailorDBType withTimestamps option tests", () => {
     const now = new Date("2025-06-01T00:00:00Z");
     const result = createHook!({
       input: specified,
-      oldValue: null,
       invoker: timestampHookInvoker,
       now,
     });
@@ -777,7 +784,6 @@ describe("TailorDBType withTimestamps option tests", () => {
     const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
       input: null,
-      oldValue: null,
       invoker: timestampHookInvoker,
       now,
     });
@@ -793,7 +799,6 @@ describe("TailorDBType withTimestamps option tests", () => {
     const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
       input: specified,
-      oldValue: null,
       invoker: timestampHookInvoker,
       now,
     });
@@ -808,7 +813,6 @@ describe("TailorDBType withTimestamps option tests", () => {
     const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
       input: null,
-      oldValue: null,
       invoker: timestampHookInvoker,
       now,
     });

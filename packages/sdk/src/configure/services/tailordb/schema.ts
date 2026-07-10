@@ -153,7 +153,10 @@ type DBFieldVectorFn<Defined extends DefinedDBFieldMetadata, Output> = () => Tai
   Output
 >;
 type DBFieldHooksFn<Defined extends DefinedDBFieldMetadata, Output> = <
-  const H extends Hook<Output>,
+  const H extends Hook<
+    Output,
+    Defined extends { default: true } ? Output | null | undefined : Output
+  >,
 >(
   hooks: H,
 ) => TailorDBField<WithDBFieldHooks<Defined, H>, Output>;

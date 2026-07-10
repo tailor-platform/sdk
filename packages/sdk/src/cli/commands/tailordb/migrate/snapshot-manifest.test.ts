@@ -318,9 +318,7 @@ describe("snapshot-manifest", () => {
       // timestamp once and dispatches each field's hook.
       const createHook = manifest.schema?.typeHook?.create?.expr ?? "";
       expect(createHook).toContain("const _now = new Date()");
-      expect(createHook).toContain(
-        '"updatedAt": ((_value, _oldValue) => (now()))(_input["updatedAt"], _oldRecord?.["updatedAt"] ?? null)',
-      );
+      expect(createHook).toContain('"updatedAt": ((_value) => (now()))(_input["updatedAt"])');
       expect(manifest.schema?.typeHook?.update?.expr).toContain('_input["updatedAt"]');
       expect(manifest.schema?.typeValidate).toBeUndefined();
     });
@@ -403,7 +401,7 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.typeValidate?.update?.expr).toBe(validateExpr);
     });
 
-    test("marks required fields optionalOnCreate when user type-level create hook exists", () => {
+    test("type-level create hook does not make required fields optionalOnCreate", () => {
       const snapshotType = createTestSnapshotType("Customer", {
         fields: {
           id: { type: "uuid", required: true },
@@ -418,8 +416,8 @@ describe("snapshot-manifest", () => {
       });
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
-      expect(manifest.schema?.fields?.name?.optionalOnCreate).toBe(true);
-      expect(manifest.schema?.fields?.fullAddress?.optionalOnCreate).toBe(true);
+      expect(manifest.schema?.fields?.name?.optionalOnCreate).toBeUndefined();
+      expect(manifest.schema?.fields?.fullAddress?.optionalOnCreate).toBeUndefined();
       expect(manifest.schema?.fields?.phone?.optionalOnCreate).toBeUndefined();
     });
 

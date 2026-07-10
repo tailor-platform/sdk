@@ -6,7 +6,7 @@
 Redesign TailorDB hooks and validators with several breaking changes (pre-release):
 
 - Add shared `now` timestamp to all hooks — multiple fields stamped with the same `Date`
-- Field-level hooks: `{ value, data, invoker }` → create `{ value, invoker, now }` / update `{ value, oldValue, invoker, now }` (`data` removed, `oldValue` added for update only)
+- Field-level hooks: `{ value, data, invoker }` → create `{ input, invoker, now }` / update `{ input, oldValue, invoker, now }` (`data` removed, `oldValue` added for update only)
 - Type-level hooks: per-field mapping (`Hooks<F>`) → single `{ create, update }` object (`TypeHook<F>`) returning partial field overrides
 - Type-level create hooks no longer receive `oldRecord`; update hooks receive non-nullable `oldRecord`
 - Field-level validators: return type changed from `boolean` to `string | void` (return error message or void to pass); `[fn, message]` tuple form removed
