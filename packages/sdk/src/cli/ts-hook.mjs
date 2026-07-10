@@ -28,7 +28,8 @@ function collectPathsInto(out, configFilePath, content, visited) {
 
   const baseDir = dirname(configFilePath);
   const opts = content.compilerOptions ?? {};
-  const ownBaseUrl = typeof opts.baseUrl === "string" ? resolvePath(baseDir, opts.baseUrl) : undefined;
+  const ownBaseUrl =
+    typeof opts.baseUrl === "string" ? resolvePath(baseDir, opts.baseUrl) : undefined;
 
   let inheritedBaseUrl;
   const extendsField = content.extends;
