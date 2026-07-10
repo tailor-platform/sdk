@@ -174,13 +174,9 @@ export type Hook<TReturn, TCreateReturn = TReturn> = {
 type DottedPaths<T, Prefix extends string = ""> = string extends keyof T
   ? string
   : T extends Record<string, unknown>
-    ?
-        | (string & {})
-        | {
-            [K in keyof T & string]:
-              | `${Prefix}${K}`
-              | DottedPaths<NonNullable<T[K]>, `${Prefix}${K}.`>;
-          }[keyof T & string]
+    ? {
+        [K in keyof T & string]: `${Prefix}${K}` | DottedPaths<NonNullable<T[K]>, `${Prefix}${K}.`>;
+      }[keyof T & string]
     : never;
 
 export type TypeValidateFn<
@@ -192,7 +188,7 @@ export type TypeValidateFn<
     oldRecord: HookArgs<TData> | null;
     invoker: TailorPrincipal | null;
   },
-  issues: (field: DottedPaths<Omit<TData, "id">>, message: string) => void,
+  issues: <P extends DottedPaths<Omit<TData, "id">>>(field: P, message: string) => void,
 ) => void;
 
 type TypeCreateHookFn<
