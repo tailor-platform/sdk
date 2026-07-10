@@ -2,7 +2,11 @@
  * Tests for `@tailor-platform/sdk/runtime/workflow` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
-import defaultWorkflow, { workflow } from "#/runtime/workflow";
+import defaultWorkflow, {
+  workflow,
+  type TailorWorkflowAPI,
+  type TriggerWorkflowOptions,
+} from "#/runtime/workflow";
 import { cleanupMocks, injectMocks, mockWorkflow } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/workflow", () => {
@@ -16,6 +20,13 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
 
   test("exports matching default and named namespace objects", () => {
     expect(defaultWorkflow).toBe(workflow);
+  });
+
+  test("exposes the wrapper trigger options", () => {
+    expectTypeOf(workflow).toExtend<TailorWorkflowAPI>();
+    expectTypeOf<Parameters<TailorWorkflowAPI["triggerWorkflow"]>[2]>().toEqualTypeOf<
+      TriggerWorkflowOptions | undefined
+    >();
   });
 
   test("triggerWorkflow forwards args and returns Promise<string>", async () => {

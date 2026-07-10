@@ -37,7 +37,7 @@ export interface PlatformTriggerWorkflowOptions {
  * Platform API surface for `tailor.workflow`. Describes the shape the platform
  * runtime injects on `globalThis.tailor.workflow`.
  */
-export interface TailorWorkflowAPI {
+export interface PlatformWorkflowAPI {
   /**
    * Triggers a workflow and returns its execution ID.
    * @param workflowName - Workflow name as defined in tailor.config
@@ -84,8 +84,24 @@ export interface TailorWorkflowAPI {
   resolve(executionId: string, key: string, callback: (waitPayload: any) => any): Promise<void>;
 }
 
-const api = (): TailorWorkflowAPI =>
-  (globalThis as unknown as { tailor: { workflow: TailorWorkflowAPI } }).tailor.workflow;
+/** Runtime wrapper API for workflow and job control. */
+export interface TailorWorkflowAPI extends Omit<PlatformWorkflowAPI, "triggerWorkflow"> {
+  /**
+   * Triggers a workflow and returns its execution ID.
+   * @param workflowName - Workflow name as defined in tailor.config
+   * @param args - Arguments forwarded to the workflow's main job
+   * @param options - Optional SDK trigger options
+   * @returns The execution ID of the triggered workflow
+   */
+  triggerWorkflow(
+    workflowName: string,
+    args?: any,
+    options?: TriggerWorkflowOptions,
+  ): Promise<string>;
+}
+
+const api = (): PlatformWorkflowAPI =>
+  (globalThis as unknown as { tailor: { workflow: PlatformWorkflowAPI } }).tailor.workflow;
 
 function triggerWorkflow(
   workflowName: string,
@@ -98,15 +114,15 @@ function triggerWorkflow(
   return api().triggerWorkflow(workflowName, args, { authInvoker: options.invoker });
 }
 
-const resumeWorkflow: TailorWorkflowAPI["resumeWorkflow"] = (...args) =>
+const resumeWorkflow: PlatformWorkflowAPI["resumeWorkflow"] = (...args) =>
   api().resumeWorkflow(...args);
 
-const triggerJobFunction: TailorWorkflowAPI["triggerJobFunction"] = (...args) =>
+const triggerJobFunction: PlatformWorkflowAPI["triggerJobFunction"] = (...args) =>
   api().triggerJobFunction(...args);
 
-const wait: TailorWorkflowAPI["wait"] = (...args) => api().wait(...args);
+const wait: PlatformWorkflowAPI["wait"] = (...args) => api().wait(...args);
 
-const resolve: TailorWorkflowAPI["resolve"] = (...args) => api().resolve(...args);
+const resolve: PlatformWorkflowAPI["resolve"] = (...args) => api().resolve(...args);
 
 /** Runtime wrapper namespace for `tailor.workflow`. */
 export const workflow = {
@@ -115,6 +131,6 @@ export const workflow = {
   triggerJobFunction,
   wait,
   resolve,
-} as const;
+} as const satisfies TailorWorkflowAPI;
 
 export default workflow;
