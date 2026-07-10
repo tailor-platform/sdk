@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 1.76.0
+
+### Minor Changes
+
+- [#1699](https://github.com/tailor-platform/sdk/pull/1699) [`f6a8d07`](https://github.com/tailor-platform/sdk/commit/f6a8d0779f94c2de5502dfdc68348e4a41ceee47) Thanks [@dqn](https://github.com/dqn)! - Allow `setup coordinate --action` values to group multiple generated actions into one multi-config deploy by separating action names with commas.
+
+### Patch Changes
+
+- [#1702](https://github.com/tailor-platform/sdk/pull/1702) [`03143f5`](https://github.com/tailor-platform/sdk/commit/03143f5213d9fa9d3c7697de78f2376994716679) Thanks [@dqn](https://github.com/dqn)! - Clarify the setup delete warning for coordinator action references so grouped `--action` values tell users to remove the action name from the relevant value.
+
+- [#1691](https://github.com/tailor-platform/sdk/pull/1691) [`2f3dbab`](https://github.com/tailor-platform/sdk/commit/2f3dbab7ed3cf40fa174a82053d70c23c356204d) Thanks [@dqn](https://github.com/dqn)! - Clarify when profile machine user override errors are caused by `TAILOR_PLATFORM_MACHINE_USER_NAME`.
+
+- [#1701](https://github.com/tailor-platform/sdk/pull/1701) [`e8bcbdf`](https://github.com/tailor-platform/sdk/commit/e8bcbdf92f90f20cc292a4f6b998475e4aa35c8e) Thanks [@dqn](https://github.com/dqn)! - Show the `profile update --user` recovery command when `tailor-sdk login --profile` authenticates a different user than the profile references.
+
+- [#1698](https://github.com/tailor-platform/sdk/pull/1698) [`dd25b69`](https://github.com/tailor-platform/sdk/commit/dd25b69ba829e7d446731b4cbf2f6753d2abde95) Thanks [@dqn](https://github.com/dqn)! - Reject duplicate TailorDB type-level builder calls at type-check time and runtime instead of silently overwriting earlier settings.
+
 ## 1.75.0
 
 ### Minor Changes
