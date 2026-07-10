@@ -1,6 +1,7 @@
 import { t, type TailorAnyField, type TailorField } from "#/configure/types/type";
 import { brandValue } from "#/utils/brand";
 import type { AuthInvoker } from "#/configure/services/auth/index";
+import type { ResolverPermission } from "#/configure/services/resolver/permission";
 import type { MachineUserName } from "#/configure/types/machine-user";
 import type { TailorEnv, TailorInvoker, TailorUser } from "#/runtime/types";
 import type { InferFieldsOutput, output } from "#/types/helpers";
@@ -35,12 +36,13 @@ type NormalizedOutput<Output extends TailorAnyField | Record<string, TailorAnyFi
 type ResolverReturn<
   Input extends Record<string, TailorAnyField> | undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField>,
-> = Omit<ResolverInput, "input" | "output" | "body" | "authInvoker"> &
+> = Omit<ResolverInput, "input" | "output" | "body" | "authInvoker" | "auth"> &
   Readonly<{
     input?: Input;
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
     authInvoker?: AuthInvoker<string> | MachineUserName;
+    auth?: ResolverPermission | "public";
   }>;
 
 /**
@@ -58,10 +60,11 @@ type ResolverReturn<
  * with `resolverExecutedTrigger`. If explicitly set to false while an executor uses this
  * resolver, an error will be thrown during apply.
  *
- * `auth` declares the resolver's access requirement. Omitted (default): unchanged, anonymous
- * callers can reach the resolver. `"loggedIn"`: anonymous callers are rejected before `body`
- * runs. `"public"`: explicitly documents that anonymous callers are allowed. The check is
- * based on `context.user`, so it is unaffected by `authInvoker`.
+ * `auth` declares the resolver's access requirement, checked against `context.user` (the
+ * original caller, unaffected by `authInvoker`) before `body` runs. Omitted (default):
+ * unchanged, anonymous callers can reach the resolver. `"public"`: explicitly documents that
+ * anonymous callers are allowed. A `{ conditions, permit }` policy (in the same style as
+ * TailorDB's `.permission()`) rejects callers that don't match.
  * @template Input
  * @template Output
  * @param config - Resolver configuration
@@ -72,6 +75,7 @@ type ResolverReturn<
  * export default createResolver({
  *   name: "getUser",
  *   operation: "query",
+ *   auth: { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
  *   input: {
  *     id: t.string(),
  *   },
@@ -91,12 +95,13 @@ export function createResolver<
   Input extends Record<string, TailorAnyField> | undefined = undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
 >(
-  config: Omit<ResolverInput, "input" | "output" | "body" | "authInvoker"> &
+  config: Omit<ResolverInput, "input" | "output" | "body" | "authInvoker" | "auth"> &
     Readonly<{
       input?: Input;
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
       authInvoker?: AuthInvoker<string> | MachineUserName;
+      auth?: ResolverPermission | "public";
     }>,
 ): ResolverReturn<Input, Output> {
   // Check if output is already a TailorField using duck typing.

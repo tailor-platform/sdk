@@ -42,7 +42,7 @@ describe("bundleResolvers", () => {
     ).resolves.toEqual(new Map());
   });
 
-  test("injects the loggedIn auth guard into the entry file", async () => {
+  test("injects the auth guard into the entry file", async () => {
     using tmp = tempCwd("sdk-bundler-auth-");
     const resolverDir = path.join(tmp.dir, "src/backend/authcheck/resolver");
     fs.mkdirSync(resolverDir, { recursive: true });
@@ -51,7 +51,7 @@ describe("bundleResolvers", () => {
       `export default {\n` +
         `  operation: "query",\n` +
         `  name: "protected",\n` +
-        `  auth: "loggedIn",\n` +
+        `  auth: { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },\n` +
         `  body: async () => 1,\n` +
         `  output: { type: "integer", metadata: {}, fields: {} },\n` +
         `};\n`,
@@ -66,9 +66,36 @@ describe("bundleResolvers", () => {
       "utf-8",
     );
 
-    expect(entryContent).toContain('_internalResolver.auth === "loggedIn"');
-    expect(entryContent).toContain("!context.user.type");
-    expect(entryContent).toContain("This resolver requires an authenticated caller.");
+    expect(entryContent).toContain('context.user.type !== ""');
+    expect(entryContent).toContain("TailorErrorMessage");
+    expect(entryContent).toContain("access denied");
+  });
+
+  test("does not inject a guard when auth is omitted or public", async () => {
+    using tmp = tempCwd("sdk-bundler-noauth-");
+    const resolverDir = path.join(tmp.dir, "src/backend/noauth/resolver");
+    fs.mkdirSync(resolverDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(resolverDir, "open.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "open",\n` +
+        `  auth: "public",\n` +
+        `  body: async () => 1,\n` +
+        `  output: { type: "integer", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+
+    await bundleResolvers("noauth", {
+      files: ["./src/backend/noauth/resolver/*.ts"],
+    });
+
+    const entryContent = fs.readFileSync(
+      path.join(tmp.dir, ".tailor-sdk/resolvers/open.entry.js"),
+      "utf-8",
+    );
+
+    expect(entryContent).not.toContain("TailorErrorMessage");
   });
 
   describe("concurrency", () => {

@@ -63,7 +63,48 @@ export type Resolver = {
         machineUserName: string;
       }
     | undefined;
-  /** Access requirement for this resolver. Omitted (default): unchanged, anonymous callers can reach the resolver. "loggedIn": anonymous callers are rejected before `body` runs. "public": explicitly documents that anonymous callers are allowed */
-  auth?: "loggedIn" | "public" | undefined;
+  auth?:
+    | "public"
+    | {
+        conditions:
+          | readonly [
+              (
+                | string
+                | boolean
+                | {
+                    user: string;
+                  }
+              ),
+              "=" | "!=",
+              (
+                | string
+                | boolean
+                | {
+                    user: string;
+                  }
+              ),
+            ]
+          | readonly (readonly [
+              (
+                | string
+                | boolean
+                | {
+                    user: string;
+                  }
+              ),
+              "=" | "!=",
+              (
+                | string
+                | boolean
+                | {
+                    user: string;
+                  }
+              ),
+            ])[];
+        permit: boolean;
+        /** Resolver description */
+        description?: string | undefined;
+      }
+    | undefined;
 };
 export type ResolverInput = Resolver;

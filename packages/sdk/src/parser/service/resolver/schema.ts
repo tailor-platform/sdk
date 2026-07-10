@@ -7,11 +7,37 @@ export const QueryTypeSchema = z
   .union([z.literal("query"), z.literal("mutation")])
   .describe("GraphQL operation type");
 
+const ResolverPermissionOperandSchema = z.union([
+  z.object({ user: z.string() }).strict(),
+  z.string(),
+  z.boolean(),
+]);
+
+const ResolverPermissionOperatorSchema = z.union([z.literal("="), z.literal("!=")]);
+
+const ResolverPermissionConditionSchema = z
+  .tuple([
+    ResolverPermissionOperandSchema,
+    ResolverPermissionOperatorSchema,
+    ResolverPermissionOperandSchema,
+  ])
+  .readonly();
+
+const ResolverPermissionSchema = z.object({
+  conditions: z.union([
+    ResolverPermissionConditionSchema,
+    z.array(ResolverPermissionConditionSchema).readonly(),
+  ]),
+  permit: z.boolean(),
+  description: z.string().optional(),
+});
+
 export const ResolverAuthSchema = z
-  .union([z.literal("loggedIn"), z.literal("public")])
+  .union([ResolverPermissionSchema, z.literal("public")])
   .describe(
-    'Access requirement for this resolver: "loggedIn" rejects anonymous callers before ' +
-      '`body` runs; "public" documents that anonymous callers are allowed',
+    "Access requirement for this resolver, evaluated against the original caller " +
+      '(unaffected by `authInvoker`) before `body` runs. "public" documents that anonymous ' +
+      "callers are allowed. Omitted (default): unchanged, anonymous callers can reach the resolver",
   );
 
 export const ResolverSchema = z.object({
@@ -23,9 +49,5 @@ export const ResolverSchema = z.object({
   output: TailorFieldSchema.describe("Output field definition"),
   publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
   authInvoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
-  auth: ResolverAuthSchema.optional().describe(
-    "Access requirement for this resolver. Omitted (default): unchanged, anonymous callers " +
-      'can reach the resolver. "loggedIn": anonymous callers are rejected before `body` ' +
-      'runs. "public": explicitly documents that anonymous callers are allowed',
-  ),
+  auth: ResolverAuthSchema.optional(),
 });

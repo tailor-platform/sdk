@@ -12,6 +12,7 @@
  */
 import { tailorUserMap } from "#/parser/service/tailordb/index";
 import type { Trigger } from "#/types/executor.generated";
+import type { Resolver } from "#/types/resolver.generated";
 
 // ---------------------------------------------------------------------------
 // Bundle inline
@@ -101,4 +102,59 @@ export function buildResolverOperationHookExpr(
   env: Record<string, string | number | boolean>,
 ): string {
   return `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`;
+}
+
+type ResolverAuthPolicy = Extract<NonNullable<Resolver["auth"]>, { conditions: unknown }>;
+type ResolverPermissionOperand = string | boolean | { user: string };
+type ResolverPermissionCondition = readonly [
+  ResolverPermissionOperand,
+  "=" | "!=",
+  ResolverPermissionOperand,
+];
+
+function isSingleResolverCondition(
+  conditions: ResolverAuthPolicy["conditions"],
+): conditions is ResolverPermissionCondition {
+  return conditions.length === 3 && typeof conditions[1] === "string";
+}
+
+function resolverPermissionOperandExpr(operand: ResolverPermissionOperand): string {
+  if (typeof operand === "object") {
+    if (operand.user === "_loggedIn") {
+      return `(context.user.type !== "")`;
+    }
+    if (operand.user === "id") {
+      return `context.user.id`;
+    }
+    return `context.user.attributes?.[${JSON.stringify(operand.user)}]`;
+  }
+  return JSON.stringify(operand);
+}
+
+function resolverPermissionConditionExpr(condition: ResolverPermissionCondition): string {
+  const [left, operator, right] = condition;
+  const jsOperator = operator === "=" ? "===" : "!==";
+  return `(${resolverPermissionOperandExpr(left)} ${jsOperator} ${resolverPermissionOperandExpr(right)})`;
+}
+
+/**
+ * Build the auth guard statement injected at resolver entry.
+ *
+ * Rejects the call with `TailorErrorMessage` when the caller doesn't match
+ * `auth`'s conditions, evaluated against `context.user` — the original caller,
+ * unaffected by `authInvoker`.
+ * @param auth - The resolver's `auth` config
+ * @returns A JS `if (...) throw ...;` statement, or `undefined` when `auth` is omitted or `"public"`
+ */
+export function buildResolverAuthGuardExpr(auth: Resolver["auth"]): string | undefined {
+  if (!auth || auth === "public") {
+    return undefined;
+  }
+  const conditions = isSingleResolverCondition(auth.conditions)
+    ? [auth.conditions]
+    : auth.conditions;
+  const combined = conditions.map(resolverPermissionConditionExpr).join(" && ");
+  const denyExpr = auth.permit === false ? `(${combined})` : `!(${combined})`;
+  const message = auth.description ? `access denied: ${auth.description}` : "access denied";
+  return `if (${denyExpr}) { throw new TailorErrorMessage(${JSON.stringify(message)}); }`;
 }

@@ -1,5 +1,9 @@
 import { describe, test, expect } from "vitest";
-import { buildExecutorArgsExpr, buildResolverOperationHookExpr } from "./runtime-exprs";
+import {
+  buildExecutorArgsExpr,
+  buildResolverAuthGuardExpr,
+  buildResolverOperationHookExpr,
+} from "./runtime-exprs";
 
 describe("buildExecutorArgsExpr", () => {
   const env = { API_URL: "https://example.com", DEBUG: true };
@@ -101,5 +105,90 @@ describe("buildResolverOperationHookExpr", () => {
   test("empty env produces empty object", () => {
     const expr = buildResolverOperationHookExpr({});
     expect(expr).toContain("env: {}");
+  });
+});
+
+describe("buildResolverAuthGuardExpr", () => {
+  class TailorErrorMessage extends Error {}
+
+  function runGuard(auth: Parameters<typeof buildResolverAuthGuardExpr>[0], user: unknown): void {
+    const guard = buildResolverAuthGuardExpr(auth);
+    if (!guard) {
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
+    const fn = new Function("context", "TailorErrorMessage", guard);
+    fn({ user }, TailorErrorMessage);
+  }
+
+  test("returns undefined when auth is omitted", () => {
+    expect(buildResolverAuthGuardExpr(undefined)).toBeUndefined();
+  });
+
+  test("returns undefined when auth is public", () => {
+    expect(buildResolverAuthGuardExpr("public")).toBeUndefined();
+  });
+
+  test("_loggedIn permit:true allows an authenticated user", () => {
+    const auth = { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true } as const;
+    expect(() => runGuard(auth, { type: "user" })).not.toThrow();
+  });
+
+  test("_loggedIn permit:true rejects an anonymous user", () => {
+    const auth = { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true } as const;
+    expect(() => runGuard(auth, { type: "" })).toThrow(TailorErrorMessage);
+  });
+
+  test("permit:false denies matching callers instead of allowing them", () => {
+    const auth = { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: false } as const;
+    expect(() => runGuard(auth, { type: "user" })).toThrow(TailorErrorMessage);
+    expect(() => runGuard(auth, { type: "" })).not.toThrow();
+  });
+
+  test("supports the != operator", () => {
+    const auth = { conditions: [[{ user: "role" }, "!=", "BANNED"]], permit: true } as const;
+    expect(() => runGuard(auth, { attributes: { role: "MEMBER" } })).not.toThrow();
+    expect(() => runGuard(auth, { attributes: { role: "BANNED" } })).toThrow(TailorErrorMessage);
+  });
+
+  test("supports the id operand", () => {
+    const auth = {
+      conditions: [[{ user: "id" }, "=", "11111111-1111-1111-1111-111111111111"]],
+      permit: true,
+    } as const;
+    expect(() => runGuard(auth, { id: "11111111-1111-1111-1111-111111111111" })).not.toThrow();
+    expect(() => runGuard(auth, { id: "other" })).toThrow(TailorErrorMessage);
+  });
+
+  test("supports arbitrary user attribute operands", () => {
+    const auth = { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true } as const;
+    expect(() => runGuard(auth, { attributes: { role: "ADMIN" } })).not.toThrow();
+    expect(() => runGuard(auth, { attributes: { role: "MEMBER" } })).toThrow(TailorErrorMessage);
+  });
+
+  test("ANDs multiple conditions", () => {
+    const auth = {
+      conditions: [
+        [{ user: "_loggedIn" }, "=", true],
+        [{ user: "role" }, "=", "ADMIN"],
+      ],
+      permit: true,
+    } as const;
+    expect(() => runGuard(auth, { type: "user", attributes: { role: "ADMIN" } })).not.toThrow();
+    expect(() => runGuard(auth, { type: "user", attributes: { role: "MEMBER" } })).toThrow(
+      TailorErrorMessage,
+    );
+    expect(() => runGuard(auth, { type: "", attributes: { role: "ADMIN" } })).toThrow(
+      TailorErrorMessage,
+    );
+  });
+
+  test("includes description in the thrown message when present", () => {
+    const auth = {
+      conditions: [[{ user: "_loggedIn" }, "=", true]],
+      permit: true,
+      description: "must be logged in",
+    } as const;
+    expect(() => runGuard(auth, { type: "" })).toThrow(/must be logged in/);
   });
 });

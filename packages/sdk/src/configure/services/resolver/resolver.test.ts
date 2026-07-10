@@ -465,7 +465,7 @@ describe("createResolver", () => {
       expect(resolver.authInvoker).toEqual({ namespace: "my-auth", machineUserName: "batch-user" });
     });
 
-    test("creates resolver with auth: loggedIn", () => {
+    test("creates resolver with loggedIn auth condition", () => {
       const outputType = t.object({ result: t.string() });
 
       const resolver = createResolver({
@@ -473,10 +473,27 @@ describe("createResolver", () => {
         operation: "query",
         output: outputType,
         body: () => ({ result: "ok" }),
-        auth: "loggedIn",
+        auth: { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
       });
 
-      expect(resolver.auth).toBe("loggedIn");
+      expect(resolver.auth).toEqual({
+        conditions: [[{ user: "_loggedIn" }, "=", true]],
+        permit: true,
+      });
+    });
+
+    test("creates resolver with auth: public", () => {
+      const outputType = t.object({ result: t.string() });
+
+      const resolver = createResolver({
+        name: "withAuthPublic",
+        operation: "query",
+        output: outputType,
+        body: () => ({ result: "ok" }),
+        auth: "public",
+      });
+
+      expect(resolver.auth).toBe("public");
     });
 
     test("creates minimal resolver without optional fields", () => {

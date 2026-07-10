@@ -11,7 +11,7 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
-import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { buildResolverAuthGuardExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import {
   createTriggerTransformPlugin,
   serializeTriggerContext,
@@ -20,10 +20,12 @@ import {
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
 import type { LogLevel } from "#/configure/config/types";
+import type { Resolver } from "#/types/resolver.generated";
 
 interface ResolverInfo {
   name: string;
   sourceFile: string;
+  auth: Resolver["auth"];
 }
 
 /**
@@ -74,6 +76,7 @@ export async function bundleResolvers(
     resolvers.push({
       name: resolver.name,
       sourceFile: file,
+      auth: resolver.auth,
     });
   }
 
@@ -148,6 +151,7 @@ async function bundleSingleResolver(
       // Step 1: Create entry file that imports from the original source
       const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
       const absoluteSourcePath = path.resolve(resolver.sourceFile);
+      const authGuardExpr = buildResolverAuthGuardExpr(resolver.auth);
 
       const entryContent = ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
@@ -155,9 +159,7 @@ async function bundleSingleResolver(
 
         const $tailor_resolver_body = async (context) => {
           const invoker = ${INVOKER_EXPR};
-          if (_internalResolver.auth === "loggedIn" && !context.user.type) {
-            throw new TailorErrorMessage("This resolver requires an authenticated caller.");
-          }
+          ${authGuardExpr ?? ""}
           if (_internalResolver.input) {
             const result = t.object(_internalResolver.input).parse({
               value: context.input,

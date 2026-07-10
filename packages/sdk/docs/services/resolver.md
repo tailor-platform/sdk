@@ -352,9 +352,9 @@ createResolver({
 
 ## Authentication
 
-### Requiring a Logged-In Caller (`auth`)
+### Access Requirement (`auth`)
 
-By default, a resolver with no in-body check is reachable by an anonymous (unauthenticated) caller. Set `auth: "loggedIn"` to reject anonymous callers before `body` runs:
+By default, a resolver with no in-body check is reachable by an anonymous (unauthenticated) caller. Set `auth` to reject callers that don't match a condition, evaluated before `body` runs:
 
 ```typescript
 import { createResolver, t } from "@tailor-platform/sdk";
@@ -362,7 +362,7 @@ import { createResolver, t } from "@tailor-platform/sdk";
 export default createResolver({
   name: "getMyOrders",
   operation: "query",
-  auth: "loggedIn",
+  auth: { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
   output: t.object({ count: t.int() }),
   body: async (context) => {
     // context.user is guaranteed to be an authenticated caller here
@@ -371,8 +371,17 @@ export default createResolver({
 });
 ```
 
-- `auth: "loggedIn"` — anonymous callers get a `TailorErrorMessage` and `body` does not run.
-- `auth: "public"` — explicitly documents that anonymous callers are allowed. Behaves the same as omitting `auth`, but records the decision so it isn't mistaken for an oversight.
+`auth` uses the same `conditions`/`permit` notation as TailorDB's `.permission()`, restricted to `user` operands (a resolver has no associated record to compare against) with equality (`=`/`!=`) comparisons:
+
+- `{ user: "_loggedIn" }` — whether the caller is authenticated
+- `{ user: "id" }` — the caller's user ID
+- `{ user: "someAttribute" }` — any attribute enabled in `auth.userProfile.attributes`
+
+Multiple conditions in the same `conditions` array are combined with AND. `permit` is required — `permit: true` denies callers that _don't_ match, `permit: false` denies callers that _do_ match.
+
+Besides a conditions object, `auth` also accepts:
+
+- `"public"` — explicitly documents that anonymous callers are allowed. Behaves the same as omitting `auth`, but records the decision so it isn't mistaken for an oversight.
 - Omitted (default) — unchanged: anonymous callers can still reach the resolver.
 
 This check is based on `context.user`, the original caller, so it still applies even when `authInvoker` swaps in a machine user for database access.
