@@ -43,7 +43,7 @@ type FieldParseRuntimeArgs<T extends TailorFieldType> = FieldParseInternalArgs &
   field: FieldRuntime<T>;
 };
 
-function validateValue<T extends TailorFieldType>(
+function validateBaseValue<T extends TailorFieldType>(
   args: FieldValidateValueArgs<T>,
 ): StandardSchemaV1.Issue[] {
   const { field, value, data, user, pathArray } = args;
@@ -171,6 +171,16 @@ function validateValue<T extends TailorFieldType>(
       break;
   }
 
+  return issues;
+}
+
+function validateCustomValue<T extends TailorFieldType>(
+  args: FieldValidateValueArgs<T>,
+): StandardSchemaV1.Issue[] {
+  const { field, value, data, user, pathArray } = args;
+  const issues: StandardSchemaV1.Issue[] = [];
+  const path = pathArray.length > 0 ? pathArray : undefined;
+
   const validateFns = field._metadata.validate;
   if (validateFns && validateFns.length > 0) {
     for (const validateInput of validateFns) {
@@ -224,7 +234,7 @@ export function parseInternal<T extends TailorFieldType, Output>(
       const elementValue = value[i];
       const elementPath = pathArray.concat(`[${i}]`);
 
-      const elementIssues = validateValue({
+      const elementIssues = validateBaseValue({
         field,
         value: elementValue,
         data,
@@ -239,14 +249,23 @@ export function parseInternal<T extends TailorFieldType, Output>(
     if (issues.length > 0) {
       return { issues };
     }
+
+    const arrayIssues = validateCustomValue({ field, value, data, user, pathArray });
+    if (arrayIssues.length > 0) {
+      return { issues: arrayIssues };
+    }
+
     return { value: value as Output };
   }
 
-  const valueIssues = validateValue({ field, value, data, user, pathArray });
-  issues.push(...valueIssues);
+  const valueIssues = validateBaseValue({ field, value, data, user, pathArray });
+  if (valueIssues.length > 0) {
+    return { issues: valueIssues };
+  }
 
-  if (issues.length > 0) {
-    return { issues };
+  const customIssues = validateCustomValue({ field, value, data, user, pathArray });
+  if (customIssues.length > 0) {
+    return { issues: customIssues };
   }
 
   return { value: value as Output };

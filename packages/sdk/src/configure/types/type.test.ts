@@ -664,6 +664,50 @@ describe("TailorField runtime validation tests", () => {
       });
     });
 
+    test("runs custom validation once against the complete array", () => {
+      const receivedValues: string[][] = [];
+      const schema = t.string({ array: true }).validate([
+        ({ value }) => {
+          receivedValues.push(value);
+          return value.length >= 2;
+        },
+        "Expected at least two values",
+      ]);
+
+      const validResult = schema.parse({ value: ["a", "b"], data, user });
+      const invalidResult = schema.parse({ value: ["a"], data, user });
+
+      expect(expectParsed(validResult)).toEqual(["a", "b"]);
+      expect(invalidResult.issues).toEqual([{ message: "Expected at least two values" }]);
+      expect(receivedValues).toEqual([["a", "b"], ["a"]]);
+    });
+
+    test("skips custom validation when scalar base validation fails", () => {
+      const receivedValues: string[] = [];
+      const schema = t.string().validate(({ value }) => {
+        receivedValues.push(value);
+        return value.toUpperCase().length > 0;
+      });
+
+      const result = schema.parse({ value: 42, data, user });
+
+      expect(result.issues).toEqual([{ message: "Expected a string: received 42" }]);
+      expect(receivedValues).toEqual([]);
+    });
+
+    test("skips array custom validation when element base validation fails", () => {
+      const receivedValues: string[][] = [];
+      const schema = t.string({ array: true }).validate(({ value }) => {
+        receivedValues.push(value);
+        return value.length > 0;
+      });
+
+      const result = schema.parse({ value: ["valid", 42], data, user });
+
+      expect(result.issues).toEqual([{ message: "Expected a string: received 42", path: ["[1]"] }]);
+      expect(receivedValues).toEqual([]);
+    });
+
     test("treats null/undefined as missing when required, and allowed when optional", () => {
       const required = t.string().parse({ value: null, data, user });
       expect(required.issues).toBeDefined();
