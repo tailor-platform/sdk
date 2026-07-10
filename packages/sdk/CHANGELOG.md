@@ -1,5 +1,44 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.4
+
+### Major Changes
+
+- [#1693](https://github.com/tailor-platform/sdk/pull/1693) [`4751214`](https://github.com/tailor-platform/sdk/commit/4751214c0923e094a844f9ce322279a47e871075) Thanks [@dqn](https://github.com/dqn)! - Rename the TailorDB schema builder from `db.type()` to `db.table()`.
+  
+  Update TailorDB definitions:
+  
+  ```diff
+   import { db } from "@tailor-platform/sdk";
+  
+  -export const user = db.type("User", {
+  +export const user = db.table("User", {
+     name: db.string(),
+   });
+  ```
+
+- [#1704](https://github.com/tailor-platform/sdk/pull/1704) [`9c81d9c`](https://github.com/tailor-platform/sdk/commit/9c81d9c18b1d29b3e9307ea17fe54c8ce55f4dda) Thanks [@dqn](https://github.com/dqn)! - Remove flat value and default exports from `@tailor-platform/sdk/runtime/*` subpath modules. Import each subpath through its self-named namespace export instead, for example `import { iconv } from "@tailor-platform/sdk/runtime/iconv"`.
+  
+  The aggregate `@tailor-platform/sdk/runtime` entry remains named-only, and its deprecated `file.deleteFile` alias is removed in favor of `file.delete`. The v2 codemod rewrites straightforward namespace-star subpath imports, flat named value imports, and aggregate `file.deleteFile` calls to the new namespace-object style.
+  
+  `TailorContextAPI` and `TailorWorkflowAPI` now describe the SDK wrapper objects. Code that types the platform-provided `globalThis.tailor.context` or `globalThis.tailor.workflow` objects directly must use `PlatformContextAPI` or `PlatformWorkflowAPI` instead.
+
+### Minor Changes
+
+- [#1699](https://github.com/tailor-platform/sdk/pull/1699) [`f6a8d07`](https://github.com/tailor-platform/sdk/commit/f6a8d0779f94c2de5502dfdc68348e4a41ceee47) Thanks [@dqn](https://github.com/dqn)! - Allow `setup coordinate --action` values to group multiple generated actions into one multi-config deploy by separating action names with commas.
+
+### Patch Changes
+
+- [#1702](https://github.com/tailor-platform/sdk/pull/1702) [`03143f5`](https://github.com/tailor-platform/sdk/commit/03143f5213d9fa9d3c7697de78f2376994716679) Thanks [@dqn](https://github.com/dqn)! - Clarify the setup delete warning for coordinator action references so grouped `--action` values tell users to remove the action name from the relevant value.
+
+- [#1691](https://github.com/tailor-platform/sdk/pull/1691) [`2f3dbab`](https://github.com/tailor-platform/sdk/commit/2f3dbab7ed3cf40fa174a82053d70c23c356204d) Thanks [@dqn](https://github.com/dqn)! - Clarify when profile machine user override errors are caused by `TAILOR_PLATFORM_MACHINE_USER_NAME`.
+
+- [#1700](https://github.com/tailor-platform/sdk/pull/1700) [`0063115`](https://github.com/tailor-platform/sdk/commit/0063115f567ba7e73c0b679a392d5983869e8ac4) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor` CLI failing with `ERR_MODULE_NOT_FOUND` when resolving extensionless relative imports of files whose basename contains a dot (e.g. `./permissions.generated`).
+
+- [#1705](https://github.com/tailor-platform/sdk/pull/1705) [`958d571`](https://github.com/tailor-platform/sdk/commit/958d571555a5c66e2e3b9beb3d2247f63cbb8f2c) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor` CLI failing with `ERR_MODULE_NOT_FOUND` when resolving `tsconfig.json` path aliases (`compilerOptions.paths`) in projects that omit `baseUrl`, which is the standard style since TypeScript 5.0. Also fix path alias resolution to match TypeScript's `extends` behavior: a child config's `baseUrl` is now correctly inherited from an extended config, and a child config's own `paths` now replaces (rather than merges with) inherited `paths`.
+
+- [#1703](https://github.com/tailor-platform/sdk/pull/1703) [`4681778`](https://github.com/tailor-platform/sdk/commit/46817786354665cb97d0de63b78fa83e64096e03) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix generated Kysely types for `db.date()` fields to use `Timestamp` instead of `string`, matching `db.datetime()` and allowing `insertInto`/`updateTable` calls to accept a `Date` value.
+
 ## 2.0.0-next.3
 
 ### Major Changes

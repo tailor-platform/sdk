@@ -1,5 +1,30 @@
 # @tailor-platform/create-sdk
 
+## 2.0.0-next.4
+
+### Major Changes
+
+- [#1693](https://github.com/tailor-platform/sdk/pull/1693) [`4751214`](https://github.com/tailor-platform/sdk/commit/4751214c0923e094a844f9ce322279a47e871075) Thanks [@dqn](https://github.com/dqn)! - Rename the TailorDB schema builder from `db.type()` to `db.table()`.
+  
+  Update TailorDB definitions:
+  
+  ```diff
+   import { db } from "@tailor-platform/sdk";
+  
+  -export const user = db.type("User", {
+  +export const user = db.table("User", {
+     name: db.string(),
+   });
+  ```
+
+### Patch Changes
+
+- [#1704](https://github.com/tailor-platform/sdk/pull/1704) [`9c81d9c`](https://github.com/tailor-platform/sdk/commit/9c81d9c18b1d29b3e9307ea17fe54c8ce55f4dda) Thanks [@dqn](https://github.com/dqn)! - Remove flat value and default exports from `@tailor-platform/sdk/runtime/*` subpath modules. Import each subpath through its self-named namespace export instead, for example `import { iconv } from "@tailor-platform/sdk/runtime/iconv"`.
+  
+  The aggregate `@tailor-platform/sdk/runtime` entry remains named-only, and its deprecated `file.deleteFile` alias is removed in favor of `file.delete`. The v2 codemod rewrites straightforward namespace-star subpath imports, flat named value imports, and aggregate `file.deleteFile` calls to the new namespace-object style.
+  
+  `TailorContextAPI` and `TailorWorkflowAPI` now describe the SDK wrapper objects. Code that types the platform-provided `globalThis.tailor.context` or `globalThis.tailor.workflow` objects directly must use `PlatformContextAPI` or `PlatformWorkflowAPI` instead.
+
 ## 2.0.0-next.3
 
 ### Major Changes
