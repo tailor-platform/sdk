@@ -154,6 +154,12 @@ describe("repository ERD schema workflow", () => {
     expect(content).toContain("pr-number: ${{ github.event.pull_request.number }}");
   });
 
+  test("scopes the comment job's concurrency per PR so an older run cannot overwrite a newer sticky comment", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("group: erd-schema-comment-${{ github.ref }}");
+  });
+
   test("checks out the repository before every tailor-platform/actions/erd-schema-* step", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 

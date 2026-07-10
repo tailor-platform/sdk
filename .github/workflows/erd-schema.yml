@@ -107,6 +107,11 @@ jobs:
       contents: read # checkout the repository
       pull-requests: write # upsert the sticky preview comment
       actions: read # required to list the run's artifacts
+    concurrency:
+      # Per-PR so an older run's comment step cannot finish after a newer
+      # run and overwrite the sticky comment with stale artifact links.
+      group: erd-schema-comment-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
