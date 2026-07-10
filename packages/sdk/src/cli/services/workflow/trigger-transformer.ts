@@ -12,11 +12,10 @@ import {
   type Replacement,
   type TriggerCallInfo,
   applyReplacements,
-  findStatementEnd,
   getModuleExportName,
   getTriggerCallInfo,
 } from "./ast-utils";
-import type { Program, ImportDeclaration, ImportDefaultSpecifier } from "@oxc-project/types";
+import type { Program } from "@oxc-project/types";
 import type { Plugin } from "rolldown";
 
 export interface ResolvedTriggerCall extends TriggerCallInfo {
@@ -215,59 +214,6 @@ function walkBindingAware(
   walk(program as unknown as ASTNode, new Set());
 }
 
-function buildReferenceCountMap(program: Program, names: Set<string>): Map<string, number> {
-  const counts = new Map([...names].map((name) => [name, 0]));
-
-  walkBindingAware(program, names, (node, shadowedNames, parentNode, parentKey) => {
-    if (node.type !== "Identifier") return;
-    const name = node.name as string;
-    if (!names.has(name) || shadowedNames.has(name)) return;
-    const isMemberProperty =
-      parentNode?.type === "MemberExpression" && parentKey === "property" && !parentNode.computed;
-    const isObjectPropertyKey =
-      parentNode?.type === "Property" &&
-      parentKey === "key" &&
-      !parentNode.shorthand &&
-      !parentNode.computed;
-    if (!isMemberProperty && !isObjectPropertyKey) {
-      counts.set(name, (counts.get(name) ?? 0) + 1);
-    }
-  });
-
-  return counts;
-}
-
-interface ImportRemovalRange {
-  start: number;
-  end: number;
-}
-
-function findDefaultImportRemovalRange(
-  program: Program,
-  localName: string,
-): ImportRemovalRange | undefined {
-  for (const statement of program.body) {
-    if (statement.type !== "ImportDeclaration") continue;
-    const declaration = statement as unknown as ImportDeclaration;
-
-    for (const specifier of declaration.specifiers) {
-      if (specifier.type !== "ImportDefaultSpecifier") continue;
-      const defaultSpecifier = specifier as ImportDefaultSpecifier;
-      if (defaultSpecifier.local.name !== localName) continue;
-      if (declaration.specifiers.length === 1) {
-        return { start: declaration.start, end: declaration.end };
-      }
-      return undefined;
-    }
-  }
-  return undefined;
-}
-
-interface LocalTriggerTargets {
-  targets: Map<string, TriggerTarget>;
-  workflowDefaultImportNames: Set<string>;
-}
-
 function resolveRelativeImport(
   context: TriggerContext,
   currentFilePath: string,
@@ -283,9 +229,8 @@ function collectLocalTargets(
   program: Program,
   context: TriggerContext,
   currentFilePath: string,
-): LocalTriggerTargets {
+): Map<string, TriggerTarget> {
   const targets = new Map<string, TriggerTarget>();
-  const workflowDefaultImportNames = new Set<string>();
   const currentModule = context.modules.get(normalizeFilePath(currentFilePath));
   if (currentModule) {
     for (const [localName, target] of currentModule.localBindings) {
@@ -312,21 +257,17 @@ function collectLocalTargets(
       const target = importedModule.exports.get(importedName);
       if (!target) continue;
       targets.set(specifier.local.name, target);
-      if (specifier.type === "ImportDefaultSpecifier" && target.kind === "workflow") {
-        workflowDefaultImportNames.add(specifier.local.name);
-      }
     }
   }
 
-  return { targets, workflowDefaultImportNames };
+  return targets;
 }
 
 function detectTriggerCallsWithTargets(
   program: Program,
   sourceText: string,
-  localTargets: LocalTriggerTargets,
+  targets: Map<string, TriggerTarget>,
 ): ResolvedTriggerCall[] {
-  const { targets } = localTargets;
   const calls: ResolvedTriggerCall[] = [];
   const targetNames = new Set(targets.keys());
 
@@ -362,7 +303,6 @@ export function transformFunctionTriggers(
 ): string {
   const { program } = parseSync("input.ts", source);
   const localTargets = collectLocalTargets(program, triggerContext, currentFilePath);
-  const { workflowDefaultImportNames } = localTargets;
   const { authNamespace } = triggerContext;
   const allTriggerCalls = detectTriggerCallsWithTargets(program, source, localTargets);
   const nestedTriggerCalls: Array<{ call: ResolvedTriggerCall; parent: ResolvedTriggerCall }> = [];
@@ -385,7 +325,6 @@ export function transformFunctionTriggers(
   }
 
   const replacements: Replacement[] = [];
-  const transformedCallsPerIdentifier = new Map<string, number>();
   let needsNormalizerHelper = false;
 
   for (const call of triggerCalls) {
@@ -410,25 +349,6 @@ export function transformFunctionTriggers(
       end: call.callRange.end,
       text: transformedCall,
     });
-    transformedCallsPerIdentifier.set(
-      call.identifierName,
-      (transformedCallsPerIdentifier.get(call.identifierName) ?? 0) + 1,
-    );
-  }
-
-  const referenceCounts = buildReferenceCountMap(program, workflowDefaultImportNames);
-  for (const localName of workflowDefaultImportNames) {
-    const transformedCount = transformedCallsPerIdentifier.get(localName) ?? 0;
-    const referenceCount = referenceCounts.get(localName) ?? 0;
-    if (referenceCount !== 0 && transformedCount < referenceCount) continue;
-    const removal = findDefaultImportRemovalRange(program, localName);
-    if (removal) {
-      replacements.push({
-        start: removal.start,
-        end: findStatementEnd(source, removal.end),
-        text: "",
-      });
-    }
   }
 
   const transformed = applyReplacements(source, replacements);

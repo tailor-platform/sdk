@@ -78,18 +78,3 @@ export function findAllWorkflows(program: Program, _sourceText: string): Workflo
   walk(program as unknown as ASTNode);
   return workflows;
 }
-
-/**
- * Build a map from export name to workflow name from detected workflows
- * @param workflows - Detected workflows
- * @returns Map from export name to workflow name
- */
-export function buildWorkflowNameMap(workflows: WorkflowLocation[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const workflow of workflows) {
-    if (workflow.exportName) {
-      map.set(workflow.exportName, workflow.name);
-    }
-  }
-  return map;
-}

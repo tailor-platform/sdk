@@ -150,7 +150,7 @@ await workflow.trigger();
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
-    expect(result).not.toContain('import workflow from "./workflow"');
+    expect(result).toContain('import workflow from "./workflow"');
     expect(result).toContain('tailor.workflow.triggerWorkflow("workflow-a", undefined)');
   });
 
