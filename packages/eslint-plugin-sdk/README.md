@@ -49,14 +49,116 @@ export default [tailorSdk.configs.recommended];
 
 ## Rules
 
-| Rule                                | Recommended | Description                                                              |
-| ----------------------------------- | ----------- | ------------------------------------------------------------------------ |
-| `no-api-prefix-in-path-pattern`     | warning     | Rejects a literal `/api` prefix in an HTTP adapter `pathPattern`.        |
-| `no-deprecated-api`                 | warning     | Rejects `defineGenerators()` and SDK Auth `invoker()` calls.             |
-| `no-resume-after-resolve`           | warning     | Rejects a direct `resumeWorkflow()` after resolving the same execution.  |
-| `one-service-per-file`              | error       | Rejects multiple deployable service factory calls in one file.           |
-| `require-named-workflow-job-export` | error       | Requires every `createWorkflowJob()` result to be a named export.        |
-| `require-service-default-export`    | error       | Requires Resolver, Executor, HTTP Adapter, and Workflow default exports. |
+### `no-api-prefix-in-path-pattern` (warning)
+
+HTTP adapter path patterns are matched after the platform's `/api` prefix.
+
+Incorrect:
+
+```ts
+export default createHttpAdapter({
+  pathPattern: "/api/orders/*",
+});
+```
+
+Correct:
+
+```ts
+export default createHttpAdapter({
+  pathPattern: "/orders/*",
+});
+```
+
+### `no-deprecated-api` (warning)
+
+Use `definePlugins()` instead of `defineGenerators()`, and pass machine-user names directly instead
+of calling `auth.invoker()`.
+
+Incorrect:
+
+```ts
+export const generators = defineGenerators(generator);
+
+export default createResolver({
+  authInvoker: auth.invoker("automation"),
+});
+```
+
+Correct:
+
+```ts
+export const plugins = definePlugins(plugin);
+
+export default createResolver({
+  authInvoker: "automation",
+});
+```
+
+### `no-resume-after-resolve` (warning)
+
+Resolving a workflow wait point already resumes that execution.
+
+Incorrect:
+
+```ts
+await approval.resolve(input.executionId, () => true);
+await resumeWorkflow(input.executionId);
+```
+
+Correct:
+
+```ts
+await approval.resolve(input.executionId, () => true);
+```
+
+### `one-service-per-file` (error)
+
+Define at most one deployable service in each file.
+
+Incorrect:
+
+```ts
+export const createOrder = createResolver({ name: "createOrder" });
+export default createResolver({ name: "cancelOrder" });
+```
+
+Correct:
+
+```ts
+export default createResolver({ name: "createOrder" });
+```
+
+### `require-named-workflow-job-export` (error)
+
+Export every `createWorkflowJob()` result as a named export.
+
+Incorrect:
+
+```ts
+const processOrder = createWorkflowJob({ name: "process-order" });
+```
+
+Correct:
+
+```ts
+export const processOrder = createWorkflowJob({ name: "process-order" });
+```
+
+### `require-service-default-export` (error)
+
+Export Resolver, Executor, HTTP Adapter, and Workflow definitions as default exports.
+
+Incorrect:
+
+```ts
+export const createOrder = createResolver({ name: "createOrder" });
+```
+
+Correct:
+
+```ts
+export default createResolver({ name: "createOrder" });
+```
 
 The rules recognize named and namespace imports from `@tailor-platform/sdk`, including local import
 aliases. Same-named functions imported from other packages are ignored.
