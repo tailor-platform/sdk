@@ -1,5 +1,23 @@
 # @tailor-platform/sdk
 
+## 1.76.1
+
+### Patch Changes
+
+- [#1673](https://github.com/tailor-platform/sdk/pull/1673) [`aea0695`](https://github.com/tailor-platform/sdk/commit/aea06950636dea71c7a33daf501f2edd3489eb24) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v17.0.2
+
+- [#1677](https://github.com/tailor-platform/sdk/pull/1677) [`ed4a0d6`](https://github.com/tailor-platform/sdk/commit/ed4a0d604c0371e75f316bf44fc985d117458f39) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.10.1
+
+- [#1690](https://github.com/tailor-platform/sdk/pull/1690) [`a891260`](https://github.com/tailor-platform/sdk/commit/a891260439c7ada1a88efb3ff2ea547c14c74235) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.7.0
+
+- [#1695](https://github.com/tailor-platform/sdk/pull/1695) [`ebcc267`](https://github.com/tailor-platform/sdk/commit/ebcc267c12e1e3e7ffb2785b3868df408b10cd53) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.29.3
+
+- [#1713](https://github.com/tailor-platform/sdk/pull/1713) [`db42a86`](https://github.com/tailor-platform/sdk/commit/db42a86906f405667ad2323f760dadb0f63f4900) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @opentelemetry/semantic-conventions to v1.42.0
+
+- [#1714](https://github.com/tailor-platform/sdk/pull/1714) [`eb220d0`](https://github.com/tailor-platform/sdk/commit/eb220d03029420e81e713c2d0b1a21e8c52eba57) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.23.0
+
+- [#1685](https://github.com/tailor-platform/sdk/pull/1685) [`f2be4fa`](https://github.com/tailor-platform/sdk/commit/f2be4fa04bf67abb77c7c3d3466db5d5463ae98f) Thanks [@toiroakr](https://github.com/toiroakr)! - Deduplicate the array-guard type logic in `.index()`/`.unique()` field builder methods into a shared helper. No behavior change.
+
 ## 1.76.0
 
 ### Minor Changes

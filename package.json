@@ -18,7 +18,7 @@
     "check": "pnpm run generate && pnpm run format && pnpm run \"/^check:/\"",
     "check:agent-rules": "pnpm run agent:rules:check",
     "check:lint": "pnpm -r run lint:fix && pnpm run lint:vitest",
-    "check:typecheck": "pnpm -r run typecheck:go && pnpm --filter=!example -r run typecheck && pnpm --filter example run typecheck:generated",
+    "check:typecheck": "pnpm run typecheck:root && pnpm -r run typecheck:go && pnpm --filter=!example -r run typecheck && pnpm --filter example run typecheck:generated",
     "check:knip": "pnpm -r run knip",
     "check:publint": "pnpm -r run publint",
     "check:jsdoc": "pnpm -r run check:public-api-jsdoc",
