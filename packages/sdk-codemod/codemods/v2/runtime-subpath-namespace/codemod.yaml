@@ -1,6 +1,6 @@
 name: "@tailor-platform/runtime-subpath-namespace"
 version: "1.0.0"
-description: "Rewrite runtime subpath namespace-star and flat value imports to v2 namespace object imports"
+description: "Rewrite runtime namespace imports and aggregate file.deleteFile calls to v2 APIs"
 engine: jssg
 language: typescript
 since: "1.0.0"

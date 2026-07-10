@@ -41,5 +41,3 @@ const getConnectionToken: TailorAuthconnectionAPI["getConnectionToken"] = (...ar
 
 /** Runtime wrapper namespace for `tailor.authconnection`. */
 export const authconnection = { getConnectionToken } as const satisfies TailorAuthconnectionAPI;
-
-export default authconnection;

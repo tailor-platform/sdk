@@ -276,10 +276,7 @@ export const file = {
   download,
   downloadAsBase64,
   delete: deleteFile,
-  deleteFile,
   getMetadata,
   downloadStream,
   uploadStream,
-} as const satisfies TailorDBFileAPI & { deleteFile: TailorDBFileAPI["delete"] };
-
-export default file;
+} as const satisfies TailorDBFileAPI;

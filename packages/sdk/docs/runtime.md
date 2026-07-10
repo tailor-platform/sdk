@@ -45,9 +45,11 @@ const { url } = await aigateway.get("my-aigateway");
 Each namespace can also be imported individually so you only pull what you need:
 
 ```ts
-import iconv from "@tailor-platform/sdk/runtime/iconv";
+import { iconv } from "@tailor-platform/sdk/runtime/iconv";
 import { idp, type ListUsersResponse, type ClientConfig } from "@tailor-platform/sdk/runtime/idp";
 ```
+
+`TailorContextAPI` and `TailorWorkflowAPI` describe the imported SDK wrapper objects. When typing direct access to the platform-provided globals or a runtime mock, use `PlatformContextAPI` or `PlatformWorkflowAPI` instead.
 
 ## Activating the global types
 

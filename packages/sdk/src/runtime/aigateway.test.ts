@@ -2,7 +2,7 @@
  * Tests for `@tailor-platform/sdk/runtime/aigateway` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
-import defaultAigateway, { aigateway, type GetAIGatewayResult } from "#/runtime/aigateway";
+import { aigateway, type GetAIGatewayResult } from "#/runtime/aigateway";
 import { cleanupMocks, injectMocks, mockAigateway } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/aigateway", () => {
@@ -12,10 +12,6 @@ describe("@tailor-platform/sdk/runtime/aigateway", () => {
 
   afterEach(() => {
     cleanupMocks(globalThis);
-  });
-
-  test("exports matching default and named namespace objects", () => {
-    expect(defaultAigateway).toBe(aigateway);
   });
 
   test("get forwards to global and returns Promise<{ url: string }>", async () => {

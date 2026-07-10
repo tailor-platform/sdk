@@ -1130,6 +1130,35 @@ describe("runCodemods", () => {
           "",
         ].join("\n"),
       );
+      await fs.promises.writeFile(
+        path.join(dir, "default-import.ts"),
+        [
+          'import iconv from "@tailor-platform/sdk/runtime/iconv";',
+          "",
+          'iconv.convert("a", "UTF-8", "Shift_JIS");',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "aggregate-destructure.ts"),
+        [
+          'import { file as runtimeFile } from "@tailor-platform/sdk/runtime";',
+          "",
+          "const { deleteFile } = runtimeFile;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "shadow-only.ts"),
+        [
+          'import { file as runtimeFile } from "@tailor-platform/sdk/runtime";',
+          "",
+          "function remove(runtimeFile: { deleteFile(): void }) {",
+          "  runtimeFile.deleteFile();",
+          "}",
+          "",
+        ].join("\n"),
+      );
 
       const result = await runCodemods([{ codemod, scriptPath }], dir, true);
 
@@ -1139,6 +1168,8 @@ describe("runCodemods", () => {
           codemodId: "v2/runtime-subpath-namespace",
           prompt: codemod.prompt,
           files: [
+            "aggregate-destructure.ts",
+            "default-import.ts",
             "dynamic-const.ts",
             "dynamic-template.ts",
             "dynamic.ts",
@@ -1152,6 +1183,16 @@ describe("runCodemods", () => {
             "type-reference.ts",
           ],
           findings: [
+            expect.objectContaining({
+              file: "aggregate-destructure.ts",
+              line: 3,
+              excerpt: "{ deleteFile } = runtimeFile",
+            }),
+            expect.objectContaining({
+              file: "default-import.ts",
+              line: 1,
+              excerpt: 'import iconv from "@tailor-platform/sdk/runtime/iconv";',
+            }),
             expect.objectContaining({
               file: "dynamic-const.ts",
               line: 2,

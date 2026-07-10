@@ -4,13 +4,19 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 import ts from "typescript";
-import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
+import { describe, expect, expectTypeOf, test } from "vitest";
+import * as aigatewayModule from "#/runtime/aigateway";
+import * as authconnectionModule from "#/runtime/authconnection";
+import * as contextModule from "#/runtime/context";
+import * as fileModule from "#/runtime/file";
+import * as iconvModule from "#/runtime/iconv";
+import * as idpModule from "#/runtime/idp";
 import { file, type iconv as runtimeIconv, type idp as runtimeIdp } from "#/runtime/index";
-import { cleanupMocks, injectMocks, mockFile } from "#/vitest/mock";
+import * as secretmanagerModule from "#/runtime/secretmanager";
+import * as workflowModule from "#/runtime/workflow";
 import type { IconvInstance } from "#/runtime/iconv";
 import type { IdpClientInstance } from "#/runtime/idp";
 
-const fileArgs = ["ns", "Doc", "blob", "rec-1"] as const;
 const packageRoot = path.resolve(import.meta.dirname, "../..");
 
 function declarationEmitDiagnostics(source: string): string {
@@ -58,12 +64,17 @@ function diagnosticHost(cwd: string): ts.FormatDiagnosticsHost {
 }
 
 describe("@tailor-platform/sdk/runtime aggregate exports", () => {
-  beforeEach(() => {
-    injectMocks(globalThis);
-  });
-
-  afterEach(() => {
-    cleanupMocks(globalThis);
+  test.each([
+    ["aigateway", aigatewayModule],
+    ["authconnection", authconnectionModule],
+    ["context", contextModule],
+    ["file", fileModule],
+    ["iconv", iconvModule],
+    ["idp", idpModule],
+    ["secretmanager", secretmanagerModule],
+    ["workflow", workflowModule],
+  ])("%s subpath has no default export", (_name, runtimeModule) => {
+    expect(runtimeModule).not.toHaveProperty("default");
   });
 
   test("exposes constructor instance types through namespace object values", () => {
@@ -74,7 +85,7 @@ describe("@tailor-platform/sdk/runtime aggregate exports", () => {
   test("emits declarations for exported namespace constructor instances", () => {
     const diagnostics = declarationEmitDiagnostics(`
       import { idp } from "#/runtime/idp";
-      import iconv from "#/runtime/iconv";
+      import { iconv } from "#/runtime/iconv";
 
       export const makeClient = () => new idp.Client({ namespace: "default" });
       export const makeConverter = () => new iconv.Iconv("UTF-8", "Shift_JIS");
@@ -83,20 +94,7 @@ describe("@tailor-platform/sdk/runtime aggregate exports", () => {
     expect(diagnostics).toBe("");
   });
 
-  test("keeps the file.deleteFile alias on the aggregate file namespace", async () => {
-    using fileM = mockFile();
-
-    await file.deleteFile(...fileArgs);
-
-    expect(file.deleteFile).toBe(file.delete);
-    expect(fileM.calls).toEqual([
-      {
-        method: "delete",
-        namespace: "ns",
-        typeName: "Doc",
-        fieldName: "blob",
-        recordId: "rec-1",
-      },
-    ]);
+  test("does not expose the removed file.deleteFile alias", () => {
+    expect("deleteFile" in file).toBe(false);
   });
 });

@@ -45,5 +45,3 @@ const get: TailorAigatewayAPI["get"] = (...args) => api().get(...args);
 
 /** Runtime wrapper namespace for `tailor.aigateway`. */
 export const aigateway = { get } as const satisfies TailorAigatewayAPI;
-
-export default aigateway;

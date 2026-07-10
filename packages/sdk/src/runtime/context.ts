@@ -79,5 +79,3 @@ function getInvoker(): Invoker | null {
 
 /** Runtime wrapper namespace for `tailor.context`. */
 export const context = { getInvoker } as const satisfies TailorContextAPI;
-
-export default context;
