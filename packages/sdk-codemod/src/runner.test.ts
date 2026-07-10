@@ -1041,6 +1041,223 @@ describe("runCodemods", () => {
       ]);
     });
 
+    test("flags runtime subpath imports left after conservative skips", async () => {
+      const codemod = allCodemods.find((entry) => entry.id === "v2/runtime-subpath-namespace");
+      if (!codemod?.scriptPath) throw new Error("runtime subpath codemod missing script");
+      const scriptPath = path.resolve(
+        __dirname,
+        "../codemods",
+        codemod.scriptPath.replace(/\.js$/, ".ts"),
+      );
+      const dir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "runner-runtime-test-"));
+      tmpDir = dir;
+      await fs.promises.writeFile(
+        path.join(dir, "exports.ts"),
+        [
+          'import { get } from "@tailor-platform/sdk/runtime/aigateway";',
+          "",
+          "export { get };",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "reexport.ts"),
+        ['export { get } from "@tailor-platform/sdk/runtime/aigateway";', ""].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "reexport-all.ts"),
+        ['export * from "@tailor-platform/sdk/runtime/aigateway";', ""].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "reexport-namespace.ts"),
+        ['export * as aigateway from "@tailor-platform/sdk/runtime/aigateway";', ""].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "dynamic.ts"),
+        [
+          'type ClientRef = import("@tailor-platform/sdk/runtime/idp").Client;',
+          'const getGateway = (await import("@tailor-platform/sdk/runtime/aigateway")).get;',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "dynamic-template.ts"),
+        [
+          "const getGateway = (await import(`@tailor-platform/sdk/runtime/aigateway`)).get;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "dynamic-const.ts"),
+        [
+          'const runtimeModule = "@tailor-platform/sdk/runtime/aigateway";',
+          "const getGateway = (await import(runtimeModule)).get;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "type-reference.ts"),
+        [
+          'import type { Client } from "@tailor-platform/sdk/runtime/idp";',
+          "",
+          "type RuntimeClient = Client;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "namespace-type.ts"),
+        [
+          'import * as idp from "@tailor-platform/sdk/runtime/idp";',
+          "",
+          "type RuntimeConfig = idp.ClientConfig;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "require.cjs"),
+        [
+          'const { get } = require("@tailor-platform/sdk/runtime/aigateway");',
+          "module.exports = get;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "import-equals.cts"),
+        [
+          'import iconv = require("@tailor-platform/sdk/runtime/iconv");',
+          "",
+          "export const encode = iconv.encode;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "default-import.ts"),
+        [
+          'import iconv from "@tailor-platform/sdk/runtime/iconv";',
+          "",
+          'iconv.convert("a", "UTF-8", "Shift_JIS");',
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "aggregate-destructure.ts"),
+        [
+          'import { file as runtimeFile } from "@tailor-platform/sdk/runtime";',
+          "",
+          "const { deleteFile } = runtimeFile;",
+          "",
+        ].join("\n"),
+      );
+      await fs.promises.writeFile(
+        path.join(dir, "shadow-only.ts"),
+        [
+          'import { file as runtimeFile } from "@tailor-platform/sdk/runtime";',
+          "",
+          "function remove(runtimeFile: { deleteFile(): void }) {",
+          "  runtimeFile.deleteFile();",
+          "}",
+          "",
+        ].join("\n"),
+      );
+
+      const result = await runCodemods([{ codemod, scriptPath }], dir, true);
+
+      expect(result.changed).toBe(false);
+      expect(result.llmReviews).toEqual([
+        {
+          codemodId: "v2/runtime-subpath-namespace",
+          prompt: codemod.prompt,
+          files: [
+            "aggregate-destructure.ts",
+            "default-import.ts",
+            "dynamic-const.ts",
+            "dynamic-template.ts",
+            "dynamic.ts",
+            "exports.ts",
+            "import-equals.cts",
+            "namespace-type.ts",
+            "reexport-all.ts",
+            "reexport-namespace.ts",
+            "reexport.ts",
+            "require.cjs",
+            "type-reference.ts",
+          ],
+          findings: [
+            expect.objectContaining({
+              file: "aggregate-destructure.ts",
+              line: 3,
+              excerpt: "{ deleteFile } = runtimeFile",
+            }),
+            expect.objectContaining({
+              file: "default-import.ts",
+              line: 1,
+              excerpt: 'import iconv from "@tailor-platform/sdk/runtime/iconv";',
+            }),
+            expect.objectContaining({
+              file: "dynamic-const.ts",
+              line: 2,
+              excerpt: "(await import(runtimeModule)).get",
+            }),
+            expect.objectContaining({
+              file: "dynamic-template.ts",
+              line: 1,
+              excerpt: "(await import(`@tailor-platform/sdk/runtime/aigateway`)).get",
+            }),
+            expect.objectContaining({
+              file: "dynamic.ts",
+              line: 1,
+              excerpt: 'import("@tailor-platform/sdk/runtime/idp").Client',
+            }),
+            expect.objectContaining({
+              file: "dynamic.ts",
+              line: 2,
+              excerpt: '(await import("@tailor-platform/sdk/runtime/aigateway")).get',
+            }),
+            expect.objectContaining({
+              file: "exports.ts",
+              line: 1,
+              excerpt: 'import { get } from "@tailor-platform/sdk/runtime/aigateway";',
+            }),
+            expect.objectContaining({
+              file: "import-equals.cts",
+              line: 1,
+              excerpt: 'import iconv = require("@tailor-platform/sdk/runtime/iconv");',
+            }),
+            expect.objectContaining({
+              file: "namespace-type.ts",
+              line: 1,
+              excerpt: 'import * as idp from "@tailor-platform/sdk/runtime/idp";',
+            }),
+            expect.objectContaining({
+              file: "reexport-all.ts",
+              line: 1,
+              excerpt: 'export * from "@tailor-platform/sdk/runtime/aigateway";',
+            }),
+            expect.objectContaining({
+              file: "reexport-namespace.ts",
+              line: 1,
+              excerpt: 'export * as aigateway from "@tailor-platform/sdk/runtime/aigateway";',
+            }),
+            expect.objectContaining({
+              file: "reexport.ts",
+              line: 1,
+              excerpt: 'export { get } from "@tailor-platform/sdk/runtime/aigateway";',
+            }),
+            expect.objectContaining({
+              file: "require.cjs",
+              line: 1,
+              excerpt: 'require("@tailor-platform/sdk/runtime/aigateway")',
+            }),
+            expect.objectContaining({
+              file: "type-reference.ts",
+              line: 1,
+              excerpt: 'import type { Client } from "@tailor-platform/sdk/runtime/idp";',
+            }),
+          ],
+        },
+      ]);
+    });
+
     test("flags unresolved auth connection token helper usages for LLM review", async () => {
       const codemod = allCodemods.find((entry) => entry.id === "v2/auth-connection-token-helper");
       if (!codemod?.scriptPath) throw new Error("auth connection token codemod missing script");

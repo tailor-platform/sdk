@@ -1,4 +1,4 @@
-import * as file from "@tailor-platform/sdk/runtime/file";
+import { file } from "@tailor-platform/sdk/runtime/file";
 import type {
   FileUploadOptions,
   FileUploadResponse,
