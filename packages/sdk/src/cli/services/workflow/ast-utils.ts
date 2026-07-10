@@ -37,6 +37,18 @@ export interface FoundProperty {
 }
 
 /**
+ * Read an import or export name from an OXC identifier or string-literal node.
+ * @param node - Import/export name node
+ * @returns Module binding name, or undefined for an unsupported node
+ */
+export function getModuleExportName(node: unknown): string | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  const exportName = node as { name?: string; value?: unknown };
+  if (exportName.name) return exportName.name;
+  return typeof exportName.value === "string" ? exportName.value : undefined;
+}
+
+/**
  * Check if a module source is from the Tailor SDK package (including subpaths)
  * @param source - Module source string
  * @returns True if the source is from the Tailor SDK package

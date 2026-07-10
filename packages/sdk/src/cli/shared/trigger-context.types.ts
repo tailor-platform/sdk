@@ -9,8 +9,7 @@ export interface TriggerModuleBindings {
 }
 
 export interface TriggerModuleResolution {
-  baseUrl: string;
-  paths: Record<string, string[]>;
+  tsconfig: TsConfigResult;
 }
 
 export interface TriggerContext {
@@ -18,3 +17,4 @@ export interface TriggerContext {
   moduleResolution?: TriggerModuleResolution;
   authNamespace?: string;
 }
+import type { TsConfigResult } from "get-tsconfig";

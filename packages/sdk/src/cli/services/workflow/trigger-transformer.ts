@@ -1,4 +1,4 @@
-import { createRequire } from "node:module";
+import { createPathsMatcher } from "get-tsconfig";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { logger } from "#/cli/shared/logger";
@@ -6,8 +6,10 @@ import { normalizeTriggerModulePath } from "#/cli/shared/trigger-path";
 import {
   type ASTNode,
   type Replacement,
+  type TriggerCallInfo,
   applyReplacements,
   findStatementEnd,
+  getModuleExportName,
   getTriggerCallInfo,
 } from "./ast-utils";
 import type {
@@ -17,15 +19,9 @@ import type {
 } from "#/cli/shared/trigger-context.types";
 import type { Program, ImportDeclaration, ImportDefaultSpecifier } from "@oxc-project/types";
 
-export interface ResolvedTriggerCall {
+export interface ResolvedTriggerCall extends TriggerCallInfo {
   kind: "job" | "workflow";
   targetName: string;
-  identifierName: string;
-  callRange: { start: number; end: number };
-  argsText: string;
-  // Source text of the options argument if present. For workflow triggers this
-  // carries `authInvoker`; for job triggers it carries `executionPolicyKey`.
-  optionsText?: string;
 }
 
 /**
@@ -172,9 +168,13 @@ function collectScopeBindings(node: ASTNode): Set<string> {
     return names;
   }
 
-  if (node.type === "BlockStatement" || node.type === "StaticBlock") {
+  if (
+    node.type === "BlockStatement" ||
+    node.type === "StaticBlock" ||
+    node.type === "TSModuleBlock"
+  ) {
     collectLexicalBindings(node.body as ASTNode[], names);
-    if (node.type === "StaticBlock") {
+    if (node.type === "StaticBlock" || node.type === "TSModuleBlock") {
       collectFunctionVarBindings(node, names);
     }
     return names;
@@ -390,7 +390,19 @@ export function detectResolvedTriggerCalls(
   context: TriggerContext,
   currentFilePath: string,
 ): ResolvedTriggerCall[] {
-  const { targets, namespaceTargets } = collectLocalTargets(program, context, currentFilePath);
+  return detectTriggerCallsWithTargets(
+    program,
+    sourceText,
+    collectLocalTargets(program, context, currentFilePath),
+  );
+}
+
+function detectTriggerCallsWithTargets(
+  program: Program,
+  sourceText: string,
+  localTargets: LocalTriggerTargets,
+): ResolvedTriggerCall[] {
+  const { targets, namespaceTargets } = localTargets;
   const calls: ResolvedTriggerCall[] = [];
   const targetNames = new Set([...targets.keys(), ...namespaceTargets.keys()]);
 
@@ -402,12 +414,9 @@ export function detectResolvedTriggerCalls(
       : targets.get(triggerCall.identifierName);
     if (target) {
       calls.push({
+        ...triggerCall,
         kind: target.kind,
         targetName: target.name,
-        identifierName: triggerCall.identifierName,
-        callRange: triggerCall.callRange,
-        argsText: triggerCall.argsText,
-        optionsText: triggerCall.optionsText,
       });
     }
   });
@@ -425,73 +434,32 @@ function resolveImportBindings(
     return context.modules.get(modulePath) ?? context.modules.get(path.join(modulePath, "index"));
   }
 
-  function findNativeModule() {
-    try {
-      const importerPath = path.resolve(currentFilePath.replace(/[?#].*$/, ""));
-      return findModule(createRequire(importerPath).resolve(importSource));
-    } catch {
-      return undefined;
-    }
-  }
-
   if (importSource.startsWith(".")) {
     const currentDir = path.dirname(currentFilePath.replace(/[?#].*$/, ""));
     return findModule(path.resolve(currentDir, importSource));
   }
 
-  if (importSource.startsWith("#")) {
-    return findNativeModule();
-  }
-
   const resolution = context.moduleResolution;
-  if (!resolution) return findNativeModule();
-
-  function matchPattern(pattern: string): string | undefined {
-    const wildcardIndex = pattern.indexOf("*");
-    if (wildcardIndex === -1) {
-      return pattern === importSource ? "" : undefined;
-    }
-    const prefix = pattern.slice(0, wildcardIndex);
-    const suffix = pattern.slice(wildcardIndex + 1);
-    if (!importSource.startsWith(prefix) || !importSource.endsWith(suffix)) return undefined;
-    return importSource.slice(prefix.length, importSource.length - suffix.length);
+  if (!resolution) return undefined;
+  const matchPaths = createPathsMatcher(resolution.tsconfig);
+  for (const candidate of matchPaths?.(importSource) ?? []) {
+    const module = findModule(candidate);
+    if (module) return module;
   }
+  return undefined;
+}
 
-  const pathPatterns = Object.entries(resolution.paths);
-  const exactPattern = pathPatterns.find(
-    ([pattern]) => !pattern.includes("*") && pattern === importSource,
-  );
-  const matchedPattern =
-    exactPattern ??
-    pathPatterns
-      .filter(([pattern]) => pattern.includes("*") && matchPattern(pattern) !== undefined)
-      .toSorted(([a], [b]) => b.indexOf("*") - a.indexOf("*"))[0];
-
-  if (matchedPattern) {
-    const [pattern, substitutions] = matchedPattern;
-    const wildcard = matchPattern(pattern);
-    if (wildcard === undefined) return undefined;
-
-    for (const substitution of substitutions) {
-      const candidate = substitution.replace("*", wildcard);
-      const module = findModule(path.resolve(resolution.baseUrl, candidate));
-      if (module) return module;
-    }
-    return undefined;
-  }
-
-  return findModule(path.resolve(resolution.baseUrl, importSource)) ?? findNativeModule();
+interface LocalTriggerTargets {
+  targets: Map<string, TriggerTarget>;
+  namespaceTargets: Map<string, TriggerModuleBindings["exports"]>;
+  workflowDefaultImportNames: Set<string>;
 }
 
 function collectLocalTargets(
   program: Program,
   context: TriggerContext,
   currentFilePath: string,
-): {
-  targets: Map<string, TriggerTarget>;
-  namespaceTargets: Map<string, TriggerModuleBindings["exports"]>;
-  workflowDefaultImportNames: Set<string>;
-} {
+): LocalTriggerTargets {
   const targets = new Map<string, TriggerTarget>();
   const namespaceTargets = new Map<string, TriggerModuleBindings["exports"]>();
   const workflowDefaultImportNames = new Set<string>();
@@ -519,7 +487,7 @@ function collectLocalTargets(
       if (specifier.type === "ImportDefaultSpecifier") {
         importedName = "default";
       } else {
-        importedName = moduleExportName(specifier.imported);
+        importedName = getModuleExportName(specifier.imported);
       }
       if (!importedName) continue;
 
@@ -533,13 +501,6 @@ function collectLocalTargets(
   }
 
   return { targets, namespaceTargets, workflowDefaultImportNames };
-}
-
-function moduleExportName(node: unknown): string | undefined {
-  if (!node || typeof node !== "object") return undefined;
-  const exportName = node as { name?: string; value?: unknown };
-  if (exportName.name) return exportName.name;
-  return typeof exportName.value === "string" ? exportName.value : undefined;
 }
 
 /**
@@ -556,23 +517,15 @@ export function transformFunctionTriggers(
   currentFilePath: string,
 ): string {
   const { program } = parseSync("input.ts", source);
-  const { workflowDefaultImportNames } = collectLocalTargets(
-    program,
-    triggerContext,
-    currentFilePath,
-  );
+  const localTargets = collectLocalTargets(program, triggerContext, currentFilePath);
+  const { workflowDefaultImportNames } = localTargets;
   const { authNamespace } = triggerContext;
 
   // Detect trigger calls only for known workflows and jobs.
   // When trigger calls nest, keep only the outermost one: the outer
   // replacement text is built from the original source, so applying an inner
   // replacement as well would corrupt the output.
-  const allTriggerCalls = detectResolvedTriggerCalls(
-    program,
-    source,
-    triggerContext,
-    currentFilePath,
-  );
+  const allTriggerCalls = detectTriggerCallsWithTargets(program, source, localTargets);
   const nestedTriggerCalls: Array<{ call: ResolvedTriggerCall; parent: ResolvedTriggerCall }> = [];
   const triggerCalls = allTriggerCalls.filter((call) => {
     const parent = allTriggerCalls.find(
@@ -621,7 +574,7 @@ export function transformFunctionTriggers(
         }
       }
       // Transform to tailor.workflow.triggerWorkflow
-      const transformedCall = `tailor.workflow.triggerWorkflow("${call.targetName}", ${call.argsText || "undefined"}${optionsPart})`;
+      const transformedCall = `tailor.workflow.triggerWorkflow(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
       replacements.push({
         start: call.callRange.start,
         end: call.callRange.end,
@@ -633,7 +586,7 @@ export function transformFunctionTriggers(
       );
     } else {
       const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
-      const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${call.targetName}", ${call.argsText || "undefined"}${optionsPart}))()`;
+      const transformedCall = `(async () => tailor.workflow.triggerJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart}))()`;
 
       replacements.push({
         start: call.callRange.start,

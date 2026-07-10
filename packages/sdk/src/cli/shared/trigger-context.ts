@@ -1,8 +1,8 @@
 import * as fs from "node:fs";
 import { getTsconfig } from "get-tsconfig";
 import { parseSync } from "oxc-parser";
-import * as path from "pathe";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
+import { getModuleExportName, type ASTNode } from "#/cli/services/workflow/ast-utils";
 import { findAllJobs } from "#/cli/services/workflow/job-detector";
 import { transformFunctionTriggers } from "#/cli/services/workflow/trigger-transformer";
 import { findAllWorkflows } from "#/cli/services/workflow/workflow-detector";
@@ -14,7 +14,6 @@ import {
   type TriggerTarget,
 } from "./trigger-context.types";
 import { normalizeTriggerModulePath } from "./trigger-path";
-import type { ASTNode } from "#/cli/services/workflow/ast-utils";
 import type { Plugin } from "rolldown";
 
 export type {
@@ -31,13 +30,6 @@ export type {
  */
 export function normalizeFilePath(filePath: string): string {
   return normalizeTriggerModulePath(filePath);
-}
-
-function moduleExportName(node: unknown): string | undefined {
-  if (!node || typeof node !== "object") return undefined;
-  const exportName = node as { name?: string; value?: unknown };
-  if (exportName.name) return exportName.name;
-  return typeof exportName.value === "string" ? exportName.value : undefined;
 }
 
 function createModuleBindings(program: ReturnType<typeof parseSync>["program"], source: string) {
@@ -82,8 +74,8 @@ function createModuleBindings(program: ReturnType<typeof parseSync>["program"], 
     if (statement.source) continue;
 
     for (const specifier of (statement.specifiers as ASTNode[] | undefined) ?? []) {
-      const localName = moduleExportName(specifier.local);
-      const exportedName = moduleExportName(specifier.exported);
+      const localName = getModuleExportName(specifier.local);
+      const exportedName = getModuleExportName(specifier.exported);
       if (!localName || !exportedName) continue;
       const target = localBindings.get(localName);
       if (target) exports.set(exportedName, target);
@@ -98,13 +90,8 @@ function loadModuleResolution(searchPath: string): TriggerModuleResolution | und
     const tsconfig = getTsconfig(searchPath);
     if (!tsconfig) return undefined;
     const compilerOptions = tsconfig.config.compilerOptions;
-    const configuredPaths = compilerOptions?.paths;
-    if (!compilerOptions?.baseUrl && !configuredPaths) return undefined;
-
-    return {
-      baseUrl: path.resolve(path.dirname(tsconfig.path), compilerOptions.baseUrl ?? "."),
-      paths: configuredPaths ?? {},
-    };
+    if (!compilerOptions?.baseUrl && !compilerOptions?.paths) return undefined;
+    return { tsconfig };
   } catch {
     return undefined;
   }
@@ -146,7 +133,7 @@ export async function buildTriggerContext(
 
   return {
     modules,
-    moduleResolution: loadModuleResolution(workflowFiles[0] ?? process.cwd()),
+    moduleResolution: loadModuleResolution(process.cwd()),
     authNamespace,
   };
 }
@@ -159,9 +146,11 @@ function sortedTargets(bindings: Map<string, TriggerTarget>) {
 
 function sortedModuleResolution(resolution: TriggerModuleResolution | undefined) {
   if (!resolution) return null;
+  const compilerOptions = resolution.tsconfig.config.compilerOptions;
   return [
-    resolution.baseUrl,
-    Object.entries(resolution.paths).toSorted(([a], [b]) => a.localeCompare(b)),
+    resolution.tsconfig.path,
+    compilerOptions?.baseUrl ?? null,
+    Object.entries(compilerOptions?.paths ?? {}).toSorted(([a], [b]) => a.localeCompare(b)),
   ];
 }
 
