@@ -249,23 +249,17 @@ export function parseInternal<T extends TailorFieldType, Output>(
     if (issues.length > 0) {
       return { issues };
     }
-
-    const arrayIssues = validateCustomValue({ field, value, data, user, pathArray });
-    if (arrayIssues.length > 0) {
-      return { issues: arrayIssues };
-    }
-
-    return { value: value as Output };
+  } else {
+    issues.push(...validateBaseValue({ field, value, data, user, pathArray }));
   }
 
-  const valueIssues = validateBaseValue({ field, value, data, user, pathArray });
-  if (valueIssues.length > 0) {
-    return { issues: valueIssues };
+  if (issues.length > 0) {
+    return { issues };
   }
 
-  const customIssues = validateCustomValue({ field, value, data, user, pathArray });
-  if (customIssues.length > 0) {
-    return { issues: customIssues };
+  issues.push(...validateCustomValue({ field, value, data, user, pathArray }));
+  if (issues.length > 0) {
+    return { issues };
   }
 
   return { value: value as Output };
