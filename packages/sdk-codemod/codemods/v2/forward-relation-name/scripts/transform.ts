@@ -4,19 +4,58 @@ import type { LlmReviewFinding } from "../../../../src/types";
 import type { SgNode } from "@ast-grep/napi";
 
 function sourceLang(filePath: string, source: string): Lang {
-  return filePath.endsWith(".tsx") || filePath.endsWith(".jsx") || source.includes("</")
-    ? Lang.Tsx
-    : Lang.TypeScript;
+  const lowerPath = filePath.toLowerCase();
+  if (/\.(?:ts|mts|cts)$/u.test(lowerPath)) return Lang.TypeScript;
+  if (/\.(?:tsx|jsx)$/u.test(lowerPath)) return Lang.Tsx;
+  return source.includes("</") ? Lang.Tsx : Lang.TypeScript;
 }
 
-function isRelationCall(call: SgNode): boolean {
+function isRelationCall(call: SgNode, aliases: ReadonlySet<string>): boolean {
   const callee = call.children()[0];
-  if (callee?.kind() !== "member_expression") return false;
+  if (!callee) return false;
+  if (callee.kind() === "identifier") return aliases.has(callee.text());
+  if (callee.kind() === "subscript_expression") {
+    return literalStringValue(callee.field("index")) === "relation";
+  }
+  if (callee.kind() !== "member_expression") return false;
 
   const property = callee
     .children()
     .findLast((child) => child.kind() === "property_identifier" || child.kind() === "identifier");
   return property?.text() === "relation";
+}
+
+function relationBindingName(pattern: SgNode): string | null {
+  if (pattern.kind() !== "object_pattern") return null;
+
+  for (const child of pattern.children()) {
+    if (child.kind() === "shorthand_property_identifier_pattern" && child.text() === "relation") {
+      return child.text();
+    }
+    if (child.kind() === "pair_pattern" && stringValue(child.field("key")) === "relation") {
+      const value = child.field("value");
+      return value?.kind() === "identifier" ? value.text() : null;
+    }
+    if (child.kind() === "object_assignment_pattern") {
+      const binding = child
+        .children()
+        .find((node) => node.kind() === "shorthand_property_identifier_pattern");
+      if (binding?.text() === "relation") return binding.text();
+    }
+  }
+
+  return null;
+}
+
+function relationAliases(root: SgNode): Set<string> {
+  const aliases = new Set<string>();
+  for (const declarator of root.findAll({ rule: { kind: "variable_declarator" } })) {
+    const binding = declarator.field("name");
+    if (!binding) continue;
+    const name = relationBindingName(binding);
+    if (name) aliases.add(name);
+  }
+  return aliases;
 }
 
 function callArgument(call: SgNode): SgNode | null {
@@ -98,12 +137,13 @@ export function reviewFindings(
   filePath: string,
   relativePath: string,
 ): LlmReviewFinding[] {
-  if (!source.includes(".relation")) return [];
+  if (!source.includes("relation")) return [];
 
   const root = parse(sourceLang(filePath, source), source).root();
+  const aliases = relationAliases(root);
   return root
     .findAll({ rule: { kind: "call_expression" } })
-    .filter((call) => isRelationCall(call) && needsReview(call))
+    .filter((call) => isRelationCall(call, aliases) && needsReview(call))
     .map((call) => ({
       file: relativePath,
       line: call.range().start.line + 1,
