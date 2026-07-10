@@ -1,16 +1,15 @@
-import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
-import { withTemporaryEntryDirectory } from "#/cli/services/entry-directory";
 import { isNodeBuiltinImport } from "#/cli/services/http-adapter/node-builtins";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { HTTP_METHODS, type HttpMethodKey } from "#/parser/service/http-adapter/index";
 import type { LogLevel } from "#/configure/config/types";
 
@@ -68,10 +67,8 @@ export async function bundleHttpAdapters(
     const kinds: Array<"input" | "output"> = adapter.hasOutput ? ["input", "output"] : ["input"];
     return kinds.map((kind) => ({ adapter, kind }));
   });
-  const results = await withTemporaryEntryDirectory("http-adapters", (outputDir) =>
-    withBundleConcurrency(tasks, ({ adapter, kind }) =>
-      bundleAdapterScript(adapter, kind, outputDir, tsconfig, cache, bundleLogLevel),
-    ),
+  const results = await withBundleConcurrency(tasks, ({ adapter, kind }) =>
+    bundleAdapterScript(adapter, kind, tsconfig, cache, bundleLogLevel),
   );
 
   const bundledInputs = new Map<string, string>();
@@ -92,7 +89,6 @@ export async function bundleHttpAdapters(
 async function bundleAdapterScript(
   adapter: HttpAdapterBundleInput,
   kind: "input" | "output",
-  outputDir: string,
   tsconfig: string | undefined,
   cache: BundleCache | undefined,
   bundleLogLevel: LogLevel = "DEBUG",
@@ -113,8 +109,12 @@ async function bundleAdapterScript(
     sourceFile: adapter.sourceFile,
     contextHash,
     async build(cachePlugins) {
-      const entryPath = path.join(outputDir, `${adapter.name}.${kind}.entry.js`);
       const absoluteSourcePath = path.resolve(adapter.sourceFile);
+      const entryContent =
+        kind === "input"
+          ? buildInputEntry(absoluteSourcePath, adapter.methods, GRAPHQL_WEB_MODULE)
+          : buildOutputEntry(absoluteSourcePath);
+      const entry = createVirtualEntry(`http-adapter:${adapter.name}:${kind}`, entryContent);
 
       const rejectNodeImports: rolldown.Plugin = {
         name: "http-adapter-reject-node-imports",
@@ -146,43 +146,34 @@ async function bundleAdapterScript(
         },
       };
 
-      const plugins: rolldown.Plugin[] = [rejectNodeImports, stubSdkImports, ...cachePlugins];
+      const plugins: rolldown.Plugin[] = [
+        entry.plugin,
+        rejectNodeImports,
+        stubSdkImports,
+        ...cachePlugins,
+      ];
 
-      let bundled: string;
-      try {
-        const entryContent =
-          kind === "input"
-            ? buildInputEntry(absoluteSourcePath, adapter.methods, GRAPHQL_WEB_MODULE)
-            : buildOutputEntry(absoluteSourcePath);
-        fs.writeFileSync(entryPath, entryContent);
-        const result = await rolldown.build({
-          input: entryPath,
-          write: false,
-          output: {
-            format: "iife",
-            sourcemap: false,
-            minify: true,
-            codeSplitting: false,
-          },
-          tsconfig,
-          plugins,
-          // es2017 on purpose: async/await must survive downleveling so
-          // rejectAsyncInBundle can reject it (lower targets rewrite it into
-          // generator+Promise code that evades the check and breaks on Sobek).
-          transform: { target: "es2017" },
-          treeshake: composeFunctionTreeshakeOptions([
-            createLogLevelTreeshakeOptions(bundleLogLevel),
-          ]),
-          logLevel: "silent",
-        } as rolldown.BuildOptions);
-        bundled = result.output[0].code;
-      } finally {
-        try {
-          fs.rmSync(entryPath, { force: true });
-        } catch {
-          // best-effort cleanup
-        }
-      }
+      const result = await rolldown.build({
+        input: entry.input,
+        write: false,
+        output: {
+          format: "iife",
+          sourcemap: false,
+          minify: true,
+          codeSplitting: false,
+        },
+        tsconfig,
+        plugins,
+        // es2017 on purpose: async/await must survive downleveling so
+        // rejectAsyncInBundle can reject it (lower targets rewrite it into
+        // generator+Promise code that evades the check and breaks on Sobek).
+        transform: { target: "es2017" },
+        treeshake: composeFunctionTreeshakeOptions([
+          createLogLevelTreeshakeOptions(bundleLogLevel),
+        ]),
+        logLevel: "silent",
+      } as rolldown.BuildOptions);
+      const bundled = result.output[0].code;
 
       const byteLength = Buffer.byteLength(bundled, "utf8");
       if (byteLength > ADAPTER_BUNDLE_ERROR_BYTES) {

@@ -84,6 +84,29 @@ describe("withBundleConcurrency", () => {
     expect(results).toEqual(["A", "B", "C", "D", "E"]);
   });
 
+  test("waits for sibling workers before rejecting", async () => {
+    vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "2");
+    let siblingCompleted = false;
+
+    const outcome = withBundleConcurrency(["failing", "sibling"], async (item) => {
+      if (item === "failing") {
+        throw new Error("bundle failed");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      siblingCompleted = true;
+      return item;
+    }).then(
+      () => ({ error: undefined, siblingCompleted }),
+      (error: unknown) => ({ error, siblingCompleted }),
+    );
+
+    await vi.runAllTimersAsync();
+    const result = await outcome;
+
+    expect(result.error).toEqual(new Error("bundle failed"));
+    expect(result.siblingCompleted).toBe(true);
+  });
+
   test("handles empty input", async () => {
     vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "4");
     const results = await withBundleConcurrency<number, number>([], async (item) => item);

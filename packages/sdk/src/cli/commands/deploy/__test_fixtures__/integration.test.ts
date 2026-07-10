@@ -73,7 +73,7 @@ describe("deploy command integration tests", () => {
     const pluginFiles = actualFiles.filter((f) => f === "db.ts" || f === "enums.ts");
     expect(pluginFiles.length).toBeGreaterThan(0);
 
-    // Temporary rolldown entry files should be removed after bundling
+    // Deployment bundling should not leave entry files on disk
     const entryFiles = actualFiles.filter((f) => f.endsWith(".entry.js"));
     expect(entryFiles).toEqual([]);
 

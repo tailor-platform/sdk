@@ -32,10 +32,20 @@ export function resolveBundleConcurrency(): number {
  * @param worker - Async worker function
  * @returns Worker results in input order
  */
-export function withBundleConcurrency<T, R>(
+export async function withBundleConcurrency<T, R>(
   items: T[],
   worker: (item: T) => Promise<R>,
 ): Promise<R[]> {
   const limit = pLimit(resolveBundleConcurrency());
-  return Promise.all(items.map((item) => limit(() => worker(item))));
+  const settled = await Promise.allSettled(items.map((item) => limit(() => worker(item))));
+  const rejection = settled.find((result) => result.status === "rejected");
+  if (rejection) {
+    throw rejection.reason;
+  }
+  return settled.map((result) => {
+    if (result.status === "rejected") {
+      throw result.reason;
+    }
+    return result.value;
+  });
 }

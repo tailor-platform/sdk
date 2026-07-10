@@ -4,7 +4,6 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
-import { withTemporaryEntryDirectory } from "#/cli/services/entry-directory";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
@@ -12,6 +11,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { detectTriggerCalls, findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
@@ -49,7 +49,7 @@ export interface BundleWorkflowJobsResult {
  * This function:
  * 1. Detects which jobs are actually used (mainJobs + their dependencies)
  * 2. Uses a transform plugin to transform trigger calls during bundling
- * 3. Creates entry file and bundles with tree-shaking
+ * 3. Creates an in-memory entry module and bundles with tree-shaking
  *
  * Returns metadata about which jobs each workflow uses.
  * @param allJobs - All available job infos
@@ -92,19 +92,16 @@ export async function bundleWorkflowJobs(
 
   // Process each job, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
-  const results = await withTemporaryEntryDirectory("workflow-jobs", (outputDir) =>
-    withBundleConcurrency(usedJobs, (job) =>
-      bundleSingleJob(
-        job,
-        usedJobs,
-        outputDir,
-        tsconfig,
-        env,
-        triggerContext,
-        cache,
-        inlineSourcemap,
-        bundleLogLevel,
-      ),
+  const results = await withBundleConcurrency(usedJobs, (job) =>
+    bundleSingleJob(
+      job,
+      usedJobs,
+      tsconfig,
+      env,
+      triggerContext,
+      cache,
+      inlineSourcemap,
+      bundleLogLevel,
     ),
   );
 
@@ -265,7 +262,6 @@ async function filterUsedJobs(
 async function bundleSingleJob(
   job: JobInfo,
   allJobs: JobInfo[],
-  outputDir: string,
   tsconfig: string | undefined,
   env: Record<string, string | number | boolean>,
   triggerContext?: TriggerContext,
@@ -295,8 +291,6 @@ async function bundleSingleJob(
     sourceFile: job.sourceFile,
     contextHash,
     async build(cachePlugins) {
-      // Step 1: Create entry file that imports job by named export
-      const entryPath = path.join(outputDir, `${job.name}.entry.js`);
       const absoluteSourcePath = path.resolve(job.sourceFile);
 
       const entryContent = ml /* js */ `
@@ -308,9 +302,8 @@ async function bundleSingleJob(
           return await ${job.exportName}.body(input, { env, invoker });
         }
       `;
-      fs.writeFileSync(entryPath, entryContent);
+      const entry = createVirtualEntry(`workflow-job:${job.name}`, entryContent);
 
-      // Step 2: Bundle with a transform plugin that transforms trigger calls
       // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
       const otherJobExportNames = allJobs
         .filter((j) => j.name !== job.name)
@@ -380,13 +373,14 @@ async function bundleSingleJob(
       };
 
       const plugins: rolldown.Plugin[] = [
+        entry.plugin,
         transformPlugin,
         platformBundleDefinePlugin,
         ...cachePlugins,
       ];
 
       const result = await rolldown.build({
-        input: entryPath,
+        input: entry.input,
         write: false,
         output: {
           format: "esm",

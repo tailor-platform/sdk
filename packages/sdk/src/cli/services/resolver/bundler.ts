@@ -1,9 +1,7 @@
-import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { type BundleCache, computeBundlerContextHash, withCache } from "#/cli/cache/bundle-cache";
-import { withTemporaryEntryDirectory } from "#/cli/services/entry-directory";
 import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
@@ -16,6 +14,7 @@ import {
   serializeTriggerContext,
   type TriggerContext,
 } from "#/cli/shared/trigger-context";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
 import type { LogLevel } from "#/configure/config/types";
@@ -30,7 +29,7 @@ interface ResolverInfo {
  *
  * This function:
  * 1. Uses a transform plugin to add validation wrapper during bundling
- * 2. Creates entry file
+ * 2. Creates an in-memory entry module
  * 3. Bundles in a single step with tree-shaking
  * @param namespace - Resolver namespace name
  * @param config - Resolver file loading configuration
@@ -85,18 +84,15 @@ export async function bundleResolvers(
 
   // Process each resolver, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
-  const results = await withTemporaryEntryDirectory("resolvers", (outputDir) =>
-    withBundleConcurrency(resolvers, (resolver) =>
-      bundleSingleResolver(
-        namespace,
-        resolver,
-        outputDir,
-        tsconfig,
-        triggerContext,
-        cache,
-        inlineSourcemap,
-        bundleLogLevel,
-      ),
+  const results = await withBundleConcurrency(resolvers, (resolver) =>
+    bundleSingleResolver(
+      namespace,
+      resolver,
+      tsconfig,
+      triggerContext,
+      cache,
+      inlineSourcemap,
+      bundleLogLevel,
     ),
   );
 
@@ -112,7 +108,6 @@ export async function bundleResolvers(
 async function bundleSingleResolver(
   namespace: string,
   resolver: ResolverInfo,
-  outputDir: string,
   tsconfig: string | undefined,
   triggerContext?: TriggerContext,
   cache?: BundleCache,
@@ -137,8 +132,6 @@ async function bundleSingleResolver(
     sourceFile: resolver.sourceFile,
     contextHash,
     async build(cachePlugins) {
-      // Step 1: Create entry file that imports from the original source
-      const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
       const absoluteSourcePath = path.resolve(resolver.sourceFile);
 
       const entryContent = ml /* js */ `
@@ -167,15 +160,17 @@ async function bundleSingleResolver(
 
         export { $tailor_resolver_body as main };
       `;
-      fs.writeFileSync(entryPath, entryContent);
+      const entry = createVirtualEntry(`resolver:${resolver.name}`, entryContent);
 
-      // Step 2: Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-      const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+      const plugins: rolldown.Plugin[] = [entry.plugin];
+      if (triggerPlugin) {
+        plugins.push(triggerPlugin);
+      }
       plugins.push(platformBundleDefinePlugin, ...cachePlugins);
 
       const result = await rolldown.build({
-        input: entryPath,
+        input: entry.input,
         write: false,
         output: {
           format: "esm",

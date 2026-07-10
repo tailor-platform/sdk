@@ -37,7 +37,41 @@ vi.mock("rolldown", async (importOriginal) => {
         if (typeof input !== "string") {
           throw new TypeError("Expected a string rolldown input");
         }
-        const entry = fs.readFileSync(input, "utf8");
+        let entry: string;
+        if (fs.existsSync(input)) {
+          entry = fs.readFileSync(input, "utf8");
+        } else {
+          const plugins = options.plugins as rolldown.Plugin[];
+          const entryPlugin = plugins.find((plugin) => plugin.name === "tailor-sdk-virtual-entry");
+          if (!entryPlugin || typeof entryPlugin.resolveId !== "function") {
+            throw new Error("Virtual entry plugin was not configured");
+          }
+          const resolveId = entryPlugin.resolveId as unknown as (source: string) => unknown;
+          const resolved = await resolveId(input);
+          const resolvedId =
+            typeof resolved === "string"
+              ? resolved
+              : resolved &&
+                  typeof resolved === "object" &&
+                  "id" in resolved &&
+                  typeof resolved.id === "string"
+                ? resolved.id
+                : undefined;
+          if (!resolvedId || typeof entryPlugin.load !== "function") {
+            throw new Error(`Could not resolve virtual entry ${input}`);
+          }
+          const load = entryPlugin.load as unknown as (id: string) => unknown;
+          const loaded = await load(resolvedId);
+          entry =
+            typeof loaded === "string"
+              ? loaded
+              : loaded &&
+                  typeof loaded === "object" &&
+                  "code" in loaded &&
+                  typeof loaded.code === "string"
+                ? loaded.code
+                : "";
+        }
         const sourcePath = entry.match(/from "([^"]+)"/)?.[1];
         if (!sourcePath) {
           throw new Error(`Could not find source import in ${input}`);
@@ -74,6 +108,29 @@ describe("bundleResolvers", () => {
     ).resolves.toEqual(new Map());
   });
 
+  test("produces deterministic bundles with inline sourcemaps", async () => {
+    using tmp = tempCwd("sdk-bundler-sourcemap-");
+    const resolverDir = path.join(tmp.dir, "resolver");
+    fs.mkdirSync(resolverDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(resolverDir, "stable.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "stable",\n` +
+        `  body: async () => "STABLE_MARKER",\n` +
+        `  output: { type: "string", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+
+    const build = () =>
+      bundleResolvers("deterministic", { files: ["./resolver/*.ts"] }, undefined, undefined, true);
+
+    const first = await build();
+    const second = await build();
+
+    expect(first.get("stable")).toBe(second.get("stable"));
+  });
+
   describe("concurrency", () => {
     afterEach(() => {
       vi.unstubAllEnvs();
@@ -81,7 +138,7 @@ describe("bundleResolvers", () => {
       concurrentBuildBarrier = undefined;
     });
 
-    test("isolates entry files between concurrent namespaces", async () => {
+    test("isolates entry modules between concurrent namespaces", async () => {
       using tmp = tempCwd("sdk-bundler-isolation-");
       const firstResolverDir = path.join(tmp.dir, "first/resolver");
       const secondResolverDir = path.join(tmp.dir, "second/resolver");
@@ -139,7 +196,7 @@ describe("bundleResolvers", () => {
       expect(firstCode).not.toContain("SECOND_NAMESPACE_MARKER");
       expect(secondCode).toContain("SECOND_NAMESPACE_MARKER");
       expect(secondCode).not.toContain("FIRST_NAMESPACE_MARKER");
-      expect(fs.readdirSync(path.join(tmp.dir, ".tailor-sdk/.entries"))).toEqual([]);
+      expect(fs.existsSync(path.join(tmp.dir, ".tailor-sdk/.entries"))).toBe(false);
     });
 
     test("caps concurrent rolldown.build invocations to TAILOR_BUNDLE_CONCURRENCY", async () => {

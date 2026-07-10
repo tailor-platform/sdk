@@ -1,9 +1,7 @@
-import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
-import { withTemporaryEntryDirectory } from "#/cli/services/entry-directory";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
@@ -16,6 +14,7 @@ import {
   serializeTriggerContext,
   type TriggerContext,
 } from "#/cli/shared/trigger-context";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
 import type { LogLevel } from "#/configure/config/types";
@@ -47,7 +46,7 @@ export interface BundleExecutorsOptions {
  * Bundle executors from the specified configuration
  *
  * This function:
- * 1. Creates entry file that extracts operation.body
+ * 1. Creates an in-memory entry module that extracts operation.body
  * 2. Bundles in a single step with tree-shaking
  * @param options - Bundle executor options
  * @returns Map of executor name to bundled code
@@ -111,17 +110,14 @@ export async function bundleExecutors(
 
   // Process each executor, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
-  const results = await withTemporaryEntryDirectory("executors", (outputDir) =>
-    withBundleConcurrency(executors, (executor) =>
-      bundleSingleExecutor(
-        executor,
-        outputDir,
-        tsconfig,
-        triggerContext,
-        cache,
-        inlineSourcemap,
-        bundleLogLevel,
-      ),
+  const results = await withBundleConcurrency(executors, (executor) =>
+    bundleSingleExecutor(
+      executor,
+      tsconfig,
+      triggerContext,
+      cache,
+      inlineSourcemap,
+      bundleLogLevel,
     ),
   );
 
@@ -136,7 +132,6 @@ export async function bundleExecutors(
 
 async function bundleSingleExecutor(
   executor: ExecutorInfo,
-  outputDir: string,
   tsconfig: string | undefined,
   triggerContext?: TriggerContext,
   cache?: BundleCache,
@@ -160,8 +155,6 @@ async function bundleSingleExecutor(
     sourceFile: executor.sourceFile,
     contextHash,
     async build(cachePlugins) {
-      // Step 1: Create entry file that imports and extracts operation.body
-      const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
       const absoluteSourcePath = path.resolve(executor.sourceFile);
 
       const entryContent = ml /* js */ `
@@ -174,15 +167,17 @@ async function bundleSingleExecutor(
 
         export { __executor_function as main };
       `;
-      fs.writeFileSync(entryPath, entryContent);
+      const entry = createVirtualEntry(`executor:${executor.name}`, entryContent);
 
-      // Step 2: Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-      const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+      const plugins: rolldown.Plugin[] = [entry.plugin];
+      if (triggerPlugin) {
+        plugins.push(triggerPlugin);
+      }
       plugins.push(platformBundleDefinePlugin, ...cachePlugins);
 
       const result = await rolldown.build({
-        input: entryPath,
+        input: entry.input,
         write: false,
         output: {
           format: "esm",
