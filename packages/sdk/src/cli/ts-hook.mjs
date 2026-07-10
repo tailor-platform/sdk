@@ -52,6 +52,7 @@ function collectPathsInto(out, configFilePath, content, visited) {
     for (const key of Object.keys(out)) delete out[key];
     const absBase = effectiveBaseUrl ?? baseDir;
     for (const [alias, targets] of Object.entries(rawPaths)) {
+      if (!Array.isArray(targets)) continue;
       out[alias] = targets.map((t) => {
         const isWildcard = t.endsWith("/*");
         const resolved = resolvePath(absBase, isWildcard ? t.slice(0, -2) : t);
