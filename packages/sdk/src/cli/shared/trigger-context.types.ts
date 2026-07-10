@@ -8,9 +8,7 @@ export interface TriggerModuleBindings {
   exports: Map<string, TriggerTarget>;
 }
 
-export interface TriggerModuleResolution {
-  tsconfig: TsConfigResult;
-}
+export type TriggerModuleResolution = TsConfigResult;
 
 export interface TriggerContext {
   modules: Map<string, TriggerModuleBindings>;

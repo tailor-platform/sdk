@@ -91,7 +91,7 @@ function loadModuleResolution(searchPath: string): TriggerModuleResolution | und
     if (!tsconfig) return undefined;
     const compilerOptions = tsconfig.config.compilerOptions;
     if (!compilerOptions?.baseUrl && !compilerOptions?.paths) return undefined;
-    return { tsconfig };
+    return tsconfig;
   } catch {
     return undefined;
   }
@@ -146,12 +146,14 @@ function sortedTargets(bindings: Map<string, TriggerTarget>) {
 
 function sortedModuleResolution(resolution: TriggerModuleResolution | undefined) {
   if (!resolution) return null;
-  const compilerOptions = resolution.tsconfig.config.compilerOptions;
-  return [
-    resolution.tsconfig.path,
-    compilerOptions?.baseUrl ?? null,
-    Object.entries(compilerOptions?.paths ?? {}).toSorted(([a], [b]) => a.localeCompare(b)),
-  ];
+  const compilerOptions = resolution.config.compilerOptions;
+  const symbolMetadata = Object.getOwnPropertySymbols(compilerOptions ?? {})
+    .map((symbol) => [
+      symbol.description ?? symbol.toString(),
+      Reflect.get(compilerOptions ?? {}, symbol),
+    ])
+    .toSorted(([a], [b]) => String(a).localeCompare(String(b)));
+  return [resolution.path, resolution.config, symbolMetadata];
 }
 
 /**

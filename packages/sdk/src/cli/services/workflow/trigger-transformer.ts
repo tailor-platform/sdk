@@ -103,7 +103,9 @@ function collectLexicalBindings(statements: ASTNode[], names: Set<string>): void
     if (
       declaration.type === "FunctionDeclaration" ||
       declaration.type === "ClassDeclaration" ||
-      declaration.type === "TSEnumDeclaration"
+      declaration.type === "TSEnumDeclaration" ||
+      declaration.type === "TSModuleDeclaration" ||
+      declaration.type === "TSImportEqualsDeclaration"
     ) {
       collectBindingNames(declaration.id as ASTNode | undefined, names);
     }
@@ -118,7 +120,8 @@ function collectFunctionVarBindings(root: ASTNode, names: Set<string>): void {
       (node.type === "FunctionDeclaration" ||
         node.type === "FunctionExpression" ||
         node.type === "ArrowFunctionExpression" ||
-        node.type === "StaticBlock")
+        node.type === "StaticBlock" ||
+        node.type === "TSModuleBlock")
     ) {
       return;
     }
@@ -441,7 +444,7 @@ function resolveImportBindings(
 
   const resolution = context.moduleResolution;
   if (!resolution) return undefined;
-  const matchPaths = createPathsMatcher(resolution.tsconfig);
+  const matchPaths = createPathsMatcher(resolution);
   for (const candidate of matchPaths?.(importSource) ?? []) {
     const module = findModule(candidate);
     if (module) return module;

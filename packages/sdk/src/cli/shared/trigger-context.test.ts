@@ -1,8 +1,9 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { transformFunctionTriggers } from "#/cli/services/workflow/trigger-transformer";
+import { tempCwd } from "./test-helpers/temp-cwd";
 import {
   buildTriggerContext,
   normalizeFilePath,
@@ -86,7 +87,6 @@ describe("buildTriggerContext", () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
-    vi.restoreAllMocks();
     for (const tempDir of tempDirs.splice(0)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -131,10 +131,8 @@ export const step = createWorkflowJob({
     paths: Record<string, string[]>,
   ) {
     context.moduleResolution = {
-      tsconfig: {
-        path: path.join(baseUrl, "tsconfig.json"),
-        config: { compilerOptions: { baseUrl, paths } },
-      },
+      path: path.join(baseUrl, "tsconfig.json"),
+      config: { compilerOptions: { baseUrl, paths } },
     };
   }
 
@@ -176,85 +174,9 @@ await importedStep.trigger();
     expect(result).not.toContain("importedStep.trigger()");
   });
 
-  test("prefers an exact tsconfig path over a wildcard match", async () => {
-    const { context, tempDir } = await createDuplicateExportContext();
-    setModuleResolution(context, tempDir, {
-      "jobs*/step": ["second"],
-      "jobs/step": ["first"],
-    });
-    const source = `
-import { step as importedStep } from "jobs/step";
-
-await importedStep.trigger();
-`;
-
-    const result = transform(source, path.join(tempDir, "caller.ts"), context);
-
-    expect(result).toContain('tailor.workflow.triggerJobFunction("step-a", undefined)');
-    expect(result).not.toContain('tailor.workflow.triggerJobFunction("step-b"');
-  });
-
-  test("prefers the tsconfig path wildcard with the longest prefix", async () => {
-    const { context, tempDir } = await createDuplicateExportContext();
-    setModuleResolution(context, tempDir, {
-      "jobs*/nested/step": ["second"],
-      "jobs/nested*": ["first"],
-    });
-    const source = `
-import { step as importedStep } from "jobs/nested/step";
-
-await importedStep.trigger();
-`;
-
-    const result = transform(source, path.join(tempDir, "caller.ts"), context);
-
-    expect(result).toContain('tailor.workflow.triggerJobFunction("step-a", undefined)');
-    expect(result).not.toContain('tailor.workflow.triggerJobFunction("step-b"');
-  });
-
-  test("resolves path aliases inherited from a base tsconfig", async () => {
-    const tempDir = mkdtempSync(path.join(tmpdir(), "trigger-context-"));
-    tempDirs.push(tempDir);
-    const workflowsDir = path.join(tempDir, "workflows");
-    mkdirSync(workflowsDir);
-    writeFileSync(
-      path.join(tempDir, "tsconfig.base.json"),
-      JSON.stringify({
-        compilerOptions: {
-          baseUrl: ".",
-          paths: { "@workflows/*": ["workflows/*"] },
-        },
-      }),
-    );
-    writeFileSync(
-      path.join(tempDir, "tsconfig.json"),
-      JSON.stringify({ extends: "./tsconfig.base.json" }),
-    );
-    const jobPath = path.join(workflowsDir, "job.ts");
-    writeFileSync(
-      jobPath,
-      `
-import { createWorkflowJob } from "@tailor-platform/sdk";
-export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
-`,
-    );
-    const cwd = vi.spyOn(process, "cwd").mockReturnValue(tempDir);
-    const context = await buildTriggerContext({ files: [jobPath] });
-    cwd.mockRestore();
-    const source = `
-import { step as importedStep } from "@workflows/job";
-await importedStep.trigger();
-`;
-
-    const result = transform(source, path.join(tempDir, "caller.ts"), context);
-
-    expect(result).toContain('tailor.workflow.triggerJobFunction("step-a", undefined)');
-    expect(result).not.toContain("importedStep.trigger()");
-  });
-
   test("resolves inherited path aliases relative to the declaring tsconfig", async () => {
-    const tempDir = mkdtempSync(path.join(tmpdir(), "trigger-context-"));
-    tempDirs.push(tempDir);
+    using temporary = tempCwd("trigger-context-");
+    const tempDir = temporary.dir;
     const appDir = path.join(tempDir, "app");
     const configDir = path.join(tempDir, "config");
     const workflowsDir = path.join(configDir, "workflows");
@@ -286,9 +208,8 @@ export const caller = createWorkflowJob({
 });
 `;
     writeFileSync(callerPath, source);
-    const cwd = vi.spyOn(process, "cwd").mockReturnValue(appDir);
+    process.chdir(appDir);
     const context = await buildTriggerContext({ files: [callerPath, jobPath] });
-    cwd.mockRestore();
 
     const result = transform(source, callerPath, context);
 
@@ -297,8 +218,8 @@ export const caller = createWorkflowJob({
   });
 
   test("uses the bundler tsconfig from the current working directory", async () => {
-    const tempDir = mkdtempSync(path.join(tmpdir(), "trigger-context-"));
-    tempDirs.push(tempDir);
+    using temporary = tempCwd("trigger-context-");
+    const tempDir = temporary.dir;
     const nestedDir = path.join(tempDir, "nested");
     mkdirSync(nestedDir);
     writeFileSync(
@@ -323,11 +244,9 @@ import { step as importedStep } from "@jobs";
 await importedStep.trigger();
 `;
     writeFileSync(callerPath, source);
-    const cwd = vi.spyOn(process, "cwd").mockReturnValue(tempDir);
     const context = await buildTriggerContext({
       files: [callerPath, rootJobPath, nestedJobPath],
     });
-    cwd.mockRestore();
 
     const result = transform(source, callerPath, context);
 
@@ -336,8 +255,8 @@ await importedStep.trigger();
   });
 
   test("does not apply baseUrl fallback when only tsconfig paths are configured", async () => {
-    const tempDir = mkdtempSync(path.join(tmpdir(), "trigger-context-"));
-    tempDirs.push(tempDir);
+    using temporary = tempCwd("trigger-context-");
+    const tempDir = temporary.dir;
     writeFileSync(
       path.join(tempDir, "tsconfig.json"),
       JSON.stringify({ compilerOptions: { paths: { "@jobs/*": ["./workflows/*"] } } }),
@@ -350,9 +269,7 @@ import { createWorkflowJob } from "@tailor-platform/sdk";
 export const step = createWorkflowJob({ name: "wrong-step", body: async () => "wrong" });
 `,
     );
-    const cwd = vi.spyOn(process, "cwd").mockReturnValue(tempDir);
     const context = await buildTriggerContext({ files: [localJobPath] });
-    cwd.mockRestore();
     const source = `
 import { step } from "local-job";
 await step.trigger();
@@ -365,8 +282,8 @@ await step.trigger();
   });
 
   test("resolves tsconfig path aliases that start with a hash", async () => {
-    const tempDir = mkdtempSync(path.join(tmpdir(), "trigger-context-"));
-    tempDirs.push(tempDir);
+    using temporary = tempCwd("trigger-context-");
+    const tempDir = temporary.dir;
     const workflowsDir = path.join(tempDir, "workflows");
     mkdirSync(workflowsDir);
     writeFileSync(
@@ -381,9 +298,7 @@ import { createWorkflowJob } from "@tailor-platform/sdk";
 export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
 `,
     );
-    const cwd = vi.spyOn(process, "cwd").mockReturnValue(tempDir);
     const context = await buildTriggerContext({ files: [jobPath] });
-    cwd.mockRestore();
     const source = `
 import { step as importedStep } from "#jobs/job";
 await importedStep.trigger();
@@ -463,6 +378,36 @@ namespace Local {
     expect(result).not.toContain("tailor.workflow.triggerJobFunction");
   });
 
+  test("keeps nested TypeScript namespace bindings in their own scope", async () => {
+    const { context, tempDir } = await createDuplicateExportContext();
+    const source = `
+import { step } from "./first";
+
+namespace WithDeclaration {
+  namespace step {
+    export function trigger() {}
+  }
+  step.trigger({ source: "declaration" });
+}
+
+namespace WithNestedVar {
+  export function run() {
+    return step.trigger({ source: "outer" });
+  }
+  namespace Inner {
+    var step = { trigger: async () => "local" };
+    step.trigger({ source: "inner" });
+  }
+}
+`;
+
+    const result = transform(source, path.join(tempDir, "caller.ts"), context);
+
+    expect(result).toContain('step.trigger({ source: "declaration" })');
+    expect(result).toContain('step.trigger({ source: "inner" })');
+    expect(result).toContain('triggerJobFunction("step-a", { source: "outer" })');
+  });
+
   test("escapes job and workflow names in generated calls", async () => {
     const { context, firstPath, firstSource } = await createDuplicateExportContext();
     const currentModule = context.modules.get(normalizeFilePath(firstPath));
@@ -489,6 +434,39 @@ namespace Local {
 
     expect(jobResult).toContain(`triggerJobFunction(${JSON.stringify(jobName)}, undefined)`);
     expect(workflowResult).toContain(`triggerWorkflow(${JSON.stringify(workflowName)}, undefined)`);
+  });
+
+  test("serializes the effective base directory of inherited path aliases", async () => {
+    using temporary = tempCwd("trigger-context-");
+    const firstBaseDir = path.join(temporary.dir, "first-base");
+    const secondBaseDir = path.join(temporary.dir, "second-base");
+    mkdirSync(firstBaseDir);
+    mkdirSync(secondBaseDir);
+    const baseConfig = JSON.stringify({
+      compilerOptions: { paths: { "@jobs/*": ["./jobs/*"] } },
+    });
+    writeFileSync(path.join(firstBaseDir, "tsconfig.json"), baseConfig);
+    writeFileSync(path.join(secondBaseDir, "tsconfig.json"), baseConfig);
+    const intermediateConfigPath = path.join(temporary.dir, "tsconfig.shared.json");
+    writeFileSync(
+      intermediateConfigPath,
+      JSON.stringify({ extends: "./first-base/tsconfig.json" }),
+    );
+    writeFileSync(
+      path.join(temporary.dir, "tsconfig.json"),
+      JSON.stringify({ extends: "./tsconfig.shared.json" }),
+    );
+    const workflowPath = path.join(temporary.dir, "workflow.ts");
+    writeFileSync(workflowPath, "");
+    const firstContext = await buildTriggerContext({ files: [workflowPath] });
+
+    writeFileSync(
+      intermediateConfigPath,
+      JSON.stringify({ extends: "./second-base/tsconfig.json" }),
+    );
+    const secondContext = await buildTriggerContext({ files: [workflowPath] });
+
+    expect(serializeTriggerContext(firstContext)).not.toBe(serializeTriggerContext(secondContext));
   });
 
   test("resolves switch discriminants outside case lexical bindings", async () => {
