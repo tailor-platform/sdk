@@ -24,7 +24,7 @@
     "lint:fix": "oxlint --type-aware . --fix",
     "typecheck": "pnpm generate && pnpm run typecheck:generated",
     "typecheck:generated": "tsc --noEmit",
-    "typecheck:go": "tsgo"
+    "typecheck:go": "tsgo --tsBuildInfoFile ./.tsgo.tsbuildinfo"
   },
   "dependencies": {
     "@tailor-platform/sdk": "workspace:^",
