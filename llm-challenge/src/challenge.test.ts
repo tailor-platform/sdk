@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { parseRunArgs, parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
 import { discoverProblems, selectProblems } from "./problems";
@@ -27,6 +27,7 @@ const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   const dirs = [...tempDirs];
   tempDirs.length = 0;
   await Promise.all(dirs.map((dir) => fs.rm(dir, { recursive: true, force: true })));
@@ -773,26 +774,21 @@ describe("verification summary", () => {
     );
     await fs.chmod(fakePodmanPath, 0o755);
 
-    const originalPath = process.env.PATH;
-    process.env.PATH = `${fakeBinPath}${path.delimiter}${originalPath ?? ""}`;
+    vi.stubEnv("PATH", `${fakeBinPath}${path.delimiter}${process.env.PATH ?? ""}`);
 
-    try {
-      const summary = await writeVerificationSummary({
-        problem: makeProblem({ group: "cli" }),
-        runIndex: 0,
-        worktreePath,
-        verifierImage: "example.invalid/codex-verifier:test",
-        verificationSummaryPath: path.join(dir, "verification-summary.json"),
-        verificationStdoutPath: path.join(dir, "verification.stdout.log"),
-        verificationStderrPath: path.join(dir, "verification.stderr.log"),
-      });
+    const summary = await writeVerificationSummary({
+      problem: makeProblem({ group: "cli" }),
+      runIndex: 0,
+      worktreePath,
+      verifierImage: "example.invalid/codex-verifier:test",
+      verificationSummaryPath: path.join(dir, "verification-summary.json"),
+      verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+      verificationStderrPath: path.join(dir, "verification.stderr.log"),
+    });
 
-      expect(summary.checks.find((check) => check.id === "typescript-no-emit")).toMatchObject({
-        outcome: "satisfied",
-      });
-    } finally {
-      process.env.PATH = originalPath;
-    }
+    expect(summary.checks.find((check) => check.id === "typescript-no-emit")).toMatchObject({
+      outcome: "satisfied",
+    });
 
     await expect(fs.stat(payloadPath)).rejects.toMatchObject({ code: "ENOENT" });
     const podmanArgs = JSON.parse(await fs.readFile(podmanArgsPath, "utf8")) as string[];
@@ -836,7 +832,7 @@ describe("verification summary", () => {
 
     expect(summary.checks.find((check) => check.id === "large")).toMatchObject({
       outcome: "error",
-      error: expect.stringContaining("content evidence limit"),
+      error: expect.stringContaining("content evidence limit exceeded for large.txt"),
     });
   });
 

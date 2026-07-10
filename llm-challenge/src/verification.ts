@@ -327,11 +327,11 @@ async function matchingContentFiles(
     if (absolutePath === undefined) {
       continue;
     }
-    const content = await readBoundedContentFile(absolutePath);
+    const content = await readBoundedContentFile(absolutePath, file);
     totalBytes += content.byteLength;
     if (totalBytes > CONTENT_TOTAL_BYTES_LIMIT) {
       throw new Error(
-        `content evidence limit exceeded: total bytes exceed ${CONTENT_TOTAL_BYTES_LIMIT}`,
+        `content evidence limit exceeded at ${file}: total bytes exceed ${CONTENT_TOTAL_BYTES_LIMIT}`,
       );
     }
     evidenceFiles.push(file);
@@ -344,11 +344,12 @@ async function matchingContentFiles(
 
 async function readBoundedContentFile(
   absolutePath: string,
+  relativePath: string,
 ): Promise<{ text: string; byteLength: number }> {
   const file = await fs.open(absolutePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
   try {
     if (!(await file.stat()).isFile()) {
-      throw new Error("content evidence limit rejected a non-regular file");
+      throw new Error(`content evidence limit rejected non-regular file ${relativePath}`);
     }
     const buffer = Buffer.alloc(CONTENT_FILE_BYTES_LIMIT + 1);
     let byteLength = 0;
@@ -366,7 +367,7 @@ async function readBoundedContentFile(
     }
     if (byteLength > CONTENT_FILE_BYTES_LIMIT) {
       throw new Error(
-        `content evidence limit exceeded: file exceeds ${CONTENT_FILE_BYTES_LIMIT} bytes`,
+        `content evidence limit exceeded for ${relativePath}: file exceeds ${CONTENT_FILE_BYTES_LIMIT} bytes`,
       );
     }
     return {
