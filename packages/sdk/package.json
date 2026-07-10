@@ -182,7 +182,7 @@
     "@opentelemetry/exporter-trace-otlp-proto": "0.220.0",
     "@opentelemetry/resources": "2.9.0",
     "@opentelemetry/sdk-trace-node": "2.9.0",
-    "@opentelemetry/semantic-conventions": "1.41.1",
+    "@opentelemetry/semantic-conventions": "1.42.0",
     "@oxc-project/types": "0.138.0",
     "@standard-schema/spec": "1.1.0",
     "@tailor-platform/function-kysely-tailordb": "0.1.3",
