@@ -113,6 +113,11 @@ export async function planAuthConnections(
   appId: string | undefined,
   auths: ReadonlyArray<Readonly<AuthService>>,
 ) {
+  const stateScope = {
+    workspaceId,
+    applicationId: appId,
+    applicationName: appName,
+  };
   const changeSet = createChangeSet<
     CreateConnection,
     UpdateConnection,
@@ -153,7 +158,7 @@ export async function planAuthConnections(
     }),
   );
 
-  const state = loadSecretsState();
+  const state = loadSecretsState(stateScope);
 
   for (const [name, config] of Object.entries(desiredConnections)) {
     const existing = existingConnections[name];
@@ -228,8 +233,13 @@ export async function planAuthConnections(
     }
   }
 
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  return { changeSet, conflicts, unmanaged, resourceOwners, stateScope };
 }
+
+type AuthConnectionApplyResult = Pick<
+  Awaited<ReturnType<typeof planAuthConnections>>,
+  "changeSet" | "stateScope"
+>;
 
 /**
  * Apply auth connection changes for the given phase.
@@ -239,10 +249,10 @@ export async function planAuthConnections(
  */
 export async function applyAuthConnections(
   client: OperatorClient,
-  result: Awaited<ReturnType<typeof planAuthConnections>>,
+  result: AuthConnectionApplyResult,
   phase: Exclude<ApplyPhase, "delete-services">,
 ) {
-  const { changeSet } = result;
+  const { changeSet, stateScope } = result;
 
   if (phase === "create-update") {
     await Promise.all(
@@ -277,7 +287,7 @@ export async function applyAuthConnections(
       }),
     );
 
-    const state = loadSecretsState();
+    const state = loadSecretsState(stateScope);
     if (!state.connections) {
       state.connections = {};
     }
@@ -296,7 +306,7 @@ export async function applyAuthConnections(
         state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
       }
     }
-    saveSecretsState(state);
+    saveSecretsState(stateScope, state);
   } else {
     await Promise.all(
       changeSet.deletes.map(async (del) => {
@@ -305,12 +315,12 @@ export async function applyAuthConnections(
     );
 
     if (changeSet.deletes.length > 0) {
-      const state = loadSecretsState();
+      const state = loadSecretsState(stateScope);
       if (state.connections) {
         for (const del of changeSet.deletes) {
           delete state.connections[del.name];
         }
-        saveSecretsState(state);
+        saveSecretsState(stateScope, state);
       }
     }
   }

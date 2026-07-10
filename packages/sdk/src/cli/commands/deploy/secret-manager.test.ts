@@ -8,6 +8,11 @@ import type { OperatorClient } from "#/cli/shared/client";
 const mockLoadSecretsState = vi.fn();
 const mockSaveSecretsState = vi.fn();
 const sdkVersion = "v1-0-0";
+const stateScope = {
+  workspaceId: "ws-1",
+  applicationId: "app-1",
+  applicationName: "test-app",
+};
 
 vi.mock("./secrets-state", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
@@ -81,13 +86,19 @@ function createPlanContext(
     vaultName: string;
     secrets: Array<{ name: string; value: string | null | undefined }>;
   }>,
-  overrides: { appName?: string; forRemoval?: boolean } = {},
+  overrides: {
+    appName?: string;
+    appId?: string;
+    workspaceId?: string;
+    forRemoval?: boolean;
+  } = {},
 ): PlanContext {
   return {
     client,
-    workspaceId: "ws-1",
+    workspaceId: overrides.workspaceId ?? "ws-1",
     application: {
       name: overrides.appName ?? "test-app",
+      id: overrides.appId ?? "app-1",
       secrets,
     } as unknown as Application,
     forRemoval: overrides.forRemoval ?? false,
@@ -98,6 +109,7 @@ function createPlanContext(
 describe("applySecretManager phase separation", () => {
   function createMockPlanResult() {
     return {
+      stateScope,
       vaultChangeSet: {
         creates: [{ name: "my-vault", workspaceId: "ws-1" }],
         updates: [],
@@ -298,6 +310,54 @@ describe("planSecretManager hash-based diff", () => {
 
     const result = await planSecretManager(ctx);
     expect(result.secretChangeSet.updates).toHaveLength(1);
+  });
+
+  test("includes update when matching state belongs to another workspace", async () => {
+    const secretValue = "my-secret-value";
+    mockLoadSecretsState.mockImplementation((scope?: { workspaceId: string }) =>
+      scope?.workspaceId === "ws-a"
+        ? { vaults: { "my-vault": { "existing-secret": hashValue(secretValue) } } }
+        : { vaults: {} },
+    );
+    const client = createMockPlanClient(["existing-secret"]);
+    const ctx = createPlanContext(
+      client,
+      [{ vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] }],
+      { workspaceId: "ws-b", appId: "shared-app-id" },
+    );
+
+    const result = await planSecretManager(ctx);
+
+    expect(result.secretChangeSet.updates).toHaveLength(1);
+    expect(mockLoadSecretsState).toHaveBeenCalledWith({
+      workspaceId: "ws-b",
+      applicationId: "shared-app-id",
+      applicationName: "test-app",
+    });
+  });
+
+  test("includes update when matching state belongs to another application", async () => {
+    const secretValue = "my-secret-value";
+    mockLoadSecretsState.mockImplementation((scope?: { applicationId: string }) =>
+      scope?.applicationId === "app-a"
+        ? { vaults: { "my-vault": { "existing-secret": hashValue(secretValue) } } }
+        : { vaults: {} },
+    );
+    const client = createMockPlanClient(["existing-secret"]);
+    const ctx = createPlanContext(
+      client,
+      [{ vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] }],
+      { appName: "shared-app", appId: "app-b" },
+    );
+
+    const result = await planSecretManager(ctx);
+
+    expect(result.secretChangeSet.updates).toHaveLength(1);
+    expect(mockLoadSecretsState).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      applicationId: "app-b",
+      applicationName: "shared-app",
+    });
   });
 });
 
@@ -563,6 +623,7 @@ describe("applySecretManager state persistence", () => {
     } as unknown as Application;
 
     const planResult = {
+      stateScope,
       vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
       secretChangeSet: {
         creates: [
@@ -583,7 +644,7 @@ describe("applySecretManager state persistence", () => {
     await applySecretManager(client, planResult, "create-update", application);
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
-    const savedState = mockSaveSecretsState.mock.calls[0]![0];
+    const savedState = mockSaveSecretsState.mock.calls[0]![1];
     expect(savedState.vaults["my-vault"]["secret-a"]).toBe(hashValue("value-a"));
     expect(savedState.vaults["my-vault"]["secret-b"]).toBe(hashValue("value-b"));
   });
@@ -591,6 +652,7 @@ describe("applySecretManager state persistence", () => {
   test("does not save state when application is not provided", async () => {
     const client = createMockApplyClient();
     const planResult = {
+      stateScope,
       vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
       secretChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
     } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
@@ -612,6 +674,7 @@ describe("applySecretManager state persistence", () => {
 
     const client = createMockApplyClient();
     const planResult = {
+      stateScope,
       vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
       secretChangeSet: {
         creates: [],
@@ -631,7 +694,7 @@ describe("applySecretManager state persistence", () => {
     await applySecretManager(client, planResult, "delete");
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
-    const savedState = mockSaveSecretsState.mock.calls[0]![0];
+    const savedState = mockSaveSecretsState.mock.calls[0]![1];
     expect(savedState.vaults["my-vault"]["secret-a"]).toBe(hashValue("value-a"));
     expect(savedState.vaults["my-vault"]["orphan"]).toBeUndefined();
   });
@@ -647,6 +710,7 @@ describe("applySecretManager state persistence", () => {
 
     const client = createMockApplyClient();
     const planResult = {
+      stateScope,
       vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
       secretChangeSet: {
         creates: [],
@@ -665,7 +729,7 @@ describe("applySecretManager state persistence", () => {
 
     await applySecretManager(client, planResult, "delete");
 
-    const savedState = mockSaveSecretsState.mock.calls[0]![0];
+    const savedState = mockSaveSecretsState.mock.calls[0]![1];
     expect(savedState.vaults["my-vault"]).toBeUndefined();
   });
 });
@@ -766,6 +830,7 @@ describe("applySecretManager ignoreNullishValues state persistence", () => {
     } as unknown as Application;
 
     const planResult = {
+      stateScope,
       vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
       secretChangeSet: {
         creates: [
@@ -786,7 +851,7 @@ describe("applySecretManager ignoreNullishValues state persistence", () => {
     await applySecretManager(client, planResult, "create-update", application);
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
-    const savedState = mockSaveSecretsState.mock.calls[0]![0];
+    const savedState = mockSaveSecretsState.mock.calls[0]![1];
     expect(savedState.vaults["my-vault"]["nullish-secret"]).toBe(hashValue("previous-value"));
     expect(savedState.vaults["my-vault"]["valued-secret"]).toBe(hashValue("real-value"));
   });

@@ -9,7 +9,24 @@ const SecretsStateSchema = z.object({
   connections: z.record(z.string(), z.string()).optional(),
 });
 
+const PersistedSecretsStateSchema = z.object({
+  version: z.literal(1),
+  workspaces: z.record(
+    z.string(),
+    z.object({
+      applications: z.record(z.string(), SecretsStateSchema),
+    }),
+  ),
+});
+
 export type SecretsState = z.infer<typeof SecretsStateSchema>;
+type PersistedSecretsState = z.infer<typeof PersistedSecretsStateSchema>;
+
+export interface SecretsStateScope {
+  readonly workspaceId: string;
+  readonly applicationId: string | undefined;
+  readonly applicationName: string;
+}
 
 /**
  * Get the file path for the secrets state JSON.
@@ -23,28 +40,50 @@ export function getSecretsStatePath(): string {
  * Load secrets hash state from disk.
  * @returns Persisted state, or empty state if file is missing or corrupted
  */
-export function loadSecretsState(): SecretsState {
+function loadPersistedSecretsState(): PersistedSecretsState {
   const filePath = getSecretsStatePath();
   if (!existsSync(filePath)) {
-    return { vaults: {} };
+    return { version: 1, workspaces: {} };
   }
   try {
     const raw = readFileSync(filePath, "utf-8");
-    return SecretsStateSchema.parse(JSON.parse(raw));
+    return PersistedSecretsStateSchema.parse(JSON.parse(raw));
   } catch {
-    return { vaults: {} };
+    return { version: 1, workspaces: {} };
   }
 }
 
+function applicationStateKey(scope: SecretsStateScope): string {
+  return scope.applicationId ? `id:${scope.applicationId}` : `name:${scope.applicationName}`;
+}
+
 /**
- * Save secrets hash state to disk.
+ * Load secrets hash state for one workspace and application from disk.
+ * @param scope - Workspace and application identity for the deployment
+ * @returns Persisted state, or empty state if the scope is missing or the file is invalid
+ */
+export function loadSecretsState(scope: SecretsStateScope): SecretsState {
+  return (
+    loadPersistedSecretsState().workspaces[scope.workspaceId]?.applications[
+      applicationStateKey(scope)
+    ] ?? { vaults: {} }
+  );
+}
+
+/**
+ * Save secrets hash state for one workspace and application to disk.
+ * @param scope - Workspace and application identity for the deployment
  * @param state - The secrets state to persist
  */
-export function saveSecretsState(state: SecretsState): void {
+export function saveSecretsState(scope: SecretsStateScope, state: SecretsState): void {
   const filePath = getSecretsStatePath();
   const dir = path.dirname(filePath);
+  const persistedState = loadPersistedSecretsState();
+  const workspaceState = persistedState.workspaces[scope.workspaceId] ?? { applications: {} };
+  workspaceState.applications[applicationStateKey(scope)] = state;
+  persistedState.workspaces[scope.workspaceId] = workspaceState;
   mkdirSync(dir, { recursive: true });
-  writeFileSync(filePath, JSON.stringify(state, null, 2), "utf-8");
+  writeFileSync(filePath, JSON.stringify(persistedState, null, 2), "utf-8");
 }
 
 /**

@@ -68,6 +68,11 @@ function emptyInput(): ValidatePlanInput {
       resourceOwners: new Set(),
     },
     auth: {
+      connectionStateScope: {
+        workspaceId: "workspace-id",
+        applicationId: "application-id",
+        applicationName: "my-app",
+      },
       changeSet: {
         service: createChangeSet("Auth services"),
         idpConfig: createChangeSet("Auth idpConfigs"),
@@ -117,6 +122,11 @@ function emptyInput(): ValidatePlanInput {
       resourceOwners: new Set(),
     },
     secretManager: {
+      stateScope: {
+        workspaceId: "workspace-id",
+        applicationId: "application-id",
+        applicationName: "my-app",
+      },
       vaultChangeSet: createChangeSet("Vaults"),
       secretChangeSet: createChangeSet("Secrets"),
       skippedSecrets: [],

@@ -236,6 +236,64 @@ describe("planAuthConnections", () => {
     expect(replace!.updateRequest.updateMask?.paths).toContain("oauth2.provider_url");
     expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
   });
+
+  test("updates an existing same-name connection when state belongs to another workspace", async () => {
+    mockLoadSecretsState.mockImplementation((scope?: { workspaceId: string }) =>
+      scope?.workspaceId === "ws-a"
+        ? { vaults: {}, connections: { "shared-connection": "fixed-hash" } }
+        : { vaults: {}, connections: {} },
+    );
+    const client = createMockClient({
+      connections: [{ name: "shared-connection", ownerLabel: appName }],
+    });
+
+    const { changeSet } = await planAuthConnections(
+      client,
+      "ws-b",
+      appName,
+      "shared-app-id",
+      authsWith(["shared-connection"]),
+    );
+
+    expect(changeSet.replaces.map((replace) => replace.name)).toEqual(["shared-connection"]);
+    expect(changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
+      "oauth2.client_secret",
+    );
+    expect(mockLoadSecretsState).toHaveBeenCalledWith({
+      workspaceId: "ws-b",
+      applicationId: "shared-app-id",
+      applicationName: appName,
+    });
+  });
+
+  test("updates an existing same-name connection when state belongs to another application", async () => {
+    mockLoadSecretsState.mockImplementation((scope?: { applicationId: string }) =>
+      scope?.applicationId === "app-a"
+        ? { vaults: {}, connections: { "shared-connection": "fixed-hash" } }
+        : { vaults: {}, connections: {} },
+    );
+    const client = createMockClient({
+      connections: [{ name: "shared-connection", ownerLabel: appName }],
+    });
+
+    const { changeSet } = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      "app-b",
+      authsWith(["shared-connection"]),
+    );
+
+    expect(changeSet.replaces.map((replace) => replace.name)).toEqual(["shared-connection"]);
+    expect(changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
+      "oauth2.client_secret",
+    );
+    expect(mockLoadSecretsState).toHaveBeenCalledWith({
+      workspaceId,
+      applicationId: "app-b",
+      applicationName: appName,
+    });
+  });
 });
 
 describe("applyAuthConnections", () => {
@@ -325,7 +383,7 @@ describe("applyAuthConnections", () => {
     mockLoadSecretsState.mockReturnValue(initialState);
     await applyAuthConnections(client, result, "create-update");
 
-    const savedState = mockSaveSecretsState.mock.calls[0]?.[0] as
+    const savedState = mockSaveSecretsState.mock.calls[0]?.[1] as
       | { connections: Record<string, string> }
       | undefined;
     expect(savedState?.connections["conn"]).toBe("old-hash");
