@@ -344,6 +344,10 @@ export interface TailorDBField<
 
   /**
    * Add validation functions to the field.
+   *
+   * Validators receive `{ value, data, user }` and run after hooks and
+   * built-in type validation; they are skipped when built-in validation
+   * fails. For array fields, `value` is the complete array.
    */
   validate: DBFieldValidateMethod<Defined, Output>;
 
@@ -353,7 +357,8 @@ export interface TailorDBField<
   serial: DBFieldSerialMethod<Defined, Output>;
 
   /**
-   * Clone the field with optional overrides for field options
+   * Clone the field with optional overrides for field options.
+   * The `array` option cannot change on fields with custom validation.
    */
   clone<const NewOpt extends DBFieldCloneOptions<Defined>>(
     options?: NewOpt,
