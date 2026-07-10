@@ -97,10 +97,18 @@
       "files": [
         "**/*.test.js",
         "**/*.test.jsx",
+        "**/*.test.cjs",
+        "**/*.test.mjs",
+        "**/*.test.cts",
+        "**/*.test.mts",
         "**/*.test.ts",
         "**/*.test.tsx",
         "**/*.spec.js",
         "**/*.spec.jsx",
+        "**/*.spec.cjs",
+        "**/*.spec.mjs",
+        "**/*.spec.cts",
+        "**/*.spec.mts",
         "**/*.spec.ts",
         "**/*.spec.tsx"
       ],

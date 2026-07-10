@@ -1,8 +1,14 @@
-import { bindingIdentifierForCall, memberName, unwrapExpression } from "../lib/ast.js";
+import {
+  bindingIdentifierForCall,
+  isExpressionWrapper,
+  memberName,
+  unwrapExpression,
+} from "../lib/ast.js";
 import {
   cliImportTracker,
   configureImportTracker,
   isBindingReference,
+  variableInitializer,
 } from "../lib/sdk-bindings.js";
 
 function isTailorConfigImport(source) {
@@ -15,23 +21,18 @@ function propertyName(property) {
   return null;
 }
 
-function isStartWorkflowAuthInvoker(call, imports) {
-  const property = call.parent;
+function isStartWorkflowAuthInvoker(call, optionObjects) {
+  let value = call;
+  while (isExpressionWrapper(value.parent)) value = value.parent;
+  const property = value.parent;
   if (
     property?.type !== "Property" ||
-    property.value !== call ||
+    property.value !== value ||
     propertyName(property) !== "authInvoker"
   ) {
     return false;
   }
-  const options = property.parent;
-  const startCall = options?.parent;
-  return (
-    options?.type === "ObjectExpression" &&
-    startCall?.type === "CallExpression" &&
-    startCall.arguments.includes(options) &&
-    imports.callName(startCall) === "startWorkflow"
-  );
+  return optionObjects.has(property.parent);
 }
 
 export default {
@@ -74,6 +75,8 @@ export default {
       },
       CallExpression: (node) => calls.push(node),
       "Program:exit"() {
+        const startWorkflowOptions = new Set();
+
         for (const call of calls) {
           const sdkCall = imports.callName(call);
           if (sdkCall === "defineGenerators") {
@@ -83,6 +86,14 @@ export default {
           if (sdkCall === "defineAuth") {
             const binding = bindingIdentifierForCall(call);
             if (binding) authBindings.push(binding);
+          }
+
+          if (cliImports.callName(call) === "startWorkflow") {
+            let options = unwrapExpression(call.arguments[0]);
+            if (options?.type === "Identifier") {
+              options = unwrapExpression(variableInitializer(context, options));
+            }
+            if (options?.type === "ObjectExpression") startWorkflowOptions.add(options);
           }
         }
 
@@ -99,7 +110,7 @@ export default {
             config?.type === "Identifier" &&
             configBindings.some((binding) => isBindingReference(context, config, binding));
           if (!isAuth && !isConfigAuth) continue;
-          if (isStartWorkflowAuthInvoker(call, cliImports)) continue;
+          if (isStartWorkflowAuthInvoker(call, startWorkflowOptions)) continue;
           context.report({ node: callee, messageId: "invoker" });
         }
       },

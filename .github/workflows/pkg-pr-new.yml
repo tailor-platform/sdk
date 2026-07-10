@@ -200,6 +200,10 @@ jobs:
           test -d /tmp/test-init-app/node_modules/@tailor-platform/eslint-plugin-sdk
           echo "SDK dependency successfully installed with $PM"
 
+      - name: Verify generated project lint
+        working-directory: /tmp/test-init-app
+        run: ./node_modules/.bin/oxlint --type-aware .
+
       - name: Verify SDK import (Node)
         if: matrix.runtime == 'node'
         working-directory: /tmp/test-init-app

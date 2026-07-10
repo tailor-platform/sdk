@@ -2,7 +2,10 @@ import { directStatementList, memberName, nodeStart, unwrapExpression } from "..
 import { workflowRuntimeImportTracker } from "../lib/sdk-bindings.js";
 
 function expressionKey(sourceCode, expression) {
-  return sourceCode.getText(unwrapExpression(expression));
+  return sourceCode
+    .getTokens(unwrapExpression(expression))
+    .map((token) => `${token.type}:${token.value.length}:${token.value}`)
+    .join("|");
 }
 
 function memberObjectIdentifier(callee) {
@@ -15,12 +18,19 @@ function memberObjectIdentifier(callee) {
 
 function isCallback(node) {
   const callback = unwrapExpression(node);
-  return callback?.type === "ArrowFunctionExpression" || callback?.type === "FunctionExpression";
+  return (
+    callback?.type === "ArrowFunctionExpression" ||
+    callback?.type === "FunctionExpression" ||
+    callback?.type === "Identifier" ||
+    callback?.type === "MemberExpression" ||
+    callback?.type === "OptionalMemberExpression"
+  );
 }
 
-function isNestedWorkflowResume(callee, imports) {
-  if (memberName(callee) !== "resumeWorkflow") return false;
+function isWorkflowFacadeCall(callee, imports, name) {
+  if (memberName(callee) !== name) return false;
   const workflow = unwrapExpression(callee.object);
+  if (workflow?.type === "Identifier" && imports.importedAs(workflow, "workflow")) return true;
   if (memberName(workflow) !== "workflow") return false;
   return imports.isNamespace(unwrapExpression(workflow.object));
 }
@@ -51,7 +61,9 @@ export default {
           const callee = unwrapExpression(call.callee);
           const directName = imports.callName(call);
           const isRuntimeResolve =
-            directName === "resolve" && call.arguments.length >= 3 && isCallback(call.arguments[2]);
+            (directName === "resolve" || isWorkflowFacadeCall(callee, imports, "resolve")) &&
+            call.arguments.length >= 3 &&
+            isCallback(call.arguments[2]);
           const isWaitPointResolve =
             directName === null &&
             memberName(callee) === "resolve" &&
@@ -74,7 +86,9 @@ export default {
             object !== null &&
             (imports.isNamespace(object) || imports.importedAs(object, "workflow"));
           if (
-            (!directResume && !memberResume && !isNestedWorkflowResume(callee, imports)) ||
+            (!directResume &&
+              !memberResume &&
+              !isWorkflowFacadeCall(callee, imports, "resumeWorkflow")) ||
             call.arguments.length === 0
           ) {
             continue;

@@ -163,6 +163,14 @@ describe("require-service-default-export", () => {
       "The resolver created by createResolver() must be the default export.",
     );
   });
+
+  test("does not treat a reassigned mutable alias as a service export", () => {
+    expectViolation(
+      'import { createResolver } from "@tailor-platform/sdk";\nconst resolver = createResolver({});\nlet entry = resolver;\nentry = {};\nexport default entry;',
+      "require-service-default-export",
+      "The resolver created by createResolver() must be the default export.",
+    );
+  });
 });
 
 describe("require-named-workflow-job-export", () => {
@@ -289,6 +297,10 @@ describe("no-deprecated-api", () => {
       'import { startWorkflow } from "@tailor-platform/sdk/cli";\nimport config from "../tailor.config";\nstartWorkflow({ workflow, authInvoker: config.auth.invoker("automation"), arg: {} });',
       "no-deprecated-api",
     );
+    expectClean(
+      'import { startWorkflow } from "@tailor-platform/sdk/cli";\nimport config from "../tailor.config";\nconst options = { workflow, authInvoker: config.auth.invoker("automation"), arg: {} };\nstartWorkflow(options);',
+      "no-deprecated-api",
+    );
   });
 });
 
@@ -354,6 +366,22 @@ describe("no-resume-after-resolve", () => {
   test("supports the workflow namespace from the runtime root", () => {
     expectViolation(
       'import * as runtime from "@tailor-platform/sdk/runtime";\nasync function decide(input) {\n  await approval.resolve(input.executionId, () => true);\n  await runtime.workflow.resumeWorkflow(input.executionId);\n}',
+      "no-resume-after-resolve",
+      "resolve() already resumes the waiting workflow; do not call resumeWorkflow() for the same execution.",
+    );
+  });
+
+  test("supports the named workflow facade from the runtime root", () => {
+    expectViolation(
+      'import { workflow } from "@tailor-platform/sdk/runtime";\nasync function decide(input) {\n  await workflow.resolve(input.executionId, "approval", () => true);\n  await workflow.resumeWorkflow(input.executionId);\n}',
+      "no-resume-after-resolve",
+      "resolve() already resumes the waiting workflow; do not call resumeWorkflow() for the same execution.",
+    );
+  });
+
+  test("supports callback identifiers and ignores expression whitespace", () => {
+    expectViolation(
+      'import { resumeWorkflow } from "@tailor-platform/sdk/runtime/workflow";\nconst decide = () => true;\nasync function complete(input) {\n  await approval.resolve(input.ids[input.index + 1], decide);\n  await resumeWorkflow(input.ids[input.index+1]);\n}',
       "no-resume-after-resolve",
       "resolve() already resumes the waiting workflow; do not call resumeWorkflow() for the same execution.",
     );

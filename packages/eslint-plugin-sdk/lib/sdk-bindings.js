@@ -24,6 +24,15 @@ export function isBindingReference(context, node, binding) {
   );
 }
 
+export function variableInitializer(context, node) {
+  if (node?.type !== "Identifier") return null;
+  const variable = findVariable(context.sourceCode, node);
+  const definition = variable?.defs.find(
+    (entry) => entry.type === "Variable" && entry.node?.type === "VariableDeclarator",
+  );
+  return definition?.node.init ?? null;
+}
+
 export function createImportTracker(context, modules) {
   const named = new Map();
   const namespaces = new Map();

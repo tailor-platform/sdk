@@ -46,7 +46,7 @@ export function collectExports(program) {
         }
       }
     }
-    if (declaration?.type === "VariableDeclaration") {
+    if (declaration?.type === "VariableDeclaration" && declaration.kind === "const") {
       for (const entry of declaration.declarations) {
         const value = unwrapExpression(entry.init);
         if (entry.id.type === "Identifier" && value?.type === "Identifier") {
@@ -57,7 +57,7 @@ export function collectExports(program) {
   }
 
   for (const exported of [named, defaults]) {
-    for (const name of exported) {
+    for (const name of Array.from(exported)) {
       const seen = new Set([name]);
       let current = name;
       while (aliases.has(current)) {
