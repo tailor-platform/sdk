@@ -451,9 +451,6 @@ importers:
       find-up-simple:
         specifier: 1.0.1
         version: 1.0.1
-      get-tsconfig:
-        specifier: 4.14.0
-        version: 4.14.0
       globals:
         specifier: 17.7.0
         version: 17.7.0

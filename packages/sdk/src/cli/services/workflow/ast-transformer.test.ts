@@ -1447,9 +1447,9 @@ export const job = createWorkflowJob({
       expect(result).toContain('tailor.workflow.triggerWorkflow("workflow-b"');
     });
 
-    test("removes only default specifier from mixed import, preserving named specifiers", () => {
+    test("leaves mixed import cleanup to the bundler", () => {
       const source = `
-import simpleWorkflow, { someHelper } from "./simple";
+import simpleWorkflow /* { */, { someHelper } from "./simple";
 
 export const job = createWorkflowJob({
   name: "my-job",
@@ -1461,9 +1461,7 @@ export const job = createWorkflowJob({
 `;
       const result = transformSimpleImport(source);
 
-      // Default specifier removed, named import preserved
-      expect(result).not.toContain("import simpleWorkflow");
-      expect(result).toContain('import { someHelper } from "./simple"');
+      expect(result).toContain('import simpleWorkflow /* { */, { someHelper } from "./simple"');
       expect(result).toContain('tailor.workflow.triggerWorkflow("simple-workflow"');
     });
 

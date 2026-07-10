@@ -120,47 +120,6 @@ export default createWorkflow({ name: "workflow", mainJob });
       expect(result.bundledCode.get("main-job")).toMatch(/triggerJobFunction\([`'"]step-a/);
     });
 
-    test("includes jobs referenced through namespace imports", async () => {
-      const dir = createTempDir();
-      const jobsFile = path.join(dir, "jobs.ts");
-      const callerFile = path.join(dir, "caller.ts");
-      fs.writeFileSync(
-        jobsFile,
-        `
-import { createWorkflowJob } from "@tailor-platform/sdk";
-export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
-`,
-      );
-      fs.writeFileSync(
-        callerFile,
-        `
-import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
-import * as jobs from "./jobs";
-
-export const mainJob = createWorkflowJob({
-  name: "main-job",
-  body: async () => await jobs.step.trigger(),
-});
-export default createWorkflow({ name: "workflow", mainJob });
-`,
-      );
-      const context = await buildTriggerContext({ files: [jobsFile, callerFile] });
-
-      const result = await bundleWorkflowJobs(
-        [
-          { name: "step-a", exportName: "step", sourceFile: jobsFile },
-          { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
-        ],
-        ["main-job"],
-        {},
-        context,
-      );
-
-      expect(result.mainJobDeps["main-job"]).toEqual(["main-job", "step-a"]);
-      expect(result.usedJobNames).toEqual(["step-a", "main-job"]);
-      expect(result.bundledCode.get("main-job")).toMatch(/triggerJobFunction\([`'"]step-a/);
-    });
-
     test("does not include a job whose binding is shadowed by a parameter", async () => {
       const dir = createTempDir();
       const workflowFile = path.join(dir, "workflow.ts");

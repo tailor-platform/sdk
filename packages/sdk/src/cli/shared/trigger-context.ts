@@ -1,35 +1,34 @@
 import * as fs from "node:fs";
-import { getTsconfig } from "get-tsconfig";
 import { parseSync } from "oxc-parser";
+import * as path from "pathe";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
 import { getModuleExportName, type ASTNode } from "#/cli/services/workflow/ast-utils";
 import { findAllJobs } from "#/cli/services/workflow/job-detector";
-import { transformFunctionTriggers } from "#/cli/services/workflow/trigger-transformer";
 import { findAllWorkflows } from "#/cli/services/workflow/workflow-detector";
 import { logger } from "#/cli/shared/logger";
-import {
-  type TriggerContext,
-  type TriggerModuleBindings,
-  type TriggerModuleResolution,
-  type TriggerTarget,
-} from "./trigger-context.types";
-import { normalizeTriggerModulePath } from "./trigger-path";
-import type { Plugin } from "rolldown";
 
-export type {
-  TriggerContext,
-  TriggerModuleBindings,
-  TriggerModuleResolution,
-  TriggerTarget,
-} from "./trigger-context.types";
+export interface TriggerTarget {
+  kind: "job" | "workflow";
+  name: string;
+}
+
+export interface TriggerModuleBindings {
+  localBindings: Map<string, TriggerTarget>;
+  exports: Map<string, TriggerTarget>;
+}
+
+export interface TriggerContext {
+  modules: Map<string, TriggerModuleBindings>;
+  authNamespace?: string;
+}
 
 /**
- * Normalize a file path by removing extension and resolving to absolute path
- * @param filePath - File path to normalize
- * @returns Normalized absolute path without extension
+ * Normalize a source module path for trigger binding lookup.
+ * @param filePath - Source file path or extensionless relative import path
+ * @returns Absolute path without a JavaScript or TypeScript extension
  */
 export function normalizeFilePath(filePath: string): string {
-  return normalizeTriggerModulePath(filePath);
+  return path.resolve(filePath.replace(/[?#].*$/, "")).replace(/\.(ts|mts|cts|js|mjs|cjs)$/, "");
 }
 
 function createModuleBindings(program: ReturnType<typeof parseSync>["program"], source: string) {
@@ -59,7 +58,6 @@ function createModuleBindings(program: ReturnType<typeof parseSync>["program"], 
     }
 
     if (statement.type !== "ExportNamedDeclaration") continue;
-
     const declaration = statement.declaration as ASTNode | undefined;
     if (declaration?.type === "VariableDeclaration") {
       for (const declarator of declaration.declarations as ASTNode[]) {
@@ -72,7 +70,6 @@ function createModuleBindings(program: ReturnType<typeof parseSync>["program"], 
     }
 
     if (statement.source) continue;
-
     for (const specifier of (statement.specifiers as ASTNode[] | undefined) ?? []) {
       const localName = getModuleExportName(specifier.local);
       const exportedName = getModuleExportName(specifier.exported);
@@ -85,61 +82,33 @@ function createModuleBindings(program: ReturnType<typeof parseSync>["program"], 
   return { localBindings, exports } satisfies TriggerModuleBindings;
 }
 
-function loadModuleResolution(searchPath: string): TriggerModuleResolution | undefined {
-  try {
-    const tsconfig = getTsconfig(searchPath);
-    if (!tsconfig) return undefined;
-    const compilerOptions = tsconfig.config.compilerOptions;
-    if (!compilerOptions?.baseUrl && !compilerOptions?.paths) return undefined;
-    return tsconfig;
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.warn(`Failed to load TypeScript module resolution from ${searchPath}: ${errorMessage}`, {
-      mode: "stream",
-    });
-    return undefined;
-  }
-}
-
 /**
- * Build trigger context from workflow configuration
- * Scans workflow files to collect workflow and job mappings
+ * Build trigger context from configured workflow source files.
  * @param workflowConfig - Workflow file loading configuration
- * @param authNamespace - Auth service namespace (optional, used for string-literal authInvoker expansion)
- * @returns Trigger context built from workflow sources
+ * @param authNamespace - Auth service namespace used by workflow trigger options
+ * @returns Module-local workflow and job binding metadata
  */
 export async function buildTriggerContext(
   workflowConfig: FileLoadConfig | undefined,
   authNamespace?: string,
 ): Promise<TriggerContext> {
   const modules = new Map<string, TriggerModuleBindings>();
+  if (!workflowConfig) return { modules, authNamespace };
 
-  if (!workflowConfig) {
-    return { modules, authNamespace };
-  }
-
-  const workflowFiles = loadFilesWithIgnores(workflowConfig);
-
-  for (const file of workflowFiles) {
+  for (const file of loadFilesWithIgnores(workflowConfig)) {
     try {
       const source = await fs.promises.readFile(file, "utf-8");
       const { program } = parseSync("input.ts", source);
-      const modulePath = normalizeFilePath(file);
-      modules.set(modulePath, createModuleBindings(program, source));
+      modules.set(normalizeFilePath(file), createModuleBindings(program, source));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn(`Failed to process workflow file ${file}: ${errorMessage}`, {
         mode: "stream",
       });
-      continue;
     }
   }
 
-  return {
-    modules,
-    moduleResolution: loadModuleResolution(process.cwd()),
-    authNamespace,
-  };
+  return { modules, authNamespace };
 }
 
 function sortedTargets(bindings: Map<string, TriggerTarget>) {
@@ -148,69 +117,19 @@ function sortedTargets(bindings: Map<string, TriggerTarget>) {
     .map(([binding, target]) => [binding, target.kind, target.name]);
 }
 
-function sortedModuleResolution(resolution: TriggerModuleResolution | undefined) {
-  if (!resolution) return null;
-  const compilerOptions = resolution.config.compilerOptions;
-  const symbolMetadata = Object.getOwnPropertySymbols(compilerOptions ?? {})
-    .map((symbol) => [
-      symbol.description ?? symbol.toString(),
-      Reflect.get(compilerOptions ?? {}, symbol),
-    ])
-    .toSorted(([a], [b]) => String(a).localeCompare(String(b)));
-  return [resolution.path, resolution.config, symbolMetadata];
-}
-
 /**
- * Serialize trigger context to a deterministic string for cache hashing.
- * Returns an empty string if no context is provided.
- * @param ctx - Trigger context to serialize
- * @returns Deterministic string representation
+ * Serialize trigger context to a deterministic cache input.
+ * @param context - Trigger context to serialize
+ * @returns Deterministic string, or an empty string when context is absent
  */
-export function serializeTriggerContext(ctx: TriggerContext | undefined): string {
-  if (!ctx) return "";
-  const modules = [...ctx.modules]
+export function serializeTriggerContext(context: TriggerContext | undefined): string {
+  if (!context) return "";
+  const modules = [...context.modules]
     .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([file, bindings]) => [
       file,
       sortedTargets(bindings.localBindings),
       sortedTargets(bindings.exports),
     ]);
-  return (
-    JSON.stringify(modules) +
-    JSON.stringify(sortedModuleResolution(ctx.moduleResolution)) +
-    (ctx.authNamespace ?? "")
-  );
-}
-
-/**
- * Create a rolldown plugin for transforming trigger calls
- * Returns undefined if no trigger context is provided
- * @param triggerContext - Trigger context to use for transformations
- * @returns Rolldown plugin or undefined when no context
- */
-export function createTriggerTransformPlugin(
-  triggerContext: TriggerContext | undefined,
-): Plugin | undefined {
-  if (!triggerContext) {
-    return undefined;
-  }
-
-  return {
-    name: "trigger-transform",
-    transform: {
-      filter: {
-        id: {
-          include: [/\.(ts|mts|cts|js|mjs|cjs)$/],
-        },
-      },
-      handler(code, id) {
-        // Only transform source files that contain trigger calls
-        if (!code.includes(".trigger(")) {
-          return null;
-        }
-        const transformed = transformFunctionTriggers(code, triggerContext, id);
-        return { code: transformed };
-      },
-    },
-  };
+  return JSON.stringify(modules) + (context.authNamespace ?? "");
 }
