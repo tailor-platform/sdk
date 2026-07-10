@@ -1,6 +1,6 @@
 /* oxlint-disable vitest/expect-expect -- Assertions are centralized in shared lint helpers. */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -90,6 +90,25 @@ describe("plugin", () => {
         }),
       ]),
     );
+  });
+
+  test("keeps scaffolded Oxlint rules aligned with the recommended config", () => {
+    const templatesDir = resolve(packageDir, "../create-sdk/templates");
+    const templates = readdirSync(templatesDir, { withFileTypes: true }).filter((entry) =>
+      entry.isDirectory(),
+    );
+
+    for (const template of templates) {
+      const config = JSON.parse(
+        readFileSync(resolve(templatesDir, template.name, ".oxlintrc.json"), "utf8"),
+      );
+      const rules = Object.fromEntries(
+        Object.entries(config.rules).filter(([name]) => name.startsWith("tailor-sdk/")),
+      );
+      expect({ rules, template: template.name }).toMatchObject({
+        rules: plugin.configs.recommended.rules,
+      });
+    }
   });
 });
 

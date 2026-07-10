@@ -1,13 +1,7 @@
 import { isModuleLevelCall } from "../lib/ast.js";
 import { collectExports, exportStatus } from "../lib/exports.js";
 import { configureImportTracker } from "../lib/sdk-bindings.js";
-
-const SERVICES = new Map([
-  ["createResolver", "resolver"],
-  ["createExecutor", "executor"],
-  ["createHttpAdapter", "HTTP adapter"],
-  ["createWorkflow", "workflow"],
-]);
+import { DEPLOYABLE_SERVICES } from "../lib/services.js";
 
 export default {
   meta: {
@@ -32,7 +26,7 @@ export default {
         for (const call of calls) {
           if (!isModuleLevelCall(call)) continue;
           const factory = imports.callName(call);
-          const service = factory === null ? null : SERVICES.get(factory);
+          const service = factory === null ? null : DEPLOYABLE_SERVICES.get(factory);
           if (!service || exportStatus(call, exports, context).isDefault) continue;
           context.report({
             node: call,
