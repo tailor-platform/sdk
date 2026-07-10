@@ -22,7 +22,8 @@
     "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
     "lint": "oxlint --type-aware .",
     "lint:fix": "oxlint --type-aware . --fix",
-    "typecheck": "pnpm generate && tsc --noEmit",
+    "typecheck": "pnpm generate && pnpm run typecheck:generated",
+    "typecheck:generated": "tsc --noEmit",
     "typecheck:go": "tsgo"
   },
   "dependencies": {
