@@ -456,7 +456,7 @@ async function bundleScriptTarget(args: {
   const fnSource = stringifyFunction(fn);
   const argsObject =
     kind === "hooks"
-      ? `{ value: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`
+      ? `{ input: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`
       : kind === "validate"
         ? `{ value: _value }`
         : kind === "typeHook"

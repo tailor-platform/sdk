@@ -201,7 +201,7 @@ const convertToScriptExpr = (
   const argsObject =
     kind === "validate"
       ? `{ value: _value }`
-      : `{ value: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`;
+      : `{ input: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`;
   return assertParsableExpression(
     `(${normalized})(${argsObject})`,
     formatScriptContext(kind, context),

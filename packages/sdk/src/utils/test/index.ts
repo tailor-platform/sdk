@@ -44,8 +44,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           }
         } else if (field.metadata.hooks?.create) {
           hooked[key] = field.metadata.hooks.create({
-            value: obj?.[key],
-            oldValue: null,
+            input: obj?.[key],
             invoker: null,
             now,
           });
@@ -65,7 +64,6 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
       const overrides = (type.metadata.typeHook.create as Function)({
         input: data,
-        oldRecord: null,
         invoker: null,
         now,
       });

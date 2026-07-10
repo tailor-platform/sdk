@@ -97,6 +97,7 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_3 = "2.0.0-next.3";
+const V2_NEXT_4 = "2.0.0-next.4";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -851,7 +852,7 @@ export const allCodemods: CodemodPackage[] = [
       "Field-level `ValidateFn` is simplified from `(args: { value, data, invoker }) => boolean` to `(args: { value }) => string | void` — the function now returns the error message directly instead of a separate `[fn, message]` tuple. The `ValidateConfig` tuple form and `Validators<F>` record syntax on `db.type().validate()` are removed. Type-level validation uses `db.type().validate((args, issues) => void)` with `{ newRecord, oldRecord, invoker }` args and an `issues(field, message)` callback for cross-field rules.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_3,
+    prereleaseUntil: V2_NEXT_4,
     suspiciousPatterns: ["ValidateConfig", "Validators<", "ValidatorsBase"],
     examples: [
       {
@@ -899,19 +900,19 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/tailordb-hook-redesign",
     name: "TailorDB hook redesign: field-level args and type-level hooks",
     description:
-      "Field-level `HookFn` args change from `{ value, data, invoker }` to create `{ value, invoker, now }` / update `{ value, oldValue, invoker, now }` — `data` (the full record) is removed; `oldValue` (previous field value) is added for update hooks only; `now` (operation timestamp) is shared across all hooks. Type-level hooks on `db.type().hooks()` change from per-field mapping `{ fieldName: { create, update } }` (`Hooks<F>`) to a single `{ create, update }` object (`TypeHook<F>`) — create hooks take `{ input, invoker, now }`, update hooks take `{ input, oldRecord, invoker, now }` (oldRecord is always non-null). Both return partial field overrides.",
+      "Field-level `HookFn` args change from `{ value, data, invoker }` to create `{ input, invoker, now }` / update `{ input, oldValue, invoker, now }` — `value` is renamed to `input`, matching the `input` arg on type-level hooks (same pre-hook data, narrowed to one field); `data` (the full record) is removed; `oldValue` (previous field value) is added for update hooks only; `now` (operation timestamp) is shared across all hooks. Type-level hooks on `db.type().hooks()` change from per-field mapping `{ fieldName: { create, update } }` (`Hooks<F>`) to a single `{ create, update }` object (`TypeHook<F>`) — create hooks take `{ input, invoker, now }`, update hooks take `{ input, oldRecord, invoker, now }` (oldRecord is always non-null). Both return partial field overrides.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_3,
+    prereleaseUntil: V2_NEXT_4,
     suspiciousPatterns: ["Hooks<", "HookFn<", "Hook<"],
     examples: [
       {
         caption:
-          "Field-level hooks: `data` replaced by `oldValue` and `now`; use `now` instead of `new Date()`:",
+          "Field-level hooks: `value` renamed to `input`, `data` replaced by `oldValue` and `now`; use `now` instead of `new Date()`:",
         before:
           "db.datetime().hooks({\n  create: ({ value }) => value ?? new Date(),\n  update: () => new Date(),\n})",
         after:
-          "db.datetime().hooks({\n  create: ({ value, now }) => value ?? now,\n  update: ({ now }) => now,\n})",
+          "db.datetime().hooks({\n  create: ({ input, now }) => input ?? now,\n  update: ({ now }) => now,\n})",
       },
       {
         caption: "Type-level hooks: per-field mapping replaced by single create/update functions:",
@@ -925,8 +926,10 @@ export const allCodemods: CodemodPackage[] = [
       "The v2 SDK redesigns TailorDB hooks at both field and type levels.",
       "",
       "Field-level `.hooks()` on individual fields:",
-      "- Create args: `{ value, data, invoker }` → `{ value, invoker, now }` (no `oldValue`)",
-      "- Update args: `{ value, data, invoker }` → `{ value, oldValue, invoker, now }`",
+      "- Create args: `{ value, data, invoker }` → `{ input, invoker, now }` (no `oldValue`)",
+      "- Update args: `{ value, data, invoker }` → `{ input, oldValue, invoker, now }`",
+      "- `value` is renamed to `input`, matching the type-level hook's `input` arg — both are",
+      "  the same pre-hook data, at different granularity",
       "- `data` (full record) is removed; update hooks get `oldValue` (previous field value) instead",
       "- `now` provides the operation timestamp — use `now` instead of `new Date()`",
       "- If a field-level hook needs the full record (other fields), move it to a type-level hook",
@@ -941,7 +944,7 @@ export const allCodemods: CodemodPackage[] = [
       "",
       "Migration steps for each `.hooks()` call on a `db.type()`:",
       "1. If the old per-field hooks only use `value`/`invoker` and don't reference `data`,",
-      "   convert them to field-level hooks with the new args (`oldValue`, `now`)",
+      "   convert them to field-level hooks with the new args (`value` → `input`, plus `oldValue`, `now`)",
       "2. If the old hooks reference `data` (cross-field access), convert to a type-level hook",
       "   using `input`/`oldRecord`",
       "3. Remove unused `Hooks<F>` / `HookFn<>` type imports",

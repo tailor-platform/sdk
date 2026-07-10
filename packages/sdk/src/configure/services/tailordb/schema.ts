@@ -1068,11 +1068,11 @@ export const db = {
      */
     timestamps: () => ({
       createdAt: datetime()
-        .hooks({ create: ({ value, now }) => value ?? now })
+        .hooks({ create: ({ input, now }) => input ?? now })
         .description("Record creation timestamp"),
       updatedAt: datetime()
         .hooks({
-          create: ({ value, now }) => value ?? now,
+          create: ({ input, now }) => input ?? now,
           update: ({ now }) => now,
         })
         .description("Record update timestamp"),

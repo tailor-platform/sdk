@@ -948,6 +948,11 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
 
   if (oldField.scale !== newField.scale) return true;
 
+  if (oldField.default !== newField.default) {
+    if (typeof oldField.default !== typeof newField.default) return true;
+    if (JSON.stringify(oldField.default) !== JSON.stringify(newField.default)) return true;
+  }
+
   const oldFields = oldField.fields ?? {};
   const newFields = newField.fields ?? {};
   const oldFieldNames = Object.keys(oldFields);
@@ -2680,7 +2685,8 @@ function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSch
       if (SYSTEM_FIELDS.has(fieldName)) continue;
       fields[fieldName] = stripFieldScriptProps(field);
     }
-    types[typeName] = { ...type, fields };
+    const { typeHookExpr: _, typeValidateExpr: __, ...typeRest } = type;
+    types[typeName] = { ...typeRest, fields };
   }
 
   return normalizeSchemaSnapshot({

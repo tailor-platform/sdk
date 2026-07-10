@@ -146,8 +146,8 @@ describe("parseFieldConfig script expression validation", () => {
   test("throws a clear error when a hook cannot be converted to valid JavaScript", () => {
     const key = "create";
     const hooks = {
-      [key]({ value }: { value: string | null }) {
-        return value ?? "generated";
+      [key]({ input }: { input: string | null }) {
+        return input ?? "generated";
       },
     };
     const type = db.table("User", {

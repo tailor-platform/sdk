@@ -502,7 +502,6 @@ describe("TailorDBField type error message tests", () => {
     const concrete = withCustomFields({ name: db.string() });
 
     const accepts: (value: GenericDefaultShape) => void = () => {};
-    // @ts-expect-error TS2589: TypeHook/TypeValidateFn's DottedPaths recursion exceeds depth limit during generic erasure
     accepts(concrete);
   });
 });
@@ -581,20 +580,20 @@ describe("TailorDBField hooks modifier tests", () => {
     db.string().hooks({
       create: (args) => {
         expectTypeOf(args).toEqualTypeOf<{
-          value: string | null;
+          input: string | null;
           invoker: TailorPrincipal | null;
           now: Date;
         }>();
-        return args.value ?? "default";
+        return args.input ?? "default";
       },
       update: (args) => {
         expectTypeOf(args).toEqualTypeOf<{
-          value: string | null;
+          input: string | null;
           oldValue: string | null;
           invoker: TailorPrincipal | null;
           now: Date;
         }>();
-        return args.oldValue ?? args.value ?? "default";
+        return args.oldValue ?? args.input ?? "default";
       },
     });
   });
@@ -762,7 +761,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     const specified = new Date("2025-02-10T09:00:00Z");
     const now = new Date("2025-06-01T00:00:00Z");
     const result = createHook!({
-      value: specified,
+      input: specified,
       oldValue: null,
       invoker: timestampHookInvoker,
       now,
@@ -777,7 +776,7 @@ describe("TailorDBType withTimestamps option tests", () => {
 
     const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
-      value: null,
+      input: null,
       oldValue: null,
       invoker: timestampHookInvoker,
       now,
@@ -793,7 +792,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     const specified = new Date("2025-02-10T09:00:00Z");
     const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
-      value: specified,
+      input: specified,
       oldValue: null,
       invoker: timestampHookInvoker,
       now,
@@ -808,7 +807,7 @@ describe("TailorDBType withTimestamps option tests", () => {
 
     const now = new Date("2025-06-01T12:00:00Z");
     const result = createHook!({
-      value: null,
+      input: null,
       oldValue: null,
       invoker: timestampHookInvoker,
       now,
@@ -823,7 +822,7 @@ describe("TailorDBType withTimestamps option tests", () => {
 
     const now = new Date("2025-06-01T12:00:00Z");
     const result = updateHook!({
-      value: null,
+      input: null,
       oldValue: null,
       invoker: timestampHookInvoker,
       now,
@@ -1164,7 +1163,6 @@ describe("TailorDBType type-level validate (function form) tests", () => {
     }).validate(({ newRecord: _newRecord }, issues) => {
       issues("name", "ok");
       issues("email", "ok");
-      // @ts-expect-error "nonexistent" is not a valid field path
       issues("nonexistent", "bad");
     });
   });
@@ -1179,7 +1177,6 @@ describe("TailorDBType type-level validate (function form) tests", () => {
       issues("profile", "ok");
       issues("profile.displayName", "ok");
       issues("profile.email", "ok");
-      // @ts-expect-error "profile.nonexistent" is not a valid field path
       issues("profile.nonexistent", "bad");
     });
   });
@@ -1376,6 +1373,29 @@ describe("TailorField/TailorType compatibility tests", () => {
     });
     expectTypeOf<output<typeof _stringType>>().toEqualTypeOf<{
       name: string;
+    }>();
+  });
+
+  test("t.object treats .default() fields as optional", () => {
+    const obj = t.object({
+      name: db.string(),
+      score: db.int().default(0),
+    });
+    expectTypeOf<output<typeof obj>>().toEqualTypeOf<{
+      name: string;
+      score?: number;
+    }>();
+  });
+
+  test("t.object with omitFields respects .default()", () => {
+    const Order = db.table("Order", {
+      totalPrice: db.int().default(0),
+      quantity: db.int(),
+    });
+    const input = t.object(Order.omitFields(["id"]));
+    expectTypeOf<output<typeof input>>().toEqualTypeOf<{
+      quantity: number;
+      totalPrice?: number;
     }>();
   });
 });
