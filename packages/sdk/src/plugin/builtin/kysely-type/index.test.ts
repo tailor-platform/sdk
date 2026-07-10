@@ -84,7 +84,7 @@ describe("KyselyTypePlugin integration tests", () => {
       expect(result.typeDef).toContain("age: number | null;");
       expect(result.typeDef).toContain("isActive: boolean;");
       expect(result.typeDef).toContain("score: number | null;");
-      expect(result.typeDef).toContain("birthDate: string | null;");
+      expect(result.typeDef).toContain("birthDate: Timestamp | null;");
       expect(result.typeDef).toContain("lastLogin: Timestamp | null;");
       expect(result.typeDef).toContain("tags: string[];");
       expect(result.typeDef).toContain("createdAt: Generated<Timestamp>;");
