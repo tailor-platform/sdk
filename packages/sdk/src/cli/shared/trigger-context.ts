@@ -1,29 +1,28 @@
 import * as fs from "node:fs";
+import { getTsconfig } from "get-tsconfig";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
-import { findAllJobs, buildJobNameMap } from "#/cli/services/workflow/job-detector";
+import { findAllJobs } from "#/cli/services/workflow/job-detector";
 import { transformFunctionTriggers } from "#/cli/services/workflow/trigger-transformer";
-import { findAllWorkflows, buildWorkflowNameMap } from "#/cli/services/workflow/workflow-detector";
+import { findAllWorkflows } from "#/cli/services/workflow/workflow-detector";
 import { logger } from "#/cli/shared/logger";
+import {
+  type TriggerContext,
+  type TriggerModuleBindings,
+  type TriggerModuleResolution,
+  type TriggerTarget,
+} from "./trigger-context.types";
+import { normalizeTriggerModulePath } from "./trigger-path";
+import type { ASTNode } from "#/cli/services/workflow/ast-utils";
 import type { Plugin } from "rolldown";
 
-/**
- * Context for trigger transformation
- * Maps variable names to workflow/job names
- */
-export interface TriggerContext {
-  workflowNameMap: Map<string, string>;
-  jobNameMap: Map<string, string>;
-  /** Maps file path (without extension) to workflow name for default exports */
-  workflowFileMap: Map<string, string>;
-  /**
-   * Auth service namespace used to expand a string-literal `authInvoker`
-   * (e.g. `"kiosk"`) to the `{ namespace, machineUserName }` form expected by
-   * the runtime. Undefined when no Auth service is configured.
-   */
-  authNamespace?: string;
-}
+export type {
+  TriggerContext,
+  TriggerModuleBindings,
+  TriggerModuleResolution,
+  TriggerTarget,
+} from "./trigger-context.types";
 
 /**
  * Normalize a file path by removing extension and resolving to absolute path
@@ -31,9 +30,84 @@ export interface TriggerContext {
  * @returns Normalized absolute path without extension
  */
 export function normalizeFilePath(filePath: string): string {
-  const absolutePath = path.resolve(filePath);
-  const ext = path.extname(absolutePath);
-  return absolutePath.slice(0, -ext.length);
+  return normalizeTriggerModulePath(filePath);
+}
+
+function moduleExportName(node: unknown): string | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  const exportName = node as { name?: string; value?: unknown };
+  if (exportName.name) return exportName.name;
+  return typeof exportName.value === "string" ? exportName.value : undefined;
+}
+
+function createModuleBindings(program: ReturnType<typeof parseSync>["program"], source: string) {
+  const localBindings = new Map<string, TriggerTarget>();
+  const exports = new Map<string, TriggerTarget>();
+
+  for (const workflow of findAllWorkflows(program, source)) {
+    const target = { kind: "workflow", name: workflow.name } as const;
+    if (workflow.exportName) localBindings.set(workflow.exportName, target);
+    if (workflow.isDefaultExport) exports.set("default", target);
+  }
+
+  for (const job of findAllJobs(program, source)) {
+    if (job.exportName) {
+      localBindings.set(job.exportName, { kind: "job", name: job.name });
+    }
+  }
+
+  for (const statement of program.body as unknown as ASTNode[]) {
+    if (statement.type === "ExportDefaultDeclaration") {
+      const declaration = statement.declaration as ASTNode | undefined;
+      if (declaration?.type === "Identifier") {
+        const target = localBindings.get(declaration.name as string);
+        if (target) exports.set("default", target);
+      }
+      continue;
+    }
+
+    if (statement.type !== "ExportNamedDeclaration") continue;
+
+    const declaration = statement.declaration as ASTNode | undefined;
+    if (declaration?.type === "VariableDeclaration") {
+      for (const declarator of declaration.declarations as ASTNode[]) {
+        const id = declarator.id as ASTNode | undefined;
+        if (id?.type !== "Identifier") continue;
+        const localName = id.name as string;
+        const target = localBindings.get(localName);
+        if (target) exports.set(localName, target);
+      }
+    }
+
+    if (statement.source) continue;
+
+    for (const specifier of (statement.specifiers as ASTNode[] | undefined) ?? []) {
+      const localName = moduleExportName(specifier.local);
+      const exportedName = moduleExportName(specifier.exported);
+      if (!localName || !exportedName) continue;
+      const target = localBindings.get(localName);
+      if (target) exports.set(exportedName, target);
+    }
+  }
+
+  return { localBindings, exports } satisfies TriggerModuleBindings;
+}
+
+function loadModuleResolution(searchPath: string): TriggerModuleResolution | undefined {
+  try {
+    const tsconfig = getTsconfig(searchPath);
+    if (!tsconfig) return undefined;
+    const compilerOptions = tsconfig.config.compilerOptions;
+    const configuredPaths = compilerOptions?.paths;
+    if (!compilerOptions?.baseUrl && !configuredPaths) return undefined;
+
+    return {
+      baseUrl: path.resolve(path.dirname(tsconfig.path), compilerOptions.baseUrl ?? "."),
+      paths: configuredPaths ?? {},
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -47,17 +121,10 @@ export async function buildTriggerContext(
   workflowConfig: FileLoadConfig | undefined,
   authNamespace?: string,
 ): Promise<TriggerContext> {
-  const workflowNameMap = new Map<string, string>();
-  const jobNameMap = new Map<string, string>();
-  const workflowFileMap = new Map<string, string>();
+  const modules = new Map<string, TriggerModuleBindings>();
 
   if (!workflowConfig) {
-    return {
-      workflowNameMap,
-      jobNameMap,
-      workflowFileMap,
-      authNamespace,
-    };
+    return { modules, authNamespace };
   }
 
   const workflowFiles = loadFilesWithIgnores(workflowConfig);
@@ -66,28 +133,8 @@ export async function buildTriggerContext(
     try {
       const source = await fs.promises.readFile(file, "utf-8");
       const { program } = parseSync("input.ts", source);
-
-      // Detect workflows
-      const workflows = findAllWorkflows(program, source);
-      const workflowMap = buildWorkflowNameMap(workflows);
-      for (const [exportName, workflowName] of workflowMap) {
-        workflowNameMap.set(exportName, workflowName);
-      }
-
-      // Also track default exported workflows by file path
-      for (const workflow of workflows) {
-        if (workflow.isDefaultExport) {
-          const normalizedPath = normalizeFilePath(file);
-          workflowFileMap.set(normalizedPath, workflow.name);
-        }
-      }
-
-      // Detect jobs
-      const jobs = findAllJobs(program, source);
-      const jobMap = buildJobNameMap(jobs);
-      for (const [exportName, jobName] of jobMap) {
-        jobNameMap.set(exportName, jobName);
-      }
+      const modulePath = normalizeFilePath(file);
+      modules.set(modulePath, createModuleBindings(program, source));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn(`Failed to process workflow file ${file}: ${errorMessage}`, {
@@ -98,15 +145,24 @@ export async function buildTriggerContext(
   }
 
   return {
-    workflowNameMap,
-    jobNameMap,
-    workflowFileMap,
+    modules,
+    moduleResolution: loadModuleResolution(workflowFiles[0] ?? process.cwd()),
     authNamespace,
   };
 }
 
-function sortedMapToJson(m: Map<string, string>): string {
-  return JSON.stringify([...m.entries()].toSorted(([a], [b]) => a.localeCompare(b)));
+function sortedTargets(bindings: Map<string, TriggerTarget>) {
+  return [...bindings]
+    .toSorted(([a], [b]) => a.localeCompare(b))
+    .map(([binding, target]) => [binding, target.kind, target.name]);
+}
+
+function sortedModuleResolution(resolution: TriggerModuleResolution | undefined) {
+  if (!resolution) return null;
+  return [
+    resolution.baseUrl,
+    Object.entries(resolution.paths).toSorted(([a], [b]) => a.localeCompare(b)),
+  ];
 }
 
 /**
@@ -117,10 +173,16 @@ function sortedMapToJson(m: Map<string, string>): string {
  */
 export function serializeTriggerContext(ctx: TriggerContext | undefined): string {
   if (!ctx) return "";
+  const modules = [...ctx.modules]
+    .toSorted(([a], [b]) => a.localeCompare(b))
+    .map(([file, bindings]) => [
+      file,
+      sortedTargets(bindings.localBindings),
+      sortedTargets(bindings.exports),
+    ]);
   return (
-    sortedMapToJson(ctx.workflowNameMap) +
-    sortedMapToJson(ctx.jobNameMap) +
-    sortedMapToJson(ctx.workflowFileMap) +
+    JSON.stringify(modules) +
+    JSON.stringify(sortedModuleResolution(ctx.moduleResolution)) +
     (ctx.authNamespace ?? "")
   );
 }
@@ -151,14 +213,7 @@ export function createTriggerTransformPlugin(
         if (!code.includes(".trigger(")) {
           return null;
         }
-        const transformed = transformFunctionTriggers(
-          code,
-          triggerContext.workflowNameMap,
-          triggerContext.jobNameMap,
-          triggerContext.workflowFileMap,
-          id,
-          triggerContext.authNamespace,
-        );
+        const transformed = transformFunctionTriggers(code, triggerContext, id);
         return { code: transformed };
       },
     },

@@ -13,9 +13,9 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
 import ml from "#/utils/multiline";
-import { detectTriggerCalls, findAllJobs } from "./job-detector";
+import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
-import { transformFunctionTriggers } from "./trigger-transformer";
+import { detectResolvedTriggerCalls, transformFunctionTriggers } from "./trigger-transformer";
 import type { LogLevel } from "#/configure/config/types";
 
 function safeRealpath(p: string): string {
@@ -76,7 +76,7 @@ export async function bundleWorkflowJobs(
   }
 
   // Filter to only used jobs and get per-mainJob dependencies
-  const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames);
+  const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames, triggerContext);
 
   logger.newline();
   logger.log(
@@ -149,11 +149,13 @@ interface FilterUsedJobsResult {
  * Also returns a map of mainJob -> all jobs it depends on (for metadata).
  * @param allJobs - All available job infos
  * @param mainJobNames - Names of main jobs
+ * @param triggerContext - Module binding metadata for resolving trigger targets
  * @returns Used jobs and main job dependency map
  */
 async function filterUsedJobs(
   allJobs: JobInfo[],
   mainJobNames: string[],
+  triggerContext?: TriggerContext,
 ): Promise<FilterUsedJobsResult> {
   if (allJobs.length === 0 || mainJobNames.length === 0) {
     return { usedJobs: [], mainJobDeps: {} };
@@ -165,12 +167,6 @@ async function filterUsedJobs(
     const existing = jobsBySourceFile.get(job.sourceFile) || [];
     existing.push(job);
     jobsBySourceFile.set(job.sourceFile, existing);
-  }
-
-  // Build export name -> job name map for all jobs
-  const exportNameToJobName = new Map<string, string>();
-  for (const job of allJobs) {
-    exportNameToJobName.set(job.exportName, job.name);
   }
 
   // Detect trigger calls and build dependency graph
@@ -186,15 +182,9 @@ async function filterUsedJobs(
 
         // Find all jobs in this file to get body ranges
         const detectedJobs = findAllJobs(program, source);
-        const localExportNameToJobName = new Map<string, string>();
-        for (const detected of detectedJobs) {
-          if (detected.exportName) {
-            localExportNameToJobName.set(detected.exportName, detected.name);
-          }
-        }
-
-        // Detect trigger calls
-        const triggerCalls = detectTriggerCalls(program, source);
+        const triggerCalls = triggerContext
+          ? detectResolvedTriggerCalls(program, source, triggerContext, sourceFile)
+          : [];
 
         // For each job in this file, find which triggers are inside its body
         const jobDependencies: Array<{ jobName: string; deps: Set<string> }> = [];
@@ -208,16 +198,11 @@ async function filterUsedJobs(
           for (const call of triggerCalls) {
             // Check if this trigger call is inside the job's body
             if (
+              call.kind === "job" &&
               call.callRange.start >= detectedJob.bodyValueRange.start &&
               call.callRange.end <= detectedJob.bodyValueRange.end
             ) {
-              // Look up the job name from the identifier
-              const triggeredJobName =
-                localExportNameToJobName.get(call.identifierName) ||
-                exportNameToJobName.get(call.identifierName);
-              if (triggeredJobName) {
-                jobDeps.add(triggeredJobName);
-              }
+              jobDeps.add(call.targetName);
             }
           }
 
@@ -323,20 +308,18 @@ async function bundleSingleJob(
       `;
       fs.writeFileSync(entryPath, entryContent);
 
+      // Pre-compute once to avoid redundant realpathSync calls per module
+      const resolvedSourceFile = safeRealpath(job.sourceFile);
+
       // Step 2: Bundle with a transform plugin that transforms trigger calls
       // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
       const otherJobExportNames = allJobs
-        .filter((j) => j.name !== job.name)
+        .filter(
+          (candidate) =>
+            candidate.name !== job.name &&
+            safeRealpath(candidate.sourceFile) === resolvedSourceFile,
+        )
         .map((j) => j.exportName);
-
-      // Build a map from export name to job name for trigger transformation
-      const allJobsMap = new Map<string, string>();
-      for (const j of allJobs) {
-        allJobsMap.set(j.exportName, j.name);
-      }
-
-      // Pre-compute once to avoid redundant realpathSync calls per module
-      const resolvedSourceFile = safeRealpath(job.sourceFile);
 
       // Create transform plugin to transform trigger calls and remove other job declarations
       const transformPlugin: rolldown.Plugin = {
@@ -370,20 +353,12 @@ async function bundleSingleJob(
                 job.name,
                 job.exportName,
                 otherJobExportNames,
-                allJobsMap,
               );
             }
 
             // Apply workflow.trigger / job.trigger transformation if context is provided
             if (triggerContext && transformed.includes(".trigger(")) {
-              transformed = transformFunctionTriggers(
-                transformed,
-                triggerContext.workflowNameMap,
-                triggerContext.jobNameMap,
-                triggerContext.workflowFileMap,
-                id,
-                triggerContext.authNamespace,
-              );
+              transformed = transformFunctionTriggers(transformed, triggerContext, id);
             }
 
             if (transformed === code) return null;

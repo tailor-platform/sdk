@@ -2,9 +2,15 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import {
+  normalizeFilePath,
+  type TriggerContext,
+  type TriggerModuleBindings,
+  type TriggerTarget,
+} from "#/cli/shared/trigger-context";
 import { findAllJobs, detectTriggerCalls, buildJobNameMap } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
-import { transformFunctionTriggers } from "./trigger-transformer";
+import { transformFunctionTriggers as transformFunctionTriggersWithContext } from "./trigger-transformer";
 import { findAllWorkflows, buildWorkflowNameMap } from "./workflow-detector";
 
 function parseProgram(source: string) {
@@ -17,6 +23,52 @@ function findJobs(source: string) {
 
 function findWorkflows(source: string) {
   return findAllWorkflows(parseProgram(source), source);
+}
+
+function transformFunctionTriggers(
+  source: string,
+  workflowNameMap: Map<string, string>,
+  jobNameMap: Map<string, string>,
+  workflowFileMap?: Map<string, string>,
+  currentFilePath = path.resolve("test.ts"),
+  authNamespace?: string,
+) {
+  const localBindings = new Map<string, TriggerTarget>();
+  for (const [name, jobName] of jobNameMap) {
+    localBindings.set(name, { kind: "job", name: jobName });
+  }
+  for (const [name, workflowName] of workflowNameMap) {
+    localBindings.set(name, { kind: "workflow", name: workflowName });
+  }
+
+  const modules = new Map<string, TriggerModuleBindings>([
+    [normalizeFilePath(currentFilePath), { localBindings, exports: new Map(localBindings) }],
+  ]);
+  for (const [file, workflowName] of workflowFileMap ?? []) {
+    modules.set(normalizeFilePath(file), {
+      localBindings: new Map(),
+      exports: new Map([["default", { kind: "workflow", name: workflowName }]]),
+    });
+  }
+
+  const context: TriggerContext = { modules, authNamespace };
+  return transformFunctionTriggersWithContext(source, context, currentFilePath);
+}
+
+function transformWorkflowJobSource(
+  source: string,
+  targetJobName: string,
+  targetJobExportName: string,
+  otherJobExportNames: string[],
+  jobNameMap: Map<string, string>,
+) {
+  const stripped = transformWorkflowSource(
+    source,
+    targetJobName,
+    targetJobExportName,
+    otherJobExportNames,
+  );
+  return transformFunctionTriggers(stripped, new Map(), jobNameMap);
 }
 
 describe("AST Transformer - createWorkflowJob call detection", () => {
@@ -408,7 +460,7 @@ const mainJob = createWorkflowJob({
         ["fetchData", "fetch-data"],
         ["mainJob", "main-job"],
       ]);
-      const result = transformWorkflowSource(
+      const result = transformWorkflowJobSource(
         source,
         "main-job",
         "mainJob",
@@ -443,7 +495,7 @@ const mainJob = createWorkflowJob({
         ["fetchData", "fetch-data"],
         ["mainJob", "main-job"],
       ]);
-      const result = transformWorkflowSource(
+      const result = transformWorkflowJobSource(
         source,
         "main-job",
         "mainJob",
@@ -480,7 +532,7 @@ const mainJob = createWorkflowJob({
         ["heavyJob", "heavy-job"],
         ["mainJob", "main-job"],
       ]);
-      const result = transformWorkflowSource(
+      const result = transformWorkflowJobSource(
         source,
         "main-job",
         "mainJob",
@@ -528,7 +580,7 @@ const mainJob = createWorkflowJob({
         ["job2", "job-two"],
         ["mainJob", "main-job"],
       ]);
-      const result = transformWorkflowSource(
+      const result = transformWorkflowJobSource(
         source,
         "main-job",
         "mainJob",
@@ -594,6 +646,25 @@ const simpleJob = createWorkflowJob({
 
       // no changes
       expect(result).toContain('"simple"');
+    });
+
+    test("does not remove a nested variable that matches another module's job export", () => {
+      const source = `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => {
+    const step = { trigger: async () => "local" };
+    return await step.trigger();
+  },
+});
+`;
+
+      const result = transformWorkflowSource(source, "main-job", "mainJob", ["step"]);
+
+      expect(result).toContain('const step = { trigger: async () => "local" }');
+      expect(result).toContain("step.trigger()");
     });
 
     test("removes createWorkflow default export", () => {

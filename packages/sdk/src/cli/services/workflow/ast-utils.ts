@@ -23,6 +23,7 @@ export interface Replacement {
 
 export interface TriggerCallInfo {
   identifierName: string;
+  namespaceExportName?: string;
   callRange: { start: number; end: number };
   argsText: string;
   optionsText?: string;
@@ -88,7 +89,8 @@ function argumentSourceText(arg: unknown, sourceText: string): string | undefine
 }
 
 /**
- * Get metadata for a static `identifier.trigger(...)` call.
+ * Get metadata for a static `identifier.trigger(...)` or
+ * `namespace.identifier.trigger(...)` call.
  * @param node - AST node to inspect
  * @param sourceText - Source code text
  * @returns Trigger call metadata, or null when the node is not a trigger call
@@ -112,14 +114,37 @@ export function getTriggerCallInfo(
     // callee may be a ComputedMemberExpression at runtime
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     memberExpr.computed ||
-    memberExpr.object.type !== "Identifier" ||
     memberExpr.property.name !== "trigger"
   ) {
     return null;
   }
 
+  let identifierName: string;
+  let namespaceExportName: string | undefined;
+  if (memberExpr.object.type === "Identifier") {
+    identifierName = (memberExpr.object as IdentifierReference).name;
+  } else if (memberExpr.object.type === "MemberExpression") {
+    const namespaceMember = memberExpr.object as unknown as ASTNode;
+    const namespaceObject = namespaceMember.object as ASTNode | undefined;
+    if (namespaceObject?.type !== "Identifier") return null;
+    const exportName = namespaceMember.property as { name?: unknown; value?: unknown };
+    namespaceExportName =
+      namespaceMember.computed === true
+        ? typeof exportName.value === "string"
+          ? exportName.value
+          : undefined
+        : typeof exportName.name === "string"
+          ? exportName.name
+          : undefined;
+    if (!namespaceExportName) return null;
+    identifierName = namespaceObject.name as string;
+  } else {
+    return null;
+  }
+
   return {
-    identifierName: (memberExpr.object as IdentifierReference).name,
+    identifierName,
+    namespaceExportName,
     callRange: { start: callExpr.start, end: callExpr.end },
     argsText: argumentSourceText(callExpr.arguments[0], sourceText) ?? "",
     optionsText: argumentSourceText(callExpr.arguments[1], sourceText),
@@ -237,34 +262,4 @@ export function findStatementEnd(source: string, position: number): number {
     i++;
   }
   return i;
-}
-
-/**
- * Resolve a relative path from a base directory
- * Simple implementation that handles ./ and ../ prefixes
- * @param baseDir - Base directory
- * @param relativePath - Relative path to resolve
- * @returns Resolved absolute path
- */
-export function resolvePath(baseDir: string, relativePath: string): string {
-  // Normalize separators to forward slash
-  const normalized = relativePath.replace(/\\/g, "/");
-
-  // Split into parts
-  const parts = normalized.split("/");
-  const baseParts = baseDir.replace(/\\/g, "/").split("/");
-
-  for (const part of parts) {
-    if (part === ".") {
-      // Current directory, do nothing
-    } else if (part === "..") {
-      // Go up one directory
-      baseParts.pop();
-    } else {
-      // Add the part
-      baseParts.push(part);
-    }
-  }
-
-  return baseParts.join("/");
 }

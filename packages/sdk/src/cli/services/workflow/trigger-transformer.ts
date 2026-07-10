@@ -1,18 +1,25 @@
+import { createRequire } from "node:module";
 import { parseSync } from "oxc-parser";
+import * as path from "pathe";
 import { logger } from "#/cli/shared/logger";
+import { normalizeTriggerModulePath } from "#/cli/shared/trigger-path";
 import {
   type ASTNode,
   type Replacement,
   applyReplacements,
   findStatementEnd,
   getTriggerCallInfo,
-  resolvePath,
 } from "./ast-utils";
-import { detectDefaultImports } from "./workflow-detector";
+import type {
+  TriggerContext,
+  TriggerModuleBindings,
+  TriggerTarget,
+} from "#/cli/shared/trigger-context.types";
 import type { Program, ImportDeclaration, ImportDefaultSpecifier } from "@oxc-project/types";
 
-interface ExtendedTriggerCall {
+export interface ResolvedTriggerCall {
   kind: "job" | "workflow";
+  targetName: string;
   identifierName: string;
   callRange: { start: number; end: number };
   argsText: string;
@@ -41,122 +48,279 @@ function buildNormalizerHelperSource(authNamespace: string): string {
   return `const ${NORMALIZER_IDENTIFIER} = (o) => o && typeof o.authInvoker === "string" ? { ...o, authInvoker: { namespace: ${JSON.stringify(authNamespace)}, machineUserName: o.authInvoker } } : o;\n`;
 }
 
-/**
- * Check if an AST binding pattern (parameter, catch clause, etc.) contains an Identifier with the given name.
- * @param node - AST node to inspect
- * @param name - Identifier name to look for
- * @returns True if the binding pattern contains the name
- */
-function containsBindingName(node: ASTNode | null | undefined, name: string): boolean {
-  if (!node || typeof node !== "object") return false;
-  if (
-    (node as { type?: string }).type === "Identifier" &&
-    (node as { name?: string }).name === name
-  )
-    return true;
-  for (const key of Object.keys(node)) {
-    const child = node[key] as unknown;
-    if (Array.isArray(child)) {
-      if (child.some((c) => containsBindingName(c as ASTNode, name))) return true;
-    } else if (child && typeof child === "object") {
-      if (containsBindingName(child as ASTNode, name)) return true;
-    }
+function collectBindingNames(node: ASTNode | null | undefined, names: Set<string>): void {
+  if (!node || typeof node !== "object") return;
+
+  switch (node.type) {
+    case "Identifier":
+      names.add(node.name as string);
+      return;
+    case "ObjectPattern":
+      for (const property of node.properties as ASTNode[]) {
+        collectBindingNames(
+          property.type === "RestElement"
+            ? (property.argument as ASTNode)
+            : (property.value as ASTNode),
+          names,
+        );
+      }
+      return;
+    case "ArrayPattern":
+      for (const element of node.elements as Array<ASTNode | null>) {
+        collectBindingNames(element, names);
+      }
+      return;
+    case "AssignmentPattern":
+      collectBindingNames(node.left as ASTNode, names);
+      return;
+    case "RestElement":
+      collectBindingNames(node.argument as ASTNode, names);
+      return;
+    case "TSParameterProperty":
+      collectBindingNames(node.parameter as ASTNode, names);
   }
-  return false;
 }
 
-/**
- * Build a map of reference counts for multiple identifiers in a single AST pass.
- * Scope-aware: references inside functions or catch clauses that shadow the name
- * via parameters are excluded, so only references to the original import binding
- * are counted.
- * Excludes import declarations and property names in non-computed member expressions.
- * @param program - The parsed AST program
- * @param names - Set of identifier names to count
- * @returns Map from identifier name to reference count
- */
-function buildReferenceCountMap(program: Program, names: Set<string>): Map<string, number> {
-  if (names.size === 0) return new Map();
+function declarationNode(statement: ASTNode): ASTNode | undefined {
+  if (
+    statement.type === "ExportNamedDeclaration" ||
+    statement.type === "ExportDefaultDeclaration"
+  ) {
+    return statement.declaration as ASTNode | undefined;
+  }
+  return statement;
+}
 
-  const counts = new Map<string, number>();
-  const shadowDepth = new Map<string, number>();
-  for (const name of names) {
-    counts.set(name, 0);
-    shadowDepth.set(name, 0);
+function collectLexicalBindings(statements: ASTNode[], names: Set<string>): void {
+  for (const statement of statements) {
+    const declaration = declarationNode(statement);
+    if (!declaration) continue;
+
+    if (declaration.type === "VariableDeclaration") {
+      if (declaration.kind === "var") continue;
+      for (const declarator of declaration.declarations as ASTNode[]) {
+        collectBindingNames(declarator.id as ASTNode, names);
+      }
+      continue;
+    }
+
+    if (
+      declaration.type === "FunctionDeclaration" ||
+      declaration.type === "ClassDeclaration" ||
+      declaration.type === "TSEnumDeclaration"
+    ) {
+      collectBindingNames(declaration.id as ASTNode | undefined, names);
+    }
+  }
+}
+
+function collectFunctionVarBindings(root: ASTNode, names: Set<string>): void {
+  function walk(node: ASTNode | null | undefined): void {
+    if (!node || typeof node !== "object") return;
+    if (
+      node !== root &&
+      (node.type === "FunctionDeclaration" ||
+        node.type === "FunctionExpression" ||
+        node.type === "ArrowFunctionExpression" ||
+        node.type === "StaticBlock")
+    ) {
+      return;
+    }
+    if (node.type === "VariableDeclaration" && node.kind === "var") {
+      for (const declarator of node.declarations as ASTNode[]) {
+        collectBindingNames(declarator.id as ASTNode, names);
+      }
+    }
+    for (const key of Object.keys(node)) {
+      if (key === "parent") continue;
+      const child = node[key] as unknown;
+      if (Array.isArray(child)) {
+        for (const item of child) walk(item as ASTNode | null);
+      } else if (child && typeof child === "object") {
+        walk(child as ASTNode);
+      }
+    }
   }
 
-  function walk(node: ASTNode | null | undefined, parentNode?: ASTNode, parentKey?: string): void {
-    if (!node || typeof node !== "object") return;
+  walk(root);
+}
 
-    const nodeType = (node as { type?: string }).type;
+function isFunctionNode(node: ASTNode): boolean {
+  return (
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression" ||
+    node.type === "ArrowFunctionExpression"
+  );
+}
 
-    if (nodeType === "ImportDeclaration") return;
+function addShadowedBindings(
+  shadowedNames: ReadonlySet<string>,
+  bindings: Set<string>,
+  targetNames: Set<string>,
+): ReadonlySet<string> {
+  const relevantBindings = [...bindings].filter((name) => targetNames.has(name));
+  return relevantBindings.length > 0
+    ? new Set([...shadowedNames, ...relevantBindings])
+    : shadowedNames;
+}
 
-    // Track scope shadowing from function/catch parameters
-    const shadowedHere: string[] = [];
-    if (
-      nodeType === "FunctionDeclaration" ||
-      nodeType === "FunctionExpression" ||
-      nodeType === "ArrowFunctionExpression"
-    ) {
-      const params = (node as { params?: unknown[] }).params;
-      if (params) {
-        for (const name of names) {
-          if (params.some((p) => containsBindingName(p as ASTNode, name))) {
-            shadowDepth.set(name, (shadowDepth.get(name) ?? 0) + 1);
-            shadowedHere.push(name);
-          }
-        }
+function collectScopeBindings(node: ASTNode): Set<string> {
+  const names = new Set<string>();
+
+  if (node.type === "ClassExpression") {
+    collectBindingNames(node.id as ASTNode | undefined, names);
+    return names;
+  }
+
+  if (node.type === "BlockStatement" || node.type === "StaticBlock") {
+    collectLexicalBindings(node.body as ASTNode[], names);
+    if (node.type === "StaticBlock") {
+      collectFunctionVarBindings(node, names);
+    }
+    return names;
+  }
+
+  if (node.type === "CatchClause") {
+    collectBindingNames(node.param as ASTNode | undefined, names);
+    return names;
+  }
+
+  if (
+    node.type === "ForStatement" ||
+    node.type === "ForInStatement" ||
+    node.type === "ForOfStatement"
+  ) {
+    const declaration = (node.init ?? node.left) as ASTNode | undefined;
+    if (declaration?.type === "VariableDeclaration" && declaration.kind !== "var") {
+      for (const declarator of declaration.declarations as ASTNode[]) {
+        collectBindingNames(declarator.id as ASTNode, names);
       }
     }
-    if (nodeType === "CatchClause") {
-      const param = (node as { param?: unknown }).param;
-      if (param) {
-        for (const name of names) {
-          if (containsBindingName(param as ASTNode, name)) {
-            shadowDepth.set(name, (shadowDepth.get(name) ?? 0) + 1);
-            shadowedHere.push(name);
+    return names;
+  }
+
+  return names;
+}
+
+function collectSwitchBindings(node: ASTNode): Set<string> {
+  const names = new Set<string>();
+  for (const switchCase of node.cases as ASTNode[]) {
+    collectLexicalBindings(switchCase.consequent as ASTNode[], names);
+  }
+  return names;
+}
+
+function walkBindingAware(
+  program: Program,
+  targetNames: Set<string>,
+  visitor: (
+    node: ASTNode,
+    shadowedNames: ReadonlySet<string>,
+    parentNode?: ASTNode,
+    parentKey?: string,
+  ) => void,
+): void {
+  function walk(
+    node: ASTNode | null | undefined,
+    shadowedNames: ReadonlySet<string>,
+    parentNode?: ASTNode,
+    parentKey?: string,
+  ): void {
+    if (!node || typeof node !== "object" || node.type === "ImportDeclaration") return;
+
+    if (isFunctionNode(node)) {
+      const headerBindings = new Set<string>();
+      collectBindingNames(node.id as ASTNode | undefined, headerBindings);
+      for (const param of node.params as ASTNode[]) {
+        collectBindingNames(param, headerBindings);
+      }
+      const headerShadowedNames = addShadowedBindings(shadowedNames, headerBindings, targetNames);
+      const varBindings = new Set<string>();
+      collectFunctionVarBindings(node, varBindings);
+      const bodyShadowedNames = addShadowedBindings(headerShadowedNames, varBindings, targetNames);
+
+      visitor(node, headerShadowedNames, parentNode, parentKey);
+      for (const key of Object.keys(node)) {
+        if (key === "parent") continue;
+        const child = node[key] as unknown;
+        const childShadowedNames = key === "body" ? bodyShadowedNames : headerShadowedNames;
+        if (Array.isArray(child)) {
+          for (const item of child) {
+            walk(item as ASTNode | null, childShadowedNames, node, key);
           }
+        } else if (child && typeof child === "object") {
+          walk(child as ASTNode, childShadowedNames, node, key);
         }
       }
+      return;
     }
 
-    if (nodeType === "Identifier") {
-      const identName = (node as { name?: string }).name;
-      if (identName && names.has(identName) && (shadowDepth.get(identName) ?? 0) === 0) {
+    let nestedShadowedNames = shadowedNames;
+    if (node.type !== "Program") {
+      nestedShadowedNames = addShadowedBindings(
+        shadowedNames,
+        collectScopeBindings(node),
+        targetNames,
+      );
+    }
+
+    visitor(node, nestedShadowedNames, parentNode, parentKey);
+
+    if (node.type === "SwitchStatement") {
+      walk(node.discriminant as ASTNode, nestedShadowedNames, node, "discriminant");
+      const caseShadowedNames = addShadowedBindings(
+        nestedShadowedNames,
+        collectSwitchBindings(node),
+        targetNames,
+      );
+      for (const switchCase of node.cases as ASTNode[]) {
+        walk(switchCase, caseShadowedNames, node, "cases");
+      }
+      return;
+    }
+
+    for (const key of Object.keys(node)) {
+      if (key === "parent") continue;
+      const child = node[key] as unknown;
+      if (Array.isArray(child)) {
+        for (const item of child) {
+          walk(item as ASTNode | null, nestedShadowedNames, node, key);
+        }
+      } else if (child && typeof child === "object") {
+        walk(child as ASTNode, nestedShadowedNames, node, key);
+      }
+    }
+  }
+
+  walk(program as unknown as ASTNode, new Set());
+}
+
+function buildReferenceCountMap(program: Program, names: Set<string>): Map<string, number> {
+  const counts = new Map([...names].map((name) => [name, 0]));
+  if (names.size === 0) return counts;
+
+  walkBindingAware(program, names, (node, shadowedNames, parentNode, parentKey) => {
+    if (node.type === "Identifier") {
+      const identName = node.name as string;
+      if (names.has(identName) && !shadowedNames.has(identName)) {
         const isMemberProperty =
           parentNode &&
-          (parentNode as { type?: string }).type === "MemberExpression" &&
+          parentNode.type === "MemberExpression" &&
           parentKey === "property" &&
-          !(parentNode as { computed?: boolean }).computed;
+          !parentNode.computed;
         const isObjectPropertyKey =
           parentNode &&
-          (parentNode as { type?: string }).type === "Property" &&
+          parentNode.type === "Property" &&
           parentKey === "key" &&
-          !(parentNode as { shorthand?: boolean }).shorthand &&
-          !(parentNode as { computed?: boolean }).computed;
+          !parentNode.shorthand &&
+          !parentNode.computed;
 
         if (!isMemberProperty && !isObjectPropertyKey) {
           counts.set(identName, (counts.get(identName) ?? 0) + 1);
         }
       }
     }
-
-    for (const key of Object.keys(node)) {
-      const child = node[key] as unknown;
-      if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null, node, key));
-      } else if (child && typeof child === "object") {
-        walk(child as ASTNode, node, key);
-      }
-    }
-
-    for (const name of shadowedHere) {
-      shadowDepth.set(name, (shadowDepth.get(name) ?? 0) - 1);
-    }
-  }
-
-  walk(program as unknown as ASTNode);
+  });
   return counts;
 }
 
@@ -213,124 +377,203 @@ function findDefaultImportRemovalRange(
 }
 
 /**
- * Detect .trigger() calls for known workflows and jobs
- * Only detects calls where the identifier is in workflowNames or jobNames
- * @param program - The parsed AST program
- * @param sourceText - The source code text
- * @param workflowNames - Set of known workflow identifier names
- * @param jobNames - Set of known job identifier names
- * @returns Detected trigger call metadata
+ * Resolve trigger calls against the current module's lexical and import bindings.
+ * @param program - Parsed source program
+ * @param sourceText - Original source text
+ * @param context - Project trigger binding metadata
+ * @param currentFilePath - Path of the source module
+ * @returns Trigger calls whose object binding resolves to a configured job or workflow
  */
-function detectExtendedTriggerCalls(
+export function detectResolvedTriggerCalls(
   program: Program,
   sourceText: string,
-  workflowNames: Set<string>,
-  jobNames: Set<string>,
-): ExtendedTriggerCall[] {
-  const calls: ExtendedTriggerCall[] = [];
+  context: TriggerContext,
+  currentFilePath: string,
+): ResolvedTriggerCall[] {
+  const { targets, namespaceTargets } = collectLocalTargets(program, context, currentFilePath);
+  const calls: ResolvedTriggerCall[] = [];
+  const targetNames = new Set([...targets.keys(), ...namespaceTargets.keys()]);
 
-  function walk(node: ASTNode | null | undefined): void {
-    if (!node || typeof node !== "object") return;
-
+  walkBindingAware(program, targetNames, (node, shadowedNames) => {
     const triggerCall = getTriggerCallInfo(node, sourceText);
-    if (triggerCall) {
-      const isWorkflow = workflowNames.has(triggerCall.identifierName);
-      const isJob = jobNames.has(triggerCall.identifierName);
-      if (isWorkflow) {
-        calls.push({
-          kind: "workflow",
-          identifierName: triggerCall.identifierName,
-          callRange: triggerCall.callRange,
-          argsText: triggerCall.argsText,
-          optionsText: triggerCall.optionsText,
-        });
-      } else if (isJob) {
-        calls.push({
-          kind: "job",
-          identifierName: triggerCall.identifierName,
-          callRange: triggerCall.callRange,
-          argsText: triggerCall.argsText,
-          optionsText: triggerCall.optionsText,
-        });
-      }
+    if (!triggerCall || shadowedNames.has(triggerCall.identifierName)) return;
+    const target = triggerCall.namespaceExportName
+      ? namespaceTargets.get(triggerCall.identifierName)?.get(triggerCall.namespaceExportName)
+      : targets.get(triggerCall.identifierName);
+    if (target) {
+      calls.push({
+        kind: target.kind,
+        targetName: target.name,
+        identifierName: triggerCall.identifierName,
+        callRange: triggerCall.callRange,
+        argsText: triggerCall.argsText,
+        optionsText: triggerCall.optionsText,
+      });
     }
+  });
 
-    for (const key of Object.keys(node)) {
-      const child = node[key] as unknown;
-      if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null));
-      } else if (child && typeof child === "object") {
-        walk(child as ASTNode);
+  return calls;
+}
+
+function resolveImportBindings(
+  context: TriggerContext,
+  currentFilePath: string,
+  importSource: string,
+) {
+  function findModule(candidate: string) {
+    const modulePath = normalizeTriggerModulePath(candidate);
+    return context.modules.get(modulePath) ?? context.modules.get(path.join(modulePath, "index"));
+  }
+
+  function findNativeModule() {
+    try {
+      const importerPath = path.resolve(currentFilePath.replace(/[?#].*$/, ""));
+      return findModule(createRequire(importerPath).resolve(importSource));
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (importSource.startsWith(".")) {
+    const currentDir = path.dirname(currentFilePath.replace(/[?#].*$/, ""));
+    return findModule(path.resolve(currentDir, importSource));
+  }
+
+  if (importSource.startsWith("#")) {
+    return findNativeModule();
+  }
+
+  const resolution = context.moduleResolution;
+  if (!resolution) return findNativeModule();
+
+  function matchPattern(pattern: string): string | undefined {
+    const wildcardIndex = pattern.indexOf("*");
+    if (wildcardIndex === -1) {
+      return pattern === importSource ? "" : undefined;
+    }
+    const prefix = pattern.slice(0, wildcardIndex);
+    const suffix = pattern.slice(wildcardIndex + 1);
+    if (!importSource.startsWith(prefix) || !importSource.endsWith(suffix)) return undefined;
+    return importSource.slice(prefix.length, importSource.length - suffix.length);
+  }
+
+  const pathPatterns = Object.entries(resolution.paths);
+  const exactPattern = pathPatterns.find(
+    ([pattern]) => !pattern.includes("*") && pattern === importSource,
+  );
+  const matchedPattern =
+    exactPattern ??
+    pathPatterns
+      .filter(([pattern]) => pattern.includes("*") && matchPattern(pattern) !== undefined)
+      .toSorted(([a], [b]) => b.indexOf("*") - a.indexOf("*"))[0];
+
+  if (matchedPattern) {
+    const [pattern, substitutions] = matchedPattern;
+    const wildcard = matchPattern(pattern);
+    if (wildcard === undefined) return undefined;
+
+    for (const substitution of substitutions) {
+      const candidate = substitution.replace("*", wildcard);
+      const module = findModule(path.resolve(resolution.baseUrl, candidate));
+      if (module) return module;
+    }
+    return undefined;
+  }
+
+  return findModule(path.resolve(resolution.baseUrl, importSource)) ?? findNativeModule();
+}
+
+function collectLocalTargets(
+  program: Program,
+  context: TriggerContext,
+  currentFilePath: string,
+): {
+  targets: Map<string, TriggerTarget>;
+  namespaceTargets: Map<string, TriggerModuleBindings["exports"]>;
+  workflowDefaultImportNames: Set<string>;
+} {
+  const targets = new Map<string, TriggerTarget>();
+  const namespaceTargets = new Map<string, TriggerModuleBindings["exports"]>();
+  const workflowDefaultImportNames = new Set<string>();
+  const currentModule = context.modules.get(normalizeTriggerModulePath(currentFilePath));
+  if (currentModule) {
+    for (const [localName, target] of currentModule.localBindings) {
+      targets.set(localName, target);
+    }
+  }
+
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration" || statement.importKind === "type") continue;
+    const importSource = statement.source.value;
+    if (typeof importSource !== "string") continue;
+    const importedModule = resolveImportBindings(context, currentFilePath, importSource);
+    if (!importedModule) continue;
+
+    for (const specifier of statement.specifiers) {
+      if (specifier.type === "ImportNamespaceSpecifier") {
+        namespaceTargets.set(specifier.local.name, importedModule.exports);
+        continue;
+      }
+
+      let importedName: string | undefined;
+      if (specifier.type === "ImportDefaultSpecifier") {
+        importedName = "default";
+      } else {
+        importedName = moduleExportName(specifier.imported);
+      }
+      if (!importedName) continue;
+
+      const target = importedModule.exports.get(importedName);
+      if (!target) continue;
+      targets.set(specifier.local.name, target);
+      if (specifier.type === "ImportDefaultSpecifier" && target.kind === "workflow") {
+        workflowDefaultImportNames.add(specifier.local.name);
       }
     }
   }
 
-  walk(program as unknown as ASTNode);
-  return calls;
+  return { targets, namespaceTargets, workflowDefaultImportNames };
+}
+
+function moduleExportName(node: unknown): string | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  const exportName = node as { name?: string; value?: unknown };
+  if (exportName.name) return exportName.name;
+  return typeof exportName.value === "string" ? exportName.value : undefined;
 }
 
 /**
  * Transform trigger calls for resolver/executor/workflow functions
  * Handles job.trigger() and workflow.trigger() calls
  * @param source - The source code to transform
- * @param workflowNameMap - Map from variable name to workflow name
- * @param jobNameMap - Map from variable name to job name
- * @param workflowFileMap - Map from file path (without extension) to workflow name for default exports
- * @param currentFilePath - Path of the current file being transformed (for resolving relative imports)
- * @param authNamespace - Auth service namespace used to expand string-literal `authInvoker` to object form
+ * @param triggerContext - Module binding metadata for workflows and jobs
+ * @param currentFilePath - Path of the current file being transformed
  * @returns Transformed source code with trigger calls rewritten
  */
 export function transformFunctionTriggers(
   source: string,
-  workflowNameMap: Map<string, string>,
-  jobNameMap: Map<string, string>,
-  workflowFileMap?: Map<string, string>,
-  currentFilePath?: string,
-  authNamespace?: string,
+  triggerContext: TriggerContext,
+  currentFilePath: string,
 ): string {
   const { program } = parseSync("input.ts", source);
-
-  // Build a map from local identifier name to workflow name
-  // This includes both named exports (from workflowNameMap) and default imports (resolved via workflowFileMap)
-  const localWorkflowNameMap = new Map(workflowNameMap);
-
-  // Track which default imports resolved to workflows (candidates for dead import removal)
-  const workflowDefaultImportNames = new Set<string>();
-
-  if (workflowFileMap && currentFilePath) {
-    // Detect default imports and resolve them to workflow names
-    const defaultImports = detectDefaultImports(program);
-    const currentDir = currentFilePath.replace(/[/\\][^/\\]+$/, "");
-
-    for (const [localName, importSource] of defaultImports) {
-      // Skip non-relative imports
-      if (!importSource.startsWith(".")) continue;
-
-      // Resolve the import path relative to the current file. Strip a trailing
-      // extension (e.g. `./simple.mjs` from a `.mts` source) so it can match
-      // workflowFileMap keys, which are stored without extensions.
-      const resolvedPath = resolvePath(currentDir, importSource).replace(
-        /\.(ts|mts|cts|js|mjs|cjs)$/,
-        "",
-      );
-      const workflowName = workflowFileMap.get(resolvedPath);
-      if (workflowName) {
-        localWorkflowNameMap.set(localName, workflowName);
-        workflowDefaultImportNames.add(localName);
-      }
-    }
-  }
-
-  // Build sets of known workflow and job identifier names for filtering
-  const workflowNames = new Set(localWorkflowNameMap.keys());
-  const jobNames = new Set(jobNameMap.keys());
+  const { workflowDefaultImportNames } = collectLocalTargets(
+    program,
+    triggerContext,
+    currentFilePath,
+  );
+  const { authNamespace } = triggerContext;
 
   // Detect trigger calls only for known workflows and jobs.
   // When trigger calls nest, keep only the outermost one: the outer
   // replacement text is built from the original source, so applying an inner
   // replacement as well would corrupt the output.
-  const allTriggerCalls = detectExtendedTriggerCalls(program, source, workflowNames, jobNames);
-  const nestedTriggerCalls: Array<{ call: ExtendedTriggerCall; parent: ExtendedTriggerCall }> = [];
+  const allTriggerCalls = detectResolvedTriggerCalls(
+    program,
+    source,
+    triggerContext,
+    currentFilePath,
+  );
+  const nestedTriggerCalls: Array<{ call: ResolvedTriggerCall; parent: ResolvedTriggerCall }> = [];
   const triggerCalls = allTriggerCalls.filter((call) => {
     const parent = allTriggerCalls.find(
       (other) =>
@@ -361,53 +604,46 @@ export function transformFunctionTriggers(
 
   for (const call of triggerCalls) {
     if (call.kind === "workflow") {
-      // Workflow trigger - get workflow name from map
-      const workflowName = localWorkflowNameMap.get(call.identifierName);
-      if (workflowName) {
-        // Wrap the options with the runtime normalizer so a string-form
-        // authInvoker in any options shape (object literal, variable
-        // reference, spread) becomes the object form the platform RPC
-        // expects. The normalizer is injected once at the top of the file.
-        // When no auth service is configured we can't expand a string, so
-        // we pass through unchanged (platform will reject a string with a
-        // clear error).
-        let optionsPart = "";
-        if (call.optionsText !== undefined) {
-          if (authNamespace) {
-            optionsPart = `, ${NORMALIZER_IDENTIFIER}(${call.optionsText})`;
-            needsNormalizerHelper = true;
-          } else {
-            optionsPart = `, ${call.optionsText}`;
-          }
+      // Wrap the options with the runtime normalizer so a string-form
+      // authInvoker in any options shape (object literal, variable
+      // reference, spread) becomes the object form the platform RPC
+      // expects. The normalizer is injected once at the top of the file.
+      // When no auth service is configured we can't expand a string, so
+      // we pass through unchanged (platform will reject a string with a
+      // clear error).
+      let optionsPart = "";
+      if (call.optionsText !== undefined) {
+        if (authNamespace) {
+          optionsPart = `, ${NORMALIZER_IDENTIFIER}(${call.optionsText})`;
+          needsNormalizerHelper = true;
+        } else {
+          optionsPart = `, ${call.optionsText}`;
         }
-        // Transform to tailor.workflow.triggerWorkflow
-        const transformedCall = `tailor.workflow.triggerWorkflow("${workflowName}", ${call.argsText || "undefined"}${optionsPart})`;
-        replacements.push({
-          start: call.callRange.start,
-          end: call.callRange.end,
-          text: transformedCall,
-        });
-        transformedCallsPerIdentifier.set(
-          call.identifierName,
-          (transformedCallsPerIdentifier.get(call.identifierName) ?? 0) + 1,
-        );
       }
+      // Transform to tailor.workflow.triggerWorkflow
+      const transformedCall = `tailor.workflow.triggerWorkflow("${call.targetName}", ${call.argsText || "undefined"}${optionsPart})`;
+      replacements.push({
+        start: call.callRange.start,
+        end: call.callRange.end,
+        text: transformedCall,
+      });
+      transformedCallsPerIdentifier.set(
+        call.identifierName,
+        (transformedCallsPerIdentifier.get(call.identifierName) ?? 0) + 1,
+      );
     } else {
-      const jobName = jobNameMap.get(call.identifierName);
-      if (jobName) {
-        const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
-        const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${jobName}", ${call.argsText || "undefined"}${optionsPart}))()`;
+      const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
+      const transformedCall = `(async () => tailor.workflow.triggerJobFunction("${call.targetName}", ${call.argsText || "undefined"}${optionsPart}))()`;
 
-        replacements.push({
-          start: call.callRange.start,
-          end: call.callRange.end,
-          text: transformedCall,
-        });
-        transformedCallsPerIdentifier.set(
-          call.identifierName,
-          (transformedCallsPerIdentifier.get(call.identifierName) ?? 0) + 1,
-        );
-      }
+      replacements.push({
+        start: call.callRange.start,
+        end: call.callRange.end,
+        text: transformedCall,
+      });
+      transformedCallsPerIdentifier.set(
+        call.identifierName,
+        (transformedCallsPerIdentifier.get(call.identifierName) ?? 0) + 1,
+      );
     }
   }
 
