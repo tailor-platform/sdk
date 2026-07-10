@@ -463,6 +463,203 @@ describe("verification summary", () => {
     }
   });
 
+  test.each([
+    { name: "malformed JSON", contents: "{" },
+    { name: "a null root", contents: JSON.stringify(null) },
+    { name: "an array root", contents: JSON.stringify([]) },
+    { name: "an empty object", contents: JSON.stringify({}) },
+    {
+      name: "missing schemaVersion",
+      contents: JSON.stringify({ checks: [] }),
+    },
+    {
+      name: "missing checks",
+      contents: JSON.stringify({ schemaVersion: 1 }),
+    },
+    {
+      name: "non-array checks",
+      contents: JSON.stringify({ schemaVersion: 1, checks: {} }),
+    },
+    {
+      name: "an unsupported schema version",
+      contents: JSON.stringify({ schemaVersion: 2, checks: [] }),
+    },
+    {
+      name: "an unknown root field",
+      contents: JSON.stringify({ schemaVersion: 1, checks: [], extra: true }),
+    },
+    {
+      name: "a non-object check",
+      contents: JSON.stringify({ schemaVersion: 1, checks: [null] }),
+    },
+    {
+      name: "an empty check id",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: " ", kind: "file-exists", path: "package.json" }],
+      }),
+    },
+    {
+      name: "duplicate check ids",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [
+          { id: "duplicate", kind: "file-exists", path: "package.json" },
+          { id: "duplicate", kind: "file-exists", path: "missing.json" },
+        ],
+      }),
+    },
+    {
+      name: "a reserved common check id",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "workspace-package-json", kind: "file-exists", path: "package.json" }],
+      }),
+    },
+    {
+      name: "an unknown check kind",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "unknown", kind: "unknown" }],
+      }),
+    },
+    {
+      name: "a non-string description",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "description", kind: "file-exists", path: "package.json", description: 1 }],
+      }),
+    },
+    {
+      name: "an unknown check field",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "typo", kind: "file-glob", glob: "*.ts", minCount: 1, minMatches: 1 }],
+      }),
+    },
+    {
+      name: "a missing file path",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "file", kind: "file-exists" }],
+      }),
+    },
+    {
+      name: "an empty file glob",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "glob", kind: "file-glob", glob: "" }],
+      }),
+    },
+    {
+      name: "a non-positive minCount",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "files", kind: "file-glob", glob: "*.ts", minCount: 0 }],
+      }),
+    },
+    {
+      name: "a non-integer minCount",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "files", kind: "file-glob", glob: "*.ts", minCount: 1.5 }],
+      }),
+    },
+    {
+      name: "a missing content pattern",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "content", kind: "content-match", glob: "*.ts" }],
+      }),
+    },
+    {
+      name: "a non-positive minMatches",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [
+          {
+            id: "content",
+            kind: "content-match",
+            glob: "*.ts",
+            pattern: "example",
+            minMatches: -1,
+          },
+        ],
+      }),
+    },
+    {
+      name: "a non-integer minMatches",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [
+          {
+            id: "content",
+            kind: "content-match",
+            glob: "*.ts",
+            pattern: "example",
+            minMatches: "1",
+          },
+        ],
+      }),
+    },
+    {
+      name: "non-string regular expression flags",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "content", kind: "content-absent", glob: "*.ts", pattern: "x", flags: 1 }],
+      }),
+    },
+    {
+      name: "an invalid regular expression",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "content", kind: "content-match", glob: "*.ts", pattern: "[", flags: "" }],
+      }),
+    },
+    {
+      name: "an out-of-workspace path",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "outside", kind: "file-exists", path: "../outside.txt" }],
+      }),
+    },
+    {
+      name: "an excluded workspace path",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "internal", kind: "file-exists", path: ".challenge/sdk.tgz" }],
+      }),
+    },
+    {
+      name: "an excluded workspace glob",
+      contents: JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "dependencies", kind: "file-glob", glob: "node_modules/**/*.ts" }],
+      }),
+    },
+  ])("reports one definition error for $name", async ({ contents }) => {
+    const { summary, verificationSummaryPath } = await writeTestVerificationSummary(contents);
+
+    expect(summary.checks.filter((check) => check.scope === "problem")).toEqual([
+      expect.objectContaining({
+        id: "problem-verify-spec",
+        outcome: "error",
+        error: expect.stringMatching(/^verify\.json/u),
+      }),
+    ]);
+    await expect(fs.readFile(verificationSummaryPath, "utf8")).resolves.toBe(
+      `${JSON.stringify(summary, null, 2)}\n`,
+    );
+  });
+
+  test("allows an empty problem check list", async () => {
+    const { summary } = await writeTestVerificationSummary(
+      JSON.stringify({ schemaVersion: 1, checks: [] }),
+    );
+
+    expect(summary.checks.filter((check) => check.scope === "problem")).toEqual([]);
+  });
+
   test("records common and problem-level minimum correctness checks", async () => {
     const dir = await makeTempDir();
     const problemRoot = path.join(dir, "problem");
@@ -487,6 +684,8 @@ describe("verification summary", () => {
               kind: "content-match",
               glob: "src/*.txt",
               pattern: "customer",
+              flags: "",
+              minMatches: 1,
             },
             {
               id: "secret-text-absent",
@@ -584,8 +783,13 @@ describe("verification summary", () => {
     const worktreePath = path.join(dir, "work");
     await fs.mkdir(path.join(problemRoot, "scaffold"), { recursive: true });
     await fs.mkdir(path.join(worktreePath, ".tailor-sdk/cache"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
     await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
     await fs.writeFile(path.join(worktreePath, ".tailor-sdk/cache/generated.ts"), "cacheOnly\n");
+    await fs.symlink(
+      path.join(worktreePath, ".tailor-sdk/cache/generated.ts"),
+      path.join(worktreePath, "src/cache-alias.ts"),
+    );
     const verifyPath = path.join(problemRoot, "verify.json");
     await fs.writeFile(
       verifyPath,
@@ -598,6 +802,12 @@ describe("verification summary", () => {
               kind: "content-match",
               glob: "**/*.ts",
               pattern: "cacheOnly",
+            },
+            {
+              id: "cache-alias-glob",
+              kind: "file-glob",
+              glob: "src/*.ts",
+              minCount: 1,
             },
           ],
         },
@@ -622,8 +832,68 @@ describe("verification summary", () => {
     expect(summary.checks.find((check) => check.id === "cache-only-text")).toMatchObject({
       outcome: "unsatisfied",
     });
+    expect(summary.checks.find((check) => check.id === "cache-alias-glob")).toMatchObject({
+      outcome: "unsatisfied",
+    });
     expect(summary.checks.find((check) => check.id === "typescript-no-emit")).toMatchObject({
       outcome: "skipped",
+    });
+  });
+
+  test("excludes files reached through out-of-workspace symlinks from verification evidence", async () => {
+    const dir = await makeTempDir();
+    const problemRoot = path.join(dir, "problem");
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(path.join(problemRoot, "scaffold"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
+    await fs.mkdir(path.join(worktreePath, "src/directory.txt"));
+    await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+    const outsidePath = path.join(dir, "outside.txt");
+    await fs.writeFile(outsidePath, "outside evidence\n");
+    await fs.symlink(outsidePath, path.join(worktreePath, "src/outside.txt"));
+    const verifyPath = path.join(problemRoot, "verify.json");
+    await fs.writeFile(
+      verifyPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        checks: [
+          { id: "outside-file", kind: "file-exists", path: "src/outside.txt" },
+          { id: "directory-file", kind: "file-exists", path: "src/directory.txt" },
+          { id: "outside-glob", kind: "file-glob", glob: "src/*.txt", minCount: 1 },
+          {
+            id: "outside-content",
+            kind: "content-match",
+            glob: "src/*.txt",
+            pattern: "outside evidence",
+          },
+        ],
+      })}\n`,
+    );
+
+    const summary = await writeVerificationSummary({
+      problem: makeProblem({
+        group: "cli",
+        scaffoldPath: path.join(problemRoot, "scaffold"),
+        verifyPath,
+      }),
+      runIndex: 0,
+      worktreePath,
+      verificationSummaryPath: path.join(dir, "verification-summary.json"),
+      verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+      verificationStderrPath: path.join(dir, "verification.stderr.log"),
+    });
+
+    expect(summary.checks.find((check) => check.id === "outside-file")).toMatchObject({
+      outcome: "unsatisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "directory-file")).toMatchObject({
+      outcome: "unsatisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "outside-glob")).toMatchObject({
+      outcome: "unsatisfied",
+    });
+    expect(summary.checks.find((check) => check.id === "outside-content")).toMatchObject({
+      outcome: "unsatisfied",
     });
   });
 });
@@ -790,6 +1060,38 @@ async function makeTempDir(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "llm-challenge-test-"));
   tempDirs.push(dir);
   return dir;
+}
+
+async function writeTestVerificationSummary(contents: string): Promise<{
+  summary: Awaited<ReturnType<typeof writeVerificationSummary>>;
+  verificationSummaryPath: string;
+}> {
+  const dir = await makeTempDir();
+  const problemRoot = path.join(dir, "problem");
+  const worktreePath = path.join(dir, "work");
+  await fs.mkdir(path.join(problemRoot, "scaffold"), { recursive: true });
+  await fs.mkdir(worktreePath, { recursive: true });
+  await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+  await fs.writeFile(path.join(dir, "outside.txt"), "outside evidence\n");
+  const verifyPath = path.join(problemRoot, "verify.json");
+  const verificationSummaryPath = path.join(dir, "verification-summary.json");
+  await fs.writeFile(verifyPath, contents);
+  await fs.writeFile(verificationSummaryPath, '{"stale":true}\n');
+
+  const summary = await writeVerificationSummary({
+    problem: makeProblem({
+      group: "cli",
+      scaffoldPath: path.join(problemRoot, "scaffold"),
+      verifyPath,
+    }),
+    runIndex: 0,
+    worktreePath,
+    verificationSummaryPath,
+    verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+    verificationStderrPath: path.join(dir, "verification.stderr.log"),
+  });
+
+  return { summary, verificationSummaryPath };
 }
 
 function makeProblem(overrides: Partial<Problem> = {}): Problem {
