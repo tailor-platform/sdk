@@ -89,6 +89,12 @@ export type IdProviderInput = OIDC | SAMLInput | IDToken | BuiltinIdP;
 
 export type IdProvider = OIDC | SAML | IDToken | BuiltinIdP;
 
+/**
+ * OAuth2 grant type
+ */
+export type OAuth2ClientGrantType = "authorization_code" | "refresh_token";
+export type OAuth2ClientGrantTypeInput = OAuth2ClientGrantType;
+
 export type OAuth2ClientInput = {
   /** Allowed redirect URIs */
   redirectURIs: (
@@ -156,9 +162,15 @@ export type SCIMAuthorization = {
 };
 export type SCIMAuthorizationInput = SCIMAuthorization;
 
+/**
+ * SCIM attribute data type
+ */
+export type SCIMAttributeType = "string" | "number" | "boolean" | "datetime" | "complex";
+export type SCIMAttributeTypeInput = SCIMAttributeType;
+
 export type SCIMAttributeInput = {
   /** Attribute data type */
-  type: "string" | "number" | "boolean" | "datetime" | "complex";
+  type: SCIMAttributeType;
   /** Attribute name */
   name: string;
   /** Attribute description */
@@ -178,7 +190,7 @@ export type SCIMAttributeInput = {
 
 export type SCIMAttribute = {
   /** Attribute data type */
-  type: "string" | "number" | "boolean" | "datetime" | "complex";
+  type: SCIMAttributeType;
   /** Attribute name */
   name: string;
   /** Attribute description */
@@ -229,10 +241,7 @@ export type SCIMResource = {
     }[];
   };
   /** Attribute mapping configuration */
-  attributeMapping: {
-    tailorDBField: string;
-    scimPath: string;
-  }[];
+  attributeMapping: SCIMAttributeMapping[];
 };
 export type SCIMResourceInput = SCIMResource;
 
@@ -240,39 +249,9 @@ export type SCIMConfig = {
   /** Machine user name for SCIM operations */
   machineUserName: string;
   /** SCIM authorization configuration */
-  authorization: {
-    type: "oauth2" | "bearer";
-    bearerSecret?:
-      | {
-          vaultName: string;
-          secretKey: string;
-        }
-      | undefined;
-  };
+  authorization: SCIMAuthorization;
   /** SCIM resource definitions */
-  resources: {
-    name: string;
-    tailorDBNamespace: string;
-    tailorDBType: string;
-    coreSchema: {
-      name: string;
-      attributes: {
-        type: "string" | "number" | "boolean" | "datetime" | "complex";
-        name: string;
-        description?: string | undefined;
-        mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
-        required?: boolean | undefined;
-        multiValued?: boolean | undefined;
-        uniqueness?: "none" | "server" | "global" | undefined;
-        canonicalValues?: string[] | null | undefined;
-        subAttributes?: any[] | null | undefined;
-      }[];
-    };
-    attributeMapping: {
-      tailorDBField: string;
-      scimPath: string;
-    }[];
-  }[];
+  resources: SCIMResource[];
 };
 export type SCIMConfigInput = SCIMConfig;
 

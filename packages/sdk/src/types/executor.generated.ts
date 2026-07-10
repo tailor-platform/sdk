@@ -52,12 +52,7 @@ export type IncomingWebhookTriggerResponseInput = IncomingWebhookTriggerResponse
 export type IncomingWebhookTrigger = {
   kind: "incomingWebhook";
   /** Response configuration */
-  response?:
-    | {
-        body?: Function | undefined;
-        statusCode?: number | undefined;
-      }
-    | undefined;
+  response?: IncomingWebhookTriggerResponse;
 };
 export type IncomingWebhookTriggerInput = IncomingWebhookTrigger;
 
@@ -187,31 +182,75 @@ export type JsonValue =
 export type WorkflowInput = string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
 export type WorkflowInputInput = WorkflowInput;
 
-export type WorkflowOperationFunction = Function;
-export type WorkflowOperationFunctionInput = WorkflowOperationFunction;
-
-export type WorkflowOperationArgs = WorkflowInput | WorkflowOperationFunction;
+/**
+ * Arguments to pass to the workflow
+ */
+export type WorkflowOperationArgs = WorkflowInput | Function;
 export type WorkflowOperationArgsInput = WorkflowOperationArgs;
 
-export type WorkflowOperation = {
-  kind: "workflow";
-  workflowName: string;
-  args?: Exclude<JsonValue, null> | WorkflowOperationFunction | undefined;
-  invoker?:
-    | string
-    | {
-        namespace: string;
-        machineUserName: string;
-      }
-    | undefined;
-};
-export type WorkflowOperationInput = WorkflowOperation;
+export type WorkflowOperationInput =
+  | {
+      workflow: {
+        [x: string]: unknown;
+        name: string;
+      };
+      kind: "workflow";
+      workflowName?: string | undefined;
+      args?: WorkflowOperationArgs;
+      invoker?:
+        | string
+        | {
+            namespace: string;
+            machineUserName: string;
+          }
+        | undefined;
+    }
+  | {
+      workflowName: string;
+      kind: "workflow";
+      workflow?: undefined;
+      args?: WorkflowOperationArgs;
+      invoker?:
+        | string
+        | {
+            namespace: string;
+            machineUserName: string;
+          }
+        | undefined;
+    };
+
+export type WorkflowOperation =
+  | {
+      workflowName: string;
+      kind: "workflow";
+      args?: WorkflowOperationArgs;
+      invoker?:
+        | string
+        | {
+            namespace: string;
+            machineUserName: string;
+          }
+        | undefined;
+    }
+  | {
+      workflowName: string;
+      kind: "workflow";
+      workflow?: undefined;
+      args?: WorkflowOperationArgs;
+      invoker?:
+        | string
+        | {
+            namespace: string;
+            machineUserName: string;
+          }
+        | undefined;
+    };
 
 export type OperationInput =
   | FunctionOperation
   | GqlOperationInput
   | WebhookOperation
-  | WorkflowOperation;
+  | WorkflowOperationInput;
 
 export type Operation = FunctionOperation | GqlOperation | WebhookOperation | WorkflowOperation;
 
@@ -219,49 +258,8 @@ export type ExecutorInput = {
   /** Executor name */
   name: string;
   /** Event trigger configuration */
-  trigger:
-    | {
-        kind: "tailordb";
-        events: (
-          | "tailordb.type_record.created"
-          | "tailordb.type_record.updated"
-          | "tailordb.type_record.deleted"
-        )[];
-        typeName: string;
-        condition?: Function | undefined;
-      }
-    | {
-        kind: "resolverExecuted";
-        resolverName: string;
-        condition?: Function | undefined;
-      }
-    | {
-        kind: "schedule";
-        cron: string;
-        timezone?: string | undefined;
-      }
-    | {
-        kind: "incomingWebhook";
-        response?:
-          | {
-              body?: Function | undefined;
-              statusCode?: number | undefined;
-            }
-          | undefined;
-      }
-    | {
-        kind: "idpUser";
-        events: ("idp.user.created" | "idp.user.updated" | "idp.user.deleted")[];
-        idp?: string | undefined;
-      }
-    | {
-        kind: "authAccessToken";
-        events: (
-          | "auth.access_token.issued"
-          | "auth.access_token.refreshed"
-          | "auth.access_token.revoked"
-        )[];
-      };
+  trigger: TriggerInput;
+  /** Operation to execute when triggered */
   operation: OperationInput;
   /** Executor description */
   description?: string | undefined;
@@ -275,49 +273,8 @@ export type Executor = {
   /** Whether the executor is disabled */
   disabled: boolean;
   /** Event trigger configuration */
-  trigger:
-    | {
-        kind: "tailordb";
-        events: (
-          | "tailordb.type_record.created"
-          | "tailordb.type_record.updated"
-          | "tailordb.type_record.deleted"
-        )[];
-        typeName: string;
-        condition?: Function | undefined;
-      }
-    | {
-        kind: "resolverExecuted";
-        resolverName: string;
-        condition?: Function | undefined;
-      }
-    | {
-        kind: "schedule";
-        cron: string;
-        timezone: string;
-      }
-    | {
-        kind: "incomingWebhook";
-        response?:
-          | {
-              body?: Function | undefined;
-              statusCode?: number | undefined;
-            }
-          | undefined;
-      }
-    | {
-        kind: "idpUser";
-        events: ("idp.user.created" | "idp.user.updated" | "idp.user.deleted")[];
-        idp?: string | undefined;
-      }
-    | {
-        kind: "authAccessToken";
-        events: (
-          | "auth.access_token.issued"
-          | "auth.access_token.refreshed"
-          | "auth.access_token.revoked"
-        )[];
-      };
+  trigger: Trigger;
+  /** Operation to execute when triggered */
   operation: Operation;
   /** Executor description */
   description?: string | undefined;

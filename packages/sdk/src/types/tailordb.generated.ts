@@ -120,14 +120,7 @@ export type TailorDBTypeParsedSettings = {
   /** Enable bulk upsert mutation for this type */
   bulkUpsert?: boolean | undefined;
   /** Configure GraphQL operations for this type. Use "query" for read-only mode, or an object for granular control. */
-  gqlOperations?:
-    | {
-        create?: boolean | undefined;
-        update?: boolean | undefined;
-        delete?: boolean | undefined;
-        read?: boolean | undefined;
-      }
-    | undefined;
+  gqlOperations?: GqlOperations;
   /**
    * Enable publishing events for this type.
    * When enabled, record creation/update/deletion events are published.
@@ -1136,12 +1129,5 @@ export type TailorDBServiceConfig = {
       }
     | undefined;
   /** Default GraphQL operations for all types in this service */
-  gqlOperations?:
-    | {
-        create?: boolean | undefined;
-        update?: boolean | undefined;
-        delete?: boolean | undefined;
-        read?: boolean | undefined;
-      }
-    | undefined;
+  gqlOperations?: GqlOperations;
 };

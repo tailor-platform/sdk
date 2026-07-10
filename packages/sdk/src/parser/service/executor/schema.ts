@@ -2,10 +2,6 @@ import { z } from "zod";
 import { AuthInvokerSchema } from "../auth";
 import { functionSchema } from "../common";
 import type { JsonValue } from "#/types/helpers";
-import type {
-  WorkflowOperation as WorkflowOperationValue,
-  WorkflowOperationFunction,
-} from "./types";
 
 export const TailorDBTriggerSchema = z.strictObject({
   kind: z.literal("tailordb").describe("TailorDB record event trigger"),
@@ -138,15 +134,9 @@ export const WorkflowInputSchema: z.ZodType<
   z.record(z.string(), JsonValueSchema),
 ]);
 
-export const WorkflowOperationFunctionSchema: z.ZodType<
-  WorkflowOperationFunction,
-  WorkflowOperationFunction
-> = functionSchema;
-
-export const WorkflowOperationArgsSchema = z.union([
-  WorkflowInputSchema,
-  WorkflowOperationFunctionSchema,
-]);
+export const WorkflowOperationArgsSchema = z
+  .union([WorkflowInputSchema, functionSchema])
+  .describe("Arguments to pass to the workflow");
 
 const workflowOperationShape = {
   kind: z.literal("workflow"),
@@ -163,17 +153,15 @@ const WorkflowOperationByNameSchema = z.strictObject({
 const WorkflowOperationByReferenceSchema = z
   .strictObject({
     ...workflowOperationShape,
-    workflow: z.object({ name: z.string() }).passthrough(),
+    workflow: z.looseObject({ name: z.string() }),
     workflowName: z.string().optional(),
   })
-  .transform(
-    ({ workflow, ...operation }): WorkflowOperationValue => ({
-      ...operation,
-      workflowName: workflow.name,
-    }),
-  );
+  .transform(({ workflow, ...operation }) => ({
+    ...operation,
+    workflowName: workflow.name,
+  }));
 
-export const WorkflowOperationSchema: z.ZodType<WorkflowOperationValue> = z.union([
+export const WorkflowOperationSchema = z.union([
   WorkflowOperationByReferenceSchema,
   WorkflowOperationByNameSchema,
 ]);
@@ -190,5 +178,5 @@ export const ExecutorSchema = z.strictObject({
   description: z.string().optional().describe("Executor description"),
   disabled: z.boolean().optional().default(false).describe("Whether the executor is disabled"),
   trigger: TriggerSchema.describe("Event trigger configuration"),
-  operation: OperationSchema,
+  operation: OperationSchema.describe("Operation to execute when triggered"),
 });

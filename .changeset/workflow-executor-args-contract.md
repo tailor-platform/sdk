@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": patch
+"@tailor-platform/sdk": major
 ---
 
-Fix workflow executor `args` to be required when the target workflow input is required, and accept primitive and array static JSON inputs during configuration parsing.
+Require workflow executor `args` when the target workflow input is required, and accept primitive and array static JSON inputs during configuration parsing. Existing workflow executor configurations that omit required input must add `args`.
