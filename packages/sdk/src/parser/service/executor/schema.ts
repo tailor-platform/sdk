@@ -2,7 +2,10 @@ import { z } from "zod";
 import { AuthInvokerSchema } from "../auth";
 import { functionSchema } from "../common";
 import type { JsonValue } from "#/types/helpers";
-import type { WorkflowOperation as WorkflowOperationValue, WorkflowOperationArgs } from "./types";
+import type {
+  WorkflowOperation as WorkflowOperationValue,
+  WorkflowOperationFunction,
+} from "./types";
 
 export const TailorDBTriggerSchema = z.strictObject({
   kind: z.literal("tailordb").describe("TailorDB record event trigger"),
@@ -113,7 +116,7 @@ export const WebhookOperationSchema = z.strictObject({
     .describe("HTTP headers for the webhook request"),
 });
 
-export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+export const JsonValueSchema: z.ZodType<JsonValue, JsonValue> = z.lazy(() =>
   z.union([
     z.string(),
     z.number(),
@@ -124,7 +127,10 @@ export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   ]),
 );
 
-export const WorkflowInputSchema: z.ZodType<Exclude<JsonValue, null>> = z.union([
+export const WorkflowInputSchema: z.ZodType<
+  Exclude<JsonValue, null>,
+  Exclude<JsonValue, null>
+> = z.union([
   z.string(),
   z.number(),
   z.boolean(),
@@ -132,12 +138,15 @@ export const WorkflowInputSchema: z.ZodType<Exclude<JsonValue, null>> = z.union(
   z.record(z.string(), JsonValueSchema),
 ]);
 
-export const WorkflowOperationArgsSchema: z.ZodType<WorkflowOperationArgs, WorkflowOperationArgs> =
-  z
-    .custom<WorkflowOperationArgs>(
-      (value) => typeof value === "function" || WorkflowInputSchema.safeParse(value).success,
-    )
-    .describe("Arguments to pass to the workflow");
+export const WorkflowOperationFunctionSchema: z.ZodType<
+  WorkflowOperationFunction,
+  WorkflowOperationFunction
+> = functionSchema;
+
+export const WorkflowOperationArgsSchema = z.union([
+  WorkflowInputSchema,
+  WorkflowOperationFunctionSchema,
+]);
 
 const workflowOperationShape = {
   kind: z.literal("workflow"),
@@ -148,12 +157,14 @@ const workflowOperationShape = {
 const WorkflowOperationByNameSchema = z.strictObject({
   ...workflowOperationShape,
   workflowName: z.string().describe("Name of the workflow to execute"),
+  workflow: z.never().optional(),
 });
 
 const WorkflowOperationByReferenceSchema = z
   .strictObject({
     ...workflowOperationShape,
     workflow: z.object({ name: z.string() }).passthrough(),
+    workflowName: z.string().optional(),
   })
   .transform(
     ({ workflow, ...operation }): WorkflowOperationValue => ({
@@ -163,8 +174,8 @@ const WorkflowOperationByReferenceSchema = z
   );
 
 export const WorkflowOperationSchema: z.ZodType<WorkflowOperationValue> = z.union([
-  WorkflowOperationByNameSchema,
   WorkflowOperationByReferenceSchema,
+  WorkflowOperationByNameSchema,
 ]);
 
 export const OperationSchema = z.union([
