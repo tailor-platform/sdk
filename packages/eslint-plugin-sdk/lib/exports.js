@@ -1,5 +1,10 @@
-import { bindingIdentifierForCall, isExpressionWrapper, unwrapExpression } from "./ast.js";
-import { isBindingReassigned } from "./sdk-bindings.js";
+import {
+  bindingIdentifierForCall,
+  isExpressionWrapper,
+  nodeStart,
+  unwrapExpression,
+} from "./ast.js";
+import { isBindingReassigned, isBindingReassignedBefore } from "./sdk-bindings.js";
 
 function declaredNames(declaration) {
   if (declaration?.type !== "VariableDeclaration") return [];
@@ -11,6 +16,7 @@ function declaredNames(declaration) {
 export function collectExports(program) {
   const named = new Set();
   const defaults = new Set();
+  const defaultSnapshots = new Map();
   const aliases = new Map();
 
   for (const statement of program.body) {
@@ -18,6 +24,7 @@ export function collectExports(program) {
       const declaration = unwrapExpression(statement.declaration);
       if (declaration.type === "Identifier") {
         defaults.add(declaration.name);
+        defaultSnapshots.set(declaration.name, nodeStart(statement));
       }
     }
     const declaration =
@@ -70,7 +77,7 @@ export function collectExports(program) {
     }
   }
 
-  return { named, defaults };
+  return { named, defaults, defaultSnapshots };
 }
 
 function isDirectExport(call, exportType) {
@@ -84,13 +91,20 @@ function isDirectExport(call, exportType) {
 export function exportStatus(call, exports, context) {
   const binding = bindingIdentifierForCall(call);
   const bindingName = binding?.name ?? null;
-  const isStable = binding === null || !isBindingReassigned(context, binding);
+  const snapshotPosition =
+    bindingName === null ? undefined : exports.defaultSnapshots.get(bindingName);
+  const isDefaultStable =
+    binding === null ||
+    (snapshotPosition === undefined
+      ? !isBindingReassigned(context, binding)
+      : !isBindingReassignedBefore(context, binding, snapshotPosition));
+  const isNamedStable = binding === null || !isBindingReassigned(context, binding);
   return {
     isDefault:
       isDirectExport(call, "ExportDefaultDeclaration") ||
-      (isStable && bindingName !== null && exports.defaults.has(bindingName)),
+      (isDefaultStable && bindingName !== null && exports.defaults.has(bindingName)),
     isNamed:
       isDirectExport(call, "ExportNamedDeclaration") ||
-      (isStable && bindingName !== null && exports.named.has(bindingName)),
+      (isNamedStable && bindingName !== null && exports.named.has(bindingName)),
   };
 }

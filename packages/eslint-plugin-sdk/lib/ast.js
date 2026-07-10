@@ -123,6 +123,7 @@ export function isModuleLevelCall(call) {
     ) {
       return false;
     }
+    if (current.type === "ClassBody") return false;
     if (current.type === "Program") return true;
     current = current.parent;
   }

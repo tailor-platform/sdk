@@ -1,9 +1,39 @@
 import { directStatementList, memberName, nodeStart, unwrapExpression } from "../lib/ast.js";
-import { workflowRuntimeImportTracker } from "../lib/sdk-bindings.js";
+import { isBindingReassigned, workflowRuntimeImportTracker } from "../lib/sdk-bindings.js";
 
-function expressionKey(sourceCode, expression) {
-  return sourceCode
-    .getTokens(unwrapExpression(expression))
+function isStableExpression(context, expression) {
+  const value = unwrapExpression(expression);
+  if (!value) return false;
+  if (value.type === "Identifier") return !isBindingReassigned(context, value);
+  if (value.type === "Literal" || value.type === "ThisExpression") return true;
+  if (value.type === "MemberExpression" || value.type === "OptionalMemberExpression") {
+    return (
+      isStableExpression(context, value.object) &&
+      (!value.computed || isStableExpression(context, value.property))
+    );
+  }
+  if (value.type === "BinaryExpression" || value.type === "LogicalExpression") {
+    return isStableExpression(context, value.left) && isStableExpression(context, value.right);
+  }
+  if (value.type === "UnaryExpression") return isStableExpression(context, value.argument);
+  if (value.type === "ConditionalExpression") {
+    return (
+      isStableExpression(context, value.test) &&
+      isStableExpression(context, value.consequent) &&
+      isStableExpression(context, value.alternate)
+    );
+  }
+  if (value.type === "TemplateLiteral") {
+    return value.expressions.every((entry) => isStableExpression(context, entry));
+  }
+  return false;
+}
+
+function expressionKey(context, expression) {
+  const value = unwrapExpression(expression);
+  if (!isStableExpression(context, value)) return null;
+  return context.sourceCode
+    .getTokens(value)
     .map((token) => `${token.type}:${token.value.length}:${token.value}`)
     .join("|");
 }
@@ -70,9 +100,11 @@ export default {
             call.arguments.length >= 2 &&
             isCallback(call.arguments[1]);
           if (!isRuntimeResolve && !isWaitPointResolve) continue;
+          const execution = expressionKey(context, call.arguments[0]);
+          if (execution === null) continue;
           resolves.push({
             block: directStatementList(call),
-            execution: expressionKey(context.sourceCode, call.arguments[0]),
+            execution,
             position: nodeStart(call),
           });
         }
@@ -96,7 +128,8 @@ export default {
 
           const block = directStatementList(call);
           if (block === null) continue;
-          const execution = expressionKey(context.sourceCode, call.arguments[0]);
+          const execution = expressionKey(context, call.arguments[0]);
+          if (execution === null) continue;
           const position = nodeStart(call);
           const resolvedEarlier = resolves.some(
             (resolve) =>

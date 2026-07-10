@@ -25,10 +25,18 @@ export function isBindingReference(context, node, binding) {
 }
 
 export function isBindingReassigned(context, binding) {
+  return isBindingReassignedBefore(context, binding, Number.POSITIVE_INFINITY);
+}
+
+export function isBindingReassignedBefore(context, binding, position) {
   const variable = findVariable(context.sourceCode, binding);
   return (
     variable?.references.some(
-      (reference) => !reference.init && reference.isWrite && reference.isWrite(),
+      (reference) =>
+        !reference.init &&
+        reference.isWrite &&
+        reference.isWrite() &&
+        nodeStart(reference.identifier) < position,
     ) ?? false
   );
 }

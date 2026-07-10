@@ -179,6 +179,20 @@ describe("require-service-default-export", () => {
       "The resolver created by createResolver() must be the default export.",
     );
   });
+
+  test("accepts a service binding changed after a default-export snapshot", () => {
+    expectClean(
+      'import { createResolver } from "@tailor-platform/sdk";\nlet resolver = createResolver({});\nexport default resolver;\nresolver = {};',
+      "require-service-default-export",
+    );
+  });
+
+  test("ignores service factories in class fields", () => {
+    expectClean(
+      'import { createResolver } from "@tailor-platform/sdk";\nexport class Helper { resolver = createResolver({}); }',
+      "require-service-default-export",
+    );
+  });
 });
 
 describe("require-named-workflow-job-export", () => {
@@ -317,6 +331,10 @@ describe("no-deprecated-api", () => {
       'import { startWorkflow } from "@tailor-platform/sdk/cli";\nimport config from "../tailor.config";\nconst options = { workflow, authInvoker: config.auth.invoker("automation"), arg: {} };\nstartWorkflow(options);',
       "no-deprecated-api",
     );
+    expectClean(
+      'import { startWorkflow } from "@tailor-platform/sdk/cli";\nimport config from "../tailor.config";\nconst authInvoker = config.auth.invoker("automation");\nstartWorkflow({ workflow, authInvoker, arg: {} });',
+      "no-deprecated-api",
+    );
   });
 });
 
@@ -344,6 +362,14 @@ describe("no-resume-after-resolve", () => {
     );
     expectClean(
       'import { resumeWorkflow } from "@tailor-platform/sdk/runtime/workflow";\nasync function decide() {\n  await approval.resolve("run 1", () => true);\n  await resumeWorkflow("run1");\n}',
+      "no-resume-after-resolve",
+    );
+    expectClean(
+      'import { resumeWorkflow } from "@tailor-platform/sdk/runtime/workflow";\nasync function decide(queue) {\n  await approval.resolve(queue.shift(), () => true);\n  await resumeWorkflow(queue.shift());\n}',
+      "no-resume-after-resolve",
+    );
+    expectClean(
+      'import { resumeWorkflow } from "@tailor-platform/sdk/runtime/workflow";\nasync function decide(input) {\n  let executionId = input.first;\n  await approval.resolve(executionId, () => true);\n  executionId = input.second;\n  await resumeWorkflow(executionId);\n}',
       "no-resume-after-resolve",
     );
   });

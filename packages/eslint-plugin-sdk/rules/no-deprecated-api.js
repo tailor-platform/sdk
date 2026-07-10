@@ -1,7 +1,7 @@
 import {
   bindingIdentifierForCall,
-  isExpressionWrapper,
   memberName,
+  objectProperty,
   unwrapExpression,
 } from "../lib/ast.js";
 import {
@@ -13,26 +13,6 @@ import {
 
 function isTailorConfigImport(source) {
   return /(?:^|\/)tailor(?:\.[^/]+)?\.config(?:\.[cm]?[jt]sx?)?$/.test(source);
-}
-
-function propertyName(property) {
-  if (!property.computed && property.key.type === "Identifier") return property.key.name;
-  if (property.key.type === "Literal") return property.key.value;
-  return null;
-}
-
-function isStartWorkflowAuthInvoker(call, optionObjects) {
-  let value = call;
-  while (isExpressionWrapper(value.parent)) value = value.parent;
-  const property = value.parent;
-  if (
-    property?.type !== "Property" ||
-    property.value !== value ||
-    propertyName(property) !== "authInvoker"
-  ) {
-    return false;
-  }
-  return optionObjects.has(property.parent);
 }
 
 export default {
@@ -97,6 +77,16 @@ export default {
           }
         }
 
+        const startWorkflowInvokers = new Set();
+        for (const options of startWorkflowOptions) {
+          const property = objectProperty(options, "authInvoker");
+          let value = unwrapExpression(property?.value);
+          if (value?.type === "Identifier") {
+            value = unwrapExpression(variableInitializer(context, value));
+          }
+          if (value?.type === "CallExpression") startWorkflowInvokers.add(value);
+        }
+
         for (const call of calls) {
           const callee = unwrapExpression(call.callee);
           if (memberName(callee) !== "invoker") continue;
@@ -110,7 +100,7 @@ export default {
             config?.type === "Identifier" &&
             configBindings.some((binding) => isBindingReference(context, config, binding));
           if (!isAuth && !isConfigAuth) continue;
-          if (isStartWorkflowAuthInvoker(call, startWorkflowOptions)) continue;
+          if (startWorkflowInvokers.has(call)) continue;
           context.report({ node: callee, messageId: "invoker" });
         }
       },
