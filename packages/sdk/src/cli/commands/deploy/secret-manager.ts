@@ -296,7 +296,7 @@ export async function planSecretManager(context: PlanContext) {
  * @param client - Operator client instance
  * @param result - Planned secret changes
  * @param phase - Apply phase
- * @param application - Application to read secrets from for hash state persistence
+ * @param application - Application used for ownership metadata and hash state persistence
  * @returns Promise that resolves when secret changes are applied
  */
 export async function applySecretManager(
@@ -351,19 +351,16 @@ export async function applySecretManager(
       ),
     );
 
-    // Persist hash state for all secrets after successful apply
-    if (application) {
+    const secretHashUpdates = [...secretChangeSet.creates, ...secretChangeSet.updates];
+    if (application && secretHashUpdates.length > 0) {
       const state = loadSecretsState(stateScope);
-      for (const vault of application.secrets) {
-        if (!Object.hasOwn(state.vaults, vault.vaultName)) {
-          state.vaults[vault.vaultName] = {};
+      for (const secret of secretHashUpdates) {
+        if (!Object.hasOwn(state.vaults, secret.vaultName)) {
+          state.vaults[secret.vaultName] = {};
         }
-        for (const secret of vault.secrets) {
-          if (secret.value != null) {
-            assertDefined(state.vaults[vault.vaultName], "vault state entry missing")[secret.name] =
-              hashValue(secret.value);
-          }
-        }
+        assertDefined(state.vaults[secret.vaultName], "vault state entry missing")[
+          secret.secretName
+        ] = hashValue(secret.value);
       }
       saveSecretsState(stateScope, state);
     }

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import * as path from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
@@ -11,12 +11,9 @@ const SecretsStateSchema = z.object({
 
 const PersistedSecretsStateSchema = z.object({
   version: z.literal(1),
-  workspaces: z.record(
-    z.string(),
-    z.object({
-      applications: z.record(z.string(), SecretsStateSchema),
-    }),
-  ),
+  workspaceId: z.string(),
+  applicationKey: z.string(),
+  state: SecretsStateSchema,
 });
 
 export type SecretsState = z.infer<typeof SecretsStateSchema>;
@@ -29,32 +26,36 @@ export interface SecretsStateScope {
 }
 
 /**
- * Get the file path for the secrets state JSON.
- * @returns Absolute path to secrets-state.json
+ * Get the file path for one workspace and application's secrets state JSON.
+ * @param scope - Workspace and application identity for the deployment
+ * @returns Absolute path to the scoped state file
  */
-export function getSecretsStatePath(): string {
-  return path.join(getDistDir(), "secrets-state.json");
+export function getSecretsStatePath(scope: SecretsStateScope): string {
+  const scopeHash = hashValue(JSON.stringify([scope.workspaceId, applicationStateKey(scope)]));
+  return path.join(getDistDir(), "secrets-state", `${scopeHash}.json`);
 }
 
-/**
- * Load secrets hash state from disk.
- * @returns Persisted state, or empty state if file is missing or corrupted
- */
-function loadPersistedSecretsState(): PersistedSecretsState {
-  const filePath = getSecretsStatePath();
-  if (!existsSync(filePath)) {
-    return { version: 1, workspaces: {} };
-  }
+function loadPersistedSecretsState(scope: SecretsStateScope): PersistedSecretsState | undefined {
   try {
-    const raw = readFileSync(filePath, "utf-8");
-    return PersistedSecretsStateSchema.parse(JSON.parse(raw));
+    const raw = readFileSync(getSecretsStatePath(scope), "utf-8");
+    const persistedState = PersistedSecretsStateSchema.parse(JSON.parse(raw));
+    if (
+      persistedState.workspaceId !== scope.workspaceId ||
+      persistedState.applicationKey !== applicationStateKey(scope)
+    ) {
+      return undefined;
+    }
+    return persistedState;
   } catch {
-    return { version: 1, workspaces: {} };
+    return undefined;
   }
 }
 
 function applicationStateKey(scope: SecretsStateScope): string {
-  return scope.applicationId ? `id:${scope.applicationId}` : `name:${scope.applicationName}`;
+  if (!scope.applicationId) {
+    throw new Error(`Application "${scope.applicationName}" has no stable id for secrets state`);
+  }
+  return `id:${scope.applicationId}`;
 }
 
 /**
@@ -63,11 +64,10 @@ function applicationStateKey(scope: SecretsStateScope): string {
  * @returns Persisted state, or empty state if the scope is missing or the file is invalid
  */
 export function loadSecretsState(scope: SecretsStateScope): SecretsState {
-  return (
-    loadPersistedSecretsState().workspaces[scope.workspaceId]?.applications[
-      applicationStateKey(scope)
-    ] ?? { vaults: {} }
-  );
+  if (!scope.applicationId) {
+    return { vaults: {} };
+  }
+  return loadPersistedSecretsState(scope)?.state ?? { vaults: {} };
 }
 
 /**
@@ -76,14 +76,26 @@ export function loadSecretsState(scope: SecretsStateScope): SecretsState {
  * @param state - The secrets state to persist
  */
 export function saveSecretsState(scope: SecretsStateScope, state: SecretsState): void {
-  const filePath = getSecretsStatePath();
+  if (!scope.applicationId) {
+    return;
+  }
+  const filePath = getSecretsStatePath(scope);
   const dir = path.dirname(filePath);
-  const persistedState = loadPersistedSecretsState();
-  const workspaceState = persistedState.workspaces[scope.workspaceId] ?? { applications: {} };
-  workspaceState.applications[applicationStateKey(scope)] = state;
-  persistedState.workspaces[scope.workspaceId] = workspaceState;
   mkdirSync(dir, { recursive: true });
-  writeFileSync(filePath, JSON.stringify(persistedState, null, 2), "utf-8");
+  writeFileSync(
+    filePath,
+    JSON.stringify(
+      {
+        version: 1,
+        workspaceId: scope.workspaceId,
+        applicationKey: applicationStateKey(scope),
+        state,
+      } satisfies PersistedSecretsState,
+      null,
+      2,
+    ),
+    "utf-8",
+  );
 }
 
 /**

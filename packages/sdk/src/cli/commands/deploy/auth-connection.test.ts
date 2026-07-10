@@ -247,7 +247,14 @@ describe("planAuthConnections", () => {
       connections: [{ name: "shared-connection", ownerLabel: appName }],
     });
 
-    const { changeSet } = await planAuthConnections(
+    const resultA = await planAuthConnections(
+      client,
+      "ws-a",
+      appName,
+      "shared-app-id",
+      authsWith(["shared-connection"]),
+    );
+    const resultB = await planAuthConnections(
       client,
       "ws-b",
       appName,
@@ -255,8 +262,13 @@ describe("planAuthConnections", () => {
       authsWith(["shared-connection"]),
     );
 
-    expect(changeSet.replaces.map((replace) => replace.name)).toEqual(["shared-connection"]);
-    expect(changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
+    expect(resultA.changeSet.unchanged.map((connection) => connection.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces.map((replace) => replace.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
       "oauth2.client_secret",
     );
     expect(mockLoadSecretsState).toHaveBeenCalledWith({
@@ -276,7 +288,14 @@ describe("planAuthConnections", () => {
       connections: [{ name: "shared-connection", ownerLabel: appName }],
     });
 
-    const { changeSet } = await planAuthConnections(
+    const resultA = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      "app-a",
+      authsWith(["shared-connection"]),
+    );
+    const resultB = await planAuthConnections(
       client,
       workspaceId,
       appName,
@@ -284,8 +303,13 @@ describe("planAuthConnections", () => {
       authsWith(["shared-connection"]),
     );
 
-    expect(changeSet.replaces.map((replace) => replace.name)).toEqual(["shared-connection"]);
-    expect(changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
+    expect(resultA.changeSet.unchanged.map((connection) => connection.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces.map((replace) => replace.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
       "oauth2.client_secret",
     );
     expect(mockLoadSecretsState).toHaveBeenCalledWith({
@@ -362,7 +386,7 @@ describe("applyAuthConnections", () => {
     expect(client.createAuthConnection).not.toHaveBeenCalled();
   });
 
-  test("does not save secret hash when clientSecret is absent from update mask (CI scenario)", async () => {
+  test("does not save state when clientSecret is absent from update mask (CI scenario)", async () => {
     const client = createMockClient({
       connections: [{ name: "conn", ownerLabel: appName }],
     });
@@ -379,14 +403,12 @@ describe("applyAuthConnections", () => {
     const [replace] = result.changeSet.replaces;
     expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
 
-    const initialState = { vaults: {}, connections: { conn: "old-hash" } };
-    mockLoadSecretsState.mockReturnValue(initialState);
+    mockLoadSecretsState.mockClear();
+    mockSaveSecretsState.mockClear();
     await applyAuthConnections(client, result, "create-update");
 
-    const savedState = mockSaveSecretsState.mock.calls[0]?.[1] as
-      | { connections: Record<string, string> }
-      | undefined;
-    expect(savedState?.connections["conn"]).toBe("old-hash");
+    expect(mockLoadSecretsState).not.toHaveBeenCalled();
+    expect(mockSaveSecretsState).not.toHaveBeenCalled();
   });
 
   test("warns user to re-authorize when the server responds UNAUTHORIZED", async () => {

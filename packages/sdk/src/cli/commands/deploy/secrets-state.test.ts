@@ -13,22 +13,32 @@ vi.mock("#/cli/shared/dist-dir", () => ({
   getDistDir: () => "/tmp/tailor-sdk-test-secrets-state",
 }));
 
-function removeStateFile(): void {
-  const statePath = getSecretsStatePath();
-  if (existsSync(statePath)) {
-    rmSync(statePath);
-  }
-}
-
 const scopeA = {
   workspaceId: "workspace-a",
   applicationId: "application-a",
   applicationName: "shared-name",
 } satisfies SecretsStateScope;
 
+const scopeB = {
+  workspaceId: "workspace-b",
+  applicationId: "application-b",
+  applicationName: "shared-name",
+} satisfies SecretsStateScope;
+
+function removeStateFiles(): void {
+  const stateDirectory = path.dirname(getSecretsStatePath(scopeA));
+  if (existsSync(stateDirectory)) {
+    rmSync(stateDirectory, { recursive: true });
+  }
+  const legacyStatePath = "/tmp/tailor-sdk-test-secrets-state/secrets-state.json";
+  if (existsSync(legacyStatePath)) {
+    rmSync(legacyStatePath);
+  }
+}
+
 describe("secrets-state", () => {
-  beforeEach(removeStateFile);
-  afterEach(removeStateFile);
+  beforeEach(removeStateFiles);
+  afterEach(removeStateFiles);
 
   test("loadSecretsState returns empty state when file does not exist", () => {
     const state = loadSecretsState(scopeA);
@@ -90,12 +100,21 @@ describe("secrets-state", () => {
     expect(loaded.vaults["shared-vault"]?.["shared-secret"]).toBe("matching-hash");
   });
 
+  test("state without a stable application id is always a cache miss", () => {
+    const scopeWithoutId = {
+      ...scopeA,
+      applicationId: undefined,
+    };
+
+    saveSecretsState(scopeWithoutId, {
+      vaults: { "shared-vault": { "shared-secret": "matching-hash" } },
+    });
+
+    expect(loadSecretsState(scopeWithoutId)).toEqual({ vaults: {} });
+    expect(existsSync(path.dirname(getSecretsStatePath(scopeA)))).toBe(false);
+  });
+
   test("saving one scope preserves another scope", () => {
-    const scopeB = {
-      workspaceId: "workspace-b",
-      applicationId: "application-b",
-      applicationName: "shared-name",
-    } satisfies SecretsStateScope;
     saveSecretsState(scopeA, { vaults: { "vault-a": { secret: "hash-a" } } });
     saveSecretsState(scopeB, { vaults: { "vault-b": { secret: "hash-b" } } });
 
@@ -103,8 +122,21 @@ describe("secrets-state", () => {
     expect(loadSecretsState(scopeB).vaults["vault-b"]?.secret).toBe("hash-b");
   });
 
+  test("stores different scopes in different files", () => {
+    expect(getSecretsStatePath(scopeA)).not.toBe(getSecretsStatePath(scopeB));
+  });
+
+  test("a malformed scope file does not invalidate another scope", () => {
+    saveSecretsState(scopeB, { vaults: { "vault-b": { secret: "hash-b" } } });
+    const statePath = getSecretsStatePath(scopeA);
+    mkdirSync(path.dirname(statePath), { recursive: true });
+    writeFileSync(statePath, "{broken json,,", "utf-8");
+
+    expect(loadSecretsState(scopeB).vaults["vault-b"]?.secret).toBe("hash-b");
+  });
+
   test("legacy unscoped state is a cache miss", () => {
-    const statePath = getSecretsStatePath();
+    const statePath = "/tmp/tailor-sdk-test-secrets-state/secrets-state.json";
     mkdirSync(path.dirname(statePath), { recursive: true });
     writeFileSync(
       statePath,
@@ -119,7 +151,7 @@ describe("secrets-state", () => {
   });
 
   test("state with an unknown version is a cache miss", () => {
-    const statePath = getSecretsStatePath();
+    const statePath = getSecretsStatePath(scopeA);
     mkdirSync(path.dirname(statePath), { recursive: true });
     writeFileSync(
       statePath,
@@ -142,7 +174,7 @@ describe("secrets-state", () => {
   });
 
   test("loadSecretsState returns empty state when file contains invalid JSON", () => {
-    const statePath = getSecretsStatePath();
+    const statePath = getSecretsStatePath(scopeA);
     mkdirSync(path.dirname(statePath), { recursive: true });
     writeFileSync(statePath, "{broken json,,,", "utf-8");
     const state = loadSecretsState(scopeA);

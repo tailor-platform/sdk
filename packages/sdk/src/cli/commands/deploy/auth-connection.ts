@@ -287,26 +287,28 @@ export async function applyAuthConnections(
       }),
     );
 
-    const state = loadSecretsState(stateScope);
-    if (!state.connections) {
-      state.connections = {};
-    }
-    for (const create of changeSet.creates) {
-      const conn = create.request.connection;
-      if (conn?.config?.case === "oauth2") {
-        state.connections[create.name] = hashValue(conn.config.value.clientSecret ?? "");
+    const secretReplaces = changeSet.replaces.filter((replace) =>
+      replace.updateRequest.updateMask?.paths?.includes("oauth2.client_secret"),
+    );
+    if (changeSet.creates.length > 0 || secretReplaces.length > 0) {
+      const state = loadSecretsState(stateScope);
+      if (!state.connections) {
+        state.connections = {};
       }
-    }
-    for (const replace of changeSet.replaces) {
-      const conn = replace.updateRequest.connection;
-      if (
-        conn?.config?.case === "oauth2" &&
-        replace.updateRequest.updateMask?.paths?.includes("oauth2.client_secret")
-      ) {
-        state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
+      for (const create of changeSet.creates) {
+        const conn = create.request.connection;
+        if (conn?.config?.case === "oauth2") {
+          state.connections[create.name] = hashValue(conn.config.value.clientSecret ?? "");
+        }
       }
+      for (const replace of secretReplaces) {
+        const conn = replace.updateRequest.connection;
+        if (conn?.config?.case === "oauth2") {
+          state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
+        }
+      }
+      saveSecretsState(stateScope, state);
     }
-    saveSecretsState(stateScope, state);
   } else {
     await Promise.all(
       changeSet.deletes.map(async (del) => {
