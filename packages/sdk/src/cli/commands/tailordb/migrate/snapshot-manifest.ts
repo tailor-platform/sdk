@@ -112,14 +112,10 @@ export function generateTailorDBTypeManifestFromSnapshot(
   }
 
   // Build fields
-  const hasUserTypeCreateHook = snapshotType.typeHookExpr?.create !== undefined;
   const fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
   for (const [fieldName, fieldConfig] of Object.entries(snapshotType.fields)) {
     if (fieldName === "id") continue;
     const fieldProto = convertFieldConfigToProto(fieldConfig);
-    if (hasUserTypeCreateHook && fieldConfig.required && !fieldProto.optionalOnCreate) {
-      fieldProto.optionalOnCreate = true;
-    }
     fields[fieldName] = fieldProto;
   }
 

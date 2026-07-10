@@ -80,8 +80,10 @@ function buildHookObject(
 
     if (hook && hasDefault) {
       parts.push(
-        `${key(name)}: ((_value, _oldValue) => (${hook.expr}))(${access}, ${oldAccess} ?? null) ?? ${serializeDefault(config.default, config.type)}`,
+        `${key(name)}: ((_value) => (${hook.expr}))(${access}) ?? ${serializeDefault(config.default, config.type)}`,
       );
+    } else if (hook && operation === "create") {
+      parts.push(`${key(name)}: ((_value) => (${hook.expr}))(${access})`);
     } else if (hook) {
       parts.push(
         `${key(name)}: ((_value, _oldValue) => (${hook.expr}))(${access}, ${oldAccess} ?? null)`,

@@ -24,7 +24,7 @@ type ScriptFunction = (...args: unknown[]) => unknown;
 
 type ScriptTarget = {
   fn: ScriptFunction;
-  kind: "hooks" | "validate" | "typeHook" | "typeValidate";
+  kind: "hooks.create" | "hooks.update" | "validate" | "typeHook" | "typeValidate";
 };
 
 /** Binding found in the source file: either an import or a top-level declaration */
@@ -97,11 +97,11 @@ function collectScriptTargets(type: TailorDBTypeSchemaOutput): ScriptTarget[] {
 
     const createHook = toScriptFunction(metadata.hooks?.create);
     if (createHook) {
-      targets.push({ fn: createHook, kind: "hooks" });
+      targets.push({ fn: createHook, kind: "hooks.create" });
     }
     const updateHook = toScriptFunction(metadata.hooks?.update);
     if (updateHook) {
-      targets.push({ fn: updateHook, kind: "hooks" });
+      targets.push({ fn: updateHook, kind: "hooks.update" });
     }
 
     for (const validateInput of metadata.validate ?? []) {
@@ -444,7 +444,7 @@ export function buildMinimalEntryFromResolved(
 
 async function bundleScriptTarget(args: {
   fn: ScriptFunction;
-  kind: "hooks" | "validate" | "typeHook" | "typeValidate";
+  kind: "hooks.create" | "hooks.update" | "validate" | "typeHook" | "typeValidate";
   sourceFilePath: string;
   sourceBindings: Map<string, SourceBinding>;
   tempDir: string;
@@ -455,13 +455,15 @@ async function bundleScriptTarget(args: {
   const context = `${kind} in ${sourceFilePath}`;
   const fnSource = stringifyFunction(fn);
   const argsObject =
-    kind === "hooks"
-      ? `{ input: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`
-      : kind === "validate"
-        ? `{ value: _value }`
-        : kind === "typeHook"
-          ? `{ input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now }`
-          : `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap} }, __issues`;
+    kind === "hooks.create"
+      ? `{ input: _value, invoker: ${tailorPrincipalMap}, now: _now }`
+      : kind === "hooks.update"
+        ? `{ input: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`
+        : kind === "validate"
+          ? `{ value: _value }`
+          : kind === "typeHook"
+            ? `{ input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now }`
+            : `{ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap} }, __issues`;
   const inlineExpr = assertParsableExpression(`(${fnSource})(${argsObject})`, context);
 
   // Check if the function has free variables that need bundling
