@@ -58,6 +58,19 @@ const secondary = db.uuid().relation({ type, toward });
     expect(findings).toHaveLength(2);
   });
 
+  test("flags relation configs with computed properties", () => {
+    const source = `
+const author = db.uuid().relation({
+  type: "n-1",
+  [TOWARD]: { type: user },
+});
+`;
+
+    const findings = reviewFindings(source, "post.ts", "post.ts");
+
+    expect(findings).toHaveLength(1);
+  });
+
   test("flags relations whose toward.as value may use the default", () => {
     const source = `
 const post = db.table("Post", {

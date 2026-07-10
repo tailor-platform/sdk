@@ -626,7 +626,11 @@ export const allCodemods: CodemodPackage[] = [
     prereleaseUntil: V2_NEXT_4,
     scriptPath: "v2/forward-relation-name/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
-    suspiciousPatterns: [/\.relation\b(?!\s*\()/],
+    suspiciousPatterns: [
+      /\.relation\b(?!\s*\()/,
+      /\{[^}\n]*\brelation\b[^}\n]*\}\s*=/,
+      /\[\s*["']relation["']\s*\]/,
+    ],
     examples: [
       {
         caption: "Preserve the v1 GraphQL field name by making it explicit:",

@@ -23,9 +23,10 @@ function callArgument(call: SgNode): SgNode | null {
   const args = call.children().find((child) => child.kind() === "arguments");
   if (!args) return null;
 
-  const values = args
-    .children()
-    .filter((child) => !["(", ")", ",", "comment"].includes(child.kind()));
+  const values = args.children().filter((child) => {
+    const kind = child.kind();
+    return kind !== "(" && kind !== ")" && kind !== "," && kind !== "comment";
+  });
   return values.length === 1 ? values[0]! : null;
 }
 
@@ -55,7 +56,11 @@ function literalStringValue(node: SgNode | null): string | null {
 function hasDynamicProperties(object: SgNode): boolean {
   return object.children().some((child) => {
     const kind = child.kind();
-    return kind === "spread_element" || kind === "shorthand_property_identifier";
+    if (kind === "{" || kind === "}" || kind === "," || kind === "comment") return false;
+    if (kind !== "pair") return true;
+
+    const keyKind = child.children()[0]?.kind();
+    return keyKind !== "property_identifier" && keyKind !== "string";
   });
 }
 
