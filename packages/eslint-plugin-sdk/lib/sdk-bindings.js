@@ -24,11 +24,23 @@ export function isBindingReference(context, node, binding) {
   );
 }
 
+export function isBindingReassigned(context, binding) {
+  const variable = findVariable(context.sourceCode, binding);
+  return (
+    variable?.references.some(
+      (reference) => !reference.init && reference.isWrite && reference.isWrite(),
+    ) ?? false
+  );
+}
+
 export function variableInitializer(context, node) {
   if (node?.type !== "Identifier") return null;
   const variable = findVariable(context.sourceCode, node);
   const definition = variable?.defs.find(
-    (entry) => entry.type === "Variable" && entry.node?.type === "VariableDeclarator",
+    (entry) =>
+      entry.type === "Variable" &&
+      entry.node?.type === "VariableDeclarator" &&
+      entry.node.parent?.kind === "const",
   );
   return definition?.node.init ?? null;
 }

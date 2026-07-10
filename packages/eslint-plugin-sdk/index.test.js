@@ -171,6 +171,14 @@ describe("require-service-default-export", () => {
       "The resolver created by createResolver() must be the default export.",
     );
   });
+
+  test("does not treat a reassigned service binding as a default export", () => {
+    expectViolation(
+      'import { createResolver } from "@tailor-platform/sdk";\nlet resolver = createResolver({});\nresolver = {};\nexport default resolver;',
+      "require-service-default-export",
+      "The resolver created by createResolver() must be the default export.",
+    );
+  });
 });
 
 describe("require-named-workflow-job-export", () => {
@@ -256,6 +264,14 @@ describe("no-api-prefix-in-path-pattern", () => {
     expectClean(
       'import { createHttpAdapter } from "@tailor-platform/sdk";\nexport default createHttpAdapter({ pathPattern: "/api/users", pathPattern: "/users" });',
       "no-api-prefix-in-path-pattern",
+    );
+  });
+
+  test("rejects a prefixed path in a constant options object", () => {
+    expectViolation(
+      'import { createHttpAdapter } from "@tailor-platform/sdk";\nconst options = { pathPattern: "/api/users/*" };\nexport default createHttpAdapter(options);',
+      "no-api-prefix-in-path-pattern",
+      "pathPattern is matched after the /api prefix; remove the leading /api.",
     );
   });
 });

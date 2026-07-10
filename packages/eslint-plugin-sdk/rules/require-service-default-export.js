@@ -1,3 +1,4 @@
+import { isModuleLevelCall } from "../lib/ast.js";
 import { collectExports, exportStatus } from "../lib/exports.js";
 import { configureImportTracker } from "../lib/sdk-bindings.js";
 
@@ -29,9 +30,10 @@ export default {
       "Program:exit"(program) {
         const exports = collectExports(program);
         for (const call of calls) {
+          if (!isModuleLevelCall(call)) continue;
           const factory = imports.callName(call);
           const service = factory === null ? null : SERVICES.get(factory);
-          if (!service || exportStatus(call, exports).isDefault) continue;
+          if (!service || exportStatus(call, exports, context).isDefault) continue;
           context.report({
             node: call,
             messageId: "required",

@@ -1,4 +1,5 @@
-import { bindingNameForCall, isExpressionWrapper, unwrapExpression } from "./ast.js";
+import { bindingIdentifierForCall, isExpressionWrapper, unwrapExpression } from "./ast.js";
+import { isBindingReassigned } from "./sdk-bindings.js";
 
 function declaredNames(declaration) {
   if (declaration?.type !== "VariableDeclaration") return [];
@@ -80,14 +81,16 @@ function isDirectExport(call, exportType) {
   return current.parent?.type === exportType && current.parent.declaration === current;
 }
 
-export function exportStatus(call, exports) {
-  const bindingName = bindingNameForCall(call);
+export function exportStatus(call, exports, context) {
+  const binding = bindingIdentifierForCall(call);
+  const bindingName = binding?.name ?? null;
+  const isStable = binding === null || !isBindingReassigned(context, binding);
   return {
     isDefault:
       isDirectExport(call, "ExportDefaultDeclaration") ||
-      (bindingName !== null && exports.defaults.has(bindingName)),
+      (isStable && bindingName !== null && exports.defaults.has(bindingName)),
     isNamed:
       isDirectExport(call, "ExportNamedDeclaration") ||
-      (bindingName !== null && exports.named.has(bindingName)),
+      (isStable && bindingName !== null && exports.named.has(bindingName)),
   };
 }

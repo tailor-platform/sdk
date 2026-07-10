@@ -1,3 +1,4 @@
+import { isModuleLevelCall } from "../lib/ast.js";
 import { collectExports, exportStatus } from "../lib/exports.js";
 import { configureImportTracker } from "../lib/sdk-bindings.js";
 
@@ -22,8 +23,8 @@ export default {
       "Program:exit"(program) {
         const exports = collectExports(program);
         for (const call of calls) {
-          if (imports.callName(call) !== "createWorkflowJob") continue;
-          const status = exportStatus(call, exports);
+          if (!isModuleLevelCall(call) || imports.callName(call) !== "createWorkflowJob") continue;
+          const status = exportStatus(call, exports, context);
           if (status.isNamed && !status.isDefault) continue;
           context.report({ node: call, messageId: "required" });
         }

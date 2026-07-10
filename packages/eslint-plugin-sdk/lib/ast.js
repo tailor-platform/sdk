@@ -112,3 +112,19 @@ export function objectProperty(object, name) {
     }) ?? null
   );
 }
+
+export function isModuleLevelCall(call) {
+  let current = call.parent;
+  while (current) {
+    if (
+      current.type === "ArrowFunctionExpression" ||
+      current.type === "FunctionDeclaration" ||
+      current.type === "FunctionExpression"
+    ) {
+      return false;
+    }
+    if (current.type === "Program") return true;
+    current = current.parent;
+  }
+  return false;
+}
