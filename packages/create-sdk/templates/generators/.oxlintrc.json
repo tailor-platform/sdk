@@ -1,6 +1,12 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "plugins": ["typescript"],
+  "jsPlugins": [
+    {
+      "name": "tailor-sdk",
+      "specifier": "@tailor-platform/eslint-plugin-sdk"
+    }
+  ],
   "categories": {
     "correctness": "error"
   },
@@ -9,6 +15,12 @@
   },
   "ignorePatterns": [".tailor-sdk/", "src/generated/", "src/seed/", "tailor.d.ts"],
   "rules": {
+    "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
+    "tailor-sdk/no-deprecated-api": "warn",
+    "tailor-sdk/no-resume-after-resolve": "error",
+    "tailor-sdk/one-service-per-file": "error",
+    "tailor-sdk/require-named-workflow-job-export": "error",
+    "tailor-sdk/require-service-default-export": "error",
     "no-case-declarations": "error",
     "no-empty": "error",
     "no-fallthrough": "error",

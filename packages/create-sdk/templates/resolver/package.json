@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@tailor-platform/eslint-plugin-sdk": "workspace:^",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.2",
     "oxfmt": "0.57.0",
