@@ -54,6 +54,10 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         } else if (obj) {
           hooked[key] = obj[key];
         }
+        if (hooked[key] === undefined && field.metadata.default !== undefined) {
+          hooked[key] =
+            field.metadata.default === "now" ? now.toISOString() : field.metadata.default;
+        }
         return hooked;
       },
       {} as Record<string, unknown>,
@@ -61,9 +65,10 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
 
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- metadata absent in recursive nested calls
     if (type.metadata?.typeHook?.create) {
+      const { id: _id, ...typeHookInput } = hooked;
       // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
       const overrides = (type.metadata.typeHook.create as Function)({
-        input: data,
+        input: typeHookInput,
         invoker: null,
         now,
       });
