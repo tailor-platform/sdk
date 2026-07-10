@@ -163,7 +163,7 @@ describe("repository ERD schema workflow", () => {
   test("checks out the repository before every tailor-platform/actions/erd-schema-* step", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    const jobBodies = content.split(/^ {2}[a-z]+:\n/m).slice(1);
+    const jobBodies = content.split(/^ {2}[a-zA-Z_][a-zA-Z0-9_-]*:\n/m).slice(1);
     const actionJobs = jobBodies.filter((job) =>
       job.includes("tailor-platform/actions/erd-schema-"),
     );
