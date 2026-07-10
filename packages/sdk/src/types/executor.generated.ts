@@ -187,22 +187,16 @@ export type JsonValue =
 export type WorkflowInput = string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
 export type WorkflowInputInput = WorkflowInput;
 
-/**
- * Arguments to pass to the workflow
- */
-export type WorkflowOperationArgs =
-  | string
-  | number
-  | boolean
-  | Function
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+export type WorkflowOperationFunction = Function;
+export type WorkflowOperationFunctionInput = WorkflowOperationFunction;
+
+export type WorkflowOperationArgs = WorkflowInput | WorkflowOperationFunction;
 export type WorkflowOperationArgsInput = WorkflowOperationArgs;
 
 export type WorkflowOperation = {
   kind: "workflow";
   workflowName: string;
-  args?: WorkflowOperationArgs | undefined;
+  args?: Exclude<JsonValue, null> | WorkflowOperationFunction | undefined;
   invoker?:
     | string
     | {

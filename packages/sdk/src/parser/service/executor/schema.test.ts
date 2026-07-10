@@ -96,6 +96,29 @@ describe("WorkflowOperationSchema", () => {
     expect(data).not.toHaveProperty("workflow");
   });
 
+  test("prefers workflow object name when workflowName is also present", () => {
+    const result = WorkflowOperationSchema.safeParse({
+      kind: "workflow",
+      workflowName: "stale-workflow",
+      workflow: { name: "current-workflow" },
+      args: { id: "123" },
+    });
+
+    const data = expectParseSuccess(result);
+    expect(data.workflowName).toBe("current-workflow");
+  });
+
+  test("rejects a malformed workflow object even when workflowName is present", () => {
+    const result = WorkflowOperationSchema.safeParse({
+      kind: "workflow",
+      workflowName: "stale-workflow",
+      workflow: {},
+      args: { id: "123" },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
   test("accepts workflowName directly", () => {
     const result = WorkflowOperationSchema.safeParse({
       kind: "workflow",
@@ -142,6 +165,7 @@ describe("WorkflowOperationSchema", () => {
     ["top-level null", null],
     ["Date", new Date("2026-01-01T00:00:00.000Z")],
     ["Map", new Map([["key", "value"]])],
+    ["nested undefined", { nested: undefined }],
     ["nested Date", { nested: new Date("2026-01-01T00:00:00.000Z") }],
     ["nested Map", [new Map([["key", "value"]])]],
   ])("rejects unsupported %s static args", (_description, args) => {
@@ -164,6 +188,28 @@ describe("WorkflowOperationSchema", () => {
 
     const data = expectParseSuccess(result);
     expect(data.args).toBe(args);
+  });
+
+  test("returns the validated copy of static args", () => {
+    let reads = 0;
+    const args = {
+      get value() {
+        reads += 1;
+        return "stable";
+      },
+    };
+    const result = WorkflowOperationSchema.safeParse({
+      kind: "workflow",
+      workflowName: "my-workflow",
+      args,
+    });
+
+    const data = expectParseSuccess(result);
+    expect(data.args).not.toBe(args);
+    expect(data.args).toEqual({ value: "stable" });
+    const readsAfterParse = reads;
+    expect(JSON.stringify(data.args)).toBe('{"value":"stable"}');
+    expect(reads).toBe(readsAfterParse);
   });
 
   test("keeps generated Executor workflow args aligned with the generated contract", () => {
