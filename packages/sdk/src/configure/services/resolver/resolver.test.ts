@@ -465,6 +465,20 @@ describe("createResolver", () => {
       expect(resolver.authInvoker).toEqual({ namespace: "my-auth", machineUserName: "batch-user" });
     });
 
+    test("creates resolver with auth: loggedIn", () => {
+      const outputType = t.object({ result: t.string() });
+
+      const resolver = createResolver({
+        name: "withAuthLoggedIn",
+        operation: "query",
+        output: outputType,
+        body: () => ({ result: "ok" }),
+        auth: "loggedIn",
+      });
+
+      expect(resolver.auth).toBe("loggedIn");
+    });
+
     test("creates minimal resolver without optional fields", () => {
       const outputType = t.object({ result: t.string() });
 
@@ -480,6 +494,7 @@ describe("createResolver", () => {
       expect(resolver.output).toBe(outputType);
       expect(resolver.description).toBeUndefined();
       expect(resolver.input).toBeUndefined();
+      expect(resolver.auth).toBeUndefined();
     });
 
     test("accepts Record<string, TailorField> as output and converts to t.object()", () => {

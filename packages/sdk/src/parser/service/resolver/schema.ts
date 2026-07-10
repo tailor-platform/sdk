@@ -7,6 +7,13 @@ export const QueryTypeSchema = z
   .union([z.literal("query"), z.literal("mutation")])
   .describe("GraphQL operation type");
 
+export const ResolverAuthSchema = z
+  .union([z.literal("loggedIn"), z.literal("public")])
+  .describe(
+    'Access requirement for this resolver: "loggedIn" rejects anonymous callers before ' +
+      '`body` runs; "public" documents that anonymous callers are allowed',
+  );
+
 export const ResolverSchema = z.object({
   operation: QueryTypeSchema.describe("GraphQL operation type (query or mutation)"),
   name: z.string().describe("Resolver name"),
@@ -16,4 +23,9 @@ export const ResolverSchema = z.object({
   output: TailorFieldSchema.describe("Output field definition"),
   publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
   authInvoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
+  auth: ResolverAuthSchema.optional().describe(
+    "Access requirement for this resolver. Omitted (default): unchanged, anonymous callers " +
+      'can reach the resolver. "loggedIn": anonymous callers are rejected before `body` ' +
+      'runs. "public": explicitly documents that anonymous callers are allowed',
+  ),
 });

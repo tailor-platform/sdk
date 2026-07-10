@@ -155,6 +155,9 @@ async function bundleSingleResolver(
 
         const $tailor_resolver_body = async (context) => {
           const invoker = ${INVOKER_EXPR};
+          if (_internalResolver.auth === "loggedIn" && !context.user.type) {
+            throw new TailorErrorMessage("This resolver requires an authenticated caller.");
+          }
           if (_internalResolver.input) {
             const result = t.object(_internalResolver.input).parse({
               value: context.input,

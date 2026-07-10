@@ -42,6 +42,35 @@ describe("bundleResolvers", () => {
     ).resolves.toEqual(new Map());
   });
 
+  test("injects the loggedIn auth guard into the entry file", async () => {
+    using tmp = tempCwd("sdk-bundler-auth-");
+    const resolverDir = path.join(tmp.dir, "src/backend/authcheck/resolver");
+    fs.mkdirSync(resolverDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(resolverDir, "protected.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "protected",\n` +
+        `  auth: "loggedIn",\n` +
+        `  body: async () => 1,\n` +
+        `  output: { type: "integer", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+
+    await bundleResolvers("authcheck", {
+      files: ["./src/backend/authcheck/resolver/*.ts"],
+    });
+
+    const entryContent = fs.readFileSync(
+      path.join(tmp.dir, ".tailor-sdk/resolvers/protected.entry.js"),
+      "utf-8",
+    );
+
+    expect(entryContent).toContain('_internalResolver.auth === "loggedIn"');
+    expect(entryContent).toContain("!context.user.type");
+    expect(entryContent).toContain("This resolver requires an authenticated caller.");
+  });
+
   describe("concurrency", () => {
     afterEach(() => {
       vi.unstubAllEnvs();

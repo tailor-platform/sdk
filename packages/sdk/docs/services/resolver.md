@@ -352,6 +352,33 @@ createResolver({
 
 ## Authentication
 
+### Requiring a Logged-In Caller (`auth`)
+
+By default, a resolver with no in-body check is reachable by an anonymous (unauthenticated) caller. Set `auth: "loggedIn"` to reject anonymous callers before `body` runs:
+
+```typescript
+import { createResolver, t } from "@tailor-platform/sdk";
+
+export default createResolver({
+  name: "getMyOrders",
+  operation: "query",
+  auth: "loggedIn",
+  output: t.object({ count: t.int() }),
+  body: async (context) => {
+    // context.user is guaranteed to be an authenticated caller here
+    return { count: 0 };
+  },
+});
+```
+
+- `auth: "loggedIn"` — anonymous callers get a `TailorErrorMessage` and `body` does not run.
+- `auth: "public"` — explicitly documents that anonymous callers are allowed. Behaves the same as omitting `auth`, but records the decision so it isn't mistaken for an oversight.
+- Omitted (default) — unchanged: anonymous callers can still reach the resolver.
+
+This check is based on `context.user`, the original caller, so it still applies even when `authInvoker` swaps in a machine user for database access.
+
+### Running as a Machine User (`authInvoker`)
+
 Specify an `authInvoker` to execute the resolver with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names you defined in your auth config:
 
 ```typescript

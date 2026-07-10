@@ -57,6 +57,11 @@ type ResolverReturn<
  * If not specified, this is automatically set to true when an executor uses this resolver
  * with `resolverExecutedTrigger`. If explicitly set to false while an executor uses this
  * resolver, an error will be thrown during apply.
+ *
+ * `auth` declares the resolver's access requirement. Omitted (default): unchanged, anonymous
+ * callers can reach the resolver. `"loggedIn"`: anonymous callers are rejected before `body`
+ * runs. `"public"`: explicitly documents that anonymous callers are allowed. The check is
+ * based on `context.user`, so it is unaffected by `authInvoker`.
  * @template Input
  * @template Output
  * @param config - Resolver configuration
