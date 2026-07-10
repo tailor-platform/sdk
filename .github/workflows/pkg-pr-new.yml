@@ -39,11 +39,12 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # pkg.pr.new --compact URLs are deterministic from the abbreviated (7-char)
-      # head SHA, so they can be computed BEFORE publishing. This lets us embed
-      # the SDK preview URL into create-sdk's templates without publishing the
-      # SDK first — all packages go out in a single `pkg-pr-new publish` call,
-      # whereas separate publishes would each rewrite the PR comment (last wins).
+      # pkg.pr.new URLs are deterministic from the abbreviated (7-char) head SHA,
+      # so they can be computed BEFORE publishing. SDK and create-sdk can use
+      # compact URLs because they already exist on npm. The new ESLint plugin
+      # needs a repository-qualified URL until its first npm release.
+      # Computing all URLs up front lets one publish call include every package;
+      # separate publishes would each rewrite the PR comment (last wins).
       - name: Compute preview URLs
         id: urls
         env:
@@ -52,7 +53,7 @@ jobs:
           SHORT_SHA="${SHA:0:7}"
           SDK_URL="https://pkg.pr.new/@tailor-platform/sdk@${SHORT_SHA}"
           CREATE_SDK_URL="https://pkg.pr.new/@tailor-platform/create-sdk@${SHORT_SHA}"
-          ESLINT_PLUGIN_SDK_URL="https://pkg.pr.new/@tailor-platform/eslint-plugin-sdk@${SHORT_SHA}"
+          ESLINT_PLUGIN_SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/eslint-plugin-sdk@${SHORT_SHA}"
           {
             echo "sdk_url=$SDK_URL"
             echo "create_sdk_url=$CREATE_SDK_URL"
