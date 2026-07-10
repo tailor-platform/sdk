@@ -216,7 +216,7 @@ describe("resolve", () => {
     vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
   });
 
-  test("ignores a paths alias whose targets is not an array", async () => {
+  test("ignores a paths alias whose target is not an array", async () => {
     const tsconfig = JSON.stringify({
       compilerOptions: { paths: { "@/*": "./*" } },
     });
