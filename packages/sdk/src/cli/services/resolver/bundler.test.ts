@@ -42,23 +42,23 @@ describe("bundleResolvers", () => {
     ).resolves.toEqual(new Map());
   });
 
-  test("injects the auth guard into the entry file", async () => {
-    using tmp = tempCwd("sdk-bundler-auth-");
-    const resolverDir = path.join(tmp.dir, "src/backend/authcheck/resolver");
+  test("injects the permission guard into the entry file", async () => {
+    using tmp = tempCwd("sdk-bundler-permission-");
+    const resolverDir = path.join(tmp.dir, "src/backend/permissioncheck/resolver");
     fs.mkdirSync(resolverDir, { recursive: true });
     fs.writeFileSync(
       path.join(resolverDir, "protected.ts"),
       `export default {\n` +
         `  operation: "query",\n` +
         `  name: "protected",\n` +
-        `  auth: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],\n` +
+        `  permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],\n` +
         `  body: async () => 1,\n` +
         `  output: { type: "integer", metadata: {}, fields: {} },\n` +
         `};\n`,
     );
 
-    await bundleResolvers("authcheck", {
-      files: ["./src/backend/authcheck/resolver/*.ts"],
+    await bundleResolvers("permissioncheck", {
+      files: ["./src/backend/permissioncheck/resolver/*.ts"],
     });
 
     const entryContent = fs.readFileSync(
@@ -71,23 +71,23 @@ describe("bundleResolvers", () => {
     expect(entryContent).toContain("access denied");
   });
 
-  test("does not inject a guard when auth is omitted or public", async () => {
-    using tmp = tempCwd("sdk-bundler-noauth-");
-    const resolverDir = path.join(tmp.dir, "src/backend/noauth/resolver");
+  test("does not inject a guard when permission is omitted or public", async () => {
+    using tmp = tempCwd("sdk-bundler-nopermission-");
+    const resolverDir = path.join(tmp.dir, "src/backend/nopermission/resolver");
     fs.mkdirSync(resolverDir, { recursive: true });
     fs.writeFileSync(
       path.join(resolverDir, "open.ts"),
       `export default {\n` +
         `  operation: "query",\n` +
         `  name: "open",\n` +
-        `  auth: "public",\n` +
+        `  permission: "public",\n` +
         `  body: async () => 1,\n` +
         `  output: { type: "integer", metadata: {}, fields: {} },\n` +
         `};\n`,
     );
 
-    await bundleResolvers("noauth", {
-      files: ["./src/backend/noauth/resolver/*.ts"],
+    await bundleResolvers("nopermission", {
+      files: ["./src/backend/nopermission/resolver/*.ts"],
     });
 
     const entryContent = fs.readFileSync(

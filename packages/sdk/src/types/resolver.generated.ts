@@ -3,7 +3,7 @@
 /**
  * Access requirement for this resolver, evaluated against the original caller (unaffected by `authInvoker`) before `body` runs. "public" documents that anonymous callers are allowed. Omitted (default): unchanged, anonymous callers can reach the resolver
  */
-export type ResolverAuth =
+export type ResolverPermission =
   | "public"
   | readonly {
       conditions:
@@ -20,7 +20,7 @@ export type ResolverAuth =
       permit: boolean;
       description?: string | undefined;
     }[];
-export type ResolverAuthInput = ResolverAuth;
+export type ResolverPermissionInput = ResolverPermission;
 
 export type Resolver = {
   /** GraphQL operation type (query or mutation) */
@@ -85,7 +85,7 @@ export type Resolver = {
         machineUserName: string;
       }
     | undefined;
-  auth?:
+  permission?:
     | "public"
     | readonly {
         conditions:

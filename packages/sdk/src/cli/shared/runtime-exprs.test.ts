@@ -1,8 +1,8 @@
 import { describe, test, expect } from "vitest";
 import {
   buildExecutorArgsExpr,
-  buildResolverAuthGuardExpr,
   buildResolverOperationHookExpr,
+  buildResolverPermissionGuardExpr,
 } from "./runtime-exprs";
 
 describe("buildExecutorArgsExpr", () => {
@@ -108,11 +108,14 @@ describe("buildResolverOperationHookExpr", () => {
   });
 });
 
-describe("buildResolverAuthGuardExpr", () => {
+describe("buildResolverPermissionGuardExpr", () => {
   class TailorErrorMessage extends Error {}
 
-  function runGuard(auth: Parameters<typeof buildResolverAuthGuardExpr>[0], user: unknown): void {
-    const guard = buildResolverAuthGuardExpr(auth);
+  function runGuard(
+    permission: Parameters<typeof buildResolverPermissionGuardExpr>[0],
+    user: unknown,
+  ): void {
+    const guard = buildResolverPermissionGuardExpr(permission);
     if (!guard) {
       return;
     }
@@ -121,55 +124,69 @@ describe("buildResolverAuthGuardExpr", () => {
     fn({ user }, TailorErrorMessage);
   }
 
-  test("returns undefined when auth is omitted", () => {
-    expect(buildResolverAuthGuardExpr(undefined)).toBeUndefined();
+  test("returns undefined when permission is omitted", () => {
+    expect(buildResolverPermissionGuardExpr(undefined)).toBeUndefined();
   });
 
-  test("returns undefined when auth is public", () => {
-    expect(buildResolverAuthGuardExpr("public")).toBeUndefined();
+  test("returns undefined when permission is public", () => {
+    expect(buildResolverPermissionGuardExpr("public")).toBeUndefined();
   });
 
   test("_loggedIn permit:true allows an authenticated user", () => {
-    const auth = [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }] as const;
-    expect(() => runGuard(auth, { type: "user" })).not.toThrow();
+    const permission = [
+      { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+    ] as const;
+    expect(() => runGuard(permission, { type: "user" })).not.toThrow();
   });
 
   test("_loggedIn permit:true rejects an anonymous user", () => {
-    const auth = [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }] as const;
-    expect(() => runGuard(auth, { type: "" })).toThrow(TailorErrorMessage);
+    const permission = [
+      { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+    ] as const;
+    expect(() => runGuard(permission, { type: "" })).toThrow(TailorErrorMessage);
   });
 
   test("permit:false denies matching callers instead of allowing them", () => {
-    const auth = [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: false }] as const;
-    expect(() => runGuard(auth, { type: "user" })).toThrow(TailorErrorMessage);
-    expect(() => runGuard(auth, { type: "" })).not.toThrow();
+    const permission = [
+      { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: false },
+    ] as const;
+    expect(() => runGuard(permission, { type: "user" })).toThrow(TailorErrorMessage);
+    expect(() => runGuard(permission, { type: "" })).not.toThrow();
   });
 
   test("supports the != operator", () => {
-    const auth = [{ conditions: [[{ user: "role" }, "!=", "BANNED"]], permit: true }] as const;
-    expect(() => runGuard(auth, { attributes: { role: "MEMBER" } })).not.toThrow();
-    expect(() => runGuard(auth, { attributes: { role: "BANNED" } })).toThrow(TailorErrorMessage);
+    const permission = [
+      { conditions: [[{ user: "role" }, "!=", "BANNED"]], permit: true },
+    ] as const;
+    expect(() => runGuard(permission, { attributes: { role: "MEMBER" } })).not.toThrow();
+    expect(() => runGuard(permission, { attributes: { role: "BANNED" } })).toThrow(
+      TailorErrorMessage,
+    );
   });
 
   test("supports the id operand", () => {
-    const auth = [
+    const permission = [
       {
         conditions: [[{ user: "id" }, "=", "11111111-1111-1111-1111-111111111111"]],
         permit: true,
       },
     ] as const;
-    expect(() => runGuard(auth, { id: "11111111-1111-1111-1111-111111111111" })).not.toThrow();
-    expect(() => runGuard(auth, { id: "other" })).toThrow(TailorErrorMessage);
+    expect(() =>
+      runGuard(permission, { id: "11111111-1111-1111-1111-111111111111" }),
+    ).not.toThrow();
+    expect(() => runGuard(permission, { id: "other" })).toThrow(TailorErrorMessage);
   });
 
   test("supports arbitrary user attribute operands", () => {
-    const auth = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
-    expect(() => runGuard(auth, { attributes: { role: "ADMIN" } })).not.toThrow();
-    expect(() => runGuard(auth, { attributes: { role: "MEMBER" } })).toThrow(TailorErrorMessage);
+    const permission = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
+    expect(() => runGuard(permission, { attributes: { role: "ADMIN" } })).not.toThrow();
+    expect(() => runGuard(permission, { attributes: { role: "MEMBER" } })).toThrow(
+      TailorErrorMessage,
+    );
   });
 
   test("ANDs multiple conditions within a policy", () => {
-    const auth = [
+    const permission = [
       {
         conditions: [
           [{ user: "_loggedIn" }, "=", true],
@@ -178,65 +195,71 @@ describe("buildResolverAuthGuardExpr", () => {
         permit: true,
       },
     ] as const;
-    expect(() => runGuard(auth, { type: "user", attributes: { role: "ADMIN" } })).not.toThrow();
-    expect(() => runGuard(auth, { type: "user", attributes: { role: "MEMBER" } })).toThrow(
+    expect(() =>
+      runGuard(permission, { type: "user", attributes: { role: "ADMIN" } }),
+    ).not.toThrow();
+    expect(() => runGuard(permission, { type: "user", attributes: { role: "MEMBER" } })).toThrow(
       TailorErrorMessage,
     );
-    expect(() => runGuard(auth, { type: "", attributes: { role: "ADMIN" } })).toThrow(
+    expect(() => runGuard(permission, { type: "", attributes: { role: "ADMIN" } })).toThrow(
       TailorErrorMessage,
     );
   });
 
   test("ORs multiple allow policies", () => {
     // Allow machine-user callers unconditionally, or regular users with role ADMIN
-    const auth = [
+    const permission = [
       { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
       { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
     ] as const;
     expect(() =>
-      runGuard(auth, { attributes: { isServiceAccount: true, role: "MEMBER" } }),
+      runGuard(permission, { attributes: { isServiceAccount: true, role: "MEMBER" } }),
     ).not.toThrow();
     expect(() =>
-      runGuard(auth, { attributes: { isServiceAccount: false, role: "ADMIN" } }),
+      runGuard(permission, { attributes: { isServiceAccount: false, role: "ADMIN" } }),
     ).not.toThrow();
     expect(() =>
-      runGuard(auth, { attributes: { isServiceAccount: false, role: "MEMBER" } }),
+      runGuard(permission, { attributes: { isServiceAccount: false, role: "MEMBER" } }),
     ).toThrow(TailorErrorMessage);
   });
 
   test("a deny policy overrides a matching allow policy", () => {
-    const auth = [
+    const permission = [
       { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
       { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false },
     ] as const;
-    expect(() => runGuard(auth, { type: "user", attributes: { role: "MEMBER" } })).not.toThrow();
-    expect(() => runGuard(auth, { type: "user", attributes: { role: "BANNED" } })).toThrow(
+    expect(() =>
+      runGuard(permission, { type: "user", attributes: { role: "MEMBER" } }),
+    ).not.toThrow();
+    expect(() => runGuard(permission, { type: "user", attributes: { role: "BANNED" } })).toThrow(
       TailorErrorMessage,
     );
   });
 
   test("denies by default when no allow policy matches", () => {
-    const auth = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
-    expect(() => runGuard(auth, { attributes: { role: "GUEST" } })).toThrow(TailorErrorMessage);
+    const permission = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
+    expect(() => runGuard(permission, { attributes: { role: "GUEST" } })).toThrow(
+      TailorErrorMessage,
+    );
   });
 
   test("includes description in the thrown message when present", () => {
-    const auth = [
+    const permission = [
       {
         conditions: [[{ user: "_loggedIn" }, "=", true]],
         permit: true,
         description: "must be logged in",
       },
     ] as const;
-    expect(() => runGuard(auth, { type: "" })).toThrow(/must be logged in/);
+    expect(() => runGuard(permission, { type: "" })).toThrow(/must be logged in/);
   });
 
-  test("throws at bundle time on an empty auth array (schema should reject this, but guard defensively too)", () => {
-    expect(() => buildResolverAuthGuardExpr([])).toThrow(/at least one policy/);
+  test("throws at bundle time on an empty permission array (schema should reject this, but guard defensively too)", () => {
+    expect(() => buildResolverPermissionGuardExpr([])).toThrow(/at least one policy/);
   });
 
   test("throws at bundle time on a policy with an empty conditions array (schema should reject this, but guard defensively too)", () => {
-    const auth = [{ conditions: [], permit: true }] as const;
-    expect(() => buildResolverAuthGuardExpr(auth)).toThrow(/at least one condition/);
+    const permission = [{ conditions: [], permit: true }] as const;
+    expect(() => buildResolverPermissionGuardExpr(permission)).toThrow(/at least one condition/);
   });
 });

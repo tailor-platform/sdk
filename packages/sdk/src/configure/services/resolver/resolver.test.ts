@@ -465,34 +465,34 @@ describe("createResolver", () => {
       expect(resolver.authInvoker).toEqual({ namespace: "my-auth", machineUserName: "batch-user" });
     });
 
-    test("creates resolver with loggedIn auth condition", () => {
+    test("creates resolver with loggedIn permission condition", () => {
       const outputType = t.object({ result: t.string() });
 
       const resolver = createResolver({
-        name: "withAuthLoggedIn",
+        name: "withPermissionLoggedIn",
         operation: "query",
         output: outputType,
         body: () => ({ result: "ok" }),
-        auth: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+        permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
       });
 
-      expect(resolver.auth).toEqual([
+      expect(resolver.permission).toEqual([
         { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
       ]);
     });
 
-    test("creates resolver with auth: public", () => {
+    test("creates resolver with permission: public", () => {
       const outputType = t.object({ result: t.string() });
 
       const resolver = createResolver({
-        name: "withAuthPublic",
+        name: "withPermissionPublic",
         operation: "query",
         output: outputType,
         body: () => ({ result: "ok" }),
-        auth: "public",
+        permission: "public",
       });
 
-      expect(resolver.auth).toBe("public");
+      expect(resolver.permission).toBe("public");
     });
 
     test("creates minimal resolver without optional fields", () => {
@@ -510,7 +510,7 @@ describe("createResolver", () => {
       expect(resolver.output).toBe(outputType);
       expect(resolver.description).toBeUndefined();
       expect(resolver.input).toBeUndefined();
-      expect(resolver.auth).toBeUndefined();
+      expect(resolver.permission).toBeUndefined();
     });
 
     test("accepts Record<string, TailorField> as output and converts to t.object()", () => {

@@ -11,7 +11,7 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
-import { buildResolverAuthGuardExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { buildResolverPermissionGuardExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import {
   createTriggerTransformPlugin,
   serializeTriggerContext,
@@ -25,7 +25,7 @@ import type { Resolver } from "#/types/resolver.generated";
 interface ResolverInfo {
   name: string;
   sourceFile: string;
-  auth: Resolver["auth"];
+  permission: Resolver["permission"];
 }
 
 /**
@@ -76,7 +76,7 @@ export async function bundleResolvers(
     resolvers.push({
       name: resolver.name,
       sourceFile: file,
-      auth: resolver.auth,
+      permission: resolver.permission,
     });
   }
 
@@ -151,7 +151,7 @@ async function bundleSingleResolver(
       // Step 1: Create entry file that imports from the original source
       const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
       const absoluteSourcePath = path.resolve(resolver.sourceFile);
-      const authGuardExpr = buildResolverAuthGuardExpr(resolver.auth);
+      const permissionGuardExpr = buildResolverPermissionGuardExpr(resolver.permission);
 
       const entryContent = ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
@@ -159,7 +159,7 @@ async function bundleSingleResolver(
 
         const $tailor_resolver_body = async (context) => {
           const invoker = ${INVOKER_EXPR};
-          ${authGuardExpr ?? ""}
+          ${permissionGuardExpr ?? ""}
           if (_internalResolver.input) {
             const result = t.object(_internalResolver.input).parse({
               value: context.input,

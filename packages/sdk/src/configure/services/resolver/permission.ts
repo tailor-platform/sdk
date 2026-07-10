@@ -61,12 +61,12 @@ export type ResolverPermissionPolicy<User extends object = InferredAttributeMap>
  * with at least one, it's an allow-list (deny by default, granted only by a
  * matching `permit: true` policy).
  * @example
- * const auth: ResolverPermission = [
+ * const permission: ResolverPermission = [
  *   { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
  * ];
  * @example
  * // Allow machine-user callers unconditionally, gate regular users behind a role
- * const auth: ResolverPermission = [
+ * const permission: ResolverPermission = [
  *   { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
  *   { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
  * ];

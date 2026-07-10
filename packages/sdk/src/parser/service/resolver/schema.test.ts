@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { ResolverAuthSchema } from "./schema";
+import { ResolverPermissionSchema } from "./schema";
 
-describe("ResolverAuthSchema", () => {
+describe("ResolverPermissionSchema", () => {
   test("accepts a single policy with one condition", () => {
     expect(() =>
-      ResolverAuthSchema.parse([
+      ResolverPermissionSchema.parse([
         { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
       ]),
     ).not.toThrow();
@@ -12,7 +12,7 @@ describe("ResolverAuthSchema", () => {
 
   test("accepts a single policy with multiple conditions", () => {
     expect(() =>
-      ResolverAuthSchema.parse([
+      ResolverPermissionSchema.parse([
         {
           conditions: [
             [{ user: "_loggedIn" }, "=", true],
@@ -26,7 +26,7 @@ describe("ResolverAuthSchema", () => {
 
   test("accepts multiple policies", () => {
     expect(() =>
-      ResolverAuthSchema.parse([
+      ResolverPermissionSchema.parse([
         { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
         { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
       ]),
@@ -34,22 +34,24 @@ describe("ResolverAuthSchema", () => {
   });
 
   test('accepts "public"', () => {
-    expect(() => ResolverAuthSchema.parse("public")).not.toThrow();
+    expect(() => ResolverPermissionSchema.parse("public")).not.toThrow();
   });
 
   test("rejects an empty policy array", () => {
-    expect(() => ResolverAuthSchema.parse([])).toThrow("auth must have at least one policy");
+    expect(() => ResolverPermissionSchema.parse([])).toThrow(
+      "permission must have at least one policy",
+    );
   });
 
   test("rejects a policy with an empty conditions array", () => {
-    expect(() => ResolverAuthSchema.parse([{ conditions: [], permit: true }])).toThrow(
+    expect(() => ResolverPermissionSchema.parse([{ conditions: [], permit: true }])).toThrow(
       "must have at least one condition",
     );
   });
 
   test("rejects a policy missing permit", () => {
     expect(() =>
-      ResolverAuthSchema.parse([{ conditions: [[{ user: "_loggedIn" }, "=", true]] }]),
+      ResolverPermissionSchema.parse([{ conditions: [[{ user: "_loggedIn" }, "=", true]] }]),
     ).toThrow("permit");
   });
 });

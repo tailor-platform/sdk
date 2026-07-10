@@ -104,8 +104,8 @@ export function buildResolverOperationHookExpr(
   return `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`;
 }
 
-type ResolverAuthPolicies = Extract<NonNullable<Resolver["auth"]>, readonly unknown[]>;
-type ResolverAuthPolicy = ResolverAuthPolicies[number];
+type ResolverPermissionPolicies = Extract<NonNullable<Resolver["permission"]>, readonly unknown[]>;
+type ResolverPermissionPolicy = ResolverPermissionPolicies[number];
 type ResolverPermissionOperand = string | boolean | { user: string };
 type ResolverPermissionCondition = readonly [
   ResolverPermissionOperand,
@@ -114,7 +114,7 @@ type ResolverPermissionCondition = readonly [
 ];
 
 function isSingleResolverCondition(
-  conditions: ResolverAuthPolicy["conditions"],
+  conditions: ResolverPermissionPolicy["conditions"],
 ): conditions is ResolverPermissionCondition {
   return conditions.length === 3 && typeof conditions[1] === "string";
 }
@@ -138,52 +138,56 @@ function resolverPermissionConditionExpr(condition: ResolverPermissionCondition)
   return `(${resolverPermissionOperandExpr(left)} ${jsOperator} ${resolverPermissionOperandExpr(right)})`;
 }
 
-function resolverPermissionPolicyExpr(policy: ResolverAuthPolicy): string {
+function resolverPermissionPolicyExpr(policy: ResolverPermissionPolicy): string {
   const conditions = isSingleResolverCondition(policy.conditions)
     ? [policy.conditions]
     : policy.conditions;
   if (conditions.length === 0) {
-    throw new Error("Resolver auth policy must have at least one condition, got an empty array.");
+    throw new Error(
+      "Resolver permission policy must have at least one condition, got an empty array.",
+    );
   }
   return conditions.map(resolverPermissionConditionExpr).join(" && ");
 }
 
 /**
- * Build the auth guard statement injected at resolver entry.
+ * Build the permission guard statement injected at resolver entry.
  *
  * Rejects the call with `TailorErrorMessage` when the caller doesn't match
- * `auth`, evaluated against `context.user` — the original caller, unaffected
- * by `authInvoker`. A `permit: false` policy always denies matching callers.
- * With no `permit: true` policy, `auth` is a pure blocklist (everyone else is
- * allowed); with at least one, it's an allow-list (deny by default, granted
- * only by a matching `permit: true` policy).
- * @param auth - The resolver's `auth` config
- * @returns A JS `if (...) throw ...;` statement, or `undefined` when `auth` is omitted or `"public"`
+ * `permission`, evaluated against `context.user` — the original caller,
+ * unaffected by `authInvoker`. A `permit: false` policy always denies matching
+ * callers. With no `permit: true` policy, `permission` is a pure blocklist
+ * (everyone else is allowed); with at least one, it's an allow-list (deny by
+ * default, granted only by a matching `permit: true` policy).
+ * @param permission - The resolver's `permission` config
+ * @returns A JS `if (...) throw ...;` statement, or `undefined` when `permission` is omitted or `"public"`
  */
-export function buildResolverAuthGuardExpr(auth: Resolver["auth"]): string | undefined {
-  if (!auth || auth === "public") {
+export function buildResolverPermissionGuardExpr(
+  permission: Resolver["permission"],
+): string | undefined {
+  if (!permission || permission === "public") {
     return undefined;
   }
-  if (auth.length === 0) {
-    throw new Error("Resolver auth must have at least one policy, got an empty array.");
+  if (permission.length === 0) {
+    throw new Error("Resolver permission must have at least one policy, got an empty array.");
   }
-  const denyPolicies = auth.filter((policy) => policy.permit === false);
-  const allowPolicies = auth.filter((policy) => policy.permit !== false);
+  const denyPolicies = permission.filter((policy) => policy.permit === false);
+  const allowPolicies = permission.filter((policy) => policy.permit !== false);
 
   const deniedExpr =
     denyPolicies.length > 0
       ? denyPolicies.map((policy) => `(${resolverPermissionPolicyExpr(policy)})`).join(" || ")
       : "false";
 
-  // With no allow policies, `auth` is a pure blocklist: deny only callers matching
-  // a deny policy, allow everyone else. With at least one allow policy, `auth` is
+  // With no allow policies, `permission` is a pure blocklist: deny only callers matching
+  // a deny policy, allow everyone else. With at least one allow policy, `permission` is
   // an allow-list: deny anyone that doesn't match an allow policy (in addition to
   // the deny-policy override above).
   const denyExpr =
     allowPolicies.length > 0
       ? `(${deniedExpr}) || !(${allowPolicies.map((policy) => `(${resolverPermissionPolicyExpr(policy)})`).join(" || ")})`
       : deniedExpr;
-  const descriptions = auth.map((policy) => policy.description).filter((d) => !!d);
+  const descriptions = permission.map((policy) => policy.description).filter((d) => !!d);
   const message =
     descriptions.length > 0 ? `access denied: ${descriptions.join("; ")}` : "access denied";
   return `if (${denyExpr}) { throw new TailorErrorMessage(${JSON.stringify(message)}); }`;

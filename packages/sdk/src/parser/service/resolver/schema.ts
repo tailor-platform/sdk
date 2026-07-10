@@ -28,18 +28,18 @@ const ResolverPermissionPolicySchema = z.object({
     ResolverPermissionConditionSchema,
     z
       .array(ResolverPermissionConditionSchema)
-      .min(1, "Resolver auth policy must have at least one condition")
+      .min(1, "Resolver permission policy must have at least one condition")
       .readonly(),
   ]),
   permit: z.boolean(),
   description: z.string().optional(),
 });
 
-export const ResolverAuthSchema = z
+export const ResolverPermissionSchema = z
   .union([
     z
       .array(ResolverPermissionPolicySchema)
-      .min(1, "Resolver auth must have at least one policy")
+      .min(1, "Resolver permission must have at least one policy")
       .readonly(),
     z.literal("public"),
   ])
@@ -58,5 +58,5 @@ export const ResolverSchema = z.object({
   output: TailorFieldSchema.describe("Output field definition"),
   publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
   authInvoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
-  auth: ResolverAuthSchema.optional(),
+  permission: ResolverPermissionSchema.optional(),
 });

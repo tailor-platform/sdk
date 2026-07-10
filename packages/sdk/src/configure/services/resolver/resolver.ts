@@ -36,13 +36,13 @@ type NormalizedOutput<Output extends TailorAnyField | Record<string, TailorAnyFi
 type ResolverReturn<
   Input extends Record<string, TailorAnyField> | undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField>,
-> = Omit<ResolverInput, "input" | "output" | "body" | "authInvoker" | "auth"> &
+> = Omit<ResolverInput, "input" | "output" | "body" | "authInvoker" | "permission"> &
   Readonly<{
     input?: Input;
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
     authInvoker?: AuthInvoker<string> | MachineUserName;
-    auth?: ResolverPermission | "public";
+    permission?: ResolverPermission | "public";
   }>;
 
 /**
@@ -60,7 +60,7 @@ type ResolverReturn<
  * with `resolverExecutedTrigger`. If explicitly set to false while an executor uses this
  * resolver, an error will be thrown during apply.
  *
- * `auth` declares the resolver's access requirement, checked against `context.user` (the
+ * `permission` declares the resolver's access requirement, checked against `context.user` (the
  * original caller, unaffected by `authInvoker`) before `body` runs. Omitted (default):
  * unchanged, anonymous callers can reach the resolver. `"public"`: explicitly documents that
  * anonymous callers are allowed. An array of `{ conditions, permit }` policies (in the same
@@ -77,7 +77,7 @@ type ResolverReturn<
  * export default createResolver({
  *   name: "getUser",
  *   operation: "query",
- *   auth: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+ *   permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
  *   input: {
  *     id: t.string(),
  *   },
@@ -97,13 +97,13 @@ export function createResolver<
   Input extends Record<string, TailorAnyField> | undefined = undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
 >(
-  config: Omit<ResolverInput, "input" | "output" | "body" | "authInvoker" | "auth"> &
+  config: Omit<ResolverInput, "input" | "output" | "body" | "authInvoker" | "permission"> &
     Readonly<{
       input?: Input;
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
       authInvoker?: AuthInvoker<string> | MachineUserName;
-      auth?: ResolverPermission | "public";
+      permission?: ResolverPermission | "public";
     }>,
 ): ResolverReturn<Input, Output> {
   // Check if output is already a TailorField using duck typing.
