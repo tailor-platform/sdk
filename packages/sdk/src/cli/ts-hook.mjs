@@ -53,13 +53,15 @@ function collectPathsInto(out, configFilePath, content, visited) {
     const absBase = effectiveBaseUrl ?? baseDir;
     for (const [alias, targets] of Object.entries(rawPaths)) {
       if (!Array.isArray(targets)) continue;
-      out[alias] = targets
+      const normalized = targets
         .filter((t) => typeof t === "string")
         .map((t) => {
           const isWildcard = t.endsWith("/*");
           const resolved = resolvePath(absBase, isWildcard ? t.slice(0, -2) : t);
           return pathToFileURL(resolved).href + (isWildcard ? "/*" : "");
         });
+      if (normalized.length === 0) continue;
+      out[alias] = normalized;
     }
   }
 
