@@ -31,19 +31,11 @@ export type FieldRuntime<T extends TailorFieldType = TailorFieldType> = {
   _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<unknown>;
 };
 
-type FieldValidateValueArgs<T extends TailorFieldType> = {
-  field: FieldRuntime<T>;
-  value: unknown;
-  data: unknown;
-  user: TailorUser;
-  pathArray: string[];
-};
-
 type FieldParseRuntimeArgs<T extends TailorFieldType> = FieldParseInternalArgs & {
   field: FieldRuntime<T>;
 };
 
-type FieldValidationArgs<T extends TailorFieldType> = FieldValidateValueArgs<T> & {
+type FieldValidationArgs<T extends TailorFieldType> = FieldParseRuntimeArgs<T> & {
   issues: StandardSchemaV1.Issue[];
 };
 
@@ -163,7 +155,7 @@ function validateBaseValue<T extends TailorFieldType>(args: FieldValidationArgs<
       for (const [fieldName, nestedField] of Object.entries(field.fields)) {
         const fieldValue = (value as Record<string, unknown>)[fieldName];
         if (
-          !validateField({
+          !validateBaseField({
             ...args,
             field: nestedField,
             value: fieldValue,
@@ -202,7 +194,7 @@ function validateCustomValue<T extends TailorFieldType>(
   }
 }
 
-function validateField<T extends TailorFieldType>(args: FieldValidationArgs<T>): boolean {
+function validateBaseField<T extends TailorFieldType>(args: FieldValidationArgs<T>): boolean {
   const { field, value, pathArray, issues } = args;
   const path = pathArray.length > 0 ? pathArray : undefined;
 
@@ -244,12 +236,38 @@ function validateField<T extends TailorFieldType>(args: FieldValidationArgs<T>):
     baseValid = validateBaseValue(args);
   }
 
-  const validateFns = field._metadata.validate;
-  if (baseValid && validateFns?.length) {
-    validateCustomValue(args, validateFns);
+  return baseValid;
+}
+
+function validateCustomField<T extends TailorFieldType>(args: FieldValidationArgs<T>): void {
+  const { field, value, pathArray } = args;
+  if (value === null || value === undefined) {
+    return;
   }
 
-  return baseValid;
+  if (field.type === "nested") {
+    const records = field._metadata.array
+      ? (value as Record<string, unknown>[])
+      : [value as Record<string, unknown>];
+
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i] as Record<string, unknown>;
+      const recordPath = field._metadata.array ? pathArray.concat(`[${i}]`) : pathArray;
+      for (const [fieldName, nestedField] of Object.entries(field.fields)) {
+        validateCustomField({
+          ...args,
+          field: nestedField,
+          value: record[fieldName],
+          pathArray: recordPath.concat(fieldName),
+        });
+      }
+    }
+  }
+
+  const validateFns = field._metadata.validate;
+  if (validateFns?.length) {
+    validateCustomValue(args, validateFns);
+  }
 }
 
 export function parseInternal<T extends TailorFieldType, Output>(
@@ -257,7 +275,11 @@ export function parseInternal<T extends TailorFieldType, Output>(
 ): StandardSchemaV1.Result<Output> {
   const { value } = args;
   const issues: StandardSchemaV1.Issue[] = [];
-  validateField({ ...args, issues });
+  const validationArgs = { ...args, issues };
+  const baseValid = validateBaseField(validationArgs);
+  if (baseValid) {
+    validateCustomField(validationArgs);
+  }
   if (issues.length > 0) {
     return { issues };
   }

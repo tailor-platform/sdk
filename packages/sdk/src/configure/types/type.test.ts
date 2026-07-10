@@ -663,6 +663,25 @@ describe("TailorField runtime validation tests", () => {
       expect(parentValidate).toHaveBeenCalledOnce();
     });
 
+    test("finishes nested base validation before running custom validation", () => {
+      const validate = vi.fn(({ data }: { data: unknown }) => {
+        const record = data as { unsafe: string };
+        return record.unsafe.toUpperCase() === "VALID";
+      });
+      const schema = t.object({
+        safe: t.string().validate(validate),
+        unsafe: t.string(),
+      });
+      const value = { safe: "valid", unsafe: 42 };
+
+      const result = schema.parse({ value, data: value, user });
+
+      expect(result.issues).toEqual([
+        { message: "Expected a string: received 42", path: ["unsafe"] },
+      ]);
+      expect(validate).not.toHaveBeenCalled();
+    });
+
     test("validates array fields and element paths", () => {
       const schema = t.int({ array: true });
 
