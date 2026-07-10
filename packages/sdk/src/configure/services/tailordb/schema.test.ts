@@ -1163,6 +1163,7 @@ describe("TailorDBType type-level validate (function form) tests", () => {
     }).validate(({ newRecord: _newRecord }, issues) => {
       issues("name", "ok");
       issues("email", "ok");
+      // @ts-expect-error TS2345 — "nonexistent" is not a valid field path
       issues("nonexistent", "bad");
     });
   });
@@ -1177,6 +1178,7 @@ describe("TailorDBType type-level validate (function form) tests", () => {
       issues("profile", "ok");
       issues("profile.displayName", "ok");
       issues("profile.email", "ok");
+      // @ts-expect-error TS2345 — "profile.nonexistent" is not a valid nested path
       issues("profile.nonexistent", "bad");
     });
   });
