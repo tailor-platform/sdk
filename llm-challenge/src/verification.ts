@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { promises as fs, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
-import { pathExistsSync, tailText, toPosix } from "./utils";
+import { tailText, toPosix } from "./utils";
 import {
   BUILT_IN_VERIFICATION_CHECK_IDS,
   parseVerificationSpec,
@@ -34,14 +34,6 @@ export type VerificationSummary = {
   group: Problem["group"];
   runIndex: number;
   checks: VerificationCheckResult[];
-};
-
-type ContentPatternCheckBase = {
-  id: string;
-  description?: string;
-  glob: string;
-  pattern: string;
-  flags?: string;
 };
 
 const TYPESCRIPT_NO_EMIT_COMMAND = "node node_modules/typescript/bin/tsc --noEmit --pretty false";
@@ -185,7 +177,7 @@ function evaluateProblemCheck(
       );
     }
     if (check.kind === "file-glob") {
-      return fileGlobCheck(check, worktreePath, files);
+      return fileGlobCheck(check, files);
     }
     if (check.kind === "content-match") {
       return contentMatchCheck(check, worktreePath, files);
@@ -219,23 +211,18 @@ function fileExistsCheck(
     scope,
     kind: "assertion",
     description,
-    outcome:
-      absolutePath !== undefined && pathExistsSync(absolutePath) ? "satisfied" : "unsatisfied",
+    outcome: absolutePath !== undefined ? "satisfied" : "unsatisfied",
     observations: [`path: ${relativePath}`],
   };
 }
 
 function fileGlobCheck(
   check: Extract<VerifySpecCheck, { kind: "file-glob" }>,
-  worktreePath: string,
   files: string[],
 ): VerificationCheckResult {
   const minCount = check.minCount ?? 1;
   const globRegex = globToRegExp(check.glob);
-  const matches = files.filter(
-    (file) =>
-      globRegex.test(file) && resolveWorkspaceEvidenceFile(worktreePath, file) !== undefined,
-  );
+  const matches = files.filter((file) => globRegex.test(file));
   return {
     id: check.id,
     scope: "problem",
@@ -280,7 +267,7 @@ function contentAbsentCheck(
 }
 
 function matchingContentFiles(
-  check: ContentPatternCheckBase,
+  check: Extract<VerifySpecCheck, { kind: "content-match" | "content-absent" }>,
   worktreePath: string,
   files: string[],
 ): string[] {

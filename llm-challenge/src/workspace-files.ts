@@ -15,13 +15,15 @@ const EXCLUDED_PATHS = new Set([".tailor-sdk/cache"]);
 
 export function isExcludedWorkspacePath(relativePath: string): boolean {
   const segments = relativePath.split("/");
-  return (
-    segments.some((segment) => EXCLUDED_DIRS.has(segment)) ||
-    [...EXCLUDED_PATHS].some(
-      (excludedPath) =>
-        relativePath === excludedPath || relativePath.startsWith(`${excludedPath}/`),
-    )
-  );
+  if (segments.some((segment) => EXCLUDED_DIRS.has(segment))) {
+    return true;
+  }
+  for (const excludedPath of EXCLUDED_PATHS) {
+    if (relativePath === excludedPath || relativePath.startsWith(`${excludedPath}/`)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
