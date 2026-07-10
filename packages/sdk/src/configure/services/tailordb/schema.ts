@@ -655,6 +655,14 @@ function createTailorDBFieldRuntime<
     },
 
     clone(cloneOptions?: FieldOptions) {
+      if (
+        this._metadata.validate?.length &&
+        cloneOptions?.array !== undefined &&
+        cloneOptions.array !== (this._metadata.array === true)
+      ) {
+        throw new Error("Cannot change the array option on a field with custom validation");
+      }
+
       // Deep clone nested object fields if present
       let clonedFields = fields;
       if (fields) {

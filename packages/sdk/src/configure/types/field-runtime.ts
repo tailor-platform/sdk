@@ -43,12 +43,18 @@ type FieldParseRuntimeArgs<T extends TailorFieldType> = FieldParseInternalArgs &
   field: FieldRuntime<T>;
 };
 
+type FieldValidationResult = {
+  issues: StandardSchemaV1.Issue[];
+  baseValid: boolean;
+};
+
 function validateBaseValue<T extends TailorFieldType>(
   args: FieldValidateValueArgs<T>,
-): StandardSchemaV1.Issue[] {
+): FieldValidationResult {
   const { field, value, data, user, pathArray } = args;
   const issues: StandardSchemaV1.Issue[] = [];
   const path = pathArray.length > 0 ? pathArray : undefined;
+  let baseValid = true;
 
   switch (field.type) {
     case "string":
@@ -57,6 +63,7 @@ function validateBaseValue<T extends TailorFieldType>(
           message: `Expected a string: received ${String(value)}`,
           path,
         });
+        baseValid = false;
       }
       break;
 
@@ -66,6 +73,7 @@ function validateBaseValue<T extends TailorFieldType>(
           message: `Expected an integer: received ${String(value)}`,
           path,
         });
+        baseValid = false;
       }
       break;
 
@@ -75,6 +83,7 @@ function validateBaseValue<T extends TailorFieldType>(
           message: `Expected a number: received ${String(value)}`,
           path,
         });
+        baseValid = false;
       }
       break;
 
@@ -84,6 +93,7 @@ function validateBaseValue<T extends TailorFieldType>(
           message: `Expected a boolean: received ${String(value)}`,
           path,
         });
+        baseValid = false;
       }
       break;
 
@@ -93,6 +103,7 @@ function validateBaseValue<T extends TailorFieldType>(
           message: `Expected a valid UUID: received ${String(value)}`,
           path,
         });
+        baseValid = false;
       }
       break;
     case "date":
@@ -101,6 +112,7 @@ function validateBaseValue<T extends TailorFieldType>(
           message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
           path,
         });
+        baseValid = false;
       }
       break;
     case "datetime":
@@ -109,6 +121,7 @@ function validateBaseValue<T extends TailorFieldType>(
           message: `Expected to match ISO format: received ${String(value)}`,
           path,
         });
+        baseValid = false;
       }
       break;
     case "time":
@@ -117,6 +130,7 @@ function validateBaseValue<T extends TailorFieldType>(
           message: `Expected to match "HH:mm" format: received ${String(value)}`,
           path,
         });
+        baseValid = false;
       }
       break;
     case "decimal":
@@ -125,6 +139,7 @@ function validateBaseValue<T extends TailorFieldType>(
           message: `Expected a decimal string: received ${String(value)}`,
           path,
         });
+        baseValid = false;
       }
       break;
 
@@ -136,6 +151,7 @@ function validateBaseValue<T extends TailorFieldType>(
             message: `Must be one of [${allowedValues.join(", ")}]: received ${String(value)}`,
             path,
           });
+          baseValid = false;
         }
       }
       break;
@@ -154,24 +170,29 @@ function validateBaseValue<T extends TailorFieldType>(
           message: `Expected an object: received ${String(value)}`,
           path,
         });
+        baseValid = false;
       } else if (Object.keys(field.fields).length > 0) {
         for (const [fieldName, nestedField] of Object.entries(field.fields)) {
           const fieldValue = (value as Record<string, unknown>)[fieldName];
-          const result = nestedField._parseInternal({
+          const result = validateField({
+            field: nestedField,
             value: fieldValue,
             data,
             user,
             pathArray: pathArray.concat(fieldName),
           });
-          if (result.issues) {
+          if (result.issues.length > 0) {
             issues.push(...result.issues);
+          }
+          if (!result.baseValid) {
+            baseValid = false;
           }
         }
       }
       break;
   }
 
-  return issues;
+  return { issues, baseValid };
 }
 
 function validateCustomValue<T extends TailorFieldType>(
@@ -201,10 +222,10 @@ function validateCustomValue<T extends TailorFieldType>(
   return issues;
 }
 
-export function parseInternal<T extends TailorFieldType, Output>(
-  args: FieldParseRuntimeArgs<T>,
-): StandardSchemaV1.Result<Output> {
-  const { field, value, data, user, pathArray } = args;
+function validateField<T extends TailorFieldType>(
+  args: FieldValidateValueArgs<T>,
+): FieldValidationResult {
+  const { field, value, pathArray } = args;
   const issues: StandardSchemaV1.Issue[] = [];
   const path = pathArray.length > 0 ? pathArray : undefined;
 
@@ -214,53 +235,55 @@ export function parseInternal<T extends TailorFieldType, Output>(
       message: "Required field is missing",
       path,
     });
-    return { issues };
+    return { issues, baseValid: false };
   }
 
   if (!field._metadata.required && isNullOrUndefined) {
-    return { value: (value ?? null) as Output };
+    return { issues, baseValid: true };
   }
 
+  let baseValid = true;
   if (field._metadata.array) {
     if (!Array.isArray(value)) {
       issues.push({
         message: "Expected an array",
         path,
       });
-      return { issues };
+      return { issues, baseValid: false };
     }
 
     for (let i = 0; i < value.length; i++) {
-      const elementValue = value[i];
-      const elementPath = pathArray.concat(`[${i}]`);
-
-      const elementIssues = validateBaseValue({
-        field,
-        value: elementValue,
-        data,
-        user,
-        pathArray: elementPath,
+      const result = validateBaseValue({
+        ...args,
+        value: value[i],
+        pathArray: pathArray.concat(`[${i}]`),
       });
-      if (elementIssues.length > 0) {
-        issues.push(...elementIssues);
+      issues.push(...result.issues);
+      if (!result.baseValid) {
+        baseValid = false;
       }
     }
-
-    if (issues.length > 0) {
-      return { issues };
-    }
   } else {
-    issues.push(...validateBaseValue({ field, value, data, user, pathArray }));
+    const result = validateBaseValue(args);
+    issues.push(...result.issues);
+    baseValid = result.baseValid;
   }
 
+  if (baseValid && field._metadata.validate?.length) {
+    issues.push(...validateCustomValue(args));
+  }
+
+  return { issues, baseValid };
+}
+
+export function parseInternal<T extends TailorFieldType, Output>(
+  args: FieldParseRuntimeArgs<T>,
+): StandardSchemaV1.Result<Output> {
+  const { value } = args;
+  const { issues } = validateField(args);
   if (issues.length > 0) {
     return { issues };
   }
 
-  issues.push(...validateCustomValue({ field, value, data, user, pathArray }));
-  if (issues.length > 0) {
-    return { issues };
-  }
-
-  return { value: value as Output };
+  return { value: (value ?? null) as Output };
 }

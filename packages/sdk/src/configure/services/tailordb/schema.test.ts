@@ -2082,6 +2082,18 @@ describe("TailorDBField clone tests", () => {
     expect(cloned.metadata.validate).not.toBe(original.metadata.validate);
   });
 
+  test("rejects changing the array shape of a validated field", () => {
+    const scalar = db.string().validate(({ value }) => value.length > 0);
+    const array = db.string({ array: true }).validate(({ value }) => value.length > 0);
+
+    expect(() => scalar.clone({ array: true })).toThrowError(
+      "Cannot change the array option on a field with custom validation",
+    );
+    expect(() => array.clone({ array: false })).toThrowError(
+      "Cannot change the array option on a field with custom validation",
+    );
+  });
+
   test("clones validate with tuple format correctly", () => {
     const validator = ({ value }: { value: string }) => value.length > 0;
     const original = db.string().validate([validator, "Value must not be empty"]);
