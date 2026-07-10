@@ -1,10 +1,11 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, expectTypeOf, test } from "vitest";
 import {
   ExecutorSchema,
   FunctionOperationSchema,
   GqlOperationSchema,
   WorkflowOperationSchema,
 } from "./schema";
+import type { Executor, WorkflowOperationArgs } from "#/types/executor.generated";
 
 function expectParseSuccess<T>(
   result: { success: true; data: T } | { success: false; error: unknown },
@@ -116,6 +117,63 @@ describe("WorkflowOperationSchema", () => {
         unknownOption: true,
       }),
     );
+  });
+
+  test.each([
+    ["string", "hello"],
+    ["empty string", ""],
+    ["number", 42],
+    ["zero", 0],
+    ["boolean", true],
+    ["false", false],
+    ["array", ["hello", 42, false, null]],
+  ])("accepts %s static args", (_description, args) => {
+    const result = WorkflowOperationSchema.safeParse({
+      kind: "workflow",
+      workflowName: "my-workflow",
+      args,
+    });
+
+    const data = expectParseSuccess(result);
+    expect(data.args).toEqual(args);
+  });
+
+  test.each([
+    ["top-level null", null],
+    ["Date", new Date("2026-01-01T00:00:00.000Z")],
+    ["Map", new Map([["key", "value"]])],
+    ["nested Date", { nested: new Date("2026-01-01T00:00:00.000Z") }],
+    ["nested Map", [new Map([["key", "value"]])]],
+  ])("rejects unsupported %s static args", (_description, args) => {
+    const result = WorkflowOperationSchema.safeParse({
+      kind: "workflow",
+      workflowName: "my-workflow",
+      args,
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  test("accepts a dynamic args function", () => {
+    const args = () => ({ orderId: "123" });
+    const result = WorkflowOperationSchema.safeParse({
+      kind: "workflow",
+      workflowName: "my-workflow",
+      args,
+    });
+
+    const data = expectParseSuccess(result);
+    expect(data.args).toBe(args);
+  });
+
+  test("keeps generated Executor workflow args aligned with the generated contract", () => {
+    type ExecutorWorkflowArgs = Extract<Executor["operation"], { kind: "workflow" }>["args"];
+
+    expectTypeOf<ExecutorWorkflowArgs>().toEqualTypeOf<WorkflowOperationArgs | undefined>();
+
+    // @ts-expect-error Date is neither a JSON-compatible input nor an args callback.
+    const invalidArgs: ExecutorWorkflowArgs = new Date();
+    void invalidArgs;
   });
 });
 

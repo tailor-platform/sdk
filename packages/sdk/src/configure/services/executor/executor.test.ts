@@ -1197,6 +1197,60 @@ describe("workflowTarget", () => {
     expect(executor.operation.workflow.name).toBe("test-workflow");
   });
 
+  test("requires args for workflow with required input", () => {
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      // @ts-expect-error - args is required by the workflow's main job input
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+      },
+    });
+  });
+
+  test("accepts primitive static args", () => {
+    const primitiveJob = createWorkflowJob({
+      name: "primitive-input-job",
+      body: (input: string) => input,
+    });
+    const primitiveWorkflow = createWorkflow({
+      name: "primitive-input-workflow",
+      mainJob: primitiveJob,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: primitiveWorkflow,
+        args: "hello",
+      },
+    });
+  });
+
+  test("accepts array static args", () => {
+    const arrayJob = createWorkflowJob({
+      name: "array-input-job",
+      body: (input: string[]) => input.length,
+    });
+    const arrayWorkflow = createWorkflow({
+      name: "array-input-workflow",
+      mainJob: arrayJob,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: arrayWorkflow,
+        args: ["hello"],
+      },
+    });
+  });
+
   test("args can be a function", () => {
     createExecutor({
       name: "test",

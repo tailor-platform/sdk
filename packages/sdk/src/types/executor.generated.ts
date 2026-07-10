@@ -168,17 +168,41 @@ export type WebhookOperation = {
 };
 export type WebhookOperationInput = WebhookOperation;
 
-export type WorkflowOperationInput = unknown;
+export type JsonValueInput =
+  | string
+  | number
+  | boolean
+  | JsonValueInput[]
+  | { [key: string]: JsonValueInput }
+  | null;
+
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | JsonValue[]
+  | { [key: string]: JsonValue }
+  | null;
+
+export type WorkflowInput = string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
+export type WorkflowInputInput = WorkflowInput;
+
+/**
+ * Arguments to pass to the workflow
+ */
+export type WorkflowOperationArgs =
+  | string
+  | number
+  | boolean
+  | Function
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+export type WorkflowOperationArgsInput = WorkflowOperationArgs;
 
 export type WorkflowOperation = {
   kind: "workflow";
   workflowName: string;
-  args?:
-    | Function
-    | {
-        [x: string]: unknown;
-      }
-    | undefined;
+  args?: WorkflowOperationArgs | undefined;
   invoker?:
     | string
     | {
@@ -187,6 +211,15 @@ export type WorkflowOperation = {
       }
     | undefined;
 };
+export type WorkflowOperationInput = WorkflowOperation;
+
+export type OperationInput =
+  | FunctionOperation
+  | GqlOperationInput
+  | WebhookOperation
+  | WorkflowOperation;
+
+export type Operation = FunctionOperation | GqlOperation | WebhookOperation | WorkflowOperation;
 
 export type ExecutorInput = {
   /** Executor name */
@@ -235,8 +268,7 @@ export type ExecutorInput = {
           | "auth.access_token.revoked"
         )[];
       };
-  /** Operation to execute when triggered */
-  operation: unknown;
+  operation: OperationInput;
   /** Executor description */
   description?: string | undefined;
   /** Whether the executor is disabled */
@@ -292,64 +324,7 @@ export type Executor = {
           | "auth.access_token.revoked"
         )[];
       };
-  /** Operation to execute when triggered */
-  operation:
-    | {
-        kind: "workflow";
-        workflowName: string;
-        args?:
-          | Function
-          | {
-              [x: string]: unknown;
-            }
-          | undefined;
-        invoker?:
-          | string
-          | {
-              namespace: string;
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "function" | "jobFunction";
-        body: Function;
-        invoker?:
-          | string
-          | {
-              namespace: string;
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "graphql";
-        query: string;
-        appName?: string | undefined;
-        variables?: Function | undefined;
-        invoker?:
-          | string
-          | {
-              namespace: string;
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "webhook";
-        url: Function;
-        requestBody?: Function | undefined;
-        headers?:
-          | {
-              [x: string]:
-                | string
-                | {
-                    vault: string;
-                    key: string;
-                  };
-            }
-          | undefined;
-      };
+  operation: Operation;
   /** Executor description */
   description?: string | undefined;
 };

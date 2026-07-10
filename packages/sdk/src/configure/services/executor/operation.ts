@@ -287,15 +287,21 @@ export type WebhookOperation<Args> = Omit<
  */
 type WorkflowInput<W extends Workflow> = Parameters<W["trigger"]>[0];
 
+type WorkflowArgs<Args, W extends Workflow> = WorkflowInput<W> | ((args: Args) => WorkflowInput<W>);
+
+type WorkflowArgsProperty<Args, W extends Workflow> =
+  undefined extends WorkflowInput<W>
+    ? { args?: WorkflowArgs<Args, W> }
+    : { args: WorkflowArgs<Args, W> };
+
 /** Workflow-triggering executor operation. Triggers a workflow in response to an event. */
 export type WorkflowOperation<Args, W extends Workflow = Workflow> = Omit<
   ParserWorkflowOperation,
   "workflowName" | "args" | "invoker"
 > & {
   workflow: W;
-  args?: WorkflowInput<W> | ((args: Args) => WorkflowInput<W>);
   invoker?: MachineUserName;
-};
+} & WorkflowArgsProperty<Args, W>;
 
 export type Operation<Args> =
   | FunctionOperation<Args>
