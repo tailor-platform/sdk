@@ -54,7 +54,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
         } else if (obj) {
           hooked[key] = obj[key];
         }
-        if (hooked[key] === undefined && field.metadata.default !== undefined) {
+        if (hooked[key] == null && field.metadata.default !== undefined) {
           hooked[key] =
             field.metadata.default === "now" ? now.toISOString() : field.metadata.default;
         }
