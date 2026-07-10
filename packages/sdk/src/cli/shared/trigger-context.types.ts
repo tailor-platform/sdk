@@ -1,3 +1,5 @@
+import type { TsConfigResult } from "get-tsconfig";
+
 export interface TriggerTarget {
   kind: "job" | "workflow";
   name: string;
@@ -15,4 +17,3 @@ export interface TriggerContext {
   moduleResolution?: TriggerModuleResolution;
   authNamespace?: string;
 }
-import type { TsConfigResult } from "get-tsconfig";

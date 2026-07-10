@@ -17,7 +17,7 @@ import type {
   TriggerModuleBindings,
   TriggerTarget,
 } from "#/cli/shared/trigger-context.types";
-import type { Program, ImportDeclaration, ImportDefaultSpecifier } from "@oxc-project/types";
+import type { Program, ImportDeclaration } from "@oxc-project/types";
 
 export interface ResolvedTriggerCall extends TriggerCallInfo {
   kind: "job" | "workflow";
@@ -228,6 +228,7 @@ function walkBindingAware(
     shadowedNames: ReadonlySet<string>,
     parentNode?: ASTNode,
     parentKey?: string,
+    excludedKey?: string,
   ): void {
     if (!node || typeof node !== "object" || node.type === "ImportDeclaration") return;
 
@@ -244,8 +245,18 @@ function walkBindingAware(
 
       visitor(node, headerShadowedNames, parentNode, parentKey);
       for (const key of Object.keys(node)) {
-        if (key === "parent") continue;
+        if (key === "parent" || key === excludedKey) continue;
         const child = node[key] as unknown;
+        if (key === "params" && Array.isArray(child)) {
+          for (const item of child) {
+            const parameter = item as ASTNode;
+            for (const decorator of (parameter.decorators as ASTNode[] | undefined) ?? []) {
+              walk(decorator, shadowedNames, parameter, "decorators");
+            }
+            walk(parameter, headerShadowedNames, node, key, "decorators");
+          }
+          continue;
+        }
         const childShadowedNames = key === "body" ? bodyShadowedNames : headerShadowedNames;
         if (Array.isArray(child)) {
           for (const item of child) {
@@ -283,7 +294,7 @@ function walkBindingAware(
     }
 
     for (const key of Object.keys(node)) {
-      if (key === "parent") continue;
+      if (key === "parent" || key === excludedKey) continue;
       const child = node[key] as unknown;
       if (Array.isArray(child)) {
         for (const item of child) {
@@ -327,56 +338,85 @@ function buildReferenceCountMap(program: Program, names: Set<string>): Map<strin
   return counts;
 }
 
-interface ImportRemovalRange {
-  start: number;
-  end: number;
-  /** True when the entire import declaration should be removed (including trailing newline). */
-  isFullDeclaration: boolean;
-}
-
 /**
- * Find the text range to remove for a dead default import.
- *
- * - Default-only import (`import wf from "..."`): returns the full declaration range.
- * - Mixed import (`import wf, { helper } from "..."`): returns the range covering
- *   the default specifier and trailing comma/whitespace so the result becomes
- *   `import { helper } from "..."`.
+ * Build source replacements for dead workflow imports.
  * @param program - The parsed AST program
- * @param localName - The local name of the default import
- * @param source - The source code text (used to locate the `{` in mixed imports)
- * @returns Range to remove, or null if the import was not found
+ * @param deadLocalNames - Local import bindings with no remaining references
+ * @param source - Original source text used to preserve import specifiers
+ * @returns Non-overlapping import declaration replacements
  */
-function findDefaultImportRemovalRange(
+function buildWorkflowImportReplacements(
   program: Program,
-  localName: string,
+  deadLocalNames: ReadonlySet<string>,
   source: string,
-): ImportRemovalRange | null {
+): Replacement[] {
+  const replacements: Replacement[] = [];
+
   for (const statement of program.body) {
     if (statement.type !== "ImportDeclaration") continue;
 
     const importDecl = statement as unknown as ImportDeclaration;
     const specifiers = importDecl.specifiers;
+    const retainedSpecifiers = specifiers.filter(
+      (specifier) => !deadLocalNames.has(specifier.local.name),
+    );
+    if (retainedSpecifiers.length === specifiers.length) continue;
 
-    for (const spec of specifiers) {
-      if (spec.type !== "ImportDefaultSpecifier") continue;
-
-      const defaultSpec = spec as ImportDefaultSpecifier;
-      if (defaultSpec.local.name !== localName) continue;
-
-      if (specifiers.length === 1) {
-        return { start: importDecl.start, end: importDecl.end, isFullDeclaration: true };
-      }
-
-      // Mixed import: remove "wf, " up to the "{" so the result is "import { ... } from ..."
-      const braceIndex = source.indexOf("{", defaultSpec.end);
-      if (braceIndex !== -1) {
-        return { start: defaultSpec.start, end: braceIndex, isFullDeclaration: false };
-      }
-      return null;
+    if (retainedSpecifiers.length === 0) {
+      replacements.push({
+        start: importDecl.start,
+        end: findStatementEnd(source, importDecl.end),
+        text: "",
+      });
+      continue;
     }
+
+    const firstSpecifier = specifiers[0];
+    const lastSpecifier = specifiers.at(-1);
+    if (!firstSpecifier || !lastSpecifier) continue;
+    const namedGroupStart = source.lastIndexOf("{", firstSpecifier.start);
+    const clauseStart =
+      firstSpecifier.type === "ImportSpecifier" && namedGroupStart >= importDecl.start
+        ? namedGroupStart
+        : firstSpecifier.start;
+    const namedGroupEnd = source.indexOf("}", lastSpecifier.end);
+    const clauseEnd =
+      lastSpecifier.type === "ImportSpecifier" &&
+      namedGroupEnd >= lastSpecifier.end &&
+      namedGroupEnd < importDecl.end
+        ? namedGroupEnd + 1
+        : lastSpecifier.end;
+
+    const defaultSpecifier = retainedSpecifiers.find(
+      (specifier) => specifier.type === "ImportDefaultSpecifier",
+    );
+    const namespaceSpecifier = retainedSpecifiers.find(
+      (specifier) => specifier.type === "ImportNamespaceSpecifier",
+    );
+    const namedSpecifiers = retainedSpecifiers.filter(
+      (specifier) => specifier.type === "ImportSpecifier",
+    );
+    const clauseParts: string[] = [];
+    if (defaultSpecifier) {
+      clauseParts.push(source.slice(defaultSpecifier.start, defaultSpecifier.end));
+    }
+    if (namespaceSpecifier) {
+      clauseParts.push(source.slice(namespaceSpecifier.start, namespaceSpecifier.end));
+    }
+    if (namedSpecifiers.length > 0) {
+      clauseParts.push(
+        `{ ${namedSpecifiers.map((specifier) => source.slice(specifier.start, specifier.end)).join(", ")} }`,
+      );
+    }
+
+    replacements.push({
+      start: clauseStart,
+      end: clauseEnd,
+      text: clauseParts.join(", "),
+    });
   }
 
-  return null;
+  return replacements;
 }
 
 /**
@@ -455,7 +495,7 @@ function resolveImportBindings(
 interface LocalTriggerTargets {
   targets: Map<string, TriggerTarget>;
   namespaceTargets: Map<string, TriggerModuleBindings["exports"]>;
-  workflowDefaultImportNames: Set<string>;
+  workflowImportNames: Set<string>;
 }
 
 function collectLocalTargets(
@@ -465,7 +505,7 @@ function collectLocalTargets(
 ): LocalTriggerTargets {
   const targets = new Map<string, TriggerTarget>();
   const namespaceTargets = new Map<string, TriggerModuleBindings["exports"]>();
-  const workflowDefaultImportNames = new Set<string>();
+  const workflowImportNames = new Set<string>();
   const currentModule = context.modules.get(normalizeTriggerModulePath(currentFilePath));
   if (currentModule) {
     for (const [localName, target] of currentModule.localBindings) {
@@ -483,6 +523,9 @@ function collectLocalTargets(
     for (const specifier of statement.specifiers) {
       if (specifier.type === "ImportNamespaceSpecifier") {
         namespaceTargets.set(specifier.local.name, importedModule.exports);
+        if (importedModule.exports.get("default")?.kind === "workflow") {
+          workflowImportNames.add(specifier.local.name);
+        }
         continue;
       }
 
@@ -497,13 +540,13 @@ function collectLocalTargets(
       const target = importedModule.exports.get(importedName);
       if (!target) continue;
       targets.set(specifier.local.name, target);
-      if (specifier.type === "ImportDefaultSpecifier" && target.kind === "workflow") {
-        workflowDefaultImportNames.add(specifier.local.name);
+      if (importedName === "default" && target.kind === "workflow") {
+        workflowImportNames.add(specifier.local.name);
       }
     }
   }
 
-  return { targets, namespaceTargets, workflowDefaultImportNames };
+  return { targets, namespaceTargets, workflowImportNames };
 }
 
 /**
@@ -521,7 +564,7 @@ export function transformFunctionTriggers(
 ): string {
   const { program } = parseSync("input.ts", source);
   const localTargets = collectLocalTargets(program, triggerContext, currentFilePath);
-  const { workflowDefaultImportNames } = localTargets;
+  const { workflowImportNames } = localTargets;
   const { authNamespace } = triggerContext;
 
   // Detect trigger calls only for known workflows and jobs.
@@ -608,23 +651,19 @@ export function transformFunctionTriggers(
   // it was already unused or because all references to its local identifier were
   // .trigger() calls that have been rewritten above.
   // Single AST pass for all candidate names; scope-aware to ignore shadowed references.
-  const refCounts = buildReferenceCountMap(program, workflowDefaultImportNames);
+  const refCounts = buildReferenceCountMap(program, workflowImportNames);
+  const deadWorkflowImports = new Set<string>();
 
-  for (const localName of workflowDefaultImportNames) {
+  for (const localName of workflowImportNames) {
     const transformedCount = transformedCallsPerIdentifier.get(localName) ?? 0;
     const refCount = refCounts.get(localName) ?? 0;
 
     if (refCount === 0 || transformedCount >= refCount) {
-      const removal = findDefaultImportRemovalRange(program, localName, source);
-      if (removal) {
-        replacements.push({
-          start: removal.start,
-          end: removal.isFullDeclaration ? findStatementEnd(source, removal.end) : removal.end,
-          text: "",
-        });
-      }
+      deadWorkflowImports.add(localName);
     }
   }
+
+  replacements.push(...buildWorkflowImportReplacements(program, deadWorkflowImports, source));
 
   const transformed = applyReplacements(source, replacements);
 

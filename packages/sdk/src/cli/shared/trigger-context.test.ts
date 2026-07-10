@@ -324,6 +324,48 @@ await jobs.step.trigger();
     expect(result).not.toContain("jobs.step.trigger()");
   });
 
+  test("removes a namespace import used only for a default workflow trigger", async () => {
+    const { tempDir } = await createDuplicateExportContext();
+    const workflowPath = path.join(tempDir, "workflow.ts");
+    writeFileSync(
+      workflowPath,
+      `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+const mainJob = createWorkflowJob({ name: "main-job", body: async () => "done" });
+export const helper = () => "helper";
+export default createWorkflow({ name: "workflow-a", mainJob });
+`,
+    );
+    const context = await buildTriggerContext({ files: [workflowPath] });
+    const source = `
+import * as workflows from "./workflow";
+await workflows.default.trigger();
+`;
+
+    const result = transform(source, path.join(tempDir, "caller.ts"), context);
+    const retainedResult = transform(
+      `${source}\nconsole.log(workflows);\n`,
+      path.join(tempDir, "retained-caller.ts"),
+      context,
+    );
+    const aliasedResult = transform(
+      `
+import { default as firstWorkflow, default as secondWorkflow, helper } from "./workflow";
+helper();
+await firstWorkflow.trigger();
+await secondWorkflow.trigger();
+`,
+      path.join(tempDir, "aliased-caller.ts"),
+      context,
+    );
+
+    expect(result).not.toContain('import * as workflows from "./workflow"');
+    expect(result).toContain('tailor.workflow.triggerWorkflow("workflow-a", undefined)');
+    expect(retainedResult).toContain('import * as workflows from "./workflow"');
+    expect(aliasedResult).toContain('import { helper } from "./workflow"');
+    expect(aliasedResult).not.toContain("default as");
+  });
+
   test("does not transform an imported job name shadowed by a parameter", async () => {
     const { context, tempDir } = await createDuplicateExportContext();
     const source = `
@@ -378,6 +420,24 @@ namespace Local {
     expect(result).not.toContain("tailor.workflow.triggerJobFunction");
   });
 
+  test("resolves trigger bindings used by parameter decorators", async () => {
+    const { context, tempDir } = await createDuplicateExportContext();
+    const source = `
+import { step } from "./first";
+
+class Consumer {
+  run(@decorate(step.trigger()) step: unknown) {
+    return step;
+  }
+}
+`;
+
+    const result = transform(source, path.join(tempDir, "caller.ts"), context);
+
+    expect(result).toContain('decorate((async () => tailor.workflow.triggerJobFunction("step-a"');
+    expect(result).toContain("return step");
+  });
+
   test("keeps nested TypeScript namespace bindings in their own scope", async () => {
     const { context, tempDir } = await createDuplicateExportContext();
     const source = `
@@ -399,12 +459,18 @@ namespace WithNestedVar {
     step.trigger({ source: "inner" });
   }
 }
+
+namespace WithImportEquals {
+  import step = Other.step;
+  step.trigger({ source: "import-equals" });
+}
 `;
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
     expect(result).toContain('step.trigger({ source: "declaration" })');
     expect(result).toContain('step.trigger({ source: "inner" })');
+    expect(result).toContain('step.trigger({ source: "import-equals" })');
     expect(result).toContain('triggerJobFunction("step-a", { source: "outer" })');
   });
 

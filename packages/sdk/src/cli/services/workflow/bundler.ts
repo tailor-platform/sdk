@@ -65,7 +65,7 @@ export async function bundleWorkflowJobs(
   allJobs: JobInfo[],
   mainJobNames: string[],
   env: Record<string, string | number | boolean> = {},
-  triggerContext?: TriggerContext,
+  triggerContext: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
@@ -155,7 +155,7 @@ interface FilterUsedJobsResult {
 async function filterUsedJobs(
   allJobs: JobInfo[],
   mainJobNames: string[],
-  triggerContext?: TriggerContext,
+  triggerContext: TriggerContext,
 ): Promise<FilterUsedJobsResult> {
   if (allJobs.length === 0 || mainJobNames.length === 0) {
     return { usedJobs: [], mainJobDeps: {} };
@@ -182,9 +182,12 @@ async function filterUsedJobs(
 
         // Find all jobs in this file to get body ranges
         const detectedJobs = findAllJobs(program, source);
-        const triggerCalls = triggerContext
-          ? detectResolvedTriggerCalls(program, source, triggerContext, sourceFile)
-          : [];
+        const triggerCalls = detectResolvedTriggerCalls(
+          program,
+          source,
+          triggerContext,
+          sourceFile,
+        );
 
         // For each job in this file, find which triggers are inside its body
         const jobDependencies: Array<{ jobName: string; deps: Set<string> }> = [];
@@ -266,7 +269,7 @@ async function bundleSingleJob(
   outputDir: string,
   tsconfig: string | undefined,
   env: Record<string, string | number | boolean>,
-  triggerContext?: TriggerContext,
+  triggerContext: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
@@ -340,10 +343,9 @@ async function bundleSingleJob(
               return null;
             }
 
-            // Only apply workflow source transformation (job removal, default
-            // export removal, intra-file trigger rewriting) to the job's own
-            // source file. Dependency files imported by the source file must
-            // keep their exports intact for rolldown to resolve cross-file
+            // Only remove other jobs and the default workflow export from the job's
+            // own source file. Dependency files imported by the source file must keep
+            // their exports intact for rolldown to resolve cross-file
             // imports (e.g. `import workflow from "./other-workflow"`).
             let transformed = code;
             const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
@@ -356,8 +358,8 @@ async function bundleSingleJob(
               );
             }
 
-            // Apply workflow.trigger / job.trigger transformation if context is provided
-            if (triggerContext && transformed.includes(".trigger(")) {
+            // Apply workflow.trigger / job.trigger transformation.
+            if (transformed.includes(".trigger(")) {
               transformed = transformFunctionTriggers(transformed, triggerContext, id);
             }
 

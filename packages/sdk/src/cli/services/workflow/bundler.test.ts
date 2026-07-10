@@ -7,7 +7,7 @@ import { bundleWorkflowJobs } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
   test("does not throw when no workflow jobs are provided", async () => {
-    await expect(bundleWorkflowJobs([], [], {})).resolves.toEqual({
+    await expect(bundleWorkflowJobs([], [], {}, { modules: new Map() })).resolves.toEqual({
       mainJobDeps: {},
       usedJobNames: [],
       bundledCode: new Map(),
