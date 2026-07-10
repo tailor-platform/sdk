@@ -11,7 +11,7 @@
  * const { users } = await client.users({ first: 10 });
  */
 
-/** Configuration object for {@link Client}. */
+/** Configuration object for `idp.Client`. */
 export interface ClientConfig {
   namespace: string;
 }
@@ -29,12 +29,12 @@ export interface User {
   mfaEnrolled: boolean;
   /**
    * Enrolled MFA second factor IDs. Pass an entry into
-   * {@link Client.unenrollMfa} to remove that factor.
+   * `idp.Client.unenrollMfa()` to remove that factor.
    */
   mfaFactorIds: string[];
 }
 
-/** Filter options for {@link Client.users}. */
+/** Filter options for `idp.Client.users()`. */
 export interface UserQuery {
   /** Filter by user IDs */
   ids?: string[];
@@ -42,7 +42,7 @@ export interface UserQuery {
   names?: string[];
 }
 
-/** Pagination/filter options for {@link Client.users}. */
+/** Pagination/filter options for `idp.Client.users()`. */
 export interface ListUsersOptions {
   /** Maximum number of users to return */
   first?: number;
@@ -52,14 +52,14 @@ export interface ListUsersOptions {
   query?: UserQuery;
 }
 
-/** Response shape for {@link Client.users}. */
+/** Response shape for `idp.Client.users()`. */
 export interface ListUsersResponse {
   users: User[];
   nextPageToken: string | null;
   totalCount: number;
 }
 
-/** Input for {@link Client.createUser}. */
+/** Input for `idp.Client.createUser()`. */
 export interface CreateUserInput {
   /** The user's name (typically email) */
   name: string;
@@ -69,7 +69,7 @@ export interface CreateUserInput {
   disabled?: boolean;
 }
 
-/** Input for {@link Client.updateUser}. */
+/** Input for `idp.Client.updateUser()`. */
 export interface UpdateUserInput {
   /** The user's ID */
   id: string;
@@ -83,7 +83,7 @@ export interface UpdateUserInput {
   disabled?: boolean;
 }
 
-/** Input for {@link Client.sendPasswordResetEmail}. */
+/** Input for `idp.Client.sendPasswordResetEmail()`. */
 export interface SendPasswordResetEmailInput {
   /** The ID of the user */
   userId: string;
@@ -95,7 +95,7 @@ export interface SendPasswordResetEmailInput {
   subject?: string;
 }
 
-/** Input for {@link Client.unenrollMfa}. */
+/** Input for `idp.Client.unenrollMfa()`. */
 export interface UnenrollMfaInput {
   /** The ID of the user whose factor will be unenrolled. */
   userId: string;
@@ -140,11 +140,13 @@ export interface TailorIdpAPI {
  *
  * Wraps the platform-provided `tailor.idp.Client` and exposes the same surface.
  */
-export class Client {
+class Client {
   #impl: IdpClientInstance;
 
   constructor(config: ClientConfig) {
-    this.#impl = new (globalThis as { tailor: { idp: TailorIdpAPI } }).tailor.idp.Client(config);
+    this.#impl = new (globalThis as unknown as { tailor: { idp: TailorIdpAPI } }).tailor.idp.Client(
+      config,
+    );
   }
 
   /**
@@ -219,3 +221,7 @@ export class Client {
     return this.#impl.unenrollMfa(input);
   }
 }
+
+// Keep the object typed to the public API so the private wrapper class does not leak into d.ts.
+/** Runtime API for `tailor.idp`. */
+export const idp: TailorIdpAPI = { Client };

@@ -1,5 +1,5 @@
 import { brandValue } from "#/utils/brand";
-import type { TailorWorkflowAPI } from "#/runtime/workflow";
+import type { PlatformWorkflowAPI } from "#/runtime/workflow";
 import type { JsonCompatible, TypeLevelError } from "#/types/helpers";
 
 /**
@@ -37,7 +37,7 @@ interface WaitPointWithSetter {
 }
 
 function getPlatformWorkflow() {
-  const platform = globalThis as { tailor?: { workflow?: TailorWorkflowAPI } };
+  const platform = globalThis as { tailor?: { workflow?: PlatformWorkflowAPI } };
   const workflow = platform.tailor?.workflow;
   if (!workflow) {
     throw new Error(

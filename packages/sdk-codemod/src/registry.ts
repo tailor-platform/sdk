@@ -502,6 +502,61 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/runtime-subpath-namespace",
+    name: "Runtime subpath imports use namespace objects",
+    description:
+      "Rewrite `@tailor-platform/sdk/runtime/*` namespace-star and flat value imports to self-named namespace imports, and aggregate `file.deleteFile` calls to `file.delete`. `TailorContextAPI` and `TailorWorkflowAPI` now describe SDK wrappers; direct platform globals use `PlatformContextAPI` and `PlatformWorkflowAPI`.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_3,
+    scriptPath: "v2/runtime-subpath-namespace/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    legacyPatterns: [
+      "@tailor-platform/sdk/runtime/iconv",
+      "@tailor-platform/sdk/runtime/secretmanager",
+      "@tailor-platform/sdk/runtime/authconnection",
+      "@tailor-platform/sdk/runtime/idp",
+      "@tailor-platform/sdk/runtime/workflow",
+      "@tailor-platform/sdk/runtime/context",
+      "@tailor-platform/sdk/runtime/file",
+      "@tailor-platform/sdk/runtime/aigateway",
+    ],
+    examples: [
+      {
+        before:
+          'import * as iconv from "@tailor-platform/sdk/runtime/iconv";\niconv.convert(value, "UTF-8", "Shift_JIS");',
+        after:
+          'import { iconv } from "@tailor-platform/sdk/runtime/iconv";\niconv.convert(value, "UTF-8", "Shift_JIS");',
+      },
+      {
+        before:
+          'import { get } from "@tailor-platform/sdk/runtime/aigateway";\nconst gateway = await get("main");',
+        after:
+          'import { aigateway } from "@tailor-platform/sdk/runtime/aigateway";\nconst gateway = await aigateway.get("main");',
+      },
+      {
+        before:
+          'import { file } from "@tailor-platform/sdk/runtime";\nawait file.deleteFile("ns", "Doc", "blob", "record-id");',
+        after:
+          'import { file } from "@tailor-platform/sdk/runtime";\nawait file.delete("ns", "Doc", "blob", "record-id");',
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2, runtime subpath modules export only a self-named namespace",
+      "object (for example, `iconv` from `@tailor-platform/sdk/runtime/iconv`).",
+      "Default and flat value imports such as",
+      '`import { get } from "@tailor-platform/sdk/runtime/aigateway"` are removed.',
+      "The codemod rewrites straightforward namespace-star imports and flat named value",
+      "imports. It also rewrites direct `file.deleteFile` calls on the aggregate runtime",
+      "namespace to `file.delete`. Destructured aggregate `deleteFile` references require",
+      "manual migration. Review any remaining runtime imports manually, especially when",
+      "a local binding or nested scope shadows an imported value, or when",
+      "type-position namespace member references need explicit top-level type imports.",
+      "For direct platform globals, replace `TailorContextAPI` and `TailorWorkflowAPI`",
+      "type references with `PlatformContextAPI` and `PlatformWorkflowAPI` respectively.",
+    ].join("\n"),
+  },
+  {
     id: "v2/tailordb-namespace",
     name: "Tailordb → tailordb (lowercase ambient namespace)",
     description:
