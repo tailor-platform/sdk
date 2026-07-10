@@ -131,12 +131,28 @@ describe("repository ERD schema workflow", () => {
   test("groups each job's concurrency per commit/ref and per namespace so matrix entries run in parallel without racing each other", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    expect(content).toContain("group: erd-schema-export-${{ github.sha }}-${{ matrix.namespace }}");
-    expect(content).toContain("cancel-in-progress: false");
-    expect(content).toContain(
+    const exportJob = content.slice(
+      content.indexOf("\n  export:"),
+      content.indexOf("\n  preview:"),
+    );
+    const previewJob = content.slice(
+      content.indexOf("\n  preview:"),
+      content.indexOf("\n  comment:"),
+    );
+    const commentJob = content.slice(content.indexOf("\n  comment:"));
+
+    expect(exportJob).toContain(
+      "group: erd-schema-export-${{ github.sha }}-${{ matrix.namespace }}",
+    );
+    expect(exportJob).toContain("cancel-in-progress: false");
+
+    expect(previewJob).toContain(
       "group: erd-schema-preview-${{ github.ref }}-${{ matrix.namespace }}",
     );
-    expect(content).toContain("cancel-in-progress: true");
+    expect(previewJob).toContain("cancel-in-progress: true");
+
+    expect(commentJob).toContain("group: erd-schema-comment-${{ github.ref }}");
+    expect(commentJob).toContain("cancel-in-progress: true");
   });
 
   test("grants actions:read for the base-run lookup and pull-requests:write for the comment", () => {
@@ -152,12 +168,6 @@ describe("repository ERD schema workflow", () => {
 
     expect(content).toContain("needs: preview");
     expect(content).toContain("pr-number: ${{ github.event.pull_request.number }}");
-  });
-
-  test("scopes the comment job's concurrency per PR so an older run cannot overwrite a newer sticky comment", () => {
-    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
-
-    expect(content).toContain("group: erd-schema-comment-${{ github.ref }}");
   });
 
   test("checks out the repository before every tailor-platform/actions/erd-schema-* step", () => {
