@@ -39,6 +39,7 @@ allowBuilds:
 
 overrides:
   esbuild@>=0.17.0 <0.28.1: 0.28.1
+  zinfer: "https://pkg.pr.new/zinfer@054a3a5?v=054a3a5"
 
 peerDependencyRules:
   allowedVersions:

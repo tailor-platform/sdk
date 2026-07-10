@@ -5,7 +5,7 @@ import {
   GqlOperationSchema,
   WorkflowOperationSchema,
 } from "./schema";
-import type { Executor, WorkflowOperationArgs } from "#/types/executor.generated";
+import type { Executor, ExecutorInput, WorkflowOperationArgs } from "#/types/executor.generated";
 
 function expectParseSuccess<T>(
   result: { success: true; data: T } | { success: false; error: unknown },
@@ -133,12 +133,27 @@ describe("WorkflowOperationSchema", () => {
   test("rejects unknown options", () => {
     expect.hasAssertions();
 
-    expectUnknownKeyRejected(
+    const error = expectParseFailure(
       WorkflowOperationSchema.safeParse({
         kind: "workflow",
         workflowName: "my-workflow",
         unknownOption: true,
       }),
+    );
+
+    expect(error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "invalid_union",
+          errors: expect.arrayContaining([
+            expect.arrayContaining([
+              expect.objectContaining({
+                code: "unrecognized_keys",
+              }),
+            ]),
+          ]),
+        }),
+      ]),
     );
   });
 
@@ -220,6 +235,39 @@ describe("WorkflowOperationSchema", () => {
     // @ts-expect-error Date is neither a JSON-compatible input nor an args callback.
     const invalidArgs: ExecutorWorkflowArgs = new Date();
     void invalidArgs;
+  });
+
+  test("keeps generated workflow operation input aligned with reference parsing", () => {
+    type WorkflowReferenceInput = Extract<
+      ExecutorInput["operation"],
+      { kind: "workflow"; workflow: unknown }
+    >;
+
+    expectTypeOf<WorkflowReferenceInput>().not.toBeAny();
+    expectTypeOf<WorkflowReferenceInput>().not.toBeUnknown();
+    expectTypeOf<WorkflowReferenceInput>().not.toBeNever();
+
+    const executor: ExecutorInput = {
+      name: "test-executor",
+      trigger: { kind: "schedule", cron: "0 12 * * *" },
+      operation: {
+        kind: "workflow",
+        workflow: { name: "my-workflow" },
+        args: { orderId: "123" },
+      },
+    };
+
+    const invalidExecutor: ExecutorInput = {
+      ...executor,
+      operation: {
+        kind: "workflow",
+        // @ts-expect-error Workflow references require a name.
+        workflow: {},
+      },
+    };
+    void invalidExecutor;
+
+    expect(executor.operation.kind).toBe("workflow");
   });
 });
 
