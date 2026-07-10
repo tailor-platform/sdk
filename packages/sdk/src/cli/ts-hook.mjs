@@ -18,29 +18,38 @@ const KNOWN_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".mjs", ".json"];
 
 const tsconfigPathsCache = new Map();
 
+// Returns the effective (own or inherited) baseUrl, so a child config whose
+// own `paths` omits `baseUrl` can still resolve against a base defined by
+// whatever config it `extends`, rather than always falling back to its own
+// directory.
 function collectPathsInto(out, configFilePath, content, visited) {
-  if (visited.has(configFilePath)) return;
+  if (visited.has(configFilePath)) return undefined;
   visited.add(configFilePath);
 
   const baseDir = dirname(configFilePath);
+  const opts = content.compilerOptions ?? {};
+  const ownBaseUrl = typeof opts.baseUrl === "string" ? resolvePath(baseDir, opts.baseUrl) : undefined;
 
+  let inheritedBaseUrl;
   const extendsField = content.extends;
   if (typeof extendsField === "string") {
     const base = resolvePath(baseDir, extendsField);
     const extendsPath = base.endsWith(".json") ? base : base + ".json";
     try {
       const sub = JSON.parse(readFileSync(extendsPath, "utf-8"));
-      collectPathsInto(out, extendsPath, sub, visited);
+      inheritedBaseUrl = collectPathsInto(out, extendsPath, sub, visited);
     } catch (e) {
       if (e?.code !== "ENOENT" && !(e instanceof SyntaxError)) throw e;
     }
   }
 
-  const opts = content.compilerOptions ?? {};
+  const effectiveBaseUrl = ownBaseUrl ?? inheritedBaseUrl;
+
   const rawPaths = opts.paths;
-  const baseUrl = typeof opts.baseUrl === "string" ? opts.baseUrl : ".";
   if (rawPaths) {
-    const absBase = resolvePath(baseDir, baseUrl);
+    // TypeScript replaces (not merges) inherited `paths` when a config defines its own.
+    for (const key of Object.keys(out)) delete out[key];
+    const absBase = effectiveBaseUrl ?? baseDir;
     for (const [alias, targets] of Object.entries(rawPaths)) {
       out[alias] = targets.map((t) => {
         const isWildcard = t.endsWith("/*");
@@ -49,6 +58,8 @@ function collectPathsInto(out, configFilePath, content, visited) {
       });
     }
   }
+
+  return effectiveBaseUrl;
 }
 
 function loadTsconfigPaths(startDir) {
