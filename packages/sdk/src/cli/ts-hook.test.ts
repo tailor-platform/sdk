@@ -333,6 +333,35 @@ describe("resolve", () => {
     vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
   });
 
+  test("resolves inherited paths using the child's own baseUrl override, not the defining config's baseUrl", async () => {
+    const baseConfig = JSON.stringify({
+      compilerOptions: { baseUrl: "parent-base", paths: { "@shared/*": ["./*"] } },
+    });
+    const rootConfig = JSON.stringify({
+      extends: "./tsconfig.base.json",
+      compilerOptions: { baseUrl: "child-base" },
+    });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      const p = String(path);
+      if (p.endsWith("tsconfig.base.json")) return baseConfig as unknown as string;
+      if (p.endsWith("tsconfig.json")) return rootConfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const nextResolve = vi.fn().mockRejectedValue(notFound("@shared/tailordb/user"));
+    await expect(
+      resolve(
+        "@shared/tailordb/user",
+        { parentURL: "file:///override-baseurl-project/tailor.config.ts" },
+        nextResolve,
+      ),
+    ).rejects.toMatchObject({ code: "ERR_MODULE_NOT_FOUND" });
+    expect(nextResolve).toHaveBeenCalledWith(
+      expect.stringContaining("override-baseurl-project/child-base/tailordb/user.ts"),
+      expect.anything(),
+    );
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
+
   test("replaces inherited paths instead of merging when child config defines its own paths", async () => {
     const baseConfig = JSON.stringify({
       compilerOptions: { baseUrl: ".", paths: { "@parent/*": ["./parent-src/*"] } },
@@ -701,6 +730,37 @@ describe("resolveSync", () => {
     ).toThrow("Cannot find '@app/tailordb/user'");
     expect(nextResolve).toHaveBeenCalledWith(
       expect.stringContaining("inherited-baseurl-sync-project/shared-base/tailordb/user.ts"),
+      expect.anything(),
+    );
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
+
+  test("resolves inherited paths using the child's own baseUrl override, not the defining config's baseUrl", () => {
+    const baseConfig = JSON.stringify({
+      compilerOptions: { baseUrl: "parent-base", paths: { "@shared/*": ["./*"] } },
+    });
+    const rootConfig = JSON.stringify({
+      extends: "./tsconfig.base.json",
+      compilerOptions: { baseUrl: "child-base" },
+    });
+    vi.mocked(readFileSync).mockImplementation((path) => {
+      const p = String(path);
+      if (p.endsWith("tsconfig.base.json")) return baseConfig as unknown as string;
+      if (p.endsWith("tsconfig.json")) return rootConfig as unknown as string;
+      return "const x: number = 1;" as unknown as string;
+    });
+    const nextResolve = vi.fn().mockImplementation(() => {
+      throw notFound("@shared/tailordb/user");
+    });
+    expect(() =>
+      resolveSync(
+        "@shared/tailordb/user",
+        { parentURL: "file:///override-baseurl-sync-project/tailor.config.ts" },
+        nextResolve,
+      ),
+    ).toThrow("Cannot find '@shared/tailordb/user'");
+    expect(nextResolve).toHaveBeenCalledWith(
+      expect.stringContaining("override-baseurl-sync-project/child-base/tailordb/user.ts"),
       expect.anything(),
     );
     vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
