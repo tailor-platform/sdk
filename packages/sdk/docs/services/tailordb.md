@@ -340,6 +340,8 @@ export const user = db
   });
 ```
 
+**Note:** `.hooks()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
+
 ### Validation
 
 Add validation rules to fields. Validators receive three arguments (executed after hooks):
@@ -403,6 +405,8 @@ export const user = db
   });
 ```
 
+**Note:** `.validate()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
+
 ### Vector Search
 
 ```typescript
@@ -433,6 +437,22 @@ export const user = db.type("User", {
 ```
 
 ## Type Modifiers
+
+Type builder methods that set one type-level configuration can be called only once on the same type. Duplicate calls fail at compile time and throw at runtime. This applies to `.description()`, `.hooks()`, `.validate()`, `.features()`, `.indexes()`, `.files()`, `.permission()`, and `.gqlPermission()`.
+
+Conditional assignment is still supported when only one branch calls the method:
+
+```typescript
+let user = db.type("User", {
+  name: db.string(),
+});
+
+if (enableFiles) {
+  user = user.files({
+    avatar: "profile image",
+  });
+}
+```
 
 ### Composite Indexes
 
