@@ -17,12 +17,12 @@
 
 import type { TailorAigatewayAPI } from "./aigateway";
 import type { TailorAuthconnectionAPI } from "./authconnection";
-import type { TailorContextAPI } from "./context";
+import type { PlatformContextAPI } from "./context";
 import type { TailorDBFileAPI } from "./file";
 import type { TailorIconvAPI } from "./iconv";
 import type { TailorIdpAPI } from "./idp";
 import type { TailorSecretmanagerAPI } from "./secretmanager";
-import type { TailorWorkflowAPI } from "./workflow";
+import type { PlatformWorkflowAPI } from "./workflow";
 
 export { iconv } from "./iconv";
 export { secretmanager } from "./secretmanager";
@@ -69,8 +69,8 @@ export interface TailorRuntime {
   authconnection: TailorAuthconnectionAPI;
   iconv: TailorIconvAPI;
   idp: TailorIdpAPI;
-  workflow: TailorWorkflowAPI;
-  context: TailorContextAPI;
+  workflow: PlatformWorkflowAPI;
+  context: PlatformContextAPI;
   aigateway: TailorAigatewayAPI;
 }
 

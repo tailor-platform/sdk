@@ -45,8 +45,17 @@ export interface ContextInvoker {
  * runtime injects on `globalThis.tailor.context`.
  * @internal
  */
-export interface TailorContextAPI {
+export interface PlatformContextAPI {
   getInvoker(): ContextInvoker | null;
+}
+
+/** Runtime wrapper API for execution context utilities. */
+export interface TailorContextAPI {
+  /**
+   * Returns information about the current invoker.
+   * @returns Invoker details, or `null` for anonymous invocations
+   */
+  getInvoker(): Invoker | null;
 }
 
 /**
@@ -56,7 +65,7 @@ export interface TailorContextAPI {
  */
 function getInvoker(): Invoker | null {
   const raw = (
-    globalThis as unknown as { tailor: { context: TailorContextAPI } }
+    globalThis as unknown as { tailor: { context: PlatformContextAPI } }
   ).tailor.context.getInvoker();
   if (!raw) return null;
   return {
@@ -69,6 +78,6 @@ function getInvoker(): Invoker | null {
 }
 
 /** Runtime wrapper namespace for `tailor.context`. */
-export const context = { getInvoker } as const;
+export const context = { getInvoker } as const satisfies TailorContextAPI;
 
 export default context;
