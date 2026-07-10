@@ -58,6 +58,12 @@ function emptyInput(): ValidatePlanInput {
       unmanaged: [],
       resourceOwners: new Set(),
     },
+    aiGateway: {
+      changeSet: createChangeSet("AIGateways"),
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set(),
+    },
     idp: {
       changeSet: {
         service: createChangeSet("IdP services"),
@@ -164,6 +170,22 @@ const validCases: Case<undefined>[] = [
           authNamespace: "my-auth",
           cors: ["https://__PLACEHOLDER__"],
           subgraphs: [{ serviceType: 1, serviceNamespace: "tailordb" }],
+        },
+        metaRequest: METADATA,
+      } as never);
+    },
+    expected: undefined,
+  },
+  {
+    name: "(g2) AIGateway create with cors containing a placeholder string passes",
+    mutate: (input) => {
+      input.aiGateway.changeSet.creates.push({
+        name: "my-gateway",
+        request: {
+          workspaceId: WS_ID,
+          aigatewayName: "my-gateway",
+          authNamespace: "my-auth",
+          cors: ["https://__PLACEHOLDER__"],
         },
         metaRequest: METADATA,
       } as never);
@@ -313,6 +335,22 @@ const invalidCases: Case<RegExp>[] = [
       input.executor.changeSet.creates.push({
         name: "INVALID_NAME",
         request: { workspaceId: WS_ID, executor: { name: "INVALID_NAME" } },
+      } as never);
+    },
+    expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
+  },
+  {
+    name: "(d2) AIGateway create with invalid name produces a violation",
+    mutate: (input) => {
+      input.aiGateway.changeSet.creates.push({
+        name: "INVALID_NAME",
+        request: {
+          workspaceId: WS_ID,
+          aigatewayName: "INVALID_NAME",
+          authNamespace: "my-auth",
+          cors: [],
+        },
+        metaRequest: METADATA,
       } as never);
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
