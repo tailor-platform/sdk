@@ -14,6 +14,7 @@ const expectedCoordinator = 'pnpm run --no-bail "/^check-type:/"';
 const expectedChecks = {
   "check-type:example": "pnpm --filter example run typecheck:generated",
   "check-type:native-preview": "pnpm --no-bail -r run typecheck:go",
+  "check-type:root": "pnpm run typecheck:root",
   "check-type:stable": "pnpm --filter=!example --no-bail -r run typecheck",
 } satisfies Scripts;
 type Lane = keyof typeof expectedChecks extends `check-type:${infer Name}` ? Name : never;
