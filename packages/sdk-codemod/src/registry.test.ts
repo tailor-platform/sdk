@@ -67,6 +67,13 @@ describe("getApplicableCodemods", () => {
     expect(codemod?.scriptPath).toBe("v2/forward-relation-name/scripts/transform.js");
     expect(codemod?.prompt).toContain("toward.as");
     expect(codemod?.prompt).toContain("GraphQL");
+    expect(codemod?.prompt).toContain("non-empty");
+    expect(codemod?.prompt).toContain("empty or dynamic");
+
+    const aliasPattern = codemod?.suspiciousPatterns?.[0];
+    expect(aliasPattern).toBeInstanceOf(RegExp);
+    expect((aliasPattern as RegExp).test("const relation = db.uuid().relation;")).toBe(true);
+    expect((aliasPattern as RegExp).test("db.uuid().relation({ type, toward });")).toBe(false);
   });
 
   test("returns empty when both versions are before the codemod boundary", () => {

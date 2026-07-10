@@ -626,6 +626,7 @@ export const allCodemods: CodemodPackage[] = [
     prereleaseUntil: V2_NEXT_4,
     scriptPath: "v2/forward-relation-name/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: [/\.relation\b(?!\s*\()/],
     examples: [
       {
         caption: "Preserve the v1 GraphQL field name by making it explicit:",
@@ -651,8 +652,10 @@ export const allCodemods: CodemodPackage[] = [
       "If consumers must keep using the v1 GraphQL field name, inspect the v1 schema and",
       "copy that exact field name into toward.as. Otherwise, update GraphQL operations",
       "and consumer code to use the new field-based name. No change is needed when the old",
-      "and new names are identical. Relations with an explicit toward.as, self-relations,",
-      "and keyOnly relations are unchanged.",
+      "and new names are identical. Relations with a guaranteed non-empty toward.as,",
+      "self-relations, and keyOnly relations are unchanged. For an empty or dynamic",
+      "toward.as, determine whether its runtime value can be falsy; if so, treat the",
+      "relation as using the default name.",
       "",
       "A relation field without a trailing ID, Id, or id would default to its own scalar",
       "field name and therefore conflict. Give that relation an explicit toward.as.",
