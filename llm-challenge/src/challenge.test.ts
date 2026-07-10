@@ -750,20 +750,77 @@ describe("verification summary", () => {
     ).resolves.toContain('"problemId": "example"');
   });
 
-  test("runs TypeScript verification through the installed compiler directly", async () => {
+  test("isolates TypeScript verification from the workspace compiler", async () => {
     const dir = await makeTempDir();
     const worktreePath = path.join(dir, "work");
+    const fakeBinPath = path.join(dir, "bin");
+    const podmanArgsPath = path.join(dir, "podman-args.json");
+    const payloadPath = path.join(dir, "host-payload");
     await fs.mkdir(path.join(worktreePath, "src"), { recursive: true });
     await fs.mkdir(path.join(worktreePath, "node_modules/typescript/bin"), { recursive: true });
+    await fs.mkdir(fakeBinPath, { recursive: true });
     await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
     await fs.writeFile(path.join(worktreePath, "src/app.ts"), "export {};\n");
     await fs.writeFile(
       path.join(worktreePath, "node_modules/typescript/bin/tsc"),
-      "process.exit(0);\n",
+      `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(payloadPath)}, "executed");\n`,
+    );
+    const fakePodmanPath = path.join(fakeBinPath, "podman");
+    await fs.writeFile(
+      fakePodmanPath,
+      `#!/usr/bin/env node\nimport { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(podmanArgsPath)}, JSON.stringify(process.argv.slice(2)));\n`,
+    );
+    await fs.chmod(fakePodmanPath, 0o755);
+
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fakeBinPath}${path.delimiter}${originalPath ?? ""}`;
+
+    try {
+      const summary = await writeVerificationSummary({
+        problem: makeProblem({ group: "cli" }),
+        runIndex: 0,
+        worktreePath,
+        verificationSummaryPath: path.join(dir, "verification-summary.json"),
+        verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+        verificationStderrPath: path.join(dir, "verification.stderr.log"),
+      });
+
+      expect(summary.checks.find((check) => check.id === "typescript-no-emit")).toMatchObject({
+        outcome: "satisfied",
+      });
+    } finally {
+      process.env.PATH = originalPath;
+    }
+
+    await expect(fs.stat(payloadPath)).rejects.toMatchObject({ code: "ENOENT" });
+    const podmanArgs = JSON.parse(await fs.readFile(podmanArgsPath, "utf8")) as string[];
+    expect(podmanArgs).toContain("--network=none");
+    expect(podmanArgs).toContain("--cap-drop=all");
+    expect(podmanArgs).toContain(`${worktreePath}:/workspace:ro,Z`);
+    expect(podmanArgs.some((argument) => argument.includes("/verifier/typescript/bin/tsc"))).toBe(
+      true,
+    );
+  });
+
+  test("rejects oversized content evidence without reading it in full", async () => {
+    const dir = await makeTempDir();
+    const problemRoot = path.join(dir, "problem");
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(path.join(problemRoot, "scaffold"), { recursive: true });
+    await fs.mkdir(worktreePath, { recursive: true });
+    await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+    await fs.writeFile(path.join(worktreePath, "large.txt"), Buffer.alloc(2 * 1024 * 1024, "a"));
+    const verifyPath = path.join(problemRoot, "verify.json");
+    await fs.writeFile(
+      verifyPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "large", kind: "content-match", glob: "*.txt", pattern: "a" }],
+      })}\n`,
     );
 
     const summary = await writeVerificationSummary({
-      problem: makeProblem({ group: "cli" }),
+      problem: makeProblem({ group: "cli", verifyPath }),
       runIndex: 0,
       worktreePath,
       verificationSummaryPath: path.join(dir, "verification-summary.json"),
@@ -771,9 +828,122 @@ describe("verification summary", () => {
       verificationStderrPath: path.join(dir, "verification.stderr.log"),
     });
 
-    expect(summary.checks.find((check) => check.id === "typescript-no-emit")).toMatchObject({
-      command: "node node_modules/typescript/bin/tsc --noEmit --pretty false",
-      outcome: "satisfied",
+    expect(summary.checks.find((check) => check.id === "large")).toMatchObject({
+      outcome: "error",
+      error: expect.stringContaining("content evidence limit"),
+    });
+  });
+
+  test("rejects content checks with too many candidate files", async () => {
+    const dir = await makeTempDir();
+    const problemRoot = path.join(dir, "problem");
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(path.join(problemRoot, "scaffold"), { recursive: true });
+    await fs.mkdir(worktreePath, { recursive: true });
+    await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+    await Promise.all(
+      Array.from({ length: 101 }, (_, index) =>
+        fs.writeFile(path.join(worktreePath, `candidate-${index}.txt`), "safe\n"),
+      ),
+    );
+    const verifyPath = path.join(problemRoot, "verify.json");
+    await fs.writeFile(
+      verifyPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "many", kind: "content-absent", glob: "*.txt", pattern: "secret" }],
+      })}\n`,
+    );
+
+    const summary = await writeVerificationSummary({
+      problem: makeProblem({ group: "cli", verifyPath }),
+      runIndex: 0,
+      worktreePath,
+      verificationSummaryPath: path.join(dir, "verification-summary.json"),
+      verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+      verificationStderrPath: path.join(dir, "verification.stderr.log"),
+    });
+
+    expect(summary.checks.find((check) => check.id === "many")).toMatchObject({
+      outcome: "error",
+      error: expect.stringContaining("101 files exceeds 100"),
+    });
+  });
+
+  test("rejects content checks whose aggregate input is oversized", async () => {
+    const dir = await makeTempDir();
+    const problemRoot = path.join(dir, "problem");
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(path.join(problemRoot, "scaffold"), { recursive: true });
+    await fs.mkdir(worktreePath, { recursive: true });
+    await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+    await Promise.all(
+      Array.from({ length: 6 }, (_, index) =>
+        fs.writeFile(path.join(worktreePath, `aggregate-${index}.txt`), Buffer.alloc(900_000, "a")),
+      ),
+    );
+    const verifyPath = path.join(problemRoot, "verify.json");
+    await fs.writeFile(
+      verifyPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        checks: [{ id: "aggregate", kind: "content-match", glob: "*.txt", pattern: "a" }],
+      })}\n`,
+    );
+
+    const summary = await writeVerificationSummary({
+      problem: makeProblem({ group: "cli", verifyPath }),
+      runIndex: 0,
+      worktreePath,
+      verificationSummaryPath: path.join(dir, "verification-summary.json"),
+      verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+      verificationStderrPath: path.join(dir, "verification.stderr.log"),
+    });
+
+    expect(summary.checks.find((check) => check.id === "aggregate")).toMatchObject({
+      outcome: "error",
+      error: expect.stringContaining("total bytes exceed"),
+    });
+  });
+
+  test("bounds pathological content regular expressions", async () => {
+    const dir = await makeTempDir();
+    const problemRoot = path.join(dir, "problem");
+    const worktreePath = path.join(dir, "work");
+    await fs.mkdir(path.join(problemRoot, "scaffold"), { recursive: true });
+    await fs.mkdir(worktreePath, { recursive: true });
+    await fs.writeFile(path.join(worktreePath, "package.json"), "{}\n");
+    await fs.writeFile(path.join(worktreePath, "adversarial.txt"), `${"a".repeat(50_000)}!`);
+    const verifyPath = path.join(problemRoot, "verify.json");
+    await fs.writeFile(
+      verifyPath,
+      `${JSON.stringify({
+        schemaVersion: 1,
+        checks: [
+          {
+            id: "pathological",
+            kind: "content-match",
+            glob: "*.txt",
+            pattern: "^(a+)+$",
+          },
+        ],
+      })}\n`,
+    );
+
+    const startedAt = Date.now();
+    const summary = await writeVerificationSummary({
+      problem: makeProblem({ group: "cli", verifyPath }),
+      runIndex: 0,
+      worktreePath,
+      verificationSummaryPath: path.join(dir, "verification-summary.json"),
+      verificationStdoutPath: path.join(dir, "verification.stdout.log"),
+      verificationStderrPath: path.join(dir, "verification.stderr.log"),
+    });
+
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
+    expect(summary.checks.find((check) => check.id === "pathological")).toMatchObject({
+      outcome: "error",
+      error: expect.stringContaining("timed out"),
     });
   });
 
