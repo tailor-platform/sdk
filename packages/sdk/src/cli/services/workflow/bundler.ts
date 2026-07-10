@@ -4,9 +4,9 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
+import { withTemporaryEntryDirectory } from "#/cli/services/entry-directory";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
@@ -83,21 +83,6 @@ export async function bundleWorkflowJobs(
     `Bundling ${styles.highlight(usedJobs.length.toString())} files for ${styles.info('"workflow-job"')}`,
   );
 
-  const outputDir = path.resolve(getDistDir(), "workflow-jobs");
-
-  // Remove stale output files (those not in the current build set)
-  fs.mkdirSync(outputDir, { recursive: true });
-  const currentJobNames = new Set(usedJobs.map((j) => j.name));
-  const existingFiles = fs.readdirSync(outputDir);
-  for (const file of existingFiles) {
-    // Remove .js and .js.map files not belonging to current jobs (covers entry files, stale outputs, and sourcemaps)
-    if (file.endsWith(".js") && !currentJobNames.has(path.basename(file, ".js"))) {
-      fs.rmSync(path.join(outputDir, file), { force: true });
-    } else if (file.endsWith(".js.map") && !currentJobNames.has(path.basename(file, ".js.map"))) {
-      fs.rmSync(path.join(outputDir, file), { force: true });
-    }
-  }
-
   let tsconfig: string | undefined;
   try {
     tsconfig = await resolveTSConfig();
@@ -107,17 +92,19 @@ export async function bundleWorkflowJobs(
 
   // Process each job, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
-  const results = await withBundleConcurrency(usedJobs, (job) =>
-    bundleSingleJob(
-      job,
-      usedJobs,
-      outputDir,
-      tsconfig,
-      env,
-      triggerContext,
-      cache,
-      inlineSourcemap,
-      bundleLogLevel,
+  const results = await withTemporaryEntryDirectory("workflow-jobs", (outputDir) =>
+    withBundleConcurrency(usedJobs, (job) =>
+      bundleSingleJob(
+        job,
+        usedJobs,
+        outputDir,
+        tsconfig,
+        env,
+        triggerContext,
+        cache,
+        inlineSourcemap,
+        bundleLogLevel,
+      ),
     ),
   );
 

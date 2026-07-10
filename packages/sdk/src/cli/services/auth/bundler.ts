@@ -3,9 +3,8 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
-import { removeStaleEntryFiles } from "#/cli/services/stale-cleanup";
+import { withTemporaryEntryDirectory } from "#/cli/services/entry-directory";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
@@ -65,11 +64,6 @@ export async function bundleAuthHooks(
   logger.newline();
   logger.log(`Bundling auth hook for ${styles.info(`"${authName}"`)}`);
 
-  const outputDir = path.resolve(getDistDir(), "auth-hooks");
-  fs.mkdirSync(outputDir, { recursive: true });
-
-  await removeStaleEntryFiles(outputDir);
-
   let tsconfig: string | undefined;
   try {
     tsconfig = await resolveTSConfig();
@@ -95,60 +89,62 @@ export async function bundleAuthHooks(
     prefix: sortedEnvPrefix,
   });
 
-  const code = await withCache({
-    cache,
-    kind: "auth-hook",
-    name: functionName,
-    sourceFile: absoluteConfigPath,
-    contextHash,
-    async build(cachePlugins) {
-      const entryPath = path.join(outputDir, `${functionName}.entry.js`);
+  const code = await withTemporaryEntryDirectory("auth-hooks", (outputDir) =>
+    withCache({
+      cache,
+      kind: "auth-hook",
+      name: functionName,
+      sourceFile: absoluteConfigPath,
+      contextHash,
+      async build(cachePlugins) {
+        const entryPath = path.join(outputDir, `${functionName}.entry.js`);
 
-      const entryContent = ml /* js */ `
-        import _config from "${absoluteConfigPath}";
-        const __auth_hook_function = _config.${handlerAccessPath};
-        export async function main(args) {
-          const env = ${JSON.stringify(env)};
-          return await __auth_hook_function({ ...args, env });
-        }
-      `;
-      fs.writeFileSync(entryPath, entryContent);
+        const entryContent = ml /* js */ `
+          import _config from "${absoluteConfigPath}";
+          const __auth_hook_function = _config.${handlerAccessPath};
+          export async function main(args) {
+            const env = ${JSON.stringify(env)};
+            return await __auth_hook_function({ ...args, env });
+          }
+        `;
+        fs.writeFileSync(entryPath, entryContent);
 
-      const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-      const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
-      plugins.push(platformBundleDefinePlugin, ...cachePlugins);
+        const triggerPlugin = createTriggerTransformPlugin(triggerContext);
+        const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+        plugins.push(platformBundleDefinePlugin, ...cachePlugins);
 
-      const result = await rolldown.build({
-        input: entryPath,
-        write: false,
-        output: {
-          format: "esm",
-          sourcemap: inlineSourcemap ? "inline" : true,
-          minify: inlineSourcemap
-            ? {
-                mangle: {
-                  keepNames: true,
-                },
-              }
-            : true,
-          codeSplitting: false,
-        },
-        tsconfig,
-        plugins,
-        transform: {
-          define: {
-            "process.env.LOG_LEVEL": JSON.stringify(bundleLogLevel),
+        const result = await rolldown.build({
+          input: entryPath,
+          write: false,
+          output: {
+            format: "esm",
+            sourcemap: inlineSourcemap ? "inline" : true,
+            minify: inlineSourcemap
+              ? {
+                  mangle: {
+                    keepNames: true,
+                  },
+                }
+              : true,
+            codeSplitting: false,
           },
-        },
-        treeshake: composeFunctionTreeshakeOptions([
-          createLogLevelTreeshakeOptions(bundleLogLevel),
-        ]),
-        logLevel: "silent",
-      } as rolldown.BuildOptions);
+          tsconfig,
+          plugins,
+          transform: {
+            define: {
+              "process.env.LOG_LEVEL": JSON.stringify(bundleLogLevel),
+            },
+          },
+          treeshake: composeFunctionTreeshakeOptions([
+            createLogLevelTreeshakeOptions(bundleLogLevel),
+          ]),
+          logLevel: "silent",
+        } as rolldown.BuildOptions);
 
-      return result.output[0].code;
-    },
-  });
+        return result.output[0].code;
+      },
+    }),
+  );
 
   logger.log(`${styles.success("Bundled")} auth hook for ${styles.info(`"${authName}"`)}`);
 

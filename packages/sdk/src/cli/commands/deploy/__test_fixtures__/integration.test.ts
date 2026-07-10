@@ -73,9 +73,9 @@ describe("deploy command integration tests", () => {
     const pluginFiles = actualFiles.filter((f) => f === "db.ts" || f === "enums.ts");
     expect(pluginFiles.length).toBeGreaterThan(0);
 
-    // Entry files should exist on disk (rolldown input)
+    // Temporary rolldown entry files should be removed after bundling
     const entryFiles = actualFiles.filter((f) => f.endsWith(".entry.js"));
-    expect(entryFiles.length).toBeGreaterThan(0);
+    expect(entryFiles).toEqual([]);
 
     // Bundle output files should NOT exist on disk (in-memory only)
     const bundleOutputFiles = actualFiles.filter(

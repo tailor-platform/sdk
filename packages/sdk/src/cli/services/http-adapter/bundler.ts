@@ -5,10 +5,10 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
+import { withTemporaryEntryDirectory } from "#/cli/services/entry-directory";
 import { isNodeBuiltinImport } from "#/cli/services/http-adapter/node-builtins";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { HTTP_METHODS, type HttpMethodKey } from "#/parser/service/http-adapter/index";
@@ -56,9 +56,6 @@ export async function bundleHttpAdapters(
     `Bundling ${styles.highlight(adapters.length.toString())} files for ${styles.info('"http-adapter"')}`,
   );
 
-  const outputDir = path.resolve(getDistDir(), "http-adapters");
-  fs.mkdirSync(outputDir, { recursive: true });
-
   let tsconfig: string | undefined;
   try {
     tsconfig = await resolveTSConfig();
@@ -71,8 +68,10 @@ export async function bundleHttpAdapters(
     const kinds: Array<"input" | "output"> = adapter.hasOutput ? ["input", "output"] : ["input"];
     return kinds.map((kind) => ({ adapter, kind }));
   });
-  const results = await withBundleConcurrency(tasks, ({ adapter, kind }) =>
-    bundleAdapterScript(adapter, kind, outputDir, tsconfig, cache, bundleLogLevel),
+  const results = await withTemporaryEntryDirectory("http-adapters", (outputDir) =>
+    withBundleConcurrency(tasks, ({ adapter, kind }) =>
+      bundleAdapterScript(adapter, kind, outputDir, tsconfig, cache, bundleLogLevel),
+    ),
   );
 
   const bundledInputs = new Map<string, string>();

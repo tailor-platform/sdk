@@ -3,11 +3,10 @@ import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { type BundleCache, computeBundlerContextHash, withCache } from "#/cli/cache/bundle-cache";
+import { withTemporaryEntryDirectory } from "#/cli/services/entry-directory";
 import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
-import { removeStaleEntryFiles } from "#/cli/services/stale-cleanup";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
@@ -77,15 +76,6 @@ export async function bundleResolvers(
     });
   }
 
-  const outputDir = path.resolve(getDistDir(), "resolvers");
-
-  fs.mkdirSync(outputDir, { recursive: true });
-
-  // Clean stale entry files from previous builds.
-  // Must complete before Promise.all below; parallel namespace processing
-  // would require separate output directories per namespace.
-  await removeStaleEntryFiles(outputDir);
-
   let tsconfig: string | undefined;
   try {
     tsconfig = await resolveTSConfig();
@@ -95,16 +85,18 @@ export async function bundleResolvers(
 
   // Process each resolver, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
-  const results = await withBundleConcurrency(resolvers, (resolver) =>
-    bundleSingleResolver(
-      namespace,
-      resolver,
-      outputDir,
-      tsconfig,
-      triggerContext,
-      cache,
-      inlineSourcemap,
-      bundleLogLevel,
+  const results = await withTemporaryEntryDirectory("resolvers", (outputDir) =>
+    withBundleConcurrency(resolvers, (resolver) =>
+      bundleSingleResolver(
+        namespace,
+        resolver,
+        outputDir,
+        tsconfig,
+        triggerContext,
+        cache,
+        inlineSourcemap,
+        bundleLogLevel,
+      ),
     ),
   );
 
