@@ -14,7 +14,7 @@ jobs:
     # an implicit breaking change that prevents the GitHub App token from
     # reaching the inner commit-action, causing 403 on POST /git/trees.
     # See https://github.com/aquaproj/update-checksum-action/issues/364
-    uses: aquaproj/update-checksum-workflow/.github/workflows/update-checksum.yaml@d248abb88efce715d50eb324100d9b29a20f7d18 # v1.0.4
+    uses: aquaproj/update-checksum-workflow/.github/workflows/update-checksum.yaml@d3ab3ae1f9db2320a23efeaf9baaafeaae45af56 # v1.0.6
     permissions:
       contents: read
     with:
