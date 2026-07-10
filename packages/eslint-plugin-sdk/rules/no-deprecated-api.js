@@ -1,8 +1,37 @@
-import { bindingNameForCall, memberName, unwrapExpression } from "../lib/ast.js";
-import { configureImportTracker } from "../lib/sdk-bindings.js";
+import { bindingIdentifierForCall, memberName, unwrapExpression } from "../lib/ast.js";
+import {
+  cliImportTracker,
+  configureImportTracker,
+  isBindingReference,
+} from "../lib/sdk-bindings.js";
 
 function isTailorConfigImport(source) {
   return /(?:^|\/)tailor(?:\.[^/]+)?\.config(?:\.[cm]?[jt]sx?)?$/.test(source);
+}
+
+function propertyName(property) {
+  if (!property.computed && property.key.type === "Identifier") return property.key.name;
+  if (property.key.type === "Literal") return property.key.value;
+  return null;
+}
+
+function isStartWorkflowAuthInvoker(call, imports) {
+  const property = call.parent;
+  if (
+    property?.type !== "Property" ||
+    property.value !== call ||
+    propertyName(property) !== "authInvoker"
+  ) {
+    return false;
+  }
+  const options = property.parent;
+  const startCall = options?.parent;
+  return (
+    options?.type === "ObjectExpression" &&
+    startCall?.type === "CallExpression" &&
+    startCall.arguments.includes(options) &&
+    imports.callName(startCall) === "startWorkflow"
+  );
 }
 
 export default {
@@ -18,16 +47,29 @@ export default {
     schema: [],
   },
   create(context) {
-    const imports = configureImportTracker();
-    const authBindings = new Set();
+    const imports = configureImportTracker(context);
+    const cliImports = cliImportTracker(context);
+    const authBindings = [];
+    const configBindings = [];
     const calls = [];
 
     return {
       ImportDeclaration(node) {
         imports.track(node);
+        cliImports.track(node);
         if (!isTailorConfigImport(String(node.source.value))) return;
         for (const specifier of node.specifiers) {
-          if (specifier.importKind !== "type") authBindings.add(specifier.local.name);
+          if (specifier.type === "ImportDefaultSpecifier") {
+            configBindings.push(specifier.local);
+          } else if (
+            specifier.type === "ImportSpecifier" &&
+            specifier.importKind !== "type" &&
+            (specifier.imported.type === "Identifier"
+              ? specifier.imported.name
+              : specifier.imported.value) === "auth"
+          ) {
+            authBindings.push(specifier.local);
+          }
         }
       },
       CallExpression: (node) => calls.push(node),
@@ -39,8 +81,8 @@ export default {
             continue;
           }
           if (sdkCall === "defineAuth") {
-            const binding = bindingNameForCall(call);
-            if (binding) authBindings.add(binding);
+            const binding = bindingIdentifierForCall(call);
+            if (binding) authBindings.push(binding);
           }
         }
 
@@ -48,7 +90,16 @@ export default {
           const callee = unwrapExpression(call.callee);
           if (memberName(callee) !== "invoker") continue;
           const object = unwrapExpression(callee.object);
-          if (object?.type !== "Identifier" || !authBindings.has(object.name)) continue;
+          const isAuth =
+            object?.type === "Identifier" &&
+            authBindings.some((binding) => isBindingReference(context, object, binding));
+          const config = unwrapExpression(object?.object);
+          const isConfigAuth =
+            memberName(object) === "auth" &&
+            config?.type === "Identifier" &&
+            configBindings.some((binding) => isBindingReference(context, config, binding));
+          if (!isAuth && !isConfigAuth) continue;
+          if (isStartWorkflowAuthInvoker(call, cliImports)) continue;
           context.report({ node: callee, messageId: "invoker" });
         }
       },

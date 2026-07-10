@@ -32,6 +32,9 @@
     "test": "vitest run",
     "publint": "publint --strict"
   },
+  "dependencies": {
+    "@types/eslint": "9.6.1"
+  },
   "devDependencies": {
     "eslint": "9.39.3",
     "oxlint": "1.72.0",

@@ -20,7 +20,7 @@ export default {
     schema: [],
   },
   create(context) {
-    const imports = configureImportTracker();
+    const imports = configureImportTracker(context);
     const calls = [];
 
     return {

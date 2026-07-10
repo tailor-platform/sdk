@@ -2,7 +2,7 @@ import { directStatementList, memberName, nodeStart, unwrapExpression } from "..
 import { workflowRuntimeImportTracker } from "../lib/sdk-bindings.js";
 
 function expressionKey(sourceCode, expression) {
-  return sourceCode.getText(expression).replaceAll(/\s+/g, "");
+  return sourceCode.getText(unwrapExpression(expression));
 }
 
 function memberObjectIdentifier(callee) {
@@ -10,7 +10,19 @@ function memberObjectIdentifier(callee) {
     return null;
   }
   const object = unwrapExpression(callee.object);
-  return object?.type === "Identifier" ? object.name : null;
+  return object?.type === "Identifier" ? object : null;
+}
+
+function isCallback(node) {
+  const callback = unwrapExpression(node);
+  return callback?.type === "ArrowFunctionExpression" || callback?.type === "FunctionExpression";
+}
+
+function isNestedWorkflowResume(callee, imports) {
+  if (memberName(callee) !== "resumeWorkflow") return false;
+  const workflow = unwrapExpression(callee.object);
+  if (memberName(workflow) !== "workflow") return false;
+  return imports.isNamespace(unwrapExpression(workflow.object));
 }
 
 export default {
@@ -26,7 +38,7 @@ export default {
     schema: [],
   },
   create(context) {
-    const imports = workflowRuntimeImportTracker();
+    const imports = workflowRuntimeImportTracker(context);
     const calls = [];
 
     return {
@@ -38,8 +50,14 @@ export default {
         for (const call of calls) {
           const callee = unwrapExpression(call.callee);
           const directName = imports.callName(call);
-          const name = directName ?? memberName(callee);
-          if (name !== "resolve" || call.arguments.length < 2) continue;
+          const isRuntimeResolve =
+            directName === "resolve" && call.arguments.length >= 3 && isCallback(call.arguments[2]);
+          const isWaitPointResolve =
+            directName === null &&
+            memberName(callee) === "resolve" &&
+            call.arguments.length >= 2 &&
+            isCallback(call.arguments[1]);
+          if (!isRuntimeResolve && !isWaitPointResolve) continue;
           resolves.push({
             block: directStatementList(call),
             execution: expressionKey(context.sourceCode, call.arguments[0]),
@@ -50,12 +68,17 @@ export default {
         for (const call of calls) {
           const callee = unwrapExpression(call.callee);
           const directResume = imports.callName(call) === "resumeWorkflow";
-          const objectName = memberObjectIdentifier(callee);
+          const object = memberObjectIdentifier(callee);
           const memberResume =
             memberName(callee) === "resumeWorkflow" &&
-            objectName !== null &&
-            (imports.isNamespace(objectName) || imports.importedAs(objectName, "workflow"));
-          if ((!directResume && !memberResume) || call.arguments.length === 0) continue;
+            object !== null &&
+            (imports.isNamespace(object) || imports.importedAs(object, "workflow"));
+          if (
+            (!directResume && !memberResume && !isNestedWorkflowResume(callee, imports)) ||
+            call.arguments.length === 0
+          ) {
+            continue;
+          }
 
           const block = directStatementList(call);
           if (block === null) continue;

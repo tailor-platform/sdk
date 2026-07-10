@@ -69,6 +69,10 @@ describe("plugin", () => {
     ]);
     expect(plugin.configs.recommended.plugins["tailor-sdk"]).toBe(plugin);
     expect(Object.keys(plugin.configs.recommended.rules)).toHaveLength(6);
+    expect(plugin.configs.recommended.rules["tailor-sdk/no-resume-after-resolve"]).toBe("warn");
+    expect(plugin.configs.recommended.rules["tailor-sdk/require-service-default-export"]).toBe(
+      "error",
+    );
   });
 
   test("runs through the ESLint v9 recommended flat config", () => {
@@ -116,6 +120,14 @@ describe("require-service-default-export", () => {
       'import { createResolver } from "@tailor-platform/sdk";\nexport default (createResolver({}) satisfies unknown);',
       "require-service-default-export",
     );
+    expectClean(
+      'import { createResolver } from "@tailor-platform/sdk";\nconst resolver = createResolver({});\nexport default (resolver satisfies unknown);',
+      "require-service-default-export",
+    );
+    expectClean(
+      'import { createResolver } from "@tailor-platform/sdk";\nconst resolver = createResolver({});\nconst entry = resolver;\nexport default entry;',
+      "require-service-default-export",
+    );
   });
 
   test("supports namespace imports", () => {
@@ -129,6 +141,17 @@ describe("require-service-default-export", () => {
   test("ignores same-named factories from other packages", () => {
     expectClean(
       'import { createResolver } from "another-sdk";\nexport const resolver = createResolver({});',
+      "require-service-default-export",
+    );
+  });
+
+  test("ignores SDK import names shadowed by function parameters", () => {
+    expectClean(
+      'import { createResolver } from "@tailor-platform/sdk";\nfunction helper(createResolver) { return createResolver({}); }',
+      "require-service-default-export",
+    );
+    expectClean(
+      'import * as sdk from "@tailor-platform/sdk";\nfunction helper(sdk) { return sdk.createResolver({}); }',
       "require-service-default-export",
     );
   });
@@ -163,6 +186,14 @@ describe("require-named-workflow-job-export", () => {
     );
     expectClean(
       'import { createWorkflowJob } from "@tailor-platform/sdk";\nconst job = createWorkflowJob({});\nexport { job };',
+      "require-named-workflow-job-export",
+    );
+    expectClean(
+      'import { createWorkflowJob } from "@tailor-platform/sdk";\nconst job = createWorkflowJob({});\nconst entry = job;\nexport { entry };',
+      "require-named-workflow-job-export",
+    );
+    expectClean(
+      'import { createWorkflowJob } from "@tailor-platform/sdk";\nconst job = createWorkflowJob({});\nexport const entry = job satisfies unknown;',
       "require-named-workflow-job-export",
     );
   });
@@ -214,6 +245,10 @@ describe("no-api-prefix-in-path-pattern", () => {
       'import { createHttpAdapter } from "@tailor-platform/sdk";\nexport default createHttpAdapter({ pathPattern });',
       "no-api-prefix-in-path-pattern",
     );
+    expectClean(
+      'import { createHttpAdapter } from "@tailor-platform/sdk";\nexport default createHttpAdapter({ pathPattern: "/api/users", pathPattern: "/users" });',
+      "no-api-prefix-in-path-pattern",
+    );
   });
 });
 
@@ -234,11 +269,24 @@ describe("no-deprecated-api", () => {
       "no-deprecated-api",
       "auth.invoker() is deprecated; pass the machine-user name as a string.",
     );
+    expectViolation(
+      'import config from "../tailor.config";\nexport const invoker = config.auth.invoker("automation");',
+      "no-deprecated-api",
+      "auth.invoker() is deprecated; pass the machine-user name as a string.",
+    );
   });
 
   test("ignores unrelated invoker methods", () => {
     expectClean(
       'import { client } from "another-sdk";\nexport const invoker = client.invoker("automation");',
+      "no-deprecated-api",
+    );
+    expectClean(
+      'import { client } from "../tailor.config";\nexport const invoker = client.invoker("automation");',
+      "no-deprecated-api",
+    );
+    expectClean(
+      'import { startWorkflow } from "@tailor-platform/sdk/cli";\nimport config from "../tailor.config";\nstartWorkflow({ workflow, authInvoker: config.auth.invoker("automation"), arg: {} });',
       "no-deprecated-api",
     );
   });
@@ -262,6 +310,14 @@ describe("no-resume-after-resolve", () => {
       'import { resumeWorkflow } from "another-sdk";\nasync function decide(input) {\n  await approval.resolve(input.executionId, () => true);\n  await resumeWorkflow(input.executionId);\n}',
       "no-resume-after-resolve",
     );
+    expectClean(
+      'import { resumeWorkflow } from "@tailor-platform/sdk/runtime/workflow";\nasync function decide(input) {\n  cache.resolve(input.executionId, true);\n  await resumeWorkflow(input.executionId);\n}',
+      "no-resume-after-resolve",
+    );
+    expectClean(
+      'import { resumeWorkflow } from "@tailor-platform/sdk/runtime/workflow";\nasync function decide() {\n  await approval.resolve("run 1", () => true);\n  await resumeWorkflow("run1");\n}',
+      "no-resume-after-resolve",
+    );
   });
 
   test("does not report a conditional resolve", () => {
@@ -282,6 +338,22 @@ describe("no-resume-after-resolve", () => {
   test("rejects assigning the redundant resume result", () => {
     expectViolation(
       'import { resumeWorkflow } from "@tailor-platform/sdk/runtime/workflow";\nasync function decide(input) {\n  await approval.resolve(input.executionId, () => true);\n  const resumedExecutionId = await resumeWorkflow(input.executionId);\n  return resumedExecutionId;\n}',
+      "no-resume-after-resolve",
+      "resolve() already resumes the waiting workflow; do not call resumeWorkflow() for the same execution.",
+    );
+  });
+
+  test("rejects a redundant resume after assigning the resolve result", () => {
+    expectViolation(
+      'import { resumeWorkflow } from "@tailor-platform/sdk/runtime/workflow";\nasync function decide(input) {\n  result = await approval.resolve(input.executionId, () => true);\n  await resumeWorkflow(input.executionId);\n}',
+      "no-resume-after-resolve",
+      "resolve() already resumes the waiting workflow; do not call resumeWorkflow() for the same execution.",
+    );
+  });
+
+  test("supports the workflow namespace from the runtime root", () => {
+    expectViolation(
+      'import * as runtime from "@tailor-platform/sdk/runtime";\nasync function decide(input) {\n  await approval.resolve(input.executionId, () => true);\n  await runtime.workflow.resumeWorkflow(input.executionId);\n}',
       "no-resume-after-resolve",
       "resolve() already resumes the waiting workflow; do not call resumeWorkflow() for the same execution.",
     );

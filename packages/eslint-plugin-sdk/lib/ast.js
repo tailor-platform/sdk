@@ -38,13 +38,17 @@ export function memberName(node) {
 }
 
 export function bindingNameForCall(call) {
+  return bindingIdentifierForCall(call)?.name ?? null;
+}
+
+export function bindingIdentifierForCall(call) {
   let current = call;
   while (current.parent && EXPRESSION_WRAPPERS.has(current.parent.type)) {
     current = current.parent;
   }
   const parent = current.parent;
   if (parent?.type === "VariableDeclarator" && parent.init === current) {
-    return parent.id.type === "Identifier" ? parent.id.name : null;
+    return parent.id.type === "Identifier" ? parent.id : null;
   }
   return null;
 }
@@ -62,12 +66,14 @@ export function directStatementList(node) {
     }
     const isVariableInitializer = parent.type === "VariableDeclarator" && parent.init === current;
     const isReturnedExpression = parent.type === "ReturnStatement" && parent.argument === current;
+    const isAssignedExpression = parent.type === "AssignmentExpression" && parent.right === current;
     if (
       parent.type !== "AwaitExpression" &&
       parent.type !== "ExpressionStatement" &&
       parent.type !== "VariableDeclaration" &&
       !isVariableInitializer &&
       !isReturnedExpression &&
+      !isAssignedExpression &&
       !isExpressionWrapper(parent)
     ) {
       return null;
@@ -97,7 +103,7 @@ export function objectProperty(object, name) {
   const value = unwrapExpression(object);
   if (value?.type !== "ObjectExpression") return null;
   return (
-    value.properties.find((property) => {
+    value.properties.findLast((property) => {
       if (property.type !== "Property" || property.kind !== "init") return false;
       if (!property.computed && property.key.type === "Identifier") {
         return property.key.name === name;

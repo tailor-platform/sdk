@@ -26,7 +26,7 @@ Add the plugin and its rules to `.oxlintrc.json`:
   "rules": {
     "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
     "tailor-sdk/no-deprecated-api": "warn",
-    "tailor-sdk/no-resume-after-resolve": "error",
+    "tailor-sdk/no-resume-after-resolve": "warn",
     "tailor-sdk/one-service-per-file": "error",
     "tailor-sdk/require-named-workflow-job-export": "error",
     "tailor-sdk/require-service-default-export": "error"
@@ -53,7 +53,7 @@ export default [tailorSdk.configs.recommended];
 | ----------------------------------- | ----------- | ------------------------------------------------------------------------ |
 | `no-api-prefix-in-path-pattern`     | warning     | Rejects a literal `/api` prefix in an HTTP adapter `pathPattern`.        |
 | `no-deprecated-api`                 | warning     | Rejects `defineGenerators()` and SDK Auth `invoker()` calls.             |
-| `no-resume-after-resolve`           | error       | Rejects a direct `resumeWorkflow()` after resolving the same execution.  |
+| `no-resume-after-resolve`           | warning     | Rejects a direct `resumeWorkflow()` after resolving the same execution.  |
 | `one-service-per-file`              | error       | Rejects multiple deployable service factory calls in one file.           |
 | `require-named-workflow-job-export` | error       | Requires every `createWorkflowJob()` result to be a named export.        |
 | `require-service-default-export`    | error       | Requires Resolver, Executor, HTTP Adapter, and Workflow default exports. |

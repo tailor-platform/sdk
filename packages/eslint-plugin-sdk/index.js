@@ -30,7 +30,7 @@ plugin.configs.recommended = {
   rules: {
     "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
     "tailor-sdk/no-deprecated-api": "warn",
-    "tailor-sdk/no-resume-after-resolve": "error",
+    "tailor-sdk/no-resume-after-resolve": "warn",
     "tailor-sdk/one-service-per-file": "error",
     "tailor-sdk/require-named-workflow-job-export": "error",
     "tailor-sdk/require-service-default-export": "error",
