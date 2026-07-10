@@ -47,7 +47,7 @@ function collectPathsInto(out, configFilePath, content, visited) {
   const effectiveBaseUrl = ownBaseUrl ?? inheritedBaseUrl;
 
   const rawPaths = opts.paths;
-  if (rawPaths) {
+  if (rawPaths && typeof rawPaths === "object" && !Array.isArray(rawPaths)) {
     // TypeScript replaces (not merges) inherited `paths` when a config defines its own.
     for (const key of Object.keys(out)) delete out[key];
     const absBase = effectiveBaseUrl ?? baseDir;
