@@ -249,4 +249,69 @@ describe("buildTypeScripts", () => {
     expect(validateExpr).toMatch(/^\(\(_invoker\) =>/);
     expect(validateExpr).toContain('typeof _invoker !== "undefined" ? _invoker : undefined');
   });
+
+  test("type-level hook receives field-level results as input, not raw _input", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      status: { type: "string", default: "active" },
+    };
+    const typeHookExpr = {
+      create:
+        "(({ input }) => ({ label: input.status }))({ input: _input, oldRecord: _oldRecord, invoker: _invoker, now: _now })",
+    };
+
+    const { typeHook } = buildTypeScripts(fields, { typeHookExpr });
+    const expr = typeHook?.create?.expr ?? "";
+
+    // Field-level result is bound to __fl
+    expect(expr).toContain("const __fl =");
+    expect(expr).toContain('"status": _input["status"] ?? "active"');
+
+    // Type-level hook receives field-level result via IIFE that shadows _input
+    expect(expr).toContain("((_input) =>");
+    expect(expr).toContain("Object.assign({}, _input, __fl)");
+
+    // Final result merges field-level and type-level
+    expect(expr).toContain("Object.assign({}, __fl,");
+  });
+
+  test("field-level + type-level hook evaluates correctly at runtime", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      name: { type: "string", hooks: { create: { expr: "_value.trim()" } } },
+    };
+    const typeHookExpr = {
+      create:
+        "(({ input }) => ({ upper: input.name.toUpperCase() }))({ input: _input, oldRecord: _oldRecord, invoker: _invoker, now: _now })",
+    };
+
+    const { typeHook } = buildTypeScripts(fields, { typeHookExpr });
+    const expr = typeHook?.create?.expr ?? "";
+
+    // Evaluate the generated expression with a mock _input
+    const _input = { name: "  hello  " }; // eslint-disable-line
+    const _oldRecord = null; // eslint-disable-line
+    const result = new Function("_input", "_oldRecord", `return ${expr}`)(_input, _oldRecord);
+    // Field-level hook trims name
+    expect(result.name).toBe("hello");
+    // Type-level hook sees trimmed input and uppercases it
+    expect(result.upper).toBe("HELLO");
+  });
+
+  test("nested array hooks do not reference __oldEl", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      items: {
+        type: "nested",
+        array: true,
+        fields: {
+          qty: {
+            type: "integer",
+            default: 1,
+            hooks: { update: { expr: "_value ?? _oldValue" } },
+          },
+        },
+      },
+    };
+
+    const updateExpr = buildTypeScripts(fields).typeHook?.update?.expr ?? "";
+    expect(updateExpr).not.toContain("__oldEl");
+  });
 });
