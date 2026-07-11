@@ -197,8 +197,8 @@ export type TypeValidateFn<
   TData = { [K in keyof F]: output<F[K]> },
 > = (
   args: {
-    newRecord: HookArgs<TData>;
-    oldRecord: HookArgs<TData> | null;
+    newRecord: Readonly<TData>;
+    oldRecord: Readonly<TData> | null;
     invoker: TailorPrincipal | null;
   },
   issues: <P extends DottedPaths<Omit<TData, "id">>>(field: P, message: string) => void,
@@ -207,7 +207,7 @@ export type TypeValidateFn<
 type TypeCreateHookFn<
   F extends Record<string, TailorAnyDBField>,
   TData = { [K in keyof F]: output<F[K]> },
-> = (args: { input: HookArgs<TData>; invoker: TailorPrincipal | null; now: Date }) => {
+> = (args: { input: Readonly<TData>; invoker: TailorPrincipal | null; now: Date }) => {
   [K in Exclude<keyof TData & string, "id">]?: TData[K] | null | undefined;
 };
 
@@ -216,7 +216,7 @@ type TypeUpdateHookFn<
   TData = { [K in keyof F]: output<F[K]> },
 > = (args: {
   input: HookArgs<TData>;
-  oldRecord: HookArgs<TData>;
+  oldRecord: Readonly<TData>;
   invoker: TailorPrincipal | null;
   now: Date;
 }) => { [K in Exclude<keyof TData & string, "id">]?: TData[K] | null | undefined };

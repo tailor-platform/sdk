@@ -70,7 +70,7 @@ function buildHookObject(
     const oldAccess = `${oldAccessExpr}?.[${key(name)}]`;
     if (isNestedType(config) && config.fields) {
       if (config.array) {
-        const inner = buildHookObject(config.fields, "__el", "__oldEl", operation);
+        const inner = buildHookObject(config.fields, "__el", "undefined", operation);
         if (inner !== null) {
           parts.push(
             `${key(name)}: (${access} || []).map((__el) => Object.assign({}, __el, ${inner}))`,
@@ -206,7 +206,7 @@ export function buildTypeScripts(
 
     if (perFieldExpr !== null && typeLevelExpr) {
       hook[operation] = {
-        expr: wrapHook(`Object.assign({}, ${perFieldExpr}, ${typeLevelExpr})`),
+        expr: `((_invoker) => { const ${NOW} = new Date(); const __fl = ${perFieldExpr}; return Object.assign({}, __fl, ((${INPUT}) => ${typeLevelExpr})(Object.assign({}, ${INPUT}, __fl))); })(typeof _invoker !== "undefined" ? _invoker : undefined)`,
       };
     } else if (typeLevelExpr) {
       hook[operation] = { expr: wrapHook(typeLevelExpr) };

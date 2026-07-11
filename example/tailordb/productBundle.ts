@@ -22,8 +22,8 @@ export const productBundle = db
     create: ({ input }) => ({
       label: `${input.name} Bundle`,
     }),
-    update: ({ input }) => ({
-      label: `${input.name} Bundle`,
+    update: ({ input, oldRecord }) => ({
+      label: `${input.name ?? oldRecord.name} Bundle`,
     }),
   })
   .validate(({ newRecord }, issues) => {

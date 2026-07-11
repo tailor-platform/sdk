@@ -27,8 +27,8 @@ export const customer = db
     create: ({ input }) => ({
       fullAddress: `${input.postalCode} ${input.address} ${input.city}`,
     }),
-    update: ({ input }) => ({
-      fullAddress: `${input.postalCode} ${input.address} ${input.city}`,
+    update: ({ input, oldRecord }) => ({
+      fullAddress: `${input.postalCode ?? oldRecord.postalCode} ${input.address ?? oldRecord.address} ${input.city ?? oldRecord.city}`,
     }),
   })
   .validate(({ newRecord }, issues) => {

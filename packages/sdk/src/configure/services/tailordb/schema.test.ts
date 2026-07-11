@@ -1115,11 +1115,11 @@ describe("TailorDBType hooks modifier tests", () => {
     });
   });
 
-  test("type create hook input args receive correct types (no oldRecord)", () => {
+  test("type create hook input: required fields are non-nullable, optional fields are nullable", () => {
     db.table("Test", { name: db.string(), age: db.int({ optional: true }) }).hooks({
       create: ({ input, invoker, now }) => {
-        expectTypeOf(input.name).toEqualTypeOf<string | null | undefined>();
-        expectTypeOf(input.age).toEqualTypeOf<number | null | undefined>();
+        expectTypeOf(input.name).toEqualTypeOf<string>();
+        expectTypeOf(input.age).toEqualTypeOf<number | null>();
         expectTypeOf(invoker).toBeNullable();
         expectTypeOf(now).toEqualTypeOf<Date>();
         return {};
@@ -1127,12 +1127,26 @@ describe("TailorDBType hooks modifier tests", () => {
     });
   });
 
-  test("type update hook input args include oldRecord", () => {
+  test("type create hook input: field with .default() is also non-nullable", () => {
+    db.table("Test", {
+      name: db.string(),
+      status: db.string().default("active"),
+    }).hooks({
+      create: ({ input }) => {
+        expectTypeOf(input.name).toEqualTypeOf<string>();
+        expectTypeOf(input.status).toEqualTypeOf<string>();
+        return {};
+      },
+    });
+  });
+
+  test("type update hook: input is partial (nullable), oldRecord is full record", () => {
     db.table("Test", { name: db.string(), age: db.int({ optional: true }) }).hooks({
       update: ({ input, oldRecord, invoker, now }) => {
         expectTypeOf(input.name).toEqualTypeOf<string | null | undefined>();
-        expectTypeOf(oldRecord.name).toEqualTypeOf<string | null | undefined>();
-        expectTypeOf(oldRecord.age).toEqualTypeOf<number | null | undefined>();
+        expectTypeOf(input.age).toEqualTypeOf<number | null | undefined>();
+        expectTypeOf(oldRecord.name).toEqualTypeOf<string>();
+        expectTypeOf(oldRecord.age).toEqualTypeOf<number | null>();
         expectTypeOf(invoker).toBeNullable();
         expectTypeOf(now).toEqualTypeOf<Date>();
         return {};
@@ -1142,22 +1156,23 @@ describe("TailorDBType hooks modifier tests", () => {
 });
 
 describe("TailorDBType type-level validate (function form) tests", () => {
-  test("accepts type-level validate function", () => {
-    const _type = db
-      .table("Test", {
-        name: db.string(),
-        email: db.string(),
-      })
-      .validate(({ newRecord }, issues) => {
-        if (!newRecord.name) issues("name", "Name is required");
-        if (!newRecord.email) issues("email", "Email is required");
-      });
-
-    expectTypeOf<output<typeof _type>>().toEqualTypeOf<{
-      id: string;
-      name: string;
-      email: string;
-    }>();
+  test("newRecord has non-nullable required fields and nullable optional fields", () => {
+    db.table("Test", {
+      name: db.string(),
+      email: db.string(),
+      phone: db.string({ optional: true }),
+    }).validate(({ newRecord, oldRecord }, issues) => {
+      expectTypeOf(newRecord.name).toEqualTypeOf<string>();
+      expectTypeOf(newRecord.email).toEqualTypeOf<string>();
+      expectTypeOf(newRecord.phone).toEqualTypeOf<string | null>();
+      expectTypeOf(oldRecord).toEqualTypeOf<Readonly<{
+        id: string;
+        name: string;
+        email: string;
+        phone: string | null;
+      }> | null>();
+      if (newRecord.name.length > 100) issues("name", "Name too long");
+    });
   });
 
   test("issues function only accepts valid field paths", () => {
@@ -1198,7 +1213,7 @@ describe("TailorDBType type-level validate (function form) tests", () => {
       ),
     }).validate(({ newRecord }, issues) => {
       issues("items", "ok");
-      newRecord.items?.forEach((item, i) => {
+      newRecord.items.forEach((item, i) => {
         if (!item.name) {
           issues(`items[${i}].name`, "required");
         }
@@ -1223,15 +1238,15 @@ describe("TailorDBType type-level validate (function form) tests", () => {
     expect(type.metadata.typeValidate).toBeDefined();
   });
 
-  test("type-level validate receives newRecord and oldRecord", () => {
+  test("type-level validate receives newRecord and oldRecord with correct types", () => {
     db.table("Test", {
       name: db.string(),
       age: db.int({ optional: true }),
     }).validate(({ newRecord, oldRecord }) => {
-      expectTypeOf(newRecord.name).toEqualTypeOf<string | null | undefined>();
-      expectTypeOf(newRecord.age).toEqualTypeOf<number | null | undefined>();
+      expectTypeOf(newRecord.name).toEqualTypeOf<string>();
+      expectTypeOf(newRecord.age).toEqualTypeOf<number | null>();
       if (oldRecord) {
-        expectTypeOf(oldRecord.name).toEqualTypeOf<string | null | undefined>();
+        expectTypeOf(oldRecord.name).toEqualTypeOf<string>();
       }
     });
   });
