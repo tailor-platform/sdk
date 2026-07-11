@@ -3,6 +3,7 @@ import {
   type Generated,
   type Timestamp,
   type ObjectColumnType,
+  type ArrayColumnType,
   type Serial,
   type NamespaceDB,
   type NamespaceInsertable,
@@ -56,6 +57,19 @@ export interface Namespace {
         version: number;
       }>;
       archived: boolean | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp>;
+    }
+
+    ProductBundle: {
+      id: Generated<string>;
+      name: string;
+      label: string | null;
+      items: ArrayColumnType<ObjectColumnType<{
+        productName: string;
+        qty: Generated<number>;
+        unitPrice: number;
+      }>>;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }
