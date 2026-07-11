@@ -6,6 +6,7 @@ import type {
   DefinedFieldMetadata,
   FieldMetadata,
   TailorField,
+  TailorFieldType,
 } from "#/configure/types/field.types";
 import type { InferredAttributes, TailorPrincipal } from "#/runtime/types";
 import type { InferFieldsOutput, output, Prettify } from "#/types/helpers";
@@ -171,13 +172,25 @@ export type Hook<TReturn, TCreateReturn = TReturn> = {
   update?: UpdateHookFn<TReturn | null, TReturn>;
 };
 
+type DotJoin<A extends string, B extends string> = A extends "" ? B : `${A}.${B}`;
+
 type DottedPaths<T, Prefix extends string = ""> = string extends keyof T
   ? string
-  : T extends Record<string, unknown>
-    ? {
-        [K in keyof T & string]: `${Prefix}${K}` | DottedPaths<NonNullable<T[K]>, `${Prefix}${K}.`>;
-      }[keyof T & string]
-    : never;
+  : T extends readonly (infer E)[]
+    ? E extends Record<string, unknown>
+      ? {
+          [K in keyof E & string]:
+            | `${Prefix}[${number}].${K}`
+            | DottedPaths<NonNullable<E[K]>, `${Prefix}[${number}].${K}`>;
+        }[keyof E & string]
+      : never
+    : T extends Record<string, unknown>
+      ? {
+          [K in keyof T & string]:
+            | DotJoin<Prefix, K>
+            | DottedPaths<NonNullable<T[K]>, DotJoin<Prefix, K>>;
+        }[keyof T & string]
+      : never;
 
 export type TypeValidateFn<
   F extends Record<string, TailorAnyDBField>,
@@ -222,6 +235,22 @@ export type ExcludeNestedDBFields<T extends Record<string, TailorAnyDBField>> = 
     ? never
     : T[K];
 };
+
+// oxlint-disable no-explicit-any -- conditional type matching requires `any` for the output param
+export type ExcludeHookedDBFields<T extends Record<string, TailorAnyDBField>> = {
+  [K in keyof T]: T[K] extends TailorDBField<
+    { type: TailorFieldType; array: boolean; hooks: { create: true; update: boolean } },
+    any
+  >
+    ? never
+    : T[K] extends TailorDBField<
+          { type: TailorFieldType; array: boolean; hooks: { create: boolean; update: true } },
+          any
+        >
+      ? never
+      : T[K];
+};
+// oxlint-enable no-explicit-any
 
 // --- Type features ---
 

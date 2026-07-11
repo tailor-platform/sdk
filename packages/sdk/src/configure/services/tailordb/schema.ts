@@ -33,7 +33,14 @@ import type { InferredAttributes } from "#/runtime/types";
 import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
 import type { RawPermissions } from "#/types/tailordb.generated";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
-import type { Hook, TypeHook, ExcludeNestedDBFields, TypeFeatures, TypeValidateFn } from "./types";
+import type {
+  Hook,
+  TypeHook,
+  ExcludeNestedDBFields,
+  ExcludeHookedDBFields,
+  TypeFeatures,
+  TypeValidateFn,
+} from "./types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 // Erased DB fields stay assignable across builder method-state changes.
@@ -802,7 +809,9 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
  * @example db.object({ name: db.string() }, { optional: true })
  */
 function object<
-  const F extends Record<string, TailorAnyDBField> & ExcludeNestedDBFields<F>,
+  const F extends Record<string, TailorAnyDBField> &
+    ExcludeNestedDBFields<F> &
+    ExcludeHookedDBFields<F>,
   const Opt extends FieldOptions,
 >(fields: F, options?: Opt) {
   return createField("nested", options, fields) as unknown as TailorDBField<

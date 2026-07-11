@@ -19,6 +19,7 @@ interface ScriptRef {
  */
 export interface ScriptFieldConfig {
   type: string;
+  array?: boolean;
   hooks?: {
     create?: ScriptRef;
     update?: ScriptRef;
@@ -68,9 +69,18 @@ function buildHookObject(
     const access = `${accessExpr}[${key(name)}]`;
     const oldAccess = `${oldAccessExpr}?.[${key(name)}]`;
     if (isNestedType(config) && config.fields) {
-      const inner = buildHookObject(config.fields, `(${access} || {})`, oldAccess, operation);
-      if (inner !== null) {
-        parts.push(`${key(name)}: Object.assign({}, ${access}, ${inner})`);
+      if (config.array) {
+        const inner = buildHookObject(config.fields, "__el", "__oldEl", operation);
+        if (inner !== null) {
+          parts.push(
+            `${key(name)}: (${access} || []).map((__el) => Object.assign({}, __el, ${inner}))`,
+          );
+        }
+      } else {
+        const inner = buildHookObject(config.fields, `(${access} || {})`, oldAccess, operation);
+        if (inner !== null) {
+          parts.push(`${key(name)}: Object.assign({}, ${access}, ${inner})`);
+        }
       }
       continue;
     }
@@ -129,7 +139,29 @@ function buildValidateStatements(
     }
 
     if (isNestedType(config) && config.fields) {
-      statements.push(...buildValidateStatements(config.fields, `(${access} || {})`, fieldPath));
+      if (config.array) {
+        const innerParts: string[] = [];
+        for (const [innerName, innerConfig] of Object.entries(config.fields)) {
+          const innerValidators = (innerConfig.validate ?? []).filter((v) => v.script?.expr);
+          if (innerValidators.length > 0) {
+            const errorKeyExpr = `${JSON.stringify(fieldPath + "[")} + __idx + ${JSON.stringify("]." + innerName)}`;
+            const checks = innerValidators
+              .map(
+                (v) =>
+                  `{ const __r = (${v.script?.expr}); if (typeof __r === "string") { __errs[${errorKeyExpr}] = __r; } }`,
+              )
+              .join(" ");
+            innerParts.push(`{ const _value = __el[${key(innerName)}]; ${checks} }`);
+          }
+        }
+        if (innerParts.length > 0) {
+          statements.push(
+            `(${access} || []).forEach((__el, __idx) => { ${innerParts.join(" ")} })`,
+          );
+        }
+      } else {
+        statements.push(...buildValidateStatements(config.fields, `(${access} || {})`, fieldPath));
+      }
     }
   }
 
