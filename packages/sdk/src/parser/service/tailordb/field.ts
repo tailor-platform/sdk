@@ -142,7 +142,7 @@ const firstObjectProperty = (wrapped: string) => {
  * @param fn - Function to stringify
  * @returns Stringified function source
  */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+// oxlint-disable-next-line typescript/no-unsafe-function-type
 export const stringifyFunction = (fn: Function): string => {
   const src = fn.toString().trim();
   // `src` is already a valid function/arrow expression (e.g. `function () {}`,
@@ -210,7 +210,7 @@ const convertToScriptExpr = (
   );
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+// oxlint-disable-next-line typescript/no-unsafe-function-type
 export const convertTypeHookToExpr = (fn: Function): string => {
   const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
   if (precompiledExpr) {
@@ -223,7 +223,7 @@ export const convertTypeHookToExpr = (fn: Function): string => {
   );
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+// oxlint-disable-next-line typescript/no-unsafe-function-type
 export const convertTypeValidateToExpr = (fn: Function): string => {
   const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
   if (precompiledExpr) {

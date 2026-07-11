@@ -89,9 +89,9 @@ export interface TailorDBTypeMetadata {
       unique?: boolean;
     }
   >;
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
   typeHook?: { create?: Function; update?: Function };
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
   typeValidate?: Function;
 }
 

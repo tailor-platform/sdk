@@ -835,9 +835,9 @@ function createTailorDBType<
   const _permissions: RawPermissions = {};
   let _files: Record<string, string> = {};
   const _plugins: PluginAttachment[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
   let _typeHook: { create?: Function; update?: Function } | undefined;
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
   let _typeValidate: Function | undefined;
 
   if (options.pluralForm) {
