@@ -306,7 +306,7 @@ Field-level hooks operate on a single field and cannot access other fields. Use 
 
 #### Type-level Hooks
 
-Set hooks across multiple fields using `db.table().hooks()`. The hook returns an object with the fields to override.
+Set hooks across multiple fields using `db.table().hooks()`. The hook returns an object with the fields to override. When both field-level and type-level hooks exist for the same field, type-level hooks take priority.
 
 Create hooks receive:
 
@@ -330,7 +330,7 @@ export const customer = db
       fullName: `${input.firstName} ${input.lastName}`,
     }),
     update: ({ input, oldRecord }) => ({
-      fullName: `${input.firstName} ${input.lastName}`,
+      fullName: `${input.firstName ?? oldRecord.firstName} ${input.lastName ?? oldRecord.lastName}`,
     }),
   });
 ```

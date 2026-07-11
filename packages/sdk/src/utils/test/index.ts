@@ -70,7 +70,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- metadata absent in recursive nested calls
     if (type.metadata?.typeHook?.create) {
       const { id: _id, ...typeHookInput } = obj ?? {};
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+      // oxlint-disable-next-line typescript/no-unsafe-function-type
       const overrides = (type.metadata.typeHook.create as Function)({
         input: typeHookInput,
         invoker: null,

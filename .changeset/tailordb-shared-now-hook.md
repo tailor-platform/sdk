@@ -3,7 +3,7 @@
 "@tailor-platform/sdk-codemod": patch
 ---
 
-Redesign TailorDB hooks and validators with several breaking changes (pre-release):
+Redesign TailorDB hooks and validators with several breaking changes:
 
 - Add shared `now` timestamp to all hooks — multiple fields stamped with the same `Date`
 - Field-level hooks: `{ value, data, invoker }` → create `{ input, invoker, now }` / update `{ input, oldValue, invoker, now }` (`data` removed, `oldValue` added for update only)
