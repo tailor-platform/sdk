@@ -63,7 +63,10 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
   const obj = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
 
   const hasOptionalFields = Object.values(fields).some((config) => config.required !== true);
-  if (aggregatedUtilityTypes.Timestamp || hasOptionalFields) {
+  const hasGeneratedFields = Object.values(fields).some(
+    (config) => config.hooks?.create || config.default !== undefined,
+  );
+  if (aggregatedUtilityTypes.Timestamp || hasOptionalFields || hasGeneratedFields) {
     return { type: `ObjectColumnType<${obj}>`, usedUtilityTypes: aggregatedUtilityTypes };
   }
   return { type: obj, usedUtilityTypes: aggregatedUtilityTypes };
