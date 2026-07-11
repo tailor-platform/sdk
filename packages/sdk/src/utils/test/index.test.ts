@@ -80,6 +80,7 @@ describe("createTailorDBHook", () => {
     test("invokes nested sub-field hooks", () => {
       const type = db.table("Test", {
         user: db.object({
+          // @ts-expect-error hooks on nested inner fields are now type-blocked
           name: db.string().hooks({
             create: ({ input }) => `hooked:${input as string}`,
           }),
@@ -121,6 +122,7 @@ describe("createTailorDBHook", () => {
       const type = db.table("Test", {
         lines: db.object(
           {
+            // @ts-expect-error hooks on nested inner fields are now type-blocked
             stamp: db.string().hooks({
               create: ({ input }) => {
                 calls.push(input);

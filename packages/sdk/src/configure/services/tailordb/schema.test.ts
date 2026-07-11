@@ -1187,6 +1187,32 @@ describe("TailorDBType type-level validate (function form) tests", () => {
     });
   });
 
+  test("issues function accepts indexed paths for nested array fields", () => {
+    db.table("Test", {
+      items: db.object(
+        {
+          name: db.string(),
+          qty: db.int(),
+        },
+        { array: true },
+      ),
+    }).validate(({ newRecord }, issues) => {
+      issues("items", "ok");
+      newRecord.items?.forEach((item, i) => {
+        if (!item.name) {
+          issues(`items[${i}].name`, "required");
+        }
+        if (item.qty < 0) {
+          issues(`items[${i}].qty`, "must be positive");
+        }
+      });
+      // @ts-expect-error TS2345 — "items.name" (without index) is not valid for array fields
+      issues("items.name", "bad");
+      // @ts-expect-error TS2345 — "items.length" should not be a valid path
+      issues("items.length", "bad");
+    });
+  });
+
   test("type-level validate function stores in metadata", () => {
     const type = db
       .table("Test", {
@@ -1235,6 +1261,23 @@ describe("db.object tests", () => {
       profile: db.object({
         bio: db.string(),
       }),
+    });
+  });
+
+  test("hooks on inner fields of db.object causes type error", () => {
+    db.object({
+      name: db.string(),
+      // @ts-expect-error hooks on nested inner fields are not allowed
+      stamped: db.string().hooks({
+        create: ({ input }) => input ?? "default",
+      }),
+    });
+  });
+
+  test("default and validate on inner fields of db.object are allowed", () => {
+    db.object({
+      name: db.string().default("unnamed"),
+      status: db.string().validate(({ value }) => (value.length > 0 ? undefined : "required")),
     });
   });
 

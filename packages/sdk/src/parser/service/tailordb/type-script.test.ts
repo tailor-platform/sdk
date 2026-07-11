@@ -162,6 +162,63 @@ describe("buildTypeScripts", () => {
     expect(expr).toContain(typeValidateExpr);
   });
 
+  test("applies defaults per element in nested array fields", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      items: {
+        type: "nested",
+        array: true,
+        fields: {
+          status: { type: "string", default: "pending" },
+          count: { type: "integer", default: 0 },
+        },
+      },
+    };
+
+    const createExpr = buildTypeScripts(fields).typeHook?.create?.expr ?? "";
+    expect(createExpr).toContain(
+      '"items": (_input["items"] || []).map((__el) => Object.assign({}, __el, {',
+    );
+    expect(createExpr).toContain('"status": __el["status"] ?? "pending"');
+    expect(createExpr).toContain('"count": __el["count"] ?? 0');
+
+    expect(buildTypeScripts(fields).typeHook?.update).toBeUndefined();
+  });
+
+  test("validates per element in nested array fields with indexed error paths", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      items: {
+        type: "nested",
+        array: true,
+        fields: {
+          name: {
+            type: "string",
+            validate: [
+              { script: { expr: '_value.length > 0 ? undefined : "required"' }, errorMessage: "" },
+            ],
+          },
+        },
+      },
+    };
+
+    const expr = buildTypeScripts(fields).typeValidate?.create?.expr ?? "";
+    expect(expr).toContain('(_newRecord["items"] || []).forEach((__el, __idx) => {');
+    expect(expr).toContain('const _value = __el["name"]');
+    expect(expr).toContain('"items[" + __idx + "].name"');
+  });
+
+  test("skips nested array with no defaults or validators", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      items: {
+        type: "nested",
+        array: true,
+        fields: {
+          name: { type: "string" },
+        },
+      },
+    };
+    expect(buildTypeScripts(fields)).toEqual({});
+  });
+
   test("no typeValidate output when no field validators and no type-level validate", () => {
     expect(buildTypeScripts({})).toEqual({});
     expect(buildTypeScripts({}, undefined)).toEqual({});
