@@ -689,6 +689,48 @@ describe("dataplane", () => {
       });
     });
 
+    test("type-level hook falls back to oldRecord when name is not in input", async () => {
+      const create = gql`
+        mutation {
+          createProductBundle(
+            input: { name: "Stable", items: [{ productName: "Item", unitPrice: 5.0 }] }
+          ) {
+            id
+            label
+          }
+        }
+      `;
+      interface Data {
+        createProductBundle: { id: string; label: string };
+      }
+      const createResult = await graphQLClient.rawRequest<Data>(create);
+      expect(createResult.errors).toBeUndefined();
+      expect(createResult.data.createProductBundle.label).toBe("Stable Bundle");
+      const id = createResult.data.createProductBundle.id;
+
+      const update = gql`
+        mutation {
+          updateProductBundle(
+            id: "${id}"
+            input: { items: [{ productName: "Item", qty: 3, unitPrice: 5.0 }] }
+          ) {
+            id
+            name
+            label
+          }
+        }
+      `;
+      const updateResult = await graphQLClient.rawRequest(update);
+      expect(updateResult.errors).toBeUndefined();
+      expect(updateResult.data).toEqual({
+        updateProductBundle: {
+          id,
+          name: "Stable",
+          label: "Stable Bundle",
+        },
+      });
+    });
+
     test("inner field validate rejects invalid qty", async () => {
       const query = gql`
         mutation {
