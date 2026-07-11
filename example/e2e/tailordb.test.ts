@@ -613,6 +613,111 @@ describe("dataplane", () => {
     });
   });
 
+  describe("productBundle", async () => {
+    test("type-level hook computes label and inner default applies", async () => {
+      const query = gql`
+        mutation {
+          createProductBundle(
+            input: {
+              name: "Summer Sale"
+              items: [
+                { productName: "Widget", unitPrice: 10.0 }
+                { productName: "Gadget", qty: 2, unitPrice: 25.0 }
+              ]
+            }
+          ) {
+            id
+            name
+            label
+            items {
+              productName
+              qty
+              unitPrice
+            }
+          }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(query);
+      expect(result.errors).toBeUndefined();
+      expect(result.data).toEqual({
+        createProductBundle: {
+          id: expect.any(String),
+          name: "Summer Sale",
+          label: "Summer Sale Bundle",
+          items: [
+            { productName: "Widget", qty: 1, unitPrice: 10.0 },
+            { productName: "Gadget", qty: 2, unitPrice: 25.0 },
+          ],
+        },
+      });
+    });
+
+    test("type-level hook recomputes label on update", async () => {
+      const create = gql`
+        mutation {
+          createProductBundle(
+            input: { name: "Original", items: [{ productName: "Item", unitPrice: 5.0 }] }
+          ) {
+            id
+            label
+          }
+        }
+      `;
+      interface Data {
+        createProductBundle: { id: string; label: string };
+      }
+      const createResult = await graphQLClient.rawRequest<Data>(create);
+      expect(createResult.errors).toBeUndefined();
+      expect(createResult.data.createProductBundle.label).toBe("Original Bundle");
+      const id = createResult.data.createProductBundle.id;
+
+      const update = gql`
+        mutation {
+          updateProductBundle(id: "${id}", input: { name: "Renamed" }) {
+            id
+            label
+          }
+        }
+      `;
+      const updateResult = await graphQLClient.rawRequest(update);
+      expect(updateResult.errors).toBeUndefined();
+      expect(updateResult.data).toEqual({
+        updateProductBundle: {
+          id,
+          label: "Renamed Bundle",
+        },
+      });
+    });
+
+    test("inner field validate rejects invalid qty", async () => {
+      const query = gql`
+        mutation {
+          createProductBundle(
+            input: { name: "Bad qty", items: [{ productName: "Widget", qty: 0, unitPrice: 10.0 }] }
+          ) {
+            id
+          }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(query);
+      expect(result.errors).toBeDefined();
+      expect(result.errors![0].message).toMatch("qty must be positive");
+    });
+
+    test("type-level validate rejects empty items", async () => {
+      const query = gql`
+        mutation {
+          createProductBundle(input: { name: "Empty", items: [] }) {
+            id
+          }
+        }
+      `;
+      const result = await graphQLClient.rawRequest(query);
+      expect(result.errors).toBeDefined();
+      expect(result.errors![0].message).toMatch("At least one item is required");
+    });
+  });
+
   describe("file", async () => {
     test("file type field returns", async () => {
       const query = gql`
