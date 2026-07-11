@@ -853,7 +853,7 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_4,
-    suspiciousPatterns: ["ValidateConfig", "Validators<", "ValidatorsBase"],
+    suspiciousPatterns: ["ValidateConfig", "Validators<", "ValidatorsBase", ".validate("],
     examples: [
       {
         caption:
@@ -904,7 +904,7 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_4,
-    suspiciousPatterns: ["Hooks<", "HookFn<", "Hook<"],
+    suspiciousPatterns: ["Hooks<", "HookFn<", "Hook<", ".hooks("],
     examples: [
       {
         caption:
