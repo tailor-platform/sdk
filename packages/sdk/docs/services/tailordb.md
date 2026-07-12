@@ -310,7 +310,7 @@ Set hooks across multiple fields using `db.table().hooks()`. The hook returns an
 
 Create hooks receive:
 
-- `input`: The submitted record data (pre-hook values)
+- `input`: The submitted record data. When field-level hooks or defaults exist, `input` reflects their applied results
 - `invoker`: Principal performing the operation
 - `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
 
