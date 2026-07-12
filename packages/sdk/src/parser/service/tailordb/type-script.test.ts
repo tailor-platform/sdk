@@ -162,19 +162,20 @@ describe("buildTypeScripts", () => {
     expect(expr).toContain(typeValidateExpr);
   });
 
-  test("ignores defaults on nested array inner fields", () => {
+  test("throws on defaults on nested array inner fields", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       items: {
         type: "nested",
         array: true,
         fields: {
           status: { type: "string", default: "pending" },
-          count: { type: "integer", default: 0 },
         },
       },
     };
 
-    expect(buildTypeScripts(fields)).toEqual({});
+    expect(() => buildTypeScripts(fields)).toThrow(
+      '.default() cannot be used on nested inner field "status"',
+    );
   });
 
   test("validates per element in nested array fields with indexed error paths", () => {
@@ -297,7 +298,6 @@ describe("buildTypeScripts", () => {
         fields: {
           qty: {
             type: "integer",
-            default: 1,
             hooks: { update: { expr: "_value ?? _oldValue" } },
           },
         },
