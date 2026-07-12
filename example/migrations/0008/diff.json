@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "namespace": "tailordb",
+  "createdAt": "2026-07-12T05:51:39.449Z",
+  "changes": [
+    {
+      "kind": "field_modified",
+      "typeName": "ProductBundle",
+      "fieldName": "items",
+      "before": {
+        "type": "nested",
+        "required": true,
+        "array": true,
+        "fields": {
+          "productName": {
+            "type": "string",
+            "required": true
+          },
+          "qty": {
+            "type": "integer",
+            "required": true,
+            "validate": [
+              {
+                "script": {
+                  "expr": "(({ value })=>value <= 0 ? \"qty must be positive\" : undefined)({ value: _value })"
+                },
+                "errorMessage": ""
+              }
+            ],
+            "default": 1
+          },
+          "unitPrice": {
+            "type": "float",
+            "required": true
+          }
+        }
+      },
+      "after": {
+        "type": "nested",
+        "required": true,
+        "array": true,
+        "fields": {
+          "productName": {
+            "type": "string",
+            "required": true
+          },
+          "qty": {
+            "type": "integer",
+            "required": true,
+            "validate": [
+              {
+                "script": {
+                  "expr": "(({ value })=>value <= 0 ? \"qty must be positive\" : undefined)({ value: _value })"
+                },
+                "errorMessage": ""
+              }
+            ]
+          },
+          "unitPrice": {
+            "type": "float",
+            "required": true
+          }
+        }
+      }
+    }
+  ],
+  "hasBreakingChanges": false,
+  "breakingChanges": [],
+  "hasWarnings": false,
+  "warnings": [],
+  "requiresMigrationScript": false
+}
