@@ -38,6 +38,7 @@ import type {
   TypeHook,
   ExcludeNestedDBFields,
   ExcludeHookedDBFields,
+  ExcludeDefaultedDBFields,
   TypeFeatures,
   TypeValidateFn,
 } from "./types";
@@ -811,7 +812,8 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
 function object<
   const F extends Record<string, TailorAnyDBField> &
     ExcludeNestedDBFields<F> &
-    ExcludeHookedDBFields<F>,
+    ExcludeHookedDBFields<F> &
+    ExcludeDefaultedDBFields<F>,
   const Opt extends FieldOptions,
 >(fields: F, options?: Opt) {
   return createField("nested", options, fields) as unknown as TailorDBField<

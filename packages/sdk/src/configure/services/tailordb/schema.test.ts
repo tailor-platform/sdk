@@ -1289,9 +1289,16 @@ describe("db.object tests", () => {
     });
   });
 
-  test("default and validate on inner fields of db.object are allowed", () => {
+  test("default on inner fields of db.object causes type error", () => {
     db.object({
+      // @ts-expect-error default on nested inner fields are not allowed
       name: db.string().default("unnamed"),
+      status: db.string(),
+    });
+  });
+
+  test("validate on inner fields of db.object is allowed", () => {
+    db.object({
       status: db.string().validate(({ value }) => (value.length > 0 ? undefined : "required")),
     });
   });
