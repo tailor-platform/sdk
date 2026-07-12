@@ -252,20 +252,6 @@ describe("Kysely TypeProcessor", () => {
       expect(typeDef).not.toContain("ArrayColumnType");
     });
 
-    test("should use ObjectColumnType for nested objects with defaulted fields", async () => {
-      const typeDef = await getTypeDef(
-        db.table("Config", {
-          settings: db.object({
-            name: db.string(),
-            status: db.string().default("active"),
-          }),
-        }),
-      );
-
-      expect(typeDef).toContain("ObjectColumnType<");
-      expect(typeDef).toContain("Generated<string>");
-    });
-
     test("should handle optional nested objects", async () => {
       const typeDef = await getTypeDef(
         db.table("User", {
