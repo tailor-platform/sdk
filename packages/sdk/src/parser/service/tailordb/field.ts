@@ -252,6 +252,13 @@ export function parseFieldConfig(
   // Access rawRelation via getter (if available)
   const rawRelation = (field as unknown as { rawRelation?: RawRelationConfig }).rawRelation;
 
+  if (context && context.fieldPath.length > 1 && metadata.default !== undefined) {
+    throw new Error(
+      `Field "${context.fieldPath.join(".")}" on type "${context.typeName}": ` +
+        `.default() cannot be used on nested inner fields`,
+    );
+  }
+
   const nestedFields = field.fields as Record<string, TailorAnyDBField> | undefined;
   return {
     type: fieldType,

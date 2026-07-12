@@ -55,7 +55,7 @@ function serializeDefault(value: unknown, fieldType: string): string {
  * @param {string} accessExpr - JS expression to access the parent object
  * @param {string} oldAccessExpr - JS expression to access the old record parent
  * @param {HookOperation} operation - Hook operation type
- * @param {boolean} nested - Whether building inside a nested field (skips defaults)
+ * @param {boolean} nested - Whether building inside a nested field (rejects defaults)
  * @returns {string | null} Object literal expression or null
  */
 function buildHookObject(
@@ -94,7 +94,10 @@ function buildHookObject(
     }
 
     const hook = config.hooks?.[operation];
-    const hasDefault = !nested && operation === "create" && config.default !== undefined;
+    if (nested && config.default !== undefined) {
+      throw new Error(`.default() cannot be used on nested inner field "${name}"`);
+    }
+    const hasDefault = operation === "create" && config.default !== undefined;
 
     if (hook && hasDefault) {
       parts.push(
