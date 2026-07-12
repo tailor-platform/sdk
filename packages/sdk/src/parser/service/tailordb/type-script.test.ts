@@ -162,7 +162,7 @@ describe("buildTypeScripts", () => {
     expect(expr).toContain(typeValidateExpr);
   });
 
-  test("applies defaults per element in nested array fields", () => {
+  test("ignores defaults on nested array inner fields", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       items: {
         type: "nested",
@@ -174,14 +174,7 @@ describe("buildTypeScripts", () => {
       },
     };
 
-    const createExpr = buildTypeScripts(fields).typeHook?.create?.expr ?? "";
-    expect(createExpr).toContain(
-      '"items": (_input["items"] || []).map((__el) => Object.assign({}, __el, {',
-    );
-    expect(createExpr).toContain('"status": __el["status"] ?? "pending"');
-    expect(createExpr).toContain('"count": __el["count"] ?? 0');
-
-    expect(buildTypeScripts(fields).typeHook?.update).toBeUndefined();
+    expect(buildTypeScripts(fields)).toEqual({});
   });
 
   test("validates per element in nested array fields with indexed error paths", () => {

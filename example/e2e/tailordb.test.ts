@@ -614,14 +614,14 @@ describe("dataplane", () => {
   });
 
   describe("productBundle", async () => {
-    test("type-level hook computes label and inner default applies", async () => {
+    test("type-level hook computes label from input fields", async () => {
       const query = gql`
         mutation {
           createProductBundle(
             input: {
               name: "Summer Sale"
               items: [
-                { productName: "Widget", unitPrice: 10.0 }
+                { productName: "Widget", qty: 1, unitPrice: 10.0 }
                 { productName: "Gadget", qty: 2, unitPrice: 25.0 }
               ]
             }
@@ -656,7 +656,7 @@ describe("dataplane", () => {
       const create = gql`
         mutation {
           createProductBundle(
-            input: { name: "Original", items: [{ productName: "Item", unitPrice: 5.0 }] }
+            input: { name: "Original", items: [{ productName: "Item", qty: 1, unitPrice: 5.0 }] }
           ) {
             id
             label
@@ -693,7 +693,7 @@ describe("dataplane", () => {
       const create = gql`
         mutation {
           createProductBundle(
-            input: { name: "Stable", items: [{ productName: "Item", unitPrice: 5.0 }] }
+            input: { name: "Stable", items: [{ productName: "Item", qty: 1, unitPrice: 5.0 }] }
           ) {
             id
             label

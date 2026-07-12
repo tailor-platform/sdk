@@ -55,6 +55,7 @@ function serializeDefault(value: unknown, fieldType: string): string {
  * @param {string} accessExpr - JS expression to access the parent object
  * @param {string} oldAccessExpr - JS expression to access the old record parent
  * @param {HookOperation} operation - Hook operation type
+ * @param {boolean} nested - Whether building inside a nested field (skips defaults)
  * @returns {string | null} Object literal expression or null
  */
 function buildHookObject(
@@ -62,6 +63,7 @@ function buildHookObject(
   accessExpr: string,
   oldAccessExpr: string,
   operation: HookOperation,
+  nested = false,
 ): string | null {
   const parts: string[] = [];
 
@@ -70,14 +72,20 @@ function buildHookObject(
     const oldAccess = `${oldAccessExpr}?.[${key(name)}]`;
     if (isNestedType(config) && config.fields) {
       if (config.array) {
-        const inner = buildHookObject(config.fields, "__el", "undefined", operation);
+        const inner = buildHookObject(config.fields, "__el", "undefined", operation, true);
         if (inner !== null) {
           parts.push(
             `${key(name)}: (${access} || []).map((__el) => Object.assign({}, __el, ${inner}))`,
           );
         }
       } else {
-        const inner = buildHookObject(config.fields, `(${access} || {})`, oldAccess, operation);
+        const inner = buildHookObject(
+          config.fields,
+          `(${access} || {})`,
+          oldAccess,
+          operation,
+          true,
+        );
         if (inner !== null) {
           parts.push(`${key(name)}: Object.assign({}, ${access}, ${inner})`);
         }
@@ -86,7 +94,7 @@ function buildHookObject(
     }
 
     const hook = config.hooks?.[operation];
-    const hasDefault = operation === "create" && config.default !== undefined;
+    const hasDefault = !nested && operation === "create" && config.default !== undefined;
 
     if (hook && hasDefault) {
       parts.push(

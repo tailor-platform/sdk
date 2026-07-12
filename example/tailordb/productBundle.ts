@@ -8,10 +8,7 @@ export const productBundle = db
     items: db.object(
       {
         productName: db.string(),
-        qty: db
-          .int()
-          .default(1)
-          .validate(({ value }) => (value <= 0 ? "qty must be positive" : undefined)),
+        qty: db.int().validate(({ value }) => (value <= 0 ? "qty must be positive" : undefined)),
         unitPrice: db.float(),
       },
       { array: true },
