@@ -225,7 +225,7 @@
     "@tailor-platform/tailor-proto": "workspace:^",
     "@types/madge": "5.0.3",
     "@types/mime-types": "3.0.1",
-    "@types/node": "24.13.2",
+    "@types/node": "24.13.3",
     "@types/semver": "7.7.1",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "4.1.10",

@@ -11,7 +11,7 @@
     "lint:fix": "oxlint --type-aware . --fix"
   },
   "devDependencies": {
-    "@types/node": "24.13.2",
+    "@types/node": "24.13.3",
     "oxlint": "1.72.0",
     "oxlint-tsgolint": "0.24.0",
     "tsx": "4.23.0",
