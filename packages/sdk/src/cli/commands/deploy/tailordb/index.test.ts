@@ -4,7 +4,13 @@ import * as path from "pathe";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import { sdkNameLabelKey } from "../label";
-import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
+import {
+  applyTailorDB,
+  formatTailorDBResourceChangeEntries,
+  overlayFieldScripts,
+  overlaySourceScripts,
+  planTailorDB,
+} from ".";
 import type { FieldDiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type {
   SnapshotFieldConfig,
@@ -1298,5 +1304,203 @@ describe("applyTailorDB migration label reconciliation", () => {
     planResult.context.executorUsedTypes = new Set();
 
     await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+  });
+});
+
+describe("overlayFieldScripts", () => {
+  test("replaces hooks, validate, and default from source fields", () => {
+    const snapshotFields: Record<string, SnapshotFieldConfig> = {
+      name: {
+        type: "string",
+        required: true,
+        hooks: { create: { expr: "old_hook" } },
+        validate: [{ script: { expr: "old_validate" }, errorMessage: "old" }],
+        default: "old_default",
+      },
+    };
+    const sourceFields: Record<string, SnapshotFieldConfig> = {
+      name: {
+        type: "string",
+        required: true,
+        hooks: { create: { expr: "new_hook" } },
+        validate: [{ script: { expr: "new_validate" }, errorMessage: "new" }],
+        default: "new_default",
+      },
+    };
+    const result = overlayFieldScripts(snapshotFields, sourceFields);
+    expect(result["name"]!.hooks).toEqual({ create: { expr: "new_hook" } });
+    expect(result["name"]!.validate).toEqual([
+      { script: { expr: "new_validate" }, errorMessage: "new" },
+    ]);
+    expect(result["name"]!.default).toBe("new_default");
+  });
+
+  test("preserves non-script properties from snapshot", () => {
+    const snapshotFields: Record<string, SnapshotFieldConfig> = {
+      name: {
+        type: "string",
+        required: true,
+        index: true,
+        description: "snapshot desc",
+        hooks: { create: { expr: "old" } },
+      },
+    };
+    const sourceFields: Record<string, SnapshotFieldConfig> = {
+      name: {
+        type: "string",
+        required: false,
+        hooks: { create: { expr: "new" } },
+      },
+    };
+    const result = overlayFieldScripts(snapshotFields, sourceFields);
+    expect(result["name"]!.index).toBe(true);
+    expect(result["name"]!.description).toBe("snapshot desc");
+    expect(result["name"]!.required).toBe(true);
+  });
+
+  test("keeps snapshot field unchanged when source has no matching field", () => {
+    const snapshotFields: Record<string, SnapshotFieldConfig> = {
+      oldField: {
+        type: "string",
+        required: true,
+        hooks: { create: { expr: "stale" } },
+      },
+    };
+    const result = overlayFieldScripts(snapshotFields, {});
+    expect(result["oldField"]!.hooks).toEqual({ create: { expr: "stale" } });
+  });
+
+  test("removes scripts when source field has no scripts", () => {
+    const snapshotFields: Record<string, SnapshotFieldConfig> = {
+      name: {
+        type: "string",
+        required: true,
+        hooks: { create: { expr: "old" } },
+        validate: [{ script: { expr: "old" }, errorMessage: "old" }],
+        default: "old",
+      },
+    };
+    const sourceFields: Record<string, SnapshotFieldConfig> = {
+      name: { type: "string", required: true },
+    };
+    const result = overlayFieldScripts(snapshotFields, sourceFields);
+    expect(result["name"]!.hooks).toBeUndefined();
+    expect(result["name"]!.validate).toBeUndefined();
+    expect(result["name"]!.default).toBeUndefined();
+  });
+
+  test("recursively overlays nested fields", () => {
+    const snapshotFields: Record<string, SnapshotFieldConfig> = {
+      address: {
+        type: "object",
+        required: false,
+        fields: {
+          city: {
+            type: "string",
+            required: true,
+            hooks: { create: { expr: "old_city_hook" } },
+          },
+        },
+      },
+    };
+    const sourceFields: Record<string, SnapshotFieldConfig> = {
+      address: {
+        type: "object",
+        required: false,
+        fields: {
+          city: {
+            type: "string",
+            required: true,
+            hooks: { create: { expr: "new_city_hook" } },
+          },
+        },
+      },
+    };
+    const result = overlayFieldScripts(snapshotFields, sourceFields);
+    expect(result["address"]!.fields!["city"]!.hooks).toEqual({
+      create: { expr: "new_city_hook" },
+    });
+  });
+});
+
+describe("overlaySourceScripts", () => {
+  function makeSnapshotType(overrides: Partial<TailorDBSnapshotType> = {}): TailorDBSnapshotType {
+    return {
+      name: "User",
+      pluralForm: "Users",
+      fields: {
+        name: { type: "string", required: true },
+      },
+      ...overrides,
+    };
+  }
+
+  test("replaces typeHookExpr and typeValidateExpr from source", () => {
+    const snapshot = makeSnapshotType({
+      typeHookExpr: { create: "old_create" },
+      typeValidateExpr: "old_validate",
+    });
+    const source = makeSnapshotType({
+      typeHookExpr: { create: "new_create", update: "new_update" },
+      typeValidateExpr: "new_validate",
+    });
+    const result = overlaySourceScripts(snapshot, source);
+    expect(result.typeHookExpr).toEqual({
+      create: "new_create",
+      update: "new_update",
+    });
+    expect(result.typeValidateExpr).toBe("new_validate");
+  });
+
+  test("removes type-level scripts when source has none", () => {
+    const snapshot = makeSnapshotType({
+      typeHookExpr: { create: "old" },
+      typeValidateExpr: "old",
+    });
+    const source = makeSnapshotType();
+    const result = overlaySourceScripts(snapshot, source);
+    expect(result.typeHookExpr).toBeUndefined();
+    expect(result.typeValidateExpr).toBeUndefined();
+  });
+
+  test("preserves non-script properties from snapshot", () => {
+    const snapshot = makeSnapshotType({
+      description: "snapshot desc",
+      indexes: { idx: { fields: ["name"] } },
+      typeHookExpr: { create: "old" },
+    });
+    const source = makeSnapshotType({
+      description: "source desc",
+      typeHookExpr: { create: "new" },
+    });
+    const result = overlaySourceScripts(snapshot, source);
+    expect(result.description).toBe("snapshot desc");
+    expect(result.indexes).toEqual({ idx: { fields: ["name"] } });
+    expect(result.name).toBe("User");
+  });
+
+  test("overlays field-level scripts from source", () => {
+    const snapshot = makeSnapshotType({
+      fields: {
+        name: {
+          type: "string",
+          required: true,
+          hooks: { create: { expr: "old_hook" } },
+        },
+      },
+    });
+    const source = makeSnapshotType({
+      fields: {
+        name: {
+          type: "string",
+          required: true,
+          hooks: { create: { expr: "new_hook" } },
+        },
+      },
+    });
+    const result = overlaySourceScripts(snapshot, source);
+    expect(result.fields["name"]!.hooks).toEqual({
+      create: { expr: "new_hook" },
+    });
   });
 });
