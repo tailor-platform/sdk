@@ -436,7 +436,7 @@ export function mockWorkflow() {
   return withDispose(facade, () => {
     for (const mock of scopedMocks) mock.restore();
     root.workflow = prev;
-    if (prevEnv) writeWorkflowTestEnv(prevEnv);
+    if (prevEnv !== undefined) writeWorkflowTestEnv(prevEnv);
     else clearWorkflowTestEnv();
   });
 }
