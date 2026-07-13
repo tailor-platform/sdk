@@ -36,6 +36,18 @@ export interface FoundProperty {
 }
 
 /**
+ * Read an import or export name from an OXC identifier or string-literal node.
+ * @param node - Import/export name node
+ * @returns Module binding name, or undefined for an unsupported node
+ */
+export function getModuleExportName(node: unknown): string | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  const exportName = node as { name?: string; value?: unknown };
+  if (exportName.name) return exportName.name;
+  return typeof exportName.value === "string" ? exportName.value : undefined;
+}
+
+/**
  * Check if a module source is from the Tailor SDK package (including subpaths)
  * @param source - Module source string
  * @returns True if the source is from the Tailor SDK package
@@ -112,8 +124,8 @@ export function getTriggerCallInfo(
     // callee may be a ComputedMemberExpression at runtime
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     memberExpr.computed ||
-    memberExpr.object.type !== "Identifier" ||
-    memberExpr.property.name !== "trigger"
+    memberExpr.property.name !== "trigger" ||
+    memberExpr.object.type !== "Identifier"
   ) {
     return null;
   }
@@ -237,34 +249,4 @@ export function findStatementEnd(source: string, position: number): number {
     i++;
   }
   return i;
-}
-
-/**
- * Resolve a relative path from a base directory
- * Simple implementation that handles ./ and ../ prefixes
- * @param baseDir - Base directory
- * @param relativePath - Relative path to resolve
- * @returns Resolved absolute path
- */
-export function resolvePath(baseDir: string, relativePath: string): string {
-  // Normalize separators to forward slash
-  const normalized = relativePath.replace(/\\/g, "/");
-
-  // Split into parts
-  const parts = normalized.split("/");
-  const baseParts = baseDir.replace(/\\/g, "/").split("/");
-
-  for (const part of parts) {
-    if (part === ".") {
-      // Current directory, do nothing
-    } else if (part === "..") {
-      // Go up one directory
-      baseParts.pop();
-    } else {
-      // Add the part
-      baseParts.push(part);
-    }
-  }
-
-  return baseParts.join("/");
 }
