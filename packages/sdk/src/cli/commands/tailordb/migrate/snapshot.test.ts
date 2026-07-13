@@ -966,6 +966,135 @@ describe("snapshot", () => {
         }),
       ]);
     });
+
+    test("detects typeHookExpr addition", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            typeHookExpr: { create: "({input}) => ({fullName: input.first + input.last})" },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "type_scripts_modified",
+          typeName: "User",
+          before: {},
+          after: {
+            typeHookExpr: {
+              create: "({input}) => ({fullName: input.first + input.last})",
+            },
+          },
+        }),
+      ]);
+    });
+
+    test("detects typeHookExpr removal", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            typeHookExpr: { create: "old-expr" },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "type_scripts_modified",
+          typeName: "User",
+          before: { typeHookExpr: { create: "old-expr" } },
+          after: {},
+        }),
+      ]);
+    });
+
+    test("detects typeValidateExpr change", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            typeValidateExpr: "old-validate",
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            typeValidateExpr: "new-validate",
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "type_scripts_modified",
+          typeName: "User",
+          before: { typeValidateExpr: "old-validate" },
+          after: { typeValidateExpr: "new-validate" },
+        }),
+      ]);
+    });
+
+    test("no diff when typeHookExpr unchanged", () => {
+      const snapshot: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            typeHookExpr: { create: "same-expr", update: "same-update" },
+            typeValidateExpr: "same-validate",
+          },
+        },
+      };
+
+      const diff = compareSnapshots(snapshot, snapshot);
+
+      expect(diff.changes).toEqual([]);
+    });
   });
 
   // ==========================================================================

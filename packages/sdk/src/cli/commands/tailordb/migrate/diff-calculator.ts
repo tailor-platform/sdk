@@ -197,6 +197,19 @@ export interface PermissionModifiedChange extends DiffChangeBase {
   after?: SnapshotPermissionState;
 }
 
+/** Type-level hook/validate script state for diff tracking. */
+export interface TypeScriptsState {
+  typeHookExpr?: { create?: string; update?: string };
+  typeValidateExpr?: string;
+}
+
+/** Type-level hook/validate scripts changed. */
+export interface TypeScriptsModifiedChange extends DiffChangeBase {
+  kind: "type_scripts_modified";
+  before: TypeScriptsState;
+  after: TypeScriptsState;
+}
+
 /**
  * Single change in migration diff, discriminated by `kind` so that
  * `before`/`after` are typed per change kind.
@@ -218,7 +231,8 @@ export type DiffChange =
   | RelationshipAddedChange
   | RelationshipRemovedChange
   | RelationshipModifiedChange
-  | PermissionModifiedChange;
+  | PermissionModifiedChange
+  | TypeScriptsModifiedChange;
 
 /**
  * Field-level diff change (added / removed / modified).
@@ -358,6 +372,8 @@ function formatDiffChange(change: DiffChange): string {
       return `  ~ [Relationship${change.relationshipType ? ` (${change.relationshipType})` : ""}] ${change.relationshipName}: ${change.reason ?? "modified"}`;
     case "permission_modified":
       return `  ~ [Permission] ${change.reason ?? "modified"}`;
+    case "type_scripts_modified":
+      return `  ~ [Type Scripts] ${change.typeName}: ${change.reason ?? "type-level hooks/validate changed"}`;
     default: {
       // Runtime fallback: diff.json is parsed without validation, so
       // hand-edited or future-version files may carry unknown kinds.
@@ -502,6 +518,7 @@ const DIFF_CHANGE_LABELS: Record<DiffChangeKind, string> = {
   relationship_removed: "relationship(s) removed",
   relationship_modified: "relationship(s) modified",
   permission_modified: "permission(s) modified",
+  type_scripts_modified: "type script(s) modified",
 };
 
 /**

@@ -284,7 +284,6 @@ export function buildTypeScripts(
   for (const operation of ["create", "update"] as const) {
     const perFieldExpr = buildHookObject(fields, INPUT, OLD_RECORD, operation);
     const typeLevelExpr = typeHookExpr?.[operation];
-
     let expr: string | undefined;
     if (perFieldExpr !== null && typeLevelExpr) {
       expr = `((_invoker) => { const ${NOW} = new Date(); const __fl = ${perFieldExpr}; return Object.assign({}, __fl, ((${INPUT}) => ${typeLevelExpr})(Object.assign({}, ${INPUT}, __fl))); })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
