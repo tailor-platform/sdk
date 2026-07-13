@@ -453,6 +453,21 @@ describe("resolveDeployWorkspace", () => {
     expect(mocks.saveWorkspaceContext).not.toHaveBeenCalled();
   });
 
+  test("ignores ambient creation scope when an existing workspace is explicit", async () => {
+    const workspaceId = "56565656-5656-4656-8656-565656565656";
+    mocks.tryLoadWorkspaceId.mockResolvedValue(workspaceId);
+
+    await expect(
+      resolveDeployWorkspace({
+        workspaceId,
+        organizationId: "57575757-5757-4757-8757-575757575757",
+        folderId: "58585858-5858-4858-8858-585858585858",
+      }),
+    ).resolves.toEqual({ client, workspaceId });
+    expect(mocks.listWorkspacesWithClient).not.toHaveBeenCalled();
+    expect(client.getWorkspace).toHaveBeenCalledWith({ workspaceId });
+  });
+
   test("does not persist an automatically selected workspace during dry-run", async () => {
     const only = workspace("19191919-1919-4919-8919-191919191919");
     mocks.listWorkspacesWithClient.mockResolvedValue([only]);

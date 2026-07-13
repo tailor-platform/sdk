@@ -386,8 +386,6 @@ export async function resolveDeployWorkspace(
   const createOptionNames = [
     options.workspaceName !== undefined ? "--workspace-name" : undefined,
     options.workspaceRegion !== undefined ? "--workspace-region" : undefined,
-    options.organizationId !== undefined ? "--organization-id" : undefined,
-    options.folderId !== undefined ? "--folder-id" : undefined,
   ].filter((name): name is string => name !== undefined);
   if (!options.createWorkspace && createOptionNames.length > 0) {
     throw CLIError({
