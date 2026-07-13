@@ -1,9 +1,13 @@
+import { createHash } from "node:crypto";
+
 // Platform-injected record map for type-level hook/validate scripts.
 const INPUT = "_input";
 const NEW_RECORD = "_newRecord";
 const OLD_RECORD = "_oldRecord";
 // Shared operation timestamp bound once per script execution.
 const NOW = "_now";
+
+const SOURCE_HASH_PREFIX = "// @sdk-source-hash:";
 
 const TIME_TYPES = new Set(["datetime", "date", "time"]);
 
@@ -35,6 +39,69 @@ export interface TypeScripts {
 }
 
 const key = (name: string) => JSON.stringify(name);
+
+function collectFieldScriptSources(fields: Record<string, ScriptFieldConfig>): [string, unknown][] {
+  const entries: [string, unknown][] = [];
+
+  for (const [name, config] of Object.entries(fields).toSorted(([a], [b]) => a.localeCompare(b))) {
+    const data: Record<string, unknown> = {};
+
+    if (config.hooks?.create?.expr) data.hc = config.hooks.create.expr;
+    if (config.hooks?.update?.expr) data.hu = config.hooks.update.expr;
+    if (config.validate?.some((v) => v.script?.expr)) {
+      data.v = config.validate
+        .filter((v) => v.script?.expr)
+        .map((v) => [v.script?.expr, v.errorMessage]);
+    }
+    if (config.default !== undefined) {
+      data.d = config.default instanceof Date ? config.default.toISOString() : config.default;
+      data.t = config.type;
+    }
+
+    if (config.fields) {
+      const nested = collectFieldScriptSources(config.fields);
+      if (nested.length > 0) {
+        data.f = nested;
+        data.a = !!config.array;
+      }
+    }
+
+    if (Object.keys(data).length > 0) {
+      entries.push([name, data]);
+    }
+  }
+
+  return entries;
+}
+
+export function computeSourceScriptHash(
+  fields: Record<string, ScriptFieldConfig>,
+  options?: {
+    typeHookExpr?: { create?: string; update?: string };
+    typeValidateExpr?: string;
+  },
+): string | undefined {
+  const fieldSources = collectFieldScriptSources(fields);
+  const hasTypeScripts =
+    fieldSources.length > 0 ||
+    options?.typeHookExpr?.create ||
+    options?.typeHookExpr?.update ||
+    options?.typeValidateExpr;
+
+  if (!hasTypeScripts) return undefined;
+
+  const payload: unknown[] = [fieldSources];
+  if (options?.typeHookExpr?.create) payload.push(["thc", options.typeHookExpr.create]);
+  if (options?.typeHookExpr?.update) payload.push(["thu", options.typeHookExpr.update]);
+  if (options?.typeValidateExpr) payload.push(["tve", options.typeValidateExpr]);
+
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex").slice(0, 16);
+}
+
+export function extractSourceScriptHash(expr: string): string | undefined {
+  const match = expr.match(/\/\/ @sdk-source-hash:([0-9a-f]+)$/);
+  return match?.[1];
+}
 
 const isNestedType = (config: ScriptFieldConfig): boolean =>
   config.type === "nested" && config.fields !== undefined;
@@ -210,19 +277,25 @@ export function buildTypeScripts(
   const typeHookExpr = options?.typeHookExpr;
   const typeValidateExpr = options?.typeValidateExpr;
 
+  const hash = computeSourceScriptHash(fields, options);
+  const hashSuffix = hash ? ` ${SOURCE_HASH_PREFIX}${hash}` : "";
+
   const hook: { create?: ScriptRef; update?: ScriptRef } = {};
   for (const operation of ["create", "update"] as const) {
     const perFieldExpr = buildHookObject(fields, INPUT, OLD_RECORD, operation);
     const typeLevelExpr = typeHookExpr?.[operation];
 
+    let expr: string | undefined;
     if (perFieldExpr !== null && typeLevelExpr) {
-      hook[operation] = {
-        expr: `((_invoker) => { const ${NOW} = new Date(); const __fl = ${perFieldExpr}; return Object.assign({}, __fl, ((${INPUT}) => ${typeLevelExpr})(Object.assign({}, ${INPUT}, __fl))); })(typeof _invoker !== "undefined" ? _invoker : undefined)`,
-      };
+      expr = `((_invoker) => { const ${NOW} = new Date(); const __fl = ${perFieldExpr}; return Object.assign({}, __fl, ((${INPUT}) => ${typeLevelExpr})(Object.assign({}, ${INPUT}, __fl))); })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
     } else if (typeLevelExpr) {
-      hook[operation] = { expr: wrapHook(typeLevelExpr) };
+      expr = wrapHook(typeLevelExpr);
     } else if (perFieldExpr !== null) {
-      hook[operation] = { expr: wrapHook(perFieldExpr) };
+      expr = wrapHook(perFieldExpr);
+    }
+
+    if (expr) {
+      hook[operation] = { expr: expr + hashSuffix };
     }
   }
   if (hook.create || hook.update) {
@@ -231,7 +304,7 @@ export function buildTypeScripts(
 
   const statements = buildValidateStatements(fields, NEW_RECORD, "");
   if (statements.length > 0 || typeValidateExpr) {
-    const expr = wrapValidate(statements, typeValidateExpr);
+    const expr = wrapValidate(statements, typeValidateExpr) + hashSuffix;
     result.typeValidate = { create: { expr }, update: { expr } };
   }
 

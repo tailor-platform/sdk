@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { buildTypeScripts, type ScriptFieldConfig } from "./type-script";
+import {
+  buildTypeScripts,
+  computeSourceScriptHash,
+  extractSourceScriptHash,
+  type ScriptFieldConfig,
+} from "./type-script";
 
 describe("buildTypeScripts", () => {
   test("returns empty result when no field has hooks or validators", () => {
@@ -366,5 +371,125 @@ describe("buildTypeScripts", () => {
 
     const updateExpr = buildTypeScripts(fields).typeHook?.update?.expr ?? "";
     expect(updateExpr).not.toContain("__oldEl");
+  });
+});
+
+describe("computeSourceScriptHash", () => {
+  test("returns undefined when no script-relevant data exists", () => {
+    expect(computeSourceScriptHash({ id: { type: "uuid" } })).toBeUndefined();
+    expect(computeSourceScriptHash({})).toBeUndefined();
+  });
+
+  test("returns a 16-char hex string when scripts exist", () => {
+    const hash = computeSourceScriptHash({
+      name: { type: "string", hooks: { create: { expr: "_value.trim()" } } },
+    });
+    expect(hash).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  test("is deterministic for the same input", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      status: { type: "string", default: "active" },
+      name: { type: "string", hooks: { create: { expr: "_value.trim()" } } },
+    };
+    expect(computeSourceScriptHash(fields)).toBe(computeSourceScriptHash(fields));
+  });
+
+  test("changes when a hook expression changes", () => {
+    const a = computeSourceScriptHash({
+      name: { type: "string", hooks: { create: { expr: "_value.trim()" } } },
+    });
+    const b = computeSourceScriptHash({
+      name: { type: "string", hooks: { create: { expr: "_value.toLowerCase()" } } },
+    });
+    expect(a).not.toBe(b);
+  });
+
+  test("changes when typeHookExpr changes", () => {
+    const fields: Record<string, ScriptFieldConfig> = {};
+    const a = computeSourceScriptHash(fields, { typeHookExpr: { create: "exprA" } });
+    const b = computeSourceScriptHash(fields, { typeHookExpr: { create: "exprB" } });
+    expect(a).not.toBe(b);
+  });
+
+  test("changes when typeValidateExpr changes", () => {
+    const a = computeSourceScriptHash({}, { typeValidateExpr: "validateA" });
+    const b = computeSourceScriptHash({}, { typeValidateExpr: "validateB" });
+    expect(a).not.toBe(b);
+  });
+
+  test("is insensitive to field insertion order", () => {
+    const a = computeSourceScriptHash({
+      alpha: { type: "string", hooks: { create: { expr: "a" } } },
+      beta: { type: "string", hooks: { create: { expr: "b" } } },
+    });
+    const b = computeSourceScriptHash({
+      beta: { type: "string", hooks: { create: { expr: "b" } } },
+      alpha: { type: "string", hooks: { create: { expr: "a" } } },
+    });
+    expect(a).toBe(b);
+  });
+
+  test("includes nested field scripts in hash", () => {
+    const withNested = computeSourceScriptHash({
+      profile: {
+        type: "nested",
+        fields: {
+          email: { type: "string", hooks: { create: { expr: "_value.toLowerCase()" } } },
+        },
+      },
+    });
+    const withoutNested = computeSourceScriptHash({
+      profile: { type: "nested", fields: { email: { type: "string" } } },
+    });
+    expect(withNested).toBeDefined();
+    expect(withoutNested).toBeUndefined();
+  });
+});
+
+describe("extractSourceScriptHash", () => {
+  test("extracts hash from expr with hash suffix", () => {
+    const expr = "((_invoker) => { return {}; })() // @sdk-source-hash:abcdef0123456789";
+    expect(extractSourceScriptHash(expr)).toBe("abcdef0123456789");
+  });
+
+  test("returns undefined when no hash is present", () => {
+    expect(extractSourceScriptHash("((_invoker) => { return {}; })()")).toBeUndefined();
+  });
+});
+
+describe("buildTypeScripts hash embedding", () => {
+  test("embeds hash in generated hook expr", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      createdAt: { type: "datetime", hooks: { create: { expr: "_now" } } },
+    };
+    const { typeHook } = buildTypeScripts(fields);
+    const expr = typeHook?.create?.expr ?? "";
+    const hash = extractSourceScriptHash(expr);
+    expect(hash).toMatch(/^[0-9a-f]{16}$/);
+    expect(hash).toBe(computeSourceScriptHash(fields));
+  });
+
+  test("embeds same hash in all generated exprs", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      name: {
+        type: "string",
+        hooks: { create: { expr: "_value.trim()" }, update: { expr: "_value.trim()" } },
+        validate: [{ script: { expr: "_value.length > 0" }, errorMessage: "required" }],
+      },
+    };
+    const { typeHook, typeValidate } = buildTypeScripts(fields);
+    const hashes = [
+      extractSourceScriptHash(typeHook?.create?.expr ?? ""),
+      extractSourceScriptHash(typeHook?.update?.expr ?? ""),
+      extractSourceScriptHash(typeValidate?.create?.expr ?? ""),
+      extractSourceScriptHash(typeValidate?.update?.expr ?? ""),
+    ];
+    expect(new Set(hashes).size).toBe(1);
+    expect(hashes[0]).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  test("no hash in empty result", () => {
+    expect(buildTypeScripts({ id: { type: "uuid" } })).toEqual({});
   });
 });
