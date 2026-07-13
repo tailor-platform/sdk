@@ -136,8 +136,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.11.0
-        version: 0.11.0(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
+        specifier: 0.11.2
+        version: 0.11.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -488,8 +488,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.11.0
-        version: 0.11.0(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
+        specifier: 0.11.2
+        version: 0.11.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
       rolldown:
         specifier: 1.1.4
         version: 1.1.4
@@ -597,8 +597,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.11.0
-        version: 0.11.0(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
+        specifier: 0.11.2
+        version: 0.11.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
       semver:
         specifier: 7.8.5
         version: 7.8.5
@@ -3233,9 +3233,9 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  politty@0.11.0:
-    resolution: {integrity: sha512-z6NYLuccKHSOv+lEfupOJWml1adkNaX9VbXGCL1Lgdioihr9w53TCGx7A9xhmmKNDdVwVFSYkBK0UEo8nEM0Ww==}
-    engines: {node: '>=18'}
+  politty@0.11.2:
+    resolution: {integrity: sha512-bPVWpt8b+TD6RfX04BZJxgFWIyH72Dgqi3cBqhNYzsIbdXxUdajIacimCYfb++Gf6FJ782yGbAQ0LwPjoFRSrA==}
+    engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
     hasBin: true
     peerDependencies:
       '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
@@ -5929,7 +5929,7 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@0.11.0(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3):
+  politty@0.11.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3):
     dependencies:
       yaml: 2.9.0
       zod: 4.4.3
