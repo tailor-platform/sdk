@@ -147,7 +147,7 @@ export function mockIdp(options: MockIdpOptions = {}) {
 
   const defaultClient = function (this: IdpClientInstance, config: ClientConfig) {
     const mocks = namespace(config.namespace);
-    this.users = (value) => mocks.users(value);
+    this.users = mocks.users;
     this.user = (value) => mocks.user(value);
     this.userByName = (value) => mocks.userByName(value);
     this.createUser = (value) => mocks.createUser(value);

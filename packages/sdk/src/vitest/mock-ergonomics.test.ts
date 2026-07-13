@@ -85,6 +85,23 @@ describe("ergonomic runtime mocks", () => {
     );
   });
 
+  test("matches TailorDB query parameters structurally without JSON coercion", async () => {
+    using db = mockTailordb({ onUnhandled: "error" });
+    db.onQuery({ sql: "SELECT object", params: [{ a: 1, b: 2 }] }).returnsRows([
+      { matched: "object" },
+    ]);
+    db.onQuery({ sql: "SELECT number", params: [null] }).returnsRows([{ matched: "null" }]);
+
+    const client = new (globalThis as any).tailordb.Client({});
+
+    await expect(client.queryObject("SELECT object", [{ b: 2, a: 1 }])).resolves.toMatchObject({
+      rows: [{ matched: "object" }],
+    });
+    await expect(client.queryObject("SELECT number", [Number.NaN])).rejects.toThrow(
+      "No TailorDB query behavior matched",
+    );
+  });
+
   test("returns typed workflow definition mocks", async () => {
     using wf = mockWorkflow();
     const job = wf.job(lookupCustomer);
@@ -191,6 +208,7 @@ describe("ergonomic runtime mocks", () => {
   test("routes IdP clients to typed namespace-specific method mocks", async () => {
     using idp = mockIdp({ onUnhandled: "error" });
     const namespace = idp.namespace("customer-idp");
+    namespace.users.mockResolvedValue({ users: [], nextPageToken: null, totalCount: 0 });
     namespace.user.mockResolvedValue({
       id: "u-1",
       name: "alice",
@@ -201,9 +219,11 @@ describe("ergonomic runtime mocks", () => {
     namespace.deleteUser.mockResolvedValue(true);
 
     const client = new (globalThis as any).tailor.idp.Client({ namespace: "customer-idp" });
+    await expect(client.users()).resolves.toMatchObject({ users: [] });
     await expect(client.user("u-1")).resolves.toMatchObject({ name: "alice" });
     await expect(client.deleteUser("u-1")).resolves.toBe(true);
 
+    expect(namespace.users).toHaveBeenCalledWith();
     expect(namespace.user).toHaveBeenCalledWith("u-1");
     expect(namespace.deleteUser).toHaveBeenCalledWith("u-1");
   });

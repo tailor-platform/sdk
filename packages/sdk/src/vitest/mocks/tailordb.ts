@@ -1,7 +1,7 @@
 import { vi } from "vitest";
 import { tailordbRoot, withDispose } from "./shared";
 
-type QueryResolver = (query: string, params: unknown[]) => unknown[];
+type QueryResolver = (query: string, params: unknown[]) => unknown[] | undefined;
 
 /** Controls how unmatched TailorDB queries are handled. */
 export interface MockTailordbOptions {
@@ -52,6 +52,32 @@ interface QueryRule {
   matcher: QueryMatcher;
   once: QueryResponse[];
   fallback?: QueryResponse;
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function queryParamsEqual(actual: unknown, expected: unknown): boolean {
+  if (Object.is(actual, expected)) return true;
+
+  if (Array.isArray(actual) && Array.isArray(expected)) {
+    if (actual.length !== expected.length) return false;
+    for (let index = 0; index < actual.length; index += 1) {
+      if (!queryParamsEqual(actual[index], expected[index])) return false;
+    }
+    return true;
+  }
+
+  if (!isPlainRecord(actual) || !isPlainRecord(expected)) return false;
+  const actualKeys = Object.keys(actual);
+  const expectedKeys = Object.keys(expected);
+  if (actualKeys.length !== expectedKeys.length) return false;
+  return actualKeys.every(
+    (key) => Object.hasOwn(expected, key) && queryParamsEqual(actual[key], expected[key]),
+  );
 }
 
 class MockQueryResult {
@@ -117,15 +143,7 @@ export function mockTailordb(options: MockTailordbOptions = {}) {
     const expectedParams = matcher.params;
     return (
       params.length === expectedParams.length &&
-      params.every((v, i) => {
-        const expected = expectedParams[i];
-        if (Object.is(v, expected)) return true;
-        try {
-          return JSON.stringify(v) === JSON.stringify(expected);
-        } catch {
-          return false;
-        }
-      })
+      params.every((value, index) => queryParamsEqual(value, expectedParams[index]))
     );
   }
 
@@ -143,7 +161,7 @@ export function mockTailordb(options: MockTailordbOptions = {}) {
       if (rule.fallback) return queryResponse(rule.fallback);
     }
 
-    if (queryResolver) return new MockQueryResult(queryResolver(query, params));
+    if (queryResolver) return new MockQueryResult(queryResolver(query, params) ?? []);
     if (options.onUnhandled === "error") {
       throw new Error(`No TailorDB query behavior matched: ${query}`);
     }

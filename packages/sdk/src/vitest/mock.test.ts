@@ -53,6 +53,19 @@ describe("mock", () => {
       expect(result.rows).toEqual([{ id: "1", name: "test" }]);
     });
 
+    test("setQueryResolver treats an undefined response as empty rows", async () => {
+      using db = mockTailordb();
+      db.setQueryResolver((query) => {
+        if (query.includes("SELECT")) return [{ id: "1" }];
+        return undefined;
+      });
+
+      const client = new (globalThis as any).tailordb.Client({});
+      const result = await client.queryObject("BEGIN");
+
+      expect(result.rows).toEqual([]);
+    });
+
     test("enqueueResult provides order-based responses", async () => {
       using db = mockTailordb();
       db.enqueueResult(); // BEGIN (empty)
