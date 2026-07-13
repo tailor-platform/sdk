@@ -1081,14 +1081,10 @@ export const db = {
      * });
      */
     timestamps: () => ({
-      createdAt: datetime()
-        .hooks({ create: ({ input, now }) => input ?? now })
-        .description("Record creation timestamp"),
+      createdAt: datetime().default("now").description("Record creation timestamp"),
       updatedAt: datetime()
-        .hooks({
-          create: ({ input, now }) => input ?? now,
-          update: ({ now }) => now,
-        })
+        .default("now")
+        .hooks({ update: ({ input, now }) => input ?? now })
         .description("Record update timestamp"),
     }),
   },

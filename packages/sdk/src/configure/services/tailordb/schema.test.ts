@@ -759,67 +759,35 @@ describe("TailorDBType withTimestamps option tests", () => {
     }>();
   });
 
-  const timestampHookInvoker = null;
-
-  test("createdAt create hook respects a user-specified value", () => {
+  test("createdAt uses default('now') without hooks", () => {
     const { createdAt } = db.fields.timestamps();
-    const createHook = createdAt.metadata.hooks?.create;
-    expect(createHook).toBeDefined();
+    expect(createdAt.metadata.default).toBe("now");
+    expect(createdAt.metadata.hooks).toBeUndefined();
+  });
+
+  test("updatedAt uses default('now') for create", () => {
+    const { updatedAt } = db.fields.timestamps();
+    expect(updatedAt.metadata.default).toBe("now");
+    expect(updatedAt.metadata.hooks?.create).toBeUndefined();
+  });
+
+  test("updatedAt update hook respects a user-specified value", () => {
+    const { updatedAt } = db.fields.timestamps();
+    const updateHook = updatedAt.metadata.hooks?.update;
+    expect(updateHook).toBeDefined();
 
     const specified = new Date("2025-02-10T09:00:00Z");
-    const now = new Date("2025-06-01T00:00:00Z");
-    const result = createHook!({
+    const now = new Date("2025-06-01T12:00:00Z");
+    const result = updateHook!({
       input: specified,
-      invoker: timestampHookInvoker,
+      oldValue: new Date("2025-01-01T00:00:00Z"),
+      invoker: null,
       now,
     });
     expect(result).toBe(specified);
   });
 
-  test("createdAt create hook falls back to now when no value is given", () => {
-    const { createdAt } = db.fields.timestamps();
-    const createHook = createdAt.metadata.hooks?.create;
-    expect(createHook).toBeDefined();
-
-    const now = new Date("2025-06-01T12:00:00Z");
-    const result = createHook!({
-      input: null,
-      invoker: timestampHookInvoker,
-      now,
-    });
-    expect(result).toBe(now);
-  });
-
-  test("updatedAt create hook respects a user-specified value", () => {
-    const { updatedAt } = db.fields.timestamps();
-    const createHook = updatedAt.metadata.hooks?.create;
-    expect(createHook).toBeDefined();
-
-    const specified = new Date("2025-02-10T09:00:00Z");
-    const now = new Date("2025-06-01T12:00:00Z");
-    const result = createHook!({
-      input: specified,
-      invoker: timestampHookInvoker,
-      now,
-    });
-    expect(result).toBe(specified);
-  });
-
-  test("updatedAt create hook falls back to now when no value is given", () => {
-    const { updatedAt } = db.fields.timestamps();
-    const createHook = updatedAt.metadata.hooks?.create;
-    expect(createHook).toBeDefined();
-
-    const now = new Date("2025-06-01T12:00:00Z");
-    const result = createHook!({
-      input: null,
-      invoker: timestampHookInvoker,
-      now,
-    });
-    expect(result).toBe(now);
-  });
-
-  test("updatedAt update hook uses now", () => {
+  test("updatedAt update hook falls back to now when no value is given", () => {
     const { updatedAt } = db.fields.timestamps();
     const updateHook = updatedAt.metadata.hooks?.update;
     expect(updateHook).toBeDefined();
@@ -828,7 +796,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     const result = updateHook!({
       input: null,
       oldValue: new Date("2025-01-01T00:00:00Z"),
-      invoker: timestampHookInvoker,
+      invoker: null,
       now,
     });
     expect(result).toBe(now);
