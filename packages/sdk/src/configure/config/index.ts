@@ -1,4 +1,3 @@
-import { CONFIG_SOURCE_DIR, captureCallerDir } from "#/utils/caller-dir";
 import type { AppConfig } from "#/configure/config/types";
 import type { GeneratorConfig, Plugin } from "#/plugin/types";
 
@@ -6,7 +5,7 @@ import type { GeneratorConfig, Plugin } from "#/plugin/types";
  * Define a Tailor SDK application configuration with shallow exactness.
  * @template Config
  * @param config - Application configuration
- * @returns An object with the same configuration; not guaranteed to be the same object reference as `config`
+ * @returns The same configuration object
  */
 /* @__NO_SIDE_EFFECTS__ */
 export function defineConfig<
@@ -14,13 +13,7 @@ export function defineConfig<
     // type-fest's Exact works recursively and causes type errors, so we use a shallow version here.
     Record<Exclude<keyof Config, keyof AppConfig>, never>,
 >(config: Config) {
-  // Stash where this call itself lives so relative file globs keep resolving
-  // against it, even if another module re-exports the returned config as-is.
-  // Returns a new object rather than mutating `config` in place, so this
-  // stays consistent with the @__NO_SIDE_EFFECTS__ annotation above.
-  const sourceDir = captureCallerDir(defineConfig);
-  if (!sourceDir) return config;
-  return { ...config, [CONFIG_SOURCE_DIR]: sourceDir };
+  return config;
 }
 
 /**

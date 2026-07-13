@@ -210,12 +210,10 @@
                   "#/utils/**",
                   "!**/utils/brand",
                   "!#/utils/brand",
-                  "!**/utils/caller-dir",
-                  "!#/utils/caller-dir",
                   "!**/utils/test/**",
                   "!#/utils/test/**"
                 ],
-                "message": "Configure module can only import `brand`, `caller-dir`, or `test/*` from utils module."
+                "message": "Configure module can only import `brand` or `test/*` from utils module."
               },
               {
                 "group": ["zod"],
