@@ -19,6 +19,7 @@ import {
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { profileNameSchema } from "#/cli/shared/profile-name";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
@@ -41,7 +42,7 @@ const createWorkspaceOptionsSchema = z.object({
   deleteProtection: z.boolean().optional(),
   organizationId: z.uuid().optional(),
   folderId: z.uuid().optional(),
-  profile: z.string().optional(),
+  profile: profileNameSchema.optional(),
 });
 
 export type CreateWorkspaceOptions = z.input<typeof createWorkspaceOptionsSchema>;
@@ -155,7 +156,7 @@ export const createCommand = defineAppCommand({
         alias: "p",
         description: "Profile name to create",
       }),
-      profile: arg(z.string().optional(), {
+      profile: arg(profileNameSchema.optional(), {
         description: "Workspace profile used for authentication and Platform selection",
         env: "TAILOR_PLATFORM_PROFILE",
       }),

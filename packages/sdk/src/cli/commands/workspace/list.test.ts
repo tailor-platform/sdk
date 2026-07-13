@@ -35,4 +35,9 @@ describe("listWorkspaces", () => {
     expect(loadPlatformClientConfig).toHaveBeenCalledWith({ profile: "staging" });
     expect(initOperatorClient).toHaveBeenCalledWith("staging-token", platformConfig);
   });
+
+  test("rejects an explicitly empty profile instead of falling back", async () => {
+    await expect(listWorkspaces({ profile: "" })).rejects.toThrow("Profile must not be empty");
+    expect(loadAccessToken).not.toHaveBeenCalled();
+  });
 });

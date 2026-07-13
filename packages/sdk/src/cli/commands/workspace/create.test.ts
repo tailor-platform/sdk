@@ -114,6 +114,13 @@ describe("workspace create --permission", () => {
     expect(initOperatorClient).not.toHaveBeenCalled();
   });
 
+  test("rejects an explicitly empty profile instead of falling back", async () => {
+    await expect(
+      createWorkspace({ name: "test-ws", region: "us-west", profile: "" }),
+    ).rejects.toThrow("Profile must not be empty");
+    expect(initOperatorClient).not.toHaveBeenCalled();
+  });
+
   test("omits the readonly key when --profile-name is given without --permission read", async () => {
     const config = await runCreate(
       "--profile-name",

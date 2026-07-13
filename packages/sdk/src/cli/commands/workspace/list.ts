@@ -5,6 +5,7 @@ import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { profileNameSchema } from "#/cli/shared/profile-name";
 import {
   workspaceInfosWithFolderNames,
   workspaceNameTransformer,
@@ -23,8 +24,9 @@ export interface ListWorkspacesOptions {
  * @returns List of workspaces
  */
 export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<WorkspaceInfo[]> {
-  const accessToken = await loadAccessToken({ profile: options?.profile });
-  const platformConfig = await loadPlatformClientConfig({ profile: options?.profile });
+  const profile = profileNameSchema.optional().parse(options?.profile);
+  const accessToken = await loadAccessToken({ profile });
+  const platformConfig = await loadPlatformClientConfig({ profile });
   const client = await initOperatorClient(accessToken, platformConfig);
   return listWorkspacesWithClient(client, options);
 }
@@ -61,7 +63,7 @@ export const listCommand = defineAppCommand({
   args: z
     .object({
       ...paginationArgs(),
-      profile: arg(z.string().optional(), {
+      profile: arg(profileNameSchema.optional(), {
         description: "Workspace profile used for authentication and Platform selection",
         env: "TAILOR_PLATFORM_PROFILE",
       }),
