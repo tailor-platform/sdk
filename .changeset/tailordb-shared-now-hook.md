@@ -1,5 +1,5 @@
 ---
-"@tailor-platform/sdk": minor
+"@tailor-platform/sdk": major
 "@tailor-platform/sdk-codemod": patch
 ---
 
