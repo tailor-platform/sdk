@@ -156,7 +156,7 @@ describe("workspace create --permission", () => {
       "bootstrap",
     ]);
 
-    expect(initOperatorClient).toHaveBeenCalledWith("custom-token");
+    expect(initOperatorClient).toHaveBeenCalledWith("custom-token", undefined);
     const config = await readPlatformConfig();
     expect(config.profiles.bootstrap).toMatchObject({
       user: "u@example.com",
@@ -200,7 +200,9 @@ describe("workspace create --permission", () => {
       "bootstrap",
     ]);
 
-    expect(initOperatorClient).toHaveBeenCalledWith("custom-token");
+    expect(initOperatorClient).toHaveBeenCalledWith("custom-token", {
+      platformUrl: "https://api.dev.tailor.tech",
+    });
     const config = await readPlatformConfig();
     expect(config.profiles.bootstrap).toMatchObject({
       user: "u@example.com",

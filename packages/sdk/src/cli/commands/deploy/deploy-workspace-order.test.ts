@@ -58,7 +58,7 @@ describe("deploy workspace resolution", () => {
 
     await expect(
       deployFromCLI(
-        { configPath },
+        { configPath, profile: "staging" },
         {
           envFile: ".env.workspace",
           envFileIfExists: ".env.local",
@@ -77,6 +77,18 @@ describe("deploy workspace resolution", () => {
           expect.stringMatching(/\/\.env\.workspace$/),
           "--env-file-if-exists",
           expect.stringMatching(/\/\.env\.local$/),
+          "--profile",
+          "staging",
+          "--verbose",
+          "--json",
+        ],
+        workspaceCommandArgs: [
+          "--env-file",
+          expect.stringMatching(/\/\.env\.workspace$/),
+          "--env-file-if-exists",
+          expect.stringMatching(/\/\.env\.local$/),
+          "--profile",
+          "staging",
           "--verbose",
           "--json",
         ],

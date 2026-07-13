@@ -839,6 +839,21 @@ function retryDeployArgs(
   ];
 }
 
+function workspaceRecoveryArgs(
+  options: DeployOptions | undefined,
+  cliContext?: DeployCLIContext,
+): readonly string[] {
+  return [
+    ...(cliContext?.envFile ? ["--env-file", path.resolve(process.cwd(), cliContext.envFile)] : []),
+    ...(cliContext?.envFileIfExists
+      ? ["--env-file-if-exists", path.resolve(process.cwd(), cliContext.envFileIfExists)]
+      : []),
+    ...(options?.profile ? ["--profile", options.profile] : []),
+    ...(cliContext?.verbose ? ["--verbose"] : []),
+    ...(cliContext?.json || logger.jsonMode ? ["--json"] : []),
+  ];
+}
+
 async function buildDeploymentTarget(
   params: BuildDeploymentTargetParams,
 ): Promise<BuiltDeploymentTarget> {
@@ -1827,13 +1842,9 @@ async function validateDeploymentPlans(
 
 /**
  * Deploy the configured application to the Tailor platform.
- * @param options - Options for deploy execution
- * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
- */
-/**
  * @param options - Deploy execution options
  * @param cliContext - Global CLI arguments to preserve in recovery actions
- * @returns Deploy result
+ * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
  */
 async function deployInternal(options?: DeployOptions, cliContext?: DeployCLIContext) {
   return withSpan("deploy", async (rootSpan) => {
@@ -1868,6 +1879,7 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
           dryRun,
           contextTargets: workspaceContextTargets,
           deployArgs: retryDeployArgs(options, resolvedConfigPaths, cliContext),
+          workspaceCommandArgs: workspaceRecoveryArgs(options, cliContext),
         });
     const targets = await withSpan("build", async () => {
       const noCache = options?.noCache ?? false;

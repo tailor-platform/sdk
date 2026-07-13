@@ -1,8 +1,9 @@
+import { arg } from "politty";
 import { z } from "zod";
 import { type Order, paginationArgs, toPageDirection } from "#/cli/shared/args";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
-import { loadAccessToken } from "#/cli/shared/context";
+import { loadAccessToken, loadPlatformClientConfig } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import {
   workspaceInfosWithFolderNames,
@@ -13,6 +14,7 @@ import {
 export interface ListWorkspacesOptions {
   order?: Order;
   limit?: number;
+  profile?: string;
 }
 
 /**
@@ -21,8 +23,9 @@ export interface ListWorkspacesOptions {
  * @returns List of workspaces
  */
 export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<WorkspaceInfo[]> {
-  const accessToken = await loadAccessToken();
-  const client = await initOperatorClient(accessToken);
+  const accessToken = await loadAccessToken({ profile: options?.profile });
+  const platformConfig = await loadPlatformClientConfig({ profile: options?.profile });
+  const client = await initOperatorClient(accessToken, platformConfig);
   return listWorkspacesWithClient(client, options);
 }
 
@@ -58,12 +61,17 @@ export const listCommand = defineAppCommand({
   args: z
     .object({
       ...paginationArgs(),
+      profile: arg(z.string().optional(), {
+        description: "Workspace profile used for authentication and Platform selection",
+        env: "TAILOR_PLATFORM_PROFILE",
+      }),
     })
     .strict(),
   run: async (args) => {
     const workspaces = await listWorkspaces({
       order: args.order,
       limit: args.limit,
+      profile: args.profile,
     });
     logger.out(workspaces, {
       display: {

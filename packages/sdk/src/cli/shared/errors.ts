@@ -57,6 +57,14 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
+function formatNextAction(next: CLIErrorNextAction): string {
+  const argv = [next.command, ...next.args];
+  if (process.platform === "win32" && argv.some((value) => /[%$]/.test(value))) {
+    return `with argv ${JSON.stringify(argv)}`;
+  }
+  return `\`${argv.map(shellQuote).join(" ")}\``;
+}
+
 /**
  * Format CLI error for output
  * @param error - CLIError instance to format
@@ -82,8 +90,7 @@ function formatError(error: CLIError): string {
   }
 
   if (error.next) {
-    const command = [error.next.command, ...error.next.args].map(shellQuote).join(" ");
-    parts.push(`\n  ${chalk.cyan("Next:")} Run \`${command}\`.`);
+    parts.push(`\n  ${chalk.cyan("Next:")} Run ${formatNextAction(error.next)}.`);
   }
 
   return parts.join("");
@@ -146,8 +153,17 @@ export function errorToJson(
   }
   if (error instanceof ConnectError) {
     const codeName = Code[error.code];
-    const stableCode = codeName.replaceAll(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
-    return { error: { code: `RPC_${stableCode}`, message: error.message } };
+    const stableCode =
+      typeof codeName === "string"
+        ? codeName.replaceAll(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase()
+        : `CODE_${error.code}`;
+    return {
+      error: {
+        code: `RPC_${stableCode}`,
+        message: error.message,
+        ...(options?.includeStack && error.stack ? { stack: error.stack } : {}),
+      },
+    };
   }
   if (error instanceof Error) {
     return {

@@ -13,6 +13,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import {
   hasUserTokenEntry,
   loadAccessToken,
+  loadPlatformClientConfig,
   platformConfigFromProfile,
   readPlatformConfig,
   writePlatformConfig,
@@ -40,6 +41,7 @@ const createWorkspaceOptionsSchema = z.object({
   deleteProtection: z.boolean().optional(),
   organizationId: z.uuid().optional(),
   folderId: z.uuid().optional(),
+  profile: z.string().optional(),
 });
 
 export type CreateWorkspaceOptions = z.input<typeof createWorkspaceOptionsSchema>;
@@ -73,26 +75,10 @@ function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
  */
 export async function createWorkspace(options: CreateWorkspaceOptions): Promise<WorkspaceInfo> {
   const validated = validateCreateWorkspaceOptions(options);
-  const accessToken = await loadAccessToken();
-  const client = await initOperatorClient(accessToken);
+  const accessToken = await loadAccessToken({ profile: validated.profile });
+  const platformConfig = await loadPlatformClientConfig({ profile: validated.profile });
+  const client = await initOperatorClient(accessToken, platformConfig);
   await validateRegion(validated.region, client);
-  return createValidatedWorkspaceWithClient(client, validated);
-}
-
-/**
- * Create a workspace using an existing Operator client.
- * @param client - Authenticated Operator client
- * @param options - Workspace creation options
- * @returns Created workspace info
- */
-export async function createWorkspaceWithClient(
-  client: OperatorClient,
-  options: CreateWorkspaceOptions,
-): Promise<WorkspaceInfo> {
-  const validated = validateCreateWorkspaceOptions(options);
-
-  await validateRegion(validated.region, client);
-
   return createValidatedWorkspaceWithClient(client, validated);
 }
 
@@ -169,6 +155,10 @@ export const createCommand = defineAppCommand({
         alias: "p",
         description: "Profile name to create",
       }),
+      profile: arg(z.string().optional(), {
+        description: "Workspace profile used for authentication and Platform selection",
+        env: "TAILOR_PLATFORM_PROFILE",
+      }),
       "profile-user": arg(z.string().optional(), {
         description: "User email for the profile (defaults to current user)",
       }),
@@ -179,9 +169,7 @@ export const createCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    // This command does not expose `--profile`, so the guard resolves the
-    // active profile from `TAILOR_PLATFORM_PROFILE` only.
-    await assertWritable();
+    await assertWritable({ profile: args.profile });
     const profileName = args["profile-name"];
     let profileSetup:
       | {
@@ -196,7 +184,7 @@ export const createCommand = defineAppCommand({
         throw new Error(`Profile "${profileName}" already exists.`);
       }
 
-      const activeProfileName = process.env.TAILOR_PLATFORM_PROFILE;
+      const activeProfileName = args.profile;
       const activeProfileEntry = activeProfileName ? config.profiles[activeProfileName] : undefined;
       const platformConfig = activeProfileEntry
         ? platformConfigFromProfile(activeProfileEntry)
@@ -227,6 +215,7 @@ export const createCommand = defineAppCommand({
       deleteProtection: args["delete-protection"],
       organizationId: args["organization-id"],
       folderId: args["folder-id"],
+      profile: args.profile,
     });
 
     let profileInfo: ProfileInfo | undefined;

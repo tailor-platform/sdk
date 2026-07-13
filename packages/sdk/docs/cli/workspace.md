@@ -106,6 +106,7 @@ tailor-sdk workspace create [options]
 | `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                 | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
 | `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                       | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
 | `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                      | No       | -         | -                                 |
+| `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                            | No       | -         | `TAILOR_PLATFORM_PROFILE`         |
 | `--profile-user <PROFILE_USER>`       | -     | User email for the profile (defaults to current user)                                                       | No       | -         | -                                 |
 | `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active. | No       | `"write"` | -                                 |
 
@@ -161,10 +162,11 @@ tailor-sdk workspace list [options]
 
 **Options**
 
-| Option            | Alias | Description                                              | Required | Default  |
-| ----------------- | ----- | -------------------------------------------------------- | -------- | -------- |
-| `--order <ORDER>` | -     | Sort order (asc or desc)                                 | No       | `"desc"` |
-| `--limit <LIMIT>` | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        |
+| Option                | Alias | Description                                                      | Required | Default  | Env                       |
+| --------------------- | ----- | ---------------------------------------------------------------- | -------- | -------- | ------------------------- |
+| `--order <ORDER>`     | -     | Sort order (asc or desc)                                         | No       | `"desc"` | -                         |
+| `--limit <LIMIT>`     | `-l`  | Maximum number of items to return (0 or omit: unlimited)         | No       | -        | -                         |
+| `--profile <PROFILE>` | -     | Workspace profile used for authentication and Platform selection | No       | -        | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

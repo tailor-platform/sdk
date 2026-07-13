@@ -80,10 +80,41 @@ describe("errorToJson", () => {
     );
   });
 
+  test("renders Windows arguments with shell expansions as an argv array", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    const error = CLIError({
+      message: "Choose a workspace.",
+      next: {
+        command: "tailor-sdk",
+        args: ["deploy", "--config", "C:\\work\\%USERNAME%\\$draft\\tailor.config.ts"],
+      },
+    });
+
+    expect(error.format()).toContain(
+      'argv ["tailor-sdk","deploy","--config","C:\\\\work\\\\%USERNAME%\\\\$draft\\\\tailor.config.ts"]',
+    );
+  });
+
   test("includes a stack trace only when requested", () => {
     const error = new Error("broken");
 
     expect(errorToJson(error, { includeStack: true }).error.stack).toBe(error.stack);
     expect(errorToJson(error).error).not.toHaveProperty("stack");
+  });
+
+  test("includes a Connect RPC stack trace when requested", () => {
+    const error = new ConnectError("permission denied", Code.PermissionDenied);
+
+    expect(errorToJson(error, { includeStack: true }).error.stack).toBe(error.stack);
+    expect(errorToJson(error).error).not.toHaveProperty("stack");
+  });
+
+  test("falls back safely for an unknown Connect RPC code", () => {
+    expect(errorToJson(new ConnectError("unknown code", 99 as Code))).toEqual({
+      error: {
+        code: "RPC_CODE_99",
+        message: expect.stringContaining("unknown code"),
+      },
+    });
   });
 });

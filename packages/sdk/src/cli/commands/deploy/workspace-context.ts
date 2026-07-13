@@ -76,14 +76,14 @@ export async function saveWorkspaceContext(
   });
   const stateDirectory = join(dirname(configPath), ".tailor-sdk");
   const targetPath = contextPath(configPath);
-  const temporaryPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`;
   const serialized = `${JSON.stringify(validated, null, 2)}\n`;
-  await mkdir(stateDirectory, { recursive: true });
   try {
     if ((await readFile(targetPath, "utf8")) === serialized) return;
   } catch {
     // Missing or unreadable state should still fall through to the atomic replacement attempt.
   }
+  const temporaryPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`;
+  await mkdir(stateDirectory, { recursive: true });
   try {
     await writeFile(temporaryPath, serialized, { mode: 0o600 });
     await rename(temporaryPath, targetPath);
