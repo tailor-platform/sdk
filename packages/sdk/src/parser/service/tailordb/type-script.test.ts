@@ -200,6 +200,30 @@ describe("buildTypeScripts", () => {
     expect(expr).toContain('"items[" + __idx + "].name"');
   });
 
+  test("nested array forEach terminates with semicolon to prevent ASI with type-level validate", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      items: {
+        type: "nested",
+        array: true,
+        fields: {
+          qty: {
+            type: "integer",
+            validate: [{ script: { expr: "_value > 0" }, errorMessage: "" }],
+          },
+        },
+      },
+    };
+    const typeValidateExpr = "fn({ newRecord: _newRecord }, __issues)";
+
+    const { typeValidate } = buildTypeScripts(fields, { typeValidateExpr });
+    const expr = typeValidate?.create?.expr ?? "";
+    expect(expr).toContain("});");
+
+    const _newRecord = { items: [{ qty: 1 }] }; // eslint-disable-line
+    const fn = () => {}; // eslint-disable-line
+    expect(() => new Function("_newRecord", "fn", `return ${expr}`)(_newRecord, fn)).not.toThrow();
+  });
+
   test("skips nested array with no defaults or validators", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       items: {

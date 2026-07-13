@@ -167,7 +167,7 @@ function buildValidateStatements(
         }
         if (innerParts.length > 0) {
           statements.push(
-            `(${access} || []).forEach((__el, __idx) => { ${innerParts.join(" ")} })`,
+            `(${access} || []).forEach((__el, __idx) => { ${innerParts.join(" ")} });`,
           );
         }
       } else {
