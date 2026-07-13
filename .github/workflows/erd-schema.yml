@@ -1,0 +1,125 @@
+name: ERD Schema
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/sdk/src/cli/commands/tailordb/erd/**
+      - example/**
+      - .github/workflows/erd-schema.yml
+  pull_request:
+    paths:
+      - packages/sdk/src/cli/commands/tailordb/erd/**
+      - example/**
+      - .github/workflows/erd-schema.yml
+
+permissions: {}
+
+jobs:
+  export:
+    if: github.event_name == 'push'
+    name: Export ERD schema (${{ matrix.namespace }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout the repository
+    concurrency:
+      # Grouped per commit (not per ref) so a rapid follow-up push cannot cancel
+      # an in-flight run and leave that commit without its own schema snapshot.
+      # Namespace-scoped so the matrix entries run in parallel instead of queuing.
+      group: erd-schema-export-${{ github.sha }}-${{ matrix.namespace }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        namespace: [tailordb, analyticsdb]
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-deps
+
+      - uses: tailor-platform/actions/erd-schema-export@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        with:
+          namespace: ${{ matrix.namespace }}
+          package-manager: pnpm
+          working-directory: example
+          artifact-name: erd-schema-${{ matrix.namespace }}
+          retention-days: "90"
+
+  preview:
+    if: github.event_name == 'pull_request'
+    name: Build ERD viewer preview (${{ matrix.namespace }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read # checkout the repository
+      actions: read # look up and download the export job's artifacts
+    concurrency:
+      # Namespace-scoped so the matrix entries run in parallel instead of
+      # racing each other for the same group and getting cancelled.
+      group: erd-schema-preview-${{ github.ref }}-${{ matrix.namespace }}
+      cancel-in-progress: true
+    strategy:
+      fail-fast: false
+      matrix:
+        # Self-contained artifacts are uploaded one file per namespace because
+        # `archive: false` only supports a single-file upload.
+        namespace: [tailordb, analyticsdb]
+
+    steps:
+      - name: Checkout PR merge
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      # install-deps builds the SDK once, so the `tailor-sdk` CLI bin resolves.
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - uses: tailor-platform/actions/erd-schema-preview@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        with:
+          namespace: ${{ matrix.namespace }}
+          package-manager: pnpm
+          working-directory: example
+          sha-base: ${{ github.event.pull_request.base.sha }}
+          sha-head: ${{ github.event.pull_request.head.sha }}
+          base-ref: ${{ github.event.pull_request.base.ref }}
+          export-workflow-file: erd-schema.yml
+          base-artifact-name: erd-schema-${{ matrix.namespace }}
+          preview-artifact-name: ${{ matrix.namespace }}.html
+          always-relevant-paths: |
+            example/tailor.config.ts
+            packages/sdk/src/cli/commands/tailordb/erd/
+          relevant-path-prefix: example/
+          github-token: ${{ github.token }}
+
+  comment:
+    name: Post preview links
+    needs: preview
+    # Skip on fork PRs, whose read-only token cannot post comments.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read # checkout the repository
+      pull-requests: write # upsert the sticky preview comment
+      actions: read # required to list the run's artifacts
+    concurrency:
+      # Per-PR so an older run's comment step cannot finish after a newer
+      # run and overwrite the sticky comment with stale artifact links.
+      group: erd-schema-comment-${{ github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: tailor-platform/actions/erd-schema-comment@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        with:
+          base-ref: ${{ github.event.pull_request.base.ref }}
+          github-token: ${{ github.token }}
+          pr-number: ${{ github.event.pull_request.number }}

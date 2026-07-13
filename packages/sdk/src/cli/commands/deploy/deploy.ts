@@ -1184,52 +1184,34 @@ function deploymentPlanResults(deployment: PlannedDeployment): PlanResults {
   return results;
 }
 
+type OwnershipTrackedPlan = {
+  conflicts: OwnerConflict[];
+  unmanaged: UnmanagedResource[];
+  resourceOwners: Set<string>;
+};
+
+/**
+ * Every `PlanResults` entry except `app` carries ownership-tracking fields;
+ * deriving the list from `results` itself (instead of naming each key) keeps
+ * these collectors in sync with `PlannedDeployment` as resource types are added.
+ * @param results - Plan results for a single deployment
+ * @returns The ownership-tracking plan entries, `app` excluded
+ */
+function ownershipTrackedPlans(results: PlanResults): ReadonlyArray<OwnershipTrackedPlan> {
+  const { app: _app, ...rest } = results;
+  return Object.values(rest);
+}
+
 function collectOwnerConflicts(results: PlanResults): OwnerConflict[] {
-  return [
-    ...results.functionRegistry.conflicts,
-    ...results.tailorDB.conflicts,
-    ...results.staticWebsite.conflicts,
-    ...results.aiGateway.conflicts,
-    ...results.idp.conflicts,
-    ...results.auth.conflicts,
-    ...results.pipeline.conflicts,
-    ...results.executor.conflicts,
-    ...results.workflow.conflicts,
-    ...results.workflowExecutionPolicy.conflicts,
-    ...results.secretManager.conflicts,
-  ];
+  return ownershipTrackedPlans(results).flatMap((plan) => plan.conflicts);
 }
 
 function collectUnmanagedResources(results: PlanResults): UnmanagedResource[] {
-  return [
-    ...results.functionRegistry.unmanaged,
-    ...results.tailorDB.unmanaged,
-    ...results.staticWebsite.unmanaged,
-    ...results.aiGateway.unmanaged,
-    ...results.idp.unmanaged,
-    ...results.auth.unmanaged,
-    ...results.pipeline.unmanaged,
-    ...results.executor.unmanaged,
-    ...results.workflow.unmanaged,
-    ...results.workflowExecutionPolicy.unmanaged,
-    ...results.secretManager.unmanaged,
-  ];
+  return ownershipTrackedPlans(results).flatMap((plan) => plan.unmanaged);
 }
 
 function collectResourceOwners(results: PlanResults): Set<string> {
-  return new Set([
-    ...results.functionRegistry.resourceOwners,
-    ...results.tailorDB.resourceOwners,
-    ...results.staticWebsite.resourceOwners,
-    ...results.aiGateway.resourceOwners,
-    ...results.idp.resourceOwners,
-    ...results.auth.resourceOwners,
-    ...results.pipeline.resourceOwners,
-    ...results.executor.resourceOwners,
-    ...results.workflow.resourceOwners,
-    ...results.workflowExecutionPolicy.resourceOwners,
-    ...results.secretManager.resourceOwners,
-  ]);
+  return new Set(ownershipTrackedPlans(results).flatMap((plan) => [...plan.resourceOwners]));
 }
 
 function collectImportantResourceDeletions(results: PlanResults): ImportantResourceDeletion[] {
