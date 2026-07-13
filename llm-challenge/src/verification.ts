@@ -1,6 +1,9 @@
 import { spawn } from "node:child_process";
-import { promises as fs, readFileSync, realpathSync, statSync } from "node:fs";
+import { constants as fsConstants, promises as fs, realpathSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
+import { DEFAULT_CODEX_IMAGE } from "./runner";
 import { tailText, toPosix } from "./utils";
 import {
   BUILT_IN_VERIFICATION_CHECK_IDS,
@@ -36,13 +39,46 @@ export type VerificationSummary = {
   checks: VerificationCheckResult[];
 };
 
-const TYPESCRIPT_NO_EMIT_COMMAND = "node node_modules/typescript/bin/tsc --noEmit --pretty false";
+const TYPESCRIPT_COMPILER_ARGS = [
+  "--noEmit",
+  "--incremental",
+  "true",
+  "--tsBuildInfoFile",
+  "/tmp/verification.tsbuildinfo",
+  "--pretty",
+  "false",
+];
+const TYPESCRIPT_NO_EMIT_COMMAND = `podman run [isolated verifier] node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
+const TYPESCRIPT_VERIFIER_SCRIPT = `exec node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
 const TYPECHECK_TIMEOUT_MS = 120_000;
+const PROCESS_OUTPUT_LIMIT_BYTES = 1024 * 1024;
+const CONTENT_FILE_LIMIT = 100;
+const CONTENT_FILE_BYTES_LIMIT = 1024 * 1024;
+const CONTENT_TOTAL_BYTES_LIMIT = 5 * 1024 * 1024;
+const CONTENT_MATCH_TIMEOUT_MS = 1_000;
+const TRUSTED_TYPESCRIPT_PATH = realpathSync(
+  path.dirname(createRequire(import.meta.url).resolve("typescript/package.json")),
+);
+const CONTENT_WORKER_SOURCE = `
+const { parentPort, workerData } = require("node:worker_threads");
+try {
+  const regex = new RegExp(workerData.pattern, workerData.flags);
+  const matches = [];
+  for (let index = 0; index < workerData.contents.length; index += 1) {
+    regex.lastIndex = 0;
+    if (regex.test(workerData.contents[index])) matches.push(index);
+  }
+  parentPort.postMessage({ matches });
+} catch (error) {
+  parentPort.postMessage({ error: error instanceof Error ? error.message : String(error) });
+}
+`;
 
 export async function writeVerificationSummary(options: {
   problem: Problem;
   runIndex: number;
   worktreePath: string;
+  verifierImage?: string;
   verificationSummaryPath: string;
   verificationStdoutPath: string;
   verificationStderrPath: string;
@@ -68,7 +104,7 @@ export async function writeVerificationSummary(options: {
   for (const check of checks) {
     completedChecks.push(
       check.kind === "command"
-        ? await runCommandCheck(check, options.worktreePath, {
+        ? await runCommandCheck(check, options.worktreePath, options.verifierImage, {
             stdoutPath: options.verificationStdoutPath,
             stderrPath: options.verificationStderrPath,
           })
@@ -158,14 +194,18 @@ async function runProblemChecks(
     ];
   }
 
-  return spec.checks.map((check) => evaluateProblemCheck(check, worktreePath, files));
+  const results: VerificationCheckResult[] = [];
+  for (const check of spec.checks) {
+    results.push(await evaluateProblemCheck(check, worktreePath, files));
+  }
+  return results;
 }
 
-function evaluateProblemCheck(
+async function evaluateProblemCheck(
   check: VerifySpecCheck,
   worktreePath: string,
   files: string[],
-): VerificationCheckResult {
+): Promise<VerificationCheckResult> {
   try {
     if (check.kind === "file-exists") {
       return fileExistsCheck(
@@ -180,10 +220,10 @@ function evaluateProblemCheck(
       return fileGlobCheck(check, files);
     }
     if (check.kind === "content-match") {
-      return contentMatchCheck(check, worktreePath, files);
+      return await contentMatchCheck(check, worktreePath, files);
     }
     if (check.kind === "content-absent") {
-      return contentAbsentCheck(check, worktreePath, files);
+      return await contentAbsentCheck(check, worktreePath, files);
     }
     throw new Error("Unsupported problem check kind");
   } catch (error) {
@@ -233,13 +273,13 @@ function fileGlobCheck(
   };
 }
 
-function contentMatchCheck(
+async function contentMatchCheck(
   check: Extract<VerifySpecCheck, { kind: "content-match" }>,
   worktreePath: string,
   files: string[],
-): VerificationCheckResult {
+): Promise<VerificationCheckResult> {
   const minMatches = check.minMatches ?? 1;
-  const matchedFiles = matchingContentFiles(check, worktreePath, files);
+  const matchedFiles = await matchingContentFiles(check, worktreePath, files);
   return {
     id: check.id,
     scope: "problem",
@@ -250,12 +290,12 @@ function contentMatchCheck(
   };
 }
 
-function contentAbsentCheck(
+async function contentAbsentCheck(
   check: Extract<VerifySpecCheck, { kind: "content-absent" }>,
   worktreePath: string,
   files: string[],
-): VerificationCheckResult {
-  const matchedFiles = matchingContentFiles(check, worktreePath, files);
+): Promise<VerificationCheckResult> {
+  const matchedFiles = await matchingContentFiles(check, worktreePath, files);
   return {
     id: check.id,
     scope: "problem",
@@ -266,26 +306,127 @@ function contentAbsentCheck(
   };
 }
 
-function matchingContentFiles(
+async function matchingContentFiles(
   check: Extract<VerifySpecCheck, { kind: "content-match" | "content-absent" }>,
   worktreePath: string,
   files: string[],
-): string[] {
-  const regex = new RegExp(check.pattern, check.flags ?? "");
+): Promise<string[]> {
   const globRegex = globToRegExp(check.glob);
-  const matchedFiles: string[] = [];
-  for (const file of files.filter((candidate) => globRegex.test(candidate))) {
+  const candidates = files.filter((candidate) => globRegex.test(candidate));
+  if (candidates.length > CONTENT_FILE_LIMIT) {
+    throw new Error(
+      `content evidence limit exceeded: ${candidates.length} files exceeds ${CONTENT_FILE_LIMIT}`,
+    );
+  }
+
+  const evidenceFiles: string[] = [];
+  const contents: string[] = [];
+  let totalBytes = 0;
+  for (const file of candidates) {
     const absolutePath = resolveWorkspaceEvidenceFile(worktreePath, file);
     if (absolutePath === undefined) {
       continue;
     }
-    const text = readFileSync(absolutePath, "utf8");
-    regex.lastIndex = 0;
-    if (regex.test(text)) {
-      matchedFiles.push(file);
+    const content = await readBoundedContentFile(absolutePath, file);
+    totalBytes += content.byteLength;
+    if (totalBytes > CONTENT_TOTAL_BYTES_LIMIT) {
+      throw new Error(
+        `content evidence limit exceeded at ${file}: total bytes exceed ${CONTENT_TOTAL_BYTES_LIMIT}`,
+      );
     }
+    evidenceFiles.push(file);
+    contents.push(content.text);
   }
-  return matchedFiles;
+
+  const matchedIndexes = await matchContentInWorker(check.pattern, check.flags ?? "", contents);
+  return matchedIndexes.map((index) => evidenceFiles[index]).filter((file) => file !== undefined);
+}
+
+async function readBoundedContentFile(
+  absolutePath: string,
+  relativePath: string,
+): Promise<{ text: string; byteLength: number }> {
+  const file = await fs.open(absolutePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  try {
+    if (!(await file.stat()).isFile()) {
+      throw new Error(`content evidence limit rejected non-regular file ${relativePath}`);
+    }
+    const buffer = Buffer.alloc(CONTENT_FILE_BYTES_LIMIT + 1);
+    let byteLength = 0;
+    while (byteLength < buffer.length) {
+      const { bytesRead } = await file.read(
+        buffer,
+        byteLength,
+        buffer.length - byteLength,
+        byteLength,
+      );
+      if (bytesRead === 0) {
+        break;
+      }
+      byteLength += bytesRead;
+    }
+    if (byteLength > CONTENT_FILE_BYTES_LIMIT) {
+      throw new Error(
+        `content evidence limit exceeded for ${relativePath}: file exceeds ${CONTENT_FILE_BYTES_LIMIT} bytes`,
+      );
+    }
+    return {
+      text: buffer.subarray(0, byteLength).toString("utf8"),
+      byteLength,
+    };
+  } finally {
+    await file.close();
+  }
+}
+
+async function matchContentInWorker(
+  pattern: string,
+  flags: string,
+  contents: string[],
+): Promise<number[]> {
+  if (contents.length === 0) {
+    return [];
+  }
+  return await new Promise((resolve, reject) => {
+    const worker = new Worker(CONTENT_WORKER_SOURCE, {
+      eval: true,
+      resourceLimits: { maxOldGenerationSizeMb: 32 },
+      workerData: { pattern, flags, contents },
+    });
+    let settled = false;
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      void worker.terminate();
+      callback();
+    };
+    const timeout = setTimeout(() => {
+      finish(() =>
+        reject(
+          new Error(`content regular expression timed out after ${CONTENT_MATCH_TIMEOUT_MS}ms`),
+        ),
+      );
+    }, CONTENT_MATCH_TIMEOUT_MS);
+
+    worker.on("message", (result: { matches?: number[]; error?: string }) => {
+      finish(() => {
+        if (result.error !== undefined) {
+          reject(new Error(result.error));
+        } else {
+          resolve(result.matches ?? []);
+        }
+      });
+    });
+    worker.on("error", (error) => finish(() => reject(error)));
+    worker.on("exit", (exitCode) => {
+      if (exitCode !== 0) {
+        finish(() => reject(new Error(`content worker exited with code ${exitCode}`)));
+      }
+    });
+  });
 }
 
 function resolveWorkspaceEvidenceFile(
@@ -319,13 +460,19 @@ function resolveWorkspaceEvidenceFile(
 async function runCommandCheck(
   check: VerificationCheckResult,
   worktreePath: string,
+  verifierImage: string | undefined,
   logPaths: { stdoutPath: string; stderrPath: string },
 ): Promise<VerificationCheckResult> {
   if (check.command === undefined) {
     return check;
   }
   const startedAt = Date.now();
-  const result = await runProcess(check.command, worktreePath, TYPECHECK_TIMEOUT_MS);
+  const result = await runProcess(
+    "podman",
+    typeScriptVerifierArgs(worktreePath, verifierImage),
+    worktreePath,
+    TYPECHECK_TIMEOUT_MS,
+  );
   await Promise.all([
     appendCommandLog(logPaths.stdoutPath, check.command, result.stdout),
     appendCommandLog(logPaths.stderrPath, check.command, result.stderr),
@@ -336,23 +483,62 @@ async function runCommandCheck(
     exitCode: result.exitCode,
     durationMs: Date.now() - startedAt,
     outputTail: tailText(`${result.stdout}${result.stderr}`),
-    observations: result.timedOut ? ["command timed out"] : undefined,
+    observations: [
+      ...(result.timedOut ? ["command timed out"] : []),
+      ...(result.outputTruncated ? ["command output truncated"] : []),
+    ],
   };
+}
+
+function typeScriptVerifierArgs(
+  worktreePath: string,
+  verifierImage = DEFAULT_CODEX_IMAGE,
+): string[] {
+  return [
+    "run",
+    "--rm",
+    "--network=none",
+    "--cap-drop=all",
+    "--security-opt=no-new-privileges",
+    "--memory=1g",
+    "--pids-limit=256",
+    "--cpus=2",
+    "-v",
+    `${worktreePath}:/workspace:ro,Z`,
+    "-v",
+    `${TRUSTED_TYPESCRIPT_PATH}:/verifier/typescript:ro,z`,
+    "-w",
+    "/workspace",
+    "--entrypoint",
+    "/bin/bash",
+    verifierImage,
+    "-lc",
+    TYPESCRIPT_VERIFIER_SCRIPT,
+  ];
 }
 
 async function runProcess(
   command: string,
+  args: string[],
   cwd: string,
   timeoutMs: number,
-): Promise<{ stdout: string; stderr: string; exitCode: number; timedOut: boolean }> {
+): Promise<{
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  timedOut: boolean;
+  outputTruncated: boolean;
+}> {
   return await new Promise((resolve) => {
-    const child = spawn(command, {
+    const child = spawn(command, args, {
       cwd,
-      shell: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let outputTruncated = false;
     let settled = false;
     let timedOut = false;
     const timeout = setTimeout(() => {
@@ -364,15 +550,35 @@ async function runProcess(
     }, timeoutMs);
     timeout.unref();
 
-    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    child.stdout.on("data", (chunk: Buffer) => {
+      const remaining = PROCESS_OUTPUT_LIMIT_BYTES - stdoutBytes;
+      if (remaining > 0) {
+        stdout.push(chunk.subarray(0, remaining));
+        stdoutBytes += Math.min(chunk.length, remaining);
+      }
+      outputTruncated ||= chunk.length > remaining;
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      const remaining = PROCESS_OUTPUT_LIMIT_BYTES - stderrBytes;
+      if (remaining > 0) {
+        stderr.push(chunk.subarray(0, remaining));
+        stderrBytes += Math.min(chunk.length, remaining);
+      }
+      outputTruncated ||= chunk.length > remaining;
+    });
     child.on("error", (error) => {
       if (settled) {
         return;
       }
       settled = true;
       clearTimeout(timeout);
-      resolve({ stdout: "", stderr: error.message, exitCode: 127, timedOut });
+      resolve({
+        stdout: "",
+        stderr: error.message,
+        exitCode: 127,
+        timedOut,
+        outputTruncated,
+      });
     });
     child.on("close", (exitCode) => {
       if (settled) {
@@ -385,6 +591,7 @@ async function runProcess(
         stderr: Buffer.concat(stderr).toString("utf8"),
         exitCode: exitCode ?? 1,
         timedOut,
+        outputTruncated,
       });
     });
   });
