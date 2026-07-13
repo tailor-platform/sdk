@@ -589,11 +589,11 @@ describe("TailorDBField hooks modifier tests", () => {
       update: (args) => {
         expectTypeOf(args).toEqualTypeOf<{
           input: string | null;
-          oldValue: string | null;
+          oldValue: string;
           invoker: TailorPrincipal | null;
           now: Date;
         }>();
-        return args.oldValue ?? args.input ?? "default";
+        return args.oldValue;
       },
     });
   });
@@ -827,7 +827,7 @@ describe("TailorDBType withTimestamps option tests", () => {
     const now = new Date("2025-06-01T12:00:00Z");
     const result = updateHook!({
       input: null,
-      oldValue: null,
+      oldValue: new Date("2025-01-01T00:00:00Z"),
       invoker: timestampHookInvoker,
       now,
     });
