@@ -226,6 +226,28 @@ describe("resolveDeployWorkspace", () => {
     expect(mocks.select).toHaveBeenCalledOnce();
   });
 
+  test("does not ignore a requested creation identity while recovering stale context", async () => {
+    const available = workspace("24242424-2424-4424-8424-242424242424", "staging");
+    mocks.canPrompt.mockReturnValue(true);
+    mocks.loadWorkspaceContext.mockResolvedValue({
+      version: 1,
+      platformUrl: "https://api.tailor.tech",
+      workspaceId: "25252525-2525-4525-8525-252525252525",
+    });
+    mocks.listWorkspacesWithClient.mockResolvedValue([available]);
+
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: "production",
+        workspaceRegion: available.region,
+        organizationId: available.organizationId,
+        folderId: available.folderId,
+      }),
+    ).rejects.toMatchObject({ name: "CLIError", code: "WORKSPACE_CREATE_CONFLICT" });
+    expect(mocks.select).not.toHaveBeenCalled();
+  });
+
   test("allows explicit ensure to replace a stale context when no workspace remains", async () => {
     const created = workspace("28282828-2828-4828-8828-282828282828", "replacement");
     mocks.loadWorkspaceContext.mockResolvedValue({
@@ -416,6 +438,17 @@ describe("resolveDeployWorkspace", () => {
     ).rejects.toMatchObject({
       name: "CLIError",
       code: "WORKSPACE_CREATE_FLAG_REQUIRED",
+      next: {
+        command: "tailor-sdk",
+        args: [
+          "deploy",
+          "--create-workspace",
+          "--workspace-name",
+          "staging",
+          "--workspace-region",
+          "us-west",
+        ],
+      },
     });
     expect(mocks.saveWorkspaceContext).not.toHaveBeenCalled();
   });
@@ -459,6 +492,24 @@ describe("resolveDeployWorkspace", () => {
       "/apps/b/tailor.config.ts",
       "app:/apps/b/tailor.config.ts",
     );
+  });
+
+  test("fills in a missing context when only some deployed configs are linked", async () => {
+    const only = workspace("23232323-2323-4323-8323-232323232323");
+    mocks.listWorkspacesWithClient.mockResolvedValue([only]);
+    mocks.loadWorkspaceContext
+      .mockResolvedValueOnce({
+        version: 1,
+        platformUrl: "https://api.tailor.tech",
+        workspaceId: only.id,
+      })
+      .mockResolvedValueOnce(undefined);
+
+    await resolveDeployWorkspace({
+      contextTargets: contextTargets("/apps/a/tailor.config.ts", "/apps/b/tailor.config.ts"),
+    });
+
+    expect(mocks.saveWorkspaceContext).toHaveBeenCalledTimes(2);
   });
 
   test("does not merge configs linked to different workspaces non-interactively", async () => {
@@ -582,6 +633,18 @@ describe("resolveDeployWorkspace", () => {
     });
   });
 
+  test("rejects an explicitly empty partial creation identity with a stable error", async () => {
+    mocks.canPrompt.mockReturnValue(true);
+
+    await expect(
+      resolveDeployWorkspace({ createWorkspace: true, workspaceName: "" }),
+    ).rejects.toMatchObject({
+      name: "CLIError",
+      code: "WORKSPACE_CREATE_OPTIONS_INVALID",
+    });
+    expect(mocks.select).not.toHaveBeenCalled();
+  });
+
   test("shows the organization and folder in workspace creation confirmation", async () => {
     const created = workspace("abababab-abab-4bab-8bab-abababababab", "new-workspace");
     mocks.canPrompt.mockReturnValue(true);
@@ -681,6 +744,7 @@ describe("resolveDeployWorkspace", () => {
   test("reuses a matching workspace on a retry", async () => {
     const existing = workspace("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     mocks.listWorkspacesWithClient.mockResolvedValue([existing]);
+    client.listAvailableWorkspaceRegions.mockRejectedValue(new Error("region API unavailable"));
 
     await expect(
       resolveDeployWorkspace({
@@ -692,6 +756,7 @@ describe("resolveDeployWorkspace", () => {
       }),
     ).resolves.toEqual({ client, workspaceId: existing.id });
     expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
+    expect(client.listAvailableWorkspaceRegions).not.toHaveBeenCalled();
   });
 
   test("does not reuse a workspace from another requested organization", async () => {
@@ -704,7 +769,8 @@ describe("resolveDeployWorkspace", () => {
         workspaceName: existing.name,
         workspaceRegion: existing.region,
         organizationId: "21212121-2121-4121-8121-212121212121",
-        workspaceCommandArgs: ["--env-file", "/apps/example/.env.staging", "--json"],
+        workspaceCommandArgs: ["--env-file", "/apps/example/.env.staging"],
+        workspaceCommandJson: true,
       }),
     ).rejects.toMatchObject({
       name: "CLIError",
@@ -834,5 +900,24 @@ describe("resolveDeployWorkspace", () => {
         workspaceRegion: "us-west",
       }),
     ).rejects.toBe(error);
+  });
+
+  test("does not remove option values that resemble the JSON flag", async () => {
+    mocks.createValidatedWorkspaceWithClient.mockRejectedValue(new Error("connection reset"));
+
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: "example-workspace",
+        workspaceRegion: "us-west",
+        workspaceCommandArgs: ["--profile=--json"],
+        workspaceCommandJson: true,
+      }),
+    ).rejects.toMatchObject({
+      next: {
+        command: "tailor-sdk",
+        args: ["workspace", "list", "--profile=--json", "--json"],
+      },
+    });
   });
 });

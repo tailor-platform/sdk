@@ -59,7 +59,7 @@ function shellQuote(value: string): string {
 
 function formatNextAction(next: CLIErrorNextAction): string {
   const argv = [next.command, ...next.args];
-  if (process.platform === "win32" && argv.some((value) => /[%$]/.test(value))) {
+  if (process.platform === "win32" && argv.some((value) => /[%$!]/.test(value))) {
     return `with argv ${JSON.stringify(argv)}`;
   }
   return `\`${argv.map(shellQuote).join(" ")}\``;

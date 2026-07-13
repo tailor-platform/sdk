@@ -11,6 +11,7 @@ import { logger } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import {
   createValidatedWorkspaceWithClient,
+  type ValidatedCreateWorkspaceOptions,
   validateCreateWorkspaceOptions,
   validateWorkspaceName,
 } from "../workspace/create";
@@ -34,6 +35,7 @@ export interface ResolveDeployWorkspaceOptions {
   contextTargets?: readonly WorkspaceContextTarget[];
   deployArgs?: readonly string[];
   workspaceCommandArgs?: readonly string[];
+  workspaceCommandJson?: boolean;
 }
 
 export interface WorkspaceContextTarget {
@@ -254,6 +256,7 @@ async function createWorkspace(
   platformUrl: string,
   options: ResolveDeployWorkspaceOptions,
   availableRegions: readonly string[],
+  validatedOptions?: ValidatedCreateWorkspaceOptions,
 ): Promise<ResolvedDeployWorkspace> {
   let name = options.workspaceName;
   let region = options.workspaceRegion;
@@ -287,29 +290,31 @@ async function createWorkspace(
 
   if (!name || !region) throw new Error("Workspace creation options were not resolved");
 
-  let validated;
-  try {
-    validated = validateCreateWorkspaceOptions({
-      name,
-      region,
-      organizationId: options.organizationId,
-      folderId: options.folderId,
-    });
-  } catch (error) {
-    throw invalidCreateOptionsError(
-      options,
-      name,
-      region,
-      error instanceof Error ? error.message : String(error),
-    );
-  }
-  if (!availableRegions.includes(region)) {
-    throw invalidCreateOptionsError(
-      options,
-      name,
-      region,
-      `Region must be one of: ${availableRegions.join(", ")}.`,
-    );
+  let validated = validatedOptions;
+  if (!validated) {
+    try {
+      validated = validateCreateWorkspaceOptions({
+        name,
+        region,
+        organizationId: options.organizationId,
+        folderId: options.folderId,
+      });
+    } catch (error) {
+      throw invalidCreateOptionsError(
+        options,
+        name,
+        region,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+    if (!availableRegions.includes(region)) {
+      throw invalidCreateOptionsError(
+        options,
+        name,
+        region,
+        `Region must be one of: ${availableRegions.join(", ")}.`,
+      );
+    }
   }
 
   if (interactive) {
@@ -353,12 +358,7 @@ async function createWorkspace(
       details: error instanceof Error ? error.message : String(error),
       suggestion:
         "The outcome may be uncertain. List workspaces before retrying creation to avoid duplicates.",
-      next: executableAction([
-        "workspace",
-        "list",
-        ...workspaceCommandArgs(options).filter((arg) => arg !== "--json"),
-        "--json",
-      ]),
+      next: executableAction(["workspace", "list", ...workspaceCommandArgs(options), "--json"]),
     });
   }
 
@@ -383,6 +383,47 @@ async function createWorkspace(
 export async function resolveDeployWorkspace(
   options: ResolveDeployWorkspaceOptions = {},
 ): Promise<ResolvedDeployWorkspace> {
+  const createOptionNames = [
+    options.workspaceName !== undefined ? "--workspace-name" : undefined,
+    options.workspaceRegion !== undefined ? "--workspace-region" : undefined,
+    options.organizationId !== undefined ? "--organization-id" : undefined,
+    options.folderId !== undefined ? "--folder-id" : undefined,
+  ].filter((name): name is string => name !== undefined);
+  if (!options.createWorkspace && createOptionNames.length > 0) {
+    throw CLIError({
+      code: "WORKSPACE_CREATE_FLAG_REQUIRED",
+      message: "Workspace creation options require --create-workspace.",
+      suggestion: "Add --create-workspace or remove the workspace creation options.",
+      next: executableAction(
+        createDeployArgs(
+          options,
+          options.workspaceName ?? "<name>",
+          options.workspaceRegion ?? "<region>",
+        ),
+      ),
+      context: { options: createOptionNames },
+    });
+  }
+  if (options.createWorkspace && options.workspaceName !== undefined) {
+    const nameValidation = validateWorkspaceName(options.workspaceName);
+    if (nameValidation !== true) {
+      throw invalidCreateOptionsError(
+        options,
+        options.workspaceName,
+        options.workspaceRegion ?? "<region>",
+        nameValidation,
+      );
+    }
+  }
+  if (options.createWorkspace && options.workspaceRegion === "") {
+    throw invalidCreateOptionsError(
+      options,
+      options.workspaceName ?? "<name>",
+      options.workspaceRegion,
+      "Region must not be empty.",
+    );
+  }
+
   const explicitWorkspaceId = await tryLoadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
@@ -417,22 +458,6 @@ export async function resolveDeployWorkspace(
     return useWorkspace(client, platformUrl, workspaceInfo(response.workspace), options, "warn");
   }
 
-  const createOptionNames = [
-    options.workspaceName !== undefined ? "--workspace-name" : undefined,
-    options.workspaceRegion !== undefined ? "--workspace-region" : undefined,
-    options.organizationId !== undefined ? "--organization-id" : undefined,
-    options.folderId !== undefined ? "--folder-id" : undefined,
-  ].filter((name): name is string => name !== undefined);
-  if (!options.createWorkspace && createOptionNames.length > 0) {
-    throw CLIError({
-      code: "WORKSPACE_CREATE_FLAG_REQUIRED",
-      message: "Workspace creation options require --create-workspace.",
-      suggestion: "Add --create-workspace or remove the workspace creation options.",
-      next: executableAction([...deployArgs(options), "--create-workspace"]),
-      context: { options: createOptionNames },
-    });
-  }
-
   let requestedCreateOptions;
   if (
     options.createWorkspace &&
@@ -456,24 +481,44 @@ export async function resolveDeployWorkspace(
     }
   }
 
-  const [contexts, workspaces, requestedRegions] = await Promise.all([
+  const [contexts, workspaces] = await Promise.all([
     loadProjectContexts(platformUrl, options.contextTargets),
     listWorkspacesWithClient(client),
-    requestedCreateOptions ? client.listAvailableWorkspaceRegions({}) : Promise.resolve(undefined),
   ]);
-  if (
-    requestedCreateOptions &&
-    requestedRegions &&
-    !requestedRegions.regions.includes(requestedCreateOptions.region)
-  ) {
-    throw invalidCreateOptionsError(
-      options,
-      requestedCreateOptions.name,
-      requestedCreateOptions.region,
-      `Region must be one of: ${requestedRegions.regions.join(", ")}.`,
-    );
-  }
   const interactive = canPrompt();
+
+  const contextWorkspaceIds = new Set(contexts.map(({ workspaceId }) => workspaceId));
+  const linkedWorkspace =
+    contextWorkspaceIds.size === 1
+      ? workspaces.find(({ id }) => contextWorkspaceIds.has(id))
+      : undefined;
+  if (
+    linkedWorkspace &&
+    (!options.createWorkspace || workspaceMatchesRequestedIdentity(linkedWorkspace, options))
+  ) {
+    const contextTargetCount = projectContextTargets(options.contextTargets)?.length ?? 1;
+    return contexts.length === contextTargetCount
+      ? useRememberedWorkspace(client, linkedWorkspace)
+      : useWorkspace(client, platformUrl, linkedWorkspace, options);
+  }
+
+  const onlyWorkspace = workspaces.length === 1 ? workspaces[0] : undefined;
+  const canReuseOnlyWorkspace =
+    onlyWorkspace !== undefined &&
+    requestedCreateOptions !== undefined &&
+    workspaceMatchesRequestedIdentity(onlyWorkspace, options);
+  let requestedRegions: { regions: readonly string[] } | undefined;
+  if (requestedCreateOptions && !canReuseOnlyWorkspace) {
+    requestedRegions = await client.listAvailableWorkspaceRegions({});
+    if (!requestedRegions.regions.includes(requestedCreateOptions.region)) {
+      throw invalidCreateOptionsError(
+        options,
+        requestedCreateOptions.name,
+        requestedCreateOptions.region,
+        `Region must be one of: ${requestedRegions.regions.join(", ")}.`,
+      );
+    }
+  }
 
   if (
     workspaces.length === 0 &&
@@ -491,7 +536,7 @@ export async function resolveDeployWorkspace(
       });
     }
     if (interactive || options.createWorkspace) {
-      return createWorkspace(client, platformUrl, options, regions);
+      return createWorkspace(client, platformUrl, options, regions, requestedCreateOptions);
     }
 
     throw CLIError({
@@ -502,18 +547,6 @@ export async function resolveDeployWorkspace(
       next: executableAction(createDeployArgs(options, "<name>", "<region>")),
       context: { availableRegions: regions },
     });
-  }
-
-  const contextWorkspaceIds = new Set(contexts.map(({ workspaceId }) => workspaceId));
-  const linkedWorkspace =
-    contextWorkspaceIds.size === 1
-      ? workspaces.find(({ id }) => contextWorkspaceIds.has(id))
-      : undefined;
-  if (
-    linkedWorkspace &&
-    (!options.createWorkspace || workspaceMatchesRequestedIdentity(linkedWorkspace, options))
-  ) {
-    return useRememberedWorkspace(client, linkedWorkspace);
   }
 
   if (contextWorkspaceIds.size > 1) {
@@ -531,7 +564,7 @@ export async function resolveDeployWorkspace(
         context: { savedWorkspaceIds: [...contextWorkspaceIds] },
       });
     }
-    if (workspaces.length > 0) {
+    if (workspaces.length > 0 && !options.createWorkspace) {
       return chooseWorkspace(client, platformUrl, workspaces, options);
     }
   }
@@ -554,7 +587,7 @@ export async function resolveDeployWorkspace(
         },
       });
     }
-    if (workspaces.length > 0 && interactive) {
+    if (workspaces.length > 0 && interactive && !options.createWorkspace) {
       return chooseWorkspace(client, platformUrl, workspaces, options);
     }
   }
@@ -573,6 +606,7 @@ export async function resolveDeployWorkspace(
           "workspace",
           "create",
           ...workspaceCommandArgs(options),
+          ...(options.workspaceCommandJson ? ["--json"] : []),
           "--name",
           options.workspaceName ?? "<name>",
           "--region",

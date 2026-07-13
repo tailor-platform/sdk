@@ -86,12 +86,12 @@ describe("errorToJson", () => {
       message: "Choose a workspace.",
       next: {
         command: "tailor-sdk",
-        args: ["deploy", "--config", "C:\\work\\%USERNAME%\\$draft\\tailor.config.ts"],
+        args: ["deploy", "--config", "C:\\work\\!SECRET!\\tailor.config.ts"],
       },
     });
 
     expect(error.format()).toContain(
-      'argv ["tailor-sdk","deploy","--config","C:\\\\work\\\\%USERNAME%\\\\$draft\\\\tailor.config.ts"]',
+      'argv ["tailor-sdk","deploy","--config","C:\\\\work\\\\!SECRET!\\\\tailor.config.ts"]',
     );
   });
 

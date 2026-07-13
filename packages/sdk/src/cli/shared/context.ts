@@ -526,7 +526,7 @@ export async function tryLoadWorkspaceId(
 ): Promise<string | undefined> {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
 
-  if (opts?.workspaceId) {
+  if (opts?.workspaceId !== undefined) {
     return validateUUID(opts.workspaceId, "--workspace-id option");
   }
 

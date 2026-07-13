@@ -90,8 +90,8 @@ describe("deploy workspace resolution", () => {
           "--profile",
           "staging",
           "--verbose",
-          "--json",
         ],
+        workspaceCommandJson: true,
       }),
     );
   });

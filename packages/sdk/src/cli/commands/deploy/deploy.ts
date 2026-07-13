@@ -814,6 +814,26 @@ export function parseDeployConfigPaths(configPath?: string): Array<string | unde
   return configPaths;
 }
 
+function recoveryEnvironmentArgs(
+  options: DeployOptions | undefined,
+  cliContext?: DeployCLIContext,
+): readonly string[] {
+  return [
+    ...(cliContext?.envFile ? ["--env-file", path.resolve(process.cwd(), cliContext.envFile)] : []),
+    ...(cliContext?.envFileIfExists
+      ? ["--env-file-if-exists", path.resolve(process.cwd(), cliContext.envFileIfExists)]
+      : []),
+    ...(options?.profile ? ["--profile", options.profile] : []),
+  ];
+}
+
+function recoveryOutputArgs(cliContext?: DeployCLIContext): readonly string[] {
+  return [
+    ...(cliContext?.verbose ? ["--verbose"] : []),
+    ...(cliContext?.json || logger.jsonMode ? ["--json"] : []),
+  ];
+}
+
 function retryDeployArgs(
   options: DeployOptions | undefined,
   configPaths: readonly string[],
@@ -823,19 +843,14 @@ function retryDeployArgs(
     "deploy",
     "--config",
     configPaths.join(","),
-    ...(cliContext?.envFile ? ["--env-file", path.resolve(process.cwd(), cliContext.envFile)] : []),
-    ...(cliContext?.envFileIfExists
-      ? ["--env-file-if-exists", path.resolve(process.cwd(), cliContext.envFileIfExists)]
-      : []),
-    ...(options?.profile ? ["--profile", options.profile] : []),
+    ...recoveryEnvironmentArgs(options, cliContext),
     ...(options?.dryRun ? ["--dry-run"] : []),
     ...(options?.yes ? ["--yes"] : []),
     ...(options?.noSchemaCheck ? ["--no-schema-check"] : []),
     ...(options?.noValidate ? ["--no-validate"] : []),
     ...(options?.noCache ? ["--no-cache"] : []),
     ...(options?.cleanCache ? ["--clean-cache"] : []),
-    ...(cliContext?.verbose ? ["--verbose"] : []),
-    ...(cliContext?.json || logger.jsonMode ? ["--json"] : []),
+    ...recoveryOutputArgs(cliContext),
   ];
 }
 
@@ -844,13 +859,8 @@ function workspaceRecoveryArgs(
   cliContext?: DeployCLIContext,
 ): readonly string[] {
   return [
-    ...(cliContext?.envFile ? ["--env-file", path.resolve(process.cwd(), cliContext.envFile)] : []),
-    ...(cliContext?.envFileIfExists
-      ? ["--env-file-if-exists", path.resolve(process.cwd(), cliContext.envFileIfExists)]
-      : []),
-    ...(options?.profile ? ["--profile", options.profile] : []),
+    ...recoveryEnvironmentArgs(options, cliContext),
     ...(cliContext?.verbose ? ["--verbose"] : []),
-    ...(cliContext?.json || logger.jsonMode ? ["--json"] : []),
   ];
 }
 
@@ -1880,6 +1890,7 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
           contextTargets: workspaceContextTargets,
           deployArgs: retryDeployArgs(options, resolvedConfigPaths, cliContext),
           workspaceCommandArgs: workspaceRecoveryArgs(options, cliContext),
+          workspaceCommandJson: cliContext?.json || logger.jsonMode,
         });
     const targets = await withSpan("build", async () => {
       const noCache = options?.noCache ?? false;
