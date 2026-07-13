@@ -293,7 +293,7 @@ Create hooks receive:
 
 Update hooks receive the same arguments plus:
 
-- `oldValue`: The previous field value (may be null)
+- `oldValue`: The previous field value (null only for optional fields)
 
 ```typescript
 db.string().hooks({
