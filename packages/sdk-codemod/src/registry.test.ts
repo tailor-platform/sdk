@@ -55,6 +55,35 @@ describe("getApplicableCodemods", () => {
     expect(prereleaseIds).toContain("v2/db-type-to-table");
   });
 
+  test("reviews forward relation names at the prerelease that changes their defaults", () => {
+    const previousIds = getApplicableCodemods("1.67.1", "2.0.0-next.3").map(
+      (codemod) => codemod.id,
+    );
+    const codemod = getApplicableCodemods("2.0.0-next.3", "2.0.0-next.4").find(
+      (entry) => entry.id === "v2/forward-relation-name",
+    );
+
+    expect(previousIds).not.toContain("v2/forward-relation-name");
+    expect(codemod?.scriptPath).toBe("v2/forward-relation-name/scripts/transform.js");
+    expect(codemod?.prompt).toContain("toward.as");
+    expect(codemod?.prompt).toContain("GraphQL");
+    expect(codemod?.prompt).toContain("non-empty");
+    expect(codemod?.prompt).toContain("empty or dynamic");
+
+    const aliasPattern = codemod?.suspiciousPatterns?.[0];
+    expect(aliasPattern).toBeInstanceOf(RegExp);
+    expect((aliasPattern as RegExp).test("const relation = db.uuid().relation;")).toBe(true);
+    expect((aliasPattern as RegExp).test("db.uuid().relation({ type, toward });")).toBe(false);
+
+    const aliasPatterns = codemod?.suspiciousPatterns as RegExp[];
+    expect(aliasPatterns.some((pattern) => pattern.test("const { relation } = db.uuid();"))).toBe(
+      true,
+    );
+    expect(
+      aliasPatterns.some((pattern) => pattern.test('db.uuid()["relation"]({ type, toward })')),
+    ).toBe(true);
+  });
+
   test("returns empty when both versions are before the codemod boundary", () => {
     expect(getApplicableCodemods("1.0.0", "1.5.0")).toEqual([]);
   });
