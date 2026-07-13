@@ -49,3 +49,14 @@ export function captureCallerDir(fn: (...args: any[]) => unknown): string | unde
 export function getConfigSourceDir(config: object): string | undefined {
   return (config as Record<PropertyKey, unknown>)[CONFIG_SOURCE_DIR] as string | undefined;
 }
+
+/**
+ * Resolve the directory relative file globs and tsconfig lookups should use
+ * for a loaded config: the captured `defineConfig()` call site when
+ * available, otherwise the directory of the config file itself.
+ * @param config - A loaded config object with its file path
+ * @returns Absolute directory to resolve relative patterns against
+ */
+export function resolveConfigBaseDir(config: { path: string }): string {
+  return getConfigSourceDir(config) ?? path.dirname(config.path);
+}
