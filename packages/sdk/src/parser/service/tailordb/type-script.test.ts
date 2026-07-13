@@ -314,6 +314,42 @@ describe("buildTypeScripts", () => {
     expect(result.upper).toBe("HELLO");
   });
 
+  test("update type-level hook falls back to oldRecord via _oldRecord", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      createdAt: {
+        type: "datetime",
+        hooks: { create: { expr: "_now" } },
+      },
+      updatedAt: {
+        type: "datetime",
+        hooks: { create: { expr: "_now" }, update: { expr: "_now" } },
+      },
+    };
+    const typeHookExpr = {
+      create:
+        "(({ input }) => ({ label: `${input.name} Bundle` }))({ input: _input, oldRecord: _oldRecord, invoker: _invoker, now: _now })",
+      update:
+        "(({ input, oldRecord }) => ({ label: `${input.name ?? oldRecord.name} Bundle` }))({ input: _input, oldRecord: _oldRecord, invoker: _invoker, now: _now })",
+    };
+
+    const { typeHook } = buildTypeScripts(fields, { typeHookExpr });
+
+    // UPDATE: input has no name, oldRecord has name
+    const updateExpr = typeHook?.update?.expr ?? "";
+    const _input = { items: [{ productName: "Item", qty: 3, unitPrice: 5.0 }] }; // eslint-disable-line
+    const _oldRecord = {
+      // eslint-disable-line
+      id: "abc",
+      name: "Stable",
+      label: "Stable Bundle",
+      items: [{ productName: "Item", qty: 1, unitPrice: 5.0 }],
+      createdAt: "2025-01-01T00:00:00Z",
+      updatedAt: "2025-01-01T00:00:00Z",
+    };
+    const result = new Function("_input", "_oldRecord", `return ${updateExpr}`)(_input, _oldRecord);
+    expect(result.label).toBe("Stable Bundle");
+  });
+
   test("nested array hooks do not reference __oldEl", () => {
     const fields: Record<string, ScriptFieldConfig> = {
       items: {
