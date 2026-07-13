@@ -16,11 +16,11 @@ export function defineConfig<
 >(config: Config) {
   // Stash where this call itself lives so relative file globs keep resolving
   // against it, even if another module re-exports the returned config as-is.
+  // Returns a new object rather than mutating `config` in place, so this
+  // stays consistent with the @__NO_SIDE_EFFECTS__ annotation above.
   const sourceDir = captureCallerDir(defineConfig);
-  if (sourceDir) {
-    (config as Record<PropertyKey, unknown>)[CONFIG_SOURCE_DIR] = sourceDir;
-  }
-  return config;
+  if (!sourceDir) return config;
+  return { ...config, [CONFIG_SOURCE_DIR]: sourceDir };
 }
 
 /**

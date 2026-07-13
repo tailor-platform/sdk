@@ -74,4 +74,14 @@ describe("loadFilesWithIgnores", () => {
     loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, targetDir);
     expect(warnSpy).not.toHaveBeenCalled();
   });
+
+  test("returns immediately without warning when files is empty, even if baseDir differs from cwd", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-empty-patterns-"));
+    tmpDirs.push(emptyBaseDir);
+
+    const files = loadFilesWithIgnores({ files: [] }, emptyBaseDir);
+    expect(files).toEqual([]);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
 });

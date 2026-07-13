@@ -17,6 +17,10 @@ const DEFAULT_IGNORE_PATTERNS = ["**/*.test.ts", "**/*.spec.ts"];
  * @returns Array of absolute file paths
  */
 export function loadFilesWithIgnores(config: FileLoadConfig, baseDir = process.cwd()): string[] {
+  if (config.files.length === 0) {
+    return [];
+  }
+
   const files = resolveFiles(config, baseDir);
   if (files.length > 0 || baseDir === process.cwd()) {
     return files;
