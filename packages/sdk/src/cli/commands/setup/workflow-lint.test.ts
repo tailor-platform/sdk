@@ -104,7 +104,7 @@ describe("repository ERD schema workflow", () => {
   test("exports on push to main, uploading a per-namespace artifact for the preview job to reuse", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    expect(content).toContain("branches: [main]");
+    expect(content).toContain("branches: [main, v2]");
     expect(content).toContain("artifact-name: erd-schema-${{ matrix.namespace }}");
     expect(content).toContain('retention-days: "90"');
   });
