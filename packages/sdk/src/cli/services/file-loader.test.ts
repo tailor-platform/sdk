@@ -84,4 +84,22 @@ describe("loadFilesWithIgnores", () => {
     expect(files).toEqual([]);
     expect(warnSpy).not.toHaveBeenCalled();
   });
+
+  test("does not fall back when baseDir matches something that is entirely filtered out by ignores", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    // baseDir has a match for the pattern, but it's a default-ignored test file.
+    const baseDir = makeDirWithFile("file-loader-all-ignored-", "src/foo.test.ts");
+    // cwd has an unrelated, non-ignored file that must NOT leak in via a wrongful fallback.
+    const cwdDir = makeDirWithFile("file-loader-unrelated-cwd-", "src/bar.ts");
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const files = loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, baseDir);
+      expect(files).toEqual([]);
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
 });

@@ -21,23 +21,33 @@ export function loadFilesWithIgnores(config: FileLoadConfig, baseDir = process.c
     return [];
   }
 
-  const files = resolveFiles(config, baseDir);
-  if (files.length > 0 || baseDir === process.cwd()) {
-    return files;
+  const resolved = resolveFiles(config, baseDir);
+  if (resolved.matchedAnyPattern || baseDir === process.cwd()) {
+    return resolved.files;
   }
 
   // v1 compatibility fallback: pre-existing configs may have relative
-  // patterns written against the invocation cwd rather than baseDir. Remove
-  // this fallback in v2, once such configs are expected to have migrated.
+  // patterns written against the invocation cwd rather than baseDir. Only
+  // triggers when baseDir's patterns matched nothing at all (not merely
+  // "matched, but every hit got filtered out by ignores") — otherwise this
+  // fallback would reintroduce the same cross-app file bleed this baseDir
+  // resolution is meant to prevent. Remove this fallback in v2, once such
+  // configs are expected to have migrated.
   logger.warn(
     `No files matched "${config.files.join(", ")}" relative to "${baseDir}"; falling back to ` +
       `process.cwd(). Update this config's file patterns to be relative to its own directory ` +
       `before v2, when this fallback will be removed.`,
   );
-  return resolveFiles(config, process.cwd());
+  return resolveFiles(config, process.cwd()).files;
 }
 
-function resolveFiles(config: FileLoadConfig, baseDir: string): string[] {
+interface ResolvedFiles {
+  files: string[];
+  /** Whether any `files` pattern matched anything under baseDir, before ignore filtering. */
+  matchedAnyPattern: boolean;
+}
+
+function resolveFiles(config: FileLoadConfig, baseDir: string): ResolvedFiles {
   // Use user-provided patterns if specified, otherwise use defaults
   const ignorePatterns = config.ignores ?? DEFAULT_IGNORE_PATTERNS;
 
@@ -53,10 +63,14 @@ function resolveFiles(config: FileLoadConfig, baseDir: string): string[] {
   }
 
   const files: string[] = [];
+  let matchedAnyPattern = false;
   for (const pattern of config.files) {
     const absolutePattern = path.resolve(baseDir, pattern);
     try {
       const matchedFiles = fs.globSync(absolutePattern);
+      if (matchedFiles.length > 0) {
+        matchedAnyPattern = true;
+      }
       // Filter out ignored files
       const filteredFiles = matchedFiles.filter((file) => !ignoreFiles.has(file));
       files.push(...filteredFiles);
@@ -65,5 +79,5 @@ function resolveFiles(config: FileLoadConfig, baseDir: string): string[] {
     }
   }
 
-  return files;
+  return { files, matchedAnyPattern };
 }
