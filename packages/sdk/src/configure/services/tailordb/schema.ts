@@ -101,6 +101,31 @@ type WithDBFieldCloneOptions<Defined extends DefinedDBFieldMetadata, NewOpt exte
     : Omit<Defined, "array"> & {
         array: NewOpt extends { array: true } ? true : Defined["array"];
       };
+type DBFieldCloneOptions<Defined extends DefinedDBFieldMetadata> = Omit<FieldOptions, "array"> & {
+  array?: Defined extends { validate: unknown } ? Defined["array"] : boolean;
+};
+type InvalidValidatedArrayCloneKeys<
+  Fields extends Record<string, TailorAnyDBField>,
+  K extends keyof Fields,
+  Opt extends FieldOptions,
+> = Opt extends { array: infer ArrayOption }
+  ? {
+      [P in K]: Fields[P] extends TailorDBField<infer Defined, infer _Output>
+        ? Defined extends { validate: unknown }
+          ? ArrayOption extends Defined["array"]
+            ? never
+            : P
+          : never
+        : never;
+    }[K]
+  : never;
+type DBFieldsCloneOptionsGuard<
+  Fields extends Record<string, TailorAnyDBField>,
+  K extends keyof Fields,
+  Opt extends FieldOptions,
+> = [InvalidValidatedArrayCloneKeys<Fields, K, Opt>] extends [never]
+  ? unknown
+  : TypeLevelError<"array cannot be changed on fields with custom validation">;
 type DefinedDBTypeMetadata = {
   hooks?: true;
   validate?: true;
@@ -319,6 +344,10 @@ export interface TailorDBField<
 
   /**
    * Add validation functions to the field.
+   *
+   * Validators receive `{ value, data, user }` and run after hooks and
+   * built-in type validation; they are skipped when built-in validation
+   * fails. For array fields, `value` is the complete array.
    */
   validate: DBFieldValidateMethod<Defined, Output>;
 
@@ -328,9 +357,10 @@ export interface TailorDBField<
   serial: DBFieldSerialMethod<Defined, Output>;
 
   /**
-   * Clone the field with optional overrides for field options
+   * Clone the field with optional overrides for field options.
+   * The `array` option cannot change on fields with custom validation.
    */
-  clone<const NewOpt extends FieldOptions>(
+  clone<const NewOpt extends DBFieldCloneOptions<Defined>>(
     options?: NewOpt,
   ): TailorDBField<
     WithDBFieldCloneOptions<Defined, NewOpt>,
@@ -425,7 +455,7 @@ export interface TailorDBType<
   pickFields<K extends keyof Fields>(keys: K[]): Pick<Fields, K>;
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
     keys: K[],
-    options: Opt,
+    options: Opt & DBFieldsCloneOptionsGuard<Fields, K, Opt>,
   ): {
     [P in K]: Fields[P] extends TailorDBField<infer D, infer _O>
       ? TailorDBField<WithDBFieldCloneOptions<D, Opt>, FieldOutput<TailorToTs[D["type"]], Opt>>
@@ -655,6 +685,14 @@ function createTailorDBFieldRuntime<
     },
 
     clone(cloneOptions?: FieldOptions) {
+      if (
+        this._metadata.validate?.length &&
+        cloneOptions?.array !== undefined &&
+        cloneOptions.array !== (this._metadata.array === true)
+      ) {
+        throw new Error("Cannot change the array option on a field with custom validation");
+      }
+
       // Deep clone nested object fields if present
       let clonedFields = fields;
       if (fields) {

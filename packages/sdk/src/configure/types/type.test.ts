@@ -1,5 +1,5 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
-import { describe, expect, test, expectTypeOf } from "vitest";
+import { describe, expect, test, expectTypeOf, vi } from "vitest";
 import { t } from "./type";
 import type { TailorUser } from "#/runtime/types";
 import type { output } from "#/types/helpers";
@@ -646,6 +646,42 @@ describe("TailorField runtime validation tests", () => {
       );
     });
 
+    test("runs parent custom validation when nested custom validation fails", () => {
+      const parentValidate = vi.fn(() => false);
+      const schema = t
+        .object({
+          name: t.string().validate([() => false, "Child validation failed"]),
+        })
+        .validate([parentValidate, "Parent validation failed"]);
+
+      const result = schema.parse({ value: { name: "valid" }, data, user });
+
+      expect(result.issues).toEqual([
+        { message: "Child validation failed", path: ["name"] },
+        { message: "Parent validation failed" },
+      ]);
+      expect(parentValidate).toHaveBeenCalledOnce();
+    });
+
+    test("finishes nested base validation before running custom validation", () => {
+      const validate = vi.fn(({ data }: { data: unknown }) => {
+        const record = data as { unsafe: string };
+        return record.unsafe.toUpperCase() === "VALID";
+      });
+      const schema = t.object({
+        safe: t.string().validate(validate),
+        unsafe: t.string(),
+      });
+      const value = { safe: "valid", unsafe: 42 };
+
+      const result = schema.parse({ value, data: value, user });
+
+      expect(result.issues).toEqual([
+        { message: "Expected a string: received 42", path: ["unsafe"] },
+      ]);
+      expect(validate).not.toHaveBeenCalled();
+    });
+
     test("validates array fields and element paths", () => {
       const schema = t.int({ array: true });
 
@@ -662,6 +698,40 @@ describe("TailorField runtime validation tests", () => {
         path: ["[1]"],
         message: "Expected an integer: received x",
       });
+    });
+
+    test("runs custom validation once against the complete array", () => {
+      const validate = vi.fn(({ value }: { value: string[] }) => value.length >= 2);
+      const schema = t.string({ array: true }).validate([validate, "Expected at least two values"]);
+
+      const validResult = schema.parse({ value: ["a", "b"], data, user });
+      const invalidResult = schema.parse({ value: ["a"], data, user });
+
+      expect(expectParsed(validResult)).toEqual(["a", "b"]);
+      expect(invalidResult.issues).toEqual([{ message: "Expected at least two values" }]);
+      expect(validate).toHaveBeenCalledTimes(2);
+      expect(validate).toHaveBeenNthCalledWith(1, { value: ["a", "b"], data, user });
+      expect(validate).toHaveBeenNthCalledWith(2, { value: ["a"], data, user });
+    });
+
+    test("skips custom validation when scalar base validation fails", () => {
+      const validate = vi.fn(({ value }: { value: string }) => value.toUpperCase().length > 0);
+      const schema = t.string().validate(validate);
+
+      const result = schema.parse({ value: 42, data, user });
+
+      expect(result.issues).toEqual([{ message: "Expected a string: received 42" }]);
+      expect(validate).not.toHaveBeenCalled();
+    });
+
+    test("skips array custom validation when element base validation fails", () => {
+      const validate = vi.fn(({ value }: { value: string[] }) => value.length > 0);
+      const schema = t.string({ array: true }).validate(validate);
+
+      const result = schema.parse({ value: ["valid", 42], data, user });
+
+      expect(result.issues).toEqual([{ message: "Expected a string: received 42", path: ["[1]"] }]);
+      expect(validate).not.toHaveBeenCalled();
     });
 
     test("treats null/undefined as missing when required, and allowed when optional", () => {

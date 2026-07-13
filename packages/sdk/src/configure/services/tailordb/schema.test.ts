@@ -3,7 +3,11 @@ import { describe, expectTypeOf, expect, test } from "vitest";
 import { t } from "#/configure/types/index";
 import { unauthenticatedTailorUser } from "#/configure/user";
 import { db, type TailorAnyDBField, type TailorDBType } from "./schema";
-import type { FieldValidateInput, ValidateConfig } from "#/configure/types/field.types";
+import type {
+  FieldOptions,
+  FieldValidateInput,
+  ValidateConfig,
+} from "#/configure/types/field.types";
 import type { TailorUser } from "#/runtime/types";
 import type { output, TypeLevelError } from "#/types/helpers";
 import type { Hook } from "./types";
@@ -2080,6 +2084,48 @@ describe("TailorDBField clone tests", () => {
 
     // Verify deep copy (different reference)
     expect(cloned.metadata.validate).not.toBe(original.metadata.validate);
+  });
+
+  test("rejects changing the array shape of a validated field", () => {
+    const scalar = db.string().validate(({ value }) => value.length > 0);
+    const array = db.string({ array: true }).validate(({ value }) => value.length > 0);
+    const type = db.type("ValidatedClone", { value: scalar });
+    const mixedType = db.type("MixedValidatedClone", {
+      validated: scalar,
+      plain: db.string(),
+    });
+    const arrayType = db.type("ValidatedArrayClone", { value: array });
+
+    type ScalarCloneOptions = Parameters<typeof scalar.clone>[0];
+    type ArrayCloneOptions = Parameters<typeof array.clone>[0];
+    type InvalidPickOptions = Parameters<typeof type.pickFields<"value", { array: true }>>[1];
+    type InvalidMixedPickOptions = Parameters<
+      typeof mixedType.pickFields<"validated" | "plain", { array: true }>
+    >[1];
+    type AllowedArrayPickOptions = Parameters<
+      typeof arrayType.pickFields<"value", { array: true }>
+    >[1];
+    type ArrayShapeError =
+      TypeLevelError<"array cannot be changed on fields with custom validation">;
+    type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+    type Expect<T extends true> = T;
+    type _ScalarCloneOptions = Expect<
+      Equal<ScalarCloneOptions, { optional?: boolean; array?: false } | undefined>
+    >;
+    type _ArrayCloneOptions = Expect<
+      Equal<ArrayCloneOptions, { optional?: boolean; array?: true } | undefined>
+    >;
+    type _InvalidPickOptions = Expect<Equal<InvalidPickOptions, { array: true } & ArrayShapeError>>;
+    type _InvalidMixedPickOptions = Expect<
+      Equal<InvalidMixedPickOptions, { array: true } & ArrayShapeError>
+    >;
+    type _AllowedArrayPickOptions = Expect<Equal<AllowedArrayPickOptions, { array: true }>>;
+    const scalarClone = scalar.clone.bind(scalar) as (options?: FieldOptions) => unknown;
+    const arrayClone = array.clone.bind(array) as (options?: FieldOptions) => unknown;
+    const expectedError = "Cannot change the array option on a field with custom validation";
+
+    expect(() => scalarClone({ array: true })).toThrowError(expectedError);
+    expect(() => arrayClone({ array: false })).toThrowError(expectedError);
   });
 
   test("clones validate with tuple format correctly", () => {
