@@ -1,8 +1,8 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { parseTypes, TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import { findOmittedPermitRules } from "#/parser/service/tailordb/permission";
 import { assertDefined } from "#/utils/assert";
@@ -241,12 +241,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
 
           const typeFiles = [...new Set(loadFilesWithIgnores(config, baseDir))];
 
-          let tsconfig: string | undefined;
-          try {
-            tsconfig = await resolveTSConfig(baseDir);
-          } catch {
-            tsconfig = undefined;
-          }
+          const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
           logger.newline();
           logger.log(

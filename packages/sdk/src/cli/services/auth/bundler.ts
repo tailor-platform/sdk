@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { removeStaleEntryFiles } from "#/cli/services/stale-cleanup";
@@ -10,6 +9,7 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
 import ml from "#/utils/multiline";
 import type { LogLevel } from "#/configure/config/types";
@@ -72,12 +72,7 @@ export async function bundleAuthHooks(
 
   const absoluteConfigPath = path.resolve(configPath);
 
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig(baseDir ?? path.dirname(absoluteConfigPath));
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir ?? path.dirname(absoluteConfigPath));
 
   const functionName = `auth-hook--${authName}--before-login`;
 

@@ -11,9 +11,10 @@ import * as path from "pathe";
  * Uses the global symbol registry (`Symbol.for`) rather than `Symbol()` so
  * the key still matches if multiple copies of the SDK end up loaded in the
  * same process (e.g. a hoisting mismatch between the CLI and the config's
- * own dependency resolution).
+ * own dependency resolution). Matches the `SDK_BRAND` / registry key
+ * convention in `utils/brand.ts` and `configure/services/workflow/registry.ts`.
  */
-export const CONFIG_SOURCE_DIR = Symbol.for("tailor-sdk:config-source-dir");
+export const CONFIG_SOURCE_DIR: unique symbol = Symbol.for("tailor-platform/sdk:config-source-dir");
 
 /**
  * Capture the absolute directory of the immediate caller of `fn`.

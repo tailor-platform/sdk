@@ -25,6 +25,11 @@ export function loadFilesWithIgnores(config: FileLoadConfig, baseDir = process.c
   // v1 compatibility fallback: pre-existing configs may have relative
   // patterns written against the invocation cwd rather than baseDir. Remove
   // this fallback in v2, once such configs are expected to have migrated.
+  logger.warn(
+    `No files matched "${config.files.join(", ")}" relative to "${baseDir}"; falling back to ` +
+      `process.cwd(). Update this config's file patterns to be relative to its own directory ` +
+      `before v2, when this fallback will be removed.`,
+  );
   return resolveFiles(config, process.cwd());
 }
 

@@ -2,7 +2,6 @@ import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { isNodeBuiltinImport } from "#/cli/services/http-adapter/node-builtins";
@@ -11,6 +10,7 @@ import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { HTTP_METHODS, type HttpMethodKey } from "#/parser/service/http-adapter/index";
 import type { LogLevel } from "#/configure/config/types";
 
@@ -61,12 +61,7 @@ export async function bundleHttpAdapters(
   const outputDir = path.resolve(getDistDir(), "http-adapters");
   fs.mkdirSync(outputDir, { recursive: true });
 
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig(baseDir);
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   // rolldown.build() is memory-intensive; cap parallelism like the other SDK bundlers.
   const tasks = adapters.flatMap((adapter) => {

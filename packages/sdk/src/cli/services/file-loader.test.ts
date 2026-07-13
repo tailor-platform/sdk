@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import { loadFilesWithIgnores } from "./file-loader";
 
 describe("loadFilesWithIgnores", () => {
@@ -48,5 +49,29 @@ describe("loadFilesWithIgnores", () => {
     } finally {
       process.chdir(originalCwd);
     }
+  });
+
+  test("warns when falling back to process.cwd()", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const cwdDir = makeDirWithFile("file-loader-cwd-warn-", "src/legacy.ts");
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-empty-warn-"));
+    tmpDirs.push(emptyBaseDir);
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining(emptyBaseDir));
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
+  test("does not warn when baseDir itself matches", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const targetDir = makeDirWithFile("file-loader-no-warn-", "src/correct.ts");
+
+    loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, targetDir);
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 });
