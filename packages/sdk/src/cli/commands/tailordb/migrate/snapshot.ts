@@ -23,6 +23,10 @@ import {
 import * as inflection from "inflection";
 import * as path from "pathe";
 import { z } from "zod";
+import {
+  computeSourceScriptHash,
+  extractSourceScriptHash,
+} from "#/parser/service/tailordb/type-script";
 import { assertDefined } from "#/utils/assert";
 import {
   type MigrationDiff,
@@ -2651,7 +2655,7 @@ export function compareRemoteWithSnapshot(
   snapshot: SchemaSnapshot,
   remoteGqlPermissions: readonly RemoteGqlPermission[] = [],
 ): SchemaDrift[] {
-  return compareNormalizedRemoteWithSnapshot(
+  const structuralDrifts = compareNormalizedRemoteWithSnapshot(
     createRemoteComparableSnapshot(
       createSnapshotFromRemoteTypes(
         remoteTypes,
@@ -2662,6 +2666,74 @@ export function compareRemoteWithSnapshot(
     ),
     createRemoteComparableSnapshot(snapshot),
   );
+
+  const scriptDrifts = compareScriptHashes(remoteTypes, snapshot);
+
+  return [...structuralDrifts, ...scriptDrifts];
+}
+
+function extractRemoteScriptHash(remoteType: ProtoTailorDBType): string | undefined {
+  const exprs = [
+    remoteType.schema?.typeHook?.create?.expr,
+    remoteType.schema?.typeHook?.update?.expr,
+    remoteType.schema?.typeValidate?.create?.expr,
+    remoteType.schema?.typeValidate?.update?.expr,
+  ];
+  for (const expr of exprs) {
+    if (expr) {
+      const hash = extractSourceScriptHash(expr);
+      if (hash) return hash;
+    }
+  }
+  return undefined;
+}
+
+function remoteHasScripts(remoteType: ProtoTailorDBType): boolean {
+  return !!(
+    remoteType.schema?.typeHook?.create?.expr ||
+    remoteType.schema?.typeHook?.update?.expr ||
+    remoteType.schema?.typeValidate?.create?.expr ||
+    remoteType.schema?.typeValidate?.update?.expr
+  );
+}
+
+function compareScriptHashes(
+  remoteTypes: ProtoTailorDBType[],
+  snapshot: SchemaSnapshot,
+): SchemaDrift[] {
+  const drifts: SchemaDrift[] = [];
+  const remoteByName = new Map(remoteTypes.map((t) => [t.name, t]));
+
+  for (const [typeName, snapshotType] of Object.entries(snapshot.types)) {
+    const localHash = computeSourceScriptHash(snapshotType.fields, {
+      typeHookExpr: snapshotType.typeHookExpr,
+      typeValidateExpr: snapshotType.typeValidateExpr,
+    });
+
+    const remoteType = remoteByName.get(typeName);
+    if (!remoteType) continue;
+
+    if (localHash) {
+      const remoteHash = extractRemoteScriptHash(remoteType);
+      if (localHash !== remoteHash) {
+        drifts.push({
+          typeName,
+          kind: "script_mismatch",
+          details: remoteHash
+            ? `Type '${typeName}' scripts differ between remote and snapshot`
+            : `Type '${typeName}' has no script hash on remote`,
+        });
+      }
+    } else if (remoteHasScripts(remoteType)) {
+      drifts.push({
+        typeName,
+        kind: "script_mismatch",
+        details: `Type '${typeName}' has scripts on remote but not in snapshot`,
+      });
+    }
+  }
+
+  return drifts;
 }
 
 function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig {
