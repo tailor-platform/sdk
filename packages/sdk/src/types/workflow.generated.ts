@@ -28,6 +28,20 @@ export type ConcurrencyPolicy = {
 };
 export type ConcurrencyPolicyInput = ConcurrencyPolicy;
 
+export type WorkflowJobFunctionExecutionPolicy = {
+  /** Workspace-unique execution policy name embedded in the resource TRN */
+  name: string;
+  /** Execution policy key passed to triggerJobFunction's executionPolicyKey option */
+  key: string;
+  /** Optional per-key concurrency cap for job function dispatches matching this policy */
+  concurrencyPolicy?:
+    | {
+        maxConcurrentExecutions: number;
+      }
+    | undefined;
+};
+export type WorkflowJobFunctionExecutionPolicyInput = WorkflowJobFunctionExecutionPolicy;
+
 export type Workflow = {
   /** Workflow name */
   name: string;

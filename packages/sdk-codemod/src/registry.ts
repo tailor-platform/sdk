@@ -503,6 +503,61 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/runtime-subpath-namespace",
+    name: "Runtime subpath imports use namespace objects",
+    description:
+      "Rewrite `@tailor-platform/sdk/runtime/*` namespace-star and flat value imports to self-named namespace imports, and aggregate `file.deleteFile` calls to `file.delete`. `TailorContextAPI` and `TailorWorkflowAPI` now describe SDK wrappers; direct platform globals use `PlatformContextAPI` and `PlatformWorkflowAPI`.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_3,
+    scriptPath: "v2/runtime-subpath-namespace/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    legacyPatterns: [
+      "@tailor-platform/sdk/runtime/iconv",
+      "@tailor-platform/sdk/runtime/secretmanager",
+      "@tailor-platform/sdk/runtime/authconnection",
+      "@tailor-platform/sdk/runtime/idp",
+      "@tailor-platform/sdk/runtime/workflow",
+      "@tailor-platform/sdk/runtime/context",
+      "@tailor-platform/sdk/runtime/file",
+      "@tailor-platform/sdk/runtime/aigateway",
+    ],
+    examples: [
+      {
+        before:
+          'import * as iconv from "@tailor-platform/sdk/runtime/iconv";\niconv.convert(value, "UTF-8", "Shift_JIS");',
+        after:
+          'import { iconv } from "@tailor-platform/sdk/runtime/iconv";\niconv.convert(value, "UTF-8", "Shift_JIS");',
+      },
+      {
+        before:
+          'import { get } from "@tailor-platform/sdk/runtime/aigateway";\nconst gateway = await get("main");',
+        after:
+          'import { aigateway } from "@tailor-platform/sdk/runtime/aigateway";\nconst gateway = await aigateway.get("main");',
+      },
+      {
+        before:
+          'import { file } from "@tailor-platform/sdk/runtime";\nawait file.deleteFile("ns", "Doc", "blob", "record-id");',
+        after:
+          'import { file } from "@tailor-platform/sdk/runtime";\nawait file.delete("ns", "Doc", "blob", "record-id");',
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2, runtime subpath modules export only a self-named namespace",
+      "object (for example, `iconv` from `@tailor-platform/sdk/runtime/iconv`).",
+      "Default and flat value imports such as",
+      '`import { get } from "@tailor-platform/sdk/runtime/aigateway"` are removed.',
+      "The codemod rewrites straightforward namespace-star imports and flat named value",
+      "imports. It also rewrites direct `file.deleteFile` calls on the aggregate runtime",
+      "namespace to `file.delete`. Destructured aggregate `deleteFile` references require",
+      "manual migration. Review any remaining runtime imports manually, especially when",
+      "a local binding or nested scope shadows an imported value, or when",
+      "type-position namespace member references need explicit top-level type imports.",
+      "For direct platform globals, replace `TailorContextAPI` and `TailorWorkflowAPI`",
+      "type references with `PlatformContextAPI` and `PlatformWorkflowAPI` respectively.",
+    ].join("\n"),
+  },
+  {
     id: "v2/tailordb-namespace",
     name: "Tailordb → tailordb (lowercase ambient namespace)",
     description:
@@ -559,6 +614,55 @@ export const allCodemods: CodemodPackage[] = [
       "alias may require call-site renaming.",
       "Review any remaining db.type references and rename SDK TailorDB schema builder",
       "calls to db.table. Leave unrelated local objects with a .type() method unchanged.",
+    ].join("\n"),
+  },
+  {
+    id: "v2/forward-relation-name",
+    name: "TailorDB forward relation names derive from field names",
+    description:
+      "Review TailorDB relations that omit `toward.as`. Their forward GraphQL field names now derive from the relation field name with a trailing `ID`, `Id`, or `id` removed, instead of from the target table name.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_4,
+    scriptPath: "v2/forward-relation-name/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: [
+      /\.relation\b(?!\s*\()/,
+      /\{[^}\n]*\brelation\b[^}\n]*\}\s*=/,
+      /\[\s*["']relation["']\s*\]/,
+    ],
+    examples: [
+      {
+        caption: "Preserve the v1 GraphQL field name by making it explicit:",
+        before: [
+          "ownerId: db.uuid().relation({",
+          '  type: "n-1",',
+          "  toward: { type: user },",
+          "}),",
+        ].join("\n"),
+        after: [
+          "ownerId: db.uuid().relation({",
+          '  type: "n-1",',
+          '  toward: { type: user, as: "user" },',
+          "}),",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "Tailor SDK v2 derives a default forward GraphQL relation name from the source",
+      "field name by removing a trailing ID, Id, or id. V1 derived it from the target",
+      "table name. Review each reported non-self relation that omits toward.as.",
+      "",
+      "If consumers must keep using the v1 GraphQL field name, inspect the v1 schema and",
+      "copy that exact field name into toward.as. Otherwise, update GraphQL operations",
+      "and consumer code to use the new field-based name. No change is needed when the old",
+      "and new names are identical. Relations with a guaranteed non-empty toward.as,",
+      "self-relations, and keyOnly relations are unchanged. For an empty or dynamic",
+      "toward.as, determine whether its runtime value can be falsy; if so, treat the",
+      "relation as using the default name.",
+      "",
+      "A relation field without a trailing ID, Id, or id would default to its own scalar",
+      "field name and therefore conflict. Give that relation an explicit toward.as.",
     ].join("\n"),
   },
   {

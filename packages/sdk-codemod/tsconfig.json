@@ -6,6 +6,6 @@
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo"
   },
-  "include": ["src/**/*.ts", "tsdown.config.ts"],
+  "include": ["src/**/*.ts", "codemods/**/scripts/transform.ts", "tsdown.config.ts"],
   "exclude": ["node_modules", "dist"]
 }

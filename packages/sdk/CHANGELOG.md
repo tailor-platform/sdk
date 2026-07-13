@@ -1,5 +1,44 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.4
+
+### Major Changes
+
+- [#1693](https://github.com/tailor-platform/sdk/pull/1693) [`4751214`](https://github.com/tailor-platform/sdk/commit/4751214c0923e094a844f9ce322279a47e871075) Thanks [@dqn](https://github.com/dqn)! - Rename the TailorDB schema builder from `db.type()` to `db.table()`.
+  
+  Update TailorDB definitions:
+  
+  ```diff
+   import { db } from "@tailor-platform/sdk";
+  
+  -export const user = db.type("User", {
+  +export const user = db.table("User", {
+     name: db.string(),
+   });
+  ```
+
+- [#1704](https://github.com/tailor-platform/sdk/pull/1704) [`9c81d9c`](https://github.com/tailor-platform/sdk/commit/9c81d9c18b1d29b3e9307ea17fe54c8ce55f4dda) Thanks [@dqn](https://github.com/dqn)! - Remove flat value and default exports from `@tailor-platform/sdk/runtime/*` subpath modules. Import each subpath through its self-named namespace export instead, for example `import { iconv } from "@tailor-platform/sdk/runtime/iconv"`.
+  
+  The aggregate `@tailor-platform/sdk/runtime` entry remains named-only, and its deprecated `file.deleteFile` alias is removed in favor of `file.delete`. The v2 codemod rewrites straightforward namespace-star subpath imports, flat named value imports, and aggregate `file.deleteFile` calls to the new namespace-object style.
+  
+  `TailorContextAPI` and `TailorWorkflowAPI` now describe the SDK wrapper objects. Code that types the platform-provided `globalThis.tailor.context` or `globalThis.tailor.workflow` objects directly must use `PlatformContextAPI` or `PlatformWorkflowAPI` instead.
+
+### Minor Changes
+
+- [#1699](https://github.com/tailor-platform/sdk/pull/1699) [`f6a8d07`](https://github.com/tailor-platform/sdk/commit/f6a8d0779f94c2de5502dfdc68348e4a41ceee47) Thanks [@dqn](https://github.com/dqn)! - Allow `setup coordinate --action` values to group multiple generated actions into one multi-config deploy by separating action names with commas.
+
+### Patch Changes
+
+- [#1702](https://github.com/tailor-platform/sdk/pull/1702) [`03143f5`](https://github.com/tailor-platform/sdk/commit/03143f5213d9fa9d3c7697de78f2376994716679) Thanks [@dqn](https://github.com/dqn)! - Clarify the setup delete warning for coordinator action references so grouped `--action` values tell users to remove the action name from the relevant value.
+
+- [#1691](https://github.com/tailor-platform/sdk/pull/1691) [`2f3dbab`](https://github.com/tailor-platform/sdk/commit/2f3dbab7ed3cf40fa174a82053d70c23c356204d) Thanks [@dqn](https://github.com/dqn)! - Clarify when profile machine user override errors are caused by `TAILOR_PLATFORM_MACHINE_USER_NAME`.
+
+- [#1700](https://github.com/tailor-platform/sdk/pull/1700) [`0063115`](https://github.com/tailor-platform/sdk/commit/0063115f567ba7e73c0b679a392d5983869e8ac4) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor` CLI failing with `ERR_MODULE_NOT_FOUND` when resolving extensionless relative imports of files whose basename contains a dot (e.g. `./permissions.generated`).
+
+- [#1705](https://github.com/tailor-platform/sdk/pull/1705) [`958d571`](https://github.com/tailor-platform/sdk/commit/958d571555a5c66e2e3b9beb3d2247f63cbb8f2c) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor` CLI failing with `ERR_MODULE_NOT_FOUND` when resolving `tsconfig.json` path aliases (`compilerOptions.paths`) in projects that omit `baseUrl`, which is the standard style since TypeScript 5.0. Also fix path alias resolution to match TypeScript's `extends` behavior: a child config's `baseUrl` is now correctly inherited from an extended config, and a child config's own `paths` now replaces (rather than merges with) inherited `paths`.
+
+- [#1703](https://github.com/tailor-platform/sdk/pull/1703) [`4681778`](https://github.com/tailor-platform/sdk/commit/46817786354665cb97d0de63b78fa83e64096e03) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix generated Kysely types for `db.date()` fields to use `Timestamp` instead of `string`, matching `db.datetime()` and allowing `insertInto`/`updateTable` calls to accept a `Date` value.
+
 ## 2.0.0-next.3
 
 ### Major Changes
@@ -225,6 +264,38 @@
 
 
 - [#1421](https://github.com/tailor-platform/sdk/pull/1421) [`b933f47`](https://github.com/tailor-platform/sdk/commit/b933f474d65f8dfed56f3991aae3a52589368b10) Thanks [@dqn](https://github.com/dqn)! - Corrupted or hand-edited TailorDB migration snapshot/diff files now fail with a clear validation error when loaded, instead of causing undefined behavior later.
+
+## 1.76.1
+
+### Patch Changes
+
+- [#1673](https://github.com/tailor-platform/sdk/pull/1673) [`aea0695`](https://github.com/tailor-platform/sdk/commit/aea06950636dea71c7a33daf501f2edd3489eb24) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency graphql to v17.0.2
+
+- [#1677](https://github.com/tailor-platform/sdk/pull/1677) [`ed4a0d6`](https://github.com/tailor-platform/sdk/commit/ed4a0d604c0371e75f316bf44fc985d117458f39) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @toiroakr/lines-db to v0.10.1
+
+- [#1690](https://github.com/tailor-platform/sdk/pull/1690) [`a891260`](https://github.com/tailor-platform/sdk/commit/a891260439c7ada1a88efb3ff2ea547c14c74235) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @clack/prompts to v1.7.0
+
+- [#1695](https://github.com/tailor-platform/sdk/pull/1695) [`ebcc267`](https://github.com/tailor-platform/sdk/commit/ebcc267c12e1e3e7ffb2785b3868df408b10cd53) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.29.3
+
+- [#1713](https://github.com/tailor-platform/sdk/pull/1713) [`db42a86`](https://github.com/tailor-platform/sdk/commit/db42a86906f405667ad2323f760dadb0f63f4900) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @opentelemetry/semantic-conventions to v1.42.0
+
+- [#1714](https://github.com/tailor-platform/sdk/pull/1714) [`eb220d0`](https://github.com/tailor-platform/sdk/commit/eb220d03029420e81e713c2d0b1a21e8c52eba57) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.23.0
+
+- [#1685](https://github.com/tailor-platform/sdk/pull/1685) [`f2be4fa`](https://github.com/tailor-platform/sdk/commit/f2be4fa04bf67abb77c7c3d3466db5d5463ae98f) Thanks [@toiroakr](https://github.com/toiroakr)! - Deduplicate the array-guard type logic in `.index()`/`.unique()` field builder methods into a shared helper. No behavior change.
+
+## 1.76.0
+
+### Patch Changes
+
+- [#1701](https://github.com/tailor-platform/sdk/pull/1701) [`e8bcbdf`](https://github.com/tailor-platform/sdk/commit/e8bcbdf92f90f20cc292a4f6b998475e4aa35c8e) Thanks [@dqn](https://github.com/dqn)! - Show the `profile update --user` recovery command when `tailor-sdk login --profile` authenticates a different user than the profile references.
+
+- [#1698](https://github.com/tailor-platform/sdk/pull/1698) [`dd25b69`](https://github.com/tailor-platform/sdk/commit/dd25b69ba829e7d446731b4cbf2f6753d2abde95) Thanks [@dqn](https://github.com/dqn)! - Reject duplicate TailorDB type-level builder calls at type-check time and runtime instead of silently overwriting earlier settings.
+
+## 1.75.0
+
+### Minor Changes
+
+- [#1679](https://github.com/tailor-platform/sdk/pull/1679) [`4ff2b23`](https://github.com/tailor-platform/sdk/commit/4ff2b23d84c5dd5f1692cc3b3f7b32b273b4d550) Thanks [@k1LoW](https://github.com/k1LoW)! - Add workflow job function execution policies. Declare them with `defineWorkflowExecutionPolicies` (or the single-key `defineWorkflowExecutionPolicy`), register them via `workflow.executionPolicies` on `defineConfig`, and pass the policy's `key` (or, for wildcard policies declared with `matchType: "prefix"`, the value returned by `keyFor(suffix)`) through the new `executionPolicyKey` option on `triggerJobFunction` / `job.trigger()` to apply the platform-side concurrency cap. `executionPolicyKey` only accepts values produced by a declared policy. `keyFor` joins the prefix and suffix with `.` by default; override it with `separator`, passed as the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group) or as a `def` field on a single `defineWorkflowExecutionPolicy`.
 
 ## 1.74.1
 

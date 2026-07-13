@@ -14,7 +14,7 @@ import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
 import { assertDefined } from "#/utils/assert";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
-import { deploymentArgs } from "../shared/args";
+import { deploymentArgs, resolveMachineUserInputSource } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { defineAppCommand } from "../shared/command";
 import { extractAllNamespaces } from "../shared/config";
@@ -48,6 +48,7 @@ const queryBaseOptionsSchema = z.object({
   configPath: z.string().optional(),
   engine: queryEngineSchema,
   machineUser: z.string().optional(),
+  machineUserSource: z.enum(["option", "env"]).optional(),
 });
 const queryOptionsSchema = queryBaseOptionsSchema.extend({
   query: z.string(),
@@ -147,6 +148,7 @@ async function loadOptions(options: QueryBaseOptions) {
 
   const machineUser = await loadMachineUserName({
     machineUser: result.data.machineUser,
+    machineUserSource: result.data.machineUserSource,
     profile: result.data.profile,
   });
   if (!machineUser) {
@@ -813,6 +815,7 @@ export const queryCommand = defineAppCommand({
       configPath: args.config,
       engine: args.engine,
       machineUser: args["machine-user"],
+      machineUserSource: resolveMachineUserInputSource(args["machine-user"]),
     };
 
     if (mode.mode === "abort") {

@@ -2,7 +2,7 @@
  * Tests for `@tailor-platform/sdk/runtime/file` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import * as file from "#/runtime/file";
+import { file, type TailorDBFileError, type TailorDBFileErrorCode } from "#/runtime/file";
 import { cleanupMocks, mockFile, injectMocks } from "#/vitest/mock";
 
 const args = ["ns", "Doc", "blob", "rec-1"] as const;
@@ -84,7 +84,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     expect(fileM.calls[0]?.method).toBe("getMetadata");
   });
 
-  test("delete forwards (re-exported from deleteFile)", async () => {
+  test("delete forwards", async () => {
     using fileM = mockFile();
     await file.delete(...args);
 
@@ -141,8 +141,8 @@ describe("@tailor-platform/sdk/runtime/file", () => {
       globalThis as unknown as {
         TailorDBFileError: new (
           m: string,
-          c?: file.TailorDBFileErrorCode,
-        ) => Error & { code?: file.TailorDBFileErrorCode };
+          c?: TailorDBFileErrorCode,
+        ) => Error & { code?: TailorDBFileErrorCode };
       }
     ).TailorDBFileError;
     const err = new TailorDBFileError("operation failed", "OPERATION_FAILED");
@@ -150,7 +150,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     expect(err.code).toBe("OPERATION_FAILED");
     // Type-level: file.TailorDBFileError is a structural interface that the
     // global class instances satisfy (not a direct alias of the class itself).
-    const _typed: file.TailorDBFileError = err as file.TailorDBFileError;
+    const _typed: TailorDBFileError = err as TailorDBFileError;
     expect(_typed).toBe(err);
   });
 });

@@ -1,4 +1,3 @@
-import * as inflection from "inflection";
 import type { RawRelationConfig } from "#/configure/services/tailordb/types";
 import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
 import type { UnionToTuple } from "type-fest";
@@ -128,16 +127,9 @@ export function buildRelationInfo(
   const targetTypeName =
     rawRelation.toward.type === "self" ? context.typeName : rawRelation.toward.type;
 
-  // Compute forward name
   let forwardName = rawRelation.toward.as;
   if (!forwardName) {
-    if (rawRelation.toward.type === "self") {
-      // For self-relations, derive from field name by removing ID suffix
-      forwardName = context.fieldName.replace(/(ID|Id|id)$/u, "");
-    } else {
-      // Use inflection to generate default forward name
-      forwardName = inflection.camelize(targetTypeName, true);
-    }
+    forwardName = context.fieldName.replace(/(ID|Id|id)$/u, "");
   }
 
   return {

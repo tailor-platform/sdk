@@ -15,6 +15,11 @@ export default {
     "src/vitest/integration/vitest.config.ts",
     "zinfer.config.ts",
   ],
+  ignoreIssues: {
+    "src/runtime/{aigateway,authconnection,context,file,iconv,idp,secretmanager,workflow}.ts": [
+      "duplicates",
+    ],
+  },
   ignoreDependencies: ["undici", "vite"],
   ignoreBinaries: ["knip", "publint", "actionlint"],
 } satisfies KnipConfig;

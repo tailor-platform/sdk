@@ -2,7 +2,7 @@
  * Tests for `@tailor-platform/sdk/runtime/authconnection` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import * as authconnection from "#/runtime/authconnection";
+import { authconnection } from "#/runtime/authconnection";
 import { mockAuthconnection, cleanupMocks, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/authconnection", () => {

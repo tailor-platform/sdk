@@ -62,7 +62,11 @@ describe("Kysely TypeProcessor", () => {
           endDate: db.datetime(),
           cancelledAt: db.datetime({ optional: true }),
         }),
-        expected: ["startDate: string;", "endDate: Timestamp;", "cancelledAt: Timestamp | null;"],
+        expected: [
+          "startDate: Timestamp;",
+          "endDate: Timestamp;",
+          "cancelledAt: Timestamp | null;",
+        ],
       },
       {
         name: "uuid types",
@@ -100,7 +104,7 @@ describe("Kysely TypeProcessor", () => {
       );
 
       expect(typeDef).toContain("eventDates: ArrayColumnType<Timestamp>;");
-      expect(typeDef).toContain("optionalDates: string[] | null;");
+      expect(typeDef).toContain("optionalDates: ArrayColumnType<Timestamp> | null;");
     });
   });
 
@@ -180,7 +184,7 @@ describe("Kysely TypeProcessor", () => {
       expect(typeDef).toContain("phone?: string | null");
     });
 
-    test("should use Date | string instead of Timestamp for date fields inside nested objects", async () => {
+    test("should use Timestamp for date fields inside nested objects", async () => {
       const type = db.table("Receipt", {
         receiptDate: db.date(),
         dueSchedule: db.object({
@@ -191,10 +195,10 @@ describe("Kysely TypeProcessor", () => {
 
       const result = await processKyselyType(parseTailorDBType(toSchemaOutput(type)));
 
-      expect(result.typeDef).toContain("receiptDate: string;");
+      expect(result.typeDef).toContain("receiptDate: Timestamp;");
       // Nested object with datetime is wrapped in ObjectColumnType
       expect(result.typeDef).toContain("ObjectColumnType<");
-      expect(result.typeDef).toContain("dueDate: string");
+      expect(result.typeDef).toContain("dueDate: Timestamp");
       expect(result.typeDef).toContain("reminderAt?: Timestamp | null");
       expect(result.usedUtilityTypes.Timestamp).toBe(true);
     });

@@ -1,11 +1,5 @@
 import { assertDefined } from "#/utils/assert";
-import {
-  type ASTNode,
-  isStringLiteral,
-  isFunctionExpression,
-  findProperty,
-  getTriggerCallInfo,
-} from "./ast-utils";
+import { type ASTNode, isStringLiteral, isFunctionExpression, findProperty } from "./ast-utils";
 import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
 import type { Program, CallExpression, ObjectExpression } from "@oxc-project/types";
 
@@ -16,12 +10,6 @@ export interface JobLocation {
   bodyValueRange: { start: number; end: number };
   // Range of the entire variable declaration statement (for removal)
   statementRange?: { start: number; end: number };
-}
-
-export interface TriggerCall {
-  identifierName: string;
-  callRange: { start: number; end: number };
-  argsText: string;
 }
 
 /**
@@ -107,55 +95,4 @@ export function findAllJobs(program: Program, _sourceText: string): JobLocation[
 
   walk(program as unknown as ASTNode);
   return jobs;
-}
-
-/**
- * Build a map from export name to job name from detected jobs
- * @param jobs - Detected job locations
- * @returns Map from export name to job name
- */
-export function buildJobNameMap(jobs: JobLocation[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const job of jobs) {
-    if (job.exportName) {
-      map.set(job.exportName, job.name);
-    }
-  }
-  return map;
-}
-
-/**
- * Detect all .trigger() calls in the source code
- * Returns information about each trigger call for transformation
- * @param program - Parsed TypeScript program
- * @param sourceText - Source code text
- * @returns Detected trigger calls
- */
-export function detectTriggerCalls(program: Program, sourceText: string): TriggerCall[] {
-  const calls: TriggerCall[] = [];
-
-  function walk(node: ASTNode | null | undefined): void {
-    if (!node || typeof node !== "object") return;
-
-    const triggerCall = getTriggerCallInfo(node, sourceText);
-    if (triggerCall) {
-      calls.push({
-        identifierName: triggerCall.identifierName,
-        callRange: triggerCall.callRange,
-        argsText: triggerCall.argsText,
-      });
-    }
-
-    for (const key of Object.keys(node)) {
-      const child = node[key] as unknown;
-      if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null));
-      } else if (child && typeof child === "object") {
-        walk(child as ASTNode);
-      }
-    }
-  }
-
-  walk(program as unknown as ASTNode);
-  return calls;
 }
