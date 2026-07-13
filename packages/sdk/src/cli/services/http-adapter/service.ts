@@ -30,14 +30,14 @@ export type HttpAdapterService = {
 
 export interface CreateHttpAdapterServiceParams {
   config: HttpAdapterServiceConfig;
-  /** Directory the config's file patterns are resolved against (defaults to process.cwd()) */
-  baseDir?: string;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
 }
 
 export function createHttpAdapterService(
   params: CreateHttpAdapterServiceParams,
 ): HttpAdapterService {
-  const { config, baseDir = process.cwd() } = params;
+  const { config, baseDir } = params;
   let adapters: LoadedHttpAdapter[] = [];
   let fileCount = 0;
   let loaded = false;

@@ -98,7 +98,7 @@ export default {
     expect(code).not.toContain("process.env.LOG_LEVEL");
   });
 
-  test("resolves tsconfig relative to baseDir, not the config file's directory", async () => {
+  test("uses the passed baseDir rather than deriving one from the config file's own directory", async () => {
     const configFile = writeConfig();
     const baseDir = fs.realpathSync(
       fs.mkdtempSync(path.join(os.tmpdir(), "auth-bundler-basedir-")),

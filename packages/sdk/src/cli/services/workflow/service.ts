@@ -36,8 +36,8 @@ export type WorkflowService = {
 export interface CreateWorkflowServiceParams {
   /** The workflow service configuration */
   config: WorkflowServiceConfig;
-  /** Directory the config's file patterns are resolved against (defaults to process.cwd()) */
-  baseDir?: string;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
 }
 
 /**
@@ -46,7 +46,7 @@ export interface CreateWorkflowServiceParams {
  * @returns A new WorkflowService instance
  */
 export function createWorkflowService(params: CreateWorkflowServiceParams): WorkflowService {
-  const { config, baseDir = process.cwd() } = params;
+  const { config, baseDir } = params;
   let workflows: Record<string, Workflow> = {};
   let workflowSources: Array<{ workflow: Workflow; sourceFile: string }> = [];
   let jobs: CollectedJob[] = [];

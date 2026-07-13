@@ -44,7 +44,7 @@ export default createResolver({
     const fileA = writeResolver("a.ts", resolverSource("resolver-a"));
     const fileB = writeResolver("b.ts", resolverSource("resolver-b"));
 
-    const service = createResolverService("ns", { files: [fileA, fileB] });
+    const service = createResolverService("ns", { files: [fileA, fileB] }, process.cwd());
     await service.loadResolvers();
 
     expect(
@@ -58,7 +58,7 @@ export default createResolver({
     const fileA = writeResolver("a.ts", resolverSource("duplicate"));
     const fileB = writeResolver("b.ts", resolverSource("duplicate"));
 
-    const service = createResolverService("ns", { files: [fileA, fileB] });
+    const service = createResolverService("ns", { files: [fileA, fileB] }, process.cwd());
 
     await expect(service.loadResolvers()).rejects.toThrow(
       /Duplicate resolver name "duplicate" found in namespace "ns"/,

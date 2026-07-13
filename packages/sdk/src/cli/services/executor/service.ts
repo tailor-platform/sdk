@@ -33,8 +33,8 @@ export type ExecutorService = {
 export interface CreateExecutorServiceParams {
   /** The executor service configuration */
   config: ExecutorServiceConfig;
-  /** Directory the config's file patterns are resolved against (defaults to process.cwd()) */
-  baseDir?: string;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
 }
 
 /**
@@ -43,7 +43,7 @@ export interface CreateExecutorServiceParams {
  * @returns A new ExecutorService instance
  */
 export function createExecutorService(params: CreateExecutorServiceParams): ExecutorService {
-  const { config, baseDir = process.cwd() } = params;
+  const { config, baseDir } = params;
   const executors: Record<string, Executor> = {};
   const pluginExecutors: PluginExecutor[] = [];
   let loadPromise: Promise<Record<string, Executor> | undefined> | undefined;
