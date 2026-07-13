@@ -7,7 +7,7 @@ const regex = {
   date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
   time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
   datetime:
-    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
+    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(\.(?<millisec>\d{3}))?Z$/,
   decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
 } as const;
 

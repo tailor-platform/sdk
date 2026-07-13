@@ -600,6 +600,15 @@ describe("TailorField runtime validation tests", () => {
       expect(bad.issues).toBeDefined();
       expect(bad.issues?.[0]?.message).toEqual(invalidMessage);
     });
+
+    test("rejects a non-dot datetime fractional-second separator", () => {
+      const value = "2025-12-21T10:11:12x123Z";
+      const result = t.datetime().parse({ value, data, user });
+
+      expect(result.issues?.[0]?.message).toEqual(
+        `Expected to match ISO format: received ${value}`,
+      );
+    });
   });
 
   describe("validates complex types", () => {
