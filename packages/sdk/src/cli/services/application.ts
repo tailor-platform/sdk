@@ -552,11 +552,11 @@ export async function loadApplication(
     const resolverBundles = await bundleResolvers(
       pipeline.namespace,
       pipeline.config,
+      baseDir,
       triggerContext,
       bundleCache,
       inlineSourcemap,
       bundleLogLevel,
-      baseDir,
     );
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
@@ -585,10 +585,10 @@ export async function loadApplication(
       mainJobNames,
       config.env ?? {},
       triggerContext,
+      baseDir,
       bundleCache,
       inlineSourcemap,
       bundleLogLevel,
-      baseDir,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -603,9 +603,9 @@ export async function loadApplication(
         methods: a.methods,
         hasOutput: a.hasOutput,
       })),
+      baseDir,
       bundleCache,
       bundleLogLevel,
-      baseDir,
     );
   }
 

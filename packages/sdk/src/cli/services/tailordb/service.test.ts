@@ -51,6 +51,7 @@ export const account = db.type("User", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [userFile, accountFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -73,6 +74,7 @@ export const objectPrototype = db.type("toString", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -94,6 +96,7 @@ export const proto = db.type("__proto__", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -116,6 +119,7 @@ export const user = db.type("User", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [userFile, userFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -141,6 +145,7 @@ export const user = db.type("User", {
       namespace: "main",
       config: { files: [] },
       pluginManager,
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");

@@ -34,8 +34,8 @@ export interface BundleAuthHooksOptions {
   inlineSourcemap?: boolean;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
-  /** Directory the tsconfig is resolved against (defaults to the config file's own directory) */
-  baseDir?: string;
+  /** Directory the tsconfig is resolved against */
+  baseDir: string;
 }
 
 /**
@@ -72,7 +72,7 @@ export async function bundleAuthHooks(
 
   const absoluteConfigPath = path.resolve(configPath);
 
-  const tsconfig = await resolveTSConfigWithFallback(baseDir ?? path.dirname(absoluteConfigPath));
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   const functionName = `auth-hook--${authName}--before-login`;
 

@@ -56,10 +56,10 @@ export interface BundleWorkflowJobsResult {
  * @param mainJobNames - Names of main jobs
  * @param env - Environment variables to inject
  * @param triggerContext - Trigger context for transformations
+ * @param baseDir - Directory the owning config's tsconfig is resolved against
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
- * @param baseDir - Directory the owning config's tsconfig is resolved against (defaults to process.cwd())
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -67,10 +67,10 @@ export async function bundleWorkflowJobs(
   mainJobNames: string[],
   env: Record<string, string | number | boolean> = {},
   triggerContext: TriggerContext,
+  baseDir: string,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
-  baseDir = process.cwd(),
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");

@@ -39,8 +39,8 @@ export interface BundleExecutorsOptions {
   inlineSourcemap?: boolean;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
-  /** Directory the config's file patterns are resolved against (defaults to process.cwd()) */
-  baseDir?: string;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
 }
 
 /**
@@ -63,7 +63,7 @@ export async function bundleExecutors(
     cache,
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
-    baseDir = process.cwd(),
+    baseDir,
   } = options;
   const configFiles = loadFilesWithIgnores(config, baseDir);
   const files = [...configFiles, ...additionalFiles];

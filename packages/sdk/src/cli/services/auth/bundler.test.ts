@@ -49,6 +49,7 @@ export default {
       authName: "my-auth",
       handlerAccessPath: "auth.hooks.beforeLogin.handler",
       env: { ENVIRONMENT: "staging", RETRIES: 3 },
+      baseDir: path.dirname(configFile),
     });
 
     const code = bundled.get("auth-hook--my-auth--before-login");
@@ -65,6 +66,7 @@ export default {
       configPath: configFile,
       authName: "my-auth",
       handlerAccessPath: "auth.hooks.beforeLogin.handler",
+      baseDir: path.dirname(configFile),
     });
 
     const code = bundled.get("auth-hook--my-auth--before-login");
@@ -88,6 +90,7 @@ export default {
       authName: "my-auth",
       handlerAccessPath: "auth.hooks.beforeLogin.handler",
       bundleLogLevel: "WARN",
+      baseDir: path.dirname(configFile),
     });
 
     const code = bundled.get("auth-hook--my-auth--before-login");

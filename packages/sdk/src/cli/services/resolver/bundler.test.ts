@@ -45,9 +45,13 @@ describe("bundleResolvers", () => {
     });
 
     await expect(
-      bundleResolvers("provisioning", {
-        files: ["./src/backend/provisioning/resolver/*.ts"],
-      }),
+      bundleResolvers(
+        "provisioning",
+        {
+          files: ["./src/backend/provisioning/resolver/*.ts"],
+        },
+        tmp.dir,
+      ),
     ).resolves.toEqual(new Map());
   });
 
@@ -70,10 +74,6 @@ describe("bundleResolvers", () => {
       await bundleResolvers(
         "tsconfig-test",
         { files: ["./src/backend/tsconfig-test/resolver/*.ts"] },
-        undefined,
-        undefined,
-        undefined,
-        "DEBUG",
         otherDir,
       );
 
@@ -110,9 +110,13 @@ describe("bundleResolvers", () => {
       vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "2");
       buildTracker = { active: 0, maxActive: 0 };
 
-      await bundleResolvers("concurrency", {
-        files: ["./src/backend/concurrency/resolver/*.ts"],
-      });
+      await bundleResolvers(
+        "concurrency",
+        {
+          files: ["./src/backend/concurrency/resolver/*.ts"],
+        },
+        tmp.dir,
+      );
 
       expect(buildTracker.maxActive).toBeGreaterThan(0);
       expect(buildTracker.maxActive).toBeLessThanOrEqual(2);

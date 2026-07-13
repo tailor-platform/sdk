@@ -32,21 +32,21 @@ interface ResolverInfo {
  * 3. Bundles in a single step with tree-shaking
  * @param namespace - Resolver namespace name
  * @param config - Resolver file loading configuration
+ * @param baseDir - Directory the config's file patterns are resolved against
  * @param triggerContext - Trigger context for workflow/job transformations
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
- * @param baseDir - Directory the config's file patterns are resolved against (defaults to process.cwd())
  * @returns Map of resolver name to bundled code
  */
 export async function bundleResolvers(
   namespace: string,
   config: FileLoadConfig,
+  baseDir: string,
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
-  baseDir = process.cwd(),
 ): Promise<Map<string, string>> {
   const bundledCode = new Map<string, string>();
   const files = loadFilesWithIgnores(config, baseDir);
