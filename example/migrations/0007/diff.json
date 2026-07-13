@@ -41,8 +41,7 @@
                     },
                     "errorMessage": ""
                   }
-                ],
-                "default": 1
+                ]
               },
               "unitPrice": {
                 "type": "float",

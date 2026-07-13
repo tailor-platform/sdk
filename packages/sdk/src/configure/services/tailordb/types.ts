@@ -9,7 +9,7 @@ import type {
   TailorFieldType,
 } from "#/configure/types/field.types";
 import type { InferredAttributes, TailorPrincipal } from "#/runtime/types";
-import type { InferFieldsOutput, output, Prettify } from "#/types/helpers";
+import type { DeepReadonly, InferFieldsOutput, output, Prettify } from "#/types/helpers";
 import type {
   DBFieldMetadata as DBFieldMetadataGenerated,
   GqlOperationsInput,
@@ -151,7 +151,7 @@ export type TailorDBInstance<
 
 type HookArgs<TData> =
   TData extends Record<string, unknown>
-    ? { readonly [K in keyof TData]?: TData[K] | null | undefined }
+    ? { readonly [K in keyof TData]?: DeepReadonly<TData[K]> | null | undefined }
     : unknown;
 
 type CreateHookFn<TValue, TReturn> = (args: {
@@ -197,8 +197,8 @@ export type TypeValidateFn<
   TData = { [K in keyof F]: output<F[K]> },
 > = (
   args: {
-    newRecord: Readonly<TData>;
-    oldRecord: Readonly<TData> | null;
+    newRecord: DeepReadonly<TData>;
+    oldRecord: DeepReadonly<TData> | null;
     invoker: TailorPrincipal | null;
   },
   issues: <P extends DottedPaths<Omit<TData, "id">>>(field: P, message: string) => void,
@@ -207,8 +207,8 @@ export type TypeValidateFn<
 type TypeCreateHookFn<
   F extends Record<string, TailorAnyDBField>,
   TData = { [K in keyof F]: output<F[K]> },
-> = (args: { input: Readonly<TData>; invoker: TailorPrincipal | null; now: Date }) => {
-  [K in Exclude<keyof TData & string, "id">]?: TData[K] | null | undefined;
+> = (args: { input: DeepReadonly<TData>; invoker: TailorPrincipal | null; now: Date }) => {
+  [K in Exclude<keyof TData & string, "id">]?: TData[K] | null;
 };
 
 type TypeUpdateHookFn<
@@ -216,10 +216,10 @@ type TypeUpdateHookFn<
   TData = { [K in keyof F]: output<F[K]> },
 > = (args: {
   input: HookArgs<TData>;
-  oldRecord: Readonly<TData>;
+  oldRecord: DeepReadonly<TData>;
   invoker: TailorPrincipal | null;
   now: Date;
-}) => { [K in Exclude<keyof TData & string, "id">]?: TData[K] | null | undefined };
+}) => { [K in Exclude<keyof TData & string, "id">]?: TData[K] | null };
 
 export type TypeHook<F extends Record<string, TailorAnyDBField>> = {
   create?: TypeCreateHookFn<F>;
