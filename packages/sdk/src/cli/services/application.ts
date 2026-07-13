@@ -621,6 +621,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      baseDir,
     });
   }
 

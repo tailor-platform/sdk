@@ -34,6 +34,8 @@ export interface BundleAuthHooksOptions {
   inlineSourcemap?: boolean;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
+  /** Directory the tsconfig is resolved against (defaults to the config file's own directory) */
+  baseDir?: string;
 }
 
 /**
@@ -57,6 +59,7 @@ export async function bundleAuthHooks(
     cache,
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
+    baseDir,
   } = options;
 
   logger.newline();
@@ -71,7 +74,7 @@ export async function bundleAuthHooks(
 
   let tsconfig: string | undefined;
   try {
-    tsconfig = await resolveTSConfig(path.dirname(absoluteConfigPath));
+    tsconfig = await resolveTSConfig(baseDir ?? path.dirname(absoluteConfigPath));
   } catch {
     tsconfig = undefined;
   }

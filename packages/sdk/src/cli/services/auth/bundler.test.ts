@@ -1,8 +1,17 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { resolveTSConfig } from "pkg-types";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { bundleAuthHooks } from "./bundler";
+import type * as pkgTypes from "pkg-types";
+
+type PkgTypesModule = typeof pkgTypes;
+
+vi.mock("pkg-types", async (importOriginal) => {
+  const original = await importOriginal<PkgTypesModule>();
+  return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
+});
 
 describe("bundleAuthHooks", () => {
   let tmpDir: string | undefined;
@@ -84,5 +93,24 @@ export default {
     const code = bundled.get("auth-hook--my-auth--before-login");
     expect(code).toBeDefined();
     expect(code).not.toContain("process.env.LOG_LEVEL");
+  });
+
+  test("resolves tsconfig relative to baseDir, not the config file's directory", async () => {
+    const configFile = writeConfig();
+    const baseDir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "auth-bundler-basedir-")),
+    );
+    try {
+      await bundleAuthHooks({
+        configPath: configFile,
+        authName: "my-auth",
+        handlerAccessPath: "auth.hooks.beforeLogin.handler",
+        baseDir,
+      });
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(baseDir);
+    } finally {
+      fs.rmSync(baseDir, { recursive: true, force: true });
+    }
   });
 });

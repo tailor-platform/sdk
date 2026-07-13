@@ -7,15 +7,21 @@ import * as path from "pathe";
  * that directory even when a different module re-exports the resulting
  * config object unchanged (e.g. a test-only config that only overrides
  * plugins/generators).
+ *
+ * Uses the global symbol registry (`Symbol.for`) rather than `Symbol()` so
+ * the key still matches if multiple copies of the SDK end up loaded in the
+ * same process (e.g. a hoisting mismatch between the CLI and the config's
+ * own dependency resolution).
  */
-export const CONFIG_SOURCE_DIR = Symbol("tailor-sdk:config-source-dir");
+export const CONFIG_SOURCE_DIR = Symbol.for("tailor-sdk:config-source-dir");
 
 /**
  * Capture the absolute directory of the immediate caller of `fn`.
- * @param fn - The function whose caller's source location should be captured
+ * @param fn - The function whose caller's source location should be captured; never invoked, only used as the `Error.captureStackTrace` exclusion marker
  * @returns Absolute directory of the caller, or undefined if it could not be determined
  */
-export function captureCallerDir(fn: (...args: never[]) => unknown): string | undefined {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function captureCallerDir(fn: (...args: any[]) => unknown): string | undefined {
   const target: { stack?: NodeJS.CallSite[] } = {};
   const originalPrepareStackTrace = Error.prepareStackTrace;
   try {
