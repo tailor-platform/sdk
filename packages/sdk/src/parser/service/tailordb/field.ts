@@ -259,6 +259,13 @@ export function parseFieldConfig(
     );
   }
 
+  if (context && context.fieldPath.length > 1 && metadata.hooks) {
+    throw new Error(
+      `Field "${context.fieldPath.join(".")}" on type "${context.typeName}": ` +
+        `.hooks() cannot be used on nested inner fields`,
+    );
+  }
+
   const nestedFields = field.fields as Record<string, TailorAnyDBField> | undefined;
   return {
     type: fieldType,
