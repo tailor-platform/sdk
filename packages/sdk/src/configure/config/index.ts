@@ -1,3 +1,4 @@
+import { CONFIG_SOURCE_DIR, captureCallerDir } from "#/utils/caller-dir";
 import type { AppConfig } from "#/configure/config/types";
 import type { GeneratorConfig, Plugin } from "#/plugin/types";
 
@@ -13,6 +14,12 @@ export function defineConfig<
     // type-fest's Exact works recursively and causes type errors, so we use a shallow version here.
     Record<Exclude<keyof Config, keyof AppConfig>, never>,
 >(config: Config) {
+  // Stash where this call itself lives so relative file globs keep resolving
+  // against it, even if another module re-exports the returned config as-is.
+  const sourceDir = captureCallerDir(defineConfig);
+  if (sourceDir) {
+    (config as Record<PropertyKey, unknown>)[CONFIG_SOURCE_DIR] = sourceDir;
+  }
   return config;
 }
 

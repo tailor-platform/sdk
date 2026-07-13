@@ -13,11 +13,6 @@ import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";
 import { user } from "./tailordb/user";
 import { executionPolicies } from "./workflows/execution-policies";
 
-// Anchor file globs to this file's own directory (rather than the invocation
-// cwd) so configs that re-export this module from another directory — e.g.
-// example/tests/tailor.config.*.ts — still resolve files from here.
-const configDir = import.meta.dirname.replace(/\\/g, "/");
-
 const website = defineStaticWebSite("my-frontend", {
   description: "my frontend application",
 });
@@ -129,26 +124,26 @@ export default defineConfig({
   ],
   db: {
     tailordb: {
-      files: [`${configDir}/tailordb/*.ts`],
+      files: ["./tailordb/*.ts"],
       erdSite: erdSite.name,
       migration: {
         directory: "./migrations",
       },
     },
-    analyticsdb: { files: [`${configDir}/analyticsdb/*.ts`] },
+    analyticsdb: { files: ["./analyticsdb/*.ts"] },
   },
   resolver: {
-    "my-resolver": { files: [`${configDir}/resolvers/*.ts`] },
+    "my-resolver": { files: ["./resolvers/*.ts"] },
   },
   idp: [idp],
   auth,
-  executor: { files: [`${configDir}/executors/*.ts`] },
+  executor: { files: ["./executors/*.ts"] },
   workflow: {
-    files: [`${configDir}/workflows/**/*.ts`],
+    files: ["./workflows/**/*.ts"],
     executionPolicies,
   },
   httpAdapter: {
-    files: [`${configDir}/adapters/**/*.ts`],
+    files: ["./adapters/**/*.ts"],
   },
   staticWebsites: [website, erdSite],
   aiGateways: [aiGateway],

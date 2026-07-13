@@ -41,6 +41,7 @@ import { IdPSchema } from "#/parser/service/idp/index";
 import { SecretsSchema } from "#/parser/service/secrets/index";
 import { StaticWebsiteSchema } from "#/parser/service/staticwebsite/index";
 import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/index";
+import { getConfigSourceDir } from "#/utils/caller-dir";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
@@ -417,7 +418,7 @@ export interface DefineApplicationParams {
  */
 export function defineApplication(params: DefineApplicationParams): Application {
   const { config, pluginManager } = params;
-  const baseDir = path.dirname(config.path);
+  const baseDir = getConfigSourceDir(config) ?? path.dirname(config.path);
   const services = defineServices(config, baseDir, pluginManager);
   // Plugin executors are not known at define-time; generate/apply flows handle them after type loading.
   const executorService = defineExecutor(config.executor, baseDir, false);
@@ -482,7 +483,7 @@ export async function loadApplication(
   params: DefineApplicationParams,
 ): Promise<LoadApplicationResult> {
   const { config, pluginManager, bundleCache } = params;
-  const baseDir = path.dirname(config.path);
+  const baseDir = getConfigSourceDir(config) ?? path.dirname(config.path);
 
   // 1. Define services (synchronous)
   const {
