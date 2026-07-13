@@ -11,6 +11,7 @@ import { canPrompt, prompt } from "#/cli/shared/prompt";
 import {
   createValidatedWorkspaceWithClient,
   validateCreateWorkspaceOptions,
+  validateWorkspaceName,
 } from "../workspace/create";
 import { listWorkspacesWithClient } from "../workspace/list";
 import { workspaceDisplayName, workspaceInfo, type WorkspaceInfo } from "../workspace/transform";
@@ -45,12 +46,7 @@ function suggestedWorkspaceName(): string {
     .replaceAll(/^-+|-+$/g, "")
     .slice(0, 63)
     .replace(/-+$/, "");
-  try {
-    validateCreateWorkspaceOptions({ name, region: "placeholder" });
-    return name;
-  } catch {
-    return "my-workspace";
-  }
+  return validateWorkspaceName(name) === true ? name : "my-workspace";
 }
 
 function executableAction(args: readonly string[]): CLIErrorNextAction {
@@ -97,6 +93,11 @@ function workspaceMatchesRequestedIdentity(
     (!options.organizationId || options.organizationId === workspace.organizationId) &&
     (!options.folderId || options.folderId === workspace.folderId)
   );
+}
+
+function workspaceIdentity(workspace: WorkspaceInfo) {
+  const { id, name, region, organizationId, folderId } = workspace;
+  return { id, name, region, organizationId, folderId };
 }
 
 async function loadProjectContexts(
@@ -237,14 +238,7 @@ async function createWorkspace(
     name ??= await prompt.text({
       message: "Workspace name",
       default: suggestedWorkspaceName(),
-      validate: (value) => {
-        try {
-          validateCreateWorkspaceOptions({ name: value, region: "placeholder" });
-          return true;
-        } catch (error) {
-          return error instanceof Error ? error.message : String(error);
-        }
-      },
+      validate: validateWorkspaceName,
     });
     region ??= await prompt.select({
       message: "Workspace region",
@@ -362,6 +356,7 @@ export async function resolveDeployWorkspace(
     loadProjectContexts(platformUrl, options.contextPaths),
     listWorkspacesWithClient(client),
   ]);
+  const interactive = canPrompt();
   const contextWorkspaceIds = new Set(contexts.map(({ workspaceId }) => workspaceId));
   const linkedWorkspace =
     contextWorkspaceIds.size === 1
@@ -375,7 +370,7 @@ export async function resolveDeployWorkspace(
   }
 
   if (contextWorkspaceIds.size > 1) {
-    if (!canPrompt()) {
+    if (!interactive) {
       throw CLIError({
         code: "WORKSPACE_CONTEXT_CONFLICT",
         message: "The deployed configuration files are linked to different workspaces.",
@@ -384,7 +379,7 @@ export async function resolveDeployWorkspace(
         context: { savedWorkspaceIds: [...contextWorkspaceIds] },
       });
     }
-    if (workspaces.length > 0 && canPrompt()) {
+    if (workspaces.length > 0) {
       return chooseWorkspace(client, platformUrl, workspaces, options);
     }
   }
@@ -395,7 +390,7 @@ export async function resolveDeployWorkspace(
       options.workspaceName !== undefined &&
       options.workspaceRegion !== undefined &&
       workspaces.length <= 1;
-    if (!canPrompt() && !explicitlyEnsuringSingleTarget) {
+    if (!interactive && !explicitlyEnsuringSingleTarget) {
       throw CLIError({
         code: "WORKSPACE_CONTEXT_STALE",
         message: "The saved project workspace is no longer available.",
@@ -403,17 +398,11 @@ export async function resolveDeployWorkspace(
         next: executableAction(selectDeployArgs(options)),
         context: {
           savedWorkspaceIds: [...contextWorkspaceIds],
-          workspaces: workspaces.map(({ id, name, region, organizationId, folderId }) => ({
-            id,
-            name,
-            region,
-            organizationId,
-            folderId,
-          })),
+          workspaces: workspaces.map(workspaceIdentity),
         },
       });
     }
-    if (workspaces.length > 0 && canPrompt()) {
+    if (workspaces.length > 0 && interactive) {
       return chooseWorkspace(client, platformUrl, workspaces, options);
     }
   }
@@ -454,20 +443,14 @@ export async function resolveDeployWorkspace(
   }
 
   if (workspaces.length > 1) {
-    if (!canPrompt()) {
+    if (!interactive) {
       throw CLIError({
         code: "WORKSPACE_SELECTION_REQUIRED",
         message: "Multiple workspaces are available.",
         suggestion: "Choose one explicitly for non-interactive deployment.",
         next: executableAction(selectDeployArgs(options)),
         context: {
-          workspaces: workspaces.map(({ id, name, region, organizationId, folderId }) => ({
-            id,
-            name,
-            region,
-            organizationId,
-            folderId,
-          })),
+          workspaces: workspaces.map(workspaceIdentity),
         },
       });
     }
@@ -485,7 +468,7 @@ export async function resolveDeployWorkspace(
       context: { availableRegions: regions },
     });
   }
-  if (canPrompt() || options.createWorkspace) {
+  if (interactive || options.createWorkspace) {
     return createWorkspace(client, platformUrl, options, regions);
   }
 
