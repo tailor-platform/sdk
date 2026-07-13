@@ -39,6 +39,7 @@ interface ResolverInfo {
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
+ * @param baseDir - Directory the config's file patterns are resolved against (defaults to process.cwd())
  * @returns Map of resolver name to bundled code
  */
 export async function bundleResolvers(
@@ -48,9 +49,10 @@ export async function bundleResolvers(
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
+  baseDir = process.cwd(),
 ): Promise<Map<string, string>> {
   const bundledCode = new Map<string, string>();
-  const files = loadFilesWithIgnores(config);
+  const files = loadFilesWithIgnores(config, baseDir);
   if (files.length === 0) {
     logger.warn(`No resolver files found for patterns: ${config.files.join(", ")}`);
     return bundledCode;
@@ -88,7 +90,7 @@ export async function bundleResolvers(
 
   let tsconfig: string | undefined;
   try {
-    tsconfig = await resolveTSConfig();
+    tsconfig = await resolveTSConfig(baseDir);
   } catch {
     tsconfig = undefined;
   }

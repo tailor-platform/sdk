@@ -41,6 +41,8 @@ export interface CreateTailorDBServiceParams {
   config: TailorDBServiceConfig;
   /** Plugin manager for processing plugins */
   pluginManager?: PluginManager;
+  /** Directory the config's file patterns are resolved against (defaults to process.cwd()) */
+  baseDir?: string;
 }
 
 /**
@@ -49,7 +51,7 @@ export interface CreateTailorDBServiceParams {
  * @returns A new TailorDBService instance
  */
 export function createTailorDBService(params: CreateTailorDBServiceParams): TailorDBService {
-  const { namespace, config, pluginManager } = params;
+  const { namespace, config, pluginManager, baseDir = process.cwd() } = params;
   type TailorDBTypesByName = Record<string, TailorDBTypeSchemaOutput>;
   const createRawTypesByName = (): TailorDBTypesByName =>
     Object.create(null) as TailorDBTypesByName;
@@ -237,11 +239,11 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             return undefined;
           }
 
-          const typeFiles = [...new Set(loadFilesWithIgnores(config))];
+          const typeFiles = [...new Set(loadFilesWithIgnores(config, baseDir))];
 
           let tsconfig: string | undefined;
           try {
-            tsconfig = await resolveTSConfig();
+            tsconfig = await resolveTSConfig(baseDir);
           } catch {
             tsconfig = undefined;
           }

@@ -70,15 +70,16 @@ export async function bundleAuthHooks(
 
   await removeStaleEntryFiles(outputDir);
 
+  const absoluteConfigPath = path.resolve(configPath);
+
   let tsconfig: string | undefined;
   try {
-    tsconfig = await resolveTSConfig();
+    tsconfig = await resolveTSConfig(path.dirname(absoluteConfigPath));
   } catch {
     tsconfig = undefined;
   }
 
   const functionName = `auth-hook--${authName}--before-login`;
-  const absoluteConfigPath = path.resolve(configPath);
 
   const serializedTriggerContext = serializeTriggerContext(triggerContext);
 

@@ -42,6 +42,8 @@ export interface BundleExecutorsOptions {
   inlineSourcemap?: boolean;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
+  /** Directory the config's file patterns are resolved against (defaults to process.cwd()) */
+  baseDir?: string;
 }
 
 /**
@@ -64,8 +66,9 @@ export async function bundleExecutors(
     cache,
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
+    baseDir = process.cwd(),
   } = options;
-  const configFiles = loadFilesWithIgnores(config);
+  const configFiles = loadFilesWithIgnores(config, baseDir);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
     logger.warn(`No executor files found for patterns: ${config.files.join(", ")}`);
@@ -114,7 +117,7 @@ export async function bundleExecutors(
 
   let tsconfig: string | undefined;
   try {
-    tsconfig = await resolveTSConfig();
+    tsconfig = await resolveTSConfig(baseDir);
   } catch {
     tsconfig = undefined;
   }

@@ -59,6 +59,7 @@ export interface BundleWorkflowJobsResult {
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
+ * @param baseDir - Directory the owning config's tsconfig is resolved against (defaults to process.cwd())
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -69,6 +70,7 @@ export async function bundleWorkflowJobs(
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
+  baseDir = process.cwd(),
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
@@ -100,7 +102,7 @@ export async function bundleWorkflowJobs(
 
   let tsconfig: string | undefined;
   try {
-    tsconfig = await resolveTSConfig();
+    tsconfig = await resolveTSConfig(baseDir);
   } catch {
     tsconfig = undefined;
   }

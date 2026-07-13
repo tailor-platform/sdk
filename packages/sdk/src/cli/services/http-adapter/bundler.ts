@@ -40,12 +40,14 @@ export interface HttpAdapterBundleResult {
  * @param adapters - Detected adapters to bundle
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
+ * @param baseDir - Directory the owning config's tsconfig is resolved against (defaults to process.cwd())
  * @returns Bundled scripts keyed by adapter name
  */
 export async function bundleHttpAdapters(
   adapters: HttpAdapterBundleInput[],
   cache?: BundleCache,
   bundleLogLevel: LogLevel = "DEBUG",
+  baseDir = process.cwd(),
 ): Promise<HttpAdapterBundleResult> {
   if (adapters.length === 0) {
     return { bundledInputs: new Map(), bundledOutputs: new Map() };
@@ -61,7 +63,7 @@ export async function bundleHttpAdapters(
 
   let tsconfig: string | undefined;
   try {
-    tsconfig = await resolveTSConfig();
+    tsconfig = await resolveTSConfig(baseDir);
   } catch {
     tsconfig = undefined;
   }

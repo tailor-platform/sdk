@@ -41,11 +41,13 @@ export function normalizeFilePath(filePath: string): string {
  * Scans workflow files to collect workflow and job mappings
  * @param workflowConfig - Workflow file loading configuration
  * @param authNamespace - Auth service namespace (optional, used for string-literal authInvoker expansion)
+ * @param baseDir - Directory the workflow config's file patterns are resolved against (defaults to process.cwd())
  * @returns Trigger context built from workflow sources
  */
 export async function buildTriggerContext(
   workflowConfig: FileLoadConfig | undefined,
   authNamespace?: string,
+  baseDir = process.cwd(),
 ): Promise<TriggerContext> {
   const workflowNameMap = new Map<string, string>();
   const jobNameMap = new Map<string, string>();
@@ -60,7 +62,7 @@ export async function buildTriggerContext(
     };
   }
 
-  const workflowFiles = loadFilesWithIgnores(workflowConfig);
+  const workflowFiles = loadFilesWithIgnores(workflowConfig, baseDir);
 
   for (const file of workflowFiles) {
     try {

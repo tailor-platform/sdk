@@ -30,12 +30,14 @@ export type HttpAdapterService = {
 
 export interface CreateHttpAdapterServiceParams {
   config: HttpAdapterServiceConfig;
+  /** Directory the config's file patterns are resolved against (defaults to process.cwd()) */
+  baseDir?: string;
 }
 
 export function createHttpAdapterService(
   params: CreateHttpAdapterServiceParams,
 ): HttpAdapterService {
-  const { config } = params;
+  const { config, baseDir = process.cwd() } = params;
   let adapters: LoadedHttpAdapter[] = [];
   let fileCount = 0;
   let loaded = false;
@@ -50,7 +52,7 @@ export function createHttpAdapterService(
     },
     loadAdapters: async () => {
       if (loaded) return;
-      const result = await loadAdapterFiles(config);
+      const result = await loadAdapterFiles(config, baseDir);
       adapters = result.adapters;
       fileCount = result.fileCount;
       loaded = true;
@@ -73,12 +75,13 @@ export function createHttpAdapterService(
 
 async function loadAdapterFiles(
   config: HttpAdapterServiceConfig,
+  baseDir: string,
 ): Promise<{ adapters: LoadedHttpAdapter[]; fileCount: number }> {
   if (config.files.length === 0) {
     return { adapters: [], fileCount: 0 };
   }
 
-  const files = loadFilesWithIgnores(config);
+  const files = loadFilesWithIgnores(config, baseDir);
 
   // Import every matched file and keep the ones whose default export is a
   // createHttpAdapter() result, mirroring the resolver/executor loaders.
