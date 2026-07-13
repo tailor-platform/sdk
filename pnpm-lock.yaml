@@ -503,8 +503,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.11.0
-        version: 0.11.0(@clack/prompts@1.6.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
+        specifier: 0.11.2
+        version: 0.11.2(@clack/prompts@1.6.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3)
       rolldown:
         specifier: 1.1.4
         version: 1.1.4
@@ -3619,6 +3619,20 @@ packages:
       '@inquirer/prompts':
         optional: true
 
+  politty@0.11.2:
+    resolution: {integrity: sha512-bPVWpt8b+TD6RfX04BZJxgFWIyH72Dgqi3cBqhNYzsIbdXxUdajIacimCYfb++Gf6FJ782yGbAQ0LwPjoFRSrA==}
+    engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
+    hasBin: true
+    peerDependencies:
+      '@clack/prompts': ^0.10.0 || ^0.11.0 || ^1.0.0
+      '@inquirer/prompts': ^8.3.2
+      zod: ^4.2.1
+    peerDependenciesMeta:
+      '@clack/prompts':
+        optional: true
+      '@inquirer/prompts':
+        optional: true
+
   postcss-values-parser@6.0.2:
     resolution: {integrity: sha512-YLJpK0N1brcNJrs9WatuJFtHaV9q5aAOj+S4DI5S7jgHlRfm0PIbDCAFRYMQD5SHq7Fy6xsDhyutgS0QOAs0qw==}
     engines: {node: '>=10'}
@@ -6675,6 +6689,14 @@ snapshots:
   pluralize@8.0.0: {}
 
   politty@0.11.0(@clack/prompts@1.6.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3):
+    dependencies:
+      yaml: 2.9.0
+      zod: 4.4.3
+    optionalDependencies:
+      '@clack/prompts': 1.6.0
+      '@inquirer/prompts': 8.5.2(@types/node@24.13.2)
+
+  politty@0.11.2(@clack/prompts@1.6.0)(@inquirer/prompts@8.5.2(@types/node@24.13.2))(zod@4.4.3):
     dependencies:
       yaml: 2.9.0
       zod: 4.4.3
