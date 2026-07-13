@@ -113,6 +113,11 @@ export async function planAuthConnections(
   appId: string | undefined,
   auths: ReadonlyArray<Readonly<AuthService>>,
 ) {
+  const stateScope = {
+    workspaceId,
+    applicationId: appId,
+    applicationName: appName,
+  };
   const changeSet = createChangeSet<
     CreateConnection,
     UpdateConnection,
@@ -153,7 +158,7 @@ export async function planAuthConnections(
     }),
   );
 
-  const state = loadSecretsState();
+  const state = loadSecretsState(stateScope);
 
   for (const [name, config] of Object.entries(desiredConnections)) {
     const existing = existingConnections[name];
@@ -228,8 +233,13 @@ export async function planAuthConnections(
     }
   }
 
-  return { changeSet, conflicts, unmanaged, resourceOwners };
+  return { changeSet, conflicts, unmanaged, resourceOwners, stateScope };
 }
+
+type AuthConnectionApplyResult = Pick<
+  Awaited<ReturnType<typeof planAuthConnections>>,
+  "changeSet" | "stateScope"
+>;
 
 /**
  * Apply auth connection changes for the given phase.
@@ -239,10 +249,10 @@ export async function planAuthConnections(
  */
 export async function applyAuthConnections(
   client: OperatorClient,
-  result: Awaited<ReturnType<typeof planAuthConnections>>,
+  result: AuthConnectionApplyResult,
   phase: Exclude<ApplyPhase, "delete-services">,
 ) {
-  const { changeSet } = result;
+  const { changeSet, stateScope } = result;
 
   if (phase === "create-update") {
     await Promise.all(
@@ -277,26 +287,28 @@ export async function applyAuthConnections(
       }),
     );
 
-    const state = loadSecretsState();
-    if (!state.connections) {
-      state.connections = {};
-    }
-    for (const create of changeSet.creates) {
-      const conn = create.request.connection;
-      if (conn?.config?.case === "oauth2") {
-        state.connections[create.name] = hashValue(conn.config.value.clientSecret ?? "");
+    const secretReplaces = changeSet.replaces.filter((replace) =>
+      replace.updateRequest.updateMask?.paths?.includes("oauth2.client_secret"),
+    );
+    if (changeSet.creates.length > 0 || secretReplaces.length > 0) {
+      const state = loadSecretsState(stateScope);
+      if (!state.connections) {
+        state.connections = {};
       }
-    }
-    for (const replace of changeSet.replaces) {
-      const conn = replace.updateRequest.connection;
-      if (
-        conn?.config?.case === "oauth2" &&
-        replace.updateRequest.updateMask?.paths?.includes("oauth2.client_secret")
-      ) {
-        state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
+      for (const create of changeSet.creates) {
+        const conn = create.request.connection;
+        if (conn?.config?.case === "oauth2") {
+          state.connections[create.name] = hashValue(conn.config.value.clientSecret ?? "");
+        }
       }
+      for (const replace of secretReplaces) {
+        const conn = replace.updateRequest.connection;
+        if (conn?.config?.case === "oauth2") {
+          state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
+        }
+      }
+      saveSecretsState(stateScope, state);
     }
-    saveSecretsState(state);
   } else {
     await Promise.all(
       changeSet.deletes.map(async (del) => {
@@ -305,12 +317,12 @@ export async function applyAuthConnections(
     );
 
     if (changeSet.deletes.length > 0) {
-      const state = loadSecretsState();
+      const state = loadSecretsState(stateScope);
       if (state.connections) {
         for (const del of changeSet.deletes) {
           delete state.connections[del.name];
         }
-        saveSecretsState(state);
+        saveSecretsState(stateScope, state);
       }
     }
   }
