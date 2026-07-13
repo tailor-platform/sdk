@@ -34,4 +34,19 @@ describe("loadFilesWithIgnores", () => {
       process.chdir(originalCwd);
     }
   });
+
+  test("falls back to process.cwd() when baseDir matches nothing", () => {
+    const cwdDir = makeDirWithFile("file-loader-cwd-fallback-", "src/legacy.ts");
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-empty-"));
+    tmpDirs.push(emptyBaseDir);
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const files = loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      expect(files).toEqual([path.join(process.cwd(), "src", "legacy.ts")]);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
 });
