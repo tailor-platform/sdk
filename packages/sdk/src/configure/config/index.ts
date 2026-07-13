@@ -6,7 +6,7 @@ import type { GeneratorConfig, Plugin } from "#/plugin/types";
  * Define a Tailor SDK application configuration with shallow exactness.
  * @template Config
  * @param config - Application configuration
- * @returns The same configuration object
+ * @returns An object with the same configuration; not guaranteed to be the same object reference as `config`
  */
 /* @__NO_SIDE_EFFECTS__ */
 export function defineConfig<

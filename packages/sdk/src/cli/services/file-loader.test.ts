@@ -15,7 +15,7 @@ describe("loadFilesWithIgnores", () => {
   });
 
   function makeDirWithFile(prefix: string, relativeFile: string): string {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
     tmpDirs.push(dir);
     fs.mkdirSync(path.dirname(path.join(dir, relativeFile)), { recursive: true });
     fs.writeFileSync(path.join(dir, relativeFile), "export const marker = true;\n");
