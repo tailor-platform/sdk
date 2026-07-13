@@ -8,6 +8,7 @@ import { platformSerialize } from "#/utils/test/platform-serialize";
 import {
   buildJobContext,
   clearWorkflowTestEnv,
+  readWorkflowTestEnv,
   writeWorkflowTestEnv,
 } from "../../configure/services/workflow/test-env-key";
 import { tailorRoot, withDispose } from "./shared";
@@ -123,6 +124,7 @@ function replaceTrigger<Trigger extends TriggerProcedure>(definition: {
 export function mockWorkflow() {
   const root = tailorRoot();
   const prev = root.workflow;
+  const prevEnv = readWorkflowTestEnv();
   const jobSpies = new Map<object, unknown>();
   const workflowSpies = new Map<object, unknown>();
   const waitPointMocks = new Map<object, unknown>();
@@ -434,6 +436,7 @@ export function mockWorkflow() {
   return withDispose(facade, () => {
     for (const mock of scopedMocks) mock.restore();
     root.workflow = prev;
-    clearWorkflowTestEnv();
+    if (prevEnv) writeWorkflowTestEnv(prevEnv);
+    else clearWorkflowTestEnv();
   });
 }

@@ -65,11 +65,11 @@ export function mockAuthconnection(options: MockAuthconnectionOptions = {}) {
     getConnectionToken,
 
     setTokens(value: Partial<Record<ConnectionName, AuthConnectionTokenResult>>): void {
-      tokens = { ...value };
+      tokens = value;
     },
 
     setToken(connectionName: ConnectionName, token: AuthConnectionTokenResult): void {
-      tokens[connectionName] = token;
+      tokens = { ...tokens, [connectionName]: token };
     },
 
     get calls(): AuthConnectionCall[] {

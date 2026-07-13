@@ -59,8 +59,17 @@ const FILE_DEFAULTS: Partial<Record<FileMethod, unknown>> = {
 
 function wrapFileIterator(
   inner: Iterator<unknown> | AsyncIterator<unknown>,
-  close: () => void | Promise<void>,
+  closeSource: () => void | Promise<void>,
 ): FileStreamIterator {
+  let closePromise: Promise<void> | undefined;
+  const closeSourceOnce = () => (closePromise ??= Promise.resolve(closeSource()));
+  const close = async () => {
+    try {
+      await inner.return?.();
+    } finally {
+      await closeSourceOnce();
+    }
+  };
   const stream = {
     async next() {
       const result = await inner.next();
@@ -69,14 +78,19 @@ function wrapFileIterator(
     },
     close,
     async return(value?: unknown) {
-      if (inner.return) return inner.return(value);
-      await close();
-      return { done: true as const, value };
+      try {
+        return inner.return ? await inner.return(value) : { done: true as const, value };
+      } finally {
+        await closeSourceOnce();
+      }
     },
     async throw(error?: unknown) {
-      if (inner.throw) return inner.throw(error);
-      await close();
-      throw error;
+      try {
+        if (inner.throw) return await inner.throw(error);
+        throw error;
+      } finally {
+        await closeSourceOnce();
+      }
     },
     [Symbol.asyncIterator]() {
       return stream;
@@ -112,9 +126,7 @@ function toFileStream(value: unknown): FileStreamIterator {
       Symbol.asyncIterator in source
         ? (source as AsyncIterable<unknown>)[Symbol.asyncIterator]()
         : (source as Iterable<unknown>)[Symbol.iterator]();
-    return wrapFileIterator(inner, async () => {
-      await inner.return?.();
-    });
+    return wrapFileIterator(inner, () => {});
   }
   const empty = {
     async next() {

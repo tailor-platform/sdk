@@ -85,16 +85,21 @@ export function mockSecretmanager(options: MockSecretmanagerOptions = {}) {
     getSecrets,
 
     setSecrets(secrets: Record<string, Record<string, string>>): void {
-      holder.store = structuredClone(secrets);
+      holder.store = secrets;
     },
 
     setSecret(vault: string, name: string, value: string): void {
-      holder.store[vault] ??= {};
-      holder.store[vault][name] = value;
+      holder.store = {
+        ...holder.store,
+        [vault]: { ...holder.store[vault], [name]: value },
+      };
     },
 
     mergeSecrets(vault: string, secrets: Record<string, string>): void {
-      holder.store[vault] = { ...holder.store[vault], ...secrets };
+      holder.store = {
+        ...holder.store,
+        [vault]: { ...holder.store[vault], ...secrets },
+      };
     },
 
     get calls(): SecretCall[] {

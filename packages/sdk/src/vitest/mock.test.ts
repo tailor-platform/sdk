@@ -207,6 +207,23 @@ describe("mock", () => {
       expect(env).toEqual({ STAGE: "test", REGION: "asia" });
     });
 
+    test("nested mockWorkflow scopes restore the outer env", async () => {
+      using outer = mockWorkflow();
+      const captureEnv = createWorkflowJob({
+        name: "capture-nested-env",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+      outer.setEnv({ STAGE: "outer" });
+
+      {
+        using inner = mockWorkflow();
+        inner.setEnv({ STAGE: "inner" });
+        expect(await captureEnv.trigger()).toEqual({ STAGE: "inner" });
+      }
+
+      expect(await captureEnv.trigger()).toEqual({ STAGE: "outer" });
+    });
+
     test("reset clears env back to {}", async () => {
       using wf = mockWorkflow();
       const captureEnv = createWorkflowJob({
@@ -700,6 +717,29 @@ describe("mock", () => {
         }
       }
       file.enqueueResult(sequence());
+
+      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
+        "ns",
+        "T",
+        "f",
+        "r",
+      );
+      for await (const _value of stream) break;
+      expect(closed).toBe(true);
+    });
+
+    test("openDownloadStream closes the source when iteration stops early", async () => {
+      using file = mockFile();
+      let closed = false;
+      const source = {
+        async close() {
+          closed = true;
+        },
+        async *[Symbol.asyncIterator]() {
+          yield { type: "complete" as const };
+        },
+      };
+      file.enqueueResult(source);
 
       const stream = await (globalThis as any).tailordb.file.openDownloadStream(
         "ns",

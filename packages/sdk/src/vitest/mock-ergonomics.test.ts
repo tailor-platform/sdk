@@ -318,6 +318,28 @@ describe("ergonomic runtime mocks", () => {
     });
   });
 
+  test("keeps bulk fixture maps live until an incremental update", async () => {
+    using ai = mockAigateway();
+    using auth = mockAuthconnection();
+    using secrets = mockSecretmanager();
+    const urls = { assistant: "https://initial.example.com" };
+    const tokens = { google: { access_token: "initial" } };
+    const secretStore = { app: { API_KEY: "initial" } };
+
+    ai.setUrls(urls);
+    auth.setTokens(tokens);
+    secrets.setSecrets(secretStore);
+    urls.assistant = "https://updated.example.com";
+    tokens.google = { access_token: "updated" };
+    secretStore.app.API_KEY = "updated";
+
+    await expect(ai.get("assistant")).resolves.toEqual({
+      url: "https://updated.example.com",
+    });
+    await expect(auth.getConnectionToken("google")).resolves.toEqual({ access_token: "updated" });
+    await expect(secrets.getSecret("app", "API_KEY")).resolves.toBe("updated");
+  });
+
   test("does not mutate bulk fixture inputs during incremental updates", () => {
     using ai = mockAigateway();
     using auth = mockAuthconnection();
