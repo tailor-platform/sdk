@@ -23,6 +23,7 @@ import {
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertDefined } from "#/utils/assert";
+import ml from "#/utils/multiline";
 
 const redirectPort = 8085;
 const redirectUri = `http://localhost:${redirectPort}/callback`;
@@ -31,27 +32,83 @@ type ProfileLoginOptions = {
   profileUser?: string;
   platformConfig?: PlatformClientConfig;
   updateCurrentUser?: boolean;
+  loginMode?: "user" | "machine-user";
+};
+type ProfileUserMismatch = {
+  profile: string;
+  oldUser: string;
+  authenticatedUser: string;
+  loginMode: "user" | "machine-user";
 };
 
 function randomState() {
   return crypto.randomBytes(32).toString("base64url");
 }
 
-function assertProfileLoginUser(
+function getProfileUserMismatch(
   args: ProfileLoginOptions,
   authenticatedUser: string,
   authenticatedSubject?: string,
-) {
+): ProfileUserMismatch | undefined {
   if (
-    args.profile &&
-    args.profileUser &&
-    authenticatedUser !== args.profileUser &&
-    authenticatedSubject !== args.profileUser
+    !args.profile ||
+    !args.profileUser ||
+    authenticatedUser === args.profileUser ||
+    authenticatedSubject === args.profileUser
   ) {
-    throw new Error(
-      `Profile "${args.profile}" is configured for "${args.profileUser}", but login authenticated "${authenticatedUser}".`,
-    );
+    return undefined;
   }
+  return {
+    profile: args.profile,
+    oldUser: args.profileUser,
+    authenticatedUser,
+    loginMode: args.loginMode ?? "user",
+  };
+}
+
+function quoteCommandArg(value: string, platform: NodeJS.Platform = process.platform) {
+  if (platform === "win32") {
+    if (/^[A-Za-z0-9_./:@+=,-]+$/.test(value)) {
+      return value;
+    }
+    return undefined;
+  }
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function profileUpdateCommand(mismatch: ProfileUserMismatch) {
+  const profileArg = quoteCommandArg(mismatch.profile);
+  const userArg = quoteCommandArg(mismatch.authenticatedUser);
+  if (profileArg && userArg) {
+    return `tailor-sdk profile update --user ${userArg} -- ${profileArg}`;
+  }
+  return [
+    "tailor-sdk profile update --user <authenticated-user> -- <profile>",
+    `profile = ${JSON.stringify(mismatch.profile)}`,
+    `authenticated user = ${JSON.stringify(mismatch.authenticatedUser)}`,
+  ].join("\n");
+}
+
+function retryInstruction(mismatch: ProfileUserMismatch) {
+  if (mismatch.loginMode === "machine-user") {
+    return "Then retry the original machine-user login command.";
+  }
+  const profileArg = quoteCommandArg(mismatch.profile);
+  if (!profileArg) {
+    return "Then retry the browser login with the same profile value.";
+  }
+  return `Then run:\n  tailor-sdk login --profile ${profileArg}`;
+}
+
+function profileUserMismatchError(mismatch: ProfileUserMismatch) {
+  const updateCommand = profileUpdateCommand(mismatch);
+  const nextStep = retryInstruction(mismatch);
+  return new Error(ml`
+    Profile "${mismatch.profile}" is configured for "${mismatch.oldUser}", but login authenticated "${mismatch.authenticatedUser}".
+    The authenticated user has been saved. To use it with this profile, run:
+      ${updateCommand}
+    ${nextStep}
+  `);
 }
 
 function shouldUpdateCurrentUser(
@@ -82,7 +139,6 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
           },
         );
         const userInfo = await fetchUserInfo(tokens.accessToken, args.platformConfig);
-        assertProfileLoginUser(args, userInfo.email, userInfo.sub);
 
         const pfConfig = await readPlatformConfig();
         await saveUserTokens(
@@ -97,6 +153,11 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
           ).toISOString(),
           { platformConfig: args.platformConfig, email: userInfo.email },
         );
+        const mismatch = getProfileUserMismatch(args, userInfo.email, userInfo.sub);
+        if (mismatch) {
+          writePlatformConfig(pfConfig);
+          throw profileUserMismatchError(mismatch);
+        }
         if (args.updateCurrentUser ?? true) {
           pfConfig.current_user = userInfo.sub;
         }
@@ -157,7 +218,6 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
 async function loginAsMachineUser(
   args: { clientId: string; clientSecret?: string } & ProfileLoginOptions,
 ) {
-  assertProfileLoginUser(args, args.clientId);
   const clientSecret = args.clientSecret ?? (await prompt.password({ message: "Client secret" }));
   const tokens = await fetchPlatformMachineUserToken(
     args.clientId,
@@ -173,6 +233,11 @@ async function loginAsMachineUser(
     new Date(assertDefined(tokens.expiresAt, "token response missing expiresAt")).toISOString(),
     { platformConfig: args.platformConfig },
   );
+  const mismatch = getProfileUserMismatch(args, args.clientId);
+  if (mismatch) {
+    writePlatformConfig(pfConfig);
+    throw profileUserMismatchError(mismatch);
+  }
   if (args.updateCurrentUser ?? true) {
     pfConfig.current_user = args.clientId;
   }
@@ -216,36 +281,41 @@ export const loginCommand = defineAppCommand({
       .describe("Machine User Login"),
   ]),
   run: async (args) => {
-    let platformConfig: PlatformClientConfig | undefined;
-    let profileUser: string | undefined;
-    if ("profile" in args && args.profile) {
-      const pfConfig = await readPlatformConfig();
-      const profileEntry = pfConfig.profiles[args.profile];
-      if (!profileEntry) {
-        throw new Error(`Profile "${args.profile}" not found`);
+    try {
+      let platformConfig: PlatformClientConfig | undefined;
+      let profileUser: string | undefined;
+      if ("profile" in args && args.profile) {
+        const pfConfig = await readPlatformConfig();
+        const profileEntry = pfConfig.profiles[args.profile];
+        if (!profileEntry) {
+          throw new Error(`Profile "${args.profile}" not found`);
+        }
+        platformConfig = platformConfigFromProfile(profileEntry);
+        profileUser = profileEntry.user;
       }
-      platformConfig = platformConfigFromProfile(profileEntry);
-      profileUser = profileEntry.user;
+      const updateCurrentUser = shouldUpdateCurrentUser(args.profile, platformConfig);
+      if ("machine-user" in args) {
+        await loginAsMachineUser({
+          clientId: args.clientId,
+          clientSecret: args.clientSecret,
+          profile: args.profile,
+          profileUser,
+          platformConfig,
+          updateCurrentUser,
+          loginMode: "machine-user",
+        });
+      } else {
+        await startAuthServer({
+          profile: args.profile,
+          profileUser,
+          platformConfig,
+          updateCurrentUser,
+          loginMode: "user",
+        });
+      }
+      logger.success("Successfully logged in to Tailor Platform.");
+    } finally {
+      await closeConnectionPool();
     }
-    const updateCurrentUser = shouldUpdateCurrentUser(args.profile, platformConfig);
-    if ("machine-user" in args) {
-      await loginAsMachineUser({
-        clientId: args.clientId,
-        clientSecret: args.clientSecret,
-        profile: args.profile,
-        profileUser,
-        platformConfig,
-        updateCurrentUser,
-      });
-    } else {
-      await startAuthServer({
-        profile: args.profile,
-        profileUser,
-        platformConfig,
-        updateCurrentUser,
-      });
-    }
-    logger.success("Successfully logged in to Tailor Platform.");
-    await closeConnectionPool();
   },
 });

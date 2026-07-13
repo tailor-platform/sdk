@@ -2,6 +2,10 @@ import { create, type DescMessage } from "@bufbuild/protobuf";
 import { pathToString } from "@bufbuild/protobuf/reflect";
 import { createValidator, type Validator } from "@bufbuild/protovalidate";
 import {
+  CreateAIGatewayRequestSchema,
+  UpdateAIGatewayRequestSchema,
+} from "@tailor-platform/tailor-proto/aigateway_pb";
+import {
   CreateApplicationRequestSchema,
   UpdateApplicationRequestSchema,
 } from "@tailor-platform/tailor-proto/application_pb";
@@ -68,32 +72,10 @@ import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
 import { buildWorkflowValidationShape } from "./workflow";
 import { toPlatformExecutionPolicyKey } from "./workflow-execution-policy";
-import type { planApplication } from "./application";
-import type { planAuth } from "./auth";
-import type { planExecutor } from "./executor";
-import type { planFunctionRegistry } from "./function-registry";
-import type { planIdP } from "./idp";
-import type { planPipeline } from "./resolver";
-import type { planSecretManager } from "./secret-manager";
-import type { planStaticWebsite } from "./staticwebsite";
-import type { planTailorDB } from "./tailordb/index";
-import type { planWorkflow } from "./workflow";
-import type { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
+import type { PlannedDeployment } from "./apply-phases";
 
 /** Plan results passed to validatePlan. */
-export type ValidatePlanInput = {
-  functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
-  tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
-  staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
-  idp: Awaited<ReturnType<typeof planIdP>>;
-  auth: Awaited<ReturnType<typeof planAuth>>;
-  pipeline: Awaited<ReturnType<typeof planPipeline>>;
-  app: Awaited<ReturnType<typeof planApplication>>;
-  executor: Awaited<ReturnType<typeof planExecutor>>;
-  workflow: Awaited<ReturnType<typeof planWorkflow>>;
-  workflowExecutionPolicy: Awaited<ReturnType<typeof planWorkflowJobFunctionExecutionPolicy>>;
-  secretManager: Awaited<ReturnType<typeof planSecretManager>>;
-};
+export type ValidatePlanInput = Omit<PlannedDeployment, "application">;
 
 type ViolationEntry = {
   kind: string;
@@ -146,13 +128,14 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  *
  * Collections not validated: idp client, tailorDB gqlPermission, functionRegistry — no
  * buf.validate annotations.
- * Application cors and IdP userAuthPolicy.allowedReturnOrigins receive special
- * handling: static-website URL placeholders are resolved at apply time, so the
+ * Application cors, AIGateway cors, and IdP userAuthPolicy.allowedReturnOrigins receive
+ * special handling: static-website URL placeholders are resolved at apply time, so the
  * relevant origin/URL constraints would false-positive on `<name>:url` entries
- * here. Application cors is dropped entirely (no other constraint to lose); IdP
- * `allowedReturnOrigins` substitutes placeholder entries with a dummy origin so
- * the per-item regex and the cross-field `enable_mfa requires ≥1 origin` rule
- * still get exercised on the rest of the payload.
+ * here. Application cors and AIGateway cors are dropped entirely, forgoing their
+ * per-item URL/origin constraints for the whole list rather than substituting
+ * placeholders; IdP `allowedReturnOrigins` instead substitutes placeholder entries
+ * with a dummy origin so the per-item regex and the cross-field `enable_mfa requires
+ * ≥1 origin` rule still get exercised on the rest of the payload.
  * Workflow jobFunctions map excluded: versions are registered at apply time (registerJobFunctions)
  * and the map field carries no min_items constraint. Job names are validated separately via
  * CreateWorkflowJobFunctionRequestSchema using usedJobNames from the workflow change set.
@@ -165,6 +148,7 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   const {
     tailorDB,
     staticWebsite,
+    aiGateway,
     idp,
     auth,
     pipeline,
@@ -274,6 +258,24 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     AddCustomDomainRequestSchema,
     "StaticWebsite custom domain",
     staticWebsite.customDomainChangeSet.creates as HasRequest[],
+  );
+
+  // cors is excluded: static-website URL placeholders are resolved at apply time.
+  creates(
+    CreateAIGatewayRequestSchema,
+    "AIGateway",
+    (aiGateway.changeSet.creates as HasRequest[]).map((item) => ({
+      name: item.name,
+      request: { ...(item.request as Record<string, unknown>), cors: undefined },
+    })),
+  );
+  updates(
+    UpdateAIGatewayRequestSchema,
+    "AIGateway",
+    (aiGateway.changeSet.updates as HasRequest[]).map((item) => ({
+      name: item.name,
+      request: { ...(item.request as Record<string, unknown>), cors: undefined },
+    })),
   );
 
   // userAuthPolicy.allowedReturnOrigins: static-website URL placeholders

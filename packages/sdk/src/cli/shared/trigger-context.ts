@@ -2,165 +2,134 @@ import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
-import { findAllJobs, buildJobNameMap } from "#/cli/services/workflow/job-detector";
-import { transformFunctionTriggers } from "#/cli/services/workflow/trigger-transformer";
-import { findAllWorkflows, buildWorkflowNameMap } from "#/cli/services/workflow/workflow-detector";
+import { getModuleExportName, type ASTNode } from "#/cli/services/workflow/ast-utils";
+import { findAllJobs } from "#/cli/services/workflow/job-detector";
+import { findAllWorkflows } from "#/cli/services/workflow/workflow-detector";
 import { logger } from "#/cli/shared/logger";
-import type { Plugin } from "rolldown";
 
-/**
- * Context for trigger transformation
- * Maps variable names to workflow/job names
- */
+export interface TriggerTarget {
+  kind: "job" | "workflow";
+  name: string;
+}
+
+export interface TriggerModuleBindings {
+  localBindings: Map<string, TriggerTarget>;
+  exports: Map<string, TriggerTarget>;
+}
+
 export interface TriggerContext {
-  workflowNameMap: Map<string, string>;
-  jobNameMap: Map<string, string>;
-  /** Maps file path (without extension) to workflow name for default exports */
-  workflowFileMap: Map<string, string>;
-  /**
-   * Auth service namespace used to expand a string-literal `invoker`
-   * (e.g. `"kiosk"`) to the `{ namespace, machineUserName }` form expected by
-   * the runtime. Undefined when no Auth service is configured.
-   */
+  modules: Map<string, TriggerModuleBindings>;
   authNamespace?: string;
 }
 
 /**
- * Normalize a file path by removing extension and resolving to absolute path
- * @param filePath - File path to normalize
- * @returns Normalized absolute path without extension
+ * Normalize a source module path for trigger binding lookup.
+ * @param filePath - Source file path or extensionless relative import path
+ * @returns Absolute path without a JavaScript or TypeScript extension
  */
 export function normalizeFilePath(filePath: string): string {
-  const absolutePath = path.resolve(filePath);
-  const ext = path.extname(absolutePath);
-  return absolutePath.slice(0, -ext.length);
+  return path.resolve(filePath.replace(/[?#].*$/, "")).replace(/\.(ts|mts|cts|js|mjs|cjs)$/, "");
+}
+
+function createModuleBindings(program: ReturnType<typeof parseSync>["program"], source: string) {
+  const localBindings = new Map<string, TriggerTarget>();
+  const exports = new Map<string, TriggerTarget>();
+
+  for (const workflow of findAllWorkflows(program, source)) {
+    const target = { kind: "workflow", name: workflow.name } as const;
+    if (workflow.exportName) localBindings.set(workflow.exportName, target);
+    if (workflow.isDefaultExport) exports.set("default", target);
+  }
+
+  for (const job of findAllJobs(program, source)) {
+    if (job.exportName) {
+      localBindings.set(job.exportName, { kind: "job", name: job.name });
+    }
+  }
+
+  for (const statement of program.body as unknown as ASTNode[]) {
+    if (statement.type === "ExportDefaultDeclaration") {
+      const declaration = statement.declaration as ASTNode | undefined;
+      if (declaration?.type === "Identifier") {
+        const target = localBindings.get(declaration.name as string);
+        if (target) exports.set("default", target);
+      }
+      continue;
+    }
+
+    if (statement.type !== "ExportNamedDeclaration") continue;
+    const declaration = statement.declaration as ASTNode | undefined;
+    if (declaration?.type === "VariableDeclaration") {
+      for (const declarator of declaration.declarations as ASTNode[]) {
+        const id = declarator.id as ASTNode | undefined;
+        if (id?.type !== "Identifier") continue;
+        const localName = id.name as string;
+        const target = localBindings.get(localName);
+        if (target) exports.set(localName, target);
+      }
+    }
+
+    if (statement.source) continue;
+    for (const specifier of (statement.specifiers as ASTNode[] | undefined) ?? []) {
+      const localName = getModuleExportName(specifier.local);
+      const exportedName = getModuleExportName(specifier.exported);
+      if (!localName || !exportedName) continue;
+      const target = localBindings.get(localName);
+      if (target) exports.set(exportedName, target);
+    }
+  }
+
+  return { localBindings, exports } satisfies TriggerModuleBindings;
 }
 
 /**
- * Build trigger context from workflow configuration
- * Scans workflow files to collect workflow and job mappings
+ * Build trigger context from configured workflow source files.
  * @param workflowConfig - Workflow file loading configuration
  * @param authNamespace - Auth service namespace (optional, used for string-literal invoker expansion)
- * @returns Trigger context built from workflow sources
+ * @returns Module-local workflow and job binding metadata
  */
 export async function buildTriggerContext(
   workflowConfig: FileLoadConfig | undefined,
   authNamespace?: string,
 ): Promise<TriggerContext> {
-  const workflowNameMap = new Map<string, string>();
-  const jobNameMap = new Map<string, string>();
-  const workflowFileMap = new Map<string, string>();
+  const modules = new Map<string, TriggerModuleBindings>();
+  if (!workflowConfig) return { modules, authNamespace };
 
-  if (!workflowConfig) {
-    return {
-      workflowNameMap,
-      jobNameMap,
-      workflowFileMap,
-      authNamespace,
-    };
-  }
-
-  const workflowFiles = loadFilesWithIgnores(workflowConfig);
-
-  for (const file of workflowFiles) {
+  for (const file of loadFilesWithIgnores(workflowConfig)) {
     try {
       const source = await fs.promises.readFile(file, "utf-8");
       const { program } = parseSync("input.ts", source);
-
-      // Detect workflows
-      const workflows = findAllWorkflows(program, source);
-      const workflowMap = buildWorkflowNameMap(workflows);
-      for (const [exportName, workflowName] of workflowMap) {
-        workflowNameMap.set(exportName, workflowName);
-      }
-
-      // Also track default exported workflows by file path
-      for (const workflow of workflows) {
-        if (workflow.isDefaultExport) {
-          const normalizedPath = normalizeFilePath(file);
-          workflowFileMap.set(normalizedPath, workflow.name);
-        }
-      }
-
-      // Detect jobs
-      const jobs = findAllJobs(program, source);
-      const jobMap = buildJobNameMap(jobs);
-      for (const [exportName, jobName] of jobMap) {
-        jobNameMap.set(exportName, jobName);
-      }
+      modules.set(normalizeFilePath(file), createModuleBindings(program, source));
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       logger.warn(`Failed to process workflow file ${file}: ${errorMessage}`, {
         mode: "stream",
       });
-      continue;
     }
   }
 
-  return {
-    workflowNameMap,
-    jobNameMap,
-    workflowFileMap,
-    authNamespace,
-  };
+  return { modules, authNamespace };
 }
 
-function sortedMapToJson(m: Map<string, string>): string {
-  return JSON.stringify([...m.entries()].toSorted(([a], [b]) => a.localeCompare(b)));
+function sortedTargets(bindings: Map<string, TriggerTarget>) {
+  return [...bindings]
+    .toSorted(([a], [b]) => a.localeCompare(b))
+    .map(([binding, target]) => [binding, target.kind, target.name]);
 }
 
 /**
- * Serialize trigger context to a deterministic string for cache hashing.
- * Returns an empty string if no context is provided.
- * @param ctx - Trigger context to serialize
- * @returns Deterministic string representation
+ * Serialize trigger context to a deterministic cache input.
+ * @param context - Trigger context to serialize
+ * @returns Deterministic string, or an empty string when context is absent
  */
-export function serializeTriggerContext(ctx: TriggerContext | undefined): string {
-  if (!ctx) return "";
-  return (
-    sortedMapToJson(ctx.workflowNameMap) +
-    sortedMapToJson(ctx.jobNameMap) +
-    sortedMapToJson(ctx.workflowFileMap) +
-    (ctx.authNamespace ?? "")
-  );
-}
-
-/**
- * Create a rolldown plugin for transforming trigger calls
- * Returns undefined if no trigger context is provided
- * @param triggerContext - Trigger context to use for transformations
- * @returns Rolldown plugin or undefined when no context
- */
-export function createTriggerTransformPlugin(
-  triggerContext: TriggerContext | undefined,
-): Plugin | undefined {
-  if (!triggerContext) {
-    return undefined;
-  }
-
-  return {
-    name: "trigger-transform",
-    transform: {
-      filter: {
-        id: {
-          include: [/\.(ts|mts|cts|js|mjs|cjs)$/],
-        },
-      },
-      handler(code, id) {
-        // Only transform source files that contain trigger calls
-        if (!code.includes(".trigger(")) {
-          return null;
-        }
-        const transformed = transformFunctionTriggers(
-          code,
-          triggerContext.workflowNameMap,
-          triggerContext.jobNameMap,
-          triggerContext.workflowFileMap,
-          id,
-          triggerContext.authNamespace,
-        );
-        return { code: transformed };
-      },
-    },
-  };
+export function serializeTriggerContext(context: TriggerContext | undefined): string {
+  if (!context) return "";
+  const modules = [...context.modules]
+    .toSorted(([a], [b]) => a.localeCompare(b))
+    .map(([file, bindings]) => [
+      file,
+      sortedTargets(bindings.localBindings),
+      sortedTargets(bindings.exports),
+    ]);
+  return JSON.stringify(modules) + (context.authNamespace ?? "");
 }

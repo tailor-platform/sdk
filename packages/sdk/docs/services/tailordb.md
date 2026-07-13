@@ -347,15 +347,24 @@ export const user = db
   });
 ```
 
+**Note:** `.hooks()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
+
 ### Validation
 
-Add validation rules to fields. Validators receive three arguments (executed after hooks):
+Add validation rules to fields. Validators receive three arguments (executed after hooks and built-in type validation):
 
 - `value`: Field value after hook transformation
 - `data`: Entire record data after hook transformations (for accessing other field values)
 - `invoker`: Principal performing the operation
 
 Validators return `true` for success, `false` for failure. Use array form `[validator, errorMessage]` for custom error messages.
+
+**Note:** Custom validators run only when built-in type validation succeeds, so `value` always has the field's declared type. For array fields, the validator is called once with the complete array, not per element:
+
+```typescript
+// value is string[], not string
+db.string({ array: true }).validate(({ value }) => value.length >= 2);
+```
 
 #### Field-level Validation
 
@@ -410,6 +419,8 @@ export const user = db
   });
 ```
 
+**Note:** `.validate()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
+
 ### Vector Search
 
 ```typescript
@@ -442,6 +453,22 @@ export const user = db.table("User", {
 `db.fields.timestamps()` adds non-null `createdAt` and `updatedAt` datetime fields. Both fields are populated when a record is created; provided values are preserved so seed data can use historical timestamps. `updatedAt` is also refreshed automatically when a record is updated.
 
 ## Type Modifiers
+
+Type builder methods that set one type-level configuration can be called only once on the same type. Duplicate calls fail at compile time and throw at runtime. This applies to `.description()`, `.hooks()`, `.validate()`, `.features()`, `.indexes()`, `.files()`, `.permission()`, and `.gqlPermission()`.
+
+Conditional assignment is still supported when only one branch calls the method:
+
+```typescript
+let user = db.type("User", {
+  name: db.string(),
+});
+
+if (enableFiles) {
+  user = user.files({
+    avatar: "profile image",
+  });
+}
+```
 
 ### Composite Indexes
 
@@ -558,6 +585,8 @@ Available options:
 | ---------- | ------------------------------------- |
 | `optional` | Makes the selected fields optional    |
 | `array`    | Makes the selected fields array types |
+
+**Note:** The `array` option cannot change fields with custom validation — their validators expect the original value shape. Define a new field with a matching validator instead.
 
 #### `omitFields(keys)`
 

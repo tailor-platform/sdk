@@ -155,7 +155,7 @@ const NPX_PACKAGE_FLAG_CONTEXT_RE = new RegExp(
 const SOURCE_TOKEN_RE = new RegExp(SOURCE_CLI_ARG_VALUE, "g");
 const CLI_RENAME_LEGACY_RE = /(?<![\w-])(?:apply|crash-report|--machineuser)(?![\w-])/;
 const TAILOR_PLATFORM_SDK_TOKEN_RE = /^@tailor-platform\/sdk(@[^\s'"`;|&)]+)?$/;
-const RUNNER_OPTION_VALUE_FLAGS = new Set(RUNNER_OPTION_VALUE_FLAG_LIST);
+const RUNNER_OPTION_VALUE_FLAGS: Set<string> = new Set(RUNNER_OPTION_VALUE_FLAG_LIST);
 
 function renameBinary(value: string): string {
   const withRunners = value.replace(PKG_RUNNER_RE, (_, runner: string, version?: string) =>
