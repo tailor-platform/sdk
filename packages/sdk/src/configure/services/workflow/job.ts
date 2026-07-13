@@ -2,6 +2,7 @@ import { brandValue } from "#/utils/brand";
 import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
 import { withWorkflowTestInvoker } from "./test-env-key";
 import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
+import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
 import type { JsonCompatible, TypeLevelError } from "#/types/helpers";
 
 /**
@@ -43,14 +44,20 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
   name: Name;
   /**
    * Trigger this job with the given input and return the job's output value.
+   * Accepts an optional second argument to pass `executionPolicyKey` for
+   * platform-side concurrency enforcement.
    * @example
    * body: async (input) => {
    *   const a = jobA.trigger({ id: input.id });
-   *   const b = jobB.trigger({ id: input.id });
+   *   const b = jobB.trigger({ id: input.id }, {
+   *     executionPolicyKey: `tenant-api.${input.tenantId}`,
+   *   });
    *   return { a, b };
    * }
    */
-  trigger: [Input] extends [undefined] ? () => Awaited<Output> : (input: Input) => Awaited<Output>;
+  trigger: [Input] extends [undefined]
+    ? (input?: undefined, options?: TriggerJobFunctionOptions) => Awaited<Output>
+    : (input: Input, options?: TriggerJobFunctionOptions) => Awaited<Output>;
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
 
@@ -112,7 +119,19 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
           "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",
         );
       }
-    : (args?: unknown) => dispatchTriggerJob(config.name, args) as Awaited<O>;
+    : // Preserve arity: use `arguments.length` (regular function, not arrow) so
+      // `.trigger(args, undefined)` is treated as "options passed" — matching
+      // the bundler rewrite, which forwards the literal `undefined` from the
+      // AST as a third argument. Without this, local execution and bundled
+      // workflows would hand mocks different call shapes.
+      function trigger(args?: unknown, options?: TriggerJobFunctionOptions) {
+        // oxlint-disable-next-line prefer-rest-params
+        return (
+          arguments.length >= 2
+            ? dispatchTriggerJob(config.name, args, options)
+            : dispatchTriggerJob(config.name, args)
+        ) as Awaited<O>;
+      };
 
   return brandValue(
     { name: config.name, trigger, body } as WorkflowJob<Name, I, Awaited<O>>,

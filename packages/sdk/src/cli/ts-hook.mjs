@@ -12,41 +12,71 @@ const JS_TO_TS = new Map([
   [".js", ".ts"],
   [".mjs", ".mts"],
 ]);
+const KNOWN_EXTENSIONS = [".ts", ".tsx", ".mts", ".js", ".mjs", ".json"];
 
 // --- tsconfig paths resolution ---
 
 const tsconfigPathsCache = new Map();
 
-function collectPathsInto(out, configFilePath, content, visited) {
-  if (visited.has(configFilePath)) return;
+// Walks the `extends` chain and returns the nearest-defined `baseUrl` (which
+// may come from a different config than the one defining `paths`), the
+// nearest-defined `paths` object (TypeScript replaces, not merges, inherited
+// `paths` once a config defines its own), and the directory of the config
+// that defines that `paths` object (the TS 5.0+ fallback base when no
+// `baseUrl` is defined anywhere in the chain).
+function resolveEffectiveConfig(configFilePath, content, visited) {
+  if (visited.has(configFilePath)) return {};
   visited.add(configFilePath);
 
   const baseDir = dirname(configFilePath);
+  const opts = content.compilerOptions ?? {};
+  const ownBaseUrl =
+    typeof opts.baseUrl === "string" ? resolvePath(baseDir, opts.baseUrl) : undefined;
+  const ownRawPaths =
+    opts.paths && typeof opts.paths === "object" && !Array.isArray(opts.paths)
+      ? opts.paths
+      : undefined;
 
+  let inherited = {};
   const extendsField = content.extends;
   if (typeof extendsField === "string") {
     const base = resolvePath(baseDir, extendsField);
     const extendsPath = base.endsWith(".json") ? base : base + ".json";
     try {
       const sub = JSON.parse(readFileSync(extendsPath, "utf-8"));
-      collectPathsInto(out, extendsPath, sub, visited);
+      inherited = resolveEffectiveConfig(extendsPath, sub, visited);
     } catch (e) {
       if (e?.code !== "ENOENT" && !(e instanceof SyntaxError)) throw e;
     }
   }
 
-  const opts = content.compilerOptions ?? {};
-  const rawPaths = opts.paths;
-  const baseUrl = opts.baseUrl;
-  if (rawPaths && baseUrl) {
-    const absBase = resolvePath(baseDir, baseUrl);
-    for (const [alias, targets] of Object.entries(rawPaths)) {
-      out[alias] = targets.map((t) => {
+  return {
+    baseUrl: ownBaseUrl ?? inherited.baseUrl,
+    rawPaths: ownRawPaths ?? inherited.rawPaths,
+    pathsBaseDir: ownRawPaths ? baseDir : inherited.pathsBaseDir,
+  };
+}
+
+function collectPathsInto(out, configFilePath, content, visited) {
+  const { baseUrl, rawPaths, pathsBaseDir } = resolveEffectiveConfig(
+    configFilePath,
+    content,
+    visited,
+  );
+  if (!rawPaths) return;
+
+  const absBase = baseUrl ?? pathsBaseDir ?? dirname(configFilePath);
+  for (const [alias, targets] of Object.entries(rawPaths)) {
+    if (!Array.isArray(targets)) continue;
+    const normalized = targets
+      .filter((t) => typeof t === "string")
+      .map((t) => {
         const isWildcard = t.endsWith("/*");
         const resolved = resolvePath(absBase, isWildcard ? t.slice(0, -2) : t);
         return pathToFileURL(resolved).href + (isWildcard ? "/*" : "");
       });
-    }
+    if (normalized.length === 0) continue;
+    out[alias] = normalized;
   }
 }
 
@@ -175,7 +205,7 @@ export async function resolve(specifier, context, nextResolve) {
     }
 
     const lastSegment = specifier.split("/").pop() ?? "";
-    if (!lastSegment.includes(".")) {
+    if (!KNOWN_EXTENSIONS.some((ext) => lastSegment.endsWith(ext))) {
       for (const ext of TS_EXTENSIONS) {
         try {
           return await nextResolve(specifier + ext, context);
@@ -259,7 +289,7 @@ export function resolveSync(specifier, context, nextResolve) {
     }
 
     const lastSegment = specifier.split("/").pop() ?? "";
-    if (!lastSegment.includes(".")) {
+    if (!KNOWN_EXTENSIONS.some((ext) => lastSegment.endsWith(ext))) {
       for (const ext of TS_EXTENSIONS) {
         try {
           return nextResolve(specifier + ext, context);

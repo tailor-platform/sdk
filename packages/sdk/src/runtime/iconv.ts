@@ -31,11 +31,6 @@ export interface IconvConstructor {
  * Platform API surface for `tailor.iconv`. Describes the shape the platform
  * runtime injects on `globalThis.tailor.iconv` so the wrapper and ambient
  * globals stay in sync.
- *
- * Each method below is also re-exported as a top-level named export from this
- * module (e.g. `convert`, `decode`, `encode`) so callers can either
- * `import * as iconv from "@tailor-platform/sdk/runtime/iconv"` or pick
- * individual methods.
  */
 export interface TailorIconvAPI {
   /**
@@ -89,53 +84,28 @@ export interface TailorIconvAPI {
    */
   encodings(): string[];
 
-  /** Constructor for the stateful {@link Iconv} converter. */
+  /** Constructor for the stateful converter. */
   Iconv: IconvConstructor;
 }
 
 const api = (): TailorIconvAPI =>
-  (globalThis as { tailor: { iconv: TailorIconvAPI } }).tailor.iconv;
+  (globalThis as unknown as { tailor: { iconv: TailorIconvAPI } }).tailor.iconv;
 
-/**
- * See {@link TailorIconvAPI.convert}.
- * @param args - Forwarded to {@link TailorIconvAPI.convert}
- * @returns `string` when `toEncoding` is `"UTF8"` or `"UTF-8"`, otherwise `Uint8Array`.
- */
-export const convert: TailorIconvAPI["convert"] = (...args) => api().convert(...args);
+const convert: TailorIconvAPI["convert"] = (...args) => api().convert(...args);
 
-/**
- * See {@link TailorIconvAPI.convertBuffer}.
- * @param args - Forwarded to {@link TailorIconvAPI.convertBuffer}
- * @returns `string` when `toEncoding` is `"UTF8"` or `"UTF-8"`, otherwise `Uint8Array`.
- */
-export const convertBuffer: TailorIconvAPI["convertBuffer"] = (...args) =>
-  api().convertBuffer(...args);
+const convertBuffer: TailorIconvAPI["convertBuffer"] = (...args) => api().convertBuffer(...args);
 
-/**
- * See {@link TailorIconvAPI.decode}.
- * @param args - Forwarded to {@link TailorIconvAPI.decode}
- * @returns Decoded UTF-8 string
- */
-export const decode: TailorIconvAPI["decode"] = (...args) => api().decode(...args);
+const decode: TailorIconvAPI["decode"] = (...args) => api().decode(...args);
 
-/**
- * See {@link TailorIconvAPI.encode}.
- * @param args - Forwarded to {@link TailorIconvAPI.encode}
- * @returns `string` when `encoding` is `"UTF8"` or `"UTF-8"`, otherwise `Uint8Array`.
- */
-export const encode: TailorIconvAPI["encode"] = (...args) => api().encode(...args);
+const encode: TailorIconvAPI["encode"] = (...args) => api().encode(...args);
 
-/**
- * See {@link TailorIconvAPI.encodings}.
- * @returns Array of encoding names supported by the platform iconv runtime
- */
-export const encodings: TailorIconvAPI["encodings"] = () => api().encodings();
+const encodings: TailorIconvAPI["encodings"] = () => api().encodings();
 
 /**
  * Stateful converter for repeated conversions between a fixed encoding pair.
  * Compatible with the `node-iconv` API surface.
  */
-export class Iconv {
+class Iconv {
   private impl: IconvInstance;
 
   constructor(fromEncoding: string, toEncoding: string) {
@@ -151,3 +121,14 @@ export class Iconv {
     return this.impl.convert(input);
   }
 }
+
+// Keep the object typed to the public API so the private wrapper class does not leak into d.ts.
+/** Runtime API for `tailor.iconv`. */
+export const iconv: TailorIconvAPI = {
+  convert,
+  convertBuffer,
+  decode,
+  encode,
+  encodings,
+  Iconv,
+};

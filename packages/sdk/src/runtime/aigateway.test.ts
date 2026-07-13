@@ -2,7 +2,7 @@
  * Tests for `@tailor-platform/sdk/runtime/aigateway` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
-import * as aigateway from "#/runtime/aigateway";
+import { aigateway, type GetAIGatewayResult } from "#/runtime/aigateway";
 import { cleanupMocks, injectMocks, mockAigateway } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/aigateway", () => {
@@ -20,7 +20,7 @@ describe("@tailor-platform/sdk/runtime/aigateway", () => {
 
     const result = aigateway.get("my-aigateway");
 
-    expectTypeOf(result).toEqualTypeOf<Promise<aigateway.GetAIGatewayResult>>();
+    expectTypeOf(result).toEqualTypeOf<Promise<GetAIGatewayResult>>();
     await expect(result).resolves.toEqual({ url: "https://my-aigateway.example.com" });
     expect(ag.calls).toEqual([{ name: "my-aigateway" }]);
   });

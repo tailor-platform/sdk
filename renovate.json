@@ -62,6 +62,22 @@
       "groupName": "@opentelemetry"
     },
     {
+      "description": "Group bufbuild ecosystem (protovalidate depends on protobuf)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@bufbuild/*"],
+      "groupName": "@bufbuild"
+    },
+    {
+      "description": "Group pnpm with the action that installs it, so the CI-pinned version and packageManager stay in sync",
+      "matchPackageNames": ["pnpm", "pnpm/action-setup"],
+      "groupName": "pnpm"
+    },
+    {
+      "description": "Group aquaproj tooling to reduce review overhead",
+      "matchPackageNames": ["aquaproj/*"],
+      "groupName": "aquaproj"
+    },
+    {
       "matchManagers": ["npm"],
       "matchPackageNames": ["@inquirer/*"],
       "groupName": "@inquirer"
@@ -76,11 +92,6 @@
       "matchManagers": ["npm"],
       "matchPackageNames": ["rolldown", "tsdown"],
       "groupName": "rolldown"
-    },
-    {
-      "description": "Skip aquaproj/update-checksum-workflow v1.0.5 only (broken via update-checksum-action v0.2.7); see https://github.com/aquaproj/update-checksum-action/issues/364. The renovate-policy-check workflow will fail once we move past v1.0.5 so this rule can be removed.",
-      "matchPackageNames": ["aquaproj/update-checksum-workflow"],
-      "allowedVersions": "<1.0.5 || >1.0.5"
     }
   ]
 }

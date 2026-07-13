@@ -58,6 +58,12 @@ function emptyInput(): ValidatePlanInput {
       unmanaged: [],
       resourceOwners: new Set(),
     },
+    aiGateway: {
+      changeSet: createChangeSet("AIGateways"),
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set(),
+    },
     idp: {
       changeSet: {
         service: createChangeSet("IdP services"),
@@ -68,6 +74,11 @@ function emptyInput(): ValidatePlanInput {
       resourceOwners: new Set(),
     },
     auth: {
+      connectionStateScope: {
+        workspaceId: "workspace-id",
+        applicationId: "application-id",
+        applicationName: "my-app",
+      },
       changeSet: {
         service: createChangeSet("Auth services"),
         idpConfig: createChangeSet("Auth idpConfigs"),
@@ -110,7 +121,18 @@ function emptyInput(): ValidatePlanInput {
       appName: "my-app",
       appId: undefined,
     },
+    workflowExecutionPolicy: {
+      changeSet: createChangeSet("Workflow execution policies"),
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set(),
+    },
     secretManager: {
+      stateScope: {
+        workspaceId: "workspace-id",
+        applicationId: "application-id",
+        applicationName: "my-app",
+      },
       vaultChangeSet: createChangeSet("Vaults"),
       secretChangeSet: createChangeSet("Secrets"),
       skippedSecrets: [],
@@ -158,6 +180,22 @@ const validCases: Case<undefined>[] = [
           authNamespace: "my-auth",
           cors: ["https://__PLACEHOLDER__"],
           subgraphs: [{ serviceType: 1, serviceNamespace: "tailordb" }],
+        },
+        metaRequest: METADATA,
+      } as never);
+    },
+    expected: undefined,
+  },
+  {
+    name: "(g2) AIGateway create with cors containing a placeholder string passes",
+    mutate: (input) => {
+      input.aiGateway.changeSet.creates.push({
+        name: "my-gateway",
+        request: {
+          workspaceId: WS_ID,
+          aigatewayName: "my-gateway",
+          authNamespace: "my-auth",
+          cors: ["my-frontend:url"],
         },
         metaRequest: METADATA,
       } as never);
@@ -231,6 +269,37 @@ const validCases: Case<undefined>[] = [
     },
     expected: undefined,
   },
+  {
+    name: "(n) workflow execution policy with matchType: 'prefix' (registers a trailing `*`) passes",
+    mutate: (input) => {
+      input.workflowExecutionPolicy.changeSet.creates.push({
+        name: "tenant-api",
+        workspaceId: WS_ID,
+        policy: {
+          name: "tenant-api",
+          // Deliberately different from `name` (and using `_`, which `name`'s
+          // grammar disallows) to show `key` is validated independently.
+          key: "tenant_api",
+          matchType: "prefix",
+          concurrencyPolicy: { maxConcurrentExecutions: 3 },
+        },
+        metaRequest: METADATA,
+      } as never);
+    },
+    expected: undefined,
+  },
+  {
+    name: "(n2) workflow execution policy with `:` in key passes",
+    mutate: (input) => {
+      input.workflowExecutionPolicy.changeSet.creates.push({
+        name: "legacy-pipeline",
+        workspaceId: WS_ID,
+        policy: { name: "legacy-pipeline", key: "legacy:pipeline" },
+        metaRequest: METADATA,
+      } as never);
+    },
+    expected: undefined,
+  },
 ];
 
 const invalidCases: Case<RegExp>[] = [
@@ -276,6 +345,22 @@ const invalidCases: Case<RegExp>[] = [
       input.executor.changeSet.creates.push({
         name: "INVALID_NAME",
         request: { workspaceId: WS_ID, executor: { name: "INVALID_NAME" } },
+      } as never);
+    },
+    expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,
+  },
+  {
+    name: "(d2) AIGateway create with invalid name produces a violation",
+    mutate: (input) => {
+      input.aiGateway.changeSet.creates.push({
+        name: "INVALID_NAME",
+        request: {
+          workspaceId: WS_ID,
+          aigatewayName: "INVALID_NAME",
+          authNamespace: "my-auth",
+          cors: [],
+        },
+        metaRequest: METADATA,
       } as never);
     },
     expected: /\d+ validation error\(s\) found in 1 resource\(s\)/,

@@ -220,10 +220,13 @@ const user = db.table("User", {
 const userProfile = db.table("UserProfile", {
   userEmail: db.string().relation({
     type: "1-1",
-    toward: { type: user, key: "email" },
+    toward: { type: user, key: "email", as: "user" },
   }),
 });
 ```
+
+`userEmail` does not end in `ID`, `Id`, or `id`, so this example specifies the forward relation
+name with `toward.as`.
 
 Customize relation names using `toward.as` / `backward` options:
 
@@ -255,27 +258,31 @@ type User {
 - `backward` - Customizes the field name for accessing this type from the related type
 
 Relation names share the same GraphQL field namespace as fields, files, and other relations on
-the type. The SDK rejects duplicate or empty relation names. Use `toward.as` when multiple fields
-on the same type point to the same target type, because their default forward names are derived
-from the target type name:
+the table. The SDK rejects duplicate or empty relation names. When `toward.as` is omitted, the
+default forward name comes from the relation field name with a trailing `ID`, `Id`, or `id`
+removed. This lets multiple fields point to the same target table with distinct forward names:
 
 ```typescript
 const post = db.table("Post", {
   authorID: db.uuid().relation({
     type: "n-1",
-    toward: { type: user, as: "author" },
+    toward: { type: user },
     backward: "authoredPosts",
   }),
   reviewerID: db.uuid().relation({
     type: "n-1",
-    toward: { type: user, as: "reviewer" },
+    toward: { type: user },
     backward: "reviewedPosts",
   }),
 });
 ```
 
+These fields generate the forward names `author` and `reviewer`. A relation field without one of
+the recognized ID suffixes needs an explicit `toward.as`, because its generated forward name
+would conflict with the field itself.
+
 Use `toward.as` or `backward` when a generated relation name would conflict with an existing
-field, files entry, or relation on the same type.
+field, files entry, or relation on the same table.
 
 ### Hooks
 
@@ -349,9 +356,18 @@ export const order = db
   });
 ```
 
+**Note:** `.hooks()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
+
 ### Validation
 
 Add validation rules to fields. Validators run after hooks.
+
+**Note:** Custom validators run only when built-in type validation succeeds, so `value` always has the field's declared type. For array fields, the validator is called once with the complete array, not per element:
+
+```typescript
+// value is string[], not string
+db.string({ array: true }).validate(({ value }) => value.length >= 2);
+```
 
 #### Field-level Validation
 
@@ -399,6 +415,8 @@ For datetime/date/time fields, pass `"now"` to use the operation timestamp:
 db.datetime().default("now");
 ```
 
+**Note:** `.validate()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
+
 ### Vector Search
 
 ```typescript
@@ -431,6 +449,22 @@ export const user = db.table("User", {
 `db.fields.timestamps()` adds non-null `createdAt` and `updatedAt` datetime fields. Both fields are populated when a record is created; provided values are preserved so seed data can use historical timestamps. `updatedAt` is also refreshed automatically when a record is updated.
 
 ## Type Modifiers
+
+Type builder methods that set one type-level configuration can be called only once on the same type. Duplicate calls fail at compile time and throw at runtime. This applies to `.description()`, `.hooks()`, `.validate()`, `.features()`, `.indexes()`, `.files()`, `.permission()`, and `.gqlPermission()`.
+
+Conditional assignment is still supported when only one branch calls the method:
+
+```typescript
+let user = db.type("User", {
+  name: db.string(),
+});
+
+if (enableFiles) {
+  user = user.files({
+    avatar: "profile image",
+  });
+}
+```
 
 ### Composite Indexes
 
@@ -547,6 +581,8 @@ Available options:
 | ---------- | ------------------------------------- |
 | `optional` | Makes the selected fields optional    |
 | `array`    | Makes the selected fields array types |
+
+**Note:** The `array` option cannot change fields with custom validation — their validators expect the original value shape. Define a new field with a matching validator instead.
 
 #### `omitFields(keys)`
 

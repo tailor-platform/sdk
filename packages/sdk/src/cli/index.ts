@@ -163,7 +163,7 @@ Run \`${cliName} plugin list\` to see which plugins are installed and where they
     descriptionAppend: false,
   },
 );
-const commandWithSkillsSubCommands = commandWithSkills.subCommands ?? {};
+const commandWithSkillsSubCommands = commandWithSkills.subCommands;
 
 export const mainCommand = withCompletionCommand({
   ...commandWithSkills,

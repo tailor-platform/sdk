@@ -9,7 +9,7 @@ import {
 import { platformSerialize } from "../utils/test/platform-serialize";
 import type { Workflow, WorkflowJob } from "../configure/services/workflow";
 import type { TailorEnv } from "../runtime/types";
-import type { TailorWorkflowAPI } from "../runtime/workflow";
+import type { PlatformWorkflowAPI } from "../runtime/workflow";
 
 type AnyWorkflowJob = WorkflowJob<string, any, any>;
 type AnyWorkflow = Workflow<AnyWorkflowJob>;
@@ -21,7 +21,7 @@ type WorkflowOutput<W extends AnyWorkflow> =
 
 type GlobalWithTailor = {
   tailor?: {
-    workflow?: TailorWorkflowAPI;
+    workflow?: PlatformWorkflowAPI;
   };
 };
 
@@ -240,9 +240,9 @@ function assertSameTrigger(record: TriggerRecord, jobName: string, args: unknown
 }
 
 function createLocalWorkflowRuntime(
-  previous: TailorWorkflowAPI | undefined,
+  previous: PlatformWorkflowAPI | undefined,
   triggerJobFunction: (name: string, args?: unknown) => unknown,
-): TailorWorkflowAPI {
+): PlatformWorkflowAPI {
   return {
     triggerJobFunction,
     triggerWorkflow: async (name, args, options) => {

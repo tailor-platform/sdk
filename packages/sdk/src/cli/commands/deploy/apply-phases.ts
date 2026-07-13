@@ -10,6 +10,10 @@ import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, type planStaticWebsite } from "./staticwebsite";
 import { applyTailorDB, type planTailorDB } from "./tailordb";
 import { applyWorkflow, type planWorkflow } from "./workflow";
+import {
+  applyWorkflowJobFunctionExecutionPolicy,
+  type planWorkflowJobFunctionExecutionPolicy,
+} from "./workflow-execution-policy";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 
@@ -25,6 +29,9 @@ export type PlannedDeployment = {
   readonly app: Awaited<ReturnType<typeof planApplication>>;
   readonly executor: Awaited<ReturnType<typeof planExecutor>>;
   readonly workflow: Awaited<ReturnType<typeof planWorkflow>>;
+  readonly workflowExecutionPolicy: Awaited<
+    ReturnType<typeof planWorkflowJobFunctionExecutionPolicy>
+  >;
   readonly secretManager: Awaited<ReturnType<typeof planSecretManager>>;
 };
 
@@ -75,11 +82,19 @@ export async function applyDeploymentPlans(
 
   await withSpan("apply.createUpdateDependentServices", async () => {
     await forEachDeployment((d) => applyExecutor(client, d.executor, "create-update"));
+    // Execution policies must exist before workflow job functions that reference
+    // them by key, otherwise the runtime rejects the dispatch as an unknown key.
+    await forEachDeployment((d) =>
+      applyWorkflowJobFunctionExecutionPolicy(client, d.workflowExecutionPolicy, "create-update"),
+    );
     await forEachDeployment((d) => applyWorkflow(client, d.workflow, "create-update"));
   });
 
   await withSpan("apply.deleteDependentServices", async () => {
     await forEachDeployment((d) => applyWorkflow(client, d.workflow, "delete"));
+    await forEachDeployment((d) =>
+      applyWorkflowJobFunctionExecutionPolicy(client, d.workflowExecutionPolicy, "delete"),
+    );
     await forEachDeployment((d) => applyExecutor(client, d.executor, "delete"));
     await forEachDeployment((d) => applyStaticWebsite(client, d.staticWebsite, "delete"));
     await forEachDeployment((d) => applyAIGateway(client, d.aiGateway, "delete"));

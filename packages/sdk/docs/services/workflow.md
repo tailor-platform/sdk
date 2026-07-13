@@ -351,6 +351,84 @@ export default createWorkflow({
 });
 ```
 
+## Execution Policies
+
+Execution policies apply a per-key concurrency cap to workflow job function dispatches. Declare them at the workspace level and pass a matching key when triggering a job; the platform serializes dispatches that resolve to the same key and suspends any that would exceed the cap until slots free up.
+
+### Declaring Policies
+
+Use `defineWorkflowExecutionPolicies` with a builder callback. Property names supply the workspace-unique name and default key prefix verbatim, matching the mental model of `defineWaitPoints`. Override `name` or `key` in the body when the property identifier is not valid execution policy grammar or the key prefix needs to differ. Set `matchType: "prefix"` to register the prefix as a wildcard that matches every dispatch key starting with it (the default, `"exact"`, matches only a dispatch key equal to it).
+
+```typescript
+import { defineWorkflowExecutionPolicies } from "@tailor-platform/sdk";
+
+export const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
+  /** Shared cap across every "premium" worker dispatch. */
+  premium: define({ concurrencyPolicy: { maxConcurrentExecutions: 5 } }),
+  /** Per-tenant cap: one pool per resolved tenant key. */
+  tenantApi: define({
+    name: "tenant-api",
+    matchType: "prefix",
+    concurrencyPolicy: { maxConcurrentExecutions: 3 },
+  }),
+}));
+```
+
+For a single policy, use `defineWorkflowExecutionPolicy(name, def?)`; the key prefix defaults to `name` when `key` is omitted.
+
+`concurrencyPolicy` is optional; when omitted, the policy registers the key as valid without a user-defined limit (platform safety nets still apply).
+
+Register the policies on your config so the SDK creates them on the workspace during deploy:
+
+```typescript
+// tailor.config.ts
+import { defineConfig } from "@tailor-platform/sdk";
+import { executionPolicies } from "./workflows/policies";
+
+export default defineConfig({
+  workflow: {
+    files: ["workflows/**/*.ts"],
+    executionPolicies,
+  },
+});
+```
+
+### Key Grammar
+
+`key` accepts `[a-z0-9_:.-]` and must start with `[a-z0-9]`. An exact key must also end with `[a-z0-9]`; a wildcard prefix (`matchType: "prefix"`) may end with any of those characters, since the platform appends a trailing `*` after it. The platform-registered key — including that trailing `*` when wildcarded — is 2 to 64 characters long, so a wildcard prefix must be at most 63 characters. `foo:bar` is a valid exact key; `tenant-api` with `matchType: "prefix"` registers `tenant-api*` as a wildcard prefix.
+
+An exact-key policy applies to dispatches whose runtime key equals the policy key. A wildcard policy applies to every dispatch whose runtime key begins with the prefix; each concrete resolved key gets its own independent pool of the declared size (a `cap = 3` wildcard yields three concurrent dispatches per resolved key, not three across every match). The longest matching prefix wins when a dispatch could match more than one wildcard.
+
+### Referencing a Policy from a Workflow
+
+Pass the runtime key through the `executionPolicyKey` option on `job.trigger()` or `tailor.workflow.triggerJobFunction()`. For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`matchType: "prefix"`), there is no `<policy>.key` — call `<policy>.keyFor(suffix)` to build the concrete key. `keyFor` joins the prefix and suffix with `.` by default; override it with `separator` — the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group), or a `def` field on a single `defineWorkflowExecutionPolicy`.
+
+```typescript
+import { createWorkflowJob } from "@tailor-platform/sdk";
+import { executionPolicies } from "./policies";
+import { sendNotification } from "./jobs/send-notification";
+import { fetchTenant } from "./jobs/fetch-tenant";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (input: { tenantId: string }) => {
+    // Exact key policy: pass .key directly.
+    await sendNotification.trigger(
+      { message: "Order processed" },
+      { executionPolicyKey: executionPolicies.premium.key },
+    );
+
+    // Wildcard policy: build the concrete key with keyFor().
+    await fetchTenant.trigger(
+      { tenantId: input.tenantId },
+      { executionPolicyKey: executionPolicies.tenantApi.keyFor(input.tenantId) },
+    );
+  },
+});
+```
+
+The same `executionPolicyKey` option is available on `tailor.workflow.triggerJobFunction(name, args, options)` for jobs invoked by name.
+
 ## Triggering a Workflow from a Resolver
 
 You can start a workflow execution from a resolver using `workflow.trigger()`.

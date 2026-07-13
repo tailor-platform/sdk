@@ -1,8 +1,8 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, expectTypeOf, expect, test } from "vitest";
 import { t } from "#/configure/types/index";
-import { db, type TailorAnyDBField } from "./schema";
-import type { FieldValidateInput } from "#/configure/types/field.types";
+import { db, type TailorAnyDBField, type TailorDBType } from "./schema";
+import type { FieldOptions, FieldValidateInput } from "#/configure/types/field.types";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { output, TypeLevelError } from "#/types/helpers";
 import type { Hook } from "./types";
@@ -480,15 +480,9 @@ describe("TailorDBField type error message tests", () => {
   });
 
   test("field types stay assignable when a module helper erases fields via an unresolved generic", () => {
-    // Mirrors a module-authoring pattern (`ReturnType<typeof genericFn>` with no
-    // explicit type args) used to describe a helper's return shape without
-    // pinning its optional custom-fields generic. With no type argument, the
-    // generic resolves to its constraint (`Record<string, TailorAnyDBField>`),
-    // which widens `array` from a literal to `boolean` and erases concrete
-    // field metadata to `any` in nested positions (pickFields/clone). A type
-    // built this way must stay assignable from a concrete instantiation of the
-    // same helper, or every consumer using this pattern for module wiring
-    // breaks the moment one of its fields is an array.
+    // Reading a generic's shape via `ReturnType<typeof genericFn>` with no type
+    // args resolves the generic to its constraint, which widens `array` from a
+    // literal to `boolean` and erases field metadata to `any` inside pickFields/clone.
     function withCustomFields<
       const F extends Record<string, TailorAnyDBField> = Record<string, never>,
     >(fields?: F) {
@@ -498,11 +492,178 @@ describe("TailorDBField type error message tests", () => {
       });
     }
 
-    type GenericDefaultShape = ReturnType<typeof withCustomFields>;
     const concrete = withCustomFields({ name: db.string() });
 
-    const accepts: (value: GenericDefaultShape) => void = () => {};
-    accepts(concrete);
+    expectTypeOf(concrete.fields.tags).toEqualTypeOf(withCustomFields().fields.tags);
+    expectTypeOf(concrete.fields.name).not.toBeAny();
+  });
+});
+
+describe("TailorDBType type error message tests", () => {
+  test("duplicate type modifiers expose type-level error messages", () => {
+    const hooked = db.table("HookedUser", { name: db.string() }).hooks({
+      create: ({ input }) => ({ name: input.name }),
+    });
+    expectTypeOf<Parameters<typeof hooked.hooks>[0]>().toEqualTypeOf<
+      TypeLevelError<".hooks() has already been set">
+    >();
+    expect(() => {
+      // @ts-expect-error hooks() cannot be called after hooks() has already been called
+      hooked.hooks({ update: ({ input }) => ({ name: input.name }) });
+    }).toThrowError(".hooks() has already been set");
+
+    const validated = db
+      .table("ValidatedUser", { name: db.string() })
+      .validate(({ newRecord }, issues) => {
+        if (!(newRecord.name.length > 0)) issues("name", "must not be empty");
+      });
+    expectTypeOf<Parameters<typeof validated.validate>[0]>().toEqualTypeOf<
+      TypeLevelError<".validate() has already been set">
+    >();
+    expect(() => {
+      // @ts-expect-error validate() cannot be called after validate() has already been called
+      validated.validate(({ newRecord }, issues) => {
+        if (!(newRecord.name.length > 1)) issues("name", "too short");
+      });
+    }).toThrowError(".validate() has already been set");
+
+    const featured = db.table("FeaturedUser", { name: db.string() }).features({
+      aggregation: true,
+    });
+    expectTypeOf<Parameters<typeof featured.features>[0]>().toEqualTypeOf<
+      TypeLevelError<".features() has already been set">
+    >();
+    expect(() => {
+      // @ts-expect-error features() cannot be called after features() has already been called
+      featured.features({ bulkUpsert: true });
+    }).toThrowError(".features() has already been set");
+
+    const indexed = db.table("IndexedUser", { name: db.string() }).indexes({
+      fields: ["id", "name"],
+    });
+    expectTypeOf<Parameters<typeof indexed.indexes>>().toEqualTypeOf<
+      [
+        TypeLevelError<".indexes() has already been set">,
+        ...TypeLevelError<".indexes() has already been set">[],
+      ]
+    >();
+    expectTypeOf<Parameters<typeof indexed.indexes>[0]>().toEqualTypeOf<
+      TypeLevelError<".indexes() has already been set">
+    >();
+    expectTypeOf<Parameters<typeof indexed.indexes>[1]>().toEqualTypeOf<
+      TypeLevelError<".indexes() has already been set">
+    >();
+    expect(() => {
+      // @ts-expect-error indexes() cannot be called after indexes() has already been called
+      indexed.indexes({ fields: ["id", "name"] });
+    }).toThrowError(".indexes() has already been set");
+
+    const permitted = db.table("PermittedUser", { name: db.string() }).permission({
+      create: [],
+      read: [],
+      update: [],
+      delete: [],
+    });
+    expectTypeOf<Parameters<typeof permitted.permission>[0]>().toEqualTypeOf<
+      TypeLevelError<".permission() has already been set">
+    >();
+    const duplicatePermission = {
+      create: [],
+      read: [],
+      update: [],
+      delete: [],
+    };
+    expect(() => {
+      // @ts-expect-error permission() cannot be called after permission() has already been called
+      permitted.permission(duplicatePermission);
+    }).toThrowError(".permission() has already been set");
+
+    const gqlPermitted = db.table("GqlPermittedUser", { name: db.string() }).gqlPermission([]);
+    expectTypeOf<Parameters<typeof gqlPermitted.gqlPermission>[0]>().toEqualTypeOf<
+      TypeLevelError<".gqlPermission() has already been set">
+    >();
+    expect(() => {
+      // @ts-expect-error gqlPermission() cannot be called after gqlPermission() has already been called
+      gqlPermitted.gqlPermission([]);
+    }).toThrowError(".gqlPermission() has already been set");
+
+    const withFiles = db.table("UserWithFiles", { name: db.string() }).files({
+      avatar: "profile image",
+    });
+    expectTypeOf<Parameters<typeof withFiles.files>[0]>().toEqualTypeOf<
+      TypeLevelError<".files() has already been set">
+    >();
+    expect(() => {
+      // @ts-expect-error files() cannot be called after files() has already been called
+      withFiles.files({ document: "user document" });
+    }).toThrowError(".files() has already been set");
+
+    const described = db.table("DescribedUser", { name: db.string() }).description("first");
+    expectTypeOf<Parameters<typeof described.description>[0]>().toEqualTypeOf<
+      TypeLevelError<".description() has already been set">
+    >();
+    expect(() => {
+      // @ts-expect-error description() cannot be called after description() has already been called
+      described.description("second");
+    }).toThrowError(".description() has already been set");
+
+    const describedInTypeCall = db.table("DescribedInTypeCallUser", "first", {
+      name: db.string(),
+    });
+    expectTypeOf<Parameters<typeof describedInTypeCall.description>[0]>().toEqualTypeOf<
+      TypeLevelError<".description() has already been set">
+    >();
+    expect(() => {
+      // @ts-expect-error description() cannot be called after the type description has already been set
+      describedInTypeCall.description("second");
+    }).toThrowError(".description() has already been set");
+
+    const describedAfterHooks = db
+      .table("DescribedAfterHooksUser", { name: db.string() })
+      .hooks({ create: ({ input }) => ({ name: input.name }) })
+      .description("user with hooks");
+    expectTypeOf<Parameters<typeof describedAfterHooks.hooks>[0]>().toEqualTypeOf<
+      TypeLevelError<".hooks() has already been set">
+    >();
+  });
+
+  test("type modifiers preserve conditional reassignment compatibility", () => {
+    function getFiles(): Record<string, string> | undefined {
+      return { avatar: "profile image" };
+    }
+
+    let conditional = db.table("ConditionallyFileUser", { name: db.string() });
+    const files = getFiles();
+
+    if (files) {
+      conditional = conditional.files(files);
+    }
+
+    expect(conditional.metadata.files).toEqual({ avatar: "profile image" });
+  });
+
+  test("duplicate type modifiers throw after type state is erased", () => {
+    const alias = db.table("RuntimeAliasFilesUser", { name: db.string() });
+    alias.files({ avatar: "profile image" });
+    expect(() => {
+      alias.files({ document: "user document" });
+    }).toThrowError(".files() has already been set");
+
+    const erased: TailorDBType = db
+      .table("RuntimeErasedFilesUser", { name: db.string() })
+      .files({ avatar: "profile image" });
+    expect(() => {
+      erased.files({ document: "user document" });
+    }).toThrowError(".files() has already been set");
+  });
+
+  test("failed duplicate-guarded calls can be retried", () => {
+    const retryable = db.table("RetryableHookedUser", { name: db.string() });
+
+    retryable.hooks({ create: ({ input }) => ({ name: input.name }) });
+    expect(() => {
+      retryable.hooks({ update: ({ input }) => ({ name: input.name ?? "" }) });
+    }).toThrowError(".hooks() has already been set");
   });
 });
 
@@ -2058,6 +2219,52 @@ describe("TailorDBField clone tests", () => {
 
     // Verify deep copy (different reference)
     expect(cloned.metadata.validate).not.toBe(original.metadata.validate);
+  });
+
+  test("rejects changing the array shape of a validated field", () => {
+    const scalar = db
+      .string()
+      .validate(({ value }) => (value.length > 0 ? undefined : "must not be empty"));
+    const array = db
+      .string({ array: true })
+      .validate(({ value }) => (value.length > 0 ? undefined : "must not be empty"));
+    const type = db.table("ValidatedClone", { value: scalar });
+    const mixedType = db.table("MixedValidatedClone", {
+      validated: scalar,
+      plain: db.string(),
+    });
+    const arrayType = db.table("ValidatedArrayClone", { value: array });
+
+    type ScalarCloneOptions = Parameters<typeof scalar.clone>[0];
+    type ArrayCloneOptions = Parameters<typeof array.clone>[0];
+    type InvalidPickOptions = Parameters<typeof type.pickFields<"value", { array: true }>>[1];
+    type InvalidMixedPickOptions = Parameters<
+      typeof mixedType.pickFields<"validated" | "plain", { array: true }>
+    >[1];
+    type AllowedArrayPickOptions = Parameters<
+      typeof arrayType.pickFields<"value", { array: true }>
+    >[1];
+    type ArrayShapeError =
+      TypeLevelError<"array cannot be changed on fields with custom validation">;
+    type Equal<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+    type Expect<T extends true> = T;
+    type _ScalarCloneOptions = Expect<
+      Equal<ScalarCloneOptions, { optional?: boolean; array?: false } | undefined>
+    >;
+    type _ArrayCloneOptions = Expect<
+      Equal<ArrayCloneOptions, { optional?: boolean; array?: true } | undefined>
+    >;
+    type _InvalidPickOptions = Expect<Equal<InvalidPickOptions, { array: true } & ArrayShapeError>>;
+    type _InvalidMixedPickOptions = Expect<
+      Equal<InvalidMixedPickOptions, { array: true } & ArrayShapeError>
+    >;
+    type _AllowedArrayPickOptions = Expect<Equal<AllowedArrayPickOptions, { array: true }>>;
+    const scalarClone = scalar.clone.bind(scalar) as (options?: FieldOptions) => unknown;
+    const arrayClone = array.clone.bind(array) as (options?: FieldOptions) => unknown;
+    const expectedError = "Cannot change the array option on a field with custom validation";
+
+    expect(() => scalarClone({ array: true })).toThrowError(expectedError);
+    expect(() => arrayClone({ array: false })).toThrowError(expectedError);
   });
 
   test("clones serial config correctly", () => {

@@ -1,4 +1,5 @@
 import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
+import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
 
 /**
  * Body signature shared by workflow jobs at registry-write time.
@@ -14,7 +15,11 @@ const JOB_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:job-regi
 
 type PlatformWorkflow = {
   triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
-  triggerJobFunction: (name: string, args?: unknown) => unknown;
+  triggerJobFunction: (
+    name: string,
+    args?: unknown,
+    options?: TriggerJobFunctionOptions,
+  ) => unknown;
 };
 
 type GlobalWithRegistry = typeof globalThis & {
@@ -77,8 +82,19 @@ export const TRIGGER_DEFAULT = "00000000-0000-4000-8000-000000000000";
 
 // `.trigger()` routes through the installed `tailor.workflow` shim. Local body
 // execution is intentionally available only through `runWorkflowLocally()`.
-export function dispatchTriggerJob(name: string, args?: unknown): unknown {
-  return requirePlatformWorkflow().triggerJobFunction(name, args);
+// Preserve arity: the shim sees a 2-argument call when the caller supplied no
+// options, and a 3-argument call otherwise, mirroring the bundler rewrite so
+// mocks observe the same shape in local execution and in bundled workflows.
+export function dispatchTriggerJob(
+  name: string,
+  args?: unknown,
+  options?: TriggerJobFunctionOptions,
+): unknown {
+  const workflow = requirePlatformWorkflow();
+  // oxlint-disable-next-line prefer-rest-params
+  return arguments.length >= 3
+    ? workflow.triggerJobFunction(name, args, options)
+    : workflow.triggerJobFunction(name, args);
 }
 
 export function dispatchTriggerWorkflow(
