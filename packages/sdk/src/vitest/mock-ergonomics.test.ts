@@ -1,0 +1,349 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
+import { createWorkflowJob } from "../configure/services/workflow/job";
+import { defineWaitPoint } from "../configure/services/workflow/wait-point";
+import { createWorkflow } from "../configure/services/workflow/workflow";
+import {
+  cleanupMocks,
+  injectMocks,
+  mockAigateway,
+  mockAuthconnection,
+  mockFile,
+  mockIconv,
+  mockIdp,
+  mockSecretmanager,
+  mockTailordb,
+  mockWorkflow,
+} from "./mock";
+
+const lookupCustomer = createWorkflowJob({
+  name: "mock-ergonomics-lookup-customer",
+  body: async (input: { customerId: string }): Promise<{ customerId: string; source: string }> => ({
+    customerId: input.customerId,
+    source: "real",
+  }),
+});
+
+const customerWorkflow = createWorkflow({
+  name: "mock-ergonomics-customer-workflow",
+  mainJob: lookupCustomer,
+});
+
+const approval = defineWaitPoint<{ message: string }, { approved: boolean }>(
+  "mock-ergonomics-approval",
+);
+
+describe("ergonomic runtime mocks", () => {
+  beforeEach(() => {
+    injectMocks(globalThis);
+  });
+
+  afterEach(() => {
+    cleanupMocks(globalThis);
+  });
+
+  test("matches TailorDB queries without coupling responses to global call order", async () => {
+    using db = mockTailordb();
+    db.onQuery({ sql: /FROM users/i, params: ["u-1"] }).returnsRows([{ id: "u-1", name: "Alice" }]);
+    db.onQuery(/FROM audit_logs/i)
+      .returnsRowsOnce([{ id: "log-1" }])
+      .returnsRows([{ id: "log-2" }]);
+
+    const client = new (globalThis as any).tailordb.Client({});
+
+    await expect(
+      client.queryObject("SELECT * FROM users WHERE id = $1", ["u-1"]),
+    ).resolves.toMatchObject({ rows: [{ id: "u-1", name: "Alice" }] });
+    await expect(client.queryObject("SELECT * FROM audit_logs")).resolves.toMatchObject({
+      rows: [{ id: "log-1" }],
+    });
+    await expect(client.queryObject("SELECT * FROM audit_logs")).resolves.toMatchObject({
+      rows: [{ id: "log-2" }],
+    });
+  });
+
+  test("keeps an explicit TailorDB rows queue for sequence-sensitive tests", async () => {
+    using db = mockTailordb();
+    db.enqueueRows([], [{ age: 30 }], []);
+
+    const client = new (globalThis as any).tailordb.Client({});
+    await expect(client.queryObject("BEGIN")).resolves.toMatchObject({ rows: [] });
+    await expect(client.queryObject("SELECT age FROM users")).resolves.toMatchObject({
+      rows: [{ age: 30 }],
+    });
+    await expect(client.queryObject("COMMIT")).resolves.toMatchObject({ rows: [] });
+  });
+
+  test("rejects configured and unhandled TailorDB queries in strict mode", async () => {
+    using db = mockTailordb({ onUnhandled: "error" });
+    db.onQuery(/DELETE FROM users/i).rejects(new Error("delete failed"));
+
+    const client = new (globalThis as any).tailordb.Client({});
+    await expect(client.queryObject("DELETE FROM users")).rejects.toThrow("delete failed");
+    await expect(client.queryObject("SELECT * FROM users")).rejects.toThrow(
+      "No TailorDB query behavior matched",
+    );
+  });
+
+  test("returns typed workflow definition mocks", async () => {
+    using wf = mockWorkflow();
+    const job = wf.job(lookupCustomer);
+    const workflow = wf.workflow(customerWorkflow);
+
+    job.mockResolvedValue({ customerId: "c-1", source: "mock" });
+    workflow.mockResolvedValue("execution-1");
+
+    await expect(lookupCustomer.trigger({ customerId: "c-1" })).resolves.toEqual({
+      customerId: "c-1",
+      source: "mock",
+    });
+    await expect(customerWorkflow.trigger({ customerId: "c-1" })).resolves.toBe("execution-1");
+    expect(job).toHaveBeenCalledWith({ customerId: "c-1" });
+    expect(workflow).toHaveBeenCalledWith({ customerId: "c-1" });
+  });
+
+  test("returns typed wait-point mocks for wait and resolve paths", async () => {
+    using wf = mockWorkflow();
+    const waitPoint = wf.waitPoint(approval);
+    waitPoint.wait.mockResolvedValue({ approved: true });
+
+    await expect(approval.wait({ message: "Approve this" })).resolves.toEqual({ approved: true });
+    expect(waitPoint.wait).toHaveBeenCalledWith({ message: "Approve this" });
+
+    waitPoint.setResolvePayload({ message: "Approve that" });
+    const callback = vi.fn(() => ({ approved: false }));
+    await approval.resolve("execution-1", callback);
+
+    expect(callback).toHaveBeenCalledWith({ message: "Approve that" });
+    expect(waitPoint.resolve).toHaveBeenCalledWith("execution-1", callback);
+  });
+
+  test("isolates definition mocks across nested workflow scopes", async () => {
+    using outer = mockWorkflow();
+    const outerJob = outer.job(lookupCustomer);
+    const outerWorkflow = outer.workflow(customerWorkflow);
+    const outerWaitPoint = outer.waitPoint(approval);
+    outerJob.mockResolvedValue({ customerId: "c-1", source: "outer" });
+    outerWorkflow.mockResolvedValue("outer-execution");
+    outerWaitPoint.wait.mockResolvedValue({ approved: true });
+
+    {
+      using inner = mockWorkflow();
+      const innerJob = inner.job(lookupCustomer);
+      const innerWorkflow = inner.workflow(customerWorkflow);
+      const innerWaitPoint = inner.waitPoint(approval);
+      expect(innerJob).not.toBe(outerJob);
+      expect(innerWorkflow).not.toBe(outerWorkflow);
+      expect(innerWaitPoint.wait).not.toBe(outerWaitPoint.wait);
+      await expect(lookupCustomer.trigger({ customerId: "c-1" })).resolves.toMatchObject({
+        source: "real",
+      });
+
+      innerJob.mockResolvedValue({ customerId: "c-1", source: "inner" });
+      innerWorkflow.mockResolvedValue("inner-execution");
+      innerWaitPoint.wait.mockResolvedValue({ approved: false });
+
+      await expect(lookupCustomer.trigger({ customerId: "c-1" })).resolves.toMatchObject({
+        source: "inner",
+      });
+      await expect(customerWorkflow.trigger({ customerId: "c-1" })).resolves.toBe(
+        "inner-execution",
+      );
+      await expect(approval.wait({ message: "inner" })).resolves.toEqual({ approved: false });
+    }
+
+    await expect(lookupCustomer.trigger({ customerId: "c-1" })).resolves.toMatchObject({
+      source: "outer",
+    });
+    await expect(customerWorkflow.trigger({ customerId: "c-1" })).resolves.toBe("outer-execution");
+    await expect(approval.wait({ message: "outer" })).resolves.toEqual({ approved: true });
+  });
+
+  test("initializes and incrementally updates Secret Manager fixtures", async () => {
+    using secrets = mockSecretmanager({
+      secrets: { app: { API_KEY: "initial" } },
+    });
+    secrets.setSecret("app", "API_KEY", "override");
+    secrets.mergeSecrets("app", { DB_PASSWORD: "password" });
+
+    await expect(secrets.getSecret("app", "API_KEY")).resolves.toBe("override");
+    await expect(secrets.getSecrets("app", ["API_KEY", "DB_PASSWORD"])).resolves.toEqual({
+      API_KEY: "override",
+      DB_PASSWORD: "password",
+    });
+  });
+
+  test("initializes AuthConnection tokens and can fail on an unhandled name", async () => {
+    using auth = mockAuthconnection({
+      tokens: { google: { access_token: "initial" } },
+      onUnhandled: "error",
+    });
+    auth.setToken("google", { access_token: "override" });
+
+    await expect(auth.getConnectionToken("google")).resolves.toEqual({
+      access_token: "override",
+    });
+    await expect(auth.getConnectionToken("unknown")).rejects.toThrow(
+      'No AuthConnection token configured for "unknown"',
+    );
+  });
+
+  test("routes IdP clients to typed namespace-specific method mocks", async () => {
+    using idp = mockIdp({ onUnhandled: "error" });
+    const namespace = idp.namespace("customer-idp");
+    namespace.user.mockResolvedValue({
+      id: "u-1",
+      name: "alice",
+      disabled: false,
+      mfaEnrolled: false,
+      mfaFactorIds: [],
+    });
+    namespace.deleteUser.mockResolvedValue(true);
+
+    const client = new (globalThis as any).tailor.idp.Client({ namespace: "customer-idp" });
+    await expect(client.user("u-1")).resolves.toMatchObject({ name: "alice" });
+    await expect(client.deleteUser("u-1")).resolves.toBe(true);
+
+    expect(namespace.user).toHaveBeenCalledWith("u-1");
+    expect(namespace.deleteUser).toHaveBeenCalledWith("u-1");
+  });
+
+  test("exposes every File operation as a typed Vitest mock", async () => {
+    using file = mockFile({ onUnhandled: "error" });
+    const response = {
+      data: new Uint8Array([1, 2, 3]),
+      metadata: {
+        contentType: "application/octet-stream",
+        fileSize: 3,
+        sha256sum: "hash",
+        lastUploadedAt: "2026-01-01T00:00:00.000Z",
+      },
+    };
+    file.download
+      .mockRejectedValueOnce(new Error("file not found"))
+      .mockResolvedValueOnce(response);
+
+    const args = ["main", "Document", "attachment", "record-1"] as const;
+    await expect((globalThis as any).tailordb.file.download(...args)).rejects.toThrow(
+      "file not found",
+    );
+    await expect((globalThis as any).tailordb.file.download(...args)).resolves.toEqual(response);
+    expect(file.download).toHaveBeenNthCalledWith(2, ...args);
+  });
+
+  test("exposes Iconv operations as typed Vitest mocks", () => {
+    using iconv = mockIconv();
+    iconv.decode.mockReturnValue("decoded");
+    iconv.encodings.mockReturnValue(["UTF-8", "Shift_JIS"]);
+
+    const bytes = new Uint8Array([0x41]);
+    expect((globalThis as any).tailor.iconv.decode(bytes, "Shift_JIS")).toBe("decoded");
+    expect((globalThis as any).tailor.iconv.encodings()).toEqual(["UTF-8", "Shift_JIS"]);
+    expect(iconv.decode).toHaveBeenCalledWith(bytes, "Shift_JIS");
+  });
+
+  test("preserves Iconv conditional return types and rejects invalid mock values", () => {
+    using iconv = mockIconv();
+    const bytes = new Uint8Array([0x41]);
+
+    expectTypeOf(iconv.convert(bytes, "Shift_JIS", "UTF-8")).toEqualTypeOf<string>();
+    expectTypeOf(iconv.convert(bytes, "UTF-8", "Shift_JIS")).toEqualTypeOf<Uint8Array>();
+    iconv.convert.mockReturnValue(new Uint8Array());
+    iconv.convertBuffer.mockReturnValue("decoded");
+    iconv.encode.mockReturnValue(new Uint8Array());
+
+    // @ts-expect-error Iconv conversion mocks only accept runtime-compatible results.
+    iconv.convert.mockReturnValue(42);
+    // @ts-expect-error Iconv conversion mocks only accept runtime-compatible results.
+    iconv.convertBuffer.mockReturnValue({ invalid: true });
+    // @ts-expect-error Iconv conversion mocks only accept runtime-compatible results.
+    iconv.encode.mockReturnValue(null);
+  });
+
+  test("initializes AI Gateway URLs and updates one URL", async () => {
+    using ai = mockAigateway({ urls: { assistant: "https://initial.example.com" } });
+    ai.setUrl("assistant", "https://override.example.com");
+
+    await expect(ai.get("assistant")).resolves.toEqual({
+      url: "https://override.example.com",
+    });
+  });
+
+  test("clears calls without clearing configured behavior", async () => {
+    using file = mockFile();
+    file.download.mockResolvedValue({
+      data: new Uint8Array(),
+      metadata: {
+        contentType: "",
+        fileSize: 0,
+        sha256sum: "",
+        lastUploadedAt: "",
+      },
+    });
+    const args = ["main", "Document", "attachment", "record-1"] as const;
+    await file.download(...args);
+
+    file.clear();
+
+    expect(file.download).not.toHaveBeenCalled();
+    await expect(file.download(...args)).resolves.toMatchObject({ data: new Uint8Array() });
+  });
+
+  test("resets typed workflow mocks to their real behavior", async () => {
+    using wf = mockWorkflow();
+    const job = wf.job(lookupCustomer);
+    job.mockResolvedValue({ customerId: "c-1", source: "mock" });
+
+    wf.reset();
+
+    await expect(lookupCustomer.trigger({ customerId: "c-1" })).resolves.toEqual({
+      customerId: "c-1",
+      source: "real",
+    });
+  });
+
+  test("resets IdP and File mocks to their fallback behavior", async () => {
+    using idp = mockIdp();
+    const namespace = idp.namespace("customer-idp");
+    namespace.user.mockResolvedValue({
+      id: "u-1",
+      name: "alice",
+      disabled: false,
+      mfaEnrolled: false,
+      mfaFactorIds: [],
+    });
+
+    using file = mockFile();
+    file.download.mockRejectedValue(new Error("configured failure"));
+
+    idp.reset();
+    file.reset();
+
+    const client = new (globalThis as any).tailor.idp.Client({ namespace: "customer-idp" });
+    await expect(client.user("u-1")).resolves.toMatchObject({ name: "mock-user" });
+    await expect(
+      file.download("main", "Document", "attachment", "record-1"),
+    ).resolves.toMatchObject({ data: new Uint8Array() });
+  });
+
+  test("resets exposed client constructor implementations", async () => {
+    using db = mockTailordb();
+    db.Client.mockImplementation(function (this: any) {
+      this.queryObject = vi.fn(async () => ({ rows: [{ id: "custom" }] }));
+    });
+
+    using idp = mockIdp();
+    idp.Client.mockImplementation(function (this: any) {
+      this.user = vi.fn(async () => ({ id: "custom", name: "custom" }));
+    });
+
+    db.reset();
+    idp.reset();
+
+    const dbClient = new (globalThis as any).tailordb.Client({});
+    await expect(dbClient.queryObject("SELECT 1")).resolves.toMatchObject({ rows: [] });
+
+    const idpClient = new (globalThis as any).tailor.idp.Client({ namespace: "customer-idp" });
+    await expect(idpClient.user("u-1")).resolves.toMatchObject({ name: "mock-user" });
+  });
+});

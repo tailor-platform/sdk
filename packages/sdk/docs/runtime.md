@@ -95,17 +95,16 @@ import { expect, test } from "vitest";
 
 test("encodes via iconv", () => {
   using iconvM = mockIconv();
-  iconvM.setResolver(() => new Uint8Array([0x82, 0xa0]));
+  iconvM.convert.mockReturnValue(new Uint8Array([0x82, 0xa0]));
 
   const out = iconv.convert("あ", "UTF-8", "Shift_JIS");
 
   expect(out).toEqual(new Uint8Array([0x82, 0xa0]));
-  expect(iconvM.calls[0]?.method).toBe("convert");
+  expect(iconvM.convert).toHaveBeenCalledWith("あ", "UTF-8", "Shift_JIS");
 }); // iconvM disposed here — the iconv mock is removed (previous state restored)
 
 test("reads from a vault", async () => {
-  using sm = mockSecretmanager();
-  sm.setSecrets({ "my-vault": { API_KEY: "sk-123" } });
+  using sm = mockSecretmanager({ secrets: { "my-vault": { API_KEY: "sk-123" } } });
 
   await expect(secretmanager.getSecret("my-vault", "API_KEY")).resolves.toBe("sk-123");
 });

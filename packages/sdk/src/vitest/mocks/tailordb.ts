@@ -3,6 +3,39 @@ import { tailordbRoot, withDispose } from "./shared";
 
 type QueryResolver = (query: string, params: unknown[]) => unknown[];
 
+/** Controls how unmatched TailorDB queries are handled. */
+export interface MockTailordbOptions {
+  /** Return an empty result or throw when no configured query behavior matches. */
+  onUnhandled?: "empty" | "error";
+}
+
+/** Matches a TailorDB query by SQL text and optionally by parameters. */
+export interface QueryMatch {
+  /** Exact SQL text or regular expression to match. */
+  sql: string | RegExp;
+  /** Exact parameters or a predicate for parameter matching. */
+  params?: readonly unknown[] | ((params: unknown[]) => boolean);
+}
+
+/** Selects TailorDB queries that receive a configured response. */
+export type QueryMatcher =
+  | string
+  | RegExp
+  | QueryMatch
+  | ((query: string, params: unknown[]) => boolean);
+
+/** Configures persistent and one-time responses for matched queries. */
+export interface QueryBehavior<Row> {
+  /** Return these rows for every matching query after one-time responses are consumed. */
+  returnsRows(rows: Row[]): QueryBehavior<Row>;
+  /** Return these rows for the next matching query. */
+  returnsRowsOnce(rows: Row[]): QueryBehavior<Row>;
+  /** Reject every matching query after one-time responses are consumed. */
+  rejects(error: unknown): QueryBehavior<Row>;
+  /** Reject the next matching query. */
+  rejectsOnce(error: unknown): QueryBehavior<Row>;
+}
+
 interface ExecutedQuery {
   query: string;
   params: unknown[];
@@ -11,6 +44,14 @@ interface ExecutedQuery {
 interface CreatedClient {
   namespace: string | undefined;
   ended: boolean;
+}
+
+type QueryResponse = { type: "rows"; rows: unknown[] } | { type: "error"; error: unknown };
+
+interface QueryRule {
+  matcher: QueryMatcher;
+  once: QueryResponse[];
+  fallback?: QueryResponse;
 }
 
 class MockQueryResult {
@@ -34,32 +75,87 @@ class MockQueryResult {
  * `tailordb.Client` whose `queryObject` is a shared `vi.fn()` (so query
  * responses can be staged before the client is constructed). Restored on
  * dispose.
+ * @param options - Query fallback behavior
  * @returns Disposable TailorDB mock control object
  * @example
  * ```typescript
  * import { mockTailordb } from "@tailor-platform/sdk/vitest";
  *
- * test("order-based", async () => {
+ * test("query-based", async () => {
  *   using db = mockTailordb();
- *   db.enqueueResults([], [{ age: 30 }], []); // BEGIN / SELECT / COMMIT
+ *   db.onQuery({ sql: /FROM users/, params: ["u-1"] }).returnsRows([{ age: 30 }]);
  *   // …
- *   expect(db.queryObject).toHaveBeenCalledTimes(3);
+ *   expect(db.queryObject).toHaveBeenCalled();
  *   expect(db.Client).toHaveBeenCalledWith({ namespace: "tailordb" });
  * });
  * ```
  */
-export function mockTailordb() {
+export function mockTailordb(options: MockTailordbOptions = {}) {
   const root = tailordbRoot();
   const prevClient = root.Client;
 
-  const queryObject = vi.fn(
-    async (_query: string, _params: unknown[] = []): Promise<MockQueryResult> =>
-      new MockQueryResult([]),
-  );
-  const connect = vi.fn(async (): Promise<void> => {});
+  const rules: QueryRule[] = [];
+  let queryResolver: QueryResolver | undefined;
+
+  function matchesQuery(matcher: QueryMatcher, query: string, params: unknown[]): boolean {
+    if (typeof matcher === "function") return matcher(query, params);
+    if (typeof matcher === "string") return query === matcher;
+    if (matcher instanceof RegExp) {
+      matcher.lastIndex = 0;
+      return matcher.test(query);
+    }
+
+    let sqlMatches: boolean;
+    if (typeof matcher.sql === "string") {
+      sqlMatches = query === matcher.sql;
+    } else {
+      matcher.sql.lastIndex = 0;
+      sqlMatches = matcher.sql.test(query);
+    }
+    if (!sqlMatches || matcher.params === undefined) return sqlMatches;
+    if (typeof matcher.params === "function") return matcher.params(params);
+    const expectedParams = matcher.params;
+    return (
+      params.length === expectedParams.length &&
+      params.every((v, i) => {
+        const expected = expectedParams[i];
+        if (Object.is(v, expected)) return true;
+        try {
+          return JSON.stringify(v) === JSON.stringify(expected);
+        } catch {
+          return false;
+        }
+      })
+    );
+  }
+
+  function queryResponse(response: QueryResponse): MockQueryResult {
+    if (response.type === "error") throw response.error;
+    return new MockQueryResult(response.rows);
+  }
+
+  async function defaultQuery(query: string, params: unknown[] = []): Promise<MockQueryResult> {
+    for (let i = rules.length - 1; i >= 0; i -= 1) {
+      const rule = rules[i];
+      if (!rule || !matchesQuery(rule.matcher, query, params)) continue;
+      const once = rule.once.shift();
+      if (once) return queryResponse(once);
+      if (rule.fallback) return queryResponse(rule.fallback);
+    }
+
+    if (queryResolver) return new MockQueryResult(queryResolver(query, params));
+    if (options.onUnhandled === "error") {
+      throw new Error(`No TailorDB query behavior matched: ${query}`);
+    }
+    return new MockQueryResult([]);
+  }
+
+  const queryObject = vi.fn(defaultQuery);
+  const defaultConnect = async (): Promise<void> => {};
+  const connect = vi.fn(defaultConnect);
   const createdClients: CreatedClient[] = [];
 
-  const Client = vi.fn(function (
+  const defaultClient = function (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this: any,
     config?: { namespace?: string },
@@ -82,7 +178,8 @@ export function mockTailordb() {
         queryObject,
       };
     };
-  });
+  };
+  const Client = vi.fn(defaultClient);
 
   root.Client = Client;
 
@@ -97,12 +194,37 @@ export function mockTailordb() {
      * @param resolver - Function that returns rows for a given query and params
      */
     setQueryResolver(resolver: QueryResolver): void {
-      queryObject.mockImplementation(
-        async (query: string, params: unknown[] = []) =>
-          // user resolvers may return undefined
-          // oxlint-disable-next-line typescript/no-unnecessary-condition
-          new MockQueryResult(resolver(query, params) ?? []),
-      );
+      queryResolver = resolver;
+    },
+
+    /**
+     * Configure responses for queries matching SQL text, parameters, or a predicate.
+     * More recently registered matchers take precedence.
+     * @param matcher - Query matcher
+     * @returns Chainable query behavior
+     */
+    onQuery<Row = unknown>(matcher: QueryMatcher): QueryBehavior<Row> {
+      const rule: QueryRule = { matcher, once: [] };
+      rules.push(rule);
+      const behavior: QueryBehavior<Row> = {
+        returnsRows(rows) {
+          rule.fallback = { type: "rows", rows };
+          return behavior;
+        },
+        returnsRowsOnce(rows) {
+          rule.once.push({ type: "rows", rows });
+          return behavior;
+        },
+        rejects(error) {
+          rule.fallback = { type: "error", error };
+          return behavior;
+        },
+        rejectsOnce(error) {
+          rule.once.push({ type: "error", error });
+          return behavior;
+        },
+      };
+      return behavior;
     },
 
     /**
@@ -119,6 +241,16 @@ export function mockTailordb() {
      * @param rowsList - Rows arrays, one per upcoming query
      */
     enqueueResults(...rowsList: unknown[][]): void {
+      for (const rows of rowsList) {
+        queryObject.mockImplementationOnce(async () => new MockQueryResult(rows));
+      }
+    },
+
+    /**
+     * Enqueue row arrays for subsequent queries whose exact order is under test.
+     * @param rowsList - Rows arrays, one per upcoming query
+     */
+    enqueueRows(...rowsList: unknown[][]): void {
       for (const rows of rowsList) {
         queryObject.mockImplementationOnce(async () => new MockQueryResult(rows));
       }
@@ -146,13 +278,25 @@ export function mockTailordb() {
       return createdClients;
     },
 
-    /** Reset query responses and recorded calls (keeps the mock installed). */
-    reset(): void {
-      queryObject.mockReset();
-      queryObject.mockImplementation(async () => new MockQueryResult([]));
+    /** Clear recorded calls while preserving configured query behavior. */
+    clear(): void {
+      queryObject.mockClear();
       connect.mockClear();
       Client.mockClear();
       createdClients.length = 0;
+    },
+
+    /** Reset query responses and recorded calls (keeps the mock installed). */
+    reset(): void {
+      queryObject.mockReset();
+      queryObject.mockImplementation(defaultQuery);
+      connect.mockReset();
+      connect.mockImplementation(defaultConnect);
+      Client.mockReset();
+      Client.mockImplementation(defaultClient);
+      createdClients.length = 0;
+      rules.length = 0;
+      queryResolver = undefined;
     },
   };
 

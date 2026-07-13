@@ -1,7 +1,9 @@
 import { type Mock, vi } from "vitest";
 import { tailorRoot, withDispose } from "./shared";
-import type { User as IdpUser } from "../../runtime/idp";
+import type { ClientConfig, IdpClientConstructor, IdpClientInstance } from "../../runtime/idp";
 
+type IdpMethod = keyof IdpClientInstance;
+type IdpResult<Method extends IdpMethod> = Awaited<ReturnType<IdpClientInstance[Method]>>;
 type IdpResolver = (method: string, args: unknown[], namespace: string) => unknown;
 
 interface IdpCall {
@@ -10,13 +12,36 @@ interface IdpCall {
   namespace: string;
 }
 
-// ---------------------------------------------------------------------------
-// IDP Mock
-// ---------------------------------------------------------------------------
+/** Controls fallback behavior for IdP calls without a configured result. */
+export interface MockIdpOptions {
+  /** Return a type-compatible fixture or throw when no behavior is configured. */
+  onUnhandled?: "fallback" | "error";
+}
 
-const IDP_DEFAULTS: Record<string, unknown> = {
+type IdpNamespaceMocks = {
+  [Method in IdpMethod]: Mock<IdpClientInstance[Method]>;
+};
+
+const IDP_METHODS = [
+  "users",
+  "user",
+  "userByName",
+  "createUser",
+  "updateUser",
+  "deleteUser",
+  "sendPasswordResetEmail",
+  "unenrollMfa",
+] as const satisfies readonly IdpMethod[];
+
+const IDP_DEFAULTS: Record<IdpMethod, unknown> = {
   users: { users: [], nextPageToken: null, totalCount: 0 },
-  user: { id: "mock-id", name: "mock-user", disabled: false, mfaEnrolled: false, mfaFactorIds: [] },
+  user: {
+    id: "mock-id",
+    name: "mock-user",
+    disabled: false,
+    mfaEnrolled: false,
+    mfaFactorIds: [],
+  },
   userByName: {
     id: "mock-id",
     name: "mock-user",
@@ -45,89 +70,114 @@ const IDP_DEFAULTS: Record<string, unknown> = {
 
 /**
  * Acquire a disposable mock for `tailor.idp`. Restored on dispose.
+ * @param options - Controls behavior for calls without a configured result
  * @returns Disposable IDP mock control object
  * @example
  * ```typescript
  * import { mockIdp } from "@tailor-platform/sdk/vitest";
  *
- * test("resolver-based", async () => {
+ * test("returns a user", async () => {
  *   using idp = mockIdp();
- *   idp.setResolver((method) =>
- *     method === "user" ? { id: "u-1", name: "alice", disabled: false } : null,
- *   );
+ *   idp.namespace("my-idp").user.mockResolvedValue({
+ *     id: "u-1",
+ *     name: "alice",
+ *     disabled: false,
+ *     mfaEnrolled: false,
+ *     mfaFactorIds: [],
+ *   });
  *   // …
  * });
  * ```
  */
-export function mockIdp() {
+export function mockIdp(options: MockIdpOptions = {}) {
   const root = tailorRoot();
   const prev = root.idp;
+  const { onUnhandled = "fallback" } = options;
 
   const queue: unknown[] = [];
   let resolver: IdpResolver = () => null;
-  const calls: IdpCall[] = [];
+  const namespaces = new Map<string, IdpNamespaceMocks>();
 
-  function handle(method: string, args: unknown[], namespace: string): unknown {
-    calls.push({ method, args, namespace });
-    if (queue.length > 0) return queue.shift();
+  function handle<Method extends IdpMethod>(
+    method: Method,
+    args: unknown[],
+    namespace: string,
+  ): IdpResult<Method> {
+    if (queue.length > 0) return queue.shift() as IdpResult<Method>;
     const resolved = resolver(method, args, namespace);
-    // Treat null and undefined alike as "no override".
-    if (resolved != null) return resolved;
-    // Clone the default so a test mutating the returned value cannot corrupt
-    // the shared module-level object for subsequent tests.
-    const fallback = IDP_DEFAULTS[method];
-    return fallback === undefined ? undefined : structuredClone(fallback);
+    if (resolved != null) return resolved as IdpResult<Method>;
+    if (onUnhandled === "error") {
+      throw new Error(`No IdP mock configured for "${namespace}.${method}"`);
+    }
+    return structuredClone(IDP_DEFAULTS[method]) as IdpResult<Method>;
   }
 
-  const Client = vi.fn(function (
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this: any,
-    config: { namespace: string },
-  ) {
-    const namespace = config.namespace;
-    this.users = async (options?: unknown) => handle("users", [options], namespace);
-    this.user = async (userId: string) => handle("user", [userId], namespace);
-    this.userByName = async (name: string) => handle("userByName", [name], namespace);
-    this.createUser = async (input: unknown) => handle("createUser", [input], namespace);
-    this.updateUser = async (input: unknown) => handle("updateUser", [input], namespace);
-    this.deleteUser = async (userId: string) => handle("deleteUser", [userId], namespace);
-    this.sendPasswordResetEmail = async (input: unknown) =>
-      handle("sendPasswordResetEmail", [input], namespace);
-    this.unenrollMfa = async (input: unknown) => handle("unenrollMfa", [input], namespace);
-  }) as unknown as new (config: { namespace: string }) => {
-    users(options?: {
-      first?: number;
-      after?: string;
-      query?: { ids?: string[]; names?: string[] };
-    }): Promise<{ users: IdpUser[]; nextPageToken: string | null; totalCount: number }>;
-    user(userId: string): Promise<IdpUser>;
-    userByName(name: string): Promise<IdpUser>;
-    createUser(input: { name: string; password?: string; disabled?: boolean }): Promise<IdpUser>;
-    updateUser(input: {
-      id: string;
-      name?: string;
-      password?: string;
-      clearPassword?: boolean;
-      disabled?: boolean;
-    }): Promise<IdpUser>;
-    deleteUser(userId: string): Promise<boolean>;
-    sendPasswordResetEmail(input: { userId: string; redirectUri: string }): Promise<boolean>;
-    unenrollMfa(input: { userId: string; mfaFactorId: string }): Promise<boolean>;
+  function createNamespaceMocks(namespace: string): IdpNamespaceMocks {
+    return {
+      users: vi.fn<IdpClientInstance["users"]>(async (...args) => handle("users", args, namespace)),
+      user: vi.fn<IdpClientInstance["user"]>(async (...args) => handle("user", args, namespace)),
+      userByName: vi.fn<IdpClientInstance["userByName"]>(async (...args) =>
+        handle("userByName", args, namespace),
+      ),
+      createUser: vi.fn<IdpClientInstance["createUser"]>(async (...args) =>
+        handle("createUser", args, namespace),
+      ),
+      updateUser: vi.fn<IdpClientInstance["updateUser"]>(async (...args) =>
+        handle("updateUser", args, namespace),
+      ),
+      deleteUser: vi.fn<IdpClientInstance["deleteUser"]>(async (...args) =>
+        handle("deleteUser", args, namespace),
+      ),
+      sendPasswordResetEmail: vi.fn<IdpClientInstance["sendPasswordResetEmail"]>(async (...args) =>
+        handle("sendPasswordResetEmail", args, namespace),
+      ),
+      unenrollMfa: vi.fn<IdpClientInstance["unenrollMfa"]>(async (...args) =>
+        handle("unenrollMfa", args, namespace),
+      ),
+    };
+  }
+
+  function namespace(name: string): IdpNamespaceMocks {
+    const existing = namespaces.get(name);
+    if (existing) return existing;
+    const mocks = createNamespaceMocks(name);
+    namespaces.set(name, mocks);
+    return mocks;
+  }
+
+  const defaultClient = function (this: IdpClientInstance, config: ClientConfig) {
+    const mocks = namespace(config.namespace);
+    this.users = (value) => mocks.users(value);
+    this.user = (value) => mocks.user(value);
+    this.userByName = (value) => mocks.userByName(value);
+    this.createUser = (value) => mocks.createUser(value);
+    this.updateUser = (value) => mocks.updateUser(value);
+    this.deleteUser = (value) => mocks.deleteUser(value);
+    this.sendPasswordResetEmail = (value) => mocks.sendPasswordResetEmail(value);
+    this.unenrollMfa = (value) => mocks.unenrollMfa(value);
   };
+  const Client = vi.fn(defaultClient) as unknown as Mock<IdpClientConstructor>;
 
   root.idp = { Client };
 
+  function allMocks(): Mock[] {
+    return [...namespaces.values()].flatMap((mocks) =>
+      IDP_METHODS.map((method) => mocks[method] as Mock),
+    );
+  }
+
   const facade = {
     /** The mock IDP `Client` constructor (`vi.fn`). */
-    Client: Client as unknown as Mock,
+    Client,
+
+    namespace,
 
     setResolver(value: IdpResolver): void {
       resolver = value;
     },
 
     /**
-     * Enqueue a single result for the next IDP call (FIFO; falls back to
-     * `setResolver` when exhausted).
+     * Enqueue a single result for the next IDP call.
      * @param result - Result to return from the next IDP call
      */
     enqueueResult(result: unknown): void {
@@ -143,13 +193,31 @@ export function mockIdp() {
     },
 
     get calls(): IdpCall[] {
-      return calls;
+      return [...namespaces.entries()]
+        .flatMap(([namespaceName, mocks]) =>
+          IDP_METHODS.flatMap((method) => {
+            const mock = mocks[method] as Mock;
+            return mock.mock.calls.map((args, index) => ({
+              call: { method, args: [...args], namespace: namespaceName },
+              order: mock.mock.invocationCallOrder[index] ?? 0,
+            }));
+          }),
+        )
+        .toSorted((left, right) => left.order - right.order)
+        .map(({ call }) => call);
+    },
+
+    clear(): void {
+      Client.mockClear();
+      for (const mock of allMocks()) mock.mockClear();
     },
 
     reset(): void {
       queue.length = 0;
       resolver = () => null;
-      calls.length = 0;
+      Client.mockReset();
+      Client.mockImplementation(defaultClient);
+      for (const mock of allMocks()) mock.mockReset();
     },
   };
 
