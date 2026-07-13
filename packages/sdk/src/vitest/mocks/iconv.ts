@@ -168,7 +168,9 @@ export function mockIconv(options: MockIconvOptions = {}) {
     }
 
     convert(input: string | Uint8Array | ArrayBuffer): string | Uint8Array {
-      return trackedConvert(input, this.#fromEncoding, this.#toEncoding) as string | Uint8Array;
+      return trackedConvert.call(this, input, this.#fromEncoding, this.#toEncoding) as
+        | string
+        | Uint8Array;
     }
   }
 

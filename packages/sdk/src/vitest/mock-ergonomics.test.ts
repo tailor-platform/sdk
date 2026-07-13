@@ -390,9 +390,15 @@ describe("ergonomic runtime mocks", () => {
     });
 
     const idpClient = new (globalThis as any).tailor.idp.Client({ namespace: "customer-idp" });
+    const iconvInstance = new (globalThis as any).tailor.iconv.Iconv("UTF-8", "Shift_JIS");
+    iconv.convert.mockImplementation(function (this: unknown) {
+      expect(this).toBe(iconvInstance);
+      return new Uint8Array();
+    });
     await (globalThis as any).tailordb.file.download("main", "Doc", "file", "r-1");
     await idpClient.user("u-1");
     (globalThis as any).tailor.iconv.decode(new Uint8Array(), "UTF-8");
+    iconvInstance.convert("hello");
   });
 
   test("clears calls without clearing configured behavior", async () => {
