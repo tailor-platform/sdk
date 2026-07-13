@@ -33,13 +33,7 @@ runs:
       run: pnpm --filter @tailor-platform/sdk run build
       shell: bash
 
-    # Re-link the SDK's bin entry after build. pnpm 11 treats a same-lockfile
-    # re-install as a no-op, so a second `pnpm install` no longer regenerates
-    # bin links. `pnpm rebuild --pending` relinks the newly-built target
-    # without re-running every dependency's lifecycle scripts; a bare
-    # `pnpm rebuild` would re-invoke esbuild/lefthook postinstalls, and on
-    # Windows runners those child shells cannot find `node` on PATH and the
-    # step fails.
-    - name: Re-link SDK bin entry after build
-      run: pnpm rebuild --pending
+    # Re-link workspace bin entries after their SDK target has been built.
+    - name: Re-link SDK bin entries after build
+      run: pnpm --filter '...@tailor-platform/sdk' --filter '!@tailor-platform/sdk' rebuild --pending
       shell: bash
