@@ -32,6 +32,7 @@
     "date-fns": "4.4.0"
   },
   "devDependencies": {
+    "@bufbuild/protobuf": "2.12.1",
     "@connectrpc/connect": "2.1.2",
     "@connectrpc/connect-node": "2.1.2",
     "@types/node": "24.13.2",
@@ -42,6 +43,7 @@
     "oxfmt": "0.57.0",
     "oxlint": "1.72.0",
     "oxlint-tsgolint": "0.24.0",
+    "tsdown": "0.22.3",
     "tsx": "4.23.0",
     "typescript": "6.0.3",
     "vitest": "4.1.10"

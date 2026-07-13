@@ -48,6 +48,7 @@
     "@types/node": "24.13.2",
     "knip": "6.25.0",
     "lefthook": "2.1.10",
+    "madge": "8.0.0",
     "oxfmt": "0.57.0",
     "oxlint": "1.72.0",
     "pkg-pr-new": "0.0.75",
