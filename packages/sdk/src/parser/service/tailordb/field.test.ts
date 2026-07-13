@@ -191,3 +191,42 @@ describe("parseFieldConfig script expression validation", () => {
     );
   });
 });
+
+describe("parseFieldConfig nested inner field restrictions", () => {
+  test("throws on .hooks() on nested inner fields", () => {
+    const field = {
+      type: "nested" as const,
+      fields: {
+        name: {
+          type: "string" as const,
+          fields: {},
+          rawRelation: undefined,
+          metadata: {
+            hooks: {
+              create: ({ input }: { input: string }) => input,
+            },
+          },
+        },
+      },
+      rawRelation: undefined,
+      metadata: {},
+    };
+
+    expect(() =>
+      parseFieldConfig(field as never, { typeName: "Test", fieldPath: ["items", "name"] }),
+    ).toThrow(".hooks() cannot be used on nested inner fields");
+  });
+
+  test("throws on .default() on nested inner fields", () => {
+    const field = {
+      type: "string" as const,
+      fields: {},
+      rawRelation: undefined,
+      metadata: { default: "pending" },
+    };
+
+    expect(() =>
+      parseFieldConfig(field as never, { typeName: "Test", fieldPath: ["items", "status"] }),
+    ).toThrow(".default() cannot be used on nested inner fields");
+  });
+});
