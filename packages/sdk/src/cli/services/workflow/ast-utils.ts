@@ -124,12 +124,11 @@ export function getTriggerCallInfo(
     // callee may be a ComputedMemberExpression at runtime
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     memberExpr.computed ||
-    memberExpr.property.name !== "trigger"
+    memberExpr.property.name !== "trigger" ||
+    memberExpr.object.type !== "Identifier"
   ) {
     return null;
   }
-
-  if (memberExpr.object.type !== "Identifier") return null;
 
   return {
     identifierName: (memberExpr.object as IdentifierReference).name,
