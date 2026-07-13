@@ -91,6 +91,12 @@ describe("ergonomic runtime mocks", () => {
       { matched: "object" },
     ]);
     db.onQuery({ sql: "SELECT number", params: [null] }).returnsRows([{ matched: "null" }]);
+    db.onQuery({ sql: "SELECT date", params: [new Date("2026-01-01")] }).returnsRows([
+      { matched: "date" },
+    ]);
+    db.onQuery({ sql: "SELECT bytes", params: [new Uint8Array([1, 2, 3])] }).returnsRows([
+      { matched: "bytes" },
+    ]);
 
     const client = new (globalThis as any).tailordb.Client({});
 
@@ -100,6 +106,12 @@ describe("ergonomic runtime mocks", () => {
     await expect(client.queryObject("SELECT number", [Number.NaN])).rejects.toThrow(
       "No TailorDB query behavior matched",
     );
+    await expect(
+      client.queryObject("SELECT date", [new Date("2026-01-01")]),
+    ).resolves.toMatchObject({ rows: [{ matched: "date" }] });
+    await expect(
+      client.queryObject("SELECT bytes", [new Uint8Array([1, 2, 3])]),
+    ).resolves.toMatchObject({ rows: [{ matched: "bytes" }] });
   });
 
   test("returns typed workflow definition mocks", async () => {
@@ -226,6 +238,11 @@ describe("ergonomic runtime mocks", () => {
     expect(namespace.users).toHaveBeenCalledWith();
     expect(namespace.user).toHaveBeenCalledWith("u-1");
     expect(namespace.deleteUser).toHaveBeenCalledWith("u-1");
+    expect(idp.calls[0]).toEqual({
+      method: "users",
+      args: [undefined],
+      namespace: "customer-idp",
+    });
   });
 
   test("exposes every File operation as a typed Vitest mock", async () => {

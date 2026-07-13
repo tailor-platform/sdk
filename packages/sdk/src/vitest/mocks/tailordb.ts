@@ -1,3 +1,4 @@
+import { isEqual } from "es-toolkit";
 import { vi } from "vitest";
 import { tailordbRoot, withDispose } from "./shared";
 
@@ -52,32 +53,6 @@ interface QueryRule {
   matcher: QueryMatcher;
   once: QueryResponse[];
   fallback?: QueryResponse;
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (value === null || typeof value !== "object") return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
-}
-
-function queryParamsEqual(actual: unknown, expected: unknown): boolean {
-  if (Object.is(actual, expected)) return true;
-
-  if (Array.isArray(actual) && Array.isArray(expected)) {
-    if (actual.length !== expected.length) return false;
-    for (let index = 0; index < actual.length; index += 1) {
-      if (!queryParamsEqual(actual[index], expected[index])) return false;
-    }
-    return true;
-  }
-
-  if (!isPlainRecord(actual) || !isPlainRecord(expected)) return false;
-  const actualKeys = Object.keys(actual);
-  const expectedKeys = Object.keys(expected);
-  if (actualKeys.length !== expectedKeys.length) return false;
-  return actualKeys.every(
-    (key) => Object.hasOwn(expected, key) && queryParamsEqual(actual[key], expected[key]),
-  );
 }
 
 class MockQueryResult {
@@ -143,7 +118,7 @@ export function mockTailordb(options: MockTailordbOptions = {}) {
     const expectedParams = matcher.params;
     return (
       params.length === expectedParams.length &&
-      params.every((value, index) => queryParamsEqual(value, expectedParams[index]))
+      params.every((value, index) => isEqual(value, expectedParams[index]))
     );
   }
 
@@ -213,6 +188,7 @@ export function mockTailordb(options: MockTailordbOptions = {}) {
      */
     setQueryResolver(resolver: QueryResolver): void {
       queryResolver = resolver;
+      queryObject.mockImplementation(defaultQuery);
     },
 
     /**

@@ -95,8 +95,13 @@ export function mockIdp(options: MockIdpOptions = {}) {
   const { onUnhandled = "fallback" } = options;
 
   const queue: unknown[] = [];
+  const calls: IdpCall[] = [];
   let resolver: IdpResolver = () => null;
   const namespaces = new Map<string, IdpNamespaceMocks>();
+
+  function compatibilityArgs(method: IdpMethod, args: unknown[]): unknown[] {
+    return method === "users" && args.length === 0 ? [undefined] : args;
+  }
 
   function handle<Method extends IdpMethod>(
     method: Method,
@@ -104,7 +109,7 @@ export function mockIdp(options: MockIdpOptions = {}) {
     namespace: string,
   ): IdpResult<Method> {
     if (queue.length > 0) return queue.shift() as IdpResult<Method>;
-    const resolved = resolver(method, args, namespace);
+    const resolved = resolver(method, compatibilityArgs(method, args), namespace);
     if (resolved != null) return resolved as IdpResult<Method>;
     if (onUnhandled === "error") {
       throw new Error(`No IdP mock configured for "${namespace}.${method}"`);
@@ -145,16 +150,39 @@ export function mockIdp(options: MockIdpOptions = {}) {
     return mocks;
   }
 
+  function track<Method extends IdpMethod>(
+    method: Method,
+    mock: IdpNamespaceMocks[Method],
+    namespaceName: string,
+  ): IdpClientInstance[Method] {
+    return ((...args: Parameters<IdpClientInstance[Method]>) => {
+      calls.push({
+        method,
+        args: [...compatibilityArgs(method, args)],
+        namespace: namespaceName,
+      });
+      return (
+        mock as unknown as (
+          ...call: Parameters<IdpClientInstance[Method]>
+        ) => ReturnType<IdpClientInstance[Method]>
+      )(...args);
+    }) as IdpClientInstance[Method];
+  }
+
   const defaultClient = function (this: IdpClientInstance, config: ClientConfig) {
     const mocks = namespace(config.namespace);
-    this.users = mocks.users;
-    this.user = (value) => mocks.user(value);
-    this.userByName = (value) => mocks.userByName(value);
-    this.createUser = (value) => mocks.createUser(value);
-    this.updateUser = (value) => mocks.updateUser(value);
-    this.deleteUser = (value) => mocks.deleteUser(value);
-    this.sendPasswordResetEmail = (value) => mocks.sendPasswordResetEmail(value);
-    this.unenrollMfa = (value) => mocks.unenrollMfa(value);
+    this.users = track("users", mocks.users, config.namespace);
+    this.user = track("user", mocks.user, config.namespace);
+    this.userByName = track("userByName", mocks.userByName, config.namespace);
+    this.createUser = track("createUser", mocks.createUser, config.namespace);
+    this.updateUser = track("updateUser", mocks.updateUser, config.namespace);
+    this.deleteUser = track("deleteUser", mocks.deleteUser, config.namespace);
+    this.sendPasswordResetEmail = track(
+      "sendPasswordResetEmail",
+      mocks.sendPasswordResetEmail,
+      config.namespace,
+    );
+    this.unenrollMfa = track("unenrollMfa", mocks.unenrollMfa, config.namespace);
   };
   const Client = vi.fn(defaultClient) as unknown as Mock<IdpClientConstructor>;
 
@@ -193,27 +221,18 @@ export function mockIdp(options: MockIdpOptions = {}) {
     },
 
     get calls(): IdpCall[] {
-      return [...namespaces.entries()]
-        .flatMap(([namespaceName, mocks]) =>
-          IDP_METHODS.flatMap((method) => {
-            const mock = mocks[method] as Mock;
-            return mock.mock.calls.map((args, index) => ({
-              call: { method, args: [...args], namespace: namespaceName },
-              order: mock.mock.invocationCallOrder[index] ?? 0,
-            }));
-          }),
-        )
-        .toSorted((left, right) => left.order - right.order)
-        .map(({ call }) => call);
+      return calls;
     },
 
     clear(): void {
+      calls.length = 0;
       Client.mockClear();
       for (const mock of allMocks()) mock.mockClear();
     },
 
     reset(): void {
       queue.length = 0;
+      calls.length = 0;
       resolver = () => null;
       Client.mockReset();
       Client.mockImplementation(defaultClient);

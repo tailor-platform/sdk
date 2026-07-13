@@ -75,6 +75,7 @@ export function mockIconv(options: MockIconvOptions = {}) {
   const prev = root.iconv;
 
   let resolver: IconvResolver | null = null;
+  const calls: IconvCall[] = [];
 
   function resolve(method: IconvMethod, args: unknown[]): unknown {
     if (resolver) {
@@ -137,6 +138,26 @@ export function mockIconv(options: MockIconvOptions = {}) {
   >;
   const encodings = vi.fn(defaultEncodings);
 
+  function track<Method extends IconvMethod>(
+    method: Method,
+    operation: TailorIconvAPI[Method],
+  ): TailorIconvAPI[Method] {
+    return ((...args: Parameters<TailorIconvAPI[Method]>) => {
+      calls.push({ method, args: [...args] });
+      return (
+        operation as (
+          ...call: Parameters<TailorIconvAPI[Method]>
+        ) => ReturnType<TailorIconvAPI[Method]>
+      )(...args);
+    }) as TailorIconvAPI[Method];
+  }
+
+  const trackedConvert = track("convert", convert);
+  const trackedConvertBuffer = track("convertBuffer", convertBuffer);
+  const trackedDecode = track("decode", decode);
+  const trackedEncode = track("encode", encode);
+  const trackedEncodings = track("encodings", encodings);
+
   class MockIconv {
     #fromEncoding: string;
     #toEncoding: string;
@@ -147,32 +168,22 @@ export function mockIconv(options: MockIconvOptions = {}) {
     }
 
     convert(input: string | Uint8Array | ArrayBuffer): string | Uint8Array {
-      return convert(input, this.#fromEncoding, this.#toEncoding) as string | Uint8Array;
+      return trackedConvert(input, this.#fromEncoding, this.#toEncoding) as string | Uint8Array;
     }
   }
 
   const iconv: TailorIconvAPI = {
-    convert,
-    convertBuffer,
-    decode,
-    encode,
-    encodings,
+    convert: trackedConvert,
+    convertBuffer: trackedConvertBuffer,
+    decode: trackedDecode,
+    encode: trackedEncode,
+    encodings: trackedEncodings,
     Iconv: MockIconv,
   };
   root.iconv = iconv;
 
-  function entries(
-    method: IconvMethod,
-    mockCalls: unknown[][],
-    invocationCallOrder: number[],
-  ): { order: number; call: IconvCall }[] {
-    return mockCalls.map((args, index) => ({
-      order: invocationCallOrder[index] ?? 0,
-      call: { method, args: [...args] },
-    }));
-  }
-
   function clear(): void {
+    calls.length = 0;
     convert.mockClear();
     convertBuffer.mockClear();
     decode.mockClear();
@@ -197,29 +208,14 @@ export function mockIconv(options: MockIconvOptions = {}) {
     },
 
     get calls(): IconvCall[] {
-      return [
-        ...entries("convert", convert.mock.calls as unknown[][], convert.mock.invocationCallOrder),
-        ...entries(
-          "convertBuffer",
-          convertBuffer.mock.calls as unknown[][],
-          convertBuffer.mock.invocationCallOrder,
-        ),
-        ...entries("decode", decode.mock.calls as unknown[][], decode.mock.invocationCallOrder),
-        ...entries("encode", encode.mock.calls as unknown[][], encode.mock.invocationCallOrder),
-        ...entries(
-          "encodings",
-          encodings.mock.calls as unknown[][],
-          encodings.mock.invocationCallOrder,
-        ),
-      ]
-        .toSorted((a, b) => a.order - b.order)
-        .map(({ call }) => call);
+      return calls;
     },
 
     clear,
 
     reset(): void {
       resolver = null;
+      calls.length = 0;
       convert.mockReset();
       convert.mockImplementation(defaultConvert);
       convertBuffer.mockReset();

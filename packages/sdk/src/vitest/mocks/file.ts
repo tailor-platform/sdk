@@ -151,6 +151,7 @@ export function mockFile(options: MockFileOptions = {}) {
   const { onUnhandled = "fallback" } = options;
 
   const queue: unknown[] = [];
+  const calls: FileCall[] = [];
   let resolver: FileResolver = () => null;
 
   function handle(
@@ -218,7 +219,36 @@ export function mockFile(options: MockFileOptions = {}) {
     uploadStream,
   };
 
-  root.file = mocks;
+  function track<Method extends FileMethod>(
+    method: Method,
+    operation: TailorDBFileAPI[Method],
+  ): TailorDBFileAPI[Method] {
+    return ((...args: Parameters<TailorDBFileAPI[Method]>) => {
+      calls.push({
+        method,
+        namespace: args[0] as string,
+        typeName: args[1] as string,
+        fieldName: args[2] as string,
+        recordId: args[3] as string,
+      });
+      return (
+        operation as (
+          ...call: Parameters<TailorDBFileAPI[Method]>
+        ) => ReturnType<TailorDBFileAPI[Method]>
+      )(...args);
+    }) as TailorDBFileAPI[Method];
+  }
+
+  root.file = {
+    upload: track("upload", upload),
+    download: track("download", download),
+    downloadAsBase64: track("downloadAsBase64", downloadAsBase64),
+    delete: track("delete", deleteFile),
+    getMetadata: track("getMetadata", getMetadata),
+    openDownloadStream: track("openDownloadStream", openDownloadStream),
+    downloadStream: track("downloadStream", downloadStream),
+    uploadStream: track("uploadStream", uploadStream),
+  };
 
   function allMocks(): Mock[] {
     return FILE_METHODS.map((method) => mocks[method] as Mock);
@@ -248,29 +278,17 @@ export function mockFile(options: MockFileOptions = {}) {
     },
 
     get calls(): FileCall[] {
-      return FILE_METHODS.flatMap((method) => {
-        const mock = mocks[method] as Mock;
-        return mock.mock.calls.map((args, index) => ({
-          call: {
-            method,
-            namespace: args[0] as string,
-            typeName: args[1] as string,
-            fieldName: args[2] as string,
-            recordId: args[3] as string,
-          },
-          order: mock.mock.invocationCallOrder[index] ?? 0,
-        }));
-      })
-        .toSorted((left, right) => left.order - right.order)
-        .map(({ call }) => call);
+      return calls;
     },
 
     clear(): void {
+      calls.length = 0;
       for (const mock of allMocks()) mock.mockClear();
     },
 
     reset(): void {
       queue.length = 0;
+      calls.length = 0;
       resolver = () => null;
       for (const mock of allMocks()) mock.mockReset();
     },
