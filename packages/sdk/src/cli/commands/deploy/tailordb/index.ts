@@ -41,6 +41,7 @@ import {
   INITIAL_SCHEMA_NUMBER,
   type RemoteGqlPermission,
   type SchemaSnapshot,
+  type SnapshotFieldConfig,
   type SnapshotGqlOperations,
   type SnapshotSettings,
   type TailorDBSnapshotType,
@@ -848,8 +849,49 @@ const migrationSnapshotCache = {
   },
 };
 
+export function overlayFieldScripts(
+  snapshotFields: Record<string, SnapshotFieldConfig>,
+  sourceFields: Record<string, SnapshotFieldConfig>,
+): Record<string, SnapshotFieldConfig> {
+  const result: Record<string, SnapshotFieldConfig> = {};
+  for (const [name, field] of Object.entries(snapshotFields)) {
+    const src = sourceFields[name];
+    if (!src) {
+      result[name] = field;
+      continue;
+    }
+    const merged: SnapshotFieldConfig = {
+      ...field,
+      hooks: src.hooks,
+      validate: src.validate,
+      default: src.default,
+    };
+    if (field.fields && src.fields) {
+      merged.fields = overlayFieldScripts(field.fields, src.fields);
+    }
+    result[name] = merged;
+  }
+  return result;
+}
+
+export function overlaySourceScripts(
+  snapshotType: TailorDBSnapshotType,
+  sourceType: TailorDBSnapshotType,
+): TailorDBSnapshotType {
+  return {
+    ...snapshotType,
+    typeHookExpr: sourceType.typeHookExpr,
+    typeValidateExpr: sourceType.typeValidateExpr,
+    fields: overlayFieldScripts(snapshotType.fields, sourceType.fields),
+  };
+}
+
 /**
  * Build the TailorDBType manifest for `typeName` from migration N's snapshot.
+ *
+ * Script properties (hooks, validate, default, typeHookExpr, typeValidateExpr)
+ * are overlaid from the current source because migration comparison strips
+ * them — the snapshot may hold stale values.
  * @param migration - The pending migration whose snapshot to consult
  * @param typeName - The type name to look up in the snapshot
  * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations
@@ -866,7 +908,9 @@ function buildSnapshotTypeManifest(
   const snapshotType = snapshot.types[typeName];
   if (!snapshotType) return undefined;
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
-  return generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+  const sourceType = input?.types[typeName];
+  const effectiveType = sourceType ? overlaySourceScripts(snapshotType, sourceType) : snapshotType;
+  return generateTailorDBTypeManifestFromSnapshot(effectiveType, {
     publishRecordEvents: executorUsedTypes.has(snapshotType.name),
     namespaceGqlOperations: input?.config.gqlOperations,
   });
