@@ -139,7 +139,7 @@ export function mockIdp(options: MockIdpOptions = {}) {
     mock: IdpNamespaceMocks[Method],
     namespaceName: string,
   ): IdpClientInstance[Method] {
-    return ((...args: Parameters<IdpClientInstance[Method]>) => {
+    return function (this: unknown, ...args: Parameters<IdpClientInstance[Method]>) {
       calls.push({
         method,
         args: [...compatibilityArgs(method, args)],
@@ -149,8 +149,8 @@ export function mockIdp(options: MockIdpOptions = {}) {
         mock as unknown as (
           ...call: Parameters<IdpClientInstance[Method]>
         ) => ReturnType<IdpClientInstance[Method]>
-      )(...args);
-    }) as IdpClientInstance[Method];
+      ).apply(this, args);
+    } as IdpClientInstance[Method];
   }
 
   const defaultClient = function (this: IdpClientInstance, config: ClientConfig) {

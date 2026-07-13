@@ -318,6 +318,61 @@ describe("ergonomic runtime mocks", () => {
     });
   });
 
+  test("does not mutate bulk fixture inputs during incremental updates", () => {
+    using ai = mockAigateway();
+    using auth = mockAuthconnection();
+    using secrets = mockSecretmanager();
+    const urls = { assistant: "https://initial.example.com" };
+    const tokens = { google: { access_token: "initial" } };
+    const secretStore = { app: { API_KEY: "initial" } };
+
+    ai.setUrls(urls);
+    auth.setTokens(tokens);
+    secrets.setSecrets(secretStore);
+    ai.setUrl("assistant", "https://override.example.com");
+    auth.setToken("google", { access_token: "override" });
+    secrets.setSecret("app", "API_KEY", "override");
+
+    expect(urls.assistant).toBe("https://initial.example.com");
+    expect(tokens.google.access_token).toBe("initial");
+    expect(secretStore.app.API_KEY).toBe("initial");
+  });
+
+  test("forwards runtime method receivers to typed mock implementations", async () => {
+    using file = mockFile();
+    using idp = mockIdp();
+    using iconv = mockIconv();
+    const fileResponse = {
+      data: new Uint8Array(),
+      metadata: { contentType: "", fileSize: 0, sha256sum: "", lastUploadedAt: "" },
+    };
+    const user = {
+      id: "u-1",
+      name: "alice",
+      disabled: false,
+      mfaEnrolled: false,
+      mfaFactorIds: [],
+    };
+
+    file.download.mockImplementation(async function (this: unknown) {
+      expect(this).toBe((globalThis as any).tailordb.file);
+      return fileResponse;
+    });
+    idp.namespace("customer-idp").user.mockImplementation(async function (this: unknown) {
+      expect(this).toBe(idpClient);
+      return user;
+    });
+    iconv.decode.mockImplementation(function (this: unknown) {
+      expect(this).toBe((globalThis as any).tailor.iconv);
+      return "decoded";
+    });
+
+    const idpClient = new (globalThis as any).tailor.idp.Client({ namespace: "customer-idp" });
+    await (globalThis as any).tailordb.file.download("main", "Doc", "file", "r-1");
+    await idpClient.user("u-1");
+    (globalThis as any).tailor.iconv.decode(new Uint8Array(), "UTF-8");
+  });
+
   test("clears calls without clearing configured behavior", async () => {
     using file = mockFile();
     file.download.mockResolvedValue({

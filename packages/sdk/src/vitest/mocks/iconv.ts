@@ -142,14 +142,14 @@ export function mockIconv(options: MockIconvOptions = {}) {
     method: Method,
     operation: TailorIconvAPI[Method],
   ): TailorIconvAPI[Method] {
-    return ((...args: Parameters<TailorIconvAPI[Method]>) => {
+    return function (this: unknown, ...args: Parameters<TailorIconvAPI[Method]>) {
       calls.push({ method, args: [...args] });
       return (
         operation as (
           ...call: Parameters<TailorIconvAPI[Method]>
         ) => ReturnType<TailorIconvAPI[Method]>
-      )(...args);
-    }) as TailorIconvAPI[Method];
+      ).apply(this, args);
+    } as TailorIconvAPI[Method];
   }
 
   const trackedConvert = track("convert", convert);

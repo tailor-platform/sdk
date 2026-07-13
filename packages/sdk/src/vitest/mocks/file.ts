@@ -68,6 +68,16 @@ function wrapFileIterator(
       return result.done ? { done: true as const, value: undefined } : result;
     },
     close,
+    async return(value?: unknown) {
+      if (inner.return) return inner.return(value);
+      await close();
+      return { done: true as const, value };
+    },
+    async throw(error?: unknown) {
+      if (inner.throw) return inner.throw(error);
+      await close();
+      throw error;
+    },
     [Symbol.asyncIterator]() {
       return stream;
     },
@@ -82,8 +92,8 @@ function toFileStream(value: unknown): FileStreamIterator {
     Symbol.asyncIterator in value &&
     typeof (value as { close?: unknown }).close === "function"
   ) {
-    const source = value as FileStreamIterator;
-    return wrapFileIterator(source, () => source.close());
+    const source = value as AsyncIterable<unknown> & { close(): Promise<void> };
+    return wrapFileIterator(source[Symbol.asyncIterator](), () => source.close());
   }
   if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
     throw new TypeError(
@@ -233,7 +243,7 @@ export function mockFile(options: MockFileOptions = {}) {
     method: Method,
     operation: TailorDBFileAPI[Method],
   ): TailorDBFileAPI[Method] {
-    return ((...args: Parameters<TailorDBFileAPI[Method]>) => {
+    return function (this: unknown, ...args: Parameters<TailorDBFileAPI[Method]>) {
       calls.push({
         method,
         namespace: args[0] as string,
@@ -245,8 +255,8 @@ export function mockFile(options: MockFileOptions = {}) {
         operation as (
           ...call: Parameters<TailorDBFileAPI[Method]>
         ) => ReturnType<TailorDBFileAPI[Method]>
-      )(...args);
-    }) as TailorDBFileAPI[Method];
+      ).apply(this, args);
+    } as TailorDBFileAPI[Method];
   }
 
   root.file = {

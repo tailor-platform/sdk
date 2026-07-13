@@ -58,7 +58,7 @@ export function mockAigateway(options: MockAigatewayOptions = {}) {
     get,
 
     setUrls(value: Partial<Record<AIGatewayName, string>>): void {
-      urls = value;
+      urls = { ...value };
     },
 
     setUrl(name: AIGatewayName, url: string): void {

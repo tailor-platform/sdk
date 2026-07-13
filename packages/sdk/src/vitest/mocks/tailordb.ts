@@ -239,7 +239,7 @@ export function mockTailordb(options: MockTailordbOptions = {}) {
      * @param rows - Row objects to return from the next `queryObject` call
      */
     enqueueResult(...rows: unknown[]): void {
-      queryObject.mockImplementationOnce(async () => new MockQueryResult(rows));
+      enqueueRowsList([rows]);
     },
 
     /**
