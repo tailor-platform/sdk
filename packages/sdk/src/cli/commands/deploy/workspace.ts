@@ -31,7 +31,13 @@ export interface ResolveDeployWorkspaceOptions {
   folderId?: string;
   dryRun?: boolean;
   contextPaths?: readonly string[];
+  contextTargets?: readonly WorkspaceContextTarget[];
   deployArgs?: readonly string[];
+}
+
+export interface WorkspaceContextTarget {
+  configPath: string;
+  applicationId?: string;
 }
 
 export interface ResolvedDeployWorkspace {
@@ -88,10 +94,10 @@ function workspaceMatchesRequestedIdentity(
   options: ResolveDeployWorkspaceOptions,
 ): boolean {
   return (
-    (!options.workspaceName || options.workspaceName === workspace.name) &&
-    (!options.workspaceRegion || options.workspaceRegion === workspace.region) &&
-    (!options.organizationId || options.organizationId === workspace.organizationId) &&
-    (!options.folderId || options.folderId === workspace.folderId)
+    (options.workspaceName === undefined || options.workspaceName === workspace.name) &&
+    (options.workspaceRegion === undefined || options.workspaceRegion === workspace.region) &&
+    (options.organizationId === undefined || options.organizationId === workspace.organizationId) &&
+    (options.folderId === undefined || options.folderId === workspace.folderId)
   );
 }
 
@@ -100,16 +106,31 @@ function workspaceIdentity(workspace: WorkspaceInfo) {
   return { id, name, region, organizationId, folderId };
 }
 
+function projectContextTargets(
+  contextPaths?: readonly string[],
+  contextTargets?: readonly WorkspaceContextTarget[],
+): WorkspaceContextTarget[] | undefined {
+  if (!contextTargets && !contextPaths) return undefined;
+  const targets = contextTargets ?? contextPaths?.map((configPath) => ({ configPath })) ?? [];
+  return [...new Map(targets.map((target) => [target.configPath, target])).values()];
+}
+
 async function loadProjectContexts(
   platformUrl: string,
   contextPaths?: readonly string[],
+  contextTargets?: readonly WorkspaceContextTarget[],
 ): Promise<WorkspaceContext[]> {
-  if (!contextPaths || contextPaths.length === 0) {
+  const targets = projectContextTargets(contextPaths, contextTargets);
+  if (!targets || targets.length === 0) {
     const context = await loadWorkspaceContext(platformUrl);
     return context ? [context] : [];
   }
   const contexts = await Promise.all(
-    [...new Set(contextPaths)].map((configPath) => loadWorkspaceContext(platformUrl, configPath)),
+    targets.map(({ configPath, applicationId }) =>
+      applicationId === undefined
+        ? loadWorkspaceContext(platformUrl, configPath)
+        : loadWorkspaceContext(platformUrl, configPath, applicationId),
+    ),
   );
   return contexts.filter((context): context is WorkspaceContext => context !== undefined);
 }
@@ -117,13 +138,19 @@ async function loadProjectContexts(
 async function persistWorkspaceContext(
   context: WorkspaceContext,
   contextPaths?: readonly string[],
+  contextTargets?: readonly WorkspaceContextTarget[],
 ): Promise<void> {
-  if (!contextPaths || contextPaths.length === 0) {
+  const targets = projectContextTargets(contextPaths, contextTargets);
+  if (!targets || targets.length === 0) {
     await saveWorkspaceContext(context);
     return;
   }
   const results = await Promise.allSettled(
-    [...new Set(contextPaths)].map((configPath) => saveWorkspaceContext(context, configPath)),
+    targets.map(({ configPath, applicationId }) =>
+      applicationId === undefined
+        ? saveWorkspaceContext(context, configPath)
+        : saveWorkspaceContext(context, configPath, applicationId),
+    ),
   );
   const failures = results.filter((result) => result.status === "rejected");
   if (failures.length > 0) {
@@ -138,12 +165,17 @@ async function persistWorkspaceContext(
 async function rememberWorkspaceContext(
   context: WorkspaceContext,
   options: ResolveDeployWorkspaceOptions,
+  toleratePartialSave = false,
 ): Promise<void> {
   if (options.dryRun) return;
   try {
-    await persistWorkspaceContext(context, options.contextPaths);
+    await persistWorkspaceContext(context, options.contextPaths, options.contextTargets);
   } catch (error) {
-    if ((options.contextPaths?.length ?? 0) > 1) {
+    const contextPathCount = projectContextTargets(
+      options.contextPaths,
+      options.contextTargets,
+    )?.length;
+    if ((contextPathCount ?? 0) > 1 && !toleratePartialSave) {
       throw CLIError({
         code: "WORKSPACE_CONTEXT_SAVE_FAILED",
         message: "The workspace selection could not be saved for every configuration file.",
@@ -152,7 +184,8 @@ async function rememberWorkspaceContext(
         next: executableAction([...deployArgs(options), "--workspace-id", context.workspaceId]),
         context: {
           workspaceId: context.workspaceId,
-          configPaths: options.contextPaths,
+          configPaths:
+            options.contextTargets?.map(({ configPath }) => configPath) ?? options.contextPaths,
         },
       });
     }
@@ -166,18 +199,16 @@ async function rememberWorkspace(
   platformUrl: string,
   workspace: WorkspaceInfo,
   options: ResolveDeployWorkspaceOptions,
+  toleratePartialSave = false,
 ): Promise<void> {
   await rememberWorkspaceContext(
     {
       version: 1,
       platformUrl,
       workspaceId: workspace.id,
-      workspaceName: workspace.name,
-      workspaceRegion: workspace.region,
-      organizationId: workspace.organizationId,
-      folderId: workspace.folderId,
     },
     options,
+    toleratePartialSave,
   );
 }
 
@@ -186,8 +217,9 @@ async function useWorkspace(
   platformUrl: string,
   workspace: WorkspaceInfo,
   options: ResolveDeployWorkspaceOptions,
+  toleratePartialSave = false,
 ): Promise<ResolvedDeployWorkspace> {
-  await rememberWorkspace(platformUrl, workspace, options);
+  await rememberWorkspace(platformUrl, workspace, options, toleratePartialSave);
   logger.info(`Using workspace: ${workspaceLabel(workspace)}`);
   return { client, workspaceId: workspace.id };
 }
@@ -233,8 +265,9 @@ async function createWorkspace(
 ): Promise<ResolvedDeployWorkspace> {
   let name = options.workspaceName;
   let region = options.workspaceRegion;
+  const interactive = canPrompt();
 
-  if (canPrompt()) {
+  if (interactive) {
     name ??= await prompt.text({
       message: "Workspace name",
       default: suggestedWorkspaceName(),
@@ -244,24 +277,10 @@ async function createWorkspace(
       message: "Workspace region",
       choices: availableRegions.map((value) => ({ name: value, value })),
     });
-    const scope = [
-      options.organizationId ? `organization: ${options.organizationId}` : undefined,
-      options.folderId ? `folder: ${options.folderId}` : undefined,
-    ].filter((value): value is string => value !== undefined);
-    const confirmed = await prompt.confirm({
-      message: `Create workspace "${name}" in ${region}${scope.length > 0 ? ` (${scope.join(", ")})` : ""}?`,
-      default: true,
-    });
-    if (!confirmed) {
-      throw CLIError({
-        code: "WORKSPACE_CREATION_CANCELLED",
-        message: "Workspace creation was cancelled.",
-      });
-    }
   } else {
     const missingOptions = [
-      ...(name ? [] : ["--workspace-name"]),
-      ...(region ? [] : ["--workspace-region"]),
+      ...(name === undefined ? ["--workspace-name"] : []),
+      ...(region === undefined ? ["--workspace-region"] : []),
     ];
     if (missingOptions.length > 0) {
       throw CLIError({
@@ -299,6 +318,23 @@ async function createWorkspace(
       region,
       `Region must be one of: ${availableRegions.join(", ")}.`,
     );
+  }
+
+  if (interactive) {
+    const scope = [
+      options.organizationId ? `organization: ${options.organizationId}` : undefined,
+      options.folderId ? `folder: ${options.folderId}` : undefined,
+    ].filter((value): value is string => value !== undefined);
+    const confirmed = await prompt.confirm({
+      message: `Create workspace "${name}" in ${region}${scope.length > 0 ? ` (${scope.join(", ")})` : ""}?`,
+      default: true,
+    });
+    if (!confirmed) {
+      throw CLIError({
+        code: "WORKSPACE_CREATION_CANCELLED",
+        message: "Workspace creation was cancelled.",
+      });
+    }
   }
 
   let workspace: WorkspaceInfo;
@@ -349,11 +385,23 @@ export async function resolveDeployWorkspace(
         message: `Workspace "${explicitWorkspaceId}" was not found.`,
       });
     }
-    return useWorkspace(client, platformUrl, workspaceInfo(response.workspace), options);
+    return useWorkspace(client, platformUrl, workspaceInfo(response.workspace), options, true);
+  }
+
+  if (options.createWorkspace && options.workspaceName !== undefined) {
+    const nameValidation = validateWorkspaceName(options.workspaceName);
+    if (nameValidation !== true) {
+      throw invalidCreateOptionsError(
+        options,
+        options.workspaceName,
+        options.workspaceRegion ?? "<region>",
+        nameValidation,
+      );
+    }
   }
 
   const [contexts, workspaces] = await Promise.all([
-    loadProjectContexts(platformUrl, options.contextPaths),
+    loadProjectContexts(platformUrl, options.contextPaths, options.contextTargets),
     listWorkspacesWithClient(client),
   ]);
   const interactive = canPrompt();
@@ -370,7 +418,12 @@ export async function resolveDeployWorkspace(
   }
 
   if (contextWorkspaceIds.size > 1) {
-    if (!interactive) {
+    const canReplaceStaleContexts =
+      options.createWorkspace === true &&
+      options.workspaceName !== undefined &&
+      options.workspaceRegion !== undefined &&
+      workspaces.length === 0;
+    if (!interactive && !canReplaceStaleContexts) {
       throw CLIError({
         code: "WORKSPACE_CONTEXT_CONFLICT",
         message: "The deployed configuration files are linked to different workspaces.",
@@ -428,13 +481,7 @@ export async function resolveDeployWorkspace(
           ...(options.folderId ? ["--folder-id", options.folderId] : []),
         ]),
         context: {
-          existingWorkspace: {
-            id: workspace.id,
-            name: workspace.name,
-            region: workspace.region,
-            organizationId: workspace.organizationId,
-            folderId: workspace.folderId,
-          },
+          existingWorkspace: workspaceIdentity(workspace),
         },
       });
     }

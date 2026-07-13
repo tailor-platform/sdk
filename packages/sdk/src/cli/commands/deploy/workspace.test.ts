@@ -126,8 +126,6 @@ describe("resolveDeployWorkspace", () => {
       version: 1,
       platformUrl: "https://api.tailor.tech",
       workspaceId: id,
-      workspaceName: "explicit-workspace",
-      workspaceRegion: "us-west",
     });
   });
 
@@ -287,6 +285,20 @@ describe("resolveDeployWorkspace", () => {
     ).rejects.toMatchObject({ name: "CLIError", code: "WORKSPACE_CREATE_CONFLICT" });
   });
 
+  test("rejects empty creation identity instead of reusing an existing workspace", async () => {
+    const existing = workspace("34343434-3434-4434-8434-343434343434");
+    mocks.listWorkspacesWithClient.mockResolvedValue([existing]);
+
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: "",
+        workspaceRegion: existing.region,
+      }),
+    ).rejects.toMatchObject({ name: "CLIError", code: "WORKSPACE_CREATE_OPTIONS_INVALID" });
+    expect(mocks.saveWorkspaceContext).not.toHaveBeenCalled();
+  });
+
   test("fails non-interactively with a machine-actionable create command", async () => {
     const promise = resolveDeployWorkspace({
       deployArgs: ["deploy", "--config", "/apps/example/tailor.config.ts", "--no-validate"],
@@ -341,10 +353,6 @@ describe("resolveDeployWorkspace", () => {
       version: 1,
       platformUrl: "https://api.tailor.tech",
       workspaceId: created.id,
-      workspaceName: created.name,
-      workspaceRegion: created.region,
-      organizationId: created.organizationId,
-      folderId: created.folderId,
     });
   });
 
@@ -419,6 +427,31 @@ describe("resolveDeployWorkspace", () => {
       name: "CLIError",
       code: "WORKSPACE_CONTEXT_CONFLICT",
     });
+  });
+
+  test("replaces conflicting stale contexts when workspace creation is fully specified", async () => {
+    const created = workspace("35353535-3535-4535-8535-353535353535", "replacement");
+    mocks.loadWorkspaceContext
+      .mockResolvedValueOnce({
+        version: 1,
+        platformUrl: "https://api.tailor.tech",
+        workspaceId: "36363636-3636-4636-8636-363636363636",
+      })
+      .mockResolvedValueOnce({
+        version: 1,
+        platformUrl: "https://api.tailor.tech",
+        workspaceId: "37373737-3737-4737-8737-373737373737",
+      });
+    mocks.createValidatedWorkspaceWithClient.mockResolvedValue(created);
+
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: created.name,
+        workspaceRegion: created.region,
+        contextPaths: ["/apps/a/tailor.config.ts", "/apps/b/tailor.config.ts"],
+      }),
+    ).resolves.toEqual({ client, workspaceId: created.id });
   });
 
   test("prompts to select when multiple workspaces exist", async () => {
@@ -559,6 +592,19 @@ describe("resolveDeployWorkspace", () => {
     expect(mocks.createValidatedWorkspaceWithClient).not.toHaveBeenCalled();
   });
 
+  test("rejects invalid creation options before asking for confirmation", async () => {
+    mocks.canPrompt.mockReturnValue(true);
+
+    await expect(
+      resolveDeployWorkspace({
+        createWorkspace: true,
+        workspaceName: "Invalid_Name",
+        workspaceRegion: "not-a-region",
+      }),
+    ).rejects.toMatchObject({ name: "CLIError", code: "WORKSPACE_CREATE_OPTIONS_INVALID" });
+    expect(mocks.confirm).not.toHaveBeenCalled();
+  });
+
   test("reuses a matching workspace on a retry", async () => {
     const existing = workspace("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
     mocks.listWorkspacesWithClient.mockResolvedValue([existing]);
@@ -617,6 +663,35 @@ describe("resolveDeployWorkspace", () => {
       name: "CLIError",
       code: "WORKSPACE_CONTEXT_SAVE_FAILED",
     });
+  });
+
+  test("continues an explicit multi-config deployment when context saving is partial", async () => {
+    const id = "38383838-3838-4838-8838-383838383838";
+    mocks.tryLoadWorkspaceId.mockResolvedValue(id);
+    mocks.saveWorkspaceContext
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("read-only filesystem"));
+
+    await expect(
+      resolveDeployWorkspace({
+        workspaceId: id,
+        contextPaths: ["/apps/a/tailor.config.ts", "/apps/b/tailor.config.ts"],
+      }),
+    ).resolves.toEqual({ client, workspaceId: id });
+    expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining(id));
+  });
+
+  test("treats duplicate config paths as one context save target", async () => {
+    const available = workspace("39393939-3939-4939-8939-393939393939");
+    mocks.listWorkspacesWithClient.mockResolvedValue([available]);
+    mocks.saveWorkspaceContext.mockRejectedValue(new Error("read-only filesystem"));
+
+    await expect(
+      resolveDeployWorkspace({
+        contextPaths: ["/apps/a/tailor.config.ts", "/apps/a/tailor.config.ts"],
+      }),
+    ).resolves.toEqual({ client, workspaceId: available.id });
+    expect(mocks.warn).toHaveBeenCalledWith(expect.stringContaining(available.id));
   });
 
   test("surfaces an ambiguous creation failure without retrying", async () => {

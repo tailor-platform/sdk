@@ -1,3 +1,4 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import chalk from "chalk";
 
 /**
@@ -48,6 +49,10 @@ type CLIErrorInternal = Error & {
 };
 
 function shellQuote(value: string): string {
+  if (process.platform === "win32") {
+    if (/^[A-Za-z0-9_./:=@+\\-]+$/.test(value)) return value;
+    return `"${value.replaceAll('"', '\\"')}"`;
+  }
   if (/^[A-Za-z0-9_./:=@+-]+$/.test(value)) return value;
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
@@ -138,6 +143,11 @@ export function errorToJson(
         ...(options?.includeStack && error.stack ? { stack: error.stack } : {}),
       },
     };
+  }
+  if (error instanceof ConnectError) {
+    const codeName = Code[error.code];
+    const stableCode = codeName.replaceAll(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase();
+    return { error: { code: `RPC_${stableCode}`, message: error.message } };
   }
   if (error instanceof Error) {
     return {

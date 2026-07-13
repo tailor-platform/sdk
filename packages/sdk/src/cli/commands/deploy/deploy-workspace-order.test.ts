@@ -8,7 +8,7 @@ vi.mock("./workspace", () => ({
   resolveDeployWorkspace: mocks.resolveDeployWorkspace,
 }));
 
-import { deploy } from "./deploy";
+import { deploy, deployFromCLI } from "./deploy";
 
 describe("deploy workspace resolution", () => {
   beforeEach(() => {
@@ -34,7 +34,12 @@ describe("deploy workspace resolution", () => {
     expect(mocks.resolveDeployWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({
         dryRun: true,
-        contextPaths: [expect.stringContaining("__test_fixtures__/tailor.config.ts")],
+        contextTargets: [
+          {
+            applicationId: expect.any(String),
+            configPath: expect.stringContaining("__test_fixtures__/tailor.config.ts"),
+          },
+        ],
         deployArgs: [
           "deploy",
           "--config",
@@ -52,13 +57,15 @@ describe("deploy workspace resolution", () => {
     const configPath = "src/cli/commands/deploy/__test_fixtures__/tailor.config.ts";
 
     await expect(
-      deploy({
-        configPath,
-        envFile: ".env.workspace",
-        envFileIfExists: ".env.local",
-        verbose: true,
-        json: true,
-      }),
+      deployFromCLI(
+        { configPath },
+        {
+          envFile: ".env.workspace",
+          envFileIfExists: ".env.local",
+          verbose: true,
+          json: true,
+        },
+      ),
     ).rejects.toBe(workspaceError);
     expect(mocks.resolveDeployWorkspace).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vitest";
+import { Code, ConnectError } from "@connectrpc/connect";
+import { describe, expect, test, vi } from "vitest";
 import { CLIError, errorToJson } from "./errors";
 import { CIPromptError } from "./logger";
 
@@ -47,6 +48,36 @@ describe("errorToJson", () => {
         message: expect.stringContaining("required options explicitly"),
       },
     });
+  });
+
+  test("preserves Connect RPC error codes for automation", () => {
+    expect(errorToJson(new ConnectError("permission denied", Code.PermissionDenied))).toEqual({
+      error: {
+        code: "RPC_PERMISSION_DENIED",
+        message: expect.stringContaining("permission denied"),
+      },
+    });
+  });
+
+  test("uses Windows-compatible quoting for human next commands on Windows", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+    const error = CLIError({
+      message: "Choose a workspace.",
+      next: {
+        command: "tailor-sdk",
+        args: [
+          "deploy",
+          "--config",
+          "C:\\Users\\Jane Doe\\tailor.config.ts",
+          "--workspace-id",
+          "<workspace-id>",
+        ],
+      },
+    });
+
+    expect(error.format()).toContain(
+      'tailor-sdk deploy --config "C:\\Users\\Jane Doe\\tailor.config.ts" --workspace-id "<workspace-id>"',
+    );
   });
 
   test("includes a stack trace only when requested", () => {

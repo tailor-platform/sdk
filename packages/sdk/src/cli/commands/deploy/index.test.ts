@@ -6,11 +6,11 @@ import { commonArgs } from "#/cli/shared/args";
 
 const mocks = vi.hoisted(() => ({
   assertWritable: vi.fn(),
-  deploy: vi.fn(),
+  deployFromCLI: vi.fn(),
   initTelemetry: vi.fn(),
 }));
 
-vi.mock("#/cli/commands/deploy/deploy", () => ({ deploy: mocks.deploy }));
+vi.mock("#/cli/commands/deploy/deploy", () => ({ deployFromCLI: mocks.deployFromCLI }));
 vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: mocks.assertWritable }));
 vi.mock("#/cli/telemetry/index", () => ({ initTelemetry: mocks.initTelemetry }));
 
@@ -36,7 +36,7 @@ describe("deployCommand", () => {
       "22222222-2222-4222-8222-222222222222",
     ]);
 
-    expect(mocks.deploy).toHaveBeenCalledWith(
+    expect(mocks.deployFromCLI).toHaveBeenCalledWith(
       expect.objectContaining({
         createWorkspace: true,
         workspaceName: "example-workspace",
@@ -44,14 +44,16 @@ describe("deployCommand", () => {
         organizationId: "11111111-1111-4111-8111-111111111111",
         folderId: "22222222-2222-4222-8222-222222222222",
       }),
+      expect.any(Object),
     );
   });
 
   test("does not treat --yes as workspace creation consent", async () => {
     await runCommand(deployCommand, ["--yes"]);
 
-    expect(mocks.deploy).toHaveBeenCalledWith(
+    expect(mocks.deployFromCLI).toHaveBeenCalledWith(
       expect.objectContaining({ yes: true, createWorkspace: undefined }),
+      expect.any(Object),
     );
   });
 
@@ -60,13 +62,19 @@ describe("deployCommand", () => {
       globalArgs: z.object(commonArgs),
     });
 
-    expect(mocks.deploy).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(mocks.deployFromCLI).toHaveBeenCalledWith(
+      expect.not.objectContaining({
         envFile: undefined,
         envFileIfExists: ".env.local",
         verbose: true,
         json: true,
       }),
+      {
+        envFile: undefined,
+        envFileIfExists: ".env.local",
+        verbose: true,
+        json: true,
+      },
     );
   });
 });

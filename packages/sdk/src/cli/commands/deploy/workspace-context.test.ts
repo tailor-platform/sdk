@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
@@ -27,8 +27,6 @@ describe("workspace context", () => {
       version: 1 as const,
       platformUrl: "https://api.tailor.tech",
       workspaceId: "11111111-1111-4111-8111-111111111111",
-      workspaceName: "example-workspace",
-      workspaceRegion: "us-west",
     };
 
     await saveWorkspaceContext(context, configPath);
@@ -70,6 +68,43 @@ describe("workspace context", () => {
     ]);
   });
 
+  test("does not reuse a context after the application ID changes", async () => {
+    const projectDirectory = await temporaryDirectory();
+    const configPath = join(projectDirectory, "tailor.config.ts");
+    const context = {
+      version: 1 as const,
+      platformUrl: "https://api.tailor.tech",
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+    };
+
+    await saveWorkspaceContext(context, configPath, "application-a");
+
+    await expect(
+      loadWorkspaceContext(context.platformUrl, configPath, "application-a"),
+    ).resolves.toMatchObject({ ...context, applicationId: "application-a" });
+    await expect(
+      loadWorkspaceContext(context.platformUrl, configPath, "application-b"),
+    ).resolves.toBeUndefined();
+  });
+
+  test("does not rewrite an unchanged context", async () => {
+    const projectDirectory = await temporaryDirectory();
+    const configPath = join(projectDirectory, "tailor.config.ts");
+    const targetPath = join(projectDirectory, ".tailor-sdk", "tailor.config.ts.context.json");
+    const context = {
+      version: 1 as const,
+      platformUrl: "https://api.tailor.tech",
+      workspaceId: "11111111-1111-4111-8111-111111111111",
+    };
+
+    await saveWorkspaceContext(context, configPath, "application-a");
+    const first = await stat(targetPath);
+    await saveWorkspaceContext(context, configPath, "application-a");
+    const second = await stat(targetPath);
+
+    expect(second.ino).toBe(first.ino);
+  });
+
   test("supports concurrent saves from the same process", async () => {
     const projectDirectory = await temporaryDirectory();
     const configPath = join(projectDirectory, "tailor.config.ts");
@@ -83,6 +118,26 @@ describe("workspace context", () => {
       Promise.all(Array.from({ length: 20 }, () => saveWorkspaceContext(context, configPath))),
     ).resolves.toHaveLength(20);
     await expect(loadWorkspaceContext(context.platformUrl, configPath)).resolves.toEqual(context);
+  });
+
+  test("removes the temporary file when the atomic rename fails", async () => {
+    const projectDirectory = await temporaryDirectory();
+    const configPath = join(projectDirectory, "tailor.config.ts");
+    const stateDirectory = join(projectDirectory, ".tailor-sdk");
+    const targetPath = join(stateDirectory, "tailor.config.ts.context.json");
+    await mkdir(targetPath, { recursive: true });
+
+    await expect(
+      saveWorkspaceContext(
+        {
+          version: 1,
+          platformUrl: "https://api.tailor.tech",
+          workspaceId: "11111111-1111-4111-8111-111111111111",
+        },
+        configPath,
+      ),
+    ).rejects.toThrow(/rename/);
+    await expect(readdir(stateDirectory)).resolves.toEqual(["tailor.config.ts.context.json"]);
   });
 
   test.each([

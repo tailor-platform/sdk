@@ -19,6 +19,7 @@ import {
 } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
+import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
 import {
   workspaceDisplayName,
@@ -34,15 +35,7 @@ import type { ProfileInfo } from "../profile";
  * - organizationId, folderId: optional UUIDs
  */
 const createWorkspaceOptionsSchema = z.object({
-  name: z
-    .string()
-    .min(3, "Name must be at least 3 characters")
-    .max(63, "Name must be at most 63 characters")
-    .regex(/^[a-z0-9-]+$/, "Name can only contain lowercase letters, numbers, and hyphens")
-    .refine(
-      (n) => !n.startsWith("-") && !n.endsWith("-"),
-      "Name cannot start or end with a hyphen",
-    ),
+  name: workspaceNameSchema,
   region: z.string(),
   deleteProtection: z.boolean().optional(),
   organizationId: z.uuid().optional(),
@@ -79,10 +72,11 @@ function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
  * @returns Created workspace info
  */
 export async function createWorkspace(options: CreateWorkspaceOptions): Promise<WorkspaceInfo> {
-  validateCreateWorkspaceOptions(options);
+  const validated = validateCreateWorkspaceOptions(options);
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
-  return createWorkspaceWithClient(client, options);
+  await validateRegion(validated.region, client);
+  return createValidatedWorkspaceWithClient(client, validated);
 }
 
 /**
@@ -112,15 +106,13 @@ export async function createValidatedWorkspaceWithClient(
   client: OperatorClient,
   options: ValidatedCreateWorkspaceOptions,
 ): Promise<WorkspaceInfo> {
-  const validated = options;
-
   // Create workspace
   const resp = await client.createWorkspace({
-    workspaceName: validated.name,
-    workspaceRegion: validated.region,
-    deleteProtection: validated.deleteProtection ?? false,
-    organizationId: validated.organizationId,
-    folderId: validated.folderId,
+    workspaceName: options.name,
+    workspaceRegion: options.region,
+    deleteProtection: options.deleteProtection ?? false,
+    organizationId: options.organizationId,
+    folderId: options.folderId,
   });
 
   return workspaceInfoWithFolderName(
@@ -144,17 +136,7 @@ export function validateCreateWorkspaceOptions(
   return result.data;
 }
 
-/**
- * Validate a workspace name for use in an interactive prompt.
- * @param name - Candidate workspace name
- * @returns True when valid, otherwise a validation message
- */
-export function validateWorkspaceName(name: string): true | string {
-  const result = createWorkspaceOptionsSchema.shape.name.safeParse(name);
-  return result.success
-    ? true
-    : assertDefined(result.error.issues[0], "Zod returned no issues").message;
-}
+export { validateWorkspaceName } from "#/cli/shared/workspace-name";
 
 export const createCommand = defineAppCommand({
   name: "create",

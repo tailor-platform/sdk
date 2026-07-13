@@ -85,13 +85,16 @@ export interface DeployOptions {
   workspaceRegion?: string;
   organizationId?: string;
   folderId?: string;
+  // NOTE(remiposo): Provide an option to run build-only for testing purposes.
+  // This could potentially be exposed as a CLI option.
+  buildOnly?: boolean;
+}
+
+interface DeployCLIContext {
   envFile?: string;
   envFileIfExists?: string;
   verbose?: boolean;
   json?: boolean;
-  // NOTE(remiposo): Provide an option to run build-only for testing purposes.
-  // This could potentially be exposed as a CLI option.
-  buildOnly?: boolean;
 }
 
 /**
@@ -814,14 +817,15 @@ export function parseDeployConfigPaths(configPath?: string): Array<string | unde
 function retryDeployArgs(
   options: DeployOptions | undefined,
   configPaths: readonly string[],
+  cliContext?: DeployCLIContext,
 ): readonly string[] {
   return [
     "deploy",
     "--config",
     configPaths.join(","),
-    ...(options?.envFile ? ["--env-file", path.resolve(process.cwd(), options.envFile)] : []),
-    ...(options?.envFileIfExists
-      ? ["--env-file-if-exists", path.resolve(process.cwd(), options.envFileIfExists)]
+    ...(cliContext?.envFile ? ["--env-file", path.resolve(process.cwd(), cliContext.envFile)] : []),
+    ...(cliContext?.envFileIfExists
+      ? ["--env-file-if-exists", path.resolve(process.cwd(), cliContext.envFileIfExists)]
       : []),
     ...(options?.profile ? ["--profile", options.profile] : []),
     ...(options?.dryRun ? ["--dry-run"] : []),
@@ -830,8 +834,8 @@ function retryDeployArgs(
     ...(options?.noValidate ? ["--no-validate"] : []),
     ...(options?.noCache ? ["--no-cache"] : []),
     ...(options?.cleanCache ? ["--clean-cache"] : []),
-    ...(options?.verbose ? ["--verbose"] : []),
-    ...(options?.json || logger.jsonMode ? ["--json"] : []),
+    ...(cliContext?.verbose ? ["--verbose"] : []),
+    ...(cliContext?.json || logger.jsonMode ? ["--json"] : []),
   ];
 }
 
@@ -1826,7 +1830,12 @@ async function validateDeploymentPlans(
  * @param options - Options for deploy execution
  * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
  */
-export async function deploy(options?: DeployOptions) {
+/**
+ * @param options - Deploy execution options
+ * @param cliContext - Global CLI arguments to preserve in recovery actions
+ * @returns Deploy result
+ */
+async function deployInternal(options?: DeployOptions, cliContext?: DeployCLIContext) {
   return withSpan("deploy", async (rootSpan) => {
     rootSpan.setAttribute("deploy.dry_run", options?.dryRun ?? false);
 
@@ -1842,6 +1851,10 @@ export async function deploy(options?: DeployOptions) {
           ),
         );
     const resolvedConfigPaths = preflightConfigs.map(({ config }) => config.path);
+    const workspaceContextTargets = preflightConfigs.map(({ config }) => ({
+      configPath: config.path,
+      applicationId: config.id ?? `name:${config.name}`,
+    }));
     const workspace = buildOnly
       ? undefined
       : await resolveDeployWorkspace({
@@ -1853,8 +1866,8 @@ export async function deploy(options?: DeployOptions) {
           organizationId: options?.organizationId,
           folderId: options?.folderId,
           dryRun,
-          contextPaths: resolvedConfigPaths,
-          deployArgs: retryDeployArgs(options, resolvedConfigPaths),
+          contextTargets: workspaceContextTargets,
+          deployArgs: retryDeployArgs(options, resolvedConfigPaths, cliContext),
         });
     const targets = await withSpan("build", async () => {
       const noCache = options?.noCache ?? false;
@@ -1935,4 +1948,23 @@ export async function deploy(options?: DeployOptions) {
 
     return undefined;
   });
+}
+
+/**
+ * Deploy using the programmatic CLI API.
+ * @param options - Deploy execution options
+ * @returns Deploy result
+ */
+export function deploy(options?: DeployOptions) {
+  return deployInternal(options);
+}
+
+/**
+ * Deploy from the command adapter while preserving global CLI arguments in recovery actions.
+ * @param options - Deploy execution options
+ * @param cliContext - Global CLI arguments already applied by the command runner
+ * @returns Deploy result
+ */
+export function deployFromCLI(options: DeployOptions | undefined, cliContext: DeployCLIContext) {
+  return deployInternal(options, cliContext);
 }
