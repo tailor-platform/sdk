@@ -114,6 +114,18 @@ describe("ergonomic runtime mocks", () => {
     ).resolves.toMatchObject({ rows: [{ matched: "bytes" }] });
   });
 
+  test("preserves a TailorDB query matcher's regular expression state", async () => {
+    using db = mockTailordb();
+    const sql = /SELECT/g;
+    sql.lastIndex = 2;
+    db.onQuery(sql).returnsRows([{ matched: true }]);
+
+    await expect(db.queryObject("SELECT")).resolves.toMatchObject({
+      rows: [{ matched: true }],
+    });
+    expect(sql.lastIndex).toBe(2);
+  });
+
   test("returns typed workflow definition mocks", async () => {
     using wf = mockWorkflow();
     const job = wf.job(lookupCustomer);

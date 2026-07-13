@@ -57,6 +57,24 @@ const FILE_DEFAULTS: Partial<Record<FileMethod, unknown>> = {
   uploadStream: { metadata: { fileSize: 0, sha256sum: "" } },
 };
 
+function wrapFileIterator(
+  inner: Iterator<unknown> | AsyncIterator<unknown>,
+  close: () => void | Promise<void>,
+): FileStreamIterator {
+  const stream = {
+    async next() {
+      const result = await inner.next();
+      if (!result.done) assertStreamValue(result.value);
+      return result.done ? { done: true as const, value: undefined } : result;
+    },
+    close,
+    [Symbol.asyncIterator]() {
+      return stream;
+    },
+  } as FileStreamIterator;
+  return stream;
+}
+
 function toFileStream(value: unknown): FileStreamIterator {
   if (
     value !== null &&
@@ -64,7 +82,8 @@ function toFileStream(value: unknown): FileStreamIterator {
     Symbol.asyncIterator in value &&
     typeof (value as { close?: unknown }).close === "function"
   ) {
-    return value as FileStreamIterator;
+    const source = value as FileStreamIterator;
+    return wrapFileIterator(source, () => source.close());
   }
   if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
     throw new TypeError(
@@ -83,18 +102,9 @@ function toFileStream(value: unknown): FileStreamIterator {
       Symbol.asyncIterator in source
         ? (source as AsyncIterable<unknown>)[Symbol.asyncIterator]()
         : (source as Iterable<unknown>)[Symbol.iterator]();
-    const stream = {
-      async next() {
-        const result = await inner.next();
-        if (!result.done) assertStreamValue(result.value);
-        return result.done ? { done: true as const, value: undefined } : result;
-      },
-      async close() {},
-      [Symbol.asyncIterator]() {
-        return stream;
-      },
-    } as FileStreamIterator;
-    return stream;
+    return wrapFileIterator(inner, async () => {
+      await inner.return?.();
+    });
   }
   const empty = {
     async next() {

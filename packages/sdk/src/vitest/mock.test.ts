@@ -622,6 +622,51 @@ describe("mock", () => {
       await expect(stream.next()).rejects.toThrow(/StreamValue/);
     });
 
+    test("openDownloadStream validates elements from an existing stream iterator", async () => {
+      using file = mockFile();
+      const invalidStream = {
+        async next() {
+          return { done: false as const, value: new Uint8Array([1]) };
+        },
+        async close() {},
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      file.enqueueResult(invalidStream);
+
+      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
+        "ns",
+        "T",
+        "f",
+        "r",
+      );
+      await expect(stream.next()).rejects.toThrow(/StreamValue/);
+    });
+
+    test("openDownloadStream closes the wrapped iterator", async () => {
+      using file = mockFile();
+      let closed = false;
+      async function* sequence() {
+        try {
+          yield { type: "complete" as const };
+        } finally {
+          closed = true;
+        }
+      }
+      file.enqueueResult(sequence());
+
+      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
+        "ns",
+        "T",
+        "f",
+        "r",
+      );
+      await stream.next();
+      await stream.close();
+      expect(closed).toBe(true);
+    });
+
     test("openDownloadStream yields the enqueued StreamValue sequence", async () => {
       using file = mockFile();
       const bytes = new Uint8Array([1, 2, 3]);

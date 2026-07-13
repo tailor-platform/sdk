@@ -33,36 +33,20 @@ const IDP_METHODS = [
   "unenrollMfa",
 ] as const satisfies readonly IdpMethod[];
 
+const IDP_USER_DEFAULT = {
+  id: "mock-id",
+  name: "mock-user",
+  disabled: false,
+  mfaEnrolled: false,
+  mfaFactorIds: [],
+};
+
 const IDP_DEFAULTS: Record<IdpMethod, unknown> = {
   users: { users: [], nextPageToken: null, totalCount: 0 },
-  user: {
-    id: "mock-id",
-    name: "mock-user",
-    disabled: false,
-    mfaEnrolled: false,
-    mfaFactorIds: [],
-  },
-  userByName: {
-    id: "mock-id",
-    name: "mock-user",
-    disabled: false,
-    mfaEnrolled: false,
-    mfaFactorIds: [],
-  },
-  createUser: {
-    id: "mock-id",
-    name: "mock-user",
-    disabled: false,
-    mfaEnrolled: false,
-    mfaFactorIds: [],
-  },
-  updateUser: {
-    id: "mock-id",
-    name: "mock-user",
-    disabled: false,
-    mfaEnrolled: false,
-    mfaFactorIds: [],
-  },
+  user: IDP_USER_DEFAULT,
+  userByName: IDP_USER_DEFAULT,
+  createUser: IDP_USER_DEFAULT,
+  updateUser: IDP_USER_DEFAULT,
   deleteUser: true,
   sendPasswordResetEmail: true,
   unenrollMfa: true,

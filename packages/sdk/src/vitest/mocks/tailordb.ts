@@ -55,6 +55,16 @@ interface QueryRule {
   fallback?: QueryResponse;
 }
 
+function testRegex(regex: RegExp, value: string): boolean {
+  const lastIndex = regex.lastIndex;
+  regex.lastIndex = 0;
+  try {
+    return regex.test(value);
+  } finally {
+    regex.lastIndex = lastIndex;
+  }
+}
+
 class MockQueryResult {
   command: string;
   rowCount: number;
@@ -101,17 +111,13 @@ export function mockTailordb(options: MockTailordbOptions = {}) {
   function matchesQuery(matcher: QueryMatcher, query: string, params: unknown[]): boolean {
     if (typeof matcher === "function") return matcher(query, params);
     if (typeof matcher === "string") return query === matcher;
-    if (matcher instanceof RegExp) {
-      matcher.lastIndex = 0;
-      return matcher.test(query);
-    }
+    if (matcher instanceof RegExp) return testRegex(matcher, query);
 
     let sqlMatches: boolean;
     if (typeof matcher.sql === "string") {
       sqlMatches = query === matcher.sql;
     } else {
-      matcher.sql.lastIndex = 0;
-      sqlMatches = matcher.sql.test(query);
+      sqlMatches = testRegex(matcher.sql, query);
     }
     if (!sqlMatches || matcher.params === undefined) return sqlMatches;
     if (typeof matcher.params === "function") return matcher.params(params);
@@ -147,6 +153,12 @@ export function mockTailordb(options: MockTailordbOptions = {}) {
   const defaultConnect = async (): Promise<void> => {};
   const connect = vi.fn(defaultConnect);
   const createdClients: CreatedClient[] = [];
+
+  function enqueueRowsList(rowsList: unknown[][]): void {
+    for (const rows of rowsList) {
+      queryObject.mockImplementationOnce(async () => new MockQueryResult(rows));
+    }
+  }
 
   const defaultClient = function (
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -235,9 +247,7 @@ export function mockTailordb(options: MockTailordbOptions = {}) {
      * @param rowsList - Rows arrays, one per upcoming query
      */
     enqueueResults(...rowsList: unknown[][]): void {
-      for (const rows of rowsList) {
-        queryObject.mockImplementationOnce(async () => new MockQueryResult(rows));
-      }
+      enqueueRowsList(rowsList);
     },
 
     /**
@@ -245,9 +255,7 @@ export function mockTailordb(options: MockTailordbOptions = {}) {
      * @param rowsList - Rows arrays, one per upcoming query
      */
     enqueueRows(...rowsList: unknown[][]): void {
-      for (const rows of rowsList) {
-        queryObject.mockImplementationOnce(async () => new MockQueryResult(rows));
-      }
+      enqueueRowsList(rowsList);
     },
 
     /**
