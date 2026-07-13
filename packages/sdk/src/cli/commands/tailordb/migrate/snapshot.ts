@@ -34,6 +34,7 @@ import {
   type FieldDiffChange,
   type BreakingChangeInfo,
   type SnapshotTypeSettingsState,
+  type TypeScriptsState,
   type WarningChangeInfo,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
@@ -666,6 +667,20 @@ function applyDiffToSnapshot(
             description: change.after.description,
             pluralForm: change.after.pluralForm,
             settings: change.after.settings ?? {},
+          };
+        }
+        break;
+      }
+      case "type_scripts_modified": {
+        const existing = types[change.typeName];
+        if (existing) {
+          const { typeHookExpr: _, typeValidateExpr: __, ...rest } = existing;
+          types[change.typeName] = {
+            ...rest,
+            ...(change.after.typeHookExpr && { typeHookExpr: change.after.typeHookExpr }),
+            ...(change.after.typeValidateExpr !== undefined && {
+              typeValidateExpr: change.after.typeValidateExpr,
+            }),
           };
         }
         break;
@@ -1576,6 +1591,33 @@ function compareTypeSettings(
   });
 }
 
+function typeScriptsState(type: TailorDBSnapshotType): TypeScriptsState {
+  return {
+    ...(type.typeHookExpr && { typeHookExpr: type.typeHookExpr }),
+    ...(type.typeValidateExpr !== undefined && { typeValidateExpr: type.typeValidateExpr }),
+  };
+}
+
+function compareTypeScripts(
+  ctx: DiffContext,
+  typeName: string,
+  previous: TailorDBSnapshotType,
+  current: TailorDBSnapshotType,
+): void {
+  const prevState = typeScriptsState(previous);
+  const currState = typeScriptsState(current);
+
+  if (JSON.stringify(prevState) === JSON.stringify(currState)) return;
+
+  ctx.changes.push({
+    kind: "type_scripts_modified",
+    typeName,
+    reason: "type-level scripts changed",
+    before: prevState,
+    after: currState,
+  });
+}
+
 /**
  * Compare two snapshots and generate a diff
  * @param {SchemaSnapshot} previous - Previous schema snapshot
@@ -1640,6 +1682,9 @@ function compareNormalizedSnapshots(
 
     // Compare type-level settings and metadata
     compareTypeSettings(ctx, typeName, prevType, currType);
+
+    // Compare type-level hook/validate scripts
+    compareTypeScripts(ctx, typeName, prevType, currType);
 
     // Compare fields
     compareTypeFields(ctx, typeName, prevType, currType);
@@ -2890,6 +2935,12 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
         typeName: change.typeName,
         kind: "permission_mismatch",
         details: change.reason ?? "Permissions differ between remote and snapshot",
+      };
+    case "type_scripts_modified":
+      return {
+        typeName: change.typeName,
+        kind: "script_mismatch",
+        details: change.reason ?? "Type-level scripts differ between remote and snapshot",
       };
     default: {
       change satisfies never;

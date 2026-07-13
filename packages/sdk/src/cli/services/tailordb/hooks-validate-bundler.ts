@@ -560,10 +560,8 @@ export async function precompileTailorDBTypeScripts(
     }
     for (const [index, result] of results.entries()) {
       if (result.status === "fulfilled") {
-        setPrecompiledScriptExpr(
-          assertDefined(targets[index], `bundle target at index ${index} missing`).fn,
-          result.value,
-        );
+        const target = assertDefined(targets[index], `bundle target at index ${index} missing`);
+        setPrecompiledScriptExpr(target.fn, result.value);
       }
     }
   } finally {

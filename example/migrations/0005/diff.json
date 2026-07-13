@@ -1,7 +1,7 @@
 {
   "version": 1,
   "namespace": "tailordb",
-  "createdAt": "2026-07-13T13:43:18.512Z",
+  "createdAt": "2026-07-13T16:35:52.223Z",
   "changes": [
     {
       "kind": "type_added",
@@ -174,6 +174,19 @@
             }
           ]
         }
+      }
+    },
+    {
+      "kind": "type_scripts_modified",
+      "typeName": "Customer",
+      "reason": "type-level scripts changed",
+      "before": {},
+      "after": {
+        "typeHookExpr": {
+          "create": "(({ input })=>({\n            fullAddress: `${input.postalCode} ${input.address} ${input.city}`\n        }))({ input: _input, oldRecord: _oldRecord, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user), now: _now })",
+          "update": "(({ input, oldRecord })=>({\n            fullAddress: `${input.postalCode ?? oldRecord.postalCode} ${input.address ?? oldRecord.address} ${input.city ?? oldRecord.city}`\n        }))({ input: _input, oldRecord: _oldRecord, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user), now: _now })"
+        },
+        "typeValidateExpr": "(({ newRecord }, issues)=>{\n    if (newRecord.country === \"JP\" && !newRecord.postalCode) {\n        issues(\"postalCode\", \"Postal code is required for Japan\");\n    }\n})({ newRecord: _newRecord, oldRecord: _oldRecord, invoker: (($raw) => {\n  if (!$raw) {\n    return null;\n  }\n  const type = $raw?.type === \"USER_TYPE_USER\"\n    ? \"user\"\n    : $raw?.type === \"USER_TYPE_MACHINE_USER\"\n      ? \"machine_user\"\n      : $raw?.type;\n  const id = $raw.id;\n  if (!type || type === \"USER_TYPE_UNSPECIFIED\" || id === \"00000000-0000-0000-0000-000000000000\") {\n    return null;\n  }\n  return {\n    id,\n    type,\n    workspaceId: $raw.workspace_id ?? $raw.workspaceId,\n    attributes: $raw.attribute_map ?? $raw.attributeMap ?? {},\n    attributeList: $raw.attributes ?? [],\n  };\n})(user) }, __issues)"
       }
     },
     {
