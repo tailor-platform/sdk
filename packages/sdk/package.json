@@ -211,7 +211,7 @@
     "rolldown": "1.1.4",
     "semver": "7.8.5",
     "sql-highlight": "6.1.0",
-    "std-env": "4.1.0",
+    "std-env": "4.2.0",
     "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
     "tsx": "4.23.0",
