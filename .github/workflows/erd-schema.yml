@@ -1,8 +1,9 @@
 name: ERD Schema
+# pinact:skip-file
 
 on:
   push:
-    branches: [main]
+    branches: [main, v2]
     paths:
       - packages/sdk/src/cli/commands/tailordb/erd/**
       - example/**
@@ -41,7 +42,7 @@ jobs:
 
       - uses: ./.github/actions/install-deps
 
-      - uses: tailor-platform/actions/erd-schema-export@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+      - uses: tailor-platform/actions/erd-schema-export@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
         with:
           namespace: ${{ matrix.namespace }}
           package-manager: pnpm
@@ -79,7 +80,7 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - uses: tailor-platform/actions/erd-schema-preview@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+      - uses: tailor-platform/actions/erd-schema-preview@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
         with:
           namespace: ${{ matrix.namespace }}
           package-manager: pnpm
@@ -118,7 +119,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: tailor-platform/actions/erd-schema-comment@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+      - uses: tailor-platform/actions/erd-schema-comment@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
         with:
           base-ref: ${{ github.event.pull_request.base.ref }}
           github-token: ${{ github.token }}
