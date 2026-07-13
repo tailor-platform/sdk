@@ -24,6 +24,10 @@ runs:
         cache: pnpm
         cache-dependency-path: pnpm-lock.yaml
 
+    - name: Disable global virtual store in CI
+      run: echo "PNPM_CONFIG_ENABLE_GLOBAL_VIRTUAL_STORE=false" >> "$GITHUB_ENV"
+      shell: bash
+
     - name: Install dependencies
       run: pnpm install
       shell: bash
