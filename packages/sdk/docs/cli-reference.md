@@ -27,8 +27,11 @@ human-readable text or empty stdout.
 Commands that only perform side effects and do not define a structured result may leave stdout empty
 even when `--json` is passed.
 
-Errors, warnings, progress, and diagnostic messages are written to stderr. On failure, check the
-non-zero exit code and read stderr; stdout is not guaranteed to contain a JSON error object.
+Errors, warnings, progress, and diagnostic messages are written to stderr. After argument parsing,
+a command failure under `--json` emits a JSON error envelope to stderr. CLI errors include a stable
+`error.code` and may include structured `error.next` and `error.context` fields for automated
+recovery. Diagnostic lines may precede the error envelope, and stdout is not guaranteed to contain
+an error object.
 
 ## Common Options
 

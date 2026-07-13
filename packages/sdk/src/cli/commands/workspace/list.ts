@@ -23,7 +23,19 @@ export interface ListWorkspacesOptions {
 export async function listWorkspaces(options?: ListWorkspacesOptions): Promise<WorkspaceInfo[]> {
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
+  return listWorkspacesWithClient(client, options);
+}
 
+/**
+ * List workspaces using an existing Operator client.
+ * @param client - Authenticated Operator client
+ * @param options - Workspace listing options
+ * @returns List of workspaces
+ */
+export async function listWorkspacesWithClient(
+  client: Parameters<typeof workspaceInfosWithFolderNames>[0],
+  options?: ListWorkspacesOptions,
+): Promise<WorkspaceInfo[]> {
   const pageDirection = toPageDirection(options?.order);
   const workspaces = await fetchPaged(
     async (pageToken, pageSize) => {
@@ -54,7 +66,13 @@ export const listCommand = defineAppCommand({
       limit: args.limit,
     });
     logger.out(workspaces, {
-      display: { name: workspaceNameTransformer, folderName: null, updatedAt: null },
+      display: {
+        name: workspaceNameTransformer,
+        folderName: null,
+        organizationId: null,
+        folderId: null,
+        updatedAt: null,
+      },
     });
   },
 });

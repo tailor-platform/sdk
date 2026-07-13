@@ -12,6 +12,7 @@ import {
   platformConfigFromProfile,
   readPlatformConfig,
   saveUserTokens,
+  tryLoadWorkspaceId,
   writePlatformConfig,
 } from "./context";
 import { isCLIError } from "./errors";
@@ -306,6 +307,10 @@ describe("loadWorkspaceId", () => {
   });
 
   describe("error case: no workspace ID source", () => {
+    test("returns undefined from optional resolution", async () => {
+      await expect(tryLoadWorkspaceId()).resolves.toBeUndefined();
+    });
+
     test("throws error when no workspaceId source is available", async () => {
       await expect(loadWorkspaceId()).rejects.toThrow("Workspace ID not found");
     });

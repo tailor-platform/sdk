@@ -507,6 +507,23 @@ function validateUUID(value: string, source: string): string {
  * @returns Resolved workspace ID
  */
 export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<string> {
+  const workspaceId = await tryLoadWorkspaceId(opts);
+  if (workspaceId) return workspaceId;
+
+  throw new Error(ml`
+    Workspace ID not found.
+    Please specify workspace ID via --workspace-id option or TAILOR_PLATFORM_WORKSPACE_ID environment variable.
+  `);
+}
+
+/**
+ * Load a workspace ID when one is explicitly configured.
+ * @param opts - Workspace and profile options
+ * @returns Resolved workspace ID, or undefined when no source is configured
+ */
+export async function tryLoadWorkspaceId(
+  opts?: LoadWorkspaceIdOptions,
+): Promise<string | undefined> {
   const profile = opts?.profile || process.env.TAILOR_PLATFORM_PROFILE;
 
   if (opts?.workspaceId) {
@@ -530,10 +547,7 @@ export async function loadWorkspaceId(opts?: LoadWorkspaceIdOptions): Promise<st
     return validateUUID(wsId, `profile "${profile}"`);
   }
 
-  throw new Error(ml`
-    Workspace ID not found.
-    Please specify workspace ID via --workspace-id option or TAILOR_PLATFORM_WORKSPACE_ID environment variable.
-  `);
+  return undefined;
 }
 
 /**

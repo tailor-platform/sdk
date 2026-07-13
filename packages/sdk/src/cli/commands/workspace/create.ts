@@ -50,6 +50,7 @@ const createWorkspaceOptionsSchema = z.object({
 });
 
 export type CreateWorkspaceOptions = z.input<typeof createWorkspaceOptionsSchema>;
+export type ValidatedCreateWorkspaceOptions = z.output<typeof createWorkspaceOptionsSchema>;
 
 const validateRegion = async (region: string, client: OperatorClient) => {
   const availableRegions = await client.listAvailableWorkspaceRegions({});
@@ -78,17 +79,40 @@ function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
  * @returns Created workspace info
  */
 export async function createWorkspace(options: CreateWorkspaceOptions): Promise<WorkspaceInfo> {
-  // Validate options with zod schema
-  const result = createWorkspaceOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
-  const validated = result.data;
-
-  // Load client and validate region
+  validateCreateWorkspaceOptions(options);
   const accessToken = await loadAccessToken();
   const client = await initOperatorClient(accessToken);
+  return createWorkspaceWithClient(client, options);
+}
+
+/**
+ * Create a workspace using an existing Operator client.
+ * @param client - Authenticated Operator client
+ * @param options - Workspace creation options
+ * @returns Created workspace info
+ */
+export async function createWorkspaceWithClient(
+  client: OperatorClient,
+  options: CreateWorkspaceOptions,
+): Promise<WorkspaceInfo> {
+  const validated = validateCreateWorkspaceOptions(options);
+
   await validateRegion(validated.region, client);
+
+  return createValidatedWorkspaceWithClient(client, validated);
+}
+
+/**
+ * Create a workspace after its local options and region have been validated.
+ * @param client - Authenticated Operator client
+ * @param options - Validated workspace creation options
+ * @returns Created workspace info
+ */
+export async function createValidatedWorkspaceWithClient(
+  client: OperatorClient,
+  options: ValidatedCreateWorkspaceOptions,
+): Promise<WorkspaceInfo> {
+  const validated = options;
 
   // Create workspace
   const resp = await client.createWorkspace({
@@ -103,6 +127,33 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
     client,
     assertDefined(resp.workspace, "createWorkspace response missing workspace"),
   );
+}
+
+/**
+ * Validate workspace creation options without making API calls.
+ * @param options - Workspace creation options
+ * @returns Validated workspace creation options
+ */
+export function validateCreateWorkspaceOptions(
+  options: CreateWorkspaceOptions,
+): ValidatedCreateWorkspaceOptions {
+  const result = createWorkspaceOptionsSchema.safeParse(options);
+  if (!result.success) {
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+  }
+  return result.data;
+}
+
+/**
+ * Validate a workspace name for use in an interactive prompt.
+ * @param name - Candidate workspace name
+ * @returns True when valid, otherwise a validation message
+ */
+export function validateWorkspaceName(name: string): true | string {
+  const result = createWorkspaceOptionsSchema.shape.name.safeParse(name);
+  return result.success
+    ? true
+    : assertDefined(result.error.issues[0], "Zod returned no issues").message;
 }
 
 export const createCommand = defineAppCommand({

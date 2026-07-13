@@ -6,7 +6,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
-import { createCommand } from "./create";
+import { createCommand, createWorkspace } from "./create";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-workspace-create-${Date.now()}-${Math.random()}`);
 
@@ -105,6 +105,13 @@ describe("workspace create --permission", () => {
       "read",
     );
     expect(config.profiles.bootstrap?.readonly).toBe(true);
+  });
+
+  test("validates programmatic options before initializing a client", async () => {
+    await expect(createWorkspace({ name: "x", region: "us-west" })).rejects.toThrow(
+      "Name must be at least 3 characters",
+    );
+    expect(initOperatorClient).not.toHaveBeenCalled();
   });
 
   test("omits the readonly key when --profile-name is given without --permission read", async () => {

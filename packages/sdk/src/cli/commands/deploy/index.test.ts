@@ -1,8 +1,72 @@
-import { describe, expect, test } from "vitest";
+import { runCommand } from "politty";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { z } from "zod";
 import { deployCommand } from "#/cli/commands/deploy/index";
+import { commonArgs } from "#/cli/shared/args";
+
+const mocks = vi.hoisted(() => ({
+  assertWritable: vi.fn(),
+  deploy: vi.fn(),
+  initTelemetry: vi.fn(),
+}));
+
+vi.mock("#/cli/commands/deploy/deploy", () => ({ deploy: mocks.deploy }));
+vi.mock("#/cli/shared/readonly-guard", () => ({ assertWritable: mocks.assertWritable }));
+vi.mock("#/cli/telemetry/index", () => ({ initTelemetry: mocks.initTelemetry }));
 
 describe("deployCommand", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   test("exposes 'apply' as an alias", () => {
     expect(deployCommand.aliases).toContain("apply");
+  });
+
+  test("forwards workspace creation options", async () => {
+    await runCommand(deployCommand, [
+      "--create-workspace",
+      "--workspace-name",
+      "example-workspace",
+      "--workspace-region",
+      "us-west",
+      "--organization-id",
+      "11111111-1111-4111-8111-111111111111",
+      "--folder-id",
+      "22222222-2222-4222-8222-222222222222",
+    ]);
+
+    expect(mocks.deploy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        createWorkspace: true,
+        workspaceName: "example-workspace",
+        workspaceRegion: "us-west",
+        organizationId: "11111111-1111-4111-8111-111111111111",
+        folderId: "22222222-2222-4222-8222-222222222222",
+      }),
+    );
+  });
+
+  test("does not treat --yes as workspace creation consent", async () => {
+    await runCommand(deployCommand, ["--yes"]);
+
+    expect(mocks.deploy).toHaveBeenCalledWith(
+      expect.objectContaining({ yes: true, createWorkspace: undefined }),
+    );
+  });
+
+  test("forwards global options needed to reproduce deploy", async () => {
+    await runCommand(deployCommand, ["--env-file-if-exists", ".env.local", "--verbose", "--json"], {
+      globalArgs: z.object(commonArgs),
+    });
+
+    expect(mocks.deploy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        envFile: undefined,
+        envFileIfExists: ".env.local",
+        verbose: true,
+        json: true,
+      }),
+    );
   });
 });

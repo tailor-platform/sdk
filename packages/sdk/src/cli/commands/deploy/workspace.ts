@@ -1,0 +1,500 @@
+import { basename } from "pathe";
+import { getPlatformBaseUrl, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import {
+  loadAccessToken,
+  loadPlatformClientConfig,
+  tryLoadWorkspaceId,
+} from "#/cli/shared/context";
+import { CLIError, type CLIErrorNextAction } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
+import { canPrompt, prompt } from "#/cli/shared/prompt";
+import {
+  createValidatedWorkspaceWithClient,
+  validateCreateWorkspaceOptions,
+} from "../workspace/create";
+import { listWorkspacesWithClient } from "../workspace/list";
+import { workspaceDisplayName, workspaceInfo, type WorkspaceInfo } from "../workspace/transform";
+import {
+  loadWorkspaceContext,
+  saveWorkspaceContext,
+  type WorkspaceContext,
+} from "./workspace-context";
+
+export interface ResolveDeployWorkspaceOptions {
+  workspaceId?: string;
+  profile?: string;
+  createWorkspace?: boolean;
+  workspaceName?: string;
+  workspaceRegion?: string;
+  organizationId?: string;
+  folderId?: string;
+  dryRun?: boolean;
+  contextPaths?: readonly string[];
+  deployArgs?: readonly string[];
+}
+
+export interface ResolvedDeployWorkspace {
+  client: OperatorClient;
+  workspaceId: string;
+}
+
+function suggestedWorkspaceName(): string {
+  const name = basename(process.cwd())
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9-]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "")
+    .slice(0, 63)
+    .replace(/-+$/, "");
+  try {
+    validateCreateWorkspaceOptions({ name, region: "placeholder" });
+    return name;
+  } catch {
+    return "my-workspace";
+  }
+}
+
+function executableAction(args: readonly string[]): CLIErrorNextAction {
+  return { command: "tailor-sdk", args };
+}
+
+function deployArgs(options: ResolveDeployWorkspaceOptions): readonly string[] {
+  return options.deployArgs ?? ["deploy"];
+}
+
+function createDeployArgs(
+  options: ResolveDeployWorkspaceOptions,
+  name: string,
+  region: string,
+): readonly string[] {
+  return [
+    ...deployArgs(options),
+    "--create-workspace",
+    "--workspace-name",
+    name,
+    "--workspace-region",
+    region,
+    ...(options.organizationId ? ["--organization-id", options.organizationId] : []),
+    ...(options.folderId ? ["--folder-id", options.folderId] : []),
+  ];
+}
+
+function selectDeployArgs(options: ResolveDeployWorkspaceOptions): readonly string[] {
+  return [...deployArgs(options), "--workspace-id", "<workspace-id>"];
+}
+
+function workspaceLabel(workspace: WorkspaceInfo): string {
+  const organization = workspace.organizationId ?? "personal";
+  return `${workspaceDisplayName(workspace)} (${workspace.region}, org: ${organization}, id: ${workspace.id})`;
+}
+
+function workspaceMatchesRequestedIdentity(
+  workspace: WorkspaceInfo,
+  options: ResolveDeployWorkspaceOptions,
+): boolean {
+  return (
+    (!options.workspaceName || options.workspaceName === workspace.name) &&
+    (!options.workspaceRegion || options.workspaceRegion === workspace.region) &&
+    (!options.organizationId || options.organizationId === workspace.organizationId) &&
+    (!options.folderId || options.folderId === workspace.folderId)
+  );
+}
+
+async function loadProjectContexts(
+  platformUrl: string,
+  contextPaths?: readonly string[],
+): Promise<WorkspaceContext[]> {
+  if (!contextPaths || contextPaths.length === 0) {
+    const context = await loadWorkspaceContext(platformUrl);
+    return context ? [context] : [];
+  }
+  const contexts = await Promise.all(
+    [...new Set(contextPaths)].map((configPath) => loadWorkspaceContext(platformUrl, configPath)),
+  );
+  return contexts.filter((context): context is WorkspaceContext => context !== undefined);
+}
+
+async function persistWorkspaceContext(
+  context: WorkspaceContext,
+  contextPaths?: readonly string[],
+): Promise<void> {
+  if (!contextPaths || contextPaths.length === 0) {
+    await saveWorkspaceContext(context);
+    return;
+  }
+  const results = await Promise.allSettled(
+    [...new Set(contextPaths)].map((configPath) => saveWorkspaceContext(context, configPath)),
+  );
+  const failures = results.filter((result) => result.status === "rejected");
+  if (failures.length > 0) {
+    throw new Error(
+      failures
+        .map(({ reason }) => (reason instanceof Error ? reason.message : String(reason)))
+        .join("; "),
+    );
+  }
+}
+
+async function rememberWorkspaceContext(
+  context: WorkspaceContext,
+  options: ResolveDeployWorkspaceOptions,
+): Promise<void> {
+  if (options.dryRun) return;
+  try {
+    await persistWorkspaceContext(context, options.contextPaths);
+  } catch (error) {
+    if ((options.contextPaths?.length ?? 0) > 1) {
+      throw CLIError({
+        code: "WORKSPACE_CONTEXT_SAVE_FAILED",
+        message: "The workspace selection could not be saved for every configuration file.",
+        details: error instanceof Error ? error.message : String(error),
+        suggestion: "Fix project state permissions, then rerun deploy with the workspace ID.",
+        next: executableAction([...deployArgs(options), "--workspace-id", context.workspaceId]),
+        context: {
+          workspaceId: context.workspaceId,
+          configPaths: options.contextPaths,
+        },
+      });
+    }
+    logger.warn(
+      `Could not save the project workspace selection (${error instanceof Error ? error.message : String(error)}). Continue with --workspace-id ${context.workspaceId} on later runs.`,
+    );
+  }
+}
+
+async function rememberWorkspace(
+  platformUrl: string,
+  workspace: WorkspaceInfo,
+  options: ResolveDeployWorkspaceOptions,
+): Promise<void> {
+  await rememberWorkspaceContext(
+    {
+      version: 1,
+      platformUrl,
+      workspaceId: workspace.id,
+      workspaceName: workspace.name,
+      workspaceRegion: workspace.region,
+      organizationId: workspace.organizationId,
+      folderId: workspace.folderId,
+    },
+    options,
+  );
+}
+
+async function useWorkspace(
+  client: OperatorClient,
+  platformUrl: string,
+  workspace: WorkspaceInfo,
+  options: ResolveDeployWorkspaceOptions,
+): Promise<ResolvedDeployWorkspace> {
+  await rememberWorkspace(platformUrl, workspace, options);
+  logger.info(`Using workspace: ${workspaceLabel(workspace)}`);
+  return { client, workspaceId: workspace.id };
+}
+
+async function chooseWorkspace(
+  client: OperatorClient,
+  platformUrl: string,
+  workspaces: readonly WorkspaceInfo[],
+  options: ResolveDeployWorkspaceOptions,
+): Promise<ResolvedDeployWorkspace> {
+  const workspaceId = await prompt.select({
+    message: "Select a workspace",
+    choices: workspaces.map((workspace) => ({
+      name: workspaceLabel(workspace),
+      value: workspace.id,
+    })),
+  });
+  const workspace = workspaces.find(({ id }) => id === workspaceId);
+  if (!workspace) throw new Error("Selected workspace was not found");
+  return useWorkspace(client, platformUrl, workspace, options);
+}
+
+function invalidCreateOptionsError(
+  options: ResolveDeployWorkspaceOptions,
+  name: string,
+  region: string,
+  details: string,
+): Error {
+  return CLIError({
+    code: "WORKSPACE_CREATE_OPTIONS_INVALID",
+    message: "Workspace creation options are invalid.",
+    details,
+    suggestion: "Correct the workspace creation options and rerun deploy.",
+    next: executableAction(createDeployArgs(options, name, region)),
+  });
+}
+
+async function createWorkspace(
+  client: OperatorClient,
+  platformUrl: string,
+  options: ResolveDeployWorkspaceOptions,
+  availableRegions: readonly string[],
+): Promise<ResolvedDeployWorkspace> {
+  let name = options.workspaceName;
+  let region = options.workspaceRegion;
+
+  if (canPrompt()) {
+    name ??= await prompt.text({
+      message: "Workspace name",
+      default: suggestedWorkspaceName(),
+      validate: (value) => {
+        try {
+          validateCreateWorkspaceOptions({ name: value, region: "placeholder" });
+          return true;
+        } catch (error) {
+          return error instanceof Error ? error.message : String(error);
+        }
+      },
+    });
+    region ??= await prompt.select({
+      message: "Workspace region",
+      choices: availableRegions.map((value) => ({ name: value, value })),
+    });
+    const scope = [
+      options.organizationId ? `organization: ${options.organizationId}` : undefined,
+      options.folderId ? `folder: ${options.folderId}` : undefined,
+    ].filter((value): value is string => value !== undefined);
+    const confirmed = await prompt.confirm({
+      message: `Create workspace "${name}" in ${region}${scope.length > 0 ? ` (${scope.join(", ")})` : ""}?`,
+      default: true,
+    });
+    if (!confirmed) {
+      throw CLIError({
+        code: "WORKSPACE_CREATION_CANCELLED",
+        message: "Workspace creation was cancelled.",
+      });
+    }
+  } else {
+    const missingOptions = [
+      ...(name ? [] : ["--workspace-name"]),
+      ...(region ? [] : ["--workspace-region"]),
+    ];
+    if (missingOptions.length > 0) {
+      throw CLIError({
+        code: "WORKSPACE_CREATE_OPTIONS_REQUIRED",
+        message: "Workspace creation requires a name and region in non-interactive mode.",
+        suggestion: "Provide every workspace creation option and rerun deploy.",
+        next: executableAction(createDeployArgs(options, name ?? "<name>", region ?? "<region>")),
+        context: { missingOptions },
+      });
+    }
+  }
+
+  if (!name || !region) throw new Error("Workspace creation options were not resolved");
+
+  let validated;
+  try {
+    validated = validateCreateWorkspaceOptions({
+      name,
+      region,
+      organizationId: options.organizationId,
+      folderId: options.folderId,
+    });
+  } catch (error) {
+    throw invalidCreateOptionsError(
+      options,
+      name,
+      region,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  if (!availableRegions.includes(region)) {
+    throw invalidCreateOptionsError(
+      options,
+      name,
+      region,
+      `Region must be one of: ${availableRegions.join(", ")}.`,
+    );
+  }
+
+  let workspace: WorkspaceInfo;
+  try {
+    workspace = await createValidatedWorkspaceWithClient(client, validated);
+  } catch (error) {
+    throw CLIError({
+      code: "WORKSPACE_CREATION_FAILED",
+      message: "Workspace creation did not complete successfully.",
+      details: error instanceof Error ? error.message : String(error),
+      suggestion:
+        "The outcome may be uncertain. List workspaces before retrying creation to avoid duplicates.",
+      next: executableAction(["workspace", "list", "--json"]),
+    });
+  }
+
+  await rememberWorkspace(platformUrl, workspace, options);
+  logger.success(`Created workspace: ${workspaceLabel(workspace)}`);
+  return { client, workspaceId: workspace.id };
+}
+
+/**
+ * Resolve or provision the workspace used by deploy.
+ * Explicit configuration wins over project context and account discovery.
+ * @param options - Deploy workspace selection and creation options
+ * @returns Authenticated client and resolved workspace ID
+ */
+export async function resolveDeployWorkspace(
+  options: ResolveDeployWorkspaceOptions = {},
+): Promise<ResolvedDeployWorkspace> {
+  const explicitWorkspaceId = await tryLoadWorkspaceId({
+    workspaceId: options.workspaceId,
+    profile: options.profile,
+  });
+  const accessToken = await loadAccessToken({ profile: options.profile });
+  const platformConfig = await loadPlatformClientConfig({
+    profile: options.profile,
+    allowMissingProfile: explicitWorkspaceId !== undefined,
+  });
+  const platformUrl = getPlatformBaseUrl(platformConfig);
+  const client = await initOperatorClient(accessToken, platformConfig);
+
+  if (explicitWorkspaceId) {
+    const response = await client.getWorkspace({ workspaceId: explicitWorkspaceId });
+    if (!response.workspace) {
+      throw CLIError({
+        code: "WORKSPACE_NOT_FOUND",
+        message: `Workspace "${explicitWorkspaceId}" was not found.`,
+      });
+    }
+    return useWorkspace(client, platformUrl, workspaceInfo(response.workspace), options);
+  }
+
+  const [contexts, workspaces] = await Promise.all([
+    loadProjectContexts(platformUrl, options.contextPaths),
+    listWorkspacesWithClient(client),
+  ]);
+  const contextWorkspaceIds = new Set(contexts.map(({ workspaceId }) => workspaceId));
+  const linkedWorkspace =
+    contextWorkspaceIds.size === 1
+      ? workspaces.find(({ id }) => contextWorkspaceIds.has(id))
+      : undefined;
+  if (
+    linkedWorkspace &&
+    (!options.createWorkspace || workspaceMatchesRequestedIdentity(linkedWorkspace, options))
+  ) {
+    return useWorkspace(client, platformUrl, linkedWorkspace, options);
+  }
+
+  if (contextWorkspaceIds.size > 1) {
+    if (!canPrompt()) {
+      throw CLIError({
+        code: "WORKSPACE_CONTEXT_CONFLICT",
+        message: "The deployed configuration files are linked to different workspaces.",
+        suggestion: "Choose one workspace explicitly for the combined deployment.",
+        next: executableAction(selectDeployArgs(options)),
+        context: { savedWorkspaceIds: [...contextWorkspaceIds] },
+      });
+    }
+    if (workspaces.length > 0 && canPrompt()) {
+      return chooseWorkspace(client, platformUrl, workspaces, options);
+    }
+  }
+
+  if (!linkedWorkspace && contexts.length > 0) {
+    const explicitlyEnsuringSingleTarget =
+      options.createWorkspace === true &&
+      options.workspaceName !== undefined &&
+      options.workspaceRegion !== undefined &&
+      workspaces.length <= 1;
+    if (!canPrompt() && !explicitlyEnsuringSingleTarget) {
+      throw CLIError({
+        code: "WORKSPACE_CONTEXT_STALE",
+        message: "The saved project workspace is no longer available.",
+        suggestion: "Choose an available workspace explicitly before deploying.",
+        next: executableAction(selectDeployArgs(options)),
+        context: {
+          savedWorkspaceIds: [...contextWorkspaceIds],
+          workspaces: workspaces.map(({ id, name, region, organizationId, folderId }) => ({
+            id,
+            name,
+            region,
+            organizationId,
+            folderId,
+          })),
+        },
+      });
+    }
+    if (workspaces.length > 0 && canPrompt()) {
+      return chooseWorkspace(client, platformUrl, workspaces, options);
+    }
+  }
+
+  if (workspaces.length === 1) {
+    const [workspace] = workspaces;
+    if (!workspace) throw new Error("Workspace discovery returned an invalid result");
+
+    if (options.createWorkspace && !workspaceMatchesRequestedIdentity(workspace, options)) {
+      throw CLIError({
+        code: "WORKSPACE_CREATE_CONFLICT",
+        message: "The existing workspace does not match the requested workspace.",
+        suggestion:
+          "Use the existing workspace, or run the explicit workspace create command to create another one.",
+        next: executableAction([
+          "workspace",
+          "create",
+          "--name",
+          options.workspaceName ?? "<name>",
+          "--region",
+          options.workspaceRegion ?? "<region>",
+          ...(options.organizationId ? ["--organization-id", options.organizationId] : []),
+          ...(options.folderId ? ["--folder-id", options.folderId] : []),
+        ]),
+        context: {
+          existingWorkspace: {
+            id: workspace.id,
+            name: workspace.name,
+            region: workspace.region,
+            organizationId: workspace.organizationId,
+            folderId: workspace.folderId,
+          },
+        },
+      });
+    }
+
+    return useWorkspace(client, platformUrl, workspace, options);
+  }
+
+  if (workspaces.length > 1) {
+    if (!canPrompt()) {
+      throw CLIError({
+        code: "WORKSPACE_SELECTION_REQUIRED",
+        message: "Multiple workspaces are available.",
+        suggestion: "Choose one explicitly for non-interactive deployment.",
+        next: executableAction(selectDeployArgs(options)),
+        context: {
+          workspaces: workspaces.map(({ id, name, region, organizationId, folderId }) => ({
+            id,
+            name,
+            region,
+            organizationId,
+            folderId,
+          })),
+        },
+      });
+    }
+
+    return chooseWorkspace(client, platformUrl, workspaces, options);
+  }
+
+  const { regions } = await client.listAvailableWorkspaceRegions({});
+  if (options.dryRun) {
+    throw CLIError({
+      code: "WORKSPACE_CREATION_DISABLED_IN_DRY_RUN",
+      message: "Dry-run cannot create the workspace required to build a deployment plan.",
+      suggestion:
+        "Create a workspace explicitly, then rerun the same dry-run with its workspace ID.",
+      context: { availableRegions: regions },
+    });
+  }
+  if (canPrompt() || options.createWorkspace) {
+    return createWorkspace(client, platformUrl, options, regions);
+  }
+
+  throw CLIError({
+    code: "WORKSPACE_NOT_FOUND",
+    message: "No workspaces are available for this account.",
+    suggestion:
+      "Create one during deploy by providing the workspace name and one of the available regions.",
+    next: executableAction(createDeployArgs(options, "<name>", "<region>")),
+    context: { availableRegions: regions },
+  });
+}
