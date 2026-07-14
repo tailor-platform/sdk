@@ -5,12 +5,12 @@ on:
   push:
     branches: [main, v2]
     paths:
-      - packages/sdk/src/cli/commands/tailordb/erd/**
+      - packages/sdk-tailordb-erd-plugin/**
       - example/**
       - .github/workflows/erd-schema.yml
   pull_request:
     paths:
-      - packages/sdk/src/cli/commands/tailordb/erd/**
+      - packages/sdk-tailordb-erd-plugin/**
       - example/**
       - .github/workflows/erd-schema.yml
 
@@ -93,7 +93,7 @@ jobs:
           preview-artifact-name: ${{ matrix.namespace }}.html
           always-relevant-paths: |
             example/tailor.config.ts
-            packages/sdk/src/cli/commands/tailordb/erd/
+            packages/sdk-tailordb-erd-plugin/
           relevant-path-prefix: example/
           github-token: ${{ github.token }}
 

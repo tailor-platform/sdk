@@ -70,54 +70,13 @@ Note: Migration scripts are automatically executed during `tailor deploy`. See [
 
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb-migration.md).
 
-{{politty:command:tailordb erd:heading}}
+### tailordb erd
 
-{{politty:command:tailordb erd:description}}
-
-{{politty:command:tailordb erd:usage}}
-
-{{politty:command:tailordb erd:global-options-link}}
-
-{{politty:command:tailordb erd:subcommands}}
-
-{{politty:command:tailordb erd export}}
-{{politty:command:tailordb erd diff}}
-{{politty:command:tailordb erd serve}}
-{{politty:command:tailordb erd deploy}}
-
-**Notes:**
-
-- ERD commands build from the local TailorDB schema, including plugin-generated TailorDB types.
-- `tailordb erd export` writes a self-contained `index.html` viewer to `<output>/<namespace>/dist`.
-- `tailordb erd diff` compares exported self-contained viewer HTML files and writes a visual ERD viewer that can switch between the current schema and the highlighted diff.
-- `tailordb erd serve` watches the config file and TailorDB type files, then reloads the browser viewer when the rebuilt `index.html` reports a new embedded schema revision.
-- `tailordb erd deploy` still requires `erdSite` in `tailor.config.ts` because it uploads the generated viewer to a configured Static Website.
-
-**Usage Examples:**
+The `tailordb erd` commands (export, diff, serve, deploy) are provided by the [`@tailor-platform/sdk-tailordb-erd-plugin`](https://www.npmjs.com/package/@tailor-platform/sdk-tailordb-erd-plugin) CLI plugin. Install it next to the SDK and keep running `tailor tailordb erd <command>` as before:
 
 ```bash
-# Deploy ERD for all namespaces with erdSite configured
-tailor tailordb erd deploy
-
-# Deploy ERD for a specific namespace
-tailor tailordb erd deploy --namespace myNamespace
-
-# Deploy ERD with JSON output
-tailor tailordb erd deploy --json
+npm install -D @tailor-platform/sdk-tailordb-erd-plugin
+tailor tailordb erd export --namespace myNamespace
 ```
 
-**Notes:**
-
-- This command is a beta feature and may introduce breaking changes in future releases
-- Requires `erdSite` to be configured in `tailor.config.ts` for each namespace you want to deploy
-- Example config:
-  ```typescript
-  export default defineConfig({
-    db: {
-      myNamespace: {
-        // ... table definitions
-        erdSite: "my-erd-site-name",
-      },
-    },
-  });
-  ```
+See the plugin's README for the full command reference.
