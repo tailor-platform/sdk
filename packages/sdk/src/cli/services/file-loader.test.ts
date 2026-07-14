@@ -102,4 +102,26 @@ describe("loadFilesWithIgnores", () => {
       process.chdir(originalCwd);
     }
   });
+
+  test("does not fall back when a files pattern throws while globbing, even if baseDir has no other matches", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-throwing-pattern-"));
+    tmpDirs.push(baseDir);
+    // The "src" segment must exist so fs.globSync actually descends into it
+    // and hits the null byte, instead of short-circuiting on a missing dir.
+    fs.mkdirSync(path.join(baseDir, "src"));
+    // cwd has an unrelated file that must NOT leak in via a wrongful fallback.
+    const cwdDir = makeDirWithFile("file-loader-unrelated-cwd-throw-", "src/bar.ts");
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      // A null byte makes fs.globSync throw synchronously, rather than matching nothing.
+      const files = loadFilesWithIgnores({ files: ["./src/\0bad/*.ts"] }, baseDir);
+      expect(files).toEqual([]);
+      expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("falling back"));
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
 });

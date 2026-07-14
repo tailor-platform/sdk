@@ -75,6 +75,10 @@ function resolveFiles(config: FileLoadConfig, baseDir: string): ResolvedFiles {
       const filteredFiles = matchedFiles.filter((file) => !ignoreFiles.has(file));
       files.push(...filteredFiles);
     } catch (error) {
+      // A glob failure means we don't know whether baseDir has matching
+      // files, not that it has none — treat it as a match so it can't
+      // trigger the v1 compatibility fallback below.
+      matchedAnyPattern = true;
       logger.warn(`Failed to glob pattern "${pattern}": ${String(error)}`);
     }
   }
