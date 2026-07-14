@@ -218,6 +218,8 @@ function useRememberedWorkspace(
   return { client, workspaceId: workspace.id };
 }
 
+const createNewWorkspaceSelection = "create-new-workspace";
+
 async function chooseWorkspace(
   client: OperatorClient,
   platformUrl: string,
@@ -226,11 +228,17 @@ async function chooseWorkspace(
 ): Promise<ResolvedDeployWorkspace> {
   const workspaceId = await prompt.select({
     message: "Select a workspace",
-    choices: workspaces.map((workspace) => ({
-      name: workspaceLabel(workspace),
-      value: workspace.id,
-    })),
+    choices: [
+      ...workspaces.map((workspace) => ({
+        name: workspaceLabel(workspace),
+        value: workspace.id,
+      })),
+      { name: "Create new workspace", value: createNewWorkspaceSelection },
+    ],
   });
+  if (workspaceId === createNewWorkspaceSelection) {
+    return createWorkspaceForDeploy(client, platformUrl, options);
+  }
   const workspace = workspaces.find(({ id }) => id === workspaceId);
   if (!workspace) throw new Error("Selected workspace was not found");
   return useWorkspace(client, platformUrl, workspace, options);
@@ -372,6 +380,26 @@ async function createWorkspace(
   );
   logger.success(`Created workspace: ${workspaceLabel(workspace)}`);
   return { client, workspaceId: workspace.id };
+}
+
+async function createWorkspaceForDeploy(
+  client: OperatorClient,
+  platformUrl: string,
+  options: ResolveDeployWorkspaceOptions,
+  requestedRegions?: readonly string[],
+  validatedOptions?: ValidatedCreateWorkspaceOptions,
+): Promise<ResolvedDeployWorkspace> {
+  const regions = requestedRegions ?? (await client.listAvailableWorkspaceRegions({})).regions;
+  if (options.dryRun) {
+    throw CLIError({
+      code: "WORKSPACE_CREATION_DISABLED_IN_DRY_RUN",
+      message: "Dry-run cannot create the workspace required to build a deployment plan.",
+      suggestion:
+        "Create a workspace explicitly, then rerun the same dry-run with its workspace ID.",
+      context: { availableRegions: regions },
+    });
+  }
+  return createWorkspace(client, platformUrl, options, regions, validatedOptions);
 }
 
 /**
@@ -524,17 +552,14 @@ export async function resolveDeployWorkspace(
   ) {
     const regions =
       requestedRegions?.regions ?? (await client.listAvailableWorkspaceRegions({})).regions;
-    if (options.dryRun) {
-      throw CLIError({
-        code: "WORKSPACE_CREATION_DISABLED_IN_DRY_RUN",
-        message: "Dry-run cannot create the workspace required to build a deployment plan.",
-        suggestion:
-          "Create a workspace explicitly, then rerun the same dry-run with its workspace ID.",
-        context: { availableRegions: regions },
-      });
-    }
-    if (interactive || options.createWorkspace) {
-      return createWorkspace(client, platformUrl, options, regions, requestedCreateOptions);
+    if (options.dryRun || interactive || options.createWorkspace) {
+      return createWorkspaceForDeploy(
+        client,
+        platformUrl,
+        options,
+        regions,
+        requestedCreateOptions,
+      );
     }
 
     throw CLIError({
@@ -616,6 +641,10 @@ export async function resolveDeployWorkspace(
           existingWorkspace: workspaceIdentity(workspace),
         },
       });
+    }
+
+    if (interactive && !options.createWorkspace) {
+      return chooseWorkspace(client, platformUrl, workspaces, options);
     }
 
     return useWorkspace(client, platformUrl, workspace, options);

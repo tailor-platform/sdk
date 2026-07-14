@@ -597,8 +597,48 @@ describe("resolveDeployWorkspace", () => {
           name: `second (us-west, org: ${second.organizationId}, id: ${second.id})`,
           value: second.id,
         },
+        {
+          name: "Create new workspace",
+          value: "create-new-workspace",
+        },
       ],
     });
+  });
+
+  test.each([
+    ["one", [workspace("40404040-4040-4040-8040-404040404040", "only")]],
+    [
+      "multiple",
+      [
+        workspace("41414141-4141-4141-8141-414141414141", "first"),
+        workspace("42424242-4242-4242-8242-424242424242", "second"),
+      ],
+    ],
+  ])("offers workspace creation when %s workspace is available", async (_, workspaces) => {
+    const created = workspace("43434343-4343-4343-8343-434343434343", "new-workspace");
+    mocks.canPrompt.mockReturnValue(true);
+    mocks.listWorkspacesWithClient.mockResolvedValue(workspaces);
+    mocks.select.mockImplementation(async ({ message }: { message: string }) =>
+      message === "Select a workspace" ? "create-new-workspace" : created.region,
+    );
+    mocks.text.mockResolvedValue(created.name);
+    mocks.confirm.mockResolvedValue(true);
+    mocks.createValidatedWorkspaceWithClient.mockResolvedValue(created);
+
+    await expect(resolveDeployWorkspace()).resolves.toEqual({
+      client,
+      workspaceId: created.id,
+    });
+    expect(mocks.select).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        message: "Select a workspace",
+        choices: expect.arrayContaining([
+          { name: "Create new workspace", value: "create-new-workspace" },
+        ]),
+      }),
+    );
+    expect(mocks.createValidatedWorkspaceWithClient).toHaveBeenCalledOnce();
   });
 
   test("does not guess among multiple workspaces non-interactively", async () => {

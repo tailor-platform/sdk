@@ -24,9 +24,9 @@ the authenticated user before reuse.
 
 When the project has no saved selection, `deploy` discovers the account's workspaces:
 
-- One workspace is selected automatically and saved for future deploys.
-- Multiple workspaces open a selection prompt in an interactive terminal. In non-interactive or
-  JSON mode, pass `--workspace-id` instead.
+- One or more workspaces open a selection prompt in an interactive terminal, with an option to
+  create a new workspace. With one workspace in non-interactive or JSON mode, it is selected
+  automatically. With multiple workspaces, pass `--workspace-id` instead.
 - No workspaces open a guided creation flow in an interactive terminal. The flow asks for a name,
   fetches the available regions from the Platform, and confirms before creating anything.
 
