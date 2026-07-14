@@ -14,6 +14,15 @@ import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
 
 /**
+ * npm packages known to provide a plugin slug, keyed by the slug the
+ * dispatcher resolves (command path joined with `-`). Used to suggest an
+ * install command when the plugin executable is not found.
+ */
+export const KNOWN_PLUGIN_PACKAGES: Record<string, string> = {
+  "tailordb-erd": "@tailor-platform/sdk-tailordb-erd-plugin",
+};
+
+/**
  * A plugin discovered on the filesystem. `tailor <name>` dispatches to the
  * external `tailor-<name>` executable.
  */

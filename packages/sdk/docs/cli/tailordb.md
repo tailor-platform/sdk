@@ -16,11 +16,10 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Commands**
 
-| Command                                     | Description                                                               |
-| ------------------------------------------- | ------------------------------------------------------------------------- |
-| [`tailordb truncate`](#tailordb-truncate)   | Truncate (delete all records from) TailorDB tables.                       |
-| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations.                                        |
-| [`tailordb erd`](#tailordb-erd)             | Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta) |
+| Command                                     | Description                                         |
+| ------------------------------------------- | --------------------------------------------------- |
+| [`tailordb truncate`](#tailordb-truncate)   | Truncate (delete all records from) TailorDB tables. |
+| [`tailordb migration`](#tailordb-migration) | Manage TailorDB schema migrations.                  |
 
 ### tailordb truncate
 
@@ -232,142 +231,11 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ### tailordb erd
 
-Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)
-
-**Usage**
-
-```
-tailor tailordb erd <command>
-```
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-**Commands**
-
-| Command                                       | Description                                                       |
-| --------------------------------------------- | ----------------------------------------------------------------- |
-| [`tailordb erd export`](#tailordb-erd-export) | Export TailorDB ERD static viewer from local TailorDB schema.     |
-| [`tailordb erd diff`](#tailordb-erd-diff)     | Render TailorDB ERD schema diff HTML from exported ERD viewers.   |
-| [`tailordb erd serve`](#tailordb-erd-serve)   | Generate and serve TailorDB ERD locally with watch reload. (beta) |
-| [`tailordb erd deploy`](#tailordb-erd-deploy) | Deploy ERD static website for TailorDB namespace(s).              |
-
-#### tailordb erd export
-
-Export TailorDB ERD static viewer from local TailorDB schema.
-
-**Usage**
-
-```
-tailor tailordb erd export [options]
-```
-
-**Options**
-
-| Option                    | Alias | Description                                                                                    | Required | Default              | Env                  |
-| ------------------------- | ----- | ---------------------------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
-| `--config <CONFIG>`       | `-c`  | Path to Tailor config file                                                                     | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
-| `--namespace <NAMESPACE>` | `-n`  | TailorDB namespace name (optional if only one namespace is defined in config)                  | No       | -                    | -                    |
-| `--output <OUTPUT>`       | `-o`  | Output directory path for TailorDB ERD viewer files (writes to `<outputDir>/<namespace>/dist`) | No       | `".tailor/erd"`      | -                    |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-#### tailordb erd diff
-
-Render TailorDB ERD schema diff HTML from exported ERD viewers.
-
-**Usage**
-
-```
-tailor tailordb erd diff [options]
-```
-
-**Options**
-
-| Option                        | Alias | Description                                                             | Required | Default |
-| ----------------------------- | ----- | ----------------------------------------------------------------------- | -------- | ------- |
-| `--base-html <BASE_HTML>`     | -     | Base ERD viewer HTML file                                               | No       | -       |
-| `--head-html <HEAD_HTML>`     | -     | Head ERD viewer HTML file                                               | No       | -       |
-| `--namespace <NAMESPACE>`     | `-n`  | TailorDB namespace name (defaults to the provided ERD schema namespace) | No       | -       |
-| `--output <OUTPUT>`           | `-o`  | Output ERD diff HTML file                                               | Yes      | -       |
-| `--output-json <OUTPUT_JSON>` | -     | Optional output JSON file for the computed diff                         | No       | -       |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-#### tailordb erd serve
-
-Generate and serve TailorDB ERD locally with watch reload. (beta)
-
-**Usage**
-
-```
-tailor tailordb erd serve [options]
-```
-
-**Options**
-
-| Option                    | Alias | Description                                                               | Required | Default              | Env                  |
-| ------------------------- | ----- | ------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
-| `--config <CONFIG>`       | `-c`  | Path to Tailor config file                                                | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
-| `--namespace <NAMESPACE>` | `-n`  | TailorDB namespace name (uses first namespace in config if not specified) | No       | -                    | -                    |
-| `--port <PORT>`           | -     | Local server port (0 selects a free port)                                 | No       | `0`                  | -                    |
-| `--open`                  | -     | Open the ERD viewer in the default browser                                | No       | `false`              | -                    |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-#### tailordb erd deploy
-
-Deploy ERD static website for TailorDB namespace(s).
-
-**Usage**
-
-```
-tailor tailordb erd deploy [options]
-```
-
-**Options**
-
-| Option                          | Alias | Description                                                                         | Required | Default              | Env                            |
-| ------------------------------- | ----- | ----------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                        | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                   | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                          | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--namespace <NAMESPACE>`       | `-n`  | TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted) | No       | -                    | -                              |
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-**Notes:**
-
-- ERD commands build from the local TailorDB schema, including plugin-generated TailorDB types.
-- `tailordb erd export` writes a self-contained `index.html` viewer to `<output>/<namespace>/dist`.
-- `tailordb erd diff` compares exported self-contained viewer HTML files and writes a visual ERD viewer that can switch between the current schema and the highlighted diff.
-- `tailordb erd serve` watches the config file and TailorDB type files, then reloads the browser viewer when the rebuilt `index.html` reports a new embedded schema revision.
-- `tailordb erd deploy` still requires `erdSite` in `tailor.config.ts` because it uploads the generated viewer to a configured Static Website.
-
-**Usage Examples:**
+The `tailordb erd` commands (export, diff, serve, deploy) are provided by the [`@tailor-platform/sdk-tailordb-erd-plugin`](https://www.npmjs.com/package/@tailor-platform/sdk-tailordb-erd-plugin) CLI plugin. Install it next to the SDK and keep running `tailor tailordb erd <command>` as before:
 
 ```bash
-# Deploy ERD for all namespaces with erdSite configured
-tailor tailordb erd deploy
-
-# Deploy ERD for a specific namespace
-tailor tailordb erd deploy --namespace myNamespace
-
-# Deploy ERD with JSON output
-tailor tailordb erd deploy --json
+npm install -D @tailor-platform/sdk-tailordb-erd-plugin
+tailor tailordb erd export --namespace myNamespace
 ```
 
-**Notes:**
-
-- This command is a beta feature and may introduce breaking changes in future releases
-- Requires `erdSite` to be configured in `tailor.config.ts` for each namespace you want to deploy
-- Example config:
-  ```typescript
-  export default defineConfig({
-    db: {
-      myNamespace: {
-        // ... table definitions
-        erdSite: "my-erd-site-name",
-      },
-    },
-  });
-  ```
+See the plugin's README for the full command reference.

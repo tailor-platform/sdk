@@ -41,7 +41,6 @@ describe("shell completion", () => {
 
     test("completes nested subcommands for tailordb", async () => {
       const values = await completeValues(["tailordb", ""]);
-      expect(values).toContain("erd");
       expect(values).toContain("migration");
       expect(values).toContain("truncate");
     });
@@ -77,13 +76,13 @@ describe("shell completion", () => {
   });
 
   describe("directory completion", () => {
-    test.each([
-      ["staticwebsite deploy --dir", ["staticwebsite", "deploy", "--dir", ""]],
-      ["tailordb erd export --output", ["tailordb", "erd", "export", "--output", ""]],
-    ])("triggers directory completion for %s", async (_label, args) => {
-      const result = await complete(args);
-      expect(result.directive & CompletionDirective.DirectoryCompletion).toBeTruthy();
-    });
+    test.each([["staticwebsite deploy --dir", ["staticwebsite", "deploy", "--dir", ""]]])(
+      "triggers directory completion for %s",
+      async (_label, args) => {
+        const result = await complete(args);
+        expect(result.directive & CompletionDirective.DirectoryCompletion).toBeTruthy();
+      },
+    );
   });
 
   describe("no file completion", () => {

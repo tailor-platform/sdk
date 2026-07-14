@@ -108,10 +108,6 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "staticwebsite/domain/list.ts",
   // TailorDB (read-only / local ops)
   "tailordb/index.ts",
-  "tailordb/erd/index.ts",
-  "tailordb/erd/diff-command.ts",
-  "tailordb/erd/export.ts",
-  "tailordb/erd/serve.ts",
   "tailordb/migrate/index.ts",
   "tailordb/migrate/generate.ts",
   "tailordb/migrate/script.ts",

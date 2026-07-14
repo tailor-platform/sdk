@@ -117,7 +117,9 @@ tailor hello world --loud
 ```
 
 This also works under a built-in command group. The command path is joined with hyphens, so a plugin
-nested under `tailordb` is named `tailor-tailordb-erd`:
+nested under `tailordb` is named `tailor-tailordb-erd`. This is how the
+[`@tailor-platform/sdk-tailordb-erd-plugin`](https://www.npmjs.com/package/@tailor-platform/sdk-tailordb-erd-plugin)
+package provides the `tailordb erd` commands:
 
 ```bash
 # Runs `tailor-tailordb-erd` with: export
@@ -195,11 +197,6 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
 | [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
 | [tailordb migration sync](./cli/tailordb.md#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                     |
-| [tailordb erd](./cli/tailordb.md#tailordb-erd)                               | Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)                                                 |
-| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export TailorDB ERD static viewer from local TailorDB schema.                                                             |
-| [tailordb erd diff](./cli/tailordb.md#tailordb-erd-diff)                     | Render TailorDB ERD schema diff HTML from exported ERD viewers.                                                           |
-| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve TailorDB ERD locally with watch reload. (beta)                                                         |
-| [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
 
 ### [Query Commands](./cli/query.md)
 
