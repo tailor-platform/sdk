@@ -8,7 +8,7 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { ExecutorSchema } from "#/parser/service/executor/index";
-import { ResolverSchema } from "#/parser/service/resolver/index";
+import { buildLocalInputParser, ResolverSchema } from "#/parser/service/resolver/index";
 import { WorkflowJobSchema } from "#/parser/service/workflow/index";
 import { assertDefined } from "#/utils/assert";
 
@@ -63,9 +63,7 @@ export async function detectFunctionType(
     const rawInput = module.default.input;
     let inputSchema: DetectedFunction["inputSchema"];
     if (rawInput) {
-      // Build schema object for local format detection.
-      const { t } = await import("#/configure/types/index");
-      inputSchema = t.object(rawInput) as InputSchema;
+      inputSchema = buildLocalInputParser(rawInput);
     }
     return {
       type: "resolver",
