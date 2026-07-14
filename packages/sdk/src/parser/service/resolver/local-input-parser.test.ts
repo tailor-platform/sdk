@@ -1,11 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { buildLocalInputParser } from "./local-input-parser";
+import { buildLocalInputParser, type ParsableField } from "./local-input-parser";
 
-const requiredField = {
-  _parseInternal: ({ value, pathArray }: { value: unknown; pathArray: string[] }) =>
-    value === undefined
+const requiredField: ParsableField = {
+  _parseInternal(args) {
+    const { value, pathArray } = args;
+    return value === undefined
       ? { issues: [{ message: "Required field is missing", path: pathArray }] }
-      : { value },
+      : {};
+  },
 };
 
 describe("buildLocalInputParser", () => {

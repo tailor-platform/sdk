@@ -1,16 +1,21 @@
 /**
+ * Arguments passed to a field's `_parseInternal` method.
+ */
+export interface ParsableFieldParseArgs {
+  value: unknown;
+  data: unknown;
+  user: Record<string, unknown>;
+  pathArray: string[];
+}
+
+/**
  * Field interface for local input validation (subset of TailorField).
  * Matches the shape already attached to fields built by the configure
  * module's `t.*` builders, without importing configure's runtime code
  * (the cli module may not import configure at runtime; see AGENTS.md).
  */
-interface ParsableField {
-  _parseInternal(args: {
-    value: unknown;
-    data: unknown;
-    user: Record<string, unknown>;
-    pathArray: string[];
-  }): { issues?: readonly { message: string; path?: readonly (string | number | symbol)[] }[] };
+export interface ParsableField {
+  _parseInternal(args: ParsableFieldParseArgs): LocalInputParseResult;
 }
 
 export interface LocalInputParseArgs {
@@ -23,6 +28,10 @@ export interface LocalInputParseResult {
   issues?: readonly { message: string; path?: readonly (string | number | symbol)[] }[];
 }
 
+export interface LocalInputParser {
+  parse(args: LocalInputParseArgs): LocalInputParseResult;
+}
+
 /**
  * Build a local, in-process validator for a resolver's declared input fields.
  * Each field already carries its own bound `_parseInternal` (attached when the
@@ -31,11 +40,10 @@ export interface LocalInputParseResult {
  * @param fields - Resolver's raw input field definitions (already-built TailorField instances)
  * @returns An object exposing a `.parse()` method for local format detection
  */
-export function buildLocalInputParser(fields: Record<string, ParsableField>): {
-  parse(args: LocalInputParseArgs): LocalInputParseResult;
-} {
+export function buildLocalInputParser(fields: Record<string, ParsableField>): LocalInputParser {
   return {
-    parse({ value, data, user }) {
+    parse(args: LocalInputParseArgs): LocalInputParseResult {
+      const { value, data, user } = args;
       if (
         typeof value !== "object" ||
         value === null ||
