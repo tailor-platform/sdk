@@ -42,6 +42,11 @@ jobs:
 
       - uses: ./.github/actions/install-deps
 
+      # install-deps only builds the SDK; `tailor tailordb erd` dispatches to
+      # this plugin's bin, which must also point at a real dist file.
+      - name: Build ERD plugin
+        run: pnpm --filter @tailor-platform/sdk-tailordb-erd-plugin run build
+
       - uses: tailor-platform/actions/erd-schema-export@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
         with:
           namespace: ${{ matrix.namespace }}
@@ -79,6 +84,11 @@ jobs:
       # install-deps builds the SDK once, so the `tailor-sdk` CLI bin resolves.
       - name: Install deps
         uses: ./.github/actions/install-deps
+
+      # install-deps only builds the SDK; `tailor tailordb erd` dispatches to
+      # this plugin's bin, which must also point at a real dist file.
+      - name: Build ERD plugin
+        run: pnpm --filter @tailor-platform/sdk-tailordb-erd-plugin run build
 
       - uses: tailor-platform/actions/erd-schema-preview@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
         with:
