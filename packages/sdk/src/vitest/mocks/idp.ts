@@ -190,6 +190,7 @@ export function mockIdp(options: MockIdpOptions = {}) {
 
     /**
      * Enqueue a single result for the next IDP call.
+     * The queue is shared across all methods and namespaces.
      * @param result - Result to return from the next IDP call
      */
     enqueueResult(result: unknown): void {
@@ -198,6 +199,7 @@ export function mockIdp(options: MockIdpOptions = {}) {
 
     /**
      * Enqueue results for multiple subsequent IDP calls.
+     * The queue is shared across all methods and namespaces.
      * @param results - Results to enqueue, one per upcoming call
      */
     enqueueResults(...results: unknown[]): void {

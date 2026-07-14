@@ -295,6 +295,7 @@ export function mockFile(options: MockFileOptions = {}) {
 
     /**
      * Enqueue a single result for the next `tailordb.file` call.
+     * The queue is shared across all methods and namespaces.
      * @param result - Result to return from the next file call
      */
     enqueueResult(result: unknown): void {
@@ -303,6 +304,7 @@ export function mockFile(options: MockFileOptions = {}) {
 
     /**
      * Enqueue results for multiple subsequent `tailordb.file` calls.
+     * The queue is shared across all methods and namespaces.
      * @param results - Results to enqueue, one per upcoming call
      */
     enqueueResults(...results: unknown[]): void {
