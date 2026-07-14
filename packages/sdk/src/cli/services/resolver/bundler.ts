@@ -65,7 +65,7 @@ export async function bundleResolvers(
   // Load all resolvers to get their names
   const resolvers: ResolverInfo[] = [];
   for (const file of files) {
-    const resolver = await loadResolver(file);
+    const resolver = await loadResolver(file, baseDir);
     if (!resolver) {
       logger.debug(`  Skipping: ${file} (could not be loaded)`);
       continue;

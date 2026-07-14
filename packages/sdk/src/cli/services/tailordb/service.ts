@@ -1,6 +1,6 @@
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { importUserFile } from "#/cli/shared/import-user-file";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { parseTypes, TailorDBTypeSchema } from "#/parser/service/tailordb/index";
@@ -173,7 +173,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
     rawTypes[typeFile] = createRawTypesByName();
     const loadedTypes = createRawTypesByName();
     try {
-      const module = await import(pathToFileURL(typeFile).href);
+      const module = await importUserFile(typeFile, baseDir);
 
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];
@@ -197,18 +197,21 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           exportName,
         });
 
-        // Process plugins if any
+        // Process plugins if any. `plugins` is attached by db.type() at the
+        // configure layer and isn't part of the validated schema output, so
+        // it's read off the original exported value.
+        const configuredType = exportedValue as { plugins?: PluginAttachment[] };
         if (
-          exportedValue.plugins &&
-          Array.isArray(exportedValue.plugins) &&
-          exportedValue.plugins.length > 0
+          configuredType.plugins &&
+          Array.isArray(configuredType.plugins) &&
+          configuredType.plugins.length > 0
         ) {
-          pluginAttachments.set(exportedValue.name, [...exportedValue.plugins]);
+          pluginAttachments.set(result.data.name, [...configuredType.plugins]);
           logger.log(
-            `  Plugin attachments: ${styles.info(exportedValue.plugins.map((p: PluginAttachment) => p.pluginId).join(", "))}`,
+            `  Plugin attachments: ${styles.info(configuredType.plugins.map((p: PluginAttachment) => p.pluginId).join(", "))}`,
           );
 
-          await processPluginsForType(exportedValue, exportedValue.plugins, typeFile);
+          await processPluginsForType(result.data, configuredType.plugins, typeFile);
         }
       }
     } catch (error) {

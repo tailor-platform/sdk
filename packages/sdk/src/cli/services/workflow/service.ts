@@ -1,6 +1,6 @@
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { importUserFile } from "#/cli/shared/import-user-file";
 import { logger, styles } from "#/cli/shared/logger";
 import { WorkflowJobSchema, WorkflowSchema } from "#/parser/service/workflow/index";
 import { isSdkBranded } from "#/utils/brand";
@@ -127,7 +127,7 @@ async function loadAndCollectJobs(
   // Load all files in parallel and collect jobs and workflows
   const loadResults = await Promise.all(
     workflowFiles.map(async (workflowFile) => {
-      const { jobs, workflow } = await loadFileContent(workflowFile);
+      const { jobs, workflow } = await loadFileContent(workflowFile, baseDir);
       return { workflowFile, jobs, workflow };
     }),
   );
@@ -164,9 +164,13 @@ async function loadAndCollectJobs(
 /**
  * Load a single file and extract jobs and workflow
  * @param filePath - Path to the workflow file
+ * @param baseDir - Directory the workflow's tsconfig is resolved against
  * @returns Extracted jobs and workflow
  */
-async function loadFileContent(filePath: string): Promise<{
+async function loadFileContent(
+  filePath: string,
+  baseDir: string,
+): Promise<{
   jobs: Array<{ name: string; exportName: string; sourceFile: string }>;
   workflow: Workflow | null;
 }> {
@@ -178,7 +182,7 @@ async function loadFileContent(filePath: string): Promise<{
   let workflow: Workflow | null = null;
 
   try {
-    const module = await import(pathToFileURL(filePath).href);
+    const module = await importUserFile(filePath, baseDir);
 
     for (const [exportName, exportValue] of Object.entries(module)) {
       // Check if it's a workflow (default export)

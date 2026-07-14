@@ -80,7 +80,7 @@ export async function bundleExecutors(
   // Load all executors and filter to function/jobFunction only
   const executors: ExecutorInfo[] = [];
   for (const file of files) {
-    const executor = await loadExecutor(file);
+    const executor = await loadExecutor(file, baseDir);
     if (!executor) {
       logger.debug(`  Skipping: ${file} (could not be loaded)`);
       continue;

@@ -5,8 +5,8 @@
  * by dynamically importing the module and checking against known schemas.
  */
 
-import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { importUserFile } from "#/cli/shared/import-user-file";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { WorkflowJobSchema } from "#/parser/service/workflow/index";
@@ -39,6 +39,8 @@ export interface DetectedFunction {
 interface DetectFunctionOptions {
   /** Absolute path to the function file */
   filePath: string;
+  /** Directory the function file's tsconfig is resolved against */
+  baseDir: string;
   /** Workflow job name to select (matches the `name` field of createWorkflowJob) */
   jobName?: string;
 }
@@ -51,21 +53,23 @@ interface DetectFunctionOptions {
 export async function detectFunctionType(
   options: DetectFunctionOptions,
 ): Promise<DetectedFunction> {
-  const { filePath, jobName } = options;
+  const { filePath, baseDir, jobName } = options;
 
-  const module = await import(pathToFileURL(filePath).href);
+  const module = await importUserFile(filePath, baseDir);
 
   // Priority: resolver → executor → workflow job → plain function
 
   // 1. Check resolver
   const resolverResult = ResolverSchema.safeParse(module.default);
   if (resolverResult.success) {
-    const rawInput = module.default.input;
+    // `input` is attached by createResolver() and isn't part of the
+    // validated schema output, so it's read off the original default export.
+    const rawInput = (module.default as { input?: unknown }).input;
     let inputSchema: DetectedFunction["inputSchema"];
     if (rawInput) {
       // Build schema object for local format detection.
       const { t } = await import("#/configure/types/index");
-      inputSchema = t.object(rawInput) as InputSchema;
+      inputSchema = t.object(rawInput as Parameters<typeof t.object>[0]) as InputSchema;
     }
     return {
       type: "resolver",
