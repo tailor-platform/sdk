@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { detectFunctionType } from "./detect";
@@ -47,13 +48,13 @@ export default {
     });
 
     test("builds a working local input parser from real t.* fields", async () => {
-      const configureTypesPath = path
-        .join(__dirname, "../../../configure/types/index.ts")
-        .replace(/\\/g, "/");
+      const configureTypesUrl = pathToFileURL(
+        path.join(__dirname, "../../../configure/types/index.ts"),
+      ).href;
       const filePath = writeFile(
         "resolver.mjs",
         `
-import { t } from "${configureTypesPath}";
+import { t } from "${configureTypesUrl}";
 export default {
   operation: "query",
   name: "my-resolver",

@@ -36,7 +36,15 @@ export function buildLocalInputParser(fields: Record<string, ParsableField>): {
 } {
   return {
     parse({ value, data, user }) {
-      const record = (value ?? {}) as Record<string, unknown>;
+      if (
+        typeof value !== "object" ||
+        value === null ||
+        Array.isArray(value) ||
+        value instanceof Date
+      ) {
+        return { issues: [{ message: `Expected an object: received ${String(value)}` }] };
+      }
+      const record = value as Record<string, unknown>;
       const issues: NonNullable<LocalInputParseResult["issues"]>[number][] = [];
       for (const [name, field] of Object.entries(fields)) {
         const result = field._parseInternal({
