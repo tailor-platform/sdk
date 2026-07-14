@@ -6,7 +6,7 @@ import { setPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 
 describe("parseFieldConfig precompiled expressions", () => {
   test("uses precompiled hook expression when attached", () => {
-    const createHook = ({ value }: { value: string | null }) => value ?? "fallback";
+    const createHook = ({ input }: { input: string | null }) => input ?? "fallback";
     setPrecompiledScriptExpr(createHook, "PRECOMPILED_HOOK_EXPR");
 
     const type = db.table("User", {
@@ -20,7 +20,8 @@ describe("parseFieldConfig precompiled expressions", () => {
   });
 
   test("uses precompiled validate expression when attached", () => {
-    const validator = ({ value }: { value: string }) => value.length > 0;
+    const validator = ({ value }: { value: string }) =>
+      value.length <= 0 ? "Must not be empty" : undefined;
     setPrecompiledScriptExpr(validator, "PRECOMPILED_VALIDATE_EXPR");
 
     const type = db.table("User", {

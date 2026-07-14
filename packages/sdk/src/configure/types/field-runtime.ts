@@ -176,18 +176,14 @@ function validateCustomValue<T extends TailorFieldType>(
   args: FieldValidationArgs<T>,
   validateFns: NonNullable<FieldMetadata["validate"]>,
 ): void {
-  const { value, data, invoker, pathArray, issues } = args;
+  const { value, pathArray, issues } = args;
   const path = pathArray.length > 0 ? pathArray : undefined;
 
-  for (const validateInput of validateFns) {
-    const { fn, message } =
-      typeof validateInput === "function"
-        ? { fn: validateInput, message: "Validation failed" }
-        : { fn: validateInput[0], message: validateInput[1] };
-
-    if (!fn({ value, data, invoker })) {
+  for (const fn of validateFns) {
+    const result = fn({ value });
+    if (typeof result === "string") {
       issues.push({
-        message,
+        message: result,
         path,
       });
     }

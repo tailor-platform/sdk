@@ -666,12 +666,12 @@ describe("TailorField runtime validation tests", () => {
     });
 
     test("runs parent custom validation when nested custom validation fails", () => {
-      const parentValidate = vi.fn(() => false);
+      const parentValidate = vi.fn((): string | void => "Parent validation failed");
       const schema = t
         .object({
-          name: t.string().validate([() => false, "Child validation failed"]),
+          name: t.string().validate(() => "Child validation failed"),
         })
-        .validate([parentValidate, "Parent validation failed"]);
+        .validate(parentValidate);
 
       const result = schema.parse({ value: { name: "valid" }, data, invoker });
 
@@ -683,9 +683,8 @@ describe("TailorField runtime validation tests", () => {
     });
 
     test("finishes nested base validation before running custom validation", () => {
-      const validate = vi.fn(({ data }: { data: unknown }) => {
-        const record = data as { unsafe: string };
-        return record.unsafe.toUpperCase() === "VALID";
+      const validate = vi.fn(({ value }: { value: string }): string | void => {
+        if (value !== "valid") return "Not valid";
       });
       const schema = t.object({
         safe: t.string().validate(validate),
@@ -720,8 +719,10 @@ describe("TailorField runtime validation tests", () => {
     });
 
     test("runs custom validation once against the complete array", () => {
-      const validate = vi.fn(({ value }: { value: string[] }) => value.length >= 2);
-      const schema = t.string({ array: true }).validate([validate, "Expected at least two values"]);
+      const validate = vi.fn(({ value }: { value: string[] }): string | void => {
+        if (value.length < 2) return "Expected at least two values";
+      });
+      const schema = t.string({ array: true }).validate(validate);
 
       const validResult = schema.parse({ value: ["a", "b"], data, invoker });
       const invalidResult = schema.parse({ value: ["a"], data, invoker });
@@ -729,12 +730,14 @@ describe("TailorField runtime validation tests", () => {
       expect(expectParsed(validResult)).toEqual(["a", "b"]);
       expect(invalidResult.issues).toEqual([{ message: "Expected at least two values" }]);
       expect(validate).toHaveBeenCalledTimes(2);
-      expect(validate).toHaveBeenNthCalledWith(1, { value: ["a", "b"], data, invoker });
-      expect(validate).toHaveBeenNthCalledWith(2, { value: ["a"], data, invoker });
+      expect(validate).toHaveBeenNthCalledWith(1, { value: ["a", "b"] });
+      expect(validate).toHaveBeenNthCalledWith(2, { value: ["a"] });
     });
 
     test("skips custom validation when scalar base validation fails", () => {
-      const validate = vi.fn(({ value }: { value: string }) => value.toUpperCase().length > 0);
+      const validate = vi.fn(({ value }: { value: string }): string | void => {
+        if (value.toUpperCase().length === 0) return "Value is empty";
+      });
       const schema = t.string().validate(validate);
 
       const result = schema.parse({ value: 42, data, invoker });
@@ -744,7 +747,9 @@ describe("TailorField runtime validation tests", () => {
     });
 
     test("skips array custom validation when element base validation fails", () => {
-      const validate = vi.fn(({ value }: { value: string[] }) => value.length > 0);
+      const validate = vi.fn(({ value }: { value: string[] }): string | void => {
+        if (value.length === 0) return "Array is empty";
+      });
       const schema = t.string({ array: true }).validate(validate);
 
       const result = schema.parse({ value: ["valid", 42], data, invoker });
@@ -816,7 +821,9 @@ describe("TailorField clone-on-write / no aliasing", () => {
 
   test("validate() returns a clone and never mutates the original", () => {
     const original = t.string();
-    const updated = original.validate((args) => args.value.length > 0);
+    const updated = original.validate((args) =>
+      args.value.length <= 0 ? "Must not be empty" : undefined,
+    );
 
     expect(original.metadata.validate).toBeUndefined();
     expect(updated.metadata.validate).toHaveLength(1);
@@ -878,7 +885,9 @@ describe("TailorField clone-on-write / no aliasing", () => {
     expect(enumClone.metadata.allowedValues).not.toBe(enumField.metadata.allowedValues);
     expect(enumClone.metadata.allowedValues?.[0]).not.toBe(enumField.metadata.allowedValues?.[0]);
 
-    const validated = t.string().validate((args) => args.value.length > 0);
+    const validated = t
+      .string()
+      .validate((args) => (args.value.length <= 0 ? "Must not be empty" : undefined));
     const validatedClone = validated.description("name");
     expect(validatedClone.metadata.validate).not.toBe(validated.metadata.validate);
   });
@@ -899,7 +908,7 @@ describe("TailorField clone-on-write / no aliasing", () => {
     const calls: unknown[] = [];
     const field = t.string().validate((args) => {
       calls.push(args.value);
-      return args.value.length > 0;
+      return args.value.length <= 0 ? "Must not be empty" : undefined;
     });
 
     const result = field.parse({ value: "x", data, invoker });
@@ -908,7 +917,9 @@ describe("TailorField clone-on-write / no aliasing", () => {
   });
 
   test("validators survive a clone triggered by a later builder, leaving the original intact", () => {
-    const validated = t.string().validate((args) => args.value.length > 0);
+    const validated = t
+      .string()
+      .validate((args) => (args.value.length <= 0 ? "Must not be empty" : undefined));
     // description() clones the field; the validators must carry over to the clone
     // and keep working, while the original stays unchanged.
     const described = validated.description("name");

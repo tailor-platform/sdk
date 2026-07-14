@@ -63,7 +63,10 @@ function getNestedType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
   const obj = `{\n  ${fieldTypes.join(";\n  ")}${fieldTypes.length > 0 ? ";" : ""}\n}`;
 
   const hasOptionalFields = Object.values(fields).some((config) => config.required !== true);
-  if (aggregatedUtilityTypes.Timestamp || hasOptionalFields) {
+  const hasGeneratedFields = Object.values(fields).some(
+    (config) => config.hooks?.create || config.default !== undefined,
+  );
+  if (aggregatedUtilityTypes.Timestamp || hasOptionalFields || hasGeneratedFields) {
     return { type: `ObjectColumnType<${obj}>`, usedUtilityTypes: aggregatedUtilityTypes };
   }
   return { type: obj, usedUtilityTypes: aggregatedUtilityTypes };
@@ -149,7 +152,7 @@ function generateFieldType(fieldConfig: OperatorFieldConfig): FieldTypeResult {
     usedUtilityTypes.Serial = true;
     finalType = `Serial<${finalType}>`;
   }
-  if (fieldConfig.hooks?.create) {
+  if (fieldConfig.hooks?.create || fieldConfig.default !== undefined) {
     finalType = `Generated<${finalType}>`;
   }
 

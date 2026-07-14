@@ -27,15 +27,21 @@ import type {
   TailorFieldType,
   TailorToTs,
   FieldValidateInput,
-  ValidateConfig,
-  Validators,
 } from "#/configure/types/field.types";
 import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
 import type { InferredAttributes } from "#/runtime/types";
 import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
 import type { RawPermissions } from "#/types/tailordb.generated";
 import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
-import type { Hook, Hooks, ExcludeNestedDBFields, TypeFeatures } from "./types";
+import type {
+  Hook,
+  TypeHook,
+  ExcludeNestedDBFields,
+  ExcludeHookedDBFields,
+  ExcludeDefaultedDBFields,
+  TypeFeatures,
+  TypeValidateFn,
+} from "./types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 // Erased DB fields stay assignable across builder method-state changes.
@@ -56,6 +62,7 @@ export type TailorAnyDBField = Omit<
   index: AnyBuilderMethod;
   unique: AnyBuilderMethod;
   vector: AnyBuilderMethod;
+  default: AnyBuilderMethod;
   hooks: AnyBuilderMethod;
   validate: AnyBuilderMethod;
   serial: AnyBuilderMethod;
@@ -90,6 +97,7 @@ type WithDBFieldHooks<Defined, H> = Defined & {
   };
   serial: false;
 };
+type WithDBFieldDefault<Defined> = Defined & { default: true };
 type WithDBFieldValidate<Defined> = Defined & { validate: true };
 type WithDBFieldSerial<Defined> = Defined & {
   serial: true;
@@ -214,7 +222,10 @@ type DBFieldVectorFn<Defined extends DefinedDBFieldMetadata, Output> = () => Tai
   Output
 >;
 type DBFieldHooksFn<Defined extends DefinedDBFieldMetadata, Output> = <
-  const H extends Hook<unknown, Output>,
+  const H extends Hook<
+    Output,
+    Defined extends { default: true } ? Output | null | undefined : Output
+  >,
 >(
   hooks: H,
 ) => TailorDBField<WithDBFieldHooks<Defined, H>, Output>;
@@ -304,6 +315,22 @@ type DBFieldSerialMethod<Defined extends DefinedDBFieldMetadata, Output> =
             : Defined extends { type: "integer" | "string"; array: false }
               ? DBFieldSerialFn<Defined, Output>
               : TypeLevelError<"serial can only be set on non-array integer or string fields">;
+type DBFieldDefaultFn<Defined extends DefinedDBFieldMetadata, Output> = (
+  value: Output extends null ? NonNullable<Output> : Output,
+) => TailorDBField<WithDBFieldDefault<Defined>, Output>;
+type DBFieldDefaultMethod<Defined extends DefinedDBFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? DBFieldDefaultFn<Defined, Output>
+    : Defined extends { default: unknown }
+      ? TypeLevelError<".default() has already been set">
+      : Defined extends { type: "nested" }
+        ? TypeLevelError<"default cannot be set on nested type fields">
+        : Defined extends { serial: true }
+          ? TypeLevelError<"default cannot be set on serial fields">
+          : null extends Output
+            ? TypeLevelError<"default cannot be set on optional fields">
+            : DBFieldDefaultFn<Defined, Output>;
+
 /**
  * Full TailorDBField interface with builder methods.
  * Extends the minimal structural interface from types/ with fluent API methods.
@@ -359,6 +386,15 @@ export interface TailorDBField<
   vector: DBFieldVectorMethod<Defined, Output>;
 
   /**
+   * Set a default value for the field on create. When the field is required,
+   * this makes it optional in the Create input — the default fills in when
+   * no value (or a nullish hook result) is provided.
+   *
+   * For datetime/date/time fields, pass `"now"` to use the operation timestamp.
+   */
+  default: DBFieldDefaultMethod<Defined, Output>;
+
+  /**
    * Add hooks for create/update operations on this field.
    */
   hooks: DBFieldHooksMethod<Defined, Output>;
@@ -400,18 +436,18 @@ export interface TailorDBType<
   _description?: string;
 
   hooks(
-    hooks: DBTypeDuplicateInputGuard<
+    hook: DBTypeDuplicateInputGuard<
       Defined,
       "hooks",
-      Hooks<Fields>,
+      TypeHook<Fields>,
       ".hooks() has already been set"
     >,
   ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "hooks">>;
   validate(
-    validators: DBTypeDuplicateInputGuard<
+    fn: DBTypeDuplicateInputGuard<
       Defined,
       "validate",
-      Validators<Fields>,
+      TypeValidateFn<Fields>,
       ".validate() has already been set"
     >,
   ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "validate">>;
@@ -552,7 +588,8 @@ type TailorDBFieldRuntime<Defined extends DefinedDBFieldMetadata, Output> = Omit
   index(): object;
   unique(): object;
   vector(): object;
-  hooks(hooks: Hook<unknown, Output>): object;
+  default(value: unknown): object;
+  hooks(hooks: Hook<Output>): object;
   serial(config: SerialConfig): object;
   clone(options?: FieldOptions): TailorDBFieldRuntime<DefinedDBFieldMetadata, AnyBuilderMethod>;
   parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
@@ -694,7 +731,13 @@ function createTailorDBFieldRuntime<
       return cloneWith({ vector: true });
     },
 
-    hooks(hooks: Hook<unknown, FieldValue>) {
+    // oxlint-disable-next-line no-explicit-any
+    default(value: any) {
+      // oxlint-disable-next-line no-explicit-any
+      return cloneWith({ default: value }) as any;
+    },
+
+    hooks(hooks: Hook<FieldValue>) {
       return cloneWith({ hooks });
     },
 
@@ -896,7 +939,10 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
  * @example db.object({ name: db.string() }, { optional: true })
  */
 function object<
-  const F extends Record<string, TailorAnyDBField> & ExcludeNestedDBFields<F>,
+  const F extends Record<string, TailorAnyDBField> &
+    ExcludeNestedDBFields<F> &
+    ExcludeHookedDBFields<F> &
+    ExcludeDefaultedDBFields<F>,
   const Opt extends FieldOptions,
 >(fields: F, options?: Opt) {
   return createField("nested", options, fields) as unknown as TailorDBField<
@@ -929,6 +975,10 @@ function createTailorDBType<
   const _permissions: RawPermissions = {};
   let _files: Record<string, string> = {};
   const _plugins: PluginAttachment[] = [];
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
+  let _typeHook: { create?: Function; update?: Function } | undefined;
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
+  let _typeValidate: Function | undefined;
   const _definedMethods = new Set<keyof DefinedDBTypeMetadata>();
   if (options.description !== undefined) {
     _definedMethods.add("description");
@@ -986,49 +1036,21 @@ function createTailorDBType<
         permissions: _permissions,
         files: _files,
         ...(Object.keys(indexes).length > 0 && { indexes }),
+        ...(_typeHook && { typeHook: _typeHook }),
+        ...(_typeValidate && { typeValidate: _typeValidate }),
       };
     },
 
-    hooks(hooks: Hooks<Fields>): TypeAfter<"hooks"> {
+    hooks(hook: TypeHook<Fields>): TypeAfter<"hooks"> {
       return runMethodOnce("hooks", () => {
-        // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
-        // oxlint-disable-next-line no-explicit-any
-        Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-          const field = this.fields[fieldName];
-          if (field === undefined) throw new Error(`field not found: ${fieldName}`);
-          (this.fields as Record<string, TailorAnyDBField>)[fieldName] = (
-            field as TailorAnyDBField
-          ).hooks(fieldHooks);
-        });
+        _typeHook = hook;
         return this as TypeAfter<"hooks">;
       });
     },
 
-    validate(validators: Validators<Fields>): TypeAfter<"validate"> {
+    validate(fn: TypeValidateFn<Fields>): TypeAfter<"validate"> {
       return runMethodOnce("validate", () => {
-        Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
-          const field = this.fields[fieldName] as TailorAnyDBField;
-
-          const validators = fieldValidators as
-            | FieldValidateInput<unknown>
-            | FieldValidateInput<unknown>[];
-
-          const isValidateConfig = (v: unknown): v is ValidateConfig<unknown> => {
-            return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
-          };
-
-          let updatedField: TailorAnyDBField;
-          if (Array.isArray(validators)) {
-            if (isValidateConfig(validators)) {
-              updatedField = field.validate(validators);
-            } else {
-              updatedField = field.validate(...validators);
-            }
-          } else {
-            updatedField = field.validate(validators);
-          }
-          (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
-        });
+        _typeValidate = fn;
         return this as TypeAfter<"validate">;
       });
     },
@@ -1217,10 +1239,9 @@ export const db = {
   object,
   fields: {
     /**
-     * Creates standard timestamp fields (createdAt, updatedAt) with auto-hooks.
-     * createdAt and updatedAt are set on create.
-     * User-specified timestamp values are respected when provided (e.g. seeding
-     * historical records); the current time is used only when the value is omitted.
+     * Creates standard timestamp fields (createdAt, updatedAt) with automatic defaults.
+     * Both fields default to the current time on create. updatedAt is also refreshed on update.
+     * User-specified values are respected when provided (e.g. seeding historical records).
      * @returns An object with createdAt and updatedAt fields
      * @example
      * const model = db.table("Model", {
@@ -1229,14 +1250,10 @@ export const db = {
      * });
      */
     timestamps: () => ({
-      createdAt: datetime()
-        .hooks({ create: ({ value }) => value ?? new Date() })
-        .description("Record creation timestamp"),
+      createdAt: datetime().default("now").description("Record creation timestamp"),
       updatedAt: datetime()
-        .hooks({
-          create: ({ value }) => value ?? new Date(),
-          update: () => new Date(),
-        })
+        .default("now")
+        .hooks({ update: ({ input, now }) => input ?? now })
         .description("Record update timestamp"),
     }),
   },

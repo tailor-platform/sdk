@@ -23,6 +23,10 @@ import {
 import * as inflection from "inflection";
 import * as path from "pathe";
 import { z } from "zod";
+import {
+  computeSourceScriptHash,
+  extractSourceScriptHash,
+} from "#/parser/service/tailordb/type-script";
 import { assertDefined } from "#/utils/assert";
 import {
   type MigrationDiff,
@@ -30,6 +34,7 @@ import {
   type FieldDiffChange,
   type BreakingChangeInfo,
   type SnapshotTypeSettingsState,
+  type TypeScriptsState,
   type WarningChangeInfo,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
@@ -324,6 +329,7 @@ function createSnapshotFieldConfigFromOperatorConfig(
   }
 
   if (fieldConfig.scale !== undefined) config.scale = fieldConfig.scale;
+  if (fieldConfig.default !== undefined) config.default = fieldConfig.default;
 
   // Recursive for nested fields
   if (fieldConfig.fields && Object.keys(fieldConfig.fields).length > 0) {
@@ -396,6 +402,14 @@ export function createSnapshotType(type: TailorDBType): TailorDBSnapshotType {
 
   if (type.files && Object.keys(type.files).length > 0) {
     snapshotType.files = { ...type.files };
+  }
+
+  if (type.typeHookExpr) {
+    snapshotType.typeHookExpr = type.typeHookExpr;
+  }
+
+  if (type.typeValidateExpr) {
+    snapshotType.typeValidateExpr = type.typeValidateExpr;
   }
 
   if (Object.keys(type.forwardRelationships).length > 0) {
@@ -653,6 +667,20 @@ function applyDiffToSnapshot(
             description: change.after.description,
             pluralForm: change.after.pluralForm,
             settings: change.after.settings ?? {},
+          };
+        }
+        break;
+      }
+      case "type_scripts_modified": {
+        const existing = types[change.typeName];
+        if (existing) {
+          const { typeHookExpr: _, typeValidateExpr: __, ...rest } = existing;
+          types[change.typeName] = {
+            ...rest,
+            ...(change.after.typeHookExpr && { typeHookExpr: change.after.typeHookExpr }),
+            ...(change.after.typeValidateExpr !== undefined && {
+              typeValidateExpr: change.after.typeValidateExpr,
+            }),
           };
         }
         break;
@@ -938,6 +966,11 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
   }
 
   if (oldField.scale !== newField.scale) return true;
+
+  if (oldField.default !== newField.default) {
+    if (typeof oldField.default !== typeof newField.default) return true;
+    if (JSON.stringify(oldField.default) !== JSON.stringify(newField.default)) return true;
+  }
 
   const oldFields = oldField.fields ?? {};
   const newFields = newField.fields ?? {};
@@ -1558,6 +1591,33 @@ function compareTypeSettings(
   });
 }
 
+function typeScriptsState(type: TailorDBSnapshotType): TypeScriptsState {
+  return {
+    ...(type.typeHookExpr && { typeHookExpr: type.typeHookExpr }),
+    ...(type.typeValidateExpr !== undefined && { typeValidateExpr: type.typeValidateExpr }),
+  };
+}
+
+function compareTypeScripts(
+  ctx: DiffContext,
+  typeName: string,
+  previous: TailorDBSnapshotType,
+  current: TailorDBSnapshotType,
+): void {
+  const prevState = typeScriptsState(previous);
+  const currState = typeScriptsState(current);
+
+  if (JSON.stringify(prevState) === JSON.stringify(currState)) return;
+
+  ctx.changes.push({
+    kind: "type_scripts_modified",
+    typeName,
+    reason: "type-level scripts changed",
+    before: prevState,
+    after: currState,
+  });
+}
+
 /**
  * Compare two snapshots and generate a diff
  * @param {SchemaSnapshot} previous - Previous schema snapshot
@@ -1622,6 +1682,9 @@ function compareNormalizedSnapshots(
 
     // Compare type-level settings and metadata
     compareTypeSettings(ctx, typeName, prevType, currType);
+
+    // Compare type-level hook/validate scripts
+    compareTypeScripts(ctx, typeName, prevType, currType);
 
     // Compare fields
     compareTypeFields(ctx, typeName, prevType, currType);
@@ -2637,7 +2700,7 @@ export function compareRemoteWithSnapshot(
   snapshot: SchemaSnapshot,
   remoteGqlPermissions: readonly RemoteGqlPermission[] = [],
 ): SchemaDrift[] {
-  return compareNormalizedRemoteWithSnapshot(
+  const structuralDrifts = compareNormalizedRemoteWithSnapshot(
     createRemoteComparableSnapshot(
       createSnapshotFromRemoteTypes(
         remoteTypes,
@@ -2648,6 +2711,90 @@ export function compareRemoteWithSnapshot(
     ),
     createRemoteComparableSnapshot(snapshot),
   );
+
+  const scriptDrifts = compareScriptHashes(remoteTypes, snapshot);
+
+  return [...structuralDrifts, ...scriptDrifts];
+}
+
+function extractRemoteScriptHash(remoteType: ProtoTailorDBType): string | undefined {
+  const exprs = [
+    remoteType.schema?.typeHook?.create?.expr,
+    remoteType.schema?.typeHook?.update?.expr,
+    remoteType.schema?.typeValidate?.create?.expr,
+    remoteType.schema?.typeValidate?.update?.expr,
+  ];
+  let found: string | undefined;
+  for (const expr of exprs) {
+    if (expr) {
+      const hash = extractSourceScriptHash(expr);
+      if (hash) {
+        if (found && found !== hash) return undefined;
+        found = hash;
+      }
+    }
+  }
+  return found;
+}
+
+function remoteHasScripts(remoteType: ProtoTailorDBType): boolean {
+  return !!(
+    remoteType.schema?.typeHook?.create?.expr ||
+    remoteType.schema?.typeHook?.update?.expr ||
+    remoteType.schema?.typeValidate?.create?.expr ||
+    remoteType.schema?.typeValidate?.update?.expr
+  );
+}
+
+function compareScriptHashes(
+  remoteTypes: ProtoTailorDBType[],
+  snapshot: SchemaSnapshot,
+): SchemaDrift[] {
+  const drifts: SchemaDrift[] = [];
+  const remoteByName = new Map(remoteTypes.map((t) => [t.name, t]));
+
+  for (const [typeName, snapshotType] of Object.entries(snapshot.types)) {
+    const localHash = computeSourceScriptHash(snapshotType.fields, {
+      typeHookExpr: snapshotType.typeHookExpr,
+      typeValidateExpr: snapshotType.typeValidateExpr,
+    });
+
+    const remoteType = remoteByName.get(typeName);
+    if (!remoteType) continue;
+
+    if (localHash) {
+      const remoteHash = extractRemoteScriptHash(remoteType);
+      if (localHash !== remoteHash) {
+        drifts.push({
+          typeName,
+          kind: "script_mismatch",
+          details: remoteHash
+            ? `Type '${typeName}' scripts differ between remote and snapshot`
+            : `Type '${typeName}' has no script hash on remote`,
+        });
+      }
+    } else if (remoteHasScripts(remoteType)) {
+      drifts.push({
+        typeName,
+        kind: "script_mismatch",
+        details: `Type '${typeName}' has scripts on remote but not in snapshot`,
+      });
+    }
+  }
+
+  return drifts;
+}
+
+function stripFieldScriptProps(field: SnapshotFieldConfig): SnapshotFieldConfig {
+  const { hooks: _hooks, validate: _validate, default: _default, ...rest } = field;
+  if (rest.fields) {
+    const nested = createSnapshotRecord<SnapshotFieldConfig>();
+    for (const [name, f] of Object.entries(rest.fields)) {
+      nested[name] = stripFieldScriptProps(f);
+    }
+    return { ...rest, fields: nested };
+  }
+  return rest;
 }
 
 function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSchemaSnapshot {
@@ -2657,9 +2804,10 @@ function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSch
     const fields = createSnapshotRecord<SnapshotFieldConfig>();
     for (const [fieldName, field] of Object.entries(type.fields)) {
       if (SYSTEM_FIELDS.has(fieldName)) continue;
-      fields[fieldName] = field;
+      fields[fieldName] = stripFieldScriptProps(field);
     }
-    types[typeName] = { ...type, fields };
+    const { typeHookExpr: _, typeValidateExpr: __, ...typeRest } = type;
+    types[typeName] = { ...typeRest, fields };
   }
 
   return normalizeSchemaSnapshot({
@@ -2791,6 +2939,12 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
         typeName: change.typeName,
         kind: "permission_mismatch",
         details: change.reason ?? "Permissions differ between remote and snapshot",
+      };
+    case "type_scripts_modified":
+      return {
+        typeName: change.typeName,
+        kind: "script_mismatch",
+        details: change.reason ?? "Type-level scripts differ between remote and snapshot",
       };
     default: {
       change satisfies never;
