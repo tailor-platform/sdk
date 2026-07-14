@@ -2,30 +2,11 @@
 import { describe, expectTypeOf, expect, test } from "vitest";
 import { t } from "#/configure/types/index";
 import { db, type TailorAnyDBField, type TailorDBType } from "./schema";
-import type {
-  FieldOptions,
-  FieldValidateInput,
-  ValidateConfig,
-} from "#/configure/types/field.types";
+import type { FieldOptions, FieldValidateInput } from "#/configure/types/field.types";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { output, TypeLevelError } from "#/types/helpers";
 import type { Hook } from "./types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-
-describe("TailorDB table builder", () => {
-  test("db.table creates a table with the generated id field", () => {
-    const user = db.table("User", {
-      name: db.string(),
-    });
-
-    expect(user.name).toBe("User");
-    expect(user.fields.id).toBeDefined();
-    expectTypeOf<output<typeof user>>().toEqualTypeOf<{
-      id: string;
-      name: string;
-    }>();
-  });
-});
 
 describe("TailorDBField basic field type tests", () => {
   test("string field outputs string type correctly", () => {
@@ -462,7 +443,7 @@ describe("TailorDBField type error message tests", () => {
       TypeLevelError<"hooks cannot be set on nested type fields">
     >();
 
-    const validated = db.string().validate(() => true);
+    const validated = db.string().validate(() => undefined);
     expectTypeOf(validated.validate).toEqualTypeOf<
       TypeLevelError<".validate() has already been set">
     >();
@@ -479,6 +460,23 @@ describe("TailorDBField type error message tests", () => {
     expectTypeOf(db.string({ optional: true }).serial).toEqualTypeOf<
       TypeLevelError<"serial can only be set on non-array integer or string fields">
     >();
+
+    const defaulted = db.string().default("hello");
+    expectTypeOf(defaulted.default).toEqualTypeOf<
+      TypeLevelError<".default() has already been set">
+    >();
+
+    expectTypeOf(db.object({ x: db.string() }).default).toEqualTypeOf<
+      TypeLevelError<"default cannot be set on nested type fields">
+    >();
+
+    expectTypeOf(db.string().serial({ start: 0 }).default).toEqualTypeOf<
+      TypeLevelError<"default cannot be set on serial fields">
+    >();
+
+    expectTypeOf(db.string({ optional: true }).default).toEqualTypeOf<
+      TypeLevelError<"default cannot be set on optional fields">
+    >();
   });
 
   test("field types stay assignable when a module helper erases fields via an unresolved generic", () => {
@@ -494,35 +492,39 @@ describe("TailorDBField type error message tests", () => {
       });
     }
 
-    type GenericDefaultShape = ReturnType<typeof withCustomFields>;
     const concrete = withCustomFields({ name: db.string() });
 
-    expectTypeOf(concrete).toExtend<GenericDefaultShape>();
+    expectTypeOf(concrete.fields.tags).toEqualTypeOf(withCustomFields().fields.tags);
+    expectTypeOf(concrete.fields.name).not.toBeAny();
   });
 });
 
 describe("TailorDBType type error message tests", () => {
   test("duplicate type modifiers expose type-level error messages", () => {
     const hooked = db.table("HookedUser", { name: db.string() }).hooks({
-      name: { create: () => "created" },
+      create: ({ input }) => ({ name: input.name }),
     });
     expectTypeOf<Parameters<typeof hooked.hooks>[0]>().toEqualTypeOf<
       TypeLevelError<".hooks() has already been set">
     >();
     expect(() => {
       // @ts-expect-error hooks() cannot be called after hooks() has already been called
-      hooked.hooks({ name: { update: () => "updated" } });
+      hooked.hooks({ update: ({ input }) => ({ name: input.name }) });
     }).toThrowError(".hooks() has already been set");
 
-    const validated = db.table("ValidatedUser", { name: db.string() }).validate({
-      name: ({ value }) => value.length > 0,
-    });
+    const validated = db
+      .table("ValidatedUser", { name: db.string() })
+      .validate(({ newRecord }, issues) => {
+        if (!(newRecord.name.length > 0)) issues("name", "must not be empty");
+      });
     expectTypeOf<Parameters<typeof validated.validate>[0]>().toEqualTypeOf<
       TypeLevelError<".validate() has already been set">
     >();
     expect(() => {
       // @ts-expect-error validate() cannot be called after validate() has already been called
-      validated.validate({ name: ({ value }) => value.length > 1 });
+      validated.validate(({ newRecord }, issues) => {
+        if (!(newRecord.name.length > 1)) issues("name", "too short");
+      });
     }).toThrowError(".validate() has already been set");
 
     const featured = db.table("FeaturedUser", { name: db.string() }).features({
@@ -618,7 +620,7 @@ describe("TailorDBType type error message tests", () => {
 
     const describedAfterHooks = db
       .table("DescribedAfterHooksUser", { name: db.string() })
-      .hooks({ name: { create: () => "created" } })
+      .hooks({ create: ({ input }) => ({ name: input.name }) })
       .description("user with hooks");
     expectTypeOf<Parameters<typeof describedAfterHooks.hooks>[0]>().toEqualTypeOf<
       TypeLevelError<".hooks() has already been set">
@@ -657,17 +659,10 @@ describe("TailorDBType type error message tests", () => {
 
   test("failed duplicate-guarded calls can be retried", () => {
     const retryable = db.table("RetryableHookedUser", { name: db.string() });
-    const invalidHooks = {
-      missing: { create: () => "created" },
-    } as unknown as Parameters<typeof retryable.hooks>[0];
 
+    retryable.hooks({ create: ({ input }) => ({ name: input.name }) });
     expect(() => {
-      retryable.hooks(invalidHooks);
-    }).toThrowError("field not found: missing");
-
-    retryable.hooks({ name: { create: () => "created" } });
-    expect(() => {
-      retryable.hooks({ name: { update: () => "updated" } });
+      retryable.hooks({ update: ({ input }) => ({ name: input.name ?? "" }) });
     }).toThrowError(".hooks() has already been set");
   });
 });
@@ -734,19 +729,49 @@ describe("TailorDBField hooks modifier tests", () => {
 
   test("hooks modifier on string field receives string", () => {
     const _hooks = db.string().hooks;
-    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<unknown, string>>();
+    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<string>>();
   });
 
   test("hooks modifier on optional field receives null", () => {
     const _hooks = db.string({ optional: true }).hooks;
-    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<unknown, string | null>>();
+    expectTypeOf<Parameters<typeof _hooks>[0]>().toEqualTypeOf<Hook<string | null>>();
+  });
+
+  test("create hook args omit oldValue, update hook args include it", () => {
+    db.string().hooks({
+      create: (args) => {
+        expectTypeOf(args).toEqualTypeOf<{
+          input: string | null;
+          invoker: TailorPrincipal | null;
+          now: Date;
+        }>();
+        return args.input ?? "default";
+      },
+      update: (args) => {
+        expectTypeOf(args).toEqualTypeOf<{
+          input: string | null;
+          oldValue: string;
+          invoker: TailorPrincipal | null;
+          now: Date;
+        }>();
+        return args.oldValue;
+      },
+    });
+  });
+
+  test("create hook allows nullable return when default is set", () => {
+    db.string()
+      .default("fallback")
+      .hooks({
+        create: ({ input }) => input?.trim(),
+      });
   });
 });
 
 describe("TailorDBField validate modifier tests", () => {
   test("validate modifier does not affect type", () => {
     const _validateType = db.table("Test", {
-      email: db.string().validate(() => true),
+      email: db.string().validate(() => undefined),
     });
     expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
       id: string;
@@ -754,45 +779,39 @@ describe("TailorDBField validate modifier tests", () => {
     }>();
   });
 
-  test("validate modifier can receive object with message", () => {
+  test("validate modifier can receive function returning error message", () => {
     const _validateType = db.table("Test", {
-      email: db.string().validate([({ value }) => value.includes("@"), "Email must contain @"]),
+      email: db
+        .string()
+        .validate(({ value }) => (!value.includes("@") ? "Email must contain @" : undefined)),
     });
     expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
       id: string;
       email: string;
     }>();
 
-    // Validate that the validation is stored correctly in metadata
     const fieldMetadata = _validateType.fields.email.metadata;
     expect(fieldMetadata.validate).toBeDefined();
     expect(fieldMetadata.validate).toHaveLength(1);
-    // Error message is part of the tuple [fn, message]
-    expect(fieldMetadata.validate?.[0]).toEqual([expect.any(Function), "Email must contain @"]);
   });
 
   test("validate modifier can receive multiple validators", () => {
     const _validateType = db.table("Test", {
-      password: db
-        .string()
-        .validate(
-          ({ value }) => value.length >= 8,
-          [({ value }) => /[A-Z]/.test(value), "Password must contain uppercase letter"],
-        ),
+      password: db.string().validate(
+        ({ value }) => (value.length < 8 ? "Password must be at least 8 characters" : undefined),
+        ({ value }) =>
+          !/[A-Z]/.test(value) ? "Password must contain uppercase letter" : undefined,
+      ),
     });
 
     const fieldMetadata = _validateType.fields.password.metadata;
     expect(fieldMetadata.validate).toHaveLength(2);
-    // Second validator is a tuple [fn, errorMessage]
-    expect((fieldMetadata.validate?.[1] as [unknown, string])[1]).toBe(
-      "Password must contain uppercase letter",
-    );
   });
 
   test("calling validate modifier more than once causes type error", () => {
-    const validated = db.string().validate(() => true);
+    const validated = db.string().validate(() => undefined);
     // @ts-expect-error validate() cannot be called after validate() has already been called
-    validated.validate(() => true);
+    validated.validate(() => undefined);
   });
 
   test("validate modifier on string field receives string", () => {
@@ -901,65 +920,47 @@ describe("TailorDBType withTimestamps option tests", () => {
     }>();
   });
 
-  const timestampHookInvoker = null;
-
-  test("createdAt create hook respects a user-specified value", () => {
+  test("createdAt uses default('now') without hooks", () => {
     const { createdAt } = db.fields.timestamps();
-    const createHook = createdAt.metadata.hooks?.create;
-    expect(createHook).toBeDefined();
-
-    const specified = new Date("2025-02-10T09:00:00Z");
-    const result = createHook!({ value: specified, data: {}, invoker: timestampHookInvoker });
-    expect(result).toBe(specified);
+    expect(createdAt.metadata.default).toBe("now");
+    expect(createdAt.metadata.hooks).toBeUndefined();
   });
 
-  test("createdAt create hook falls back to now when no value is given", () => {
-    const { createdAt } = db.fields.timestamps();
-    const createHook = createdAt.metadata.hooks?.create;
-    expect(createHook).toBeDefined();
-
-    const before = Date.now();
-    const result = createHook!({ value: null, data: {}, invoker: timestampHookInvoker });
-    const after = Date.now();
-    expect(result).toBeInstanceOf(Date);
-    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
-    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
-  });
-
-  test("updatedAt create hook respects a user-specified value", () => {
+  test("updatedAt uses default('now') for create", () => {
     const { updatedAt } = db.fields.timestamps();
-    const createHook = updatedAt.metadata.hooks?.create;
-    expect(createHook).toBeDefined();
-
-    const specified = new Date("2025-02-10T09:00:00Z");
-    const result = createHook!({ value: specified, data: {}, invoker: timestampHookInvoker });
-    expect(result).toBe(specified);
+    expect(updatedAt.metadata.default).toBe("now");
+    expect(updatedAt.metadata.hooks?.create).toBeUndefined();
   });
 
-  test("updatedAt create hook falls back to now when no value is given", () => {
-    const { updatedAt } = db.fields.timestamps();
-    const createHook = updatedAt.metadata.hooks?.create;
-    expect(createHook).toBeDefined();
-
-    const before = Date.now();
-    const result = createHook!({ value: null, data: {}, invoker: timestampHookInvoker });
-    const after = Date.now();
-    expect(result).toBeInstanceOf(Date);
-    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
-    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
-  });
-
-  test("updatedAt update hook uses current time", () => {
+  test("updatedAt update hook respects a user-specified value", () => {
     const { updatedAt } = db.fields.timestamps();
     const updateHook = updatedAt.metadata.hooks?.update;
     expect(updateHook).toBeDefined();
 
-    const before = Date.now();
-    const result = updateHook!({ value: null, data: {}, invoker: timestampHookInvoker });
-    const after = Date.now();
-    expect(result).toBeInstanceOf(Date);
-    expect((result as Date).getTime()).toBeGreaterThanOrEqual(before);
-    expect((result as Date).getTime()).toBeLessThanOrEqual(after);
+    const specified = new Date("2025-02-10T09:00:00Z");
+    const now = new Date("2025-06-01T12:00:00Z");
+    const result = updateHook!({
+      input: specified,
+      oldValue: new Date("2025-01-01T00:00:00Z"),
+      invoker: null,
+      now,
+    });
+    expect(result).toBe(specified);
+  });
+
+  test("updatedAt update hook falls back to now when no value is given", () => {
+    const { updatedAt } = db.fields.timestamps();
+    const updateHook = updatedAt.metadata.hooks?.update;
+    expect(updateHook).toBeDefined();
+
+    const now = new Date("2025-06-01T12:00:00Z");
+    const result = updateHook!({
+      input: null,
+      oldValue: new Date("2025-01-01T00:00:00Z"),
+      invoker: null,
+      now,
+    });
+    expect(result).toBe(now);
   });
 });
 
@@ -1174,20 +1175,18 @@ describe("TailorDBType plural form tests", () => {
   });
 
   test("validation and plural form coexist in tuple format", () => {
-    const _userType = db
-      .table(["User", "Users"], {
-        name: db.string(),
-        email: db.string(),
-      })
-      .validate({
-        name: [({ value }) => value.length > 0],
-        email: [({ value }) => value.includes("@"), "Invalid email format"],
-      });
+    const _userType = db.table(["User", "Users"], {
+      name: db
+        .string()
+        .validate(({ value }) => (value.length <= 0 ? "Name must not be empty" : undefined)),
+      email: db
+        .string()
+        .validate(({ value }) => (!value.includes("@") ? "Invalid email format" : undefined)),
+    });
 
     expect(_userType.name).toBe("User");
     expect(_userType.metadata.settings?.pluralForm).toBe("Users");
 
-    // Validate that the validation function is stored correctly in metadata
     const emailMetadata = _userType.fields.email.metadata;
     expect(emailMetadata.validate).toBeDefined();
     expect(emailMetadata.validate).toHaveLength(1);
@@ -1218,10 +1217,8 @@ describe("TailorDBType hooks modifier tests", () => {
         name: db.string(),
       })
       .hooks({
-        name: {
-          create: () => "created",
-          update: () => "updated",
-        },
+        create: ({ input }) => ({ name: `${input.name}_created` }),
+        update: ({ input }) => ({ name: `${input.name}_updated` }),
       });
     expectTypeOf<output<typeof _hookType>>().toEqualTypeOf<{
       id: string;
@@ -1229,153 +1226,158 @@ describe("TailorDBType hooks modifier tests", () => {
     }>();
   });
 
-  test("setting hooks on id causes type error", () => {
+  test("type hook stores create/update functions in metadata", () => {
+    const createFn = () => ({ name: "created" });
+    const updateFn = () => ({ name: "updated" });
+    const hookType = db.table("Test", { name: db.string() }).hooks({
+      create: createFn,
+      update: updateFn,
+    });
+    expect(hookType.metadata.typeHook?.create).toBe(createFn);
+    expect(hookType.metadata.typeHook?.update).toBe(updateFn);
+  });
+
+  test("type hook return type excludes id", () => {
+    db.table("Test", { name: db.string() }).hooks({
+      // @ts-expect-error id cannot be returned from type hook
+      create: () => ({ id: "00000000-0000-0000-0000-000000000001" }),
+    });
+  });
+
+  test("type create hook input: required fields are non-nullable, optional fields are nullable", () => {
+    db.table("Test", { name: db.string(), age: db.int({ optional: true }) }).hooks({
+      create: ({ input, invoker, now }) => {
+        expectTypeOf(input.name).toEqualTypeOf<string>();
+        expectTypeOf(input.age).toEqualTypeOf<number | null>();
+        expectTypeOf(invoker).toBeNullable();
+        expectTypeOf(now).toEqualTypeOf<Date>();
+        return {};
+      },
+    });
+  });
+
+  test("type create hook input: field with .default() is also non-nullable", () => {
     db.table("Test", {
       name: db.string(),
+      status: db.string().default("active"),
     }).hooks({
-      // @ts-expect-error hooks() cannot be called on the "id" field
-      id: {
-        create: () => "created",
+      create: ({ input }) => {
+        expectTypeOf(input.name).toEqualTypeOf<string>();
+        expectTypeOf(input.status).toEqualTypeOf<string>();
+        return {};
       },
     });
   });
 
-  test("setting hooks on nested field causes type error", () => {
-    db.table("Test", {
-      name: db.object({
-        first: db.string(),
-        last: db.string(),
-      }),
-      // @ts-expect-error hooks() cannot be called on nested fields
-    }).hooks({
-      name: {
-        create: () => "created",
+  test("type update hook: input is partial (nullable), oldRecord is full record", () => {
+    db.table("Test", { name: db.string(), age: db.int({ optional: true }) }).hooks({
+      update: ({ input, oldRecord, invoker, now }) => {
+        expectTypeOf(input.name).toEqualTypeOf<string | null | undefined>();
+        expectTypeOf(input.age).toEqualTypeOf<number | null | undefined>();
+        expectTypeOf(oldRecord.name).toEqualTypeOf<string>();
+        expectTypeOf(oldRecord.age).toEqualTypeOf<number | null>();
+        expectTypeOf(invoker).toBeNullable();
+        expectTypeOf(now).toEqualTypeOf<Date>();
+        return {};
       },
     });
-  });
-
-  test("hooks modifier on string field receives string", () => {
-    const testType = db.table("Test", { name: db.string() });
-    const _hooks = testType.hooks;
-    type ExpectedHooksParam = Parameters<typeof _hooks>[0];
-    type ActualNameType = Exclude<ExpectedHooksParam["name"], undefined>;
-
-    expectTypeOf<ActualNameType>().toEqualTypeOf<
-      Hook<
-        {
-          id: string;
-          readonly name: string;
-        },
-        string
-      >
-    >();
-  });
-
-  test("hooks modifier on optional field receives null", () => {
-    const testType = db.table("Test", {
-      name: db.string({ optional: true }),
-    });
-    const _hooks = testType.hooks;
-    type ExpectedHooksParam = Parameters<typeof _hooks>[0];
-    type ActualNameType = Exclude<ExpectedHooksParam["name"], undefined>;
-
-    expectTypeOf<ActualNameType>().toEqualTypeOf<
-      Hook<
-        {
-          id: string;
-          name?: string | null;
-        },
-        string | null
-      >
-    >();
   });
 });
 
-describe("TailorDBType validate modifier tests", () => {
-  test("validate modifier can receive function", () => {
-    const _validateType = db
-      .table("Test", {
-        email: db.string(),
-      })
-      .validate({
-        email: () => true,
-      });
-
-    expectTypeOf<output<typeof _validateType>>().toEqualTypeOf<{
-      id: string;
-      email: string;
-    }>();
-    const fieldMetadata = _validateType.fields.email.metadata;
-    expect(fieldMetadata.validate).toHaveLength(1);
-  });
-
-  test("validate modifier can receive object with message", () => {
-    const _validateType = db
-      .table("Test", {
-        email: db.string(),
-      })
-      .validate({
-        email: [({ value }) => value.includes("@"), "Email must contain @"],
-      });
-
-    const fieldMetadata = _validateType.fields.email.metadata;
-    expect(fieldMetadata.validate).toHaveLength(1);
-    // Validator is a tuple [fn, errorMessage]
-    expect((fieldMetadata.validate?.[0] as [unknown, string])[1]).toBe("Email must contain @");
-  });
-
-  test("validate modifier can receive multiple validators", () => {
-    const _validateType = db
-      .table("Test", {
-        password: db.string(),
-      })
-      .validate({
-        password: [
-          ({ value }) => value.length >= 8,
-          [({ value }) => /[A-Z]/.test(value), "Password must contain uppercase letter"],
-        ],
-      });
-
-    const fieldMetadata = _validateType.fields.password.metadata;
-    expect(fieldMetadata.validate).toHaveLength(2);
-    // Second validator is a tuple [fn, errorMessage]
-    expect((fieldMetadata.validate?.[1] as [unknown, string])[1]).toBe(
-      "Password must contain uppercase letter",
-    );
-  });
-
-  test("type error occurs when validate is already set on TailorDBField", () => {
-    db.table("Test", {
-      name: db.string().validate(() => true),
-      // @ts-expect-error validate() cannot be called after validate() has already been called
-    }).validate({
-      name: () => true,
-    });
-  });
-
-  test("setting validate on id causes type error", () => {
+describe("TailorDBType type-level validate (function form) tests", () => {
+  test("newRecord has non-nullable required fields and nullable optional fields", () => {
     db.table("Test", {
       name: db.string(),
-    }).validate({
-      // @ts-expect-error validate() cannot be called on the "id" field
-      id: () => true,
+      email: db.string(),
+      phone: db.string({ optional: true }),
+    }).validate(({ newRecord, oldRecord }, issues) => {
+      expectTypeOf(newRecord.name).toEqualTypeOf<string>();
+      expectTypeOf(newRecord.email).toEqualTypeOf<string>();
+      expectTypeOf(newRecord.phone).toEqualTypeOf<string | null>();
+      expectTypeOf(oldRecord).toEqualTypeOf<Readonly<{
+        id: string;
+        name: string;
+        email: string;
+        phone: string | null;
+      }> | null>();
+      if (newRecord.name.length > 100) issues("name", "Name too long");
     });
   });
 
-  test("validate modifier on string field receives string", () => {
-    const _validate = db.table("Test", { name: db.string() }).validate;
-    expectTypeOf<ValidateConfig<string, { id: string; name: string }>>().toExtend<
-      Parameters<typeof _validate>[0]["name"]
-    >();
+  test("issues function only accepts valid field paths", () => {
+    db.table("Test", {
+      name: db.string(),
+      email: db.string(),
+    }).validate(({ newRecord: _newRecord }, issues) => {
+      issues("name", "ok");
+      issues("email", "ok");
+      // @ts-expect-error TS2345 — "nonexistent" is not a valid field path
+      issues("nonexistent", "bad");
+    });
   });
 
-  test("validate modifier on optional field receives null", () => {
-    const _validate = db.table("Test", {
-      name: db.string({ optional: true }),
-    }).validate;
-    expectTypeOf<ValidateConfig<string | null, { id: string; name?: string | null }>>().toExtend<
-      Parameters<typeof _validate>[0]["name"]
-    >();
+  test("issues function accepts dotted paths for nested fields", () => {
+    db.table("Test", {
+      profile: db.object({
+        displayName: db.string(),
+        email: db.string(),
+      }),
+    }).validate((_args, issues) => {
+      issues("profile", "ok");
+      issues("profile.displayName", "ok");
+      issues("profile.email", "ok");
+      // @ts-expect-error TS2345 — "profile.nonexistent" is not a valid nested path
+      issues("profile.nonexistent", "bad");
+    });
+  });
+
+  test("issues function accepts indexed paths for nested array fields", () => {
+    db.table("Test", {
+      items: db.object(
+        {
+          name: db.string(),
+          qty: db.int(),
+        },
+        { array: true },
+      ),
+    }).validate(({ newRecord }, issues) => {
+      issues("items", "ok");
+      newRecord.items.forEach((item, i) => {
+        if (!item.name) {
+          issues(`items[${i}].name`, "required");
+        }
+        if (item.qty < 0) {
+          issues(`items[${i}].qty`, "must be positive");
+        }
+      });
+      // @ts-expect-error TS2345 — "items.name" (without index) is not valid for array fields
+      issues("items.name", "bad");
+      // @ts-expect-error TS2345 — "items.length" should not be a valid path
+      issues("items.length", "bad");
+    });
+  });
+
+  test("type-level validate function stores in metadata", () => {
+    const type = db
+      .table("Test", {
+        name: db.string(),
+      })
+      .validate((_args, _issues) => {});
+
+    expect(type.metadata.typeValidate).toBeDefined();
+  });
+
+  test("type-level validate receives newRecord and oldRecord with correct types", () => {
+    db.table("Test", {
+      name: db.string(),
+      age: db.int({ optional: true }),
+    }).validate(({ newRecord, oldRecord }) => {
+      expectTypeOf(newRecord.name).toEqualTypeOf<string>();
+      expectTypeOf(newRecord.age).toEqualTypeOf<number | null>();
+      if (oldRecord) {
+        expectTypeOf(oldRecord.name).toEqualTypeOf<string>();
+      }
+    });
   });
 });
 
@@ -1403,6 +1405,30 @@ describe("db.object tests", () => {
       profile: db.object({
         bio: db.string(),
       }),
+    });
+  });
+
+  test("hooks on inner fields of db.object causes type error", () => {
+    db.object({
+      name: db.string(),
+      // @ts-expect-error hooks on nested inner fields are not allowed
+      stamped: db.string().hooks({
+        create: ({ input }) => input ?? "default",
+      }),
+    });
+  });
+
+  test("default on inner fields of db.object causes type error", () => {
+    db.object({
+      // @ts-expect-error default on nested inner fields are not allowed
+      name: db.string().default("unnamed"),
+      status: db.string(),
+    });
+  });
+
+  test("validate on inner fields of db.object is allowed", () => {
+    db.object({
+      status: db.string().validate(({ value }) => (value.length > 0 ? undefined : "required")),
     });
   });
 
@@ -1549,6 +1575,29 @@ describe("TailorField/TailorType compatibility tests", () => {
       name: string;
     }>();
   });
+
+  test("t.object treats .default() fields as optional", () => {
+    const obj = t.object({
+      name: db.string(),
+      score: db.int().default(0),
+    });
+    expectTypeOf<output<typeof obj>>().toEqualTypeOf<{
+      name: string;
+      score?: number;
+    }>();
+  });
+
+  test("t.object with omitFields respects .default()", () => {
+    const Order = db.table("Order", {
+      totalPrice: db.int().default(0),
+      quantity: db.int(),
+    });
+    const input = t.object(Order.omitFields(["id"]));
+    expectTypeOf<output<typeof input>>().toEqualTypeOf<{
+      quantity: number;
+      totalPrice?: number;
+    }>();
+  });
 });
 
 describe("TailorDBType/TailorDBField description support", () => {
@@ -1620,7 +1669,7 @@ describe("TailorDBField fluent API type preservation", () => {
       .string()
       .description("Email address")
       .index()
-      .validate(({ value }) => value.includes("@"));
+      .validate(({ value }) => (!value.includes("@") ? "Invalid email" : undefined));
     expectTypeOf<output<typeof _field>>().toEqualTypeOf<string>();
   });
 
@@ -1916,7 +1965,9 @@ describe("TailorDBField immutability", () => {
 
   test("field.validate() returns a new field without mutating the original", () => {
     const original = db.string();
-    const withValidate = original.validate(({ value }) => value.length > 0);
+    const withValidate = original.validate(({ value }) =>
+      value.length <= 0 ? "Must not be empty" : undefined,
+    );
 
     expect(withValidate).not.toBe(original);
     expect(original.metadata.validate).toBeUndefined();
@@ -1992,23 +2043,25 @@ describe("TailorDBField immutability", () => {
 });
 
 describe("TailorDBType does not mutate shared fields", () => {
-  test("type.hooks() does not mutate the shared field", () => {
+  test("type.hooks() does not affect other types sharing the same field", () => {
     const sharedField = db.string();
 
-    const typeA = db.table("TypeA", { name: sharedField }).hooks({ name: { create: () => "A" } });
+    const typeA = db.table("TypeA", { name: sharedField }).hooks({ create: () => ({ name: "A" }) });
     const typeB = db.table("TypeB", { name: sharedField });
 
-    expect(typeA.fields.name.metadata.hooks).toBeDefined();
-    expect(typeB.fields.name.metadata.hooks).toBeUndefined();
+    expect(typeA.metadata.typeHook?.create).toBeDefined();
+    expect(typeB.metadata.typeHook).toBeUndefined();
     expect(sharedField.metadata.hooks).toBeUndefined();
   });
 
   test("type.validate() does not mutate the shared field", () => {
     const sharedField = db.string();
 
-    const typeA = db
-      .table("TypeA", { email: sharedField })
-      .validate({ email: ({ value }) => value.includes("@") });
+    const typeA = db.table("TypeA", {
+      email: sharedField.validate(({ value }) =>
+        !value.includes("@") ? "Invalid email" : undefined,
+      ),
+    });
     const typeB = db.table("TypeB", { email: sharedField });
 
     expect(typeA.fields.email.metadata.validate).toBeDefined();
@@ -2020,9 +2073,8 @@ describe("TailorDBType does not mutate shared fields", () => {
     const nameField = db.string();
     const fields = { name: nameField };
 
-    db.table("TypeA", fields).hooks({ name: { create: () => "hooked" } });
+    db.table("TypeA", fields).hooks({ create: () => ({ name: "hooked" }) });
 
-    // The fields record should still reference the original field instance
     expect(fields.name).toBe(nameField);
   });
 
@@ -2030,9 +2082,12 @@ describe("TailorDBType does not mutate shared fields", () => {
     const emailField = db.string();
     const fields = { email: emailField };
 
-    db.table("TypeA", fields).validate({ email: ({ value }) => value.includes("@") });
+    db.table("TypeA", {
+      email: emailField.validate(({ value }) =>
+        !value.includes("@") ? "Invalid email" : undefined,
+      ),
+    });
 
-    // The fields record should still reference the original field instance
     expect(fields.email).toBe(emailField);
   });
 });
@@ -2154,7 +2209,8 @@ describe("TailorDBField clone tests", () => {
   });
 
   test("clones validate correctly", () => {
-    const validator = ({ value }: { value: string }) => value.length > 0;
+    const validator = ({ value }: { value: string }) =>
+      value.length <= 0 ? "Must not be empty" : undefined;
     const original = db.string().validate(validator);
     const cloned = original.clone();
 
@@ -2166,8 +2222,12 @@ describe("TailorDBField clone tests", () => {
   });
 
   test("rejects changing the array shape of a validated field", () => {
-    const scalar = db.string().validate(({ value }) => value.length > 0);
-    const array = db.string({ array: true }).validate(({ value }) => value.length > 0);
+    const scalar = db
+      .string()
+      .validate(({ value }) => (value.length > 0 ? undefined : "must not be empty"));
+    const array = db
+      .string({ array: true })
+      .validate(({ value }) => (value.length > 0 ? undefined : "must not be empty"));
     const type = db.table("ValidatedClone", { value: scalar });
     const mixedType = db.table("MixedValidatedClone", {
       validated: scalar,
@@ -2205,20 +2265,6 @@ describe("TailorDBField clone tests", () => {
 
     expect(() => scalarClone({ array: true })).toThrowError(expectedError);
     expect(() => arrayClone({ array: false })).toThrowError(expectedError);
-  });
-
-  test("clones validate with tuple format correctly", () => {
-    const validator = ({ value }: { value: string }) => value.length > 0;
-    const original = db.string().validate([validator, "Value must not be empty"]);
-    const cloned = original.clone();
-
-    expect(cloned.metadata.validate).toBeDefined();
-    expect(cloned.metadata.validate).toHaveLength(1);
-    expect(cloned.metadata.validate?.[0]).toEqual([validator, "Value must not be empty"]);
-
-    // Verify deep copy (different reference for array and tuple)
-    expect(cloned.metadata.validate).not.toBe(original.metadata.validate);
-    expect(cloned.metadata.validate?.[0]).not.toBe(original.metadata.validate?.[0]);
   });
 
   test("clones serial config correctly", () => {

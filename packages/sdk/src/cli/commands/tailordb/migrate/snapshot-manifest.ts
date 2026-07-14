@@ -18,7 +18,6 @@ import {
   type TailorDBGQLPermissionSchema,
   TailorDBType_Permission_Operator,
   TailorDBType_Permission_Permit,
-  TailorDBType_PermitAction,
   type TailorDBType_FieldConfigSchema,
   type TailorDBType_FileConfigSchema,
   type TailorDBType_IndexSchema,
@@ -30,6 +29,7 @@ import {
   type TailorDBTypeSchema,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as inflection from "inflection";
+import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
 import { isSnapshotFieldRefOperand } from "./snapshot";
 import type {
   SchemaSnapshot,
@@ -115,7 +115,8 @@ export function generateTailorDBTypeManifestFromSnapshot(
   const fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
   for (const [fieldName, fieldConfig] of Object.entries(snapshotType.fields)) {
     if (fieldName === "id") continue;
-    fields[fieldName] = convertFieldConfigToProto(fieldConfig);
+    const fieldProto = convertFieldConfigToProto(fieldConfig);
+    fields[fieldName] = fieldProto;
   }
 
   // Build relationships
@@ -163,6 +164,13 @@ export function generateTailorDBTypeManifestFromSnapshot(
     ? convertRecordPermissionToProto(snapshotType.permissions.record)
     : defaultPermission;
 
+  // Field hooks/validators are aggregated into type-level scripts so that a
+  // single shared timestamp is observed across every field in one operation.
+  const { typeHook, typeValidate } = buildTypeScripts(snapshotType.fields, {
+    typeHookExpr: snapshotType.typeHookExpr,
+    typeValidateExpr: snapshotType.typeValidateExpr,
+  });
+
   return {
     name: snapshotType.name,
     schema: {
@@ -175,8 +183,16 @@ export function generateTailorDBTypeManifestFromSnapshot(
       indexes,
       files,
       permission,
+      ...(typeHook && { typeHook }),
+      ...(typeValidate && { typeValidate }),
     },
   };
+}
+
+function optionalOnCreate(
+  config: Pick<SnapshotFieldConfig, "hooks" | "default">,
+): Pick<MessageInitShape<typeof TailorDBType_FieldConfigSchema>, "optionalOnCreate"> {
+  return config.hooks?.create || config.default !== undefined ? { optionalOnCreate: true } : {};
 }
 
 /**
@@ -194,7 +210,6 @@ export function convertFieldConfigToProto(
         ? (config.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [])
         : [],
     description: config.description || "",
-    validate: toProtoSnapshotFieldValidate(config),
     array: config.array ?? false,
     index: config.index ?? false,
     unique: config.unique ?? false,
@@ -203,7 +218,7 @@ export function convertFieldConfigToProto(
     foreignKeyField: config.foreignKeyField,
     required: config.required,
     vector: config.vector ?? false,
-    ...toProtoSnapshotFieldHooks(config),
+    ...optionalOnCreate(config),
     ...(config.serial && {
       serial: {
         start: BigInt(config.serial.start),
@@ -226,40 +241,6 @@ export function convertFieldConfigToProto(
   return fieldEntry;
 }
 
-function toProtoSnapshotFieldValidate(
-  config: SnapshotFieldConfig,
-): MessageInitShape<typeof TailorDBType_FieldConfigSchema>["validate"] {
-  return (config.validate ?? []).map((val) => ({
-    action: TailorDBType_PermitAction.DENY,
-    errorMessage: val.errorMessage || "",
-    script: {
-      expr: val.script && val.script.expr ? `!${val.script.expr}` : "",
-    },
-  }));
-}
-
-function toProtoSnapshotFieldHooks(
-  config: SnapshotFieldConfig,
-): Pick<MessageInitShape<typeof TailorDBType_FieldConfigSchema>, "hooks"> | Record<never, never> {
-  if (!config.hooks) {
-    return {};
-  }
-  return {
-    hooks: {
-      create: config.hooks.create
-        ? {
-            expr: config.hooks.create.expr || "",
-          }
-        : undefined,
-      update: config.hooks.update
-        ? {
-            expr: config.hooks.update.expr || "",
-          }
-        : undefined,
-    },
-  };
-}
-
 /**
  * Process nested fields from snapshot format to proto format
  * @param {Record<string, SnapshotFieldConfig>} fields - Nested fields
@@ -277,14 +258,12 @@ function processNestedFieldsFromSnapshot(
         type: "nested",
         allowedValues: fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [],
         description: fieldConfig.description || "",
-        validate: toProtoSnapshotFieldValidate(fieldConfig),
         required: fieldConfig.required,
         array: fieldConfig.array ?? false,
         index: false,
         unique: false,
         foreignKey: false,
         vector: false,
-        ...toProtoSnapshotFieldHooks(fieldConfig),
         fields: deepNestedFields,
         ...(fieldConfig.scale !== undefined && { scale: fieldConfig.scale }),
       };
@@ -296,14 +275,13 @@ function processNestedFieldsFromSnapshot(
             ? (fieldConfig.allowedValues?.map((v: SnapshotEnumValue) => ({ ...v })) ?? [])
             : [],
         description: fieldConfig.description || "",
-        validate: toProtoSnapshotFieldValidate(fieldConfig),
         required: fieldConfig.required,
         array: fieldConfig.array ?? false,
         index: false,
         unique: false,
         foreignKey: false,
         vector: false,
-        ...toProtoSnapshotFieldHooks(fieldConfig),
+        ...optionalOnCreate(fieldConfig),
         ...(fieldConfig.serial && {
           serial: {
             start: BigInt(fieldConfig.serial.start),

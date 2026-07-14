@@ -65,6 +65,7 @@ export interface SnapshotFieldConfig {
   validate?: SnapshotValidation[];
   serial?: SnapshotSerial;
   scale?: number;
+  default?: unknown;
   /** Nested fields (recursive) */
   fields?: Record<string, SnapshotFieldConfig>;
 }
@@ -218,6 +219,8 @@ export interface TailorDBSnapshotType {
     record?: SnapshotRecordPermission;
     gql?: SnapshotGqlPermission;
   };
+  typeHookExpr?: { create?: string; update?: string };
+  typeValidateExpr?: string;
 }
 
 export type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;

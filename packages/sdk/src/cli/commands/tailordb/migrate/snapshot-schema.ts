@@ -31,6 +31,8 @@ import type {
   RelationshipRemovedChange,
   RelationshipModifiedChange,
   PermissionModifiedChange,
+  TypeScriptsModifiedChange,
+  TypeScriptsState,
   DiffChange,
   BreakingChangeInfo,
   WarningChangeInfo,
@@ -124,6 +126,7 @@ export const snapshotFieldConfigSchema: z.ZodType<SnapshotFieldConfig> = z.loose
   validate: z.array(snapshotValidationSchema).optional(),
   serial: snapshotSerialSchema.optional(),
   scale: z.number().optional(),
+  default: z.unknown().optional(),
   fields: z.lazy(() => snapshotRecordSchema(snapshotFieldConfigSchema)).optional(),
 }) as z.ZodType<SnapshotFieldConfig>;
 
@@ -446,6 +449,24 @@ const permissionModifiedChangeSchema = z.looseObject({
   after: snapshotPermissionStateSchema.optional(),
 }) as unknown as z.ZodType<PermissionModifiedChange>;
 
+const typeScriptsStateSchema: z.ZodType<TypeScriptsState> = z.looseObject({
+  typeHookExpr: z
+    .looseObject({
+      create: z.string().optional(),
+      update: z.string().optional(),
+    })
+    .optional(),
+  typeValidateExpr: z.string().optional(),
+});
+
+const typeScriptsModifiedChangeSchema = z.looseObject({
+  kind: z.literal("type_scripts_modified"),
+  typeName: z.string(),
+  reason: z.string().optional(),
+  before: typeScriptsStateSchema,
+  after: typeScriptsStateSchema,
+}) as unknown as z.ZodType<TypeScriptsModifiedChange>;
+
 type DiscriminableSchema = Parameters<typeof z.discriminatedUnion>[1][number];
 
 export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kind", [
@@ -466,6 +487,7 @@ export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kin
   relationshipRemovedChangeSchema as unknown as DiscriminableSchema,
   relationshipModifiedChangeSchema as unknown as DiscriminableSchema,
   permissionModifiedChangeSchema as unknown as DiscriminableSchema,
+  typeScriptsModifiedChangeSchema as unknown as DiscriminableSchema,
 ]) as z.ZodType<DiffChange>;
 
 export const breakingChangeInfoSchema: z.ZodType<BreakingChangeInfo> = z.looseObject({

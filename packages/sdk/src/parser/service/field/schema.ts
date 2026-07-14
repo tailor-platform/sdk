@@ -32,11 +32,9 @@ const FieldMetadataSchema = z.strictObject({
     })
     .optional()
     .describe("Lifecycle hooks"),
-  validate: z
-    .array(z.union([functionSchema, z.tuple([functionSchema, z.string()])]))
-    .optional()
-    .describe("Validation functions for the field"),
+  validate: z.array(functionSchema).optional().describe("Validation functions for the field"),
   typeName: z.string().optional().describe("Type name for nested or enum fields"),
+  default: z.unknown().optional().describe("Default value for the field on create"),
 });
 
 // strip unknown keys

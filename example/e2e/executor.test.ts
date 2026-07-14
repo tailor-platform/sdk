@@ -177,6 +177,7 @@ describe("dataplane", () => {
               email: "customer@example.com"
               country: "USA"
               postalCode: "12345"
+              fullAddress: "12345 USA"
               state: "California"
             }
           ) {

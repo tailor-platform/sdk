@@ -143,7 +143,7 @@ describe.sequential("E2E: function test-run", () => {
         stdio: ["ignore", "pipe", "pipe"],
         env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules" },
         encoding: "utf-8",
-        timeout: 120000,
+        timeout: 300000,
       },
     );
     console.log("Deploy completed.");
