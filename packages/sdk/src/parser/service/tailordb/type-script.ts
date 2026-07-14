@@ -99,7 +99,7 @@ export function computeSourceScriptHash(
 }
 
 export function extractSourceScriptHash(expr: string): string | undefined {
-  const match = expr.match(/\/\/ @sdk-source-hash:([0-9a-f]+)$/);
+  const match = expr.match(/\/\/ @sdk-source-hash:([0-9a-f]+)\s*$/);
   return match?.[1];
 }
 
@@ -212,8 +212,8 @@ function buildValidateStatements(
           (v) =>
             `{ const __r = (${v.script?.expr}); if (typeof __r === "string") { __errs[${key(fieldPath)}] = __r; } }`,
         )
-        .join(" ");
-      statements.push(`{ const _value = ${access}; ${checks} }`);
+        .join("\n");
+      statements.push(`{ const _value = ${access};\n${checks}\n}`);
     }
 
     if (isNestedType(config) && config.fields) {
@@ -228,13 +228,13 @@ function buildValidateStatements(
                 (v) =>
                   `{ const __r = (${v.script?.expr}); if (typeof __r === "string") { __errs[${errorKeyExpr}] = __r; } }`,
               )
-              .join(" ");
-            innerParts.push(`{ const _value = __el[${key(innerName)}]; ${checks} }`);
+              .join("\n");
+            innerParts.push(`{ const _value = __el[${key(innerName)}];\n${checks}\n}`);
           }
         }
         if (innerParts.length > 0) {
           statements.push(
-            `(${access} || []).forEach((__el, __idx) => { ${innerParts.join(" ")} });`,
+            `(${access} || []).forEach((__el, __idx) => {\n${innerParts.join("\n")}\n});`,
           );
         }
       } else {
@@ -253,7 +253,7 @@ function wrapHook(objectExpr: string): string {
 function wrapValidate(statements: string[], typeValidateExpr?: string): string {
   const issuesFn = typeValidateExpr ? " const __issues = (f, m) => { __errs[f] = m; };" : "";
   const typeValidateStmt = typeValidateExpr ? ` ${typeValidateExpr};` : "";
-  return `((_invoker) => { const __errs = {};${issuesFn} ${statements.join(" ")}${typeValidateStmt} return __errs; })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
+  return `((_invoker) => { const __errs = {};${issuesFn}\n${statements.join("\n")}${typeValidateStmt}\nreturn __errs; })(typeof _invoker !== "undefined" ? _invoker : undefined)`;
 }
 
 /**
