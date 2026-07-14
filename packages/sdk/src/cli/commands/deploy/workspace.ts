@@ -379,6 +379,8 @@ async function createWorkspace(
     options,
   );
   logger.success(`Created workspace: ${workspaceLabel(workspace)}`);
+  logger.info(`Reuse this workspace with: tailor-sdk deploy --workspace-id ${workspace.id}`);
+  logger.info(`Or set TAILOR_PLATFORM_WORKSPACE_ID=${workspace.id}.`);
   return { client, workspaceId: workspace.id };
 }
 

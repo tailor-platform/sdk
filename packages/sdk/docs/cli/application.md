@@ -93,7 +93,9 @@ When the project has no saved selection, `deploy` discovers the account's worksp
   create a new workspace. With one workspace in non-interactive or JSON mode, it is selected
   automatically. With multiple workspaces, pass `--workspace-id` instead.
 - No workspaces open a guided creation flow in an interactive terminal. The flow asks for a name,
-  fetches the available regions from the Platform, and confirms before creating anything.
+  fetches the available regions from the Platform, and confirms before creating anything. After
+  creation, the output shows how to reuse the workspace with `--workspace-id` or
+  `TAILOR_PLATFORM_WORKSPACE_ID` from CI or another machine.
 
 In CI and other non-interactive environments, workspace creation must be explicit:
 

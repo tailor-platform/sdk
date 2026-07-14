@@ -686,6 +686,10 @@ describe("resolveDeployWorkspace", () => {
       message: 'Create workspace "new-workspace" in asia-northeast?',
       default: true,
     });
+    expect(mocks.info).toHaveBeenCalledWith(
+      `Reuse this workspace with: tailor-sdk deploy --workspace-id ${created.id}`,
+    );
+    expect(mocks.info).toHaveBeenCalledWith(`Or set TAILOR_PLATFORM_WORKSPACE_ID=${created.id}.`);
   });
 
   test("rejects an explicitly empty partial creation identity with a stable error", async () => {
