@@ -11,12 +11,13 @@ tailor-sdk <command> [options]
 ## Global Options
 
 <a id="global-options"></a>
-| Option | Alias | Description | Required | Default |
-|--------|-------|-------------|----------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | No | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | No | - |
-| `--verbose` | - | Enable verbose logging | No | `false` |
-| `--json` | `-j` | Output as JSON | No | `false` |
+
+| Option                                      | Alias | Description                                         | Required | Default |
+| ------------------------------------------- | ----- | --------------------------------------------------- | -------- | ------- |
+| `--env-file <ENV_FILE>`                     | `-e`  | Path to the environment file (error if not found)   | No       | -       |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | -     | Path to the environment file (ignored if not found) | No       | -       |
+| `--verbose`                                 | -     | Enable verbose logging                              | No       | `false` |
+| `--json`                                    | `-j`  | Output as JSON                                      | No       | `false` |
 
 ### JSON Output
 
