@@ -125,6 +125,8 @@ test("content-based mock", async () => {
 });
 ```
 
+Within one `mockTailordb()` instance, use either `onQuery()` matchers or a direct `queryObject.mockImplementation()` override. A direct override replaces matcher-based behavior, so do not combine the two styles.
+
 `returnsRowsOnce` and `rejectsOnce` configure one-time responses before the persistent `returnsRows` or `rejects` response. `enqueueRows(...rowArrays)` remains available for transaction sequences whose exact call order is under test. The existing `enqueueResult`, `enqueueResults`, and `setQueryResolver` helpers remain supported for compatibility.
 
 Pass `{ onUnhandled: "error" }` to make an unmatched query fail instead of returning an empty result.

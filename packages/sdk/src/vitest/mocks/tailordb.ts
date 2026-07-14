@@ -206,6 +206,7 @@ export function mockTailordb(options: MockTailordbOptions = {}) {
     /**
      * Configure responses for queries matching SQL text, parameters, or a predicate.
      * More recently registered matchers take precedence.
+     * Do not combine matchers with a direct `queryObject.mockImplementation()` override.
      * @param matcher - Query matcher
      * @returns Chainable query behavior
      */
