@@ -1,7 +1,4 @@
-import { defineApplication } from "#/cli/services/application";
-import { loadConfig } from "#/cli/shared/config-loader";
-import { generateUserTypes } from "#/cli/shared/type-generator";
-import { PluginManager } from "#/plugin/manager";
+import { loadTailorDBNamespaces } from "#/cli/shared/tailordb-namespaces";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBNamespaceData } from "#/plugin/types";
 
@@ -53,45 +50,12 @@ export function resolveLocalErdSchemaNamespaces(
 export async function loadLocalErdSchema(
   options: LoadLocalErdSchemaOptions,
 ): Promise<LocalErdSchemaContext> {
-  const { config, plugins } = await loadConfig(options.configPath);
-
-  await generateUserTypes({ config, configPath: config.path });
-
-  const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
-  const application = defineApplication({
-    config,
-    pluginManager,
+  return await loadTailorDBNamespaces({
+    configPath: options.configPath,
+    namespaces: (config) =>
+      resolveLocalErdSchemaNamespaces(config, {
+        namespaces: options.namespaces,
+        requireErdSite: options.requireErdSite,
+      }),
   });
-  const namespaceNames = resolveLocalErdSchemaNamespaces(config, {
-    namespaces: options.namespaces,
-    requireErdSite: options.requireErdSite,
-  });
-  const namespaceFilter = namespaceNames ? new Set(namespaceNames) : undefined;
-  const services = namespaceFilter
-    ? application.tailorDBServices.filter((db) => namespaceFilter.has(db.namespace))
-    : application.tailorDBServices;
-
-  if (namespaceFilter && services.length !== namespaceFilter.size) {
-    const available = application.tailorDBServices.map((db) => db.namespace).join(", ");
-    const requested = [...namespaceFilter].join(", ");
-    throw new Error(
-      `TailorDB namespace "${requested}" not found in local config.db.` +
-        (available ? ` Available owned namespaces: ${available}` : ""),
-    );
-  }
-
-  const namespaces: TailorDBNamespaceData[] = [];
-
-  for (const db of services) {
-    await db.loadTypes();
-    await db.processNamespacePlugins();
-    namespaces.push({
-      namespace: db.namespace,
-      types: { ...db.types },
-      sourceInfo: new Map(Object.entries(db.typeSourceInfo)),
-      pluginAttachments: db.pluginAttachments,
-    });
-  }
-
-  return { config, namespaces };
 }
