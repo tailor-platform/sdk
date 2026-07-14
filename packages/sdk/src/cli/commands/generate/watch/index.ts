@@ -325,7 +325,7 @@ export function createDependencyGraphManager(
  */
 export type DependencyWatcher = {
   initialize: () => Promise<void>;
-  addWatchGroup: (groupId: string, patterns: string[]) => Promise<void>;
+  addWatchGroup: (groupId: string, patterns: string[], baseDir: string) => Promise<void>;
   removeWatchGroup: (groupId: string) => Promise<void>;
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -617,7 +617,7 @@ export function createDependencyWatcher(options: WatcherOptions = {}): Dependenc
   return {
     initialize,
 
-    async addWatchGroup(groupId: string, patterns: string[]): Promise<void> {
+    async addWatchGroup(groupId: string, patterns: string[], baseDir: string): Promise<void> {
       validateWatchGroup(groupId, patterns);
 
       if (!isInitialized) {
@@ -626,10 +626,11 @@ export function createDependencyWatcher(options: WatcherOptions = {}): Dependenc
 
       const files = new Set<string>();
       for (const pattern of patterns) {
+        const absolutePattern = path.resolve(baseDir, pattern);
         logger.log(
-          `${styles.dim(`Watch pattern for`)} ${styles.dim(groupId + ":")} ${path.relative(process.cwd(), pattern)}`,
+          `${styles.dim(`Watch pattern for`)} ${styles.dim(groupId + ":")} ${path.relative(process.cwd(), absolutePattern)}`,
         );
-        for await (const file of glob(pattern)) {
+        for await (const file of glob(absolutePattern)) {
           files.add(path.resolve(file));
         }
       }

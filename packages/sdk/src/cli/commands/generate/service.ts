@@ -804,8 +804,13 @@ export function createGenerationManager(params: {
         restartWatchProcess();
       });
 
+      // Watch groups' relative patterns resolve against the config file's own
+      // directory, not process.cwd() — matching how services/bundlers resolve
+      // `files` patterns, so watch mode stays correct in multi-config setups.
+      const configDir = path.dirname(config.path);
+
       // Watch config file
-      await watcher.addWatchGroup("Config", [config.path]);
+      await watcher.addWatchGroup("Config", [config.path], configDir);
 
       // Watch application services
       const app = application;
@@ -813,7 +818,7 @@ export function createGenerationManager(params: {
       // Watch TailorDB services
       for (const db of app.tailorDBServices) {
         const dbNamespace = db.namespace;
-        await watcher.addWatchGroup(`TailorDB/${dbNamespace}`, db.config.files);
+        await watcher.addWatchGroup(`TailorDB/${dbNamespace}`, db.config.files, configDir);
       }
 
       // Watch Resolver services
@@ -822,6 +827,7 @@ export function createGenerationManager(params: {
         await watcher.addWatchGroup(
           `Resolver/${resolverNamespace}`,
           resolverService["config"].files,
+          configDir,
         );
       }
 
