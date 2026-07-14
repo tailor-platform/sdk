@@ -175,6 +175,12 @@
 
 - [#1435](https://github.com/tailor-platform/sdk/pull/1435) [`49c0cc9`](https://github.com/tailor-platform/sdk/commit/49c0cc99171d7e317a50a18804a21067d89f9493) Thanks [@dqn](https://github.com/dqn)! - Add the `v2/plugin-cli-import` codemod so `tailor-sdk upgrade` rewrites deprecated plugin imports from `@tailor-platform/sdk/cli` (`kyselyTypePlugin`, `enumConstantsPlugin`, `fileUtilsPlugin`, `seedPlugin`) to their dedicated `@tailor-platform/sdk/plugin/*` subpaths, splitting any non-plugin specifiers onto a separate import.
 
+## 0.3.7
+
+### Patch Changes
+
+- [#1744](https://github.com/tailor-platform/sdk/pull/1744) [`3ca5b48`](https://github.com/tailor-platform/sdk/commit/3ca5b48fca4e8e1f0878350afc11d42d36bf3cab) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.2
+
 ## 0.3.6
 
 ### Patch Changes
