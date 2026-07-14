@@ -56,47 +56,22 @@ const packageName = packageJson.name ?? "@tailor-platform/sdk";
 const packageJsonPath = await resolvePackageJSON(import.meta.url);
 const bundledSkillsDir = resolve(dirname(packageJsonPath), "agent-skills");
 
-type CommandArgShape = Record<string, z.ZodType>;
-
-function replaceCommandArgs(command: AnyCommand, removals: string[] = []): AnyCommand {
-  const args = command.args as { shape?: CommandArgShape } | undefined;
-  if (!args?.shape) {
-    return command;
-  }
-  const shape = { ...args.shape };
-  for (const name of removals) {
-    delete shape[name];
-  }
-  return {
-    ...command,
-    args: z.strictObject({
-      ...shape,
-    }),
-  };
-}
-
-function removeCommandAliases(command: AnyCommand): AnyCommand {
-  const next = { ...command };
-  delete next.aliases;
-  return next;
-}
-
 function alignSkillCommand(command: AnyCommand): AnyCommand {
   const subCommands = command.subCommands ?? {};
   const add = {
-    ...removeCommandAliases(replaceCommandArgs(subCommands.add as AnyCommand, ["verbose"])),
+    ...(subCommands.add as AnyCommand),
     description: "Install Tailor SDK agent skills.",
   };
   const list = {
-    ...replaceCommandArgs(subCommands.list as AnyCommand, ["json"]),
+    ...(subCommands.list as AnyCommand),
     description: "List Tailor SDK agent skills.",
   };
   const remove = {
-    ...removeCommandAliases(replaceCommandArgs(subCommands.remove as AnyCommand)),
+    ...(subCommands.remove as AnyCommand),
     description: "Remove installed Tailor SDK agent skills.",
   };
   const sync = {
-    ...replaceCommandArgs(subCommands.sync as AnyCommand, ["verbose"]),
+    ...(subCommands.sync as AnyCommand),
     description: "Remove and reinstall Tailor SDK agent skills.",
   };
   return {
@@ -161,15 +136,18 @@ Run \`${cliName} plugin list\` to see which plugins are installed and where they
     package: packageName,
     mode: "copy",
     descriptionAppend: false,
+    // strip unknown keys
+    globalArgs: z.object(commonArgs),
+    commandMap: { add: ["add"], remove: ["remove"] },
+    unknownKeys: "strict",
   },
 );
-const commandWithSkillsSubCommands = commandWithSkills.subCommands;
 
 export const mainCommand = withCompletionCommand({
   ...commandWithSkills,
   subCommands: {
-    ...commandWithSkillsSubCommands,
-    skills: alignSkillCommand(commandWithSkillsSubCommands.skills as AnyCommand),
+    ...commandWithSkills.subCommands,
+    skills: alignSkillCommand(commandWithSkills.subCommands.skills),
   },
 });
 
