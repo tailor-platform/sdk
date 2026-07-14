@@ -151,7 +151,7 @@ function keyText(node: SgNode | null): string | null {
 }
 
 function expressionArguments(args: SgNode): SgNode[] {
-  return args.children().filter((child) => !["(", ")", ","].includes(child.kind()));
+  return args.children().filter((child) => !["(", ")", ","].includes(child.kind() as string));
 }
 
 function argumentCallForObject(objectNode: SgNode): { call: SgNode; index: number } | null {

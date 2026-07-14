@@ -2,9 +2,13 @@
  * Tests for `@tailor-platform/sdk/runtime/workflow` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
-import { workflow, type TailorWorkflowAPI, type TriggerWorkflowOptions } from "#/runtime/workflow";
+import {
+  workflow,
+  type ExecutionPolicyKey,
+  type TailorWorkflowAPI,
+  type TriggerWorkflowOptions,
+} from "#/runtime/workflow";
 import { cleanupMocks, injectMocks, mockWorkflow } from "#/vitest/mock";
-import type { ExecutionPolicyKey } from "#/runtime/workflow";
 
 describe("@tailor-platform/sdk/runtime/workflow", () => {
   beforeEach(() => {

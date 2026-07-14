@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import * as path from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
@@ -10,42 +10,94 @@ const SecretsStateSchema = z.object({
   connections: z.record(z.string(), z.string()).optional(),
 });
 
+// strip unknown keys
+const PersistedSecretsStateSchema = z.object({
+  version: z.literal(1),
+  workspaceId: z.string(),
+  applicationKey: z.string(),
+  state: SecretsStateSchema,
+});
+
 export type SecretsState = z.infer<typeof SecretsStateSchema>;
+type PersistedSecretsState = z.infer<typeof PersistedSecretsStateSchema>;
 
-/**
- * Get the file path for the secrets state JSON.
- * @returns Absolute path to secrets-state.json
- */
-export function getSecretsStatePath(): string {
-  return path.join(getDistDir(), "secrets-state.json");
+export interface SecretsStateScope {
+  readonly workspaceId: string;
+  readonly applicationId: string | undefined;
+  readonly applicationName: string;
 }
 
 /**
- * Load secrets hash state from disk.
- * @returns Persisted state, or empty state if file is missing or corrupted
+ * Get the file path for one workspace and application's secrets state JSON.
+ * @param scope - Workspace and application identity for the deployment
+ * @returns Absolute path to the scoped state file
  */
-export function loadSecretsState(): SecretsState {
-  const filePath = getSecretsStatePath();
-  if (!existsSync(filePath)) {
-    return { vaults: {} };
-  }
+export function getSecretsStatePath(scope: SecretsStateScope): string {
+  const scopeHash = hashValue(JSON.stringify([scope.workspaceId, applicationStateKey(scope)]));
+  return path.join(getDistDir(), "secrets-state", `${scopeHash}.json`);
+}
+
+function loadPersistedSecretsState(scope: SecretsStateScope): PersistedSecretsState | undefined {
   try {
-    const raw = readFileSync(filePath, "utf-8");
-    return SecretsStateSchema.parse(JSON.parse(raw));
+    const raw = readFileSync(getSecretsStatePath(scope), "utf-8");
+    const persistedState = PersistedSecretsStateSchema.parse(JSON.parse(raw));
+    if (
+      persistedState.workspaceId !== scope.workspaceId ||
+      persistedState.applicationKey !== applicationStateKey(scope)
+    ) {
+      return undefined;
+    }
+    return persistedState;
   } catch {
-    return { vaults: {} };
+    return undefined;
   }
 }
 
+function applicationStateKey(scope: SecretsStateScope): string {
+  if (!scope.applicationId) {
+    throw new Error(`Application "${scope.applicationName}" has no stable id for secrets state`);
+  }
+  return `id:${scope.applicationId}`;
+}
+
 /**
- * Save secrets hash state to disk.
+ * Load secrets hash state for one workspace and application from disk.
+ * @param scope - Workspace and application identity for the deployment
+ * @returns Persisted state, or empty state if the scope is missing or the file is invalid
+ */
+export function loadSecretsState(scope: SecretsStateScope): SecretsState {
+  if (!scope.applicationId) {
+    return { vaults: {} };
+  }
+  return loadPersistedSecretsState(scope)?.state ?? { vaults: {} };
+}
+
+/**
+ * Save secrets hash state for one workspace and application to disk.
+ * @param scope - Workspace and application identity for the deployment
  * @param state - The secrets state to persist
  */
-export function saveSecretsState(state: SecretsState): void {
-  const filePath = getSecretsStatePath();
+export function saveSecretsState(scope: SecretsStateScope, state: SecretsState): void {
+  if (!scope.applicationId) {
+    return;
+  }
+  const filePath = getSecretsStatePath(scope);
   const dir = path.dirname(filePath);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(filePath, JSON.stringify(state, null, 2), "utf-8");
+  writeFileSync(
+    filePath,
+    JSON.stringify(
+      {
+        version: 1,
+        workspaceId: scope.workspaceId,
+        applicationKey: applicationStateKey(scope),
+        state,
+      } satisfies PersistedSecretsState,
+      null,
+      2,
+    ),
+    "utf-8",
+  );
 }
 
 /**

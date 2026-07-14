@@ -133,7 +133,10 @@ export async function applyAuth(
   const applyCreateUpdateDependents = async () => {
     await applyAuthConnections(
       client,
-      { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+      {
+        changeSet: changeSet.connection,
+        stateScope: result.connectionStateScope,
+      },
       "create-update",
     );
 
@@ -290,7 +293,10 @@ export async function applyAuth(
     // Auth Connections
     await applyAuthConnections(
       client,
-      { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+      {
+        changeSet: changeSet.connection,
+        stateScope: result.connectionStateScope,
+      },
       "delete-resources",
     );
   } else if (phase === "delete-services") {
@@ -373,6 +379,7 @@ export async function planAuth(context: PlanContext) {
     conflicts: [...conflicts, ...connectionResult.conflicts],
     unmanaged: [...unmanaged, ...connectionResult.unmanaged],
     resourceOwners: new Set([...resourceOwners, ...connectionResult.resourceOwners]),
+    connectionStateScope: connectionResult.stateScope,
   };
 }
 

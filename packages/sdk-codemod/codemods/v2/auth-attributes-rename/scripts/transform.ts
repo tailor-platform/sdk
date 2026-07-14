@@ -78,7 +78,7 @@ function isDeclarationName(node: SgNode): boolean {
       "interface_declaration",
       "type_alias_declaration",
       "type_parameter",
-    ].includes(parent.kind())
+    ].includes(parent.kind() as string)
   ) {
     return false;
   }
@@ -97,7 +97,7 @@ function declarationName(node: SgNode): SgNode | undefined {
       "enum_declaration",
       "interface_declaration",
       "type_alias_declaration",
-    ].includes(node.kind())
+    ].includes(node.kind() as string)
   ) {
     return node.field("name") ?? undefined;
   }
@@ -110,7 +110,7 @@ function declarationName(node: SgNode): SgNode | undefined {
         "enum_declaration",
         "interface_declaration",
         "type_alias_declaration",
-      ].includes(child.kind()),
+      ].includes(child.kind() as string),
     );
   return declaration?.field("name") ?? undefined;
 }
@@ -140,7 +140,7 @@ function isShadowedTypeReference(node: SgNode, name: string): boolean {
         "interface_declaration",
         "method_definition",
         "type_alias_declaration",
-      ].includes(current.kind()) &&
+      ].includes(current.kind() as string) &&
       hasTypeParameterShadow(current, name)
     ) {
       return true;
