@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.77.0
+
+### Minor Changes
+
+- [#1758](https://github.com/tailor-platform/sdk/pull/1758) [`e596975`](https://github.com/tailor-platform/sdk/commit/e596975eeb4ca1479554f98aaf449b5c21c98610) Thanks [@toiroakr](https://github.com/toiroakr)! - Show the URL of each configured AI Gateway in the `show` command output.
+
+### Patch Changes
+
+- [#1717](https://github.com/tailor-platform/sdk/pull/1717) [`34aff11`](https://github.com/tailor-platform/sdk/commit/34aff110c6f2cebd2e86fa82e45216d6360368e1) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
 ## 1.76.2
 
 ### Patch Changes
