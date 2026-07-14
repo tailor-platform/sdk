@@ -211,6 +211,23 @@ describe("createTailorDBHook", () => {
       expect(typeNow).toBe(fieldNow);
     });
 
+    test("runs type-level validate and throws on validation failure", () => {
+      const type = db
+        .table("Range", {
+          start: db.int(),
+          end: db.int(),
+        })
+        .validate(({ newRecord }, issues) => {
+          if ((newRecord.start as number) > (newRecord.end as number)) {
+            issues("start", "start must be <= end");
+          }
+        });
+      expect(() => createTailorDBHook(type)({ start: 10, end: 5 })).toThrow(
+        "Validation failed on field 'start': start must be <= end",
+      );
+      expect(() => createTailorDBHook(type)({ start: 1, end: 10 })).not.toThrow();
+    });
+
     test("does not invoke a hook that only defines update (createTailorDBHook is create-only)", () => {
       let updateCalled = false;
       const type = db.table("Test", { updatedAt: db.datetime() }).hooks({

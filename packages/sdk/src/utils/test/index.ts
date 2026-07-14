@@ -83,6 +83,18 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
       }
     }
 
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- metadata absent in recursive nested calls
+    if (type.metadata?.typeValidate) {
+      const { id: _id, ...newRecord } = hooked;
+      // oxlint-disable-next-line typescript/no-unsafe-function-type
+      (type.metadata.typeValidate as Function)(
+        { newRecord, oldRecord: null, invoker: null },
+        (field: string, message: string) => {
+          throw new Error(`Validation failed on field '${field}': ${message}`);
+        },
+      );
+    }
+
     return hooked as Partial<output<T>>;
   };
 }

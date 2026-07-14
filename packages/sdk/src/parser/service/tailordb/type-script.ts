@@ -238,7 +238,10 @@ function buildValidateStatements(
           );
         }
       } else {
-        statements.push(...buildValidateStatements(config.fields, `(${access} || {})`, fieldPath));
+        const nested = buildValidateStatements(config.fields, access, fieldPath);
+        if (nested.length > 0) {
+          statements.push(`if (${access} != null) {\n${nested.join("\n")}\n}`);
+        }
       }
     }
   }

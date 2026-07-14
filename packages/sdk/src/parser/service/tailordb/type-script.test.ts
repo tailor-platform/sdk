@@ -242,6 +242,30 @@ describe("buildTypeScripts", () => {
     expect(buildTypeScripts(fields)).toEqual({});
   });
 
+  test("skips nested object child validators when parent is absent", () => {
+    const fields: Record<string, ScriptFieldConfig> = {
+      address: {
+        type: "nested",
+        fields: {
+          city: {
+            type: "string",
+            validate: [
+              { script: { expr: '_value.length > 0 ? undefined : "required"' }, errorMessage: "" },
+            ],
+          },
+        },
+      },
+    };
+
+    const expr = buildTypeScripts(fields).typeValidate?.create?.expr ?? "";
+    expect(expr).toContain('if (_newRecord["address"] != null)');
+
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const run = (record: unknown) => new Function("_newRecord", `return ${expr}`)(record);
+    expect(run({ address: null })).toEqual({});
+    expect(run({ address: { city: "" } })).toEqual({ "address.city": "required" });
+  });
+
   test("no typeValidate output when no field validators and no type-level validate", () => {
     expect(buildTypeScripts({})).toEqual({});
     expect(buildTypeScripts({}, undefined)).toEqual({});
