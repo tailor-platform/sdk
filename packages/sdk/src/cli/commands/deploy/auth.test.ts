@@ -115,6 +115,11 @@ describe("applyAuth phase separation", () => {
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set<string>(),
+      connectionStateScope: {
+        workspaceId: "test-workspace",
+        applicationId: "test-app-id",
+        applicationName: "test-app",
+      },
     } as unknown as Awaited<ReturnType<typeof planAuth>>;
   }
 
