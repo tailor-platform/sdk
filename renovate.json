@@ -21,6 +21,16 @@
       "packageNameTemplate": "{{depName}}",
       "autoReplaceStringTemplate": "uses: {{depName}}@{{newDigest}} # {{newValue}}",
       "datasourceTemplate": "github-tags"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^packages/sdk/src/cli/commands/setup/templates\\.ts$/"],
+      "matchStrings": [
+        "const ACTIONS_SHA = \"(?<currentDigest>[a-f0-9]+)\";\\nconst ACTIONS_VERSION = \"(?<currentValue>v[\\d.]+)\";"
+      ],
+      "depNameTemplate": "tailor-platform/actions",
+      "autoReplaceStringTemplate": "const ACTIONS_SHA = \"{{newDigest}}\";\nconst ACTIONS_VERSION = \"{{newValue}}\";",
+      "datasourceTemplate": "github-tags"
     }
   ],
   "packageRules": [
