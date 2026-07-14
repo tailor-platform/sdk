@@ -1,5 +1,39 @@
 # @tailor-platform/sdk
 
+## 1.76.2
+
+### Patch Changes
+
+- [#1729](https://github.com/tailor-platform/sdk/pull/1729) [`6c9cda3`](https://github.com/tailor-platform/sdk/commit/6c9cda3e029911653afcfb1000d0a21135dd02a8) Thanks [@dqn](https://github.com/dqn)! - Run array field custom validators once against the complete array, skip custom validation when built-in type validation fails, and reject cloning validated fields between scalar and array shapes.
+
+- [#1735](https://github.com/tailor-platform/sdk/pull/1735) [`a5f14a0`](https://github.com/tailor-platform/sdk/commit/a5f14a08d12614f5c3ef9c5699fbee476cdb253d) Thanks [@dqn](https://github.com/dqn)! - Reject non-dot separators before fractional seconds in datetime field values.
+
+- [#1720](https://github.com/tailor-platform/sdk/pull/1720) [`3d1c0f2`](https://github.com/tailor-platform/sdk/commit/3d1c0f2f63167335d968a7dc601f0485f3265184) Thanks [@renovate](https://github.com/apps/renovate)! - Fix `tailor-sdk setup` generated workflows referencing `tailor-platform/actions` without the required sub-action path (e.g. `/setup`, `/deploy`), which broke generated GitHub Actions workflows after the v1.7.0 dependency bump. Also bring the coordinator workflow and local `tailor-setup` action templates up to the same v1.7.0 pin, which had been missed by the original bump.
+
+- [#1731](https://github.com/tailor-platform/sdk/pull/1731) [`1e3de77`](https://github.com/tailor-platform/sdk/commit/1e3de776bba7b03c78777639e2cf6caa8b4545b4) Thanks [@toiroakr](https://github.com/toiroakr)! - Guard `tailor-sdk remove` against silently skipping a newly added managed resource type.
+
+- [#1725](https://github.com/tailor-platform/sdk/pull/1725) [`4d724db`](https://github.com/tailor-platform/sdk/commit/4d724db776eb55e5877f741ce50fee193857d5b5) Thanks [@dqn](https://github.com/dqn)! - Fix `tailor-sdk remove` to delete managed workflow job function execution policies.
+
+- [#1715](https://github.com/tailor-platform/sdk/pull/1715) [`5d7fd1a`](https://github.com/tailor-platform/sdk/commit/5d7fd1a800b220e27241a2cb38c38bf9a603c582) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency type-fest to v5.8.0
+
+- [#1716](https://github.com/tailor-platform/sdk/pull/1716) [`686c35d`](https://github.com/tailor-platform/sdk/commit/686c35dc4c59c4df11522e8ae3e82e78ae268fd4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8.7.0
+
+- [#1744](https://github.com/tailor-platform/sdk/pull/1744) [`3ca5b48`](https://github.com/tailor-platform/sdk/commit/3ca5b48fca4e8e1f0878350afc11d42d36bf3cab) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.2
+
+- [#1745](https://github.com/tailor-platform/sdk/pull/1745) [`fac7aff`](https://github.com/tailor-platform/sdk/commit/fac7affffdf0b70a8446072c7954663ed7fb9c09) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1748](https://github.com/tailor-platform/sdk/pull/1748) [`120fff3`](https://github.com/tailor-platform/sdk/commit/120fff3da9f67e229759aae19f5353fb9abb8db9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @opentelemetry/semantic-conventions to v1.43.0
+
+- [#1750](https://github.com/tailor-platform/sdk/pull/1750) [`57d81f3`](https://github.com/tailor-platform/sdk/commit/57d81f36f2620293cfeca3590855809322054771) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency std-env to v4.2.0
+
+- [#1732](https://github.com/tailor-platform/sdk/pull/1732) [`28fdb21`](https://github.com/tailor-platform/sdk/commit/28fdb211d3f5397bd57f68c91dbc63107a3cfd76) Thanks [@dqn](https://github.com/dqn)! - Fix workflow trigger bundling for aliased imports, repeated local export names, and shadowed identifiers
+
+- [#1742](https://github.com/tailor-platform/sdk/pull/1742) [`d0b0c2d`](https://github.com/tailor-platform/sdk/commit/d0b0c2d35055c9c84573775974439ea4254093ed) Thanks [@toiroakr](https://github.com/toiroakr)! - revert temporary pageSize limit for listWorkflowJobFunctions
+
+- [#1734](https://github.com/tailor-platform/sdk/pull/1734) [`2c44645`](https://github.com/tailor-platform/sdk/commit/2c446452dd20b534401781c54b327b3db5ba2dc0) Thanks [@dqn](https://github.com/dqn)! - Fix secret and Auth connection deployments so local hash state cannot suppress updates in another workspace or application.
+
+- [#1731](https://github.com/tailor-platform/sdk/pull/1731) [`2bdde6b`](https://github.com/tailor-platform/sdk/commit/2bdde6b58303c1eb7f2863a1a7ea1fc498b9aa67) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor-sdk deploy` now validates AIGateway create/update requests against platform constraints before applying changes.
+
 ## 1.76.1
 
 ### Patch Changes
