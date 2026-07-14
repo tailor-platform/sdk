@@ -29,6 +29,9 @@ importers:
       lefthook:
         specifier: 2.1.10
         version: 2.1.10
+      madge:
+        specifier: 8.0.0
+        version: 8.0.0(typescript@6.0.3)
       oxfmt:
         specifier: 0.58.0
         version: 0.58.0
@@ -60,6 +63,9 @@ importers:
         specifier: 4.4.0
         version: 4.4.0
     devDependencies:
+      '@bufbuild/protobuf':
+        specifier: 2.12.1
+        version: 2.12.1
       '@connectrpc/connect':
         specifier: 2.1.2
         version: 2.1.2(@bufbuild/protobuf@2.12.1)
@@ -90,6 +96,9 @@ importers:
       oxlint-tsgolint:
         specifier: 0.24.0
         version: 0.24.0
+      tsdown:
+        specifier: 0.22.4
+        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3)
       tsx:
         specifier: 4.23.0
         version: 4.23.0
@@ -1608,9 +1617,6 @@ packages:
 
   '@oxc-project/types@0.137.0':
     resolution: {integrity: sha512-WT+Gb24i8hmvo85AIv2oEYouEXkRlKAlT9WaCa3TfLgNCN+GhrJOGZuIlMouAh38Qe4QOx26eUOVsq70qXrywA==}
-
-  '@oxc-project/types@0.138.0':
-    resolution: {integrity: sha512-1a7ZKmrRTCoN1XMZ4L0PyyqrMnrNlLyPuOkdSX2MZg7IiIGRUyurNhAm73ptDOraoBcIordsIGKNPKUzy3ZmfA==}
 
   '@oxc-project/types@0.139.0':
     resolution: {integrity: sha512-r9gHphtCs+1M7J0pw6Sn/hh/Wpa/iQrOOkrNAlVLF/gHq+/CJmHIWKKUUhdWjcD6CIa8idarspCsASiXCXvFUw==}
@@ -4620,8 +4626,6 @@ snapshots:
     optional: true
 
   '@oxc-project/types@0.137.0': {}
-
-  '@oxc-project/types@0.138.0': {}
 
   '@oxc-project/types@0.139.0': {}
 
