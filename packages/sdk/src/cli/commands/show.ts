@@ -84,7 +84,7 @@ async function fetchAIGateways(
 /**
  * Show applied application information for the current workspace.
  * @param options - Show options
- * @returns Application information
+ * @returns Deployed application, workspace, and AI Gateway information
  */
 export async function show(options?: ShowOptions): Promise<ShowInfo> {
   // Load and validate options
