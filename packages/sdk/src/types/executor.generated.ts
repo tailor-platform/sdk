@@ -52,12 +52,7 @@ export type IncomingWebhookTriggerResponseInput = IncomingWebhookTriggerResponse
 export type IncomingWebhookTrigger = {
   kind: "incomingWebhook";
   /** Response configuration */
-  response?:
-    | {
-        body?: Function | undefined;
-        statusCode?: number | undefined;
-      }
-    | undefined;
+  response?: IncomingWebhookTriggerResponse;
 };
 export type IncomingWebhookTriggerInput = IncomingWebhookTrigger;
 
@@ -192,49 +187,7 @@ export type ExecutorInput = {
   /** Executor name */
   name: string;
   /** Event trigger configuration */
-  trigger:
-    | {
-        kind: "tailordb";
-        events: (
-          | "tailordb.type_record.created"
-          | "tailordb.type_record.updated"
-          | "tailordb.type_record.deleted"
-        )[];
-        typeName: string;
-        condition?: Function | undefined;
-      }
-    | {
-        kind: "resolverExecuted";
-        resolverName: string;
-        condition?: Function | undefined;
-      }
-    | {
-        kind: "schedule";
-        cron: string;
-        timezone?: string | undefined;
-      }
-    | {
-        kind: "incomingWebhook";
-        response?:
-          | {
-              body?: Function | undefined;
-              statusCode?: number | undefined;
-            }
-          | undefined;
-      }
-    | {
-        kind: "idpUser";
-        events: ("idp.user.created" | "idp.user.updated" | "idp.user.deleted")[];
-        idp?: string | undefined;
-      }
-    | {
-        kind: "authAccessToken";
-        events: (
-          | "auth.access_token.issued"
-          | "auth.access_token.refreshed"
-          | "auth.access_token.revoked"
-        )[];
-      };
+  trigger: TriggerInput;
   /** Operation to execute when triggered */
   operation: unknown;
   /** Executor description */
@@ -249,49 +202,7 @@ export type Executor = {
   /** Whether the executor is disabled */
   disabled: boolean;
   /** Event trigger configuration */
-  trigger:
-    | {
-        kind: "tailordb";
-        events: (
-          | "tailordb.type_record.created"
-          | "tailordb.type_record.updated"
-          | "tailordb.type_record.deleted"
-        )[];
-        typeName: string;
-        condition?: Function | undefined;
-      }
-    | {
-        kind: "resolverExecuted";
-        resolverName: string;
-        condition?: Function | undefined;
-      }
-    | {
-        kind: "schedule";
-        cron: string;
-        timezone: string;
-      }
-    | {
-        kind: "incomingWebhook";
-        response?:
-          | {
-              body?: Function | undefined;
-              statusCode?: number | undefined;
-            }
-          | undefined;
-      }
-    | {
-        kind: "idpUser";
-        events: ("idp.user.created" | "idp.user.updated" | "idp.user.deleted")[];
-        idp?: string | undefined;
-      }
-    | {
-        kind: "authAccessToken";
-        events: (
-          | "auth.access_token.issued"
-          | "auth.access_token.refreshed"
-          | "auth.access_token.revoked"
-        )[];
-      };
+  trigger: Trigger;
   /** Operation to execute when triggered */
   operation:
     | {

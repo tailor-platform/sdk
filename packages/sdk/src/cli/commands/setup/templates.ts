@@ -416,7 +416,8 @@ export function renderActionWorkflow(params: RenderActionParams): RenderResult {
   return { content: out, generatedIds };
 }
 
-const ACTIONS_SHA = "e74173d4bdd931d036ad359cf5f7729fc6aa7067"; // v1.5.1
+const ACTIONS_SHA = "a3c3032e14277e81039eb26ae1a425adb22eb532";
+const ACTIONS_VERSION = "v1.7.0";
 
 /**
  * Render the coordinator workflow that orchestrates per-app composite actions.
@@ -484,7 +485,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
 
   const driftCheckStep = [
     `- id: tailor-drift-check`,
-    `  uses: tailor-platform/actions/drift-check@${ACTIONS_SHA} # v1.5.1`,
+    `  uses: tailor-platform/actions/drift-check@${ACTIONS_SHA} # ${ACTIONS_VERSION}`,
     `  with:`,
     `    package-manager: ${packageManager}`,
   ].join("\n");
@@ -504,7 +505,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
     return [
       `- id: tailor-plan-${group.id}`,
       `  if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork`,
-      `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # v1.5.1`,
+      `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # ${ACTIONS_VERSION}`,
       `  with:`,
       `    workspace-id: \${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}`,
       `    package-manager: ${packageManager}${wdLine}`,
@@ -517,7 +518,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
   const multiConfigPlanStep = (group: CoordinateAppGroup) => [
     `- id: tailor-plan-${group.id}`,
     `  if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork`,
-    `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # v1.5.1`,
+    `  uses: tailor-platform/actions/plan@${ACTIONS_SHA} # ${ACTIONS_VERSION}`,
     `  env:`,
     `    TAILOR_PLATFORM_SDK_CONFIG_PATH: ${groupConfigPath(group)}`,
     `  with:`,
@@ -535,7 +536,7 @@ export function renderCoordinateWorkflow(params: RenderCoordinateParams): Render
         const wdLine = wd ? `\n    working-directory: ${wd}` : "";
         return [
           `- id: tailor-generate-check-${app.name}`,
-          `  uses: tailor-platform/actions/generate-check@${ACTIONS_SHA} # v1.5.1`,
+          `  uses: tailor-platform/actions/generate-check@${ACTIONS_SHA} # ${ACTIONS_VERSION}`,
           `  with:`,
           `    package-manager: ${packageManager}${wdLine}`,
         ];
@@ -666,11 +667,11 @@ export function renderTailorSetupAction(params: { packageManager: PackageManager
     `runs:`,
     `  using: composite`,
     `  steps:`,
-    `    - uses: tailor-platform/actions/setup@${ACTIONS_SHA} # v1.5.1`,
+    `    - uses: tailor-platform/actions/setup@${ACTIONS_SHA} # ${ACTIONS_VERSION}`,
     `      with:`,
     `        package-manager: ${packageManager}`,
     `    # Add custom steps here (e.g. private registry authentication)`,
-    `    - uses: tailor-platform/actions/install@${ACTIONS_SHA} # v1.5.1`,
+    `    - uses: tailor-platform/actions/install@${ACTIONS_SHA} # ${ACTIONS_VERSION}`,
     `      with:`,
     `        package-manager: ${packageManager}`,
     `        # editable: install-command:`,
