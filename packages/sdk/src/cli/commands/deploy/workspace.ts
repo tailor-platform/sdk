@@ -214,7 +214,7 @@ function useRememberedWorkspace(
   client: OperatorClient,
   workspace: WorkspaceInfo,
 ): ResolvedDeployWorkspace {
-  logger.info(`Using workspace: ${workspaceLabel(workspace)}`);
+  logger.warn(`Using saved workspace selection: ${workspaceLabel(workspace)}`);
   return { client, workspaceId: workspace.id };
 }
 

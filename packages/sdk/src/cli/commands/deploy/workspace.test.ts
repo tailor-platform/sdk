@@ -170,6 +170,10 @@ describe("resolveDeployWorkspace", () => {
     await expect(resolveDeployWorkspace()).resolves.toEqual({ client, workspaceId: id });
     expect(mocks.listWorkspacesWithClient).toHaveBeenCalledOnce();
     expect(mocks.saveWorkspaceContext).not.toHaveBeenCalled();
+    expect(mocks.warn).toHaveBeenCalledWith(
+      `Using saved workspace selection: example-workspace (us-west, org: 33333333-3333-4333-8333-333333333333, id: ${id})`,
+    );
+    expect(mocks.info).not.toHaveBeenCalled();
   });
 
   test("rejects stale project context before selecting a workspace", async () => {

@@ -20,7 +20,7 @@ application. Explicit configuration takes precedence in this order: `--workspace
 previously selected for that configuration from project-local state. Each config file keeps an
 independent selection, including when multiple configs share a directory. An explicit workspace also
 updates this selection. Saved selections are verified against the workspaces currently visible to
-the authenticated user before reuse.
+the authenticated user before reuse, and `deploy` warns when it uses one.
 
 When the project has no saved selection, `deploy` discovers the account's workspaces:
 
