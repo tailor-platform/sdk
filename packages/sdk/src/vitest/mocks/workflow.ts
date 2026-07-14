@@ -107,6 +107,11 @@ function replaceTrigger<Trigger extends TriggerProcedure>(definition: {
 /**
  * Acquire a disposable mock for workflow operations (`tailor.workflow`).
  * Restored on dispose.
+ *
+ * Canonical names (`startWorkflow`, `startJobFunction`, `resumeWorkflowExecution`)
+ * and their frozen aliases (`triggerWorkflow`, `triggerJobFunction`, `resumeWorkflow`)
+ * share the same underlying `vi.fn`, so calls through either name are recorded
+ * once and handlers configured on either name apply to both.
  * @returns Disposable workflow mock control object
  * @example
  * ```typescript
@@ -169,25 +174,31 @@ export function mockWorkflow() {
     ): Promise<void> => {},
   );
 
-  root.workflow = {
-    // Preserve arity: recording `undefined` as the third element only when the
-    // caller supplied it, mirroring `.triggerJobFunction(name, args, options)`.
-    triggerJobFunction: (...call: [string, unknown?, TriggerJobFunctionOptions?]) => {
-      const out =
-        call.length >= 3
-          ? triggerJobFunction(call[0], platformSerialize(call[1]), call[2])
-          : triggerJobFunction(call[0], platformSerialize(call[1]));
-      return out instanceof Promise
-        ? out.then((v) => platformSerialize(v))
-        : platformSerialize(out);
-    },
-    // Preserve arity so a forwarded third `options` arg — even `undefined` — is
-    // recorded, matching the real `.trigger(args, options)` call shape.
-    triggerWorkflow: (...call: [string, unknown?, TriggerWorkflowOptions?]) =>
+  // Preserve arity: recording `undefined` as the third element only when the
+  // caller supplied it, mirroring `.triggerJobFunction(name, args, options)`.
+  const jobFunctionShim = (...call: [string, unknown?, TriggerJobFunctionOptions?]) => {
+    const out =
       call.length >= 3
-        ? triggerWorkflow(call[0], platformSerialize(call[1]), call[2])
-        : triggerWorkflow(call[0], platformSerialize(call[1])),
-    resumeWorkflow: (executionId: string) => resumeWorkflow(executionId),
+        ? triggerJobFunction(call[0], platformSerialize(call[1]), call[2])
+        : triggerJobFunction(call[0], platformSerialize(call[1]));
+    return out instanceof Promise ? out.then((v) => platformSerialize(v)) : platformSerialize(out);
+  };
+  // Preserve arity so a forwarded third `options` arg — even `undefined` — is
+  // recorded, matching the real `.trigger(args, options)` call shape.
+  const workflowShim = (...call: [string, unknown?, TriggerWorkflowOptions?]) =>
+    call.length >= 3
+      ? triggerWorkflow(call[0], platformSerialize(call[1]), call[2])
+      : triggerWorkflow(call[0], platformSerialize(call[1]));
+  const resumeShim = (executionId: string) => resumeWorkflow(executionId);
+  root.workflow = {
+    // Canonical and frozen alias names share a single shim so calls through
+    // either name are recorded on the same underlying vi.fn.
+    startJobFunction: jobFunctionShim,
+    triggerJobFunction: jobFunctionShim,
+    startWorkflow: workflowShim,
+    triggerWorkflow: workflowShim,
+    resumeWorkflowExecution: resumeShim,
+    resumeWorkflow: resumeShim,
     wait: (key: string, payload?: unknown) => wait(key, platformSerialize(payload)),
     resolve: (executionId: string, key: string, callback: (payload: unknown) => unknown) =>
       resolve(executionId, key, (payload: unknown) => {
@@ -199,11 +210,26 @@ export function mockWorkflow() {
   };
 
   const facade = {
-    /** The `triggerJobFunction` `vi.fn`. */
+    /** The `startJobFunction` `vi.fn`. */
+    startJobFunction: triggerJobFunction,
+    /**
+     * Frozen alias of `startJobFunction` (same `vi.fn` reference).
+     * @deprecated Use `startJobFunction` instead.
+     */
     triggerJobFunction,
-    /** The `triggerWorkflow` `vi.fn`. */
+    /** The `startWorkflow` `vi.fn`. */
+    startWorkflow: triggerWorkflow,
+    /**
+     * Frozen alias of `startWorkflow` (same `vi.fn` reference).
+     * @deprecated Use `startWorkflow` instead.
+     */
     triggerWorkflow,
-    /** The `resumeWorkflow` `vi.fn`. */
+    /** The `resumeWorkflowExecution` `vi.fn`. */
+    resumeWorkflowExecution: resumeWorkflow,
+    /**
+     * Frozen alias of `resumeWorkflowExecution` (same `vi.fn` reference).
+     * @deprecated Use `resumeWorkflowExecution` instead.
+     */
     resumeWorkflow,
     /** The `wait` `vi.fn`. */
     wait,

@@ -5,12 +5,15 @@ import { runRegisteredJob, runRegisteredWorkflow } from "../configure/services/w
 import type { TriggerJobFunctionOptions } from "../runtime/workflow";
 
 export interface DefaultWorkflowRuntime {
+  startJobFunction: (name: string, args?: unknown, options?: TriggerJobFunctionOptions) => unknown;
   triggerJobFunction: (
     name: string,
     args?: unknown,
     options?: TriggerJobFunctionOptions,
   ) => unknown;
+  startWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
   triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
+  resumeWorkflowExecution: (executionId: string) => Promise<string>;
   resumeWorkflow: (executionId: string) => Promise<string>;
   wait: (key: string, payload?: unknown) => unknown;
   resolve: (
@@ -21,10 +24,20 @@ export interface DefaultWorkflowRuntime {
 }
 
 export function createDefaultWorkflowRuntime(): DefaultWorkflowRuntime {
+  const startJobFunction: DefaultWorkflowRuntime["startJobFunction"] = (name, args) =>
+    runRegisteredJob(name, args);
+  const startWorkflow: DefaultWorkflowRuntime["startWorkflow"] = (name, args) =>
+    runRegisteredWorkflow(name, args);
+  const resumeWorkflowExecution: DefaultWorkflowRuntime["resumeWorkflowExecution"] = async (
+    executionId,
+  ) => executionId;
   return {
-    triggerJobFunction: (name, args) => runRegisteredJob(name, args),
-    triggerWorkflow: (name, args) => runRegisteredWorkflow(name, args),
-    resumeWorkflow: async (executionId: string): Promise<string> => executionId,
+    startJobFunction,
+    triggerJobFunction: startJobFunction,
+    startWorkflow,
+    triggerWorkflow: startWorkflow,
+    resumeWorkflowExecution,
+    resumeWorkflow: resumeWorkflowExecution,
     wait: (key: string): unknown => {
       throw new Error(
         `No wait handler for "${key}". Acquire mockWorkflow() and call setWaitHandler(...).`,
