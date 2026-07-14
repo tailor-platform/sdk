@@ -15,7 +15,7 @@ export interface MockAuthconnectionOptions {
   /** Tokens available when the mock is acquired. */
   tokens?: Partial<Record<ConnectionName, AuthConnectionTokenResult>>;
   /** Return a placeholder token or throw when a connection has no configured token. */
-  onUnhandled?: "default" | "error";
+  onUnhandled?: "fallback" | "error";
 }
 
 // ---------------------------------------------------------------------------

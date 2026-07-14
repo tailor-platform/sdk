@@ -85,6 +85,24 @@ describe("ergonomic runtime mocks", () => {
     );
   });
 
+  test("uses shared fallback vocabulary across service mocks", async () => {
+    using db = mockTailordb({ onUnhandled: "fallback" });
+    using auth = mockAuthconnection({ onUnhandled: "fallback" });
+    using idp = mockIdp({ onUnhandled: "fallback" });
+    using file = mockFile({ onUnhandled: "fallback" });
+    using iconv = mockIconv({ onUnhandled: "fallback" });
+
+    await expect(db.queryObject("SELECT 1")).resolves.toMatchObject({ rows: [] });
+    await expect(auth.getConnectionToken("unknown")).resolves.toEqual({
+      access_token: "mock-token",
+    });
+    await expect(idp.namespace("customer-idp").deleteUser("u-1")).resolves.toBe(true);
+    await expect(file.delete("main", "Document", "attachment", "record-1")).resolves.toBe(
+      undefined,
+    );
+    expect(iconv.decode(new Uint8Array(), "UTF-8")).toBe("");
+  });
+
   test("matches TailorDB query parameters structurally without JSON coercion", async () => {
     using db = mockTailordb({ onUnhandled: "error" });
     db.onQuery({ sql: "SELECT object", params: [{ a: 1, b: 2 }] }).returnsRows([

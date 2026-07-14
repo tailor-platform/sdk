@@ -30,7 +30,7 @@ type TypedOperationMock<
 /** Controls how unconfigured Iconv operations are handled. */
 export interface MockIconvOptions {
   /** Return an empty type-compatible value or throw when no behavior is configured. */
-  onUnhandled?: "empty" | "error";
+  onUnhandled?: "fallback" | "error";
 }
 
 // ---------------------------------------------------------------------------

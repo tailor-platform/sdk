@@ -7,7 +7,7 @@ type QueryResolver = (query: string, params: unknown[]) => unknown[] | undefined
 /** Controls how unmatched TailorDB queries are handled. */
 export interface MockTailordbOptions {
   /** Return an empty result or throw when no configured query behavior matches. */
-  onUnhandled?: "empty" | "error";
+  onUnhandled?: "fallback" | "error";
 }
 
 /** Matches a TailorDB query by SQL text and optionally by parameters. */
