@@ -10,6 +10,15 @@ import { erdDiffCommand } from "./diff-command";
 import { erdExportCommand } from "./export";
 import { erdServeCommand } from "./serve";
 import { commonArgs } from "./shared/args";
+import { logger } from "./shared/logger";
+
+function hasFormat(error: unknown): error is { format(): string } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    typeof (error as { format?: unknown }).format === "function"
+  );
+}
 
 const packageRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageJson = await readPackageJSON(packageRoot);
@@ -31,4 +40,16 @@ void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
   // strip unknown keys
   globalArgs: z.object(commonArgs),
+  displayErrors: false,
+  // Render the SDK's CLIError format (details/suggestion) like the host CLI does.
+  cleanup: ({ error }) => {
+    if (!error) return;
+    if (hasFormat(error)) {
+      logger.log(error.format());
+    } else if (error instanceof Error) {
+      logger.error(error.message);
+    } else {
+      logger.error(`Unknown error: ${String(error)}`);
+    }
+  },
 });
