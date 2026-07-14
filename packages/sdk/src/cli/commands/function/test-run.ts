@@ -370,6 +370,8 @@ export function resolveResolverArg(
 
   // New format failed — check if old format works
   if (
+    typeof parsed === "object" &&
+    parsed !== null &&
     Object.keys(parsed).length === 1 &&
     parsed.input != null &&
     typeof parsed.input === "object" &&

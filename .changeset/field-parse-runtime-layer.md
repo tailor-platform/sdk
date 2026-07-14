@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Align local input validation in `tailor function test-run` with deployed resolver behavior. A `null` input is now reported as `Required field is missing` instead of `Expected an object: received null`, matching the validation that runs on the platform.
+Fix `tailor function test-run` crashing with `TypeError: Cannot convert undefined or null to object` when `--arg` is a non-object JSON value such as `null`. The argument is now forwarded to the server, which reports the validation error. Local input validation also runs the same logic as deployed resolvers.
