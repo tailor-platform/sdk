@@ -111,3 +111,5 @@ const { url } = await aigateway.get("my-aigateway");
 ```
 
 Type narrowing is provided by the generated `tailor.d.ts` (the `AIGatewayNameRegistry` interface). Run `tailor-sdk generate` (or `deploy`) after defining new AI Gateways to refresh it. Before the first generate run, `get()` accepts any string.
+
+The same URL is also shown by `tailor-sdk show`, which lists the URL of each AI Gateway defined in `aiGateways` once it has been deployed.

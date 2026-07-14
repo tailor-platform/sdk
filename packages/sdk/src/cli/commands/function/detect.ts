@@ -8,7 +8,7 @@
 import * as path from "pathe";
 import { importUserFile } from "#/cli/shared/import-user-file";
 import { ExecutorSchema } from "#/parser/service/executor/index";
-import { ResolverSchema } from "#/parser/service/resolver/index";
+import { buildLocalInputParser, ResolverSchema } from "#/parser/service/resolver/index";
 import { WorkflowJobSchema } from "#/parser/service/workflow/index";
 import { assertDefined } from "#/utils/assert";
 
@@ -67,9 +67,7 @@ export async function detectFunctionType(
     const rawInput = (module.default as { input?: unknown }).input;
     let inputSchema: DetectedFunction["inputSchema"];
     if (rawInput) {
-      // Build schema object for local format detection.
-      const { t } = await import("#/configure/types/index");
-      inputSchema = t.object(rawInput as Parameters<typeof t.object>[0]) as InputSchema;
+      inputSchema = buildLocalInputParser(rawInput as Parameters<typeof buildLocalInputParser>[0]);
     }
     return {
       type: "resolver",
