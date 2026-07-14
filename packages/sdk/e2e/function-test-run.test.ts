@@ -87,7 +87,6 @@ async function runTestRun(
 
   const detected = await detectFunctionType({
     filePath,
-    baseDir: path.dirname(filePath),
     jobName: options?.name,
   });
 
@@ -296,10 +295,7 @@ describe.sequential("E2E: function test-run", () => {
     test("runs pre-bundled .js file directly", async () => {
       // Bundle the resolver first to create the .js file
       const sourceFile = path.resolve(exampleDir, "resolvers/add.ts");
-      const detected = await detectFunctionType({
-        filePath: sourceFile,
-        baseDir: path.dirname(sourceFile),
-      });
+      const detected = await detectFunctionType({ filePath: sourceFile });
       const { bundledCode } = await bundleForTestRun({
         detected,
         sourceFile,
@@ -337,7 +333,7 @@ describe.sequential("E2E: function test-run", () => {
       const fixtureDir = path.join(__dirname, "fixtures", "function-test-run");
       const filePath = path.join(fixtureDir, "error-function.ts");
 
-      const detected = await detectFunctionType({ filePath, baseDir: fixtureDir });
+      const detected = await detectFunctionType({ filePath });
       const { bundledCode, scriptName } = await bundleForTestRun({
         detected,
         sourceFile: filePath,

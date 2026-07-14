@@ -1,6 +1,6 @@
+import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
-import { importUserFile } from "#/cli/shared/import-user-file";
 import { logger, styles } from "#/cli/shared/logger";
 import { type HttpAdapterServiceInput } from "#/configure/config/types";
 import {
@@ -86,9 +86,7 @@ async function loadAdapterFiles(
   // Import every matched file and keep the ones whose default export is a
   // createHttpAdapter() result, mirroring the resolver/executor loaders.
   // Matched files without one (e.g. shared helpers) are skipped.
-  const loadResults = await Promise.all(
-    files.map((filePath) => loadAdapterFromFile(filePath, baseDir)),
-  );
+  const loadResults = await Promise.all(files.map(loadAdapterFromFile));
 
   const adapters: LoadedHttpAdapter[] = [];
   const seenNames = new Map<string, string>();
@@ -110,12 +108,9 @@ async function loadAdapterFiles(
   return { adapters, fileCount: files.length };
 }
 
-async function loadAdapterFromFile(
-  filePath: string,
-  baseDir: string,
-): Promise<LoadedHttpAdapter | null> {
+async function loadAdapterFromFile(filePath: string): Promise<LoadedHttpAdapter | null> {
   try {
-    const module = (await importUserFile(filePath, baseDir)) as Record<string, unknown>;
+    const module = (await import(pathToFileURL(filePath).href)) as Record<string, unknown>;
     // Only a createHttpAdapter() result is a valid default export; a plain
     // object that happens to match the schema is rejected by the brand check.
     if (!isSdkBranded(module.default, "http-adapter")) {

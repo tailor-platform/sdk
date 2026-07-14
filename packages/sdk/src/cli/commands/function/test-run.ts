@@ -132,7 +132,6 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
       const detected = await detectFunctionType({
         filePath,
-        baseDir: path.dirname(config.path),
         jobName: args.name,
       });
 

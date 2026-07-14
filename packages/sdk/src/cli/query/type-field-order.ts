@@ -1,6 +1,6 @@
+import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
-import { importUserFile } from "#/cli/shared/import-user-file";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
@@ -29,7 +29,7 @@ export async function loadTypeFieldOrder(
   await Promise.all(
     typeFiles.map(async (typeFile) => {
       try {
-        const module = await importUserFile(typeFile, baseDir);
+        const module = await import(pathToFileURL(typeFile).href);
 
         for (const exportedValue of Object.values(module)) {
           const result = TailorDBTypeSchema.safeParse(exportedValue);

@@ -42,7 +42,7 @@ export default {
 `,
       );
 
-      const result = await detectFunctionType({ filePath, baseDir: testDir });
+      const result = await detectFunctionType({ filePath });
       expect(result.type).toBe("resolver");
       expect(result.name).toBe("my-resolver");
     });
@@ -65,7 +65,7 @@ export default {
 `,
       );
 
-      const result = await detectFunctionType({ filePath, baseDir: testDir });
+      const result = await detectFunctionType({ filePath });
       expect(result.hasInput).toBe(true);
 
       const valid = result.inputSchema?.parse({ value: { name: "a", age: 1 }, data: {}, user: {} });
@@ -99,7 +99,7 @@ export default {
 `,
       );
 
-      const result = await detectFunctionType({ filePath, baseDir: testDir });
+      const result = await detectFunctionType({ filePath });
       expect(result.type).toBe("executor");
       expect(result.name).toBe("my-executor");
     });
@@ -120,9 +120,7 @@ export default {
       );
 
       // Should fall through to plain function check, which will also fail
-      await expect(detectFunctionType({ filePath, baseDir: testDir })).rejects.toThrow(
-        "Could not detect",
-      );
+      await expect(detectFunctionType({ filePath })).rejects.toThrow("Could not detect");
     });
   });
 
@@ -158,7 +156,7 @@ export default {
 `,
       );
 
-      const result = await detectFunctionType({ filePath, baseDir: testDir });
+      const result = await detectFunctionType({ filePath });
       expect(result.type).toBe("workflow-job");
       expect(result.name).toBe("my-job");
       expect(result.exportName).toBe("my_job");
@@ -167,7 +165,7 @@ export default {
     test("selects a workflow job by --name", async () => {
       const filePath = writeFile("multi-jobs.mjs", multiJobSource);
 
-      const result = await detectFunctionType({ filePath, baseDir: testDir, jobName: "job-b" });
+      const result = await detectFunctionType({ filePath, jobName: "job-b" });
       expect(result.type).toBe("workflow-job");
       expect(result.name).toBe("job-b");
       expect(result.exportName).toBe("job_b");
@@ -176,7 +174,7 @@ export default {
     test("throws when multiple jobs exist without --name", async () => {
       const filePath = writeFile("multi-jobs.mjs", multiJobSource);
 
-      await expect(detectFunctionType({ filePath, baseDir: testDir })).rejects.toThrow(
+      await expect(detectFunctionType({ filePath })).rejects.toThrow(
         "Multiple workflow jobs found",
       );
     });
@@ -193,9 +191,9 @@ export const my_job = {
 `,
       );
 
-      await expect(
-        detectFunctionType({ filePath, baseDir: testDir, jobName: "nonexistent" }),
-      ).rejects.toThrow('Workflow job "nonexistent" not found');
+      await expect(detectFunctionType({ filePath, jobName: "nonexistent" })).rejects.toThrow(
+        'Workflow job "nonexistent" not found',
+      );
     });
   });
 
@@ -210,7 +208,7 @@ export default function(input) {
 `,
       );
 
-      const result = await detectFunctionType({ filePath, baseDir: testDir });
+      const result = await detectFunctionType({ filePath });
       expect(result.type).toBe("plain");
       expect(result.name).toBe("my-function");
       expect(result.namedMain).toBeUndefined();
@@ -226,7 +224,7 @@ export function main(input) {
 `,
       );
 
-      const result = await detectFunctionType({ filePath, baseDir: testDir });
+      const result = await detectFunctionType({ filePath });
       expect(result.type).toBe("plain");
       expect(result.name).toBe("my-main");
       expect(result.namedMain).toBe(true);
@@ -245,7 +243,7 @@ export default function(input) {
 `,
       );
 
-      const result = await detectFunctionType({ filePath, baseDir: testDir });
+      const result = await detectFunctionType({ filePath });
       expect(result.type).toBe("plain");
       expect(result.namedMain).toBeUndefined();
     });
@@ -255,9 +253,7 @@ export default function(input) {
     test("throws when file exports nothing recognizable", async () => {
       const filePath = writeFile("empty.mjs", `export default 42;`);
 
-      await expect(detectFunctionType({ filePath, baseDir: testDir })).rejects.toThrow(
-        "Could not detect",
-      );
+      await expect(detectFunctionType({ filePath })).rejects.toThrow("Could not detect");
     });
   });
 });
