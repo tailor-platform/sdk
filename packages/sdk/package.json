@@ -234,7 +234,7 @@
     "oxlint-tsgolint": "0.24.0",
     "sonda": "0.14.0",
     "tsdown": "0.22.4",
-    "typescript": "6.0.3",
+    "typescript": "7.0.2",
     "vitest": "4.1.10",
     "zinfer": "0.2.5"
   },
