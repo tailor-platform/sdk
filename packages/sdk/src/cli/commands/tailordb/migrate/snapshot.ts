@@ -2724,13 +2724,17 @@ function extractRemoteScriptHash(remoteType: ProtoTailorDBType): string | undefi
     remoteType.schema?.typeValidate?.create?.expr,
     remoteType.schema?.typeValidate?.update?.expr,
   ];
+  let found: string | undefined;
   for (const expr of exprs) {
     if (expr) {
       const hash = extractSourceScriptHash(expr);
-      if (hash) return hash;
+      if (hash) {
+        if (found && found !== hash) return undefined;
+        found = hash;
+      }
     }
   }
-  return undefined;
+  return found;
 }
 
 function remoteHasScripts(remoteType: ProtoTailorDBType): boolean {

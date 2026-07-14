@@ -5,7 +5,9 @@ import { type DB, getDB } from "../generated/kysely-tailordb";
 
 const input = {
   order: t.object(order.omitFields(["id", "createdAt", "updatedAt"])),
-  items: t.object(orderItem.omitFields(["id", "createdAt", "updatedAt"]), { array: true }),
+  items: t.object(orderItem.omitFields(["id", "createdAt", "updatedAt", "totalPrice"]), {
+    array: true,
+  }),
 };
 interface Input {
   order: t.infer<typeof input.order>;

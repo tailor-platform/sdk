@@ -454,6 +454,12 @@ async function bundleScriptTarget(args: {
   const { fn, kind, sourceFilePath, sourceBindings, tempDir, targetIndex, tsconfig } = args;
   const context = `${kind} in ${sourceFilePath}`;
   const fnSource = stringifyFunction(fn);
+  if ((kind === "typeValidate" || kind === "validate") && fn.constructor.name === "AsyncFunction") {
+    throw new Error(
+      `${context} must be synchronous — the generated validator runs synchronously, ` +
+        "so issues reported after an await are silently lost. Remove the async keyword.",
+    );
+  }
   const argsObject =
     kind === "hooks.create"
       ? `{ input: _value, invoker: ${tailorPrincipalMap}, now: _now }`
