@@ -35,6 +35,7 @@ import { commonArgs, isVerbose } from "./shared/args";
 import { isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
+import { registerTsconfigPathsHook } from "./shared/register-tsconfig-paths-hook";
 import { isNativeTypeScriptRuntime } from "./shared/runtime";
 
 // Register tsx for TypeScript loading on Node.js.
@@ -45,6 +46,7 @@ if (!isNativeTypeScriptRuntime()) {
   const { register } = await import("tsx/esm/api");
   register();
 }
+await registerTsconfigPathsHook(new URL("./tsconfig-paths-hook.mjs", import.meta.url));
 
 // Runs before globalArgs effects load --env-file, so env file overrides for
 // TAILOR_CRASH_REPORTS_* are not available for early startup failures.

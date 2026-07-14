@@ -1,4 +1,5 @@
 // CLI API exports for programmatic usage
+import { registerTsconfigPathsHook } from "./shared/register-tsconfig-paths-hook";
 import { isNativeTypeScriptRuntime } from "./shared/runtime";
 
 // Register tsx to handle TypeScript files when using CLI API programmatically.
@@ -9,6 +10,7 @@ if (!isNativeTypeScriptRuntime()) {
   const { register } = await import("tsx/esm/api");
   register();
 }
+await registerTsconfigPathsHook(new URL("./tsconfig-paths-hook.mjs", import.meta.url));
 
 export { deploy, deploy as apply } from "./commands/deploy/deploy";
 export type { DeployOptions, DeployOptions as ApplyOptions } from "./commands/deploy/deploy";
