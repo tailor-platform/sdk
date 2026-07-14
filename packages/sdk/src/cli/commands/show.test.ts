@@ -80,6 +80,7 @@ describe("show", () => {
       workspaceId: "workspace-1",
       aigatewayName: "gateway-b",
     });
+    expect(getAIGatewayMock).toHaveBeenCalledTimes(2);
   });
 
   test("omits AI Gateways that have not been deployed yet", async () => {
@@ -95,6 +96,32 @@ describe("show", () => {
     const info = await show();
 
     expect(info.aiGateways).toEqual([{ name: "gateway-a", url: "https://gateway-a.example.com" }]);
+    expect(getAIGatewayMock).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      aigatewayName: "gateway-a",
+    });
+    expect(getAIGatewayMock).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      aigatewayName: "gateway-b",
+    });
+    expect(getAIGatewayMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("de-duplicates AI Gateway names before fetching", async () => {
+    vi.mocked(loadConfig).mockResolvedValue({
+      config: {
+        name: "my-app",
+        aiGateways: [{ name: "gateway-a" }, { name: "gateway-a" }],
+      },
+    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    getAIGatewayMock.mockResolvedValue({
+      aigateway: { name: "gateway-a", url: "https://gateway-a.example.com" },
+    });
+
+    const info = await show();
+
+    expect(info.aiGateways).toEqual([{ name: "gateway-a", url: "https://gateway-a.example.com" }]);
+    expect(getAIGatewayMock).toHaveBeenCalledTimes(1);
   });
 
   test("returns an empty array when no AI Gateway is configured", async () => {

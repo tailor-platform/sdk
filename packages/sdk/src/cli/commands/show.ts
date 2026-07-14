@@ -98,7 +98,9 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
   });
 
   const { config } = await loadConfig(options?.configPath);
-  const aiGatewayNames = config.aiGateways?.map((gateway) => gateway.name) ?? [];
+  const aiGatewayNames = config.aiGateways?.length
+    ? [...new Set(config.aiGateways.map((gateway) => gateway.name))]
+    : [];
   const [workspaceResp, resp, aiGateways] = await Promise.all([
     client.getWorkspace({
       workspaceId,
