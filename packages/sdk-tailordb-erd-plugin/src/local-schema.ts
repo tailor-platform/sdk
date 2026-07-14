@@ -1,6 +1,5 @@
 import { loadTailorDBNamespaces } from "@tailor-platform/sdk/cli";
-import type { LoadedConfig } from "@tailor-platform/sdk/cli";
-import type { TailorDBNamespaceData } from "@tailor-platform/sdk/cli";
+import type { LoadedConfig, TailorDBNamespaceData } from "@tailor-platform/sdk/cli";
 
 export interface LoadLocalErdSchemaOptions {
   configPath?: string;
