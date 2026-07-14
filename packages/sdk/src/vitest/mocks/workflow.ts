@@ -15,18 +15,15 @@ import { tailorRoot, withDispose } from "./shared";
 import type { WorkflowJob } from "#/configure/services/workflow/job";
 import type { WaitPointInstance } from "#/configure/services/workflow/wait-point";
 import type { Workflow } from "#/configure/services/workflow/workflow";
-import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
+import type { StartJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
 import type { TailorEnv } from "../../runtime/types";
 
-type JobHandler = (jobName: string, args: unknown, options?: TriggerJobFunctionOptions) => unknown;
+type JobHandler = (jobName: string, args: unknown, options?: StartJobFunctionOptions) => unknown;
 
-type TriggerWorkflowOptions = {
-  authInvoker?: { namespace: string; machineUserName: string };
-};
 type TriggerHandlerFn = (
   workflowName: string,
   args: unknown,
-  options?: TriggerWorkflowOptions,
+  options?: StartWorkflowOptions,
 ) => string;
 type ResumeHandlerFn = (executionId: string) => string;
 type WaitHandlerFn = (key: string, payload: unknown) => unknown;
@@ -48,7 +45,7 @@ type SetWaitHandler = {
 interface TriggeredJob {
   jobName: string;
   args: unknown;
-  options?: TriggerJobFunctionOptions;
+  options?: StartJobFunctionOptions;
 }
 
 interface ScopedMock {
@@ -140,7 +137,7 @@ export function mockWorkflow() {
   const defaultTriggerJob = (
     jobName: string,
     args?: unknown,
-    _options?: TriggerJobFunctionOptions,
+    _options?: StartJobFunctionOptions,
   ): unknown => {
     const body = getRegisteredJob(jobName);
     return body ? body(args, buildJobContext()) : null;
@@ -148,7 +145,7 @@ export function mockWorkflow() {
   const defaultTriggerWorkflow = async (
     workflowName: string,
     args?: unknown,
-    _options?: TriggerWorkflowOptions,
+    _options?: StartWorkflowOptions,
   ): Promise<string> => {
     const wf = getRegisteredWorkflow(workflowName);
     if (wf) {
@@ -176,7 +173,7 @@ export function mockWorkflow() {
 
   // Preserve arity: recording `undefined` as the third element only when the
   // caller supplied it, mirroring `.triggerJobFunction(name, args, options)`.
-  const jobFunctionShim = (...call: [string, unknown?, TriggerJobFunctionOptions?]) => {
+  const jobFunctionShim = (...call: [string, unknown?, StartJobFunctionOptions?]) => {
     const out =
       call.length >= 3
         ? triggerJobFunction(call[0], platformSerialize(call[1]), call[2])
@@ -185,7 +182,7 @@ export function mockWorkflow() {
   };
   // Preserve arity so a forwarded third `options` arg — even `undefined` — is
   // recorded, matching the real `.trigger(args, options)` call shape.
-  const workflowShim = (...call: [string, unknown?, TriggerWorkflowOptions?]) =>
+  const workflowShim = (...call: [string, unknown?, StartWorkflowOptions?]) =>
     call.length >= 3
       ? triggerWorkflow(call[0], platformSerialize(call[1]), call[2])
       : triggerWorkflow(call[0], platformSerialize(call[1]));
@@ -350,7 +347,7 @@ export function mockWorkflow() {
       return triggerJobFunction.mock.calls.map(([jobName, args, options]) => ({
         jobName: jobName as string,
         args,
-        ...(options !== undefined && { options: options as TriggerJobFunctionOptions }),
+        ...(options !== undefined && { options: options as StartJobFunctionOptions }),
       }));
     },
 

@@ -1,7 +1,7 @@
 import { platformSerialize } from "#/utils/test/platform-serialize";
 import { buildJobContext } from "./test-env-key";
 import type { TailorEnv, TailorInvoker } from "#/runtime/types";
-import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
+import type { StartJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
 
 /**
  * Body signature shared by workflow jobs at registry-write time.
@@ -21,14 +21,14 @@ const JOB_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:job-regi
 const WORKFLOW_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:workflow-registry");
 
 type PlatformWorkflow = {
-  startWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
-  triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
-  startJobFunction: (name: string, args?: unknown, options?: TriggerJobFunctionOptions) => unknown;
-  triggerJobFunction: (
+  startWorkflow: (name: string, args?: unknown, options?: StartWorkflowOptions) => Promise<string>;
+  triggerWorkflow: (
     name: string,
     args?: unknown,
-    options?: TriggerJobFunctionOptions,
-  ) => unknown;
+    options?: StartWorkflowOptions,
+  ) => Promise<string>;
+  startJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
+  triggerJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
 };
 
 type GlobalWithRegistry = typeof globalThis & {
@@ -134,7 +134,7 @@ export async function runRegisteredWorkflow(name: string, args?: unknown): Promi
 export function dispatchTriggerJob(
   name: string,
   args?: unknown,
-  options?: TriggerJobFunctionOptions,
+  options?: StartJobFunctionOptions,
 ): unknown {
   const workflow = currentPlatformWorkflow();
   if (!workflow) return runRegisteredJob(name, args);
@@ -144,6 +144,11 @@ export function dispatchTriggerJob(
     : workflow.triggerJobFunction(name, args);
 }
 
+// Accepts `unknown` because the SDK-side `.trigger()` accepts a wider options
+// shape than the platform surface (e.g. `authInvoker` may be a machine-user
+// name string that the bundler normalizes at build time). Local execution
+// forwards the value verbatim; only the bundled path enforces the platform
+// contract.
 export function dispatchTriggerWorkflow(
   name: string,
   args?: unknown,
@@ -151,6 +156,6 @@ export function dispatchTriggerWorkflow(
 ): Promise<string> {
   const workflow = currentPlatformWorkflow();
   return workflow
-    ? workflow.triggerWorkflow(name, args, options)
+    ? workflow.triggerWorkflow(name, args, options as StartWorkflowOptions | undefined)
     : runRegisteredWorkflow(name, args);
 }

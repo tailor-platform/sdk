@@ -2,17 +2,17 @@
 // Must stay free of `vitest` (`vi`): it loads via `./globals` in the environment
 // realm where `vi` is unavailable, hence relative imports only (no `@/` alias).
 import { runRegisteredJob, runRegisteredWorkflow } from "../configure/services/workflow/registry";
-import type { TriggerJobFunctionOptions } from "../runtime/workflow";
+import type { StartJobFunctionOptions, StartWorkflowOptions } from "../runtime/workflow";
 
 export interface DefaultWorkflowRuntime {
-  startJobFunction: (name: string, args?: unknown, options?: TriggerJobFunctionOptions) => unknown;
-  triggerJobFunction: (
+  startJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
+  triggerJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
+  startWorkflow: (name: string, args?: unknown, options?: StartWorkflowOptions) => Promise<string>;
+  triggerWorkflow: (
     name: string,
     args?: unknown,
-    options?: TriggerJobFunctionOptions,
-  ) => unknown;
-  startWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
-  triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
+    options?: StartWorkflowOptions,
+  ) => Promise<string>;
   resumeWorkflowExecution: (executionId: string) => Promise<string>;
   resumeWorkflow: (executionId: string) => Promise<string>;
   wait: (key: string, payload?: unknown) => unknown;
