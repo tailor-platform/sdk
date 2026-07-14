@@ -5,6 +5,13 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { loadFilesWithIgnores } from "./file-loader";
 
+// Delegates to the real implementation by default, so only the one test
+// that needs fs.globSync to throw has to override it.
+vi.mock("node:fs", async (importOriginal) => {
+  const original = await importOriginal<typeof fs>();
+  return { ...original, globSync: vi.fn(original.globSync) };
+});
+
 describe("loadFilesWithIgnores", () => {
   const tmpDirs: string[] = [];
 
@@ -105,23 +112,35 @@ describe("loadFilesWithIgnores", () => {
 
   test("does not fall back when a files pattern throws while globbing, even if baseDir has no other matches", () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
-    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-throwing-pattern-"));
+    const baseDir = fs.realpathSync(
+      fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-throwing-pattern-")),
+    );
     tmpDirs.push(baseDir);
-    // The "src" segment must exist so fs.globSync actually descends into it
-    // and hits the null byte, instead of short-circuiting on a missing dir.
-    fs.mkdirSync(path.join(baseDir, "src"));
     // cwd has an unrelated file that must NOT leak in via a wrongful fallback.
     const cwdDir = makeDirWithFile("file-loader-unrelated-cwd-throw-", "src/bar.ts");
+
+    // Simulate a glob failure directly, rather than relying on OS-specific
+    // fs.globSync behavior for a malformed pattern (e.g. a null byte throws
+    // on macOS but not on Linux).
+    const throwingPattern = path.resolve(baseDir, "./src/**/*.ts");
+    const mockedGlobSync = vi.mocked(fs.globSync);
+    const originalImplementation = mockedGlobSync.getMockImplementation()!;
+    mockedGlobSync.mockImplementation((pattern, options) => {
+      if (pattern === throwingPattern) {
+        throw new Error("simulated glob failure");
+      }
+      return originalImplementation(pattern, options);
+    });
 
     const originalCwd = process.cwd();
     process.chdir(cwdDir);
     try {
-      // A null byte makes fs.globSync throw synchronously, rather than matching nothing.
-      const files = loadFilesWithIgnores({ files: ["./src/\0bad/*.ts"] }, baseDir);
+      const files = loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, baseDir);
       expect(files).toEqual([]);
       expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining("falling back"));
     } finally {
       process.chdir(originalCwd);
+      mockedGlobSync.mockImplementation(originalImplementation);
     }
   });
 });
