@@ -174,7 +174,7 @@ tailor-sdk setup tag [options]
 | Option                        | Alias | Description                                                                  | Required | Default |
 | ----------------------------- | ----- | ---------------------------------------------------------------------------- | -------- | ------- |
 | `--name <NAME>`               | `-n`  | Name (defaults to the config 'name')                                         | No       | -       |
-| `--tag-pattern <TAG_PATTERN>` | -     | Tag glob to match (defaults to v\*)                                          | No       | `"v*"`  |
+| `--tag-pattern <TAG_PATTERN>` | -     | Tag glob to match (defaults to v*)                                           | No       | `"v*"`  |
 | `--branch <BRANCH>`           | -     | Tag-reachability guard branch (no guard when omitted)                        | No       | -       |
 | `--environment <ENVIRONMENT>` | -     | GitHub Environment for the plan/deploy jobs (defaults to the workspace name) | No       | -       |
 | `--dir <DIR>`                 | `-d`  | App directory (for monorepo setups)                                          | No       | `"."`   |
