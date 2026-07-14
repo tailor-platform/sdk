@@ -155,7 +155,9 @@ export function dispatchTriggerWorkflow(
   options?: unknown,
 ): Promise<string> {
   const workflow = currentPlatformWorkflow();
-  return workflow
+  if (!workflow) return runRegisteredWorkflow(name, args);
+  // oxlint-disable-next-line prefer-rest-params
+  return arguments.length >= 3
     ? workflow.triggerWorkflow(name, args, options as StartWorkflowOptions | undefined)
-    : runRegisteredWorkflow(name, args);
+    : workflow.triggerWorkflow(name, args);
 }

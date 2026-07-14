@@ -864,6 +864,34 @@ describe("mock", () => {
       expect(wf.triggerWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }, undefined]]);
     });
 
+    test("createWorkflow().trigger(args) without options records a 2-arg call", async () => {
+      using wf = mockWorkflow();
+      const arityJob = createWorkflowJob({
+        name: "arity-workflow-main",
+        body: (_input: undefined) => ({ ok: true }),
+      });
+      const arityWorkflow = createWorkflow({ name: "arity-workflow", mainJob: arityJob });
+
+      await arityWorkflow.trigger(undefined);
+
+      expect(wf.triggerWorkflow.mock.calls).toEqual([["arity-workflow", undefined]]);
+    });
+
+    test("createWorkflow().trigger(args, undefined) records a 3-arg call", async () => {
+      using wf = mockWorkflow();
+      const arityJob = createWorkflowJob({
+        name: "arity-workflow-main-3arg",
+        body: (_input: undefined) => ({ ok: true }),
+      });
+      const arityWorkflow = createWorkflow({ name: "arity-workflow-3arg", mainJob: arityJob });
+
+      await arityWorkflow.trigger(undefined, undefined);
+
+      expect(wf.triggerWorkflow.mock.calls).toEqual([
+        ["arity-workflow-3arg", undefined, undefined],
+      ]);
+    });
+
     test("setTriggerHandler with string controls triggerWorkflow response", async () => {
       using wf = mockWorkflow();
       wf.setTriggerHandler("exec-123");

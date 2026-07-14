@@ -77,7 +77,20 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
               "workflow.trigger() is rewritten at build time and unavailable in the bundle",
             );
           }
-        : async (args, options) => await dispatchTriggerWorkflow(config.name, args, options),
+        : // Preserve arity: use `arguments.length` (regular function, not arrow) so
+          // `.trigger(args, undefined)` is treated as "options passed" — matching
+          // the bundler rewrite, which forwards the literal `undefined` from the
+          // AST as a third argument. Without this, local execution and bundled
+          // workflows would hand mocks different call shapes.
+          async function trigger(
+            args: Parameters<Job["trigger"]>[0],
+            options?: { authInvoker: AuthInvoker<string> | MachineUserName },
+          ) {
+            // oxlint-disable-next-line prefer-rest-params
+            return arguments.length >= 2
+              ? await dispatchTriggerWorkflow(config.name, args, options)
+              : await dispatchTriggerWorkflow(config.name, args);
+          },
     } as Workflow<Job>,
     "workflow",
   );
