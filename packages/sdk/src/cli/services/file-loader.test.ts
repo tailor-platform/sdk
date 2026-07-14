@@ -74,6 +74,24 @@ describe("loadFilesWithIgnores", () => {
     }
   });
 
+  test("warns only once when called repeatedly for the same baseDir", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const cwdDir = makeDirWithFile("file-loader-dedupe-cwd-", "src/legacy.ts");
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-dedupe-empty-"));
+    tmpDirs.push(emptyBaseDir);
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test("does not warn when baseDir itself matches", () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const targetDir = makeDirWithFile("file-loader-no-warn-", "src/correct.ts");

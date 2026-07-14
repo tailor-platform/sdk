@@ -9,6 +9,12 @@ export interface FileLoadConfig {
 
 const DEFAULT_IGNORE_PATTERNS = ["**/*.test.ts", "**/*.spec.ts"];
 
+// loadFilesWithIgnores is called once per service/bundler, so a single
+// generate/apply run can call it multiple times for the same baseDir (once
+// per resolver/executor/tailordb/etc. config sharing that directory). Track
+// which baseDirs have already warned so each one only warns once per run.
+const warnedBaseDirs = new Set<string>();
+
 /**
  * Load files matching the given patterns, excluding files that match ignore patterns.
  * By default, test files (*.test.ts, *.spec.ts) are excluded unless ignores is explicitly specified.
@@ -37,11 +43,14 @@ export function loadFilesWithIgnores(config: FileLoadConfig, baseDir: string): s
   // resolution — re-running against cwd would just repeat the same glob.
   // Remove this fallback in v2, once such configs are expected to have
   // migrated.
-  logger.warn(
-    `No files matched "${config.files.join(", ")}" relative to "${baseDir}"; falling back to ` +
-      `process.cwd(). Update this config's file patterns to be relative to its own directory ` +
-      `before v2, when this fallback will be removed.`,
-  );
+  if (!warnedBaseDirs.has(baseDir)) {
+    warnedBaseDirs.add(baseDir);
+    logger.warn(
+      `No files matched "${config.files.join(", ")}" relative to "${baseDir}"; falling back to ` +
+        `process.cwd(). Update this config's file patterns to be relative to its own directory ` +
+        `before v2, when this fallback will be removed.`,
+    );
+  }
   return resolveFiles(config, process.cwd()).files;
 }
 

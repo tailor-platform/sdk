@@ -66,6 +66,24 @@ describe("resolveTSConfigWithFallback", () => {
     }
   });
 
+  test("warns only once when called repeatedly for the same baseDir", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const baseDir = makeIsolatedBaseDir("resolve-tsconfig-dedupe");
+    tmpDirs.push(baseDir);
+
+    const cwdDir = makeDirWithTsconfig("resolve-tsconfig-dedupe-cwd-");
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      await resolveTSConfigWithFallback(baseDir);
+      await resolveTSConfigWithFallback(baseDir);
+      await resolveTSConfigWithFallback(baseDir);
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test("returns undefined without warning when no tsconfig exists anywhere", async () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const baseDir = makeIsolatedBaseDir("resolve-tsconfig-none");
