@@ -22,7 +22,8 @@ export function loadFilesWithIgnores(config: FileLoadConfig, baseDir: string): s
   }
 
   const resolved = resolveFiles(config, baseDir);
-  if (resolved.matchedAnyPattern || baseDir === process.cwd()) {
+  const allPatternsAbsolute = config.files.every((pattern) => path.isAbsolute(pattern));
+  if (resolved.matchedAnyPattern || baseDir === process.cwd() || allPatternsAbsolute) {
     return resolved.files;
   }
 
@@ -31,8 +32,11 @@ export function loadFilesWithIgnores(config: FileLoadConfig, baseDir: string): s
   // triggers when baseDir's patterns matched nothing at all (not merely
   // "matched, but every hit got filtered out by ignores") — otherwise this
   // fallback would reintroduce the same cross-app file bleed this baseDir
-  // resolution is meant to prevent. Remove this fallback in v2, once such
-  // configs are expected to have migrated.
+  // resolution is meant to prevent. Also skipped when every pattern is
+  // already absolute, since baseDir can't change an absolute pattern's
+  // resolution — re-running against cwd would just repeat the same glob.
+  // Remove this fallback in v2, once such configs are expected to have
+  // migrated.
   logger.warn(
     `No files matched "${config.files.join(", ")}" relative to "${baseDir}"; falling back to ` +
       `process.cwd(). Update this config's file patterns to be relative to its own directory ` +

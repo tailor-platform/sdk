@@ -92,6 +92,24 @@ describe("loadFilesWithIgnores", () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
+  test("does not warn or fall back when every pattern is already absolute", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const cwdDir = makeDirWithFile("file-loader-absolute-cwd-", "src/legacy.ts");
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-absolute-base-"));
+    tmpDirs.push(emptyBaseDir);
+    const absolutePattern = path.join(emptyBaseDir, "src", "**", "*.ts");
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      const files = loadFilesWithIgnores({ files: [absolutePattern] }, emptyBaseDir);
+      expect(files).toEqual([]);
+      expect(warnSpy).not.toHaveBeenCalled();
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test("does not fall back when baseDir matches something that is entirely filtered out by ignores", () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     // baseDir has a match for the pattern, but it's a default-ignored test file.

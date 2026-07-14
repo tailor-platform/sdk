@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import type * as Chokidar from "chokidar";
 
 const madgeMock = vi.hoisted(() =>
   vi.fn(async () => ({
@@ -14,6 +15,14 @@ const madgeMock = vi.hoisted(() =>
 vi.mock("madge", () => ({
   default: madgeMock,
 }));
+
+const chokidarWatchMock = vi.hoisted(() => vi.fn());
+
+vi.mock("chokidar", async (importOriginal) => {
+  const actual = await importOriginal<typeof Chokidar>();
+  chokidarWatchMock.mockImplementation(actual.watch);
+  return { ...actual, watch: chokidarWatchMock };
+});
 
 import {
   createDependencyGraphManager,
@@ -32,6 +41,7 @@ beforeEach(() => {
     obj: () => ({}),
     circular: () => [],
   }));
+  chokidarWatchMock.mockClear();
   manager = createDependencyGraphManager();
 });
 
@@ -107,6 +117,20 @@ describe("DependencyWatcher", () => {
       const status = watcher.getWatchStatus();
       expect(status.groupCount).toBe(0);
       expect(status.fileCount).toBe(0);
+    });
+
+    test("unwatches the resolved absolute files, not the original relative pattern", async () => {
+      const testFile = path.join(tempDir, "src", "test.ts");
+      await createTestFile(testFile, 'export const test = "hello";');
+
+      await watcher.addWatchGroup("test-group", ["src/*.ts"], tempDir);
+
+      const chokidarInstance = chokidarWatchMock.mock.results[0]?.value;
+      const unwatchSpy = vi.spyOn(chokidarInstance, "unwatch");
+
+      await watcher.removeWatchGroup("test-group");
+
+      expect(unwatchSpy).toHaveBeenCalledWith([path.resolve(testFile)]);
     });
 
     test("duplicate group ID causes error", async () => {

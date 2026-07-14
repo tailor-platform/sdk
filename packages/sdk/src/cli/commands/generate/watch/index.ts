@@ -656,7 +656,7 @@ export function createDependencyWatcher(options: WatcherOptions = {}): Dependenc
       if (!watchGroup) return;
 
       if (chokidarWatcher) {
-        chokidarWatcher.unwatch(watchGroup.patterns);
+        chokidarWatcher.unwatch(Array.from(watchGroup.files));
       }
 
       for (const filePath of watchGroup.files) {
