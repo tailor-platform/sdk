@@ -45,6 +45,41 @@ export default {
       expect(result.type).toBe("resolver");
       expect(result.name).toBe("my-resolver");
     });
+
+    test("builds a working local input parser from real t.* fields", async () => {
+      const configureTypesPath = path
+        .join(__dirname, "../../../configure/types/index.ts")
+        .replace(/\\/g, "/");
+      const filePath = writeFile(
+        "resolver.mjs",
+        `
+import { t } from "${configureTypesPath}";
+export default {
+  operation: "query",
+  name: "my-resolver",
+  input: { name: t.string(), age: t.int({ optional: true }) },
+  body: (ctx) => ctx.input,
+  output: { type: "string", metadata: {}, fields: {} },
+};
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.hasInput).toBe(true);
+
+      const valid = result.inputSchema?.parse({ value: { name: "a", age: 1 }, data: {}, user: {} });
+      expect(valid?.issues).toBeUndefined();
+
+      const invalid = result.inputSchema?.parse({
+        value: { age: "not-a-number" },
+        data: {},
+        user: {},
+      });
+      expect(invalid?.issues).toEqual([
+        { message: "Required field is missing", path: ["name"] },
+        { message: "Expected an integer: received not-a-number", path: ["age"] },
+      ]);
+    });
   });
 
   describe("executor detection", () => {
