@@ -14,6 +14,24 @@ fail() {
   exit 1
 }
 
+wait_for_path_removal() {
+  local path=$1 message=$2
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [[ ! -e "$path" ]] && return 0
+    sleep 0.05
+  done
+  fail "$message"
+}
+
+wait_for_empty_directory() {
+  local path=$1 message=$2
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    [[ -z $(find "$path" -mindepth 1 -maxdepth 1 -print -quit) ]] && return 0
+    sleep 0.05
+  done
+  fail "$message"
+}
+
 [[ ! -f "$repo_root/.agents/skills/e2e-setup/SKILL.md" ]] || fail "legacy SKILL.md remains"
 [[ ! -f "$repo_root/.agents/skills/e2e-setup/.gitignore" ]] || fail "legacy skill ignore remains"
 [[ -f "$skill_dir/SKILL.md" ]] || fail "SKILL.md is missing"
@@ -102,11 +120,7 @@ fi
 isolated_config_home=$(<"$auth_marker")
 [[ "$isolated_config_home" == "$(<"$target_marker")" ]] ||
   fail "authentication and target used different config homes"
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  [[ ! -e "$isolated_config_home" ]] && break
-  sleep 0.05
-done
-[[ ! -e "$isolated_config_home" ]] || fail "temporary config home was not removed"
+wait_for_path_removal "$isolated_config_home" "temporary config home was not removed"
 
 set +e
 xtrace_output=$(
@@ -139,11 +153,7 @@ set -e
 [[ $failure_status -eq 23 ]] || fail "target failure status was not preserved"
 [[ "$failure_output" != *"$secret"* ]] || fail "failed run leaked the secret"
 failed_config_home=$(<"$failure_marker")
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  [[ ! -e "$failed_config_home" ]] && break
-  sleep 0.05
-done
-[[ ! -e "$failed_config_home" ]] || fail "temporary config home survived a failed target"
+wait_for_path_removal "$failed_config_home" "temporary config home survived a failed target"
 
 auth_failure_tmp="$tmp_dir/auth-failure"
 mkdir "$auth_failure_tmp"
@@ -157,12 +167,9 @@ auth_failure_status=$?
 set -e
 [[ $auth_failure_status -eq 22 ]] || fail "authentication failure status was not preserved"
 [[ "$auth_failure_output" != *"$secret"* ]] || fail "authentication failure leaked the secret"
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  [[ -z $(find "$auth_failure_tmp" -mindepth 1 -maxdepth 1 -print -quit) ]] && break
-  sleep 0.05
-done
-[[ -z $(find "$auth_failure_tmp" -mindepth 1 -maxdepth 1 -print -quit) ]] ||
-  fail "temporary config home survived an authentication failure"
+wait_for_empty_directory \
+  "$auth_failure_tmp" \
+  "temporary config home survived an authentication failure"
 
 for signal_case in TERM:143 KILL:137; do
   target_signal=${signal_case%%:*}
@@ -180,11 +187,9 @@ for signal_case in TERM:143 KILL:137; do
   [[ $target_signal_status -eq $expected_status ]] || fail "helper lost the $target_signal status"
   [[ "$signal_output" != *"$secret"* ]] || fail "$target_signal run leaked the secret"
   signaled_config_home=$(<"$signal_marker")
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
-    [[ ! -e "$signaled_config_home" ]] && break
-    sleep 0.05
-  done
-  [[ ! -e "$signaled_config_home" ]] || fail "temporary config home survived $target_signal"
+  wait_for_path_removal \
+    "$signaled_config_home" \
+    "temporary config home survived $target_signal"
 done
 
 pnpm_marker="$tmp_dir/pnpm-marker"
