@@ -23,6 +23,19 @@ export interface ResolvedTriggerCall extends StartCallInfo {
   targetName: string;
 }
 
+const START_CALL_RE = /\.start\s*\(/;
+
+/**
+ * Fast pre-check for whether `code` contains a `.start(` call, tolerating
+ * whitespace/newlines between `.start` and `(` that a plain substring check
+ * would miss.
+ * @param code - Source text to scan
+ * @returns Whether `code` contains a `.start(` call
+ */
+export function hasStartCall(code: string): boolean {
+  return START_CALL_RE.test(code);
+}
+
 const NORMALIZER_IDENTIFIER = "__tailor_normalizeTriggerOptions";
 
 /**
@@ -380,7 +393,7 @@ export function createTriggerTransformPlugin(
     transform: {
       filter: { id: { include: [/\.(ts|mts|cts|js|mjs|cjs)$/] } },
       handler(code, id) {
-        if (!code.includes(".start(")) return null;
+        if (!hasStartCall(code)) return null;
         return { code: transformFunctionTriggers(code, triggerContext, id) };
       },
     },

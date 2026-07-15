@@ -15,7 +15,11 @@ import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigg
 import ml from "#/utils/multiline";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
-import { detectResolvedTriggerCalls, transformFunctionTriggers } from "./trigger-transformer";
+import {
+  detectResolvedTriggerCalls,
+  hasStartCall,
+  transformFunctionTriggers,
+} from "./trigger-transformer";
 import type { LogLevel } from "#/configure/config/types";
 
 function safeRealpath(p: string): string {
@@ -338,7 +342,7 @@ async function bundleSingleJob(
             if (
               !code.includes("createWorkflowJob") &&
               !code.includes("createWorkflow") &&
-              !code.includes(".start(")
+              !hasStartCall(code)
             ) {
               return null;
             }
@@ -359,7 +363,7 @@ async function bundleSingleJob(
             }
 
             // Apply workflow.start / job.start transformation.
-            if (transformed.includes(".start(")) {
+            if (hasStartCall(transformed)) {
               transformed = transformFunctionTriggers(transformed, triggerContext, id);
             }
 
