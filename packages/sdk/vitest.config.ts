@@ -146,9 +146,15 @@ export default defineConfig({
     environment: "node",
     globals: true,
     watch: false,
-    // The dedicated tsconfig narrows tsc to the test-d files and their
+    // The dedicated tsconfig narrows tsc to the type-test files and their
     // imports; the full-project surface is already covered by `pnpm typecheck`.
-    typecheck: { enabled: true, tsconfig: "./tsconfig.vitest-typecheck.json" },
+    // Keep `include` and the tsconfig's `include` covering the same files so
+    // every collected type test is actually compiled.
+    typecheck: {
+      enabled: true,
+      tsconfig: "./tsconfig.vitest-typecheck.json",
+      include: ["src/**/*.{test,spec}-d.ts"],
+    },
     coverage: {
       reporter: ["text", "lcov"],
     },

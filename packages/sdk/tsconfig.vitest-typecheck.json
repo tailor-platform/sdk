@@ -5,5 +5,5 @@
     "tsBuildInfoFile": null,
     "types": ["node"]
   },
-  "include": ["src/**/*.test-d.ts", "src/runtime/globals.ts"]
+  "include": ["src/**/*.test-d.ts", "src/**/*.spec-d.ts", "src/runtime/globals.ts"]
 }
