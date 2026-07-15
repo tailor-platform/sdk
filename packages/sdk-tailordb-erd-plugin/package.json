@@ -23,7 +23,7 @@
     "lint:fix": "oxlint . --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "prepublish": "pnpm run build",
+    "prepack": "pnpm run build",
     "publint": "publint --strict"
   },
   "dependencies": {

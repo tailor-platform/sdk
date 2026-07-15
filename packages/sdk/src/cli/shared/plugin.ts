@@ -223,6 +223,8 @@ export function listPlugins(cliName: string): DiscoveredPlugin[] {
 interface PluginContextOptions {
   /** Active profile used to resolve the workspace, user, and token. */
   profile?: string | undefined;
+  /** Skip platform context (URL, client ID, workspace, user, token) injection. */
+  skipPlatformContext?: boolean;
 }
 
 /**
@@ -248,18 +250,7 @@ async function resolveActiveUser(profile?: string): Promise<string | undefined> 
  */
 async function buildPluginEnv(options: PluginContextOptions = {}): Promise<Record<string, string>> {
   const { profile } = options;
-  // Resolve the active profile's platform settings so the injected URL and
-  // OAuth client match the profile the token and workspace belong to.
-  let platformConfig: PlatformClientConfig | undefined;
-  try {
-    platformConfig = await loadPlatformClientConfig({ profile, allowMissingProfile: true });
-  } catch {
-    // Fall back to env/default platform settings when the profile is unreadable.
-  }
-  const env: Record<string, string> = {
-    TAILOR_PLATFORM_URL: getPlatformBaseUrl(platformConfig),
-    TAILOR_PLATFORM_OAUTH2_CLIENT_ID: getOAuth2ClientId(platformConfig),
-  };
+  const env: Record<string, string> = {};
 
   const binPath = process.argv[1];
   if (binPath) {
@@ -277,6 +268,24 @@ async function buildPluginEnv(options: PluginContextOptions = {}): Promise<Recor
   if (configPath) {
     env.TAILOR_CONFIG_PATH = configPath;
   }
+
+  // An explicit --env-file supplies the plugin's platform context itself.
+  // Injected values would shadow it (the plugin's env-file loader never
+  // overwrites pre-existing keys), so skip context injection entirely.
+  if (options.skipPlatformContext) {
+    return env;
+  }
+
+  // Resolve the active profile's platform settings so the injected URL and
+  // OAuth client match the profile the token and workspace belong to.
+  let platformConfig: PlatformClientConfig | undefined;
+  try {
+    platformConfig = await loadPlatformClientConfig({ profile, allowMissingProfile: true });
+  } catch {
+    // Fall back to env/default platform settings when the profile is unreadable.
+  }
+  env.TAILOR_PLATFORM_URL = getPlatformBaseUrl(platformConfig);
+  env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID = getOAuth2ClientId(platformConfig);
 
   try {
     env.TAILOR_PLATFORM_WORKSPACE_ID = await loadWorkspaceId({ profile });
@@ -361,6 +370,29 @@ function buildSpawnTarget(
  * @param args - Args forwarded to the plugin
  * @returns The explicit profile value, or undefined when not present
  */
+/**
+ * Check whether args forwarded to a plugin carry an explicit env-file flag.
+ * Scanning stops at a `--` terminator.
+ * @param args - Args forwarded to the plugin
+ * @returns Whether an `--env-file`/`-e`/`--env-file-if-exists` flag is present
+ */
+export function hasEnvFileFlag(args: readonly string[]): boolean {
+  for (const token of args) {
+    if (token === "--") return false;
+    if (token === "--env-file" || token === "-e" || token === "--env-file-if-exists") {
+      return true;
+    }
+    if (
+      token.startsWith("--env-file=") ||
+      token.startsWith("-e=") ||
+      token.startsWith("--env-file-if-exists=")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function explicitProfileFromArgs(args: readonly string[]): string | undefined {
   let profile: string | undefined;
   for (let i = 0; i < args.length; i++) {
@@ -408,7 +440,10 @@ export async function dispatchPlugin(params: {
   }
 
   const profile = explicitProfileFromArgs(params.args) ?? params.profile;
-  const env = { ...process.env, ...(await buildPluginEnv({ profile })) };
+  const env = {
+    ...process.env,
+    ...(await buildPluginEnv({ profile, skipPlatformContext: hasEnvFileFlag(params.args) })),
+  };
   const { command, args, shell } = buildSpawnTarget(plugin.path, params.args);
 
   return await new Promise<number>((resolve) => {

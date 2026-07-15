@@ -3,7 +3,13 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { getOAuth2ClientId, getPlatformBaseUrl } from "./client";
-import { dispatchPlugin, explicitProfileFromArgs, listPlugins, resolvePlugin } from "./plugin";
+import {
+  dispatchPlugin,
+  explicitProfileFromArgs,
+  hasEnvFileFlag,
+  listPlugins,
+  resolvePlugin,
+} from "./plugin";
 
 const contextMocks = vi.hoisted(() => ({
   loadAccessToken: vi.fn(),
@@ -339,5 +345,18 @@ describe("explicitProfileFromArgs", () => {
     [["deploy", "--", "--profile", "staging"], undefined],
   ])("extracts profile from %j", (args, expected) => {
     expect(explicitProfileFromArgs(args)).toBe(expected);
+  });
+});
+
+describe("hasEnvFileFlag", () => {
+  test.each([
+    [["deploy", "--env-file", ".env"], true],
+    [["deploy", "-e", ".env"], true],
+    [["deploy", "--env-file=.env"], true],
+    [["deploy", "--env-file-if-exists", ".env"], true],
+    [["deploy"], false],
+    [["deploy", "--", "--env-file", ".env"], false],
+  ])("detects env-file flag in %j", (args, expected) => {
+    expect(hasEnvFileFlag(args)).toBe(expected);
   });
 });
