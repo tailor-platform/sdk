@@ -6,7 +6,7 @@ import resolver from "./incrementUserAge";
 describe("incrementUserAge resolver", () => {
   test("increments user age", async () => {
     using db = mockTailordb();
-    db.enqueueResults(
+    db.enqueueRows(
       [], // BEGIN
       [{ age: 30 }], // SELECT
       [], // UPDATE
@@ -24,7 +24,7 @@ describe("incrementUserAge resolver", () => {
 
   test("throws when user not found", async () => {
     using db = mockTailordb();
-    db.enqueueResults(
+    db.enqueueRows(
       [], // BEGIN
       [], // SELECT (empty)
       [], // ROLLBACK

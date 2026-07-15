@@ -1,4 +1,4 @@
-import { vi } from "vitest";
+import { type Mock, vi } from "vitest";
 import {
   getRegisteredJob,
   getRegisteredWorkflow,
@@ -8,9 +8,13 @@ import { platformSerialize } from "#/utils/test/platform-serialize";
 import {
   buildJobContext,
   clearWorkflowTestEnv,
+  readWorkflowTestEnv,
   writeWorkflowTestEnv,
 } from "../../configure/services/workflow/test-env-key";
 import { tailorRoot, withDispose } from "./shared";
+import type { WorkflowJob } from "#/configure/services/workflow/job";
+import type { WaitPointInstance } from "#/configure/services/workflow/wait-point";
+import type { Workflow } from "#/configure/services/workflow/workflow";
 import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
 import type { TailorEnv } from "../../runtime/types";
 
@@ -47,6 +51,55 @@ interface TriggeredJob {
   options?: TriggerJobFunctionOptions;
 }
 
+interface ScopedMock {
+  mockClear(): unknown;
+  mockReset(): unknown;
+  restore(): void;
+}
+
+type WaitPayload<Payload> = [Payload] extends [undefined] ? undefined : Payload;
+type TriggerProcedure = (...args: never[]) => unknown;
+// `vi.spyOn` reuses an existing spy for the same property. Keep the base
+// procedure separately so nested mockWorkflow scopes get independent mocks
+// while disposal can still restore the immediately preceding scope.
+const originalProcedures = new WeakMap<TriggerProcedure, TriggerProcedure>();
+
+function replaceProcedure<Procedure extends TriggerProcedure>(
+  target: object,
+  key: string,
+  current: Procedure,
+): { mock: Mock<Procedure>; scoped: ScopedMock } {
+  const original = (originalProcedures.get(current) ?? current) as Procedure;
+  const defaultImplementation = function (
+    this: unknown,
+    ...args: Parameters<Procedure>
+  ): ReturnType<Procedure> {
+    return Reflect.apply(original, this, args) as ReturnType<Procedure>;
+  };
+  const mock = vi.fn(defaultImplementation) as unknown as Mock<Procedure>;
+  originalProcedures.set(mock as TriggerProcedure, original);
+
+  const record = target as Record<string, unknown>;
+  record[key] = mock;
+
+  return {
+    mock,
+    scoped: {
+      mockClear: () => mock.mockClear(),
+      mockReset: () => mock.mockReset(),
+      restore: () => {
+        if (record[key] === mock) record[key] = current;
+      },
+    },
+  };
+}
+
+function replaceTrigger<Trigger extends TriggerProcedure>(definition: {
+  trigger: Trigger;
+}): { mock: Mock<Trigger>; scoped: ScopedMock } {
+  return replaceProcedure(definition, "trigger", definition.trigger);
+}
+
 // ---------------------------------------------------------------------------
 // Workflow Mock
 // ---------------------------------------------------------------------------
@@ -59,17 +112,23 @@ interface TriggeredJob {
  * ```typescript
  * import { mockWorkflow } from "@tailor-platform/sdk/vitest";
  *
- * test("job handler", async () => {
+ * test("job trigger", async () => {
  *   using wf = mockWorkflow();
- *   wf.setJobHandler((name) => (name === "validate" ? { valid: true } : null));
- *   await runWorkflowUnderTest(); // calls tailor.workflow.triggerJobFunction("validate", {})
- *   expect(wf.triggerJobFunction).toHaveBeenCalledWith("validate", {});
+ *   const job = wf.job(validateOrder);
+ *   job.mockResolvedValue({ valid: true });
+ *   await runWorkflowUnderTest();
+ *   expect(job).toHaveBeenCalled();
  * });
  * ```
  */
 export function mockWorkflow() {
   const root = tailorRoot();
   const prev = root.workflow;
+  const prevEnv = readWorkflowTestEnv();
+  const jobSpies = new Map<object, unknown>();
+  const workflowSpies = new Map<object, unknown>();
+  const waitPointMocks = new Map<object, unknown>();
+  const scopedMocks = new Set<ScopedMock>();
 
   // Default impls (also restored by reset): run the registered body by name so a
   // `.trigger()` with no handler/result executes the real job locally.
@@ -150,6 +209,85 @@ export function mockWorkflow() {
     wait,
     /** The `resolve` `vi.fn`. */
     resolve,
+
+    /**
+     * Get a stable, typed mock for a workflow job's `trigger` method.
+     * The real trigger behavior is used until an implementation or result is configured.
+     * @param definition - Workflow job definition to mock
+     * @returns Typed `trigger` mock for the definition
+     */
+    job<Name extends string, Input, Output>(
+      definition: WorkflowJob<Name, Input, Output>,
+    ): Mock<WorkflowJob<Name, Input, Output>["trigger"]> {
+      const existing = jobSpies.get(definition);
+      if (existing) {
+        return existing as Mock<WorkflowJob<Name, Input, Output>["trigger"]>;
+      }
+
+      const { mock, scoped } =
+        replaceTrigger<WorkflowJob<Name, Input, Output>["trigger"]>(definition);
+      scopedMocks.add(scoped);
+      jobSpies.set(definition, mock);
+      return mock;
+    },
+
+    /**
+     * Get a stable, typed mock for a workflow definition's `trigger` method.
+     * The real trigger behavior is used until an implementation or result is configured.
+     * @param definition - Workflow definition to mock
+     * @returns Typed `trigger` mock for the definition
+     */
+    workflow<Definition extends Workflow>(definition: Definition): Mock<Definition["trigger"]> {
+      const existing = workflowSpies.get(definition);
+      if (existing) return existing as Mock<Definition["trigger"]>;
+
+      const { mock, scoped } = replaceTrigger<Definition["trigger"]>(definition);
+      workflowSpies.set(definition, mock);
+      scopedMocks.add(scoped);
+      return mock;
+    },
+
+    /**
+     * Get stable, typed mocks for a wait point's `wait` and `resolve` methods.
+     * @param definition - Wait point definition to mock
+     * @returns Typed wait point mock control object
+     */
+    waitPoint<Payload, Result>(definition: WaitPointInstance<Payload, Result>) {
+      const existing = waitPointMocks.get(definition);
+      if (existing) {
+        return existing as {
+          wait: Mock<WaitPointInstance<Payload, Result>["wait"]>;
+          resolve: Mock<WaitPointInstance<Payload, Result>["resolve"]>;
+          setResolvePayload(payload: WaitPayload<Payload>): void;
+        };
+      }
+
+      const waitReplacement = replaceProcedure(definition, "wait", definition.wait);
+      const resolveReplacement = replaceProcedure(definition, "resolve", definition.resolve);
+      const waitSpy = waitReplacement.mock;
+      const resolveSpy = resolveReplacement.mock;
+      scopedMocks.add(waitReplacement.scoped);
+      scopedMocks.add(resolveReplacement.scoped);
+
+      const waitPointMock = {
+        wait: waitSpy,
+        resolve: resolveSpy,
+
+        /**
+         * Invoke the next and subsequent resolve callbacks with a wait payload.
+         * @param payload - Payload originally supplied to the wait point
+         */
+        setResolvePayload(payload: WaitPayload<Payload>): void {
+          resolveSpy.mockImplementation(async (_executionId, callback) => {
+            const result = await callback(platformSerialize(payload) as WaitPayload<Payload>);
+            platformSerialize(result);
+          });
+        },
+      };
+
+      waitPointMocks.set(definition, waitPointMock);
+      return waitPointMock;
+    },
 
     /**
      * Set a fallback job handler. Called when the enqueue queue is empty.
@@ -268,6 +406,16 @@ export function mockWorkflow() {
       }));
     },
 
+    /** Clear recorded calls while preserving configured responses. */
+    clear(): void {
+      triggerJobFunction.mockClear();
+      triggerWorkflow.mockClear();
+      resumeWorkflow.mockClear();
+      wait.mockClear();
+      resolve.mockClear();
+      for (const mock of scopedMocks) mock.mockClear();
+    },
+
     /** Reset all workflow responses and recorded calls (keeps the mock installed). */
     reset(): void {
       triggerJobFunction.mockReset();
@@ -280,12 +428,15 @@ export function mockWorkflow() {
       wait.mockImplementation(() => null);
       resolve.mockReset();
       resolve.mockImplementation(async () => {});
+      for (const mock of scopedMocks) mock.mockReset();
       clearWorkflowTestEnv();
     },
   };
 
   return withDispose(facade, () => {
+    for (const mock of scopedMocks) mock.restore();
     root.workflow = prev;
-    clearWorkflowTestEnv();
+    if (prevEnv !== undefined) writeWorkflowTestEnv(prevEnv);
+    else clearWorkflowTestEnv();
   });
 }
