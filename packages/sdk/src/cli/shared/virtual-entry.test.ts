@@ -1,3 +1,4 @@
+import { build } from "rolldown";
 import { describe, expect, test } from "vitest";
 import { createVirtualEntry } from "./virtual-entry";
 
@@ -20,5 +21,18 @@ describe("createVirtualEntry", () => {
     ) => unknown;
 
     expect(await resolveId(entry.input, "/project/resolver.ts")).toBeNull();
+  });
+
+  test("parses generated JavaScript independently of the logical name suffix", async () => {
+    const entry = createVirtualEntry("resolver:report.json", "export const value = 1;");
+
+    const result = await build({
+      input: entry.input,
+      plugins: [entry.plugin],
+      write: false,
+      output: { format: "esm" },
+    });
+
+    expect(result.output[0].code).toContain("value = 1");
   });
 });

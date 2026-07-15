@@ -9,10 +9,15 @@ type VirtualEntry = {
  * Create an in-memory rolldown entry module with a deterministic ID.
  * @param name - Logical entry name
  * @param code - Entry module source
+ * @param sourceType - Parser type for the generated module
  * @returns Rolldown input and plugin for loading the entry
  */
-export function createVirtualEntry(name: string, code: string): VirtualEntry {
-  const input = `tailor-sdk-entry:${name}`;
+export function createVirtualEntry(
+  name: string,
+  code: string,
+  sourceType: "js" | "ts" = "js",
+): VirtualEntry {
+  const input = `tailor-sdk-entry:${name}.${sourceType}`;
   const resolvedId = `\0${input}`;
 
   return {
