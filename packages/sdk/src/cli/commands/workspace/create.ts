@@ -12,13 +12,16 @@ import {
 import { defineAppCommand } from "#/cli/shared/command";
 import {
   loadAccessToken,
+  loadPlatformClientConfig,
   platformConfigFromProfile,
   readPlatformConfig,
   resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
+import { profileNameSchema } from "#/cli/shared/profile-name";
 import { assertWritable } from "#/cli/shared/readonly-guard";
+import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { assertDefined } from "#/utils/assert";
 import {
   workspaceDisplayName,
@@ -35,22 +38,16 @@ import type { ProfileInfo } from "../profile";
  */
 // strip unknown keys
 const createWorkspaceOptionsSchema = z.object({
-  name: z
-    .string()
-    .min(3, "Name must be at least 3 characters")
-    .max(63, "Name must be at most 63 characters")
-    .regex(/^[a-z0-9-]+$/, "Name can only contain lowercase letters, numbers, and hyphens")
-    .refine(
-      (n) => !n.startsWith("-") && !n.endsWith("-"),
-      "Name cannot start or end with a hyphen",
-    ),
+  name: workspaceNameSchema,
   region: z.string(),
   deleteProtection: z.boolean().optional(),
   organizationId: z.uuid().optional(),
   folderId: z.uuid().optional(),
+  profile: profileNameSchema.optional(),
 });
 
 export type CreateWorkspaceOptions = z.input<typeof createWorkspaceOptionsSchema>;
+export type ValidatedCreateWorkspaceOptions = z.output<typeof createWorkspaceOptionsSchema>;
 
 const validateRegion = async (region: string, client: OperatorClient) => {
   const availableRegions = await client.listAvailableWorkspaceRegions({});
@@ -79,25 +76,31 @@ function profilePlatformSettings(platformConfig?: PlatformClientConfig) {
  * @returns Created workspace info
  */
 export async function createWorkspace(options: CreateWorkspaceOptions): Promise<WorkspaceInfo> {
-  // Validate options with zod schema
-  const result = createWorkspaceOptionsSchema.safeParse(options);
-  if (!result.success) {
-    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
-  }
-  const validated = result.data;
-
-  // Load client and validate region
-  const accessToken = await loadAccessToken();
-  const client = await initOperatorClient(accessToken);
+  const validated = validateCreateWorkspaceOptions(options);
+  const accessToken = await loadAccessToken({ profile: validated.profile });
+  const platformConfig = await loadPlatformClientConfig({ profile: validated.profile });
+  const client = await initOperatorClient(accessToken, platformConfig);
   await validateRegion(validated.region, client);
+  return createValidatedWorkspaceWithClient(client, validated);
+}
 
+/**
+ * Create a workspace after its local options and region have been validated.
+ * @param client - Authenticated Operator client
+ * @param options - Validated workspace creation options
+ * @returns Created workspace info
+ */
+export async function createValidatedWorkspaceWithClient(
+  client: OperatorClient,
+  options: ValidatedCreateWorkspaceOptions,
+): Promise<WorkspaceInfo> {
   // Create workspace
   const resp = await client.createWorkspace({
-    workspaceName: validated.name,
-    workspaceRegion: validated.region,
-    deleteProtection: validated.deleteProtection ?? false,
-    organizationId: validated.organizationId,
-    folderId: validated.folderId,
+    workspaceName: options.name,
+    workspaceRegion: options.region,
+    deleteProtection: options.deleteProtection ?? false,
+    organizationId: options.organizationId,
+    folderId: options.folderId,
   });
 
   return workspaceInfoWithFolderName(
@@ -105,6 +108,23 @@ export async function createWorkspace(options: CreateWorkspaceOptions): Promise<
     assertDefined(resp.workspace, "createWorkspace response missing workspace"),
   );
 }
+
+/**
+ * Validate workspace creation options without making API calls.
+ * @param options - Workspace creation options
+ * @returns Validated workspace creation options
+ */
+export function validateCreateWorkspaceOptions(
+  options: CreateWorkspaceOptions,
+): ValidatedCreateWorkspaceOptions {
+  const result = createWorkspaceOptionsSchema.safeParse(options);
+  if (!result.success) {
+    throw new Error(assertDefined(result.error.issues[0], "Zod returned no issues").message);
+  }
+  return result.data;
+}
+
+export { validateWorkspaceName } from "#/cli/shared/workspace-name";
 
 export const createCommand = defineAppCommand({
   name: "create",
@@ -136,6 +156,10 @@ export const createCommand = defineAppCommand({
       alias: "p",
       description: "Profile name to create",
     }),
+    profile: arg(profileNameSchema.optional(), {
+      description: "Workspace profile used for authentication and Platform selection",
+      env: "TAILOR_PLATFORM_PROFILE",
+    }),
     "profile-user": arg(z.string().optional(), {
       description:
         "User email address or machine user client ID for the profile (defaults to current user)",
@@ -146,9 +170,7 @@ export const createCommand = defineAppCommand({
     }),
   }),
   run: async (args) => {
-    // This command does not expose `--profile`, so the guard resolves the
-    // active profile from `TAILOR_PLATFORM_PROFILE` only.
-    await assertWritable();
+    await assertWritable({ profile: args.profile });
     const profileName = args["profile-name"];
     let profileSetup:
       | {
@@ -163,7 +185,7 @@ export const createCommand = defineAppCommand({
         throw new Error(`Profile "${profileName}" already exists.`);
       }
 
-      const activeProfileName = process.env.TAILOR_PLATFORM_PROFILE;
+      const activeProfileName = args.profile;
       const activeProfileEntry = activeProfileName ? config.profiles[activeProfileName] : undefined;
       const platformConfig = activeProfileEntry
         ? platformConfigFromProfile(activeProfileEntry)
@@ -195,6 +217,7 @@ export const createCommand = defineAppCommand({
       deleteProtection: args["delete-protection"],
       organizationId: args["organization-id"],
       folderId: args["folder-id"],
+      profile: args.profile,
     });
 
     let profileInfo: ProfileInfo | undefined;

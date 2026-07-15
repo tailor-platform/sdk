@@ -1,5 +1,32 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.5
+
+### Major Changes
+
+- [#1719](https://github.com/tailor-platform/sdk/pull/1719) [`4a05aec`](https://github.com/tailor-platform/sdk/commit/4a05aecfb100a1ea7292a6ae5809a2d1e6eddbfe) Thanks [@dqn](https://github.com/dqn)! - Derive default TailorDB forward relation names from the relation field name by removing a trailing `ID`, `Id`, or `id`, instead of deriving them from the target table name.
+  
+  The v2 migration review identifies non-self relations without `toward.as`. Add an explicit name to preserve the v1 GraphQL field name, or update consumers to use the new field-based name.
+
+- [#1678](https://github.com/tailor-platform/sdk/pull/1678) [`e0e768d`](https://github.com/tailor-platform/sdk/commit/e0e768d77470d13806ed7b2ee2117fe374d51d40) Thanks [@toiroakr](https://github.com/toiroakr)! - Redesign TailorDB hooks and validators with several breaking changes:
+  
+  - Add shared `now` timestamp to all hooks — multiple fields stamped with the same `Date`
+  - Field-level hooks: `{ value, data, invoker }` → create `{ input, invoker, now }` / update `{ input, oldValue, invoker, now }` (`data` removed, `oldValue` added for update only)
+  - Type-level hooks: per-field mapping (`Hooks<F>`) → single `{ create, update }` object (`TypeHook<F>`) returning partial field overrides
+  - Type-level create hooks no longer receive `oldRecord`; update hooks receive non-nullable `oldRecord`
+  - Field-level validators: return type changed from `boolean` to `string | void` (return error message or void to pass); `[fn, message]` tuple form removed
+  - Type-level validators: `Validators<F>` per-field record → `TypeValidateFn<F>` single function with `issues(field, message)` callback
+  - Add `.default(value)` on fields to set a create-time default (makes required fields optional in create input)
+  - Remove exported types: `Hooks<F>`, `Validators<F>`, `ValidateConfig`
+
+### Patch Changes
+
+- [#1763](https://github.com/tailor-platform/sdk/pull/1763) [`2abbe40`](https://github.com/tailor-platform/sdk/commit/2abbe409ed77eb5e1c50d4aa0b65fbf26843fdb1) Thanks [@dqn](https://github.com/dqn)! - Reduce duplicated schema-derived type declarations.
+
+- [#1764](https://github.com/tailor-platform/sdk/pull/1764) [`7895ed6`](https://github.com/tailor-platform/sdk/commit/7895ed621dc87ec0307ddb511307a0daac637556) Thanks [@k1LoW](https://github.com/k1LoW)! - Correct the execution policy matching semantics in the workflow docs: overlapping policies now stack (every matching cap is enforced independently and the tightest blocks), not longest-prefix-wins.
+
+- [#1749](https://github.com/tailor-platform/sdk/pull/1749) [`f0e38ac`](https://github.com/tailor-platform/sdk/commit/f0e38ac5765e1d52ff8431262b387a681d99c82a) Thanks [@toiroakr](https://github.com/toiroakr)! - Upgrade politty to 0.11.2 and simplify the `skills` command wiring to use its new `globalArgs`/`commandMap`/`unknownKeys` customization options instead of hand-rolled schema rewriting.
+
 ## 2.0.0-next.4
 
 ### Major Changes
@@ -264,6 +291,18 @@
 
 
 - [#1421](https://github.com/tailor-platform/sdk/pull/1421) [`b933f47`](https://github.com/tailor-platform/sdk/commit/b933f474d65f8dfed56f3991aae3a52589368b10) Thanks [@dqn](https://github.com/dqn)! - Corrupted or hand-edited TailorDB migration snapshot/diff files now fail with a clear validation error when loaded, instead of causing undefined behavior later.
+
+## 1.78.0
+
+### Minor Changes
+
+- [#1753](https://github.com/tailor-platform/sdk/pull/1753) [`6bff945`](https://github.com/tailor-platform/sdk/commit/6bff94505f3dbe11a8be36ef301e3641ee2cba89) Thanks [@dqn](https://github.com/dqn)! - Add typed, service-specific Vitest mock controls for runtime APIs and update generated project tests to use them.
+
+- [#1754](https://github.com/tailor-platform/sdk/pull/1754) [`10392ff`](https://github.com/tailor-platform/sdk/commit/10392ff07fa50d90ba7e4846bf1dc14011dde2eb) Thanks [@dqn](https://github.com/dqn)! - Guide workspace selection and optional creation during deploy when no workspace is configured, with machine-readable recovery actions that preserve environment and profile settings
+
+### Patch Changes
+
+- [#1770](https://github.com/tailor-platform/sdk/pull/1770) [`9ca5eaa`](https://github.com/tailor-platform/sdk/commit/9ca5eaa4c92b699aa49c79913975cdcfd702214d) Thanks [@toiroakr](https://github.com/toiroakr)! - Document the type-level `gqlOperations` feature (`.features({ gqlOperations })`, including the `"query"` read-only alias) and the namespace-level `db.tailordb.gqlOperations` default in `tailor.config.ts`, clarifying that the namespace default also updates types that already exist on the platform.
 
 ## 1.77.0
 

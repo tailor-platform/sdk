@@ -1,5 +1,5 @@
 import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
-import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
+import type { StartJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
 
 /**
  * Body signature shared by workflow jobs at registry-write time.
@@ -14,12 +14,14 @@ export type RegisteredJobBody = (
 const JOB_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:job-registry");
 
 type PlatformWorkflow = {
-  triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
-  triggerJobFunction: (
+  startWorkflow: (name: string, args?: unknown, options?: StartWorkflowOptions) => Promise<string>;
+  triggerWorkflow: (
     name: string,
     args?: unknown,
-    options?: TriggerJobFunctionOptions,
-  ) => unknown;
+    options?: StartWorkflowOptions,
+  ) => Promise<string>;
+  startJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
+  triggerJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
 };
 
 type GlobalWithRegistry = typeof globalThis & {
@@ -88,7 +90,7 @@ export const TRIGGER_DEFAULT = "00000000-0000-4000-8000-000000000000";
 export function dispatchTriggerJob(
   name: string,
   args?: unknown,
-  options?: TriggerJobFunctionOptions,
+  options?: StartJobFunctionOptions,
 ): unknown {
   const workflow = requirePlatformWorkflow();
   // oxlint-disable-next-line prefer-rest-params
@@ -97,14 +99,26 @@ export function dispatchTriggerJob(
     : workflow.triggerJobFunction(name, args);
 }
 
+// Accepts `unknown` because the SDK-side `.trigger()` accepts a wider options
+// shape than the platform surface (e.g. `authInvoker` may be a machine-user
+// name string that the bundler normalizes at build time). Local execution
+// forwards the value verbatim; only the bundled path enforces the platform
+// contract.
 export function dispatchTriggerWorkflow(
   name: string,
   args?: unknown,
   options?: { invoker?: unknown },
 ): Promise<string> {
   const workflow = requirePlatformWorkflow();
-  if (options?.invoker === undefined) {
+  // oxlint-disable-next-line prefer-rest-params
+  if (arguments.length < 3) {
     return workflow.triggerWorkflow(name, args);
   }
-  return workflow.triggerWorkflow(name, args, { authInvoker: options.invoker });
+  return workflow.triggerWorkflow(
+    name,
+    args,
+    options?.invoker === undefined
+      ? (options as StartWorkflowOptions | undefined)
+      : ({ authInvoker: options.invoker } as StartWorkflowOptions),
+  );
 }
