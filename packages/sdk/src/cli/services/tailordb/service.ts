@@ -4,7 +4,10 @@ import { resolveTSConfig } from "pkg-types";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { parseTypes, TailorDBTypeSchema } from "#/parser/service/tailordb/index";
-import { findOmittedPermitRules } from "#/parser/service/tailordb/permission";
+import {
+  findMissingPermissionConfig,
+  findOmittedPermitRules,
+} from "#/parser/service/tailordb/permission";
 import { assertDefined } from "#/utils/assert";
 import { isSdkBranded } from "#/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
@@ -108,6 +111,40 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           );
         }
       }
+    }
+  };
+
+  // Require .permission()/.gqlPermission() to be set explicitly. TailorDB
+  // fails closed for record operations without a .permission(), producing an
+  // opaque "internal error" instead of a clear denial when only
+  // .gqlPermission() is set. Catching the omission here, rather than at
+  // deploy/insert time, surfaces it while the type is still local.
+  const validateRequiredPermissions = (): void => {
+    const errors: string[] = [];
+    for (const fileTypes of Object.values(rawTypes)) {
+      for (const [typeName, type] of Object.entries(fileTypes)) {
+        const effectiveGqlOperations =
+          type.metadata.settings?.gqlOperations ?? config.gqlOperations;
+        const { missingPermission, missingGqlPermission } = findMissingPermissionConfig(
+          type.metadata.permissions,
+          effectiveGqlOperations,
+        );
+        if (missingPermission) {
+          errors.push(
+            `TailorDB type "${typeName}" has no .permission() configured. TailorDB denies all record operations for types without permission; call .permission(...) to grant access explicitly.`,
+          );
+        }
+        if (missingGqlPermission) {
+          errors.push(
+            `TailorDB type "${typeName}" has no .gqlPermission() configured, but GraphQL operations are enabled for it. Call .gqlPermission(...) to grant GraphQL access explicitly, or disable GraphQL exposure with .features({ gqlOperations: { create: false, update: false, delete: false, read: false } }).`,
+          );
+        }
+      }
+    }
+    if (errors.length > 0) {
+      throw new Error(
+        `TailorDB permission configuration errors in service "${namespace}":\n${errors.map((e) => `  - ${e}`).join("\n")}`,
+      );
     }
   };
 
@@ -260,6 +297,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           }
           doParseTypes();
           warnOmittedPermit();
+          validateRequiredPermissions();
           return types;
         })();
       }

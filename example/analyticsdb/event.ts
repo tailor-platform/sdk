@@ -1,4 +1,5 @@
 import { db } from "@tailor-platform/sdk";
+import { defaultGqlPermission, defaultPermission } from "../tailordb/permissions";
 
 export const event = db
   .type("Event", {
@@ -7,4 +8,6 @@ export const event = db
   })
   .files({
     screenshot: "screenshot image",
-  });
+  })
+  .permission(defaultPermission)
+  .gqlPermission(defaultGqlPermission);
