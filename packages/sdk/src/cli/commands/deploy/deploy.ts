@@ -5,9 +5,9 @@ import { hashFile } from "#/cli/cache/hasher";
 import { createCacheManager } from "#/cli/cache/manager";
 import { loadApplication, type Application } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
-import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { loadAccessToken, loadConfigPath, loadWorkspaceId } from "#/cli/shared/context";
+import { loadConfigPath } from "#/cli/shared/context";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { logger, styles } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
@@ -67,6 +67,7 @@ import { formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
 import { validatePlan } from "./validate-plan";
 import { formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
+import { resolveDeployWorkspace } from "./workspace";
 import type { PlanContext } from "./types";
 
 export interface DeployOptions {
@@ -79,9 +80,21 @@ export interface DeployOptions {
   noValidate?: boolean;
   noCache?: boolean;
   cleanCache?: boolean;
+  createWorkspace?: boolean;
+  workspaceName?: string;
+  workspaceRegion?: string;
+  organizationId?: string;
+  folderId?: string;
   // NOTE(remiposo): Provide an option to run build-only for testing purposes.
   // This could potentially be exposed as a CLI option.
   buildOnly?: boolean;
+}
+
+interface DeployCLIContext {
+  envFile?: string;
+  envFileIfExists?: string;
+  verbose?: boolean;
+  json?: boolean;
 }
 
 /**
@@ -405,8 +418,11 @@ export function computeRenamedAppDeletions(params: {
 
 type PlanResults = Omit<PlannedDeployment, "application">;
 
+type LoadedDeployConfig = Awaited<ReturnType<typeof loadConfig>>;
+
 type BuildDeploymentTargetParams = {
   configPath: string | undefined;
+  loadedConfig?: LoadedDeployConfig;
   dryRun: boolean;
   buildOnly: boolean;
   noCache: boolean;
@@ -422,8 +438,12 @@ type BuiltDeploymentTarget = {
   bundledScripts: Awaited<ReturnType<typeof loadApplication>>["bundledScripts"];
 };
 
-type BuildDeploymentTargetsParams = Omit<BuildDeploymentTargetParams, "configPath"> & {
+type BuildDeploymentTargetsParams = Omit<
+  BuildDeploymentTargetParams,
+  "configPath" | "loadedConfig"
+> & {
   configPaths: ReadonlyArray<string | undefined>;
+  loadedConfigs?: ReadonlyArray<LoadedDeployConfig>;
   buildTarget?: (params: BuildDeploymentTargetParams) => Promise<BuiltDeploymentTarget>;
 };
 
@@ -794,20 +814,62 @@ export function parseDeployConfigPaths(configPath?: string): Array<string | unde
   return configPaths;
 }
 
+function recoveryEnvironmentArgs(
+  options: DeployOptions | undefined,
+  cliContext?: DeployCLIContext,
+): readonly string[] {
+  return [
+    ...(cliContext?.envFile ? ["--env-file", path.resolve(process.cwd(), cliContext.envFile)] : []),
+    ...(cliContext?.envFileIfExists
+      ? ["--env-file-if-exists", path.resolve(process.cwd(), cliContext.envFileIfExists)]
+      : []),
+    ...(options?.profile ? ["--profile", options.profile] : []),
+  ];
+}
+
+function recoveryOutputArgs(cliContext?: DeployCLIContext): readonly string[] {
+  return [
+    ...(cliContext?.verbose ? ["--verbose"] : []),
+    ...(cliContext?.json || logger.jsonMode ? ["--json"] : []),
+  ];
+}
+
+function retryDeployArgs(
+  options: DeployOptions | undefined,
+  configPaths: readonly string[],
+  cliContext?: DeployCLIContext,
+): readonly string[] {
+  return [
+    "deploy",
+    "--config",
+    configPaths.join(","),
+    ...recoveryEnvironmentArgs(options, cliContext),
+    ...(options?.dryRun ? ["--dry-run"] : []),
+    ...(options?.yes ? ["--yes"] : []),
+    ...(options?.noSchemaCheck ? ["--no-schema-check"] : []),
+    ...(options?.noValidate ? ["--no-validate"] : []),
+    ...(options?.noCache ? ["--no-cache"] : []),
+    ...(options?.cleanCache ? ["--clean-cache"] : []),
+    ...recoveryOutputArgs(cliContext),
+  ];
+}
+
+function workspaceRecoveryArgs(
+  options: DeployOptions | undefined,
+  cliContext?: DeployCLIContext,
+): readonly string[] {
+  return [
+    ...recoveryEnvironmentArgs(options, cliContext),
+    ...(cliContext?.verbose ? ["--verbose"] : []),
+  ];
+}
+
 async function buildDeploymentTarget(
   params: BuildDeploymentTargetParams,
 ): Promise<BuiltDeploymentTarget> {
-  const { configPath, dryRun, buildOnly, noCache, packageVersion, cacheDir } = params;
-  const { config, plugins } = await withSpan("build.loadConfig", async () => {
-    const foundPath = loadConfigPath(configPath);
-    if (foundPath) {
-      const resolvedPath = path.resolve(process.cwd(), foundPath);
-      if (fs.existsSync(resolvedPath)) {
-        await ensureConfigIdForDeploy({ configPath: resolvedPath, dryRun, buildOnly });
-      }
-    }
-    return loadConfig(configPath);
-  });
+  const { configPath, loadedConfig, dryRun, buildOnly, noCache, packageVersion, cacheDir } = params;
+  const { config, plugins } =
+    loadedConfig ?? (await loadDeployConfig({ configPath, dryRun, buildOnly }));
 
   const configDir = path.dirname(config.path);
   const lockfilePath =
@@ -860,15 +922,39 @@ async function buildDeploymentTarget(
   };
 }
 
+async function loadDeployConfig(params: {
+  configPath: string | undefined;
+  dryRun: boolean;
+  buildOnly: boolean;
+}): Promise<LoadedDeployConfig> {
+  const { configPath, dryRun, buildOnly } = params;
+  return withSpan("build.loadConfig", async () => {
+    const foundPath = loadConfigPath(configPath);
+    if (foundPath) {
+      const resolvedPath = path.resolve(process.cwd(), foundPath);
+      if (fs.existsSync(resolvedPath)) {
+        await ensureConfigIdForDeploy({ configPath: resolvedPath, dryRun, buildOnly });
+      }
+    }
+    return loadConfig(configPath);
+  });
+}
+
 export async function buildDeploymentTargets(
   params: BuildDeploymentTargetsParams,
 ): Promise<BuiltDeploymentTarget[]> {
-  const { configPaths, buildTarget = buildDeploymentTarget, ...targetParams } = params;
+  const {
+    configPaths,
+    loadedConfigs,
+    buildTarget = buildDeploymentTarget,
+    ...targetParams
+  } = params;
   return Promise.all(
-    configPaths.map((configPath) =>
+    configPaths.map((configPath, index) =>
       buildTarget({
         ...targetParams,
         configPath,
+        loadedConfig: loadedConfigs?.[index],
       }),
     ),
   );
@@ -1748,18 +1834,47 @@ async function validateDeploymentPlans(
 
 /**
  * Deploy the configured application to the Tailor platform.
- * @param options - Options for deploy execution
+ * @param options - Deploy execution options
+ * @param cliContext - Global CLI arguments to preserve in recovery actions
  * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
  */
-export async function deploy(options?: DeployOptions) {
+async function deployInternal(options?: DeployOptions, cliContext?: DeployCLIContext) {
   return withSpan("deploy", async (rootSpan) => {
     rootSpan.setAttribute("deploy.dry_run", options?.dryRun ?? false);
 
     const configPaths = parseDeployConfigPaths(options?.configPath);
-    const { targets, buildOnly } = await withSpan("build", async () => {
-      const dryRun = options?.dryRun ?? false;
-      const buildOnly =
-        options?.buildOnly ?? parseBoolean(process.env.TAILOR_DEPLOY_BUILD_ONLY) === true;
+    const dryRun = options?.dryRun ?? false;
+    const buildOnly =
+      options?.buildOnly ?? parseBoolean(process.env.TAILOR_DEPLOY_BUILD_ONLY) === true;
+    const preflightConfigs = buildOnly
+      ? []
+      : await withSpan("config.preflight", () =>
+          Promise.all(
+            configPaths.map((configPath) => loadDeployConfig({ configPath, dryRun, buildOnly })),
+          ),
+        );
+    const resolvedConfigPaths = preflightConfigs.map(({ config }) => config.path);
+    const workspaceContextTargets = preflightConfigs.map(({ config }) => ({
+      configPath: config.path,
+      applicationId: config.id ?? `name:${config.name}`,
+    }));
+    const workspace = buildOnly
+      ? undefined
+      : await resolveDeployWorkspace({
+          workspaceId: options?.workspaceId,
+          profile: options?.profile,
+          createWorkspace: options?.createWorkspace,
+          workspaceName: options?.workspaceName,
+          workspaceRegion: options?.workspaceRegion,
+          organizationId: options?.organizationId,
+          folderId: options?.folderId,
+          dryRun,
+          contextTargets: workspaceContextTargets,
+          deployArgs: retryDeployArgs(options, resolvedConfigPaths, cliContext),
+          workspaceCommandArgs: workspaceRecoveryArgs(options, cliContext),
+          workspaceCommandJson: cliContext?.json || logger.jsonMode,
+        });
+    const targets = await withSpan("build", async () => {
       const noCache = options?.noCache ?? false;
       const packageJson = await readPackageJson();
       const cacheDir = path.resolve(getDistDir(), "cache");
@@ -1770,6 +1885,7 @@ export async function deploy(options?: DeployOptions) {
 
       const targets = await buildDeploymentTargets({
         configPaths,
+        loadedConfigs: preflightConfigs,
         dryRun,
         buildOnly,
         noCache,
@@ -1777,10 +1893,7 @@ export async function deploy(options?: DeployOptions) {
         cacheDir,
       });
 
-      return {
-        targets,
-        buildOnly,
-      };
+      return targets;
     });
     if (buildOnly) {
       return { bundledScripts: mergeBundledScripts(targets) };
@@ -1793,15 +1906,8 @@ export async function deploy(options?: DeployOptions) {
     // function registry. To test a function locally, use `function test-run`
     // with a .ts source file instead of a pre-bundled .js file.
 
-    // Initialize client
-    const accessToken = await loadAccessToken({
-      profile: options?.profile,
-    });
-    const client = await initOperatorClient(accessToken);
-    const workspaceId = await loadWorkspaceId({
-      workspaceId: options?.workspaceId,
-      profile: options?.profile,
-    });
+    if (!workspace) throw new Error("Workspace was not resolved");
+    const { client, workspaceId } = workspace;
 
     rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
     rootSpan.setAttribute("workspace.id", workspaceId);
@@ -1815,7 +1921,6 @@ export async function deploy(options?: DeployOptions) {
       noSchemaCheck: options?.noSchemaCheck,
     });
 
-    const dryRun = options?.dryRun ?? false;
     const yes = options?.yes ?? false;
 
     dropCrossDeploymentManagedDeletes(deployments);
@@ -1848,4 +1953,23 @@ export async function deploy(options?: DeployOptions) {
 
     return undefined;
   });
+}
+
+/**
+ * Deploy using the programmatic CLI API.
+ * @param options - Deploy execution options
+ * @returns Deploy result
+ */
+export function deploy(options?: DeployOptions) {
+  return deployInternal(options);
+}
+
+/**
+ * Deploy from the command adapter while preserving global CLI arguments in recovery actions.
+ * @param options - Deploy execution options
+ * @param cliContext - Global CLI arguments already applied by the command runner
+ * @returns Deploy result
+ */
+export function deployFromCLI(options: DeployOptions | undefined, cliContext: DeployCLIContext) {
+  return deployInternal(options, cliContext);
 }

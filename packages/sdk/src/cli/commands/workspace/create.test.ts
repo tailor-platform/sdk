@@ -6,7 +6,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { resetKeyringState } from "#/cli/shared/token-store";
-import { createCommand } from "./create";
+import { createCommand, createWorkspace } from "./create";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-workspace-create-${Date.now()}-${Math.random()}`);
 
@@ -107,6 +107,20 @@ describe("workspace create --permission", () => {
     expect(config.profiles.bootstrap?.readonly).toBe(true);
   });
 
+  test("validates programmatic options before initializing a client", async () => {
+    await expect(createWorkspace({ name: "x", region: "us-west" })).rejects.toThrow(
+      "Name must be at least 3 characters",
+    );
+    expect(initOperatorClient).not.toHaveBeenCalled();
+  });
+
+  test("rejects an explicitly empty profile instead of falling back", async () => {
+    await expect(
+      createWorkspace({ name: "test-ws", region: "us-west", profile: "" }),
+    ).rejects.toThrow("Profile must not be empty");
+    expect(initOperatorClient).not.toHaveBeenCalled();
+  });
+
   test("omits the readonly key when --profile-name is given without --permission read", async () => {
     const config = await runCreate(
       "--profile-name",
@@ -149,7 +163,7 @@ describe("workspace create --permission", () => {
       "bootstrap",
     ]);
 
-    expect(initOperatorClient).toHaveBeenCalledWith("custom-token");
+    expect(initOperatorClient).toHaveBeenCalledWith("custom-token", undefined);
     const config = await readPlatformConfig();
     expect(config.profiles.bootstrap).toMatchObject({
       user: "u@example.com",
@@ -193,7 +207,9 @@ describe("workspace create --permission", () => {
       "bootstrap",
     ]);
 
-    expect(initOperatorClient).toHaveBeenCalledWith("custom-token");
+    expect(initOperatorClient).toHaveBeenCalledWith("custom-token", {
+      platformUrl: "https://api.dev.tailor.tech",
+    });
     const config = await readPlatformConfig();
     expect(config.profiles.bootstrap).toMatchObject({
       user: "u@example.com",

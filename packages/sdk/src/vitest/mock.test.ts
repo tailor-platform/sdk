@@ -54,6 +54,34 @@ describe("mock", () => {
       expect(result.rows).toEqual([{ id: "1", name: "test" }]);
     });
 
+    test("setQueryResolver treats an undefined response as empty rows", async () => {
+      using db = mockTailordb();
+      db.setQueryResolver((query) => {
+        if (query.includes("SELECT")) return [{ id: "1" }];
+        return undefined;
+      });
+
+      const client = new (globalThis as any).tailordb.Client({});
+      const result = await client.queryObject("BEGIN");
+
+      expect(result.rows).toEqual([]);
+    });
+
+    test("setQueryResolver replaces a direct queryObject implementation", async () => {
+      using db = mockTailordb();
+      db.queryObject.mockImplementation(async () => ({
+        command: "",
+        rowCount: 1,
+        rows: [{ source: "direct" }],
+      }));
+      db.setQueryResolver(() => [{ source: "resolver" }]);
+
+      const client = new (globalThis as any).tailordb.Client({});
+      const result = await client.queryObject("SELECT source");
+
+      expect(result.rows).toEqual([{ source: "resolver" }]);
+    });
+
     test("enqueueResult provides order-based responses", async () => {
       using db = mockTailordb();
       db.enqueueResult(); // BEGIN (empty)
@@ -195,6 +223,24 @@ describe("mock", () => {
         await runWorkflowLocally(workflow, undefined, { env: { STAGE: "from-option" } }),
       ).toEqual({ STAGE: "from-option" });
       expect(await runWorkflowLocally(workflow)).toEqual({ STAGE: "from-mock" });
+    });
+
+    test("nested mockWorkflow scopes restore the outer env", async () => {
+      using outer = mockWorkflow();
+      const captureEnv = createWorkflowJob({
+        name: "capture-nested-env",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+      const workflow = createWorkflow({ name: "capture-nested-env-workflow", mainJob: captureEnv });
+      outer.setEnv({ STAGE: "outer" });
+
+      {
+        using inner = mockWorkflow();
+        inner.setEnv({ STAGE: "inner" });
+        expect(await runWorkflowLocally(workflow)).toEqual({ STAGE: "inner" });
+      }
+
+      expect(await runWorkflowLocally(workflow)).toEqual({ STAGE: "outer" });
     });
 
     test("reset clears env back to {}", async () => {
@@ -582,9 +628,16 @@ describe("mock", () => {
   describe("mockIdp", () => {
     test("records calls with method, args, namespace", async () => {
       using idp = mockIdp();
+      const calls = idp.calls;
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
       await client.user("u-1");
-      expect(idp.calls).toEqual([{ method: "user", args: ["u-1"], namespace: "ns" }]);
+      expect(calls).toEqual([{ method: "user", args: ["u-1"], namespace: "ns" }]);
+
+      idp.clear();
+      expect(calls).toEqual([]);
+
+      await client.user("u-2");
+      expect(calls).toEqual([{ method: "user", args: ["u-2"], namespace: "ns" }]);
     });
 
     test("enqueueResults provides ordered responses", async () => {
@@ -601,7 +654,9 @@ describe("mock", () => {
 
     test("setResolver provides content-based responses", async () => {
       using idp = mockIdp();
-      idp.setResolver((method) => {
+      const resolverArgs: unknown[][] = [];
+      idp.setResolver((method, args) => {
+        resolverArgs.push(args);
         if (method === "users")
           return {
             users: [{ id: "u-1", name: "bob", disabled: false }],
@@ -614,14 +669,16 @@ describe("mock", () => {
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
       const result = await client.users();
       expect(result.users).toHaveLength(1);
+      expect(resolverArgs).toEqual([[undefined]]);
     });
 
     test("reset clears state", async () => {
       using idp = mockIdp();
+      const calls = idp.calls;
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
       await client.user("u-1");
       idp.reset();
-      expect(idp.calls).toHaveLength(0);
+      expect(calls).toHaveLength(0);
     });
 
     test("default fallback is cloned so test mutations cannot leak across tests", async () => {
@@ -640,14 +697,29 @@ describe("mock", () => {
   describe("mockFile", () => {
     test("records calls", async () => {
       using file = mockFile();
+      const calls = file.calls;
       await (globalThis as any).tailordb.file.upload("ns", "Doc", "file", "r-1", "data");
-      expect(file.calls).toEqual([
+      expect(calls).toEqual([
         {
           method: "upload",
           namespace: "ns",
           typeName: "Doc",
           fieldName: "file",
           recordId: "r-1",
+        },
+      ]);
+
+      file.clear();
+      expect(calls).toEqual([]);
+
+      await (globalThis as any).tailordb.file.delete("ns", "Doc", "file", "r-2");
+      expect(calls).toEqual([
+        {
+          method: "delete",
+          namespace: "ns",
+          typeName: "Doc",
+          fieldName: "file",
+          recordId: "r-2",
         },
       ]);
     });
@@ -672,9 +744,10 @@ describe("mock", () => {
 
     test("reset clears state", async () => {
       using file = mockFile();
+      const calls = file.calls;
       await (globalThis as any).tailordb.file.delete("ns", "T", "f", "r");
       file.reset();
-      expect(file.calls).toHaveLength(0);
+      expect(calls).toHaveLength(0);
     });
 
     test("does not install the removed openDownloadStream file mock", () => {
@@ -703,8 +776,15 @@ describe("mock", () => {
   describe("mockIconv", () => {
     test("records calls", () => {
       using iconv = mockIconv();
+      const calls = iconv.calls;
       (globalThis as any).tailor.iconv.convert("hello", "UTF-8", "Shift_JIS");
-      expect(iconv.calls).toEqual([{ method: "convert", args: ["hello", "UTF-8", "Shift_JIS"] }]);
+      expect(calls).toEqual([{ method: "convert", args: ["hello", "UTF-8", "Shift_JIS"] }]);
+
+      iconv.clear();
+      expect(calls).toEqual([]);
+
+      (globalThis as any).tailor.iconv.decode(new Uint8Array(), "UTF-8");
+      expect(calls).toEqual([{ method: "decode", args: [new Uint8Array(), "UTF-8"] }]);
     });
 
     test("setResolver overrides responses", () => {
@@ -719,9 +799,10 @@ describe("mock", () => {
 
     test("reset clears calls and resolver", () => {
       using iconv = mockIconv();
+      const calls = iconv.calls;
       (globalThis as any).tailor.iconv.encodings();
       iconv.reset();
-      expect(iconv.calls).toHaveLength(0);
+      expect(calls).toHaveLength(0);
     });
 
     test.each([

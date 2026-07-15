@@ -13,6 +13,7 @@ import {
   platformConfigFromProfile,
   readPlatformConfig,
   saveUserTokens,
+  tryLoadWorkspaceId,
   writePlatformConfig,
 } from "./context";
 import { isCLIError } from "./errors";
@@ -208,6 +209,14 @@ describe("loadWorkspaceId", () => {
       );
     });
 
+    test("rejects an explicitly empty workspaceId instead of falling back", async () => {
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID = otherUUID;
+
+      await expect(loadWorkspaceId({ workspaceId: "" })).rejects.toThrow(
+        "Invalid value from --workspace-id option: must be a valid UUID",
+      );
+    });
+
     test("opts.workspaceId takes precedence over env variable", async () => {
       process.env.TAILOR_PLATFORM_WORKSPACE_ID = otherUUID;
       const result = await loadWorkspaceId({ workspaceId: validUUID });
@@ -327,6 +336,10 @@ describe("loadWorkspaceId", () => {
   });
 
   describe("error case: no workspace ID source", () => {
+    test("returns undefined from optional resolution", async () => {
+      await expect(tryLoadWorkspaceId()).resolves.toBeUndefined();
+    });
+
     test("throws error when no workspaceId source is available", async () => {
       await expect(loadWorkspaceId()).rejects.toThrow("Workspace ID not found");
     });
