@@ -47,6 +47,26 @@ const invalidCases: Array<[string, (scripts: Scripts) => void]> = [
   ],
 ];
 
+function runCheckTypecheck(cwd: string): Promise<{ status: number | null; output: string }> {
+  const pnpm =
+    process.platform === "win32"
+      ? {
+          command: process.env.ComSpec ?? "cmd.exe",
+          args: ["/d", "/s", "/c", "pnpm run check:typecheck"],
+        }
+      : { command: "pnpm", args: ["run", "check:typecheck"] };
+  return new Promise((resolve, reject) => {
+    const child = spawn(pnpm.command, pnpm.args, { cwd });
+    let output = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => (output += chunk));
+    child.stderr.on("data", (chunk: string) => (output += chunk));
+    child.on("error", reject);
+    child.on("close", (status) => resolve({ status, output }));
+  });
+}
+
 function validateParallelTypecheckScripts(scripts: Scripts): void {
   if (scripts["check:typecheck"] !== expectedCoordinator) {
     throw new Error("typecheck coordinator mismatch");
@@ -99,23 +119,7 @@ describe("workspace typecheck scripts", () => {
           join(fixture, "package.json"),
           JSON.stringify({ packageManager: packageJson.packageManager, private: true, scripts }),
         );
-        const pnpm =
-          process.platform === "win32"
-            ? {
-                command: process.env.ComSpec ?? "cmd.exe",
-                args: ["/d", "/s", "/c", "pnpm run check:typecheck"],
-              }
-            : { command: "pnpm", args: ["run", "check:typecheck"] };
-        const result = await new Promise<{ status: number | null; output: string }>(
-          (resolve, reject) => {
-            const child = spawn(pnpm.command, pnpm.args, { cwd: fixture });
-            let output = "";
-            child.stdout.on("data", (chunk: Buffer) => (output += chunk.toString()));
-            child.stderr.on("data", (chunk: Buffer) => (output += chunk.toString()));
-            child.on("error", reject);
-            child.on("close", (status) => resolve({ status, output }));
-          },
-        );
+        const result = await runCheckTypecheck(fixture);
 
         expect(result.status).not.toBe(0);
         for (const lane of lanes) {
