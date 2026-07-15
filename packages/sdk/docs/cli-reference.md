@@ -118,7 +118,7 @@ tailor hello world --loud
 
 This also works under a built-in command group. The command path is joined with hyphens, so a plugin
 nested under `tailordb` is named `tailor-tailordb-erd`. This is how the
-[`@tailor-platform/sdk-tailordb-erd-plugin`](https://www.npmjs.com/package/@tailor-platform/sdk-tailordb-erd-plugin)
+`@tailor-platform/sdk-tailordb-erd-plugin`
 package provides the `tailordb erd` commands:
 
 ```bash
