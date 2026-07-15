@@ -54,16 +54,71 @@ unset extra_byte
 config_home=$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/tailor-e2e-auth.XXXXXX")
 /bin/chmod 700 "$config_home"
 /bin/mkdir -p "$config_home/home"
+managed_pid_file="$config_home/.managed-pgid"
 cleanup_config() {
   /bin/rm -rf -- "$config_home"
 }
 trap cleanup_config EXIT
-trap 'exit 129' HUP
-trap 'exit 130' INT
-trap 'exit 143' TERM
+
+helper_pid=$$
+/usr/bin/env -i PATH=/usr/bin:/bin /bin/bash -c '
+  trap "" HUP INT TERM
+  helper_pid=$1
+  config_home=$2
+  managed_pid_file=$3
+
+  managed_pid=""
+  observed_candidate=""
+  while kill -0 "$helper_pid" 2>/dev/null; do
+    candidate_pid=""
+    if [[ -r "$managed_pid_file" ]]; then
+      IFS= read -r candidate_pid <"$managed_pid_file" || true
+    fi
+    if [[ "$candidate_pid" != "$observed_candidate" ]]; then
+      observed_candidate=$candidate_pid
+      candidate_parent=""
+      if [[ "$candidate_pid" =~ ^[0-9]+$ ]]; then
+        candidate_parent=$(/bin/ps -o ppid= -p "$candidate_pid" 2>/dev/null | /usr/bin/tr -d " ")
+      fi
+      if [[ "$candidate_parent" == "$helper_pid" ]]; then
+        managed_pid=$candidate_pid
+      else
+        managed_pid=""
+      fi
+    fi
+    /bin/sleep 0.05
+  done
+
+  if [[ "$managed_pid" =~ ^[0-9]+$ ]]; then
+    kill -KILL -- "-$managed_pid" 2>/dev/null || true
+  else
+    for child_pid in $(/usr/bin/pgrep -P "$helper_pid" 2>/dev/null); do
+      if [[ "$child_pid" != "$$" ]]; then
+        kill -KILL -- "-$child_pid" 2>/dev/null || kill -KILL "$child_pid" 2>/dev/null || true
+      fi
+    done
+  fi
+  /bin/rm -rf -- "$config_home"
+' bash "$helper_pid" "$config_home" "$managed_pid_file" </dev/null >/dev/null 2>&1 &
+
+auth_pid=""
+handle_auth_signal() {
+  local signal_name=$1 signal_status=$2
+  trap - HUP INT TERM
+  if [[ "$auth_pid" =~ ^[0-9]+$ ]]; then
+    kill -s "$signal_name" -- "-$auth_pid" 2>/dev/null || true
+    wait "$auth_pid" 2>/dev/null || true
+  fi
+  /bin/rm -f -- "$managed_pid_file"
+  exit "$signal_status"
+}
+trap 'handle_auth_signal HUP 129' HUP
+trap 'handle_auth_signal INT 130' INT
+trap 'handle_auth_signal TERM 143' TERM
 
 set +e
-printf '%s\0%s\0' "$client_id" "$client_secret" | /usr/bin/env -i \
+set -m
+/usr/bin/env -i \
   HOME="$config_home/home" \
   XDG_CONFIG_HOME="$config_home" \
   /bin/bash -c '
@@ -73,10 +128,15 @@ printf '%s\0%s\0' "$client_id" "$client_secret" | /usr/bin/env -i \
     export TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID="$client_id"
     export TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET="$client_secret"
     exec "$1" "$2" login --machine-user
-  ' bash "$auth_node" "$auth_cli"
+  ' bash "$auth_node" "$auth_cli" < <(printf '%s\0%s\0' "$client_id" "$client_secret") &
+auth_pid=$!
+set +m
+printf '%s\n' "$auth_pid" >"$managed_pid_file"
+wait "$auth_pid"
 auth_status=$?
+/bin/rm -f -- "$managed_pid_file"
 set -e
-unset client_id client_secret
+unset auth_pid client_id client_secret
 
 if [[ $auth_status -ne 0 ]]; then
   exit "$auth_status"
@@ -100,15 +160,7 @@ exec /usr/bin/env -u TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID \
   /bin/bash -c '
     config_home=$1
     shift
-
-    guardian_pid=$$
-    /usr/bin/env -i PATH=/usr/bin:/bin /bin/bash -c '\''
-      trap "" HUP INT TERM
-      while kill -0 "$1" 2>/dev/null; do
-        /bin/sleep 0.05
-      done
-      /bin/rm -rf -- "$2"
-    '\'' bash "$guardian_pid" "$config_home" </dev/null >/dev/null 2>&1 &
+    managed_pid_file="$config_home/.managed-pgid"
 
     cleanup_and_exit() {
       status=$1
@@ -130,6 +182,7 @@ exec /usr/bin/env -u TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID \
     "$@" &
     target_pid=$!
     set +m
+    printf "%s\n" "$target_pid" >"$managed_pid_file"
     trap "forward_signal HUP 129" HUP
     trap "forward_signal INT 130" INT
     trap "forward_signal TERM 143" TERM

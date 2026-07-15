@@ -4,6 +4,14 @@ set -euo pipefail
 
 printf '%s\n' "$*" >>"$E2E_PNPM_MARKER"
 
+signal_cleanup_stage() {
+  local stage=$1
+  if [[ ${E2E_CLEANUP_SIGNAL_AT:-} == "$stage" ]]; then
+    kill -s "${E2E_CLEANUP_SIGNAL:-TERM}" "$PPID"
+    /bin/sleep 0.1
+  fi
+}
+
 case "$*" in
   "run test -- --project e2e")
     if [[ -n ${E2E_RUN_ID_MARKER:-} ]]; then
@@ -22,6 +30,7 @@ case "$*" in
     exit "${E2E_TEST_STATUS:-0}"
     ;;
   "exec tsx scripts/cleanup-e2e-workspaces.ts --dry-run --run-id="*)
+    signal_cleanup_stage preview
     preview_count=$(grep -c -- '--dry-run' "$E2E_PNPM_MARKER")
     if [[ $preview_count -eq 1 ]]; then
       echo "Found a workspace for this run"
@@ -40,6 +49,7 @@ case "$*" in
     exit "${E2E_VERIFY_STATUS:-0}"
     ;;
   "exec tsx scripts/cleanup-e2e-workspaces.ts --run-id="*)
+    signal_cleanup_stage delete
     exit "${E2E_CLEANUP_STATUS:-0}"
     ;;
   "exec tailor-sdk --json workspace list")
@@ -59,6 +69,12 @@ case "$*" in
       printf '[{"name":"e2e-ws-other-run-12345-leftover"}]\n'
     else
       printf '[]\n'
+    fi
+    raw_count=$(grep -c -- 'exec tailor-sdk --json workspace list' "$E2E_PNPM_MARKER")
+    if [[ $raw_count -eq 1 ]]; then
+      signal_cleanup_stage pre-audit
+    else
+      signal_cleanup_stage post-audit
     fi
     exit "${E2E_RAW_STATUS:-0}"
     ;;

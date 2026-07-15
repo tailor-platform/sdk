@@ -10,6 +10,12 @@ set -euo pipefail
 [[ -z ${TAILOR_PLATFORM_PROFILE:-} ]]
 [[ -n ${XDG_CONFIG_HOME:-} ]]
 
+if [[ $TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID == slow-auth ]]; then
+  printf 'started' >"$XDG_CONFIG_HOME/auth-started"
+  /bin/sleep 0.3
+  printf 'completed' >"$XDG_CONFIG_HOME/auth-completed"
+fi
+
 /bin/mkdir -p "$XDG_CONFIG_HOME/tailor-platform"
 printf 'version: 3\ncurrent_user: test-client\n' >"$XDG_CONFIG_HOME/tailor-platform/config.yaml"
 printf 'authenticated' >"$XDG_CONFIG_HOME/auth-marker"

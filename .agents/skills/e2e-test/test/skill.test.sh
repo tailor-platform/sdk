@@ -228,6 +228,36 @@ wait_for_empty_directory \
   "$auth_failure_tmp" \
   "temporary config home survived an authentication failure"
 
+for auth_signal_case in TERM:143 KILL:137; do
+  auth_signal=${auth_signal_case%%:*}
+  expected_status=${auth_signal_case##*:}
+  auth_kill_tmp="$tmp_dir/auth-$auth_signal"
+  mkdir "$auth_kill_tmp"
+  TMPDIR="$auth_kill_tmp" \
+    "$helper" "$fake_node" "$fixtures/fake-tailor-sdk.sh" -- "$fixtures/fake-target.sh" \
+    3< <(set +x; /usr/bin/env -i /bin/bash "$credential_provider" slow-auth) &
+  auth_helper_pid=$!
+  auth_started_path=""
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    auth_started_path=$(find "$auth_kill_tmp" -name auth-started -print -quit)
+    [[ -z "$auth_started_path" ]] || break
+    sleep 0.05
+  done
+  [[ -n "$auth_started_path" ]] || fail "machine-user authentication did not start"
+  auth_kill_config_home=${auth_started_path%/auth-started}
+  /bin/kill -s "$auth_signal" "$auth_helper_pid"
+  set +e
+  wait "$auth_helper_pid" 2>/dev/null
+  auth_kill_status=$?
+  set -e
+  [[ $auth_kill_status -eq $expected_status ]] || fail "helper lost $auth_signal during authentication"
+  wait_for_path_removal \
+    "$auth_kill_config_home" \
+    "temporary config home survived $auth_signal during authentication"
+  sleep 0.35
+  [[ ! -e "$auth_kill_config_home" ]] || fail "authentication child survived helper $auth_signal"
+done
+
 extra_stream_target_marker="$tmp_dir/extra-stream-target-marker"
 set +e
 extra_stream_output=$(
@@ -368,11 +398,11 @@ PATH="$fake_bin:$PATH" \
 e2e_tmpdir=$(<"$e2e_tmpdir_marker")
 [[ "$e2e_tmpdir" == *"tailor-sdk-e2e."* ]] || fail "SDK test did not receive an isolated TMPDIR"
 [[ ! -e "$e2e_tmpdir" ]] || fail "SDK runner left its tracking directory behind"
-[[ $(sed -n '2p' "$pnpm_marker") == "exec tsx scripts/cleanup-e2e-workspaces.ts --dry-run --run-id=$run_id" ]] ||
+[[ $(sed -n '2p' "$pnpm_marker") == "exec tsx scripts/cleanup-e2e-workspaces.ts --dry-run --run-id=$run_id --workspace-name-prefix=e2e-ws-$run_id-" ]] ||
   fail "SDK cleanup preview command changed"
 [[ $(sed -n '3p' "$pnpm_marker") == "exec tailor-sdk --json workspace list" ]] ||
   fail "SDK cleanup pre-audit command changed"
-[[ $(sed -n '4p' "$pnpm_marker") == "exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=$run_id" ]] ||
+[[ $(sed -n '4p' "$pnpm_marker") == "exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=$run_id --workspace-name-prefix=e2e-ws-$run_id-" ]] ||
   fail "SDK cleanup command changed"
 [[ $(sed -n '5p' "$pnpm_marker") == "exec tailor-sdk --json workspace list" ]] ||
   fail "SDK raw cleanup verification command changed"
@@ -496,6 +526,27 @@ for signal_case in HUP:129 INT:130 TERM:143; do
   [[ $signal_status -eq $expected_status ]] || fail "SDK runner lost the $target_signal status"
   [[ ! -e "$signal_completion_marker" ]] || fail "SDK runner did not forward $target_signal"
   [[ $(wc -l <"$pnpm_marker") -eq 5 ]] || fail "SDK runner skipped cleanup after $target_signal"
+done
+
+for cleanup_signal_case in preview:HUP:129 pre-audit:INT:130 delete:TERM:143; do
+  cleanup_stage=${cleanup_signal_case%%:*}
+  cleanup_signal_and_status=${cleanup_signal_case#*:}
+  cleanup_signal=${cleanup_signal_and_status%%:*}
+  expected_status=${cleanup_signal_and_status##*:}
+  : >"$pnpm_marker"
+  set +e
+  PATH="$fake_bin:$PATH" \
+    E2E_PNPM_MARKER="$pnpm_marker" \
+    E2E_CLEANUP_SIGNAL_AT="$cleanup_stage" \
+    E2E_CLEANUP_SIGNAL="$cleanup_signal" \
+    TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+    "$skill_dir/scripts/run-sdk-e2e.sh"
+  cleanup_signal_status=$?
+  set -e
+  [[ $cleanup_signal_status -eq $expected_status ]] ||
+    fail "SDK runner lost $cleanup_signal during $cleanup_stage"
+  [[ $(wc -l <"$pnpm_marker") -eq 5 ]] ||
+    fail "SDK runner did not finish cleanup after $cleanup_signal during $cleanup_stage"
 done
 
 echo "e2e-test skill checks passed"

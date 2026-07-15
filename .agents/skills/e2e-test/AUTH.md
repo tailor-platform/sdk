@@ -74,8 +74,9 @@ The helper:
 - replaces itself after removing client credentials and stale token/profile overrides, so no
   long-lived process retains the secret;
 - runs the suite as a child of a credential-free guardian that forwards HUP, INT, and TERM; and
-- uses a separate credential-free watchdog to delete the temporary configuration even if the
-  guardian is killed, without waiting for orphaned suite descendants.
+- uses a separate credential-free watchdog to terminate the managed process group and delete the
+  temporary configuration if authentication or the guardian is killed, without waiting for
+  orphaned suite descendants.
 
 The code under test can still read the short-lived access token it needs. Dedicated test-only scope
 and prompt workspace cleanup therefore remain mandatory.

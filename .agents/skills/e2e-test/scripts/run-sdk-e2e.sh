@@ -28,6 +28,7 @@ if [[ ${#run_id} -lt 8 || ${#run_id} -gt 40 || ! "$run_id" =~ ^[a-z0-9-]+$ ]]; t
   exit 64
 fi
 export TAILOR_PLATFORM_E2E_RUN_ID="$run_id"
+workspace_name_prefix="e2e-ws-${run_id}-"
 
 run_tmp=$(mktemp -d "${TMPDIR:-/tmp}/tailor-sdk-e2e.XXXXXX") || exit 1
 chmod 700 "$run_tmp"
@@ -37,8 +38,29 @@ cleanup_local_tmp() {
 }
 trap cleanup_local_tmp EXIT
 
+run_cleanup_command() {
+  local command_pid command_status signal_count_before
+
+  set -m
+  "$@" &
+  command_pid=$!
+  set +m
+
+  while true; do
+    signal_count_before=$cleanup_signal_count
+    wait "$command_pid"
+    command_status=$?
+    if [[ $cleanup_signal_count -ne $signal_count_before ]] && kill -0 "$command_pid" 2>/dev/null; then
+      continue
+    fi
+    return "$command_status"
+  done
+}
+
 verify_raw_workspace_list() {
-  local phase=$1 workspace_output workspace_status verification_node
+  local phase=$1 workspace_output workspace_output_file workspace_status verification_node
+
+  workspace_output_file="$run_tmp/workspace-list-$phase.json"
 
   if [[ -n ${TAILOR_E2E_TRUSTED_NODE:-} || -n ${TAILOR_E2E_TRUSTED_CLI:-} ]]; then
     if [[ ${TAILOR_E2E_TRUSTED_NODE:-} != /* || ! -x ${TAILOR_E2E_TRUSTED_NODE:-} ||
@@ -46,14 +68,16 @@ verify_raw_workspace_list() {
       echo "Trusted raw-verification Node.js and CLI paths must both be valid." >&2
       return 64
     fi
-    workspace_output=$(
+    run_cleanup_command \
       /usr/bin/env -u TAILOR_PLATFORM_PROFILE \
-        "$TAILOR_E2E_TRUSTED_NODE" "$TAILOR_E2E_TRUSTED_CLI" --json workspace list
-    )
+      "$TAILOR_E2E_TRUSTED_NODE" "$TAILOR_E2E_TRUSTED_CLI" --json workspace list \
+      >"$workspace_output_file"
     workspace_status=$?
     verification_node=$TAILOR_E2E_TRUSTED_NODE
   else
-    workspace_output=$(/usr/bin/env -u TAILOR_PLATFORM_PROFILE pnpm exec tailor-sdk --json workspace list)
+    run_cleanup_command \
+      /usr/bin/env -u TAILOR_PLATFORM_PROFILE pnpm exec tailor-sdk --json workspace list \
+      >"$workspace_output_file"
     workspace_status=$?
     verification_node=$(type -P node)
   fi
@@ -61,19 +85,25 @@ verify_raw_workspace_list() {
   if [[ $workspace_status -ne 0 ]]; then
     return "$workspace_status"
   fi
+  workspace_output=$(<"$workspace_output_file")
+  /bin/rm -f -- "$workspace_output_file"
   if [[ "$verification_node" != /* || ! -x "$verification_node" ]]; then
     echo "An absolute executable Node.js path is required for raw cleanup verification." >&2
     return 64
   fi
 
-  printf '%s' "$workspace_output" |
-    "$verification_node" "$script_dir/verify-workspace-list.mjs" "$run_id" "$phase"
+  run_cleanup_command \
+    "$verification_node" "$script_dir/verify-workspace-list.mjs" "$run_id" "$phase" \
+    <<<"$workspace_output"
 }
 
 run_cleanup() {
   local preview_status pre_audit_status cleanup_status verification_status attempt
 
-  pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --dry-run "--run-id=$run_id"
+  run_cleanup_command pnpm exec tsx scripts/cleanup-e2e-workspaces.ts \
+    --dry-run \
+    "--run-id=$run_id" \
+    "--workspace-name-prefix=$workspace_name_prefix"
   preview_status=$?
   if [[ $preview_status -ne 0 ]]; then
     return "$preview_status"
@@ -86,7 +116,9 @@ run_cleanup() {
     return "$pre_audit_status"
   fi
 
-  pnpm exec tsx scripts/cleanup-e2e-workspaces.ts "--run-id=$run_id"
+  run_cleanup_command pnpm exec tsx scripts/cleanup-e2e-workspaces.ts \
+    "--run-id=$run_id" \
+    "--workspace-name-prefix=$workspace_name_prefix"
   cleanup_status=$?
   if [[ $cleanup_status -ne 0 ]]; then
     return "$cleanup_status"
@@ -106,17 +138,28 @@ run_cleanup() {
 
 handle_signal() {
   local signal_name=$1 signal_status=$2 cleanup_status
-  trap - HUP INT TERM
+  if [[ $cleanup_in_progress -eq 1 ]]; then
+    [[ $interrupted_status -ne 0 ]] || interrupted_status=$signal_status
+    ((cleanup_signal_count += 1))
+    echo "E2E interrupted during cleanup (status $signal_status); cleanup will continue." >&2
+    return
+  fi
+
+  interrupted_status=$signal_status
   if [[ -n ${test_pid:-} ]]; then
     kill -s "$signal_name" -- "-$test_pid" 2>/dev/null || true
     wait "$test_pid" 2>/dev/null || true
     test_pid=""
   fi
+  cleanup_in_progress=1
   run_cleanup
   cleanup_status=$?
   echo "E2E interrupted (status $signal_status); cleanup status: $cleanup_status" >&2
   exit "$signal_status"
 }
+cleanup_in_progress=0
+cleanup_signal_count=0
+interrupted_status=0
 trap 'handle_signal HUP 129' HUP
 trap 'handle_signal INT 130' INT
 trap 'handle_signal TERM 143' TERM
@@ -129,13 +172,18 @@ set +m
 wait "$test_pid"
 test_status=$?
 test_pid=""
-trap - HUP INT TERM
 
+cleanup_in_progress=1
 run_cleanup
 cleanup_status=$?
+cleanup_in_progress=0
+trap - HUP INT TERM
 
 echo "E2E test status: $test_status; cleanup status: $cleanup_status" >&2
 
+if [[ $interrupted_status -ne 0 ]]; then
+  exit "$interrupted_status"
+fi
 if [[ $cleanup_status -ne 0 ]]; then
   exit "$cleanup_status"
 fi
