@@ -58,10 +58,11 @@ export async function loadTailorDBNamespaces(
     : application.tailorDBServices;
 
   if (namespaceFilter && services.length !== namespaceFilter.size) {
+    const found = new Set(services.map((db) => db.namespace));
+    const missing = [...namespaceFilter].filter((ns) => !found.has(ns)).join(", ");
     const available = application.tailorDBServices.map((db) => db.namespace).join(", ");
-    const requested = [...namespaceFilter].join(", ");
     throw new Error(
-      `TailorDB namespace "${requested}" not found in local config.db.` +
+      `TailorDB namespace "${missing}" not found in local config.db.` +
         (available ? ` Available owned namespaces: ${available}` : ""),
     );
   }
