@@ -555,6 +555,48 @@ db.table("User", {
    });
    ```
 
+#### GraphQL Operations
+
+Control which GraphQL operations (`create`, `update`, `delete`, `read`) are exposed for a type. All operations are enabled by default.
+
+```typescript
+db.type("Order", {
+  status: db.string(),
+}).features({
+  gqlOperations: {
+    delete: false, // Disable the delete mutation
+  },
+});
+```
+
+Use the `"query"` alias to disable all mutations at once (read-only type: `create`/`update`/`delete` false, `read` true):
+
+```typescript
+db.type("AuditLog", {
+  action: db.string(),
+}).features({
+  gqlOperations: "query",
+});
+```
+
+**Namespace-level default**
+
+Set a default for every type in a TailorDB namespace in `tailor.config.ts`. A type's own `.features({ gqlOperations })` always takes precedence over this default.
+
+```typescript
+// tailor.config.ts
+export default defineConfig({
+  db: {
+    tailordb: {
+      files: ["./tailordb/*.ts"],
+      gqlOperations: { delete: false }, // Default for every type in this namespace
+    },
+  },
+});
+```
+
+This default is re-evaluated on every `tailor-sdk deploy`, so changing it also updates types that already exist on the platform, not only newly created ones.
+
 ### Field Extraction (`pickFields` / `omitFields`)
 
 Extract subsets of fields from a `TailorDBType` for reuse in resolvers, executors, seed schemas, etc.

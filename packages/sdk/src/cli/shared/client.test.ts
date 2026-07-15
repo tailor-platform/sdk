@@ -343,6 +343,18 @@ describe("retryInterceptor", () => {
     expect(next).toHaveBeenCalledTimes(2);
   });
 
+  test("does not retry workspace creation when the outcome is ambiguous", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createWorkspace))),
+    ).rejects.toThrow("unavailable");
+    expect(next).toHaveBeenCalledOnce();
+  });
+
   test("treats AlreadyExists after a retry as success for Create methods", async () => {
     // #1350: prior attempt landed server-side but came back Unavailable; the
     // identical retry then hits already_exists on the _file metadata table.

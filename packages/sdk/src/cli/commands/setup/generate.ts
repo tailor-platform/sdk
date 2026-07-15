@@ -5,6 +5,7 @@ import { logBetaWarning } from "#/cli/shared/beta";
 import { extractOwnedNamespaces } from "#/cli/shared/config";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { logger, styles } from "#/cli/shared/logger";
+import { workspaceNameSchema } from "#/cli/shared/workspace-name";
 import { getNamespacesWithMigrations } from "../tailordb/migrate/config";
 import { detectDefaultBranch, type GitRunner } from "./git";
 import {
@@ -151,19 +152,10 @@ async function defaultLoadHasStaticWebsites(configPath: string): Promise<boolean
   return (config.staticWebsites?.length ?? 0) > 0;
 }
 
-// Kept in sync with the `workspace create` schema (cli/commands/workspace/create.ts).
 // The name is used as the plan label, the generated file name, and the default
 // GitHub Environment name, so it must stay within the workspace-name charset.
-const WORKSPACE_NAME_RE = /^[a-z0-9-]+$/;
-
 function validateWorkspaceName(name: string): void {
-  if (
-    name.length < 3 ||
-    name.length > 63 ||
-    !WORKSPACE_NAME_RE.test(name) ||
-    name.startsWith("-") ||
-    name.endsWith("-")
-  ) {
+  if (!workspaceNameSchema.safeParse(name).success) {
     throw new Error(
       `Invalid workspace name "${name}". Names must be 3-63 characters of lowercase ` +
         "letters, numbers, and hyphens, and cannot start or end with a hyphen. " +
