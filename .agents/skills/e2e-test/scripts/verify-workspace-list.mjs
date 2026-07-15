@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 
 const runId = process.argv[2];
+const phase = process.argv[3];
 
-if (!runId || runId.length < 8 || !/^[A-Za-z0-9._-]+$/.test(runId)) {
+if (!runId || runId.length < 8 || runId.length > 40 || !/^[a-z0-9-]+$/.test(runId)) {
   console.error("A valid e2e run ID is required for raw workspace verification.");
+  process.exit(64);
+}
+if (phase !== "before-delete" && phase !== "after-delete") {
+  console.error("Raw workspace verification requires a valid cleanup phase.");
   process.exit(64);
 }
 
@@ -31,13 +36,31 @@ if (
   process.exit(1);
 }
 
-const residualNames = workspaces
-  .map((workspace) => workspace.name)
-  .filter((name) => name.includes(runId));
+const workspaceNames = workspaces.map((workspace) => workspace.name);
+const cleanupPrefixes = ["e2e-ws-", "template-e2e-", "sdk-ci-"];
+const expectedPrefix = `e2e-ws-${runId}-`;
 
+if (phase === "before-delete") {
+  const ambiguousNames = workspaceNames.filter(
+    (name) =>
+      cleanupPrefixes.some((prefix) => name.startsWith(prefix)) &&
+      name.includes(runId) &&
+      !name.startsWith(expectedPrefix),
+  );
+  if (ambiguousNames.length > 0) {
+    console.error(
+      `Raw workspace pre-audit found ambiguous run ${runId}: ${ambiguousNames.join(", ")}`,
+    );
+    process.exit(1);
+  }
+  console.log(`Raw workspace pre-audit accepted the exact namespace for run ${runId}.`);
+  process.exit(0);
+}
+
+const residualNames = workspaceNames.filter((name) => name.startsWith(expectedPrefix));
 if (residualNames.length > 0) {
   console.error(`Raw workspace verification found run ${runId}: ${residualNames.join(", ")}`);
   process.exit(1);
 }
 
-console.log(`Raw workspace verification found no workspace for run ${runId}.`);
+console.log(`Raw workspace verification found no exact workspace for run ${runId}.`);

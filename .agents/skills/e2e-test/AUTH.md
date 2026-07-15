@@ -31,6 +31,9 @@ The client ID and secret must come from an OS keychain or external secret manage
 in `ids.local.env`, another repository file, chat, command arguments, shell variables, shell
 history, or logs. Use a trusted credential provider that writes exactly
 `<client-id>NUL<client-secret>NUL` to standard output without logging either value.
+The provider is part of the trusted computing base: it must validate both secret-store reads before
+emitting values and exit successfully immediately after closing the exact stream. Process
+substitution does not expose a later provider exit status to the helper.
 
 Invoke `/bin/bash`, the helper, the Node.js executable, and the actual `tailor-sdk` JavaScript entry
 point from a trusted checkout outside the diff under test. Use absolute paths, and start with an
@@ -41,32 +44,25 @@ login process:
 /usr/bin/env -i \
   HOME="$HOME" \
   PATH="$PATH" \
-  TAILOR_PLATFORM_ORGANIZATION_ID="$TAILOR_PLATFORM_ORGANIZATION_ID" \
-  TAILOR_PLATFORM_FOLDER_ID="$TAILOR_PLATFORM_FOLDER_ID" \
   /bin/bash /absolute/path/to/trusted-checkout/.agents/skills/e2e-test/scripts/with-machine-user-auth.sh \
-  /absolute/path/to/trusted/node /absolute/path/to/trusted/tailor-sdk -- <suite-command> \
+  /absolute/path/to/trusted/node /absolute/path/to/trusted/tailor-sdk -- \
+  /absolute/path/to/trusted-checkout/.agents/skills/e2e-test/scripts/with-e2e-ids.sh \
+  /absolute/path/to/trusted-checkout/.agents/skills/e2e-test/ids.local.env -- <suite-command> \
   3< <(set +x; /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin" \
     /absolute/path/to/trusted-credential-provider --format=nul)
 ```
 
-Pass only the non-secret suite IDs that the selected target needs; the example above shows the SDK
-suite. Resolve the trusted Node.js path with `mise which node` before loading credentials. Resolve
-the CLI package's `bin["tailor-sdk"]` target; do not pass a `.bin` shell shim to Node.js. The provider
-must read the two values directly from its secret store; do not wrap it with shell assignments or
-`printf ... "$SECRET"`. `set +x` disables caller-side tracing, and the nested `env -i` blocks preload
-variables before the provider starts. The values travel only through file descriptor 3, not through
-process arguments or the helper's environment.
+The example loads the SDK suite's non-secret IDs after authentication. Omit the ID loader when the
+target does not need stored IDs. Resolve the trusted Node.js path with `mise which node` before
+loading credentials. Resolve the CLI package's `bin["tailor-sdk"]` target; do not pass a `.bin` shell
+shim to Node.js. The provider must read the two values directly from its secret store; do not wrap
+it with shell assignments or `printf ... "$SECRET"`. `set +x` disables caller-side tracing, and the
+nested `env -i` blocks preload variables before the provider starts. The values travel only through
+file descriptor 3, not through process arguments or the helper's environment.
 
-For example, a macOS Keychain-backed provider can emit two existing generic-password items without
-materializing either value in the caller shell:
-
-```sh
-set +x
-/usr/bin/security find-generic-password -s tailor-e2e-client-id -w | /usr/bin/tr -d '\n'
-printf '\0'
-/usr/bin/security find-generic-password -s tailor-e2e-client-secret -w | /usr/bin/tr -d '\n'
-printf '\0'
-```
+A macOS Keychain-backed provider should read both generic-password items through the Security API,
+validate them in its own memory, and emit the framed stream only after both reads succeed. Keep that
+provider outside the repository under test.
 
 The helper:
 
@@ -75,10 +71,11 @@ The helper:
 - starts the trusted Node.js and CLI with an allowlisted environment containing only an isolated
   home and the client credentials;
 - stores the resulting short-lived access token under a temporary `XDG_CONFIG_HOME`;
-- replaces itself with the suite process after removing client credentials and stale token/profile
-  overrides, so no long-lived helper retains the secret; and
-- uses a credential-free guardian blocked on a lifetime pipe to delete the temporary configuration
-  after the suite exits or receives an ordinary termination signal.
+- replaces itself after removing client credentials and stale token/profile overrides, so no
+  long-lived process retains the secret;
+- runs the suite as a child of a credential-free guardian that forwards HUP, INT, and TERM; and
+- uses a separate credential-free watchdog to delete the temporary configuration even if the
+  guardian is killed, without waiting for orphaned suite descendants.
 
 The code under test can still read the short-lived access token it needs. Dedicated test-only scope
 and prompt workspace cleanup therefore remain mandatory.

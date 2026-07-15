@@ -37,6 +37,26 @@ if [[ -n ${AUTH_ARGV_MARKER:-} ]]; then
   /bin/cp "$XDG_CONFIG_HOME/auth-argv" "$AUTH_ARGV_MARKER"
 fi
 
+if [[ -n ${SPAWN_ORPHAN:-} ]]; then
+  /bin/sleep 2 </dev/null >/dev/null 2>&1 &
+  orphan_pid=$!
+  if [[ -n ${ORPHAN_PID_MARKER:-} ]]; then
+    printf '%s' "$orphan_pid" >"$ORPHAN_PID_MARKER"
+  fi
+fi
+
+if [[ -n ${TARGET_PARENT_SIGNAL:-} ]]; then
+  kill -s "$TARGET_PARENT_SIGNAL" "$PPID"
+fi
+
+if [[ -n ${TARGET_DELAY:-} ]]; then
+  /bin/sleep "$TARGET_DELAY"
+fi
+
+if [[ -n ${TARGET_COMPLETION_MARKER:-} ]]; then
+  printf 'completed' >"$TARGET_COMPLETION_MARKER"
+fi
+
 if [[ -n ${TARGET_SIGNAL:-} ]]; then
   kill -s "$TARGET_SIGNAL" "$$"
 fi

@@ -11,12 +11,20 @@ if [[ -n ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID:-} || -n ${TAILOR_PLATFORM_MAC
   exit 64
 fi
 
-repo_root=$(git rev-parse --show-toplevel)
+repo_root=$(git -C "$script_dir" rev-parse --show-toplevel)
 cd "$repo_root/packages/sdk" || exit 1
 
+for required_id in TAILOR_PLATFORM_ORGANIZATION_ID TAILOR_PLATFORM_FOLDER_ID; do
+  id_value=${!required_id:-}
+  if [[ ! "$id_value" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
+    echo "$required_id must contain a UUID." >&2
+    exit 64
+  fi
+done
+
 run_id=${TAILOR_PLATFORM_E2E_RUN_ID:-"local-$(date +%s)-$$-$RANDOM"}
-if [[ ${#run_id} -lt 8 || ! "$run_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
-  echo "TAILOR_PLATFORM_E2E_RUN_ID must be at least 8 safe filename characters." >&2
+if [[ ${#run_id} -lt 8 || ${#run_id} -gt 40 || ! "$run_id" =~ ^[a-z0-9-]+$ ]]; then
+  echo "TAILOR_PLATFORM_E2E_RUN_ID must be 8-40 lowercase letters, digits, or hyphens." >&2
   exit 64
 fi
 export TAILOR_PLATFORM_E2E_RUN_ID="$run_id"
@@ -30,7 +38,7 @@ cleanup_local_tmp() {
 trap cleanup_local_tmp EXIT
 
 verify_raw_workspace_list() {
-  local workspace_output workspace_status verification_node
+  local phase=$1 workspace_output workspace_status verification_node
 
   if [[ -n ${TAILOR_E2E_TRUSTED_NODE:-} || -n ${TAILOR_E2E_TRUSTED_CLI:-} ]]; then
     if [[ ${TAILOR_E2E_TRUSTED_NODE:-} != /* || ! -x ${TAILOR_E2E_TRUSTED_NODE:-} ||
@@ -38,11 +46,14 @@ verify_raw_workspace_list() {
       echo "Trusted raw-verification Node.js and CLI paths must both be valid." >&2
       return 64
     fi
-    workspace_output=$("$TAILOR_E2E_TRUSTED_NODE" "$TAILOR_E2E_TRUSTED_CLI" --json workspace list)
+    workspace_output=$(
+      /usr/bin/env -u TAILOR_PLATFORM_PROFILE \
+        "$TAILOR_E2E_TRUSTED_NODE" "$TAILOR_E2E_TRUSTED_CLI" --json workspace list
+    )
     workspace_status=$?
     verification_node=$TAILOR_E2E_TRUSTED_NODE
   else
-    workspace_output=$(pnpm exec tailor-sdk --json workspace list)
+    workspace_output=$(/usr/bin/env -u TAILOR_PLATFORM_PROFILE pnpm exec tailor-sdk --json workspace list)
     workspace_status=$?
     verification_node=$(type -P node)
   fi
@@ -56,17 +67,23 @@ verify_raw_workspace_list() {
   fi
 
   printf '%s' "$workspace_output" |
-    "$verification_node" "$script_dir/verify-workspace-list.mjs" "$run_id"
+    "$verification_node" "$script_dir/verify-workspace-list.mjs" "$run_id" "$phase"
 }
 
 run_cleanup() {
-  local preview_status cleanup_status verification_status verification_output attempt
-  local line success_lines found_workspaces
+  local preview_status pre_audit_status cleanup_status verification_status attempt
 
   pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --dry-run "--run-id=$run_id"
   preview_status=$?
   if [[ $preview_status -ne 0 ]]; then
     return "$preview_status"
+  fi
+
+  verify_raw_workspace_list before-delete
+  pre_audit_status=$?
+  if [[ $pre_audit_status -ne 0 ]]; then
+    echo "Cleanup stopped because the raw workspace pre-audit was not safe." >&2
+    return "$pre_audit_status"
   fi
 
   pnpm exec tsx scripts/cleanup-e2e-workspaces.ts "--run-id=$run_id"
@@ -76,50 +93,46 @@ run_cleanup() {
   fi
 
   verification_status=1
-  verification_output=""
   for attempt in 1 2 3; do
-    verification_output=$(pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --dry-run "--run-id=$run_id" 2>&1)
+    verify_raw_workspace_list after-delete
     verification_status=$?
-    success_lines=0
-    found_workspaces=0
-    while IFS= read -r line; do
-      [[ "$line" == "✅ No e2e workspaces found to delete." ]] && ((success_lines += 1))
-      [[ "$line" == Found\ *\ e2e\ workspace\(s\): ]] && found_workspaces=1
-    done <<<"$verification_output"
-    if [[ $verification_status -eq 0 && $success_lines -eq 1 && $found_workspaces -eq 0 ]]; then
-      printf '%s\n' "$verification_output"
-      verify_raw_workspace_list
-      verification_status=$?
-      [[ $verification_status -ne 0 ]] || return 0
-    fi
+    [[ $verification_status -ne 0 ]] || return 0
     [[ $attempt -eq 3 ]] || sleep 1
   done
 
-  printf '%s\n' "$verification_output" >&2
-  if [[ $verification_status -ne 0 ]]; then
-    return "$verification_status"
-  fi
   echo "Cleanup verification still found workspaces for run ID $run_id." >&2
-  return 1
+  return "$verification_status"
 }
 
 handle_signal() {
-  local signal_status=$1
-  trap - INT TERM
+  local signal_name=$1 signal_status=$2 cleanup_status
+  trap - HUP INT TERM
+  if [[ -n ${test_pid:-} ]]; then
+    kill -s "$signal_name" -- "-$test_pid" 2>/dev/null || true
+    wait "$test_pid" 2>/dev/null || true
+    test_pid=""
+  fi
   run_cleanup
-  local cleanup_status=$?
+  cleanup_status=$?
   echo "E2E interrupted (status $signal_status); cleanup status: $cleanup_status" >&2
   exit "$signal_status"
 }
-trap 'handle_signal 130' INT
-trap 'handle_signal 143' TERM
+trap 'handle_signal HUP 129' HUP
+trap 'handle_signal INT 130' INT
+trap 'handle_signal TERM 143' TERM
 
-pnpm run test -- --project e2e
+test_pid=""
+set -m
+pnpm run test -- --project e2e &
+test_pid=$!
+set +m
+wait "$test_pid"
 test_status=$?
+test_pid=""
+trap - HUP INT TERM
 
 run_cleanup
 cleanup_status=$?
-trap - INT TERM
 
 echo "E2E test status: $test_status; cleanup status: $cleanup_status" >&2
 

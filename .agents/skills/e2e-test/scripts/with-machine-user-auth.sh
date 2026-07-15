@@ -38,31 +38,29 @@ if ! IFS= read -r -d '' client_id 2>/dev/null <&3 ||
   echo "File descriptor 3 must contain a NUL-terminated client ID and client secret." >&2
   exit 64
 fi
+extra_byte=$(/usr/bin/od -An -N1 -tu1 <&3)
 exec 3<&-
 
 if [[ -z "$client_id" || -z "$client_secret" ]]; then
   echo "The client ID and client secret on file descriptor 3 must be non-empty." >&2
   exit 64
 fi
+if [[ -n ${extra_byte//[[:space:]]/} ]]; then
+  echo "File descriptor 3 must contain exactly two NUL-terminated values." >&2
+  exit 64
+fi
+unset extra_byte
 
 config_home=$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/tailor-e2e-auth.XXXXXX")
 /bin/chmod 700 "$config_home"
 /bin/mkdir -p "$config_home/home"
-lifetime_fifo="$config_home/.lifetime"
-/usr/bin/mkfifo "$lifetime_fifo"
-
-/usr/bin/env -i \
-  PATH=/usr/bin:/bin \
-  /bin/bash -c '
-    trap "" HUP INT TERM
-    lifetime_fifo=$1
-    config_home=$2
-    IFS= read -r _ <"$lifetime_fifo" || true
-    rm -rf -- "$config_home"
-  ' bash "$lifetime_fifo" "$config_home" </dev/null >/dev/null 2>&1 &
-
-exec 9>"$lifetime_fifo"
-/bin/rm -f "$lifetime_fifo"
+cleanup_config() {
+  /bin/rm -rf -- "$config_home"
+}
+trap cleanup_config EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 set +e
 printf '%s\0%s\0' "$client_id" "$client_secret" | /usr/bin/env -i \
@@ -99,4 +97,44 @@ exec /usr/bin/env -u TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID \
   XDG_CONFIG_HOME="$config_home" \
   TAILOR_E2E_TRUSTED_NODE="$auth_node" \
   TAILOR_E2E_TRUSTED_CLI="$auth_cli" \
-  "$@"
+  /bin/bash -c '
+    config_home=$1
+    shift
+
+    guardian_pid=$$
+    /usr/bin/env -i PATH=/usr/bin:/bin /bin/bash -c '\''
+      trap "" HUP INT TERM
+      while kill -0 "$1" 2>/dev/null; do
+        /bin/sleep 0.05
+      done
+      /bin/rm -rf -- "$2"
+    '\'' bash "$guardian_pid" "$config_home" </dev/null >/dev/null 2>&1 &
+
+    cleanup_and_exit() {
+      status=$1
+      trap - HUP INT TERM
+      /bin/rm -rf -- "$config_home"
+      exit "$status"
+    }
+
+    forward_signal() {
+      signal_name=$1
+      signal_status=$2
+      trap - HUP INT TERM
+      kill -s "$signal_name" -- "-$target_pid" 2>/dev/null || true
+      wait "$target_pid" 2>/dev/null || true
+      cleanup_and_exit "$signal_status"
+    }
+
+    set -m
+    "$@" &
+    target_pid=$!
+    set +m
+    trap "forward_signal HUP 129" HUP
+    trap "forward_signal INT 130" INT
+    trap "forward_signal TERM 143" TERM
+
+    wait "$target_pid"
+    target_status=$?
+    cleanup_and_exit "$target_status"
+  ' bash "$config_home" "$@"

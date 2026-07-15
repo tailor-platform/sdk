@@ -14,6 +14,10 @@ case "$*" in
     fi
     if [[ -n ${E2E_TEST_SIGNAL:-} ]]; then
       kill -s "$E2E_TEST_SIGNAL" "$PPID"
+      /bin/sleep "${E2E_SIGNAL_DELAY:-1}"
+      if [[ -n ${E2E_SIGNAL_COMPLETION_MARKER:-} ]]; then
+        printf 'completed' >"$E2E_SIGNAL_COMPLETION_MARKER"
+      fi
     fi
     exit "${E2E_TEST_STATUS:-0}"
     ;;
@@ -39,10 +43,16 @@ case "$*" in
     exit "${E2E_CLEANUP_STATUS:-0}"
     ;;
   "exec tailor-sdk --json workspace list")
+    if [[ -n ${TAILOR_PLATFORM_PROFILE:-} ]]; then
+      echo "workspace verification inherited TAILOR_PLATFORM_PROFILE" >&2
+      exit 27
+    fi
     if [[ -n ${E2E_RAW_MISSING:-} ]]; then
       :
     elif [[ -n ${E2E_RAW_MALFORMED:-} ]]; then
       printf '{"not":"a workspace list"}\n'
+    elif [[ -n ${E2E_RAW_AMBIGUOUS:-} ]]; then
+      printf '[{"name":"template-e2e-%s-leftover"}]\n' "$TAILOR_PLATFORM_E2E_RUN_ID"
     elif [[ -n ${E2E_RAW_RESIDUAL:-} ]]; then
       printf '[{"name":"e2e-ws-%s-leftover"}]\n' "$TAILOR_PLATFORM_E2E_RUN_ID"
     elif [[ -n ${E2E_RAW_OTHER_RUN:-} ]]; then
