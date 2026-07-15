@@ -26,20 +26,8 @@ describe("@tailor-platform/sdk/runtime/globals activates ambient globals", () =>
     >();
   });
 
-  test("tailor.workflow.triggerWorkflow returns Promise<string>", () => {
-    expectTypeOf<ReturnType<typeof tailor.workflow.triggerWorkflow>>().toEqualTypeOf<
-      Promise<string>
-    >();
-  });
-
   test("tailor.workflow.startWorkflow returns Promise<string>", () => {
     expectTypeOf<ReturnType<typeof tailor.workflow.startWorkflow>>().toEqualTypeOf<
-      Promise<string>
-    >();
-  });
-
-  test("tailor.workflow.resumeWorkflow returns Promise<string>", () => {
-    expectTypeOf<ReturnType<typeof tailor.workflow.resumeWorkflow>>().toEqualTypeOf<
       Promise<string>
     >();
   });

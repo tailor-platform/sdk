@@ -23,8 +23,8 @@ export const validate_order = createWorkflowJob({
   name: "validate-order",
   body: (input: { orderId: string }) => {
     console.log("Order ID:", input.orderId);
-    const inventoryResult = check_inventory.trigger();
-    const paymentResult = process_payment.trigger();
+    const inventoryResult = check_inventory.start();
+    const paymentResult = process_payment.start();
     return { inventoryResult, paymentResult };
   },
 });

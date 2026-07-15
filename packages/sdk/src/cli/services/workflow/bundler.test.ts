@@ -41,7 +41,7 @@ import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
 export const mainA = createWorkflowJob({
   name: "main-a",
-  body: async () => await step.trigger(),
+  body: async () => await step.start(),
 });
 export default createWorkflow({ name: "workflow-a", mainJob: mainA });
 `,
@@ -54,7 +54,7 @@ import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 export const step = createWorkflowJob({ name: "step-b", body: async () => "b" });
 export const mainB = createWorkflowJob({
   name: "main-b",
-  body: async () => await step.trigger(),
+  body: async () => await step.start(),
 });
 export default createWorkflow({ name: "workflow-b", mainJob: mainB });
 `,
@@ -75,8 +75,8 @@ export default createWorkflow({ name: "workflow-b", mainJob: mainB });
 
       expect(result.mainJobDeps["main-a"]).toEqual(["main-a", "step-a"]);
       expect(result.usedJobNames).toEqual(["step-a", "main-a"]);
-      expect(result.bundledCode.get("main-a")).toMatch(/triggerJobFunction\([`'"]step-a/);
-      expect(result.bundledCode.get("main-a")).not.toMatch(/triggerJobFunction\([`'"]step-b/);
+      expect(result.bundledCode.get("main-a")).toMatch(/startJobFunction\([`'"]step-a/);
+      expect(result.bundledCode.get("main-a")).not.toMatch(/startJobFunction\([`'"]step-b/);
     });
 
     test("includes jobs referenced through aliased named imports", async () => {
@@ -98,7 +98,7 @@ import { step as importedStep } from "./jobs";
 
 export const mainJob = createWorkflowJob({
   name: "main-job",
-  body: async () => await importedStep.trigger(),
+  body: async () => await importedStep.start(),
 });
 export default createWorkflow({ name: "workflow", mainJob });
 `,
@@ -117,7 +117,7 @@ export default createWorkflow({ name: "workflow", mainJob });
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job", "step-a"]);
       expect(result.usedJobNames).toEqual(["step-a", "main-job"]);
-      expect(result.bundledCode.get("main-job")).toMatch(/triggerJobFunction\([`'"]step-a/);
+      expect(result.bundledCode.get("main-job")).toMatch(/startJobFunction\([`'"]step-a/);
     });
 
     test("does not include a job whose binding is shadowed by a parameter", async () => {
@@ -131,7 +131,7 @@ import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
 export const mainJob = createWorkflowJob({
   name: "main-job",
-  body: async (step: { trigger(): Promise<string> }) => await step.trigger(),
+  body: async (step: { start(): Promise<string> }) => await step.start(),
 });
 export default createWorkflow({ name: "workflow", mainJob });
 `,
@@ -150,7 +150,7 @@ export default createWorkflow({ name: "workflow", mainJob });
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job"]);
       expect(result.usedJobNames).toEqual(["main-job"]);
-      expect(result.bundledCode.get("main-job")).not.toContain("triggerJobFunction");
+      expect(result.bundledCode.get("main-job")).not.toContain("startJobFunction");
     });
   });
 
@@ -206,7 +206,7 @@ import simpleWorkflow from "${importPath}";
 export const callerJob = createWorkflowJob({
   name: "caller-job",
   body: async () => {
-    const executionId = await simpleWorkflow.trigger(${triggerArgs});
+    const executionId = await simpleWorkflow.start(${triggerArgs});
     return { executionId };
   },
 });
@@ -256,17 +256,17 @@ export default createWorkflow({
     test.each([
       { label: "cross-file default import", ext: "ts", importPath: "./simple" },
       { label: ".mts dependency files", ext: "mts", importPath: "./simple.mjs" },
-    ])("transforms workflow.trigger() from $label", async (options) => {
+    ])("transforms workflow.start() from $label", async (options) => {
       const { ext, importPath } = options;
       const result = await buildBundleFixture({ ext, importPath });
 
       expect(result.bundledCode.has("caller-job")).toBe(true);
       const callerCode = result.bundledCode.get("caller-job")!;
 
-      // The trigger call should be transformed to triggerWorkflow
-      expect(callerCode).toContain("triggerWorkflow");
-      // The raw simpleWorkflow.trigger() should NOT remain in the bundle
-      expect(callerCode).not.toContain("simpleWorkflow.trigger");
+      // The trigger call should be transformed to startWorkflow
+      expect(callerCode).toContain("startWorkflow");
+      // The raw simpleWorkflow.start() should NOT remain in the bundle
+      expect(callerCode).not.toContain("simpleWorkflow.start");
     });
 
     test("strips platform-bundle-only symbols from cross-file default import", async () => {
@@ -284,7 +284,7 @@ export default createWorkflow({
       }
     });
 
-    test("transforms workflow.trigger() without an options argument", async () => {
+    test("transforms workflow.start() without an options argument", async () => {
       const result = await buildBundleFixture({
         ext: "ts",
         importPath: "./simple",
@@ -294,8 +294,8 @@ export default createWorkflow({
       expect(result.bundledCode.has("caller-job")).toBe(true);
       const callerCode = result.bundledCode.get("caller-job")!;
 
-      expect(callerCode).toContain("triggerWorkflow");
-      expect(callerCode).not.toContain("simpleWorkflow.trigger");
+      expect(callerCode).toContain("startWorkflow");
+      expect(callerCode).not.toContain("simpleWorkflow.start");
     });
   });
 });

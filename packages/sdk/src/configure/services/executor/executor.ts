@@ -8,7 +8,7 @@ import type { Trigger } from "./trigger";
 /**
  * Extract mainJob's Input type from Workflow.
  */
-type WorkflowInput<W extends Workflow> = Parameters<W["trigger"]>[0];
+type WorkflowInput<W extends Workflow> = Parameters<W["start"]>[0];
 
 type TriggerArgs<T extends Trigger<unknown>> = T extends { __args: infer Args } ? Args : never;
 

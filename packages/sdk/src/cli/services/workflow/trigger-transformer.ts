@@ -331,7 +331,7 @@ export function transformFunctionTriggers(
 
   for (const { call, parent } of nestedTriggerCalls) {
     logger.warn(
-      `Nested trigger call "${call.identifierName}.trigger(...)" inside "${parent.identifierName}.trigger(...)" cannot be converted. Move it to a separate statement and pass the result instead.`,
+      `Nested start call "${call.identifierName}.start(...)" inside "${parent.identifierName}.start(...)" cannot be converted. Move it to a separate statement and pass the result instead.`,
     );
   }
 
@@ -352,10 +352,10 @@ export function transformFunctionTriggers(
           optionsPart = `, ${call.optionsText}`;
         }
       }
-      transformedCall = `tailor.workflow.triggerWorkflow(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
+      transformedCall = `tailor.workflow.startWorkflow(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
     } else {
       const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
-      transformedCall = `tailor.workflow.triggerJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
+      transformedCall = `tailor.workflow.startJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
     }
     replacements.push({
       start: call.callRange.start,
@@ -380,7 +380,7 @@ export function createTriggerTransformPlugin(
     transform: {
       filter: { id: { include: [/\.(ts|mts|cts|js|mjs|cjs)$/] } },
       handler(code, id) {
-        if (!code.includes(".trigger(")) return null;
+        if (!code.includes(".start(")) return null;
         return { code: transformFunctionTriggers(code, triggerContext, id) };
       },
     },
