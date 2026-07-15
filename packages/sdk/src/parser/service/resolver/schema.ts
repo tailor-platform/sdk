@@ -15,12 +15,19 @@ const ResolverPermissionOperandSchema = z.union([
 
 const ResolverPermissionOperatorSchema = z.union([z.literal("="), z.literal("!=")]);
 
+const isUserOperand = (operand: z.infer<typeof ResolverPermissionOperandSchema>) =>
+  typeof operand === "object";
+
 const ResolverPermissionConditionSchema = z
   .tuple([
     ResolverPermissionOperandSchema,
     ResolverPermissionOperatorSchema,
     ResolverPermissionOperandSchema,
   ])
+  .refine(
+    ([left, , right]) => isUserOperand(left) || isUserOperand(right),
+    "Resolver permission condition must reference a `user` operand on at least one side",
+  )
   .readonly();
 
 const ResolverPermissionPolicySchema = z.object({
@@ -32,7 +39,10 @@ const ResolverPermissionPolicySchema = z.object({
       .readonly(),
   ]),
   permit: z.boolean(),
-  description: z.string().optional(),
+  description: z
+    .string()
+    .optional()
+    .describe("Reason recorded for this policy, used in the access-denied error message"),
 });
 
 export const ResolverPermissionSchema = z

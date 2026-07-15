@@ -48,7 +48,8 @@ export type ResolverPermissionPolicy<User extends object = InferredAttributeMap>
  * A `permit: false` policy always denies matching callers. With no
  * `permit: true` policy, this is a pure blocklist (everyone else is allowed);
  * with at least one, it's an allow-list (deny by default, granted only by a
- * matching `permit: true` policy).
+ * matching `permit: true` policy). `"allowAnonymous"` explicitly documents
+ * that anonymous callers are allowed.
  * @example
  * const permission: ResolverPermission = [
  *   { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
@@ -59,6 +60,9 @@ export type ResolverPermissionPolicy<User extends object = InferredAttributeMap>
  *   { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
  *   { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
  * ];
+ * @example
+ * const permission: ResolverPermission = "allowAnonymous";
  */
 export type ResolverPermission<User extends object = InferredAttributeMap> =
-  readonly ResolverPermissionPolicy<User>[];
+  | readonly ResolverPermissionPolicy<User>[]
+  | "allowAnonymous";

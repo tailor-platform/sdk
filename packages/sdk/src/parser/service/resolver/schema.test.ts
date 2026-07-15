@@ -54,4 +54,10 @@ describe("ResolverPermissionSchema", () => {
       ResolverPermissionSchema.parse([{ conditions: [[{ user: "_loggedIn" }, "=", true]] }]),
     ).toThrow("permit");
   });
+
+  test("rejects a condition with no `user` operand on either side", () => {
+    expect(() =>
+      ResolverPermissionSchema.parse([{ conditions: [["a", "=", "b"]], permit: true }]),
+    ).toThrow("must reference a `user` operand");
+  });
 });

@@ -42,7 +42,7 @@ type ResolverReturn<
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
     authInvoker?: AuthInvoker<string> | MachineUserName;
-    permission?: ResolverPermission | "allowAnonymous";
+    permission?: ResolverPermission;
   }>;
 
 /**
@@ -103,7 +103,7 @@ export function createResolver<
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
       authInvoker?: AuthInvoker<string> | MachineUserName;
-      permission?: ResolverPermission | "allowAnonymous";
+      permission?: ResolverPermission;
     }>,
 ): ResolverReturn<Input, Output> {
   // Check if output is already a TailorField using duck typing.

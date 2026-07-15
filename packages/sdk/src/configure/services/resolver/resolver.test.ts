@@ -5,6 +5,7 @@ import { createResolver } from "./resolver";
 import type { TailorInvoker, TailorUser } from "#/runtime/types";
 import type { output } from "#/types/helpers";
 import type { ResolverInput } from "#/types/resolver.generated";
+import type { ResolverPermission } from "./permission";
 
 describe("createResolver", () => {
   describe("type inference", () => {
@@ -493,6 +494,11 @@ describe("createResolver", () => {
       });
 
       expect(resolver.permission).toBe("allowAnonymous");
+    });
+
+    test("ResolverPermission type accepts a standalone allowAnonymous constant", () => {
+      const permission: ResolverPermission = "allowAnonymous";
+      expect(permission).toBe("allowAnonymous");
     });
 
     test("creates minimal resolver without optional fields", () => {
