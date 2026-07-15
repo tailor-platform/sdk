@@ -315,6 +315,27 @@ describe("dispatchPlugin", () => {
     expect(env.TAILOR_CONFIG_PATH).toBe("/proj/tailor.config.ts");
   });
 
+  test("skips platform context even when the --env-file-if-exists file is missing", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["deploy", "--env-file-if-exists", ".env.missing"],
+      cliName: CLI,
+    });
+
+    // The flag check is presence-only: with the file absent, neither the
+    // injected context nor the plugin's env-file loader supplies platform vars.
+    expect(code).toBe(0);
+    const { env } = readCapture();
+    expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_WORKSPACE_ID).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_URL).toBeUndefined();
+  });
+
   test("omits best-effort context when it cannot be resolved but still dispatches", async () => {
     contextMocks.loadAccessToken.mockRejectedValue(new Error("not logged in"));
     contextMocks.loadWorkspaceId.mockRejectedValue(new Error("no workspace"));
