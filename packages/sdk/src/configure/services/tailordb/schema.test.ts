@@ -1357,7 +1357,7 @@ describe("TailorDBType type-level validate (function form) tests", () => {
     });
   });
 
-  test("table with custom fields stays assignable across generic module factory boundaries", () => {
+  test("table type built inside a generic factory stays assignable when threaded through another generic factory's explicitly-parameterized signature", () => {
     function defineItemModule<CustomFields extends Record<string, TailorAnyDBField>>(params: {
       fields: CustomFields;
     }) {
