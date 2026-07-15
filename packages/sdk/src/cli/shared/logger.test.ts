@@ -6,8 +6,8 @@ describe("logger", () => {
     test("has correct name and message", () => {
       const error = new CIPromptError();
       expect(error.name).toBe("CIPromptError");
-      expect(error.message).toContain("CI environments");
-      expect(error.message).toContain("--yes flag");
+      expect(error.message).toContain("not available in this environment");
+      expect(error.message).toContain("required options explicitly");
     });
 
     test("accepts custom message", () => {
