@@ -101,9 +101,10 @@ export function installPlatformGlobals(global: typeof globalThis): void {
   g[RUNTIME_FLAG_KEY] = true;
 
   // Containers. Namespace mocks (secretmanager, …) are added to these by the
-  // corresponding `xMock()` on acquisition. `workflow` carries a default runner
-  // so `.start()` runs the real job chain locally without `mockWorkflow()`;
-  // `mockWorkflow()` overlays and restores it.
+  // corresponding `xMock()` on acquisition. `workflow` carries a default
+  // runner: job/wait/resolve calls throw a helpful error, and workflow starts
+  // return a placeholder execution id, unless overlaid by `mockWorkflow()` or
+  // `runWorkflowLocally()`.
   g.tailor = {
     context: { getInvoker: defaultGetInvoker },
     workflow: createDefaultWorkflowRuntime(),

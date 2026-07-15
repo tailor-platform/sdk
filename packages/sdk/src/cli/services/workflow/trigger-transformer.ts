@@ -10,15 +10,15 @@ import {
 import {
   type ASTNode,
   type Replacement,
-  type TriggerCallInfo,
+  type StartCallInfo,
   applyReplacements,
   getModuleExportName,
-  getTriggerCallInfo,
+  getStartCallInfo,
 } from "./ast-utils";
 import type { Program } from "@oxc-project/types";
 import type { Plugin } from "rolldown";
 
-export interface ResolvedTriggerCall extends TriggerCallInfo {
+export interface ResolvedTriggerCall extends StartCallInfo {
   kind: "job" | "workflow";
   targetName: string;
 }
@@ -283,7 +283,7 @@ function detectTriggerCallsWithTargets(
   const targetNames = new Set(targets.keys());
 
   walkBindingAware(program, targetNames, (node, shadowedNames) => {
-    const triggerCall = getTriggerCallInfo(node, sourceText);
+    const triggerCall = getStartCallInfo(node, sourceText);
     if (!triggerCall || shadowedNames.has(triggerCall.identifierName)) return;
     const target = targets.get(triggerCall.identifierName);
     if (target) {

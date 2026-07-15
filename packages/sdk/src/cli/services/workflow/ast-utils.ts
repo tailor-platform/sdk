@@ -21,7 +21,7 @@ export interface Replacement {
   text: string;
 }
 
-export interface TriggerCallInfo {
+export interface StartCallInfo {
   identifierName: string;
   callRange: { start: number; end: number };
   argsText: string;
@@ -105,10 +105,10 @@ function argumentSourceText(arg: unknown, sourceText: string): string | undefine
  * @param sourceText - Source code text
  * @returns Start call metadata, or null when the node is not a start call
  */
-export function getTriggerCallInfo(
+export function getStartCallInfo(
   node: ASTNode | null | undefined,
   sourceText: string,
-): TriggerCallInfo | null {
+): StartCallInfo | null {
   if (!node || typeof node !== "object" || node.type !== "CallExpression") {
     return null;
   }
