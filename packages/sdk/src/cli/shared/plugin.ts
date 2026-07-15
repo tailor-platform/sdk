@@ -364,13 +364,6 @@ function buildSpawnTarget(
 }
 
 /**
- * Extract an explicit `--profile`/`-p` value from args forwarded to a plugin,
- * so the injected platform context matches the profile the plugin will use.
- * Scanning stops at a `--` terminator; the last occurrence wins.
- * @param args - Args forwarded to the plugin
- * @returns The explicit profile value, or undefined when not present
- */
-/**
  * Check whether args forwarded to a plugin carry an explicit env-file flag.
  * Scanning stops at a `--` terminator.
  * @param args - Args forwarded to the plugin
@@ -393,6 +386,13 @@ export function hasEnvFileFlag(args: readonly string[]): boolean {
   return false;
 }
 
+/**
+ * Extract an explicit `--profile`/`-p` value from args forwarded to a plugin,
+ * so the injected platform context matches the profile the plugin will use.
+ * Scanning stops at a `--` terminator; the last occurrence wins.
+ * @param args - Args forwarded to the plugin
+ * @returns The explicit profile value, or undefined when not present
+ */
 export function explicitProfileFromArgs(args: readonly string[]): string | undefined {
   let profile: string | undefined;
   for (let i = 0; i < args.length; i++) {
