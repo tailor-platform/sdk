@@ -92,6 +92,25 @@ describe("loadFilesWithIgnores", () => {
     }
   });
 
+  test("warns again for a different pattern set sharing the same baseDir", () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const cwdDir = makeDirWithFile("file-loader-dedupe-patterns-cwd-", "src/legacy.ts");
+    fs.mkdirSync(path.join(cwdDir, "other"), { recursive: true });
+    fs.writeFileSync(path.join(cwdDir, "other", "legacy.ts"), "export const legacy = true;\n");
+    const emptyBaseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-dedupe-patterns-"));
+    tmpDirs.push(emptyBaseDir);
+
+    const originalCwd = process.cwd();
+    process.chdir(cwdDir);
+    try {
+      loadFilesWithIgnores({ files: ["./src/**/*.ts"] }, emptyBaseDir);
+      loadFilesWithIgnores({ files: ["./other/**/*.ts"] }, emptyBaseDir);
+      expect(warnSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      process.chdir(originalCwd);
+    }
+  });
+
   test("does not warn when baseDir itself matches", () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     const targetDir = makeDirWithFile("file-loader-no-warn-", "src/correct.ts");

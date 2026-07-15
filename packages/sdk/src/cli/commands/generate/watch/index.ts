@@ -96,8 +96,10 @@ interface GraphStats {
 // addWatchGroup is called once per watch group, so a single `generate --watch`
 // run can call it multiple times for the same baseDir (once per
 // resolver/executor/tailordb/etc. config sharing that directory). Track which
-// baseDirs have already warned so each one only warns once per run.
-const warnedBaseDirs = new Set<string>();
+// (baseDir, groupId) pairs have already warned so each one only warns once per
+// run — keyed by groupId too, since different groups sharing a baseDir each
+// need their own warning.
+const warnedFallbacks = new Set<string>();
 
 /**
  * Error codes.
@@ -662,8 +664,9 @@ export function createDependencyWatcher(options: WatcherOptions = {}): Dependenc
         // patterns written against the invocation cwd rather than baseDir.
         // Remove this fallback in v2, once such configs are expected to have
         // migrated.
-        if (!warnedBaseDirs.has(baseDir)) {
-          warnedBaseDirs.add(baseDir);
+        const fallbackKey = `${baseDir}\0${groupId}`;
+        if (!warnedFallbacks.has(fallbackKey)) {
+          warnedFallbacks.add(fallbackKey);
           logger.warn(
             `No files matched watch patterns for "${groupId}" relative to "${baseDir}"; ` +
               `falling back to process.cwd(). Update this config's file patterns to be ` +

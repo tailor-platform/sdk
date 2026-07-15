@@ -3,6 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import type * as Chokidar from "chokidar";
 
 const madgeMock = vi.hoisted(() =>
@@ -181,6 +182,25 @@ describe("DependencyWatcher", () => {
 
       const status = watcher.getWatchStatus();
       expect(status.fileCount).toBe(1);
+    });
+
+    test("warns again for a different group falling back for the same baseDir", async () => {
+      const legacyCwd = await createTempDir();
+      await createTestFile(path.join(legacyCwd, "src", "legacy.ts"), 'export const a = "hello";');
+      await createTestFile(path.join(legacyCwd, "other", "legacy.ts"), 'export const b = "hello";');
+
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const originalCwd = process.cwd();
+      process.chdir(legacyCwd);
+      try {
+        await watcher.addWatchGroup("group-a", ["src/*.ts"], tempDir);
+        await watcher.addWatchGroup("group-b", ["other/*.ts"], tempDir);
+      } finally {
+        process.chdir(originalCwd);
+        await fs.rm(legacyCwd, { recursive: true, force: true });
+      }
+
+      expect(warnSpy).toHaveBeenCalledTimes(2);
     });
   });
 
