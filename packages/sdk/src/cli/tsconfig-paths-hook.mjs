@@ -6,13 +6,22 @@ import { createPathsMatcher, getTsconfig } from "get-tsconfig";
 // for dynamically-imported user files (resolvers, executors, workflows,
 // TailorDB types). tsx's own tsconfig-paths support is scoped to the
 // tsconfig discovered relative to where tsx itself was registered, so an
-// alias declared in a project-local tsconfig.json can fail to resolve (or
-// resolve against the wrong project) when the imported file lives in a
-// different directory. This hook re-derives the effective `paths` matcher
-// from the importing file's own directory on every miss, so each
-// dynamically loaded file resolves against its own project's tsconfig
-// regardless of process cwd or which other tsconfig-bearing projects have
-// already been loaded in the same process.
+// alias declared in a project-local tsconfig.json can fail to resolve when
+// the imported file lives in a different directory. This hook activates
+// only when tsx's own resolution throws (a fallback, not an override): it
+// then re-derives the effective `paths` matcher from the importing file's
+// own directory, so the fallback resolves against each file's own
+// project's tsconfig regardless of process cwd or which other
+// tsconfig-bearing projects have already been loaded in the same process.
+//
+// Known limitation: if tsx's cwd-scoped tsconfig happens to define the
+// same alias pattern as the importing file's own tsconfig (e.g. both share
+// a `@/*` convention) and a file exists at the guessed target, tsx's own
+// resolution succeeds — incorrectly — before this fallback ever runs.
+// Winning that race would require this hook to run ahead of tsx's own
+// resolution, which was investigated and found to depend on undocumented,
+// inconsistent Node.js module-hook composition behavior between tsx's two
+// internal registration APIs; not attempted here.
 //
 // Registered via module.register() (not module.registerHooks()): tsx picks
 // between the async register() and sync registerHooks() APIs internally
