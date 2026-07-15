@@ -144,7 +144,7 @@ interface FilterUsedJobsResult {
  * Filter jobs to only include those that are actually used.
  * A job is "used" if:
  * - It's a mainJob of a workflow
- * - It's called via .trigger() from another used job (transitively)
+ * - It's called via .start() from another used job (transitively)
  *
  * Also returns a map of mainJob -> all jobs it depends on (for metadata).
  * @param allJobs - All available job infos
@@ -334,11 +334,11 @@ async function bundleSingleJob(
             },
           },
           handler(code, id) {
-            // Only transform source files that contain workflow jobs or trigger calls
+            // Only transform source files that contain workflow jobs or start calls
             if (
               !code.includes("createWorkflowJob") &&
               !code.includes("createWorkflow") &&
-              !code.includes(".trigger(")
+              !code.includes(".start(")
             ) {
               return null;
             }
@@ -358,8 +358,8 @@ async function bundleSingleJob(
               );
             }
 
-            // Apply workflow.trigger / job.trigger transformation.
-            if (transformed.includes(".trigger(")) {
+            // Apply workflow.start / job.start transformation.
+            if (transformed.includes(".start(")) {
               transformed = transformFunctionTriggers(transformed, triggerContext, id);
             }
 

@@ -416,7 +416,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/auth-invoker-unwrap",
     name: 'auth.invoker("name") → invoker: "name"',
     description:
-      'Rename statically identified SDK `authInvoker` options to `invoker`, replace `auth.invoker("name")` there with the bare `"name"` string, and drop the `auth` import when no other reference remains. Ambiguous workflow `.trigger()` calls are left for manual review. The `auth.invoker()` helper is removed in v2 because importing `auth` from `tailor.config.ts` into runtime files pulls Node-only modules into the bundle.',
+      'Rename statically identified SDK `authInvoker` options to `invoker`, replace `auth.invoker("name")` there with the bare `"name"` string, and drop the `auth` import when no other reference remains. Ambiguous workflow `.start()` calls are left for manual review. The `auth.invoker()` helper is removed in v2 because importing `auth` from `tailor.config.ts` into runtime files pulls Node-only modules into the bundle.',
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_2,
@@ -449,8 +449,8 @@ export const allCodemods: CodemodPackage[] = [
       "   machine user name string; platform/runtime authInvoker payloads still expect",
       "   the object form.",
       "2. Rename remaining authInvoker option keys to invoker only for SDK resolver,",
-      "   executor, workflow.trigger(), or startWorkflow() options. Keep platform/runtime",
-      "   payload keys such as tailor.workflow.triggerWorkflow(..., { authInvoker: ... }).",
+      "   executor, workflow.start(), or startWorkflow() options. Keep platform/runtime",
+      "   payload keys such as tailor.workflow.startWorkflow(..., { authInvoker: ... }).",
       "3. After removing every auth.invoker usage in a file, delete the now-unused auth",
       "   import (keeping it pulls Node-only config modules into runtime bundles); leave",
       "   the import if auth is still referenced elsewhere.",
@@ -718,6 +718,41 @@ export const allCodemods: CodemodPackage[] = [
     ],
   },
   {
+    id: "v2/workflow-trigger-rename",
+    name: "workflow.triggerWorkflow/triggerJobFunction/resumeWorkflow → startWorkflow/startJobFunction/resumeWorkflowExecution",
+    description:
+      "Rename tailor.workflow call sites from the pre-alignment triggerWorkflow/triggerJobFunction/resumeWorkflow names to the canonical startWorkflow/startJobFunction/resumeWorkflowExecution names, on both the ambient tailor.workflow global and a workflow value imported from @tailor-platform/sdk/runtime(/workflow).",
+    since: "1.0.0",
+    until: "2.0.0",
+    scriptPath: "v2/workflow-trigger-rename/scripts/transform.js",
+    legacyPatterns: ["triggerWorkflow", "triggerJobFunction", "resumeWorkflow"],
+    examples: [
+      {
+        before:
+          'import { workflow } from "@tailor-platform/sdk/runtime";\n\nawait workflow.triggerWorkflow("myWorkflow", { data: "value" });',
+        after:
+          'import { workflow } from "@tailor-platform/sdk/runtime";\n\nawait workflow.startWorkflow("myWorkflow", { data: "value" });',
+      },
+    ],
+    prompt: [
+      "The pre-alignment tailor.workflow names triggerWorkflow, triggerJobFunction, and",
+      "resumeWorkflow are removed from the SDK's type surface in v2; use the canonical",
+      "startWorkflow, startJobFunction, and resumeWorkflowExecution names instead. The",
+      "codemod rewrites direct member-access call sites on the ambient tailor.workflow",
+      "global and on a workflow value imported from @tailor-platform/sdk/runtime or",
+      "@tailor-platform/sdk/runtime/workflow (including aliased imports). It skips a",
+      "file entirely when a local declaration shadows the workflow import or the",
+      "ambient tailor name, to avoid rewriting an unrelated same-named value — review",
+      "those manually.",
+      "",
+      "Also review, and migrate by hand:",
+      "- Destructured references (e.g. const { triggerWorkflow } = workflow) — the",
+      "  codemod only rewrites direct member-access calls.",
+      "- Imported TriggerWorkflowOptions / TriggerJobFunctionOptions types — rename",
+      "  them to StartWorkflowOptions / StartJobFunctionOptions.",
+    ].join("\n"),
+  },
+  {
     id: "v2/open-download-stream",
     name: "openDownloadStream → downloadStream",
     description:
@@ -824,28 +859,68 @@ export const allCodemods: CodemodPackage[] = [
   },
   {
     id: "v2/workflow-trigger-dispatch",
-    name: "Workflow .trigger() and trigger tests",
+    name: "Workflow job start() and start tests",
     description:
-      "Workflow job `.trigger()` now aligns with the platform runtime: it returns the job result directly instead of a Promise wrapper, and tests no longer run job bodies locally. Mock trigger responses with `mockWorkflow()` (`setJobHandler` / `enqueueResult`, assert via `triggeredJobs`), or use `runWorkflowLocally()` for a full-chain local run.",
+      "Workflow job `.start()` (previously `.trigger()`) now aligns with the platform runtime: it returns the job result directly instead of a Promise wrapper, and tests no longer run job bodies locally. Mock start responses with `mockWorkflow()` (`setJobHandler` / `enqueueResult`, assert via `startedJobs`), or use `runWorkflowLocally()` for a full-chain local run.",
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_1,
-    suspiciousPatterns: [".trigger("],
+    suspiciousPatterns: [".trigger(", ".start("],
     examples: [
       {
         caption: "Tests must mock the workflow runtime instead of running bodies locally:",
-        before:
-          'const result = await orderJob.trigger({ id });\nexpect(result.status).toBe("done");',
+        before: 'const result = await orderJob.start({ id });\nexpect(result.status).toBe("done");',
         after:
-          'using wf = mockWorkflow();\nwf.setJobHandler((jobName) => (jobName === "order-job" ? { status: "done" } : null));\nconst result = await orderJob.trigger({ id });\nexpect(result.status).toBe("done");',
+          'using wf = mockWorkflow();\nwf.setJobHandler((jobName) => (jobName === "order-job" ? { status: "done" } : null));\nconst result = await orderJob.start({ id });\nexpect(result.status).toBe("done");',
       },
     ],
     prompt: [
-      "Workflow job .trigger() now uses the platform workflow runtime instead of running",
+      "Workflow job .start() now uses the platform workflow runtime instead of running",
       "the job body locally. In tests, acquire `using wf = mockWorkflow()` and provide",
-      "trigger responses (setJobHandler / enqueueResult), or use runWorkflowLocally() for a",
-      "full-chain local run; an unmocked trigger now throws. Outside tests, treat the",
-      "trigger result as the job output directly (no Promise wrapper to unwrap).",
+      "start responses (setJobHandler / enqueueResult), or use runWorkflowLocally() for a",
+      "full-chain local run; an unmocked start now throws. Outside tests, treat the",
+      "start result as the job output directly (no Promise wrapper to unwrap).",
+    ].join("\n"),
+  },
+  {
+    id: "v2/workflow-start-rename",
+    name: "Workflow.trigger()/WorkflowJob.trigger() → .start()",
+    description:
+      "Rename `Workflow.trigger()` (returned by `createWorkflow()`) and `WorkflowJob.trigger()` (returned by `createWorkflowJob()`) to `.start()`, aligning the SDK's ergonomic verb with the platform's `start*` RPC vocabulary. No codemod ships for this rename: distinguishing a workflow/job `.trigger()` call from an unrelated object's own `.trigger()` method requires resolving the receiver back to a `createWorkflow`/`createWorkflowJob` result, which is not reliably decidable from a single file's syntax.",
+    since: "1.0.0",
+    until: "2.0.0",
+    suspiciousPatterns: [".trigger("],
+    examples: [
+      {
+        before: [
+          "const inventory = checkInventory.trigger({ orderId: input.orderId });",
+          'const workflowRunId = await orderProcessingWorkflow.trigger(args, { invoker: "manager" });',
+        ].join("\n"),
+        after: [
+          "const inventory = checkInventory.start({ orderId: input.orderId });",
+          'const workflowRunId = await orderProcessingWorkflow.start(args, { invoker: "manager" });',
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2, the ergonomic .trigger() method on a createWorkflow() or",
+      "createWorkflowJob() result is renamed to .start(). This is unrelated to the",
+      "separate tailor.workflow.triggerWorkflow/triggerJobFunction/resumeWorkflow removal",
+      "(see the workflow-trigger-rename codemod) — this rename targets the SDK's own",
+      "ergonomic wrapper, not the low-level platform call.",
+      "",
+      "For each flagged `.trigger(` call in these files:",
+      "1. Confirm the receiver is a workflow or job object — typically a local const",
+      "   assigned from createWorkflow(...)/createWorkflowJob(...), a named import of one,",
+      "   or the default import of a workflow module. Skip receivers that are unrelated",
+      "   objects with their own .trigger() method (state machines, event emitters, etc.).",
+      "2. Rename the call from .trigger(...) to .start(...); the argument list is unchanged.",
+      "3. Update any mock/test code that reads WorkflowJob['trigger'] / Workflow['trigger']",
+      "   as a type, or that mocks the ergonomic method via a wrapper — for example,",
+      "   `wf.job(definition)` / `wf.workflow(definition)` from mockWorkflow() now return a",
+      "   mock of the `.start` method.",
+      '4. Update prose/docs/comments that say "trigger the workflow/job" to "start" only',
+      "   where they describe this SDK verb specifically, not unrelated event terminology.",
     ].join("\n"),
   },
   {

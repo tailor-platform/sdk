@@ -1,6 +1,6 @@
 /* oxlint-disable typescript/no-explicit-any */
 import { brandValue } from "#/utils/brand";
-import { dispatchTriggerWorkflow } from "./registry";
+import { dispatchStartWorkflow } from "./registry";
 import type { MachineUserName } from "#/configure/types/machine-user";
 import type { ConcurrencyPolicy, RetryPolicy } from "#/types/workflow.generated";
 import type { WorkflowJob } from "./job";
@@ -21,8 +21,8 @@ export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<a
   mainJob: Job;
   retryPolicy?: RetryPolicy;
   concurrencyPolicy?: ConcurrencyPolicy;
-  trigger: (
-    args: Parameters<Job["trigger"]>[0],
+  start: (
+    args: Parameters<Job["start"]>[0],
     options?: { invoker: MachineUserName },
   ) => Promise<string>;
 }
@@ -35,8 +35,8 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 }
 
 /**
- * Create a workflow definition that can be triggered via the Tailor SDK.
- * In production, bundler transforms .trigger() calls to tailor.workflow.triggerWorkflow().
+ * Create a workflow definition that can be started via the Tailor SDK.
+ * In production, the bundler rewrites `.start()` calls into direct platform workflow calls.
  *
  * The workflow MUST be the default export of the file.
  * All jobs referenced by the workflow MUST be named exports.
@@ -48,7 +48,7 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
  * export const processData = createWorkflowJob({
  *   name: "process-data",
  *   body: (input: { id: string }) => {
- *     const data = fetchData.trigger({ id: input.id });
+ *     const data = fetchData.start({ id: input.id });
  *     return { data };
  *   },
  * });
@@ -65,25 +65,25 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   return brandValue(
     {
       ...config,
-      trigger: process.env.__TAILOR_PLATFORM_BUNDLE
+      start: process.env.__TAILOR_PLATFORM_BUNDLE
         ? async () => {
             throw new Error(
-              "workflow.trigger() is rewritten at build time and unavailable in the bundle",
+              "workflow.start() is rewritten at build time and unavailable in the bundle",
             );
           }
         : // Preserve arity: use `arguments.length` (regular function, not arrow) so
-          // `.trigger(args, undefined)` is treated as "options passed" — matching
+          // `.start(args, undefined)` is treated as "options passed" — matching
           // the bundler rewrite, which forwards the literal `undefined` from the
           // AST as a third argument. Without this, local execution and bundled
           // workflows would hand mocks different call shapes.
-          async function trigger(
-            args: Parameters<Job["trigger"]>[0],
+          async function start(
+            args: Parameters<Job["start"]>[0],
             options?: { invoker: MachineUserName },
           ) {
             // oxlint-disable-next-line prefer-rest-params
             return arguments.length >= 2
-              ? await dispatchTriggerWorkflow(config.name, args, options)
-              : await dispatchTriggerWorkflow(config.name, args);
+              ? await dispatchStartWorkflow(config.name, args, options)
+              : await dispatchStartWorkflow(config.name, args);
           },
     } as Workflow<Job>,
     "workflow",

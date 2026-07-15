@@ -100,10 +100,10 @@ function argumentSourceText(arg: unknown, sourceText: string): string | undefine
 }
 
 /**
- * Get metadata for a static `identifier.trigger(...)` call.
+ * Get metadata for a static `identifier.start(...)` call.
  * @param node - AST node to inspect
  * @param sourceText - Source code text
- * @returns Trigger call metadata, or null when the node is not a trigger call
+ * @returns Start call metadata, or null when the node is not a start call
  */
 export function getTriggerCallInfo(
   node: ASTNode | null | undefined,
@@ -124,7 +124,7 @@ export function getTriggerCallInfo(
     // callee may be a ComputedMemberExpression at runtime
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     memberExpr.computed ||
-    memberExpr.property.name !== "trigger" ||
+    memberExpr.property.name !== "start" ||
     memberExpr.object.type !== "Identifier"
   ) {
     return null;

@@ -61,8 +61,8 @@ export const testRunCommand = defineAppCommand({
 When a \`.js\` file is provided, detection and bundling are skipped and the file is executed as-is.
 
 > [!WARNING]
-> Workflow job \`.trigger()\` calls do not work in test-run mode.
-> Triggered jobs are not executed; only the target job's \`body\` function runs in isolation.`,
+> Workflow job \`.start()\` calls do not work in test-run mode.
+> Started jobs are not executed; only the target job's \`body\` function runs in isolation.`,
   examples: [
     {
       cmd: 'resolvers/add.ts --arg \'{"a":1,"b":2}\'',

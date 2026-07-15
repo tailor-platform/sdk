@@ -102,7 +102,7 @@ export function installPlatformGlobals(global: typeof globalThis): void {
 
   // Containers. Namespace mocks (secretmanager, …) are added to these by the
   // corresponding `xMock()` on acquisition. `workflow` carries a default runner
-  // so `.trigger()` runs the real job chain locally without `mockWorkflow()`;
+  // so `.start()` runs the real job chain locally without `mockWorkflow()`;
   // `mockWorkflow()` overlays and restores it.
   g.tailor = {
     context: { getInvoker: defaultGetInvoker },

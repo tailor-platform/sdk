@@ -19,14 +19,14 @@ export const notifyUser = createWorkflowJob({
 export const processOrder = createWorkflowJob({
   name: "process-order",
   body: (input: { orderId: string; userEmail: string }) => {
-    const details = fetchDetails.trigger({ orderId: input.orderId });
-    // trigger return may be undefined when the upstream job produces no value
+    const details = fetchDetails.start({ orderId: input.orderId });
+    // start return may be undefined when the upstream job produces no value
     // oxlint-disable-next-line typescript/no-unnecessary-condition
     if (!details) {
       throw new Error(`Order ${input.orderId} not found`);
     }
 
-    const notification = notifyUser.trigger({
+    const notification = notifyUser.start({
       message: `Order ${input.orderId} processed`,
       recipient: input.userEmail,
     });
