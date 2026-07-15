@@ -12,6 +12,48 @@ Commands for managing Tailor Platform applications. These commands work with `ta
 {{politty:command:init}}
 {{politty:command:generate}}
 {{politty:command:deploy}}
+**Workspace Selection:**
+
+After validating the configuration file, `deploy` resolves a workspace before bundling the
+application. Explicit configuration takes precedence in this order: `--workspace-id`,
+`TAILOR_PLATFORM_WORKSPACE_ID`, and the selected profile. Otherwise, `deploy` reuses the workspace
+previously selected for that configuration from project-local state. Each config file keeps an
+independent selection, including when multiple configs share a directory. An explicit workspace also
+updates this selection. Saved selections are verified against the workspaces currently visible to
+the authenticated user before reuse, and `deploy` warns when it uses one.
+
+When the project has no saved selection, `deploy` discovers the account's workspaces:
+
+- One or more workspaces open a selection prompt in an interactive terminal, with an option to
+  create a new workspace. With one workspace in non-interactive or JSON mode, it is selected
+  automatically. With multiple workspaces, pass `--workspace-id` instead.
+- No workspaces open a guided creation flow in an interactive terminal. The flow asks for a name,
+  fetches the available regions from the Platform, and confirms before creating anything. After
+  creation, the output shows how to reuse the workspace with `--workspace-id` or
+  `TAILOR_PLATFORM_WORKSPACE_ID` from CI or another machine.
+
+In CI and other non-interactive environments, workspace creation must be explicit:
+
+```bash
+tailor-sdk deploy \
+  --create-workspace \
+  --workspace-name example-workspace \
+  --workspace-region us-west
+```
+
+`--create-workspace` only creates when the account has no workspace. If the existing workspace
+matches the requested name, region, organization, and folder, `deploy` reuses it so the same command
+is safe to rerun. If multiple workspaces exist, the flag never creates another one or guesses which
+workspace to use. `--yes` skips deployment confirmation but does not authorize workspace creation.
+
+If a saved workspace has been deleted or is no longer accessible, interactive terminals return to
+workspace selection. Non-interactive environments stop with `WORKSPACE_CONTEXT_STALE` instead of
+silently switching to another workspace. Automatically selected targets are printed with their
+region, organization, and workspace ID.
+
+`--dry-run` never creates a workspace or writes project context. When an account has no workspace,
+create one explicitly before requesting a deployment plan.
+
 **Config File Modification:**
 
 On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into your `defineConfig({...})` call in `tailor.config.ts`. This UUID is used to track your application across renames so the SDK can recognize ownership across renames. Commit the generated id to version control. See [Configuration](../configuration.md#application-settings) for details.

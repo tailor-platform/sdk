@@ -76,6 +76,11 @@ function emptyResults(): PlanResults {
       ...emptyOwnership(),
     },
     auth: {
+      connectionStateScope: {
+        workspaceId: "workspace-id",
+        applicationId: "application-id",
+        applicationName: "my-app",
+      },
       changeSet: {
         service: createChangeSet("Auth services"),
         idpConfig: createChangeSet("Auth idpConfigs"),
@@ -115,6 +120,11 @@ function emptyResults(): PlanResults {
       ...emptyOwnership(),
     },
     secretManager: {
+      stateScope: {
+        workspaceId: "workspace-id",
+        applicationId: "application-id",
+        applicationName: "my-app",
+      },
       vaultChangeSet: createChangeSet("Vaults"),
       secretChangeSet: createChangeSet("Secrets"),
       skippedSecrets: [],

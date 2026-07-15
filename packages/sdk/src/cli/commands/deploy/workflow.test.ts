@@ -1,9 +1,9 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { MAX_PAGE_SIZE, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { sdkNameLabelKey } from "./label";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
-import type { OperatorClient } from "#/cli/shared/client";
 import type { Workflow, WorkflowJob } from "#/types/workflow.generated";
 
 // Mock label.ts
@@ -620,7 +620,7 @@ describe("planWorkflow", () => {
       expect(listWorkflowJobFunctions).toHaveBeenCalledWith({
         workspaceId,
         pageToken: "",
-        pageSize: 100,
+        pageSize: MAX_PAGE_SIZE,
       });
       expect(result.jobFunctionDeletes).toEqual([{ workspaceId, jobFunctionName: "orphaned-job" }]);
     });

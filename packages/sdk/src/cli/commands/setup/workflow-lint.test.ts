@@ -59,7 +59,7 @@ const COMMON = {
 
 const ALL_PM: PackageManager[] = ["pnpm", "yarn", "npm", "bun"];
 const REPO_ROOT = path.resolve(process.cwd(), "../..");
-const ERD_PREVIEW_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-viewer-preview.yml");
+const ERD_SCHEMA_WORKFLOW = path.join(REPO_ROOT, ".github/workflows/erd-schema.yml");
 
 // Suites are skipped entirely when actionlint is not on PATH (run `aqua i` first).
 const actionlintAvailable = isActionlintAvailable();
@@ -70,46 +70,121 @@ function writeAndLint(name: string, content: string): LintResult {
   return runActionlint(filePath);
 }
 
-describe("repository ERD preview workflow", () => {
-  test("installs base dependencies before exporting the base schema", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
-    const checkoutBase = content.indexOf("name: Checkout base branch");
-    const installBase = content.indexOf("name: Install base deps");
-    const baseExport = content.indexOf("cd .erd-base/example");
+describe("repository ERD schema workflow", () => {
+  test("gates the export and preview jobs by event type in a single workflow file", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    expect(checkoutBase).toBeGreaterThanOrEqual(0);
-    expect(installBase).toBeGreaterThan(checkoutBase);
-    expect(installBase).toBeLessThan(baseExport);
-    expect(content).toContain("working-directory: .erd-base");
-    expect(content).toContain("pnpm install --frozen-lockfile");
-    expect(content).toContain("pnpm --filter @tailor-platform/sdk run build");
+    expect(content).toContain("if: github.event_name == 'push'");
+    expect(content).toContain("if: github.event_name == 'pull_request'");
+    expect(content).toContain(
+      "if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository",
+    );
   });
 
-  test("renders a diff when the base namespace is missing", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+  test("triggers on the example project and the workflow file for both push and pull_request", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    expect(content).toContain('base_missing="false"');
-    expect(content).toContain("grep -q 'not found in local config.db'");
-    expect(content).toContain("Base ERD namespace '$NAMESPACE' not found");
-    expect(content).toContain('diff_args=(--namespace "$NAMESPACE"');
-    expect(content).toContain('diff_args+=(--base-html "$base_html")');
-    expect(content).toContain("pnpm exec tailor-sdk tailordb erd diff");
+    expect(content.match(/- example\/\*\*/g)?.length).toBe(2);
+    expect(content.match(/- \.github\/workflows\/erd-schema\.yml/g)?.length).toBe(2);
   });
 
-  test("uploads artifacts with names matched by the sticky comment", () => {
-    const content = fs.readFileSync(ERD_PREVIEW_WORKFLOW, "utf-8");
+  test("delegates to the shared tailor-platform/actions ERD building blocks instead of in-repo scripts", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
-    expect(content).toContain("name: ${{ matrix.namespace }}.html");
-    expect(content).not.toContain("name: ${{ matrix.namespace }}-diff.html");
-    expect(content).toContain('select(.name | endswith(".html"))');
-    expect(content).toContain("can switch between the current schema and a diff");
-    expect(content).not.toContain("name: erd-viewer-preview-${{ matrix.namespace }}");
-    expect(content).not.toContain("name: erd-viewer-diff-${{ matrix.namespace }}");
+    expect(content).toMatch(/uses: tailor-platform\/actions\/erd-schema-export@[0-9a-f]{40} # v\d/);
+    expect(content).toMatch(
+      /uses: tailor-platform\/actions\/erd-schema-preview@[0-9a-f]{40} # v\d/,
+    );
+    expect(content).toMatch(
+      /uses: tailor-platform\/actions\/erd-schema-comment@[0-9a-f]{40} # v\d/,
+    );
+    expect(content).not.toContain(".github/scripts/erd-");
+  });
+
+  test("exports on push to main, uploading a per-namespace artifact for the preview job to reuse", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("branches: [main]");
+    expect(content).toContain("artifact-name: erd-schema-${{ matrix.namespace }}");
+    expect(content).toContain('retention-days: "90"');
+  });
+
+  test("previews on pull_request at the PR's true fork point via base-ref/sha-base/sha-head", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("sha-base: ${{ github.event.pull_request.base.sha }}");
+    expect(content).toContain("sha-head: ${{ github.event.pull_request.head.sha }}");
+    expect(content).toContain("base-ref: ${{ github.event.pull_request.base.ref }}");
+    expect(content).toContain("export-workflow-file: erd-schema.yml");
+    expect(content).toContain("base-artifact-name: erd-schema-${{ matrix.namespace }}");
+    expect(content).toContain("preview-artifact-name: ${{ matrix.namespace }}.html");
+  });
+
+  test("passes both the static config path and the erd viewer implementation as always-relevant", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("example/tailor.config.ts");
+    expect(content).toContain("packages/sdk/src/cli/commands/tailordb/erd/");
+    expect(content).toContain("relevant-path-prefix: example/");
+  });
+
+  test("groups each job's concurrency per commit/ref and per namespace so matrix entries run in parallel without racing each other", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    const exportJob = content.slice(
+      content.indexOf("\n  export:"),
+      content.indexOf("\n  preview:"),
+    );
+    const previewJob = content.slice(
+      content.indexOf("\n  preview:"),
+      content.indexOf("\n  comment:"),
+    );
+    const commentJob = content.slice(content.indexOf("\n  comment:"));
+
+    expect(exportJob).toContain(
+      "group: erd-schema-export-${{ github.sha }}-${{ matrix.namespace }}",
+    );
+    expect(exportJob).toContain("cancel-in-progress: false");
+
+    expect(previewJob).toContain(
+      "group: erd-schema-preview-${{ github.ref }}-${{ matrix.namespace }}",
+    );
+    expect(previewJob).toContain("cancel-in-progress: true");
+
+    expect(commentJob).toContain("group: erd-schema-comment-${{ github.ref }}");
+    expect(commentJob).toContain("cancel-in-progress: true");
+  });
+
+  test("grants actions:read for the base-run lookup and pull-requests:write for the comment", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("actions: read # look up and download the export job's artifacts");
+    expect(content).toContain("pull-requests: write # upsert the sticky preview comment");
+    expect(content).toContain("actions: read # required to list the run's artifacts");
+  });
+
+  test("posts the sticky preview comment once per PR, skipping fork PRs", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    expect(content).toContain("needs: preview");
+    expect(content).toContain("pr-number: ${{ github.event.pull_request.number }}");
+  });
+
+  test("checks out the repository before every tailor-platform/actions/erd-schema-* step", () => {
+    const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
+
+    const jobBodies = content.split(/^ {2}[a-zA-Z_][a-zA-Z0-9_-]*:\n/m).slice(1);
+    const actionJobs = jobBodies.filter((job) =>
+      job.includes("tailor-platform/actions/erd-schema-"),
+    );
+
+    expect(actionJobs.length).toBe(3);
+    expect(actionJobs.every((job) => job.includes("uses: actions/checkout@"))).toBe(true);
   });
 
   test.skipIf(!actionlintAvailable)("passes actionlint", () => {
-    const { ok, output } = runActionlint(ERD_PREVIEW_WORKFLOW);
-    expect(ok, `actionlint errors for ${ERD_PREVIEW_WORKFLOW}:\n${output}`).toBe(true);
+    const { ok, output } = runActionlint(ERD_SCHEMA_WORKFLOW);
+    expect(ok, `actionlint errors for ${ERD_SCHEMA_WORKFLOW}:\n${output}`).toBe(true);
   });
 });
 

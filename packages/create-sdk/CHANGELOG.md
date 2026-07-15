@@ -1,5 +1,19 @@
 # @tailor-platform/create-sdk
 
+## 1.78.0
+
+### Patch Changes
+
+- [#1753](https://github.com/tailor-platform/sdk/pull/1753) [`6bff945`](https://github.com/tailor-platform/sdk/commit/6bff94505f3dbe11a8be36ef301e3641ee2cba89) Thanks [@dqn](https://github.com/dqn)! - Add typed, service-specific Vitest mock controls for runtime APIs and update generated project tests to use them.
+
+## 1.77.0
+
+## 1.76.2
+
+## 1.76.1
+
+## 1.76.0
+
 ## 1.75.0
 
 ## 1.74.1

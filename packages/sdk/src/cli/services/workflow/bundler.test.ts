@@ -2,15 +2,155 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { normalizeFilePath } from "#/cli/shared/trigger-context";
+import { buildTriggerContext, normalizeFilePath } from "#/cli/shared/trigger-context";
 import { bundleWorkflowJobs } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
   test("does not throw when no workflow jobs are provided", async () => {
-    await expect(bundleWorkflowJobs([], [], {})).resolves.toEqual({
+    await expect(bundleWorkflowJobs([], [], {}, { modules: new Map() })).resolves.toEqual({
       mainJobDeps: {},
       usedJobNames: [],
       bundledCode: new Map(),
+    });
+  });
+
+  describe("job trigger binding resolution", () => {
+    let tmpDir: string | undefined;
+
+    afterEach(() => {
+      if (tmpDir) {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        tmpDir = undefined;
+      }
+    });
+
+    function createTempDir() {
+      tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-binding-test-")));
+      return tmpDir;
+    }
+
+    test("resolves duplicate local export names from the job's module", async () => {
+      const dir = createTempDir();
+      const firstFile = path.join(dir, "first.ts");
+      const secondFile = path.join(dir, "second.ts");
+      fs.writeFileSync(
+        firstFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
+export const mainA = createWorkflowJob({
+  name: "main-a",
+  body: async () => await step.trigger(),
+});
+export default createWorkflow({ name: "workflow-a", mainJob: mainA });
+`,
+      );
+      fs.writeFileSync(
+        secondFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const step = createWorkflowJob({ name: "step-b", body: async () => "b" });
+export const mainB = createWorkflowJob({
+  name: "main-b",
+  body: async () => await step.trigger(),
+});
+export default createWorkflow({ name: "workflow-b", mainJob: mainB });
+`,
+      );
+      const context = await buildTriggerContext({ files: [firstFile, secondFile] });
+
+      const result = await bundleWorkflowJobs(
+        [
+          { name: "step-a", exportName: "step", sourceFile: firstFile },
+          { name: "main-a", exportName: "mainA", sourceFile: firstFile },
+          { name: "step-b", exportName: "step", sourceFile: secondFile },
+          { name: "main-b", exportName: "mainB", sourceFile: secondFile },
+        ],
+        ["main-a"],
+        {},
+        context,
+      );
+
+      expect(result.mainJobDeps["main-a"]).toEqual(["main-a", "step-a"]);
+      expect(result.usedJobNames).toEqual(["step-a", "main-a"]);
+      expect(result.bundledCode.get("main-a")).toMatch(/triggerJobFunction\([`'"]step-a/);
+      expect(result.bundledCode.get("main-a")).not.toMatch(/triggerJobFunction\([`'"]step-b/);
+    });
+
+    test("includes jobs referenced through aliased named imports", async () => {
+      const dir = createTempDir();
+      const jobsFile = path.join(dir, "jobs.ts");
+      const callerFile = path.join(dir, "caller.ts");
+      fs.writeFileSync(
+        jobsFile,
+        `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
+`,
+      );
+      fs.writeFileSync(
+        callerFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+import { step as importedStep } from "./jobs";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async () => await importedStep.trigger(),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildTriggerContext({ files: [jobsFile, callerFile] });
+
+      const result = await bundleWorkflowJobs(
+        [
+          { name: "step-a", exportName: "step", sourceFile: jobsFile },
+          { name: "main-job", exportName: "mainJob", sourceFile: callerFile },
+        ],
+        ["main-job"],
+        {},
+        context,
+      );
+
+      expect(result.mainJobDeps["main-job"]).toEqual(["main-job", "step-a"]);
+      expect(result.usedJobNames).toEqual(["step-a", "main-job"]);
+      expect(result.bundledCode.get("main-job")).toMatch(/triggerJobFunction\([`'"]step-a/);
+    });
+
+    test("does not include a job whose binding is shadowed by a parameter", async () => {
+      const dir = createTempDir();
+      const workflowFile = path.join(dir, "workflow.ts");
+      fs.writeFileSync(
+        workflowFile,
+        `
+import { createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
+
+export const step = createWorkflowJob({ name: "step-a", body: async () => "a" });
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (step: { trigger(): Promise<string> }) => await step.trigger(),
+});
+export default createWorkflow({ name: "workflow", mainJob });
+`,
+      );
+      const context = await buildTriggerContext({ files: [workflowFile] });
+
+      const result = await bundleWorkflowJobs(
+        [
+          { name: "step-a", exportName: "step", sourceFile: workflowFile },
+          { name: "main-job", exportName: "mainJob", sourceFile: workflowFile },
+        ],
+        ["main-job"],
+        {},
+        context,
+      );
+
+      expect(result.mainJobDeps["main-job"]).toEqual(["main-job"]);
+      expect(result.usedJobNames).toEqual(["main-job"]);
+      expect(result.bundledCode.get("main-job")).not.toContain("triggerJobFunction");
     });
   });
 
@@ -84,16 +224,29 @@ export default createWorkflow({
       ];
       const mainJobNames = ["caller-job"];
 
-      const workflowFileMap = new Map<string, string>([
-        [normalizeFilePath(simpleFile), "simple-workflow"],
-      ]);
       const triggerContext = {
-        workflowNameMap: new Map<string, string>(),
-        jobNameMap: new Map<string, string>([
-          ["step1", "step1"],
-          ["callerJob", "caller-job"],
+        modules: new Map([
+          [
+            normalizeFilePath(simpleFile),
+            {
+              localBindings: new Map([["step1", { kind: "job" as const, name: "step1" }]]),
+              exports: new Map([
+                ["step1", { kind: "job" as const, name: "step1" }],
+                ["default", { kind: "workflow" as const, name: "simple-workflow" }],
+              ]),
+            },
+          ],
+          [
+            normalizeFilePath(callerFile),
+            {
+              localBindings: new Map([["callerJob", { kind: "job" as const, name: "caller-job" }]]),
+              exports: new Map([
+                ["callerJob", { kind: "job" as const, name: "caller-job" }],
+                ["default", { kind: "workflow" as const, name: "caller-workflow" }],
+              ]),
+            },
+          ],
         ]),
-        workflowFileMap,
         authNamespace: "default",
       };
 

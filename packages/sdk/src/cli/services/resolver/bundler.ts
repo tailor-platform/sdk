@@ -5,6 +5,7 @@ import * as rolldown from "rolldown";
 import { type BundleCache, computeBundlerContextHash, withCache } from "#/cli/cache/bundle-cache";
 import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { removeStaleEntryFiles } from "#/cli/services/stale-cleanup";
+import { createTriggerTransformPlugin } from "#/cli/services/workflow/trigger-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { getDistDir } from "#/cli/shared/dist-dir";
@@ -12,11 +13,7 @@ import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { buildResolverPermissionGuardExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
-import {
-  createTriggerTransformPlugin,
-  serializeTriggerContext,
-  type TriggerContext,
-} from "#/cli/shared/trigger-context";
+import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
 import type { LogLevel } from "#/configure/config/types";
