@@ -1,10 +1,6 @@
 import type { ESLint, Linter, Rule } from "eslint";
 
-export type TailorSdkRuleName =
-  | "no-api-prefix-in-path-pattern"
-  | "no-deprecated-api"
-  | "require-named-workflow-job-export"
-  | "require-service-default-export";
+export type TailorSdkRuleName = "no-api-prefix-in-path-pattern";
 
 type RecommendedRules = {
   readonly [RuleName in TailorSdkRuleName as `tailor-sdk/${RuleName}`]: Linter.RuleEntry;

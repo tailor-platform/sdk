@@ -3,4 +3,4 @@
 "@tailor-platform/create-sdk": minor
 ---
 
-Add lint rules for Tailor SDK service exports, workflow lifecycle calls, HTTP adapter paths, and deprecated APIs, and enable them in newly scaffolded projects.
+Add a lint rule that flags the external /api prefix in HTTP adapter path patterns, and enable it in newly scaffolded projects.

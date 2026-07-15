@@ -1,7 +1,6 @@
 import { memberName, nodeStart, unwrapExpression } from "./ast.js";
 
-export const SDK_CONFIGURE_MODULE = "@tailor-platform/sdk";
-export const SDK_CLI_MODULE = "@tailor-platform/sdk/cli";
+const SDK_CONFIGURE_MODULE = "@tailor-platform/sdk";
 
 function findVariable(sourceCode, node) {
   let scope = sourceCode.getScope(node);
@@ -13,29 +12,12 @@ function findVariable(sourceCode, node) {
   return null;
 }
 
-export function isBindingReference(context, node, binding) {
+function isBindingReference(context, node, binding) {
   if (node?.type !== "Identifier") return false;
   const variable = findVariable(context.sourceCode, node);
   return (
     variable?.identifiers.some((identifier) => nodeStart(identifier) === nodeStart(binding)) ??
     false
-  );
-}
-
-export function isBindingReassigned(context, binding) {
-  return isBindingReassignedBefore(context, binding, Number.POSITIVE_INFINITY);
-}
-
-export function isBindingReassignedBefore(context, binding, position) {
-  const variable = findVariable(context.sourceCode, binding);
-  return (
-    variable?.references.some(
-      (reference) =>
-        !reference.init &&
-        reference.isWrite &&
-        reference.isWrite() &&
-        nodeStart(reference.identifier) < position,
-    ) ?? false
   );
 }
 
@@ -51,7 +33,7 @@ export function variableInitializer(context, node) {
   return definition?.node.init ?? null;
 }
 
-export function createImportTracker(context, modules) {
+function createImportTracker(context, modules) {
   const named = new Map();
   const namespaces = new Map();
 
@@ -86,12 +68,6 @@ export function createImportTracker(context, modules) {
       return memberName(callee);
     },
 
-    importedAs(node, importedName) {
-      if (node?.type !== "Identifier") return false;
-      const entry = named.get(node.name);
-      return entry?.imported === importedName && isBindingReference(context, node, entry.binding);
-    },
-
     isNamespace(node) {
       if (node?.type !== "Identifier") return false;
       const binding = namespaces.get(node.name);
@@ -102,8 +78,4 @@ export function createImportTracker(context, modules) {
 
 export function configureImportTracker(context) {
   return createImportTracker(context, new Set([SDK_CONFIGURE_MODULE]));
-}
-
-export function cliImportTracker(context) {
-  return createImportTracker(context, new Set([SDK_CLI_MODULE]));
 }

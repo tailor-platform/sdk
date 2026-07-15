@@ -16,9 +16,6 @@
   "ignorePatterns": [".tailor-sdk/", "src/generated/", "tailor.d.ts"],
   "rules": {
     "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
-    "tailor-sdk/no-deprecated-api": "warn",
-    "tailor-sdk/require-named-workflow-job-export": "error",
-    "tailor-sdk/require-service-default-export": "error",
     "no-case-declarations": "error",
     "no-empty": "error",
     "no-fallthrough": "error",
@@ -89,30 +86,6 @@
         "no-with": "off",
         "prefer-rest-params": "error",
         "prefer-spread": "error"
-      }
-    },
-    {
-      "files": [
-        "**/*.test.js",
-        "**/*.test.jsx",
-        "**/*.test.cjs",
-        "**/*.test.mjs",
-        "**/*.test.cts",
-        "**/*.test.mts",
-        "**/*.test.ts",
-        "**/*.test.tsx",
-        "**/*.spec.js",
-        "**/*.spec.jsx",
-        "**/*.spec.cjs",
-        "**/*.spec.mjs",
-        "**/*.spec.cts",
-        "**/*.spec.mts",
-        "**/*.spec.ts",
-        "**/*.spec.tsx"
-      ],
-      "rules": {
-        "tailor-sdk/require-named-workflow-job-export": "off",
-        "tailor-sdk/require-service-default-export": "off"
       }
     }
   ]

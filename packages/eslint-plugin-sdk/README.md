@@ -24,10 +24,7 @@ Add the plugin and its rules to `.oxlintrc.json`:
     }
   ],
   "rules": {
-    "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
-    "tailor-sdk/no-deprecated-api": "warn",
-    "tailor-sdk/require-named-workflow-job-export": "error",
-    "tailor-sdk/require-service-default-export": "error"
+    "tailor-sdk/no-api-prefix-in-path-pattern": "warn"
   }
 }
 ```
@@ -67,65 +64,5 @@ export default createHttpAdapter({
 });
 ```
 
-### `no-deprecated-api` (warning)
-
-Use `definePlugins()` instead of `defineGenerators()`, and pass machine-user names directly instead
-of calling `auth.invoker()`.
-
-Incorrect:
-
-```ts
-export const generators = defineGenerators(generator);
-
-export default createResolver({
-  authInvoker: auth.invoker("automation"),
-});
-```
-
-Correct:
-
-```ts
-export const plugins = definePlugins(plugin);
-
-export default createResolver({
-  authInvoker: "automation",
-});
-```
-
-### `require-named-workflow-job-export` (error)
-
-Export every `createWorkflowJob()` result as a named export.
-
-Incorrect:
-
-```ts
-const processOrder = createWorkflowJob({ name: "process-order" });
-```
-
-Correct:
-
-```ts
-export const processOrder = createWorkflowJob({ name: "process-order" });
-```
-
-### `require-service-default-export` (error)
-
-Export Resolver, Executor, HTTP Adapter, and Workflow definitions as default exports.
-
-Incorrect:
-
-```ts
-export const createOrder = createResolver({ name: "createOrder" });
-```
-
-Correct:
-
-```ts
-export default createResolver({ name: "createOrder" });
-```
-
 The rules recognize named and namespace imports from `@tailor-platform/sdk`, including local import
 aliases. Same-named functions imported from other packages are ignored.
-
-For deprecated API migrations, run `tailor-sdk upgrade --from <installed-version>` to apply the SDK
-codemods.

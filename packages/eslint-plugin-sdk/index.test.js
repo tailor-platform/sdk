@@ -59,32 +59,25 @@ function expectClean(source, rule, filename) {
 
 describe("plugin", () => {
   test("exports every rule in the recommended ESLint flat config", () => {
-    expect(Object.keys(plugin.rules).toSorted()).toEqual([
-      "no-api-prefix-in-path-pattern",
-      "no-deprecated-api",
-      "require-named-workflow-job-export",
-      "require-service-default-export",
-    ]);
+    expect(Object.keys(plugin.rules).toSorted()).toEqual(["no-api-prefix-in-path-pattern"]);
     expect(plugin.configs.recommended.plugins["tailor-sdk"]).toBe(plugin);
-    expect(Object.keys(plugin.configs.recommended.rules)).toHaveLength(4);
-    expect(plugin.configs.recommended.rules["tailor-sdk/no-deprecated-api"]).toBe("warn");
-    expect(plugin.configs.recommended.rules["tailor-sdk/require-service-default-export"]).toBe(
-      "error",
-    );
+    expect(plugin.configs.recommended.rules).toEqual({
+      "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
+    });
   });
 
   test("runs through the ESLint v9 recommended flat config", () => {
     const messages = new Linter().verify(
-      'import { createResolver } from "@tailor-platform/sdk";\nexport const resolver = createResolver({});',
+      'import { createHttpAdapter } from "@tailor-platform/sdk";\nexport default createHttpAdapter({ pathPattern: "/api/users/*" });',
       [plugin.configs.recommended],
-      { filename: "resolver.js" },
+      { filename: "adapter.js" },
     );
 
     expect(messages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          ruleId: "tailor-sdk/require-service-default-export",
-          severity: 2,
+          ruleId: "tailor-sdk/no-api-prefix-in-path-pattern",
+          severity: 1,
         }),
       ]),
     );
@@ -107,150 +100,6 @@ describe("plugin", () => {
         rules: plugin.configs.recommended.rules,
       });
     }
-  });
-});
-
-describe("require-service-default-export", () => {
-  test.each([
-    ["createResolver", "resolver"],
-    ["createExecutor", "executor"],
-    ["createHttpAdapter", "HTTP adapter"],
-    ["createWorkflow", "workflow"],
-  ])("requires %s results to be default exports", (factory, service) => {
-    expectViolation(
-      `import { ${factory} as defineService } from "@tailor-platform/sdk";\nexport const service = defineService({});`,
-      "require-service-default-export",
-      `The ${service} created by ${factory}() must be the default export.`,
-    );
-  });
-
-  test("accepts direct and identifier default exports", () => {
-    expectClean(
-      'import { createResolver } from "@tailor-platform/sdk";\nexport default createResolver({});',
-      "require-service-default-export",
-    );
-    expectClean(
-      'import { createResolver } from "@tailor-platform/sdk";\nconst resolver = createResolver({});\nexport { resolver as default };',
-      "require-service-default-export",
-    );
-    expectClean(
-      'import { createResolver } from "@tailor-platform/sdk";\nexport default (createResolver({}) satisfies unknown);',
-      "require-service-default-export",
-    );
-    expectClean(
-      'import { createResolver } from "@tailor-platform/sdk";\nconst resolver = createResolver({});\nexport default (resolver satisfies unknown);',
-      "require-service-default-export",
-    );
-    expectClean(
-      'import { createResolver } from "@tailor-platform/sdk";\nconst resolver = createResolver({});\nconst entry = resolver;\nexport default entry;',
-      "require-service-default-export",
-    );
-  });
-
-  test("supports namespace imports", () => {
-    expectViolation(
-      'import * as sdk from "@tailor-platform/sdk";\nexport const resolver = sdk.createResolver({});',
-      "require-service-default-export",
-      "The resolver created by createResolver() must be the default export.",
-    );
-  });
-
-  test("ignores same-named factories from other packages", () => {
-    expectClean(
-      'import { createResolver } from "another-sdk";\nexport const resolver = createResolver({});',
-      "require-service-default-export",
-    );
-  });
-
-  test("ignores SDK import names shadowed by function parameters", () => {
-    expectClean(
-      'import { createResolver } from "@tailor-platform/sdk";\nfunction helper(createResolver) { return createResolver({}); }',
-      "require-service-default-export",
-    );
-    expectClean(
-      'import * as sdk from "@tailor-platform/sdk";\nfunction helper(sdk) { return sdk.createResolver({}); }',
-      "require-service-default-export",
-    );
-  });
-
-  test("rejects a service nested inside a default-exported object", () => {
-    expectViolation(
-      'import { createResolver } from "@tailor-platform/sdk";\nexport default { resolver: createResolver({}) };',
-      "require-service-default-export",
-      "The resolver created by createResolver() must be the default export.",
-    );
-  });
-
-  test("does not treat a reassigned mutable alias as a service export", () => {
-    expectViolation(
-      'import { createResolver } from "@tailor-platform/sdk";\nconst resolver = createResolver({});\nlet entry = resolver;\nentry = {};\nexport default entry;',
-      "require-service-default-export",
-      "The resolver created by createResolver() must be the default export.",
-    );
-  });
-
-  test("does not treat a reassigned service binding as a default export", () => {
-    expectViolation(
-      'import { createResolver } from "@tailor-platform/sdk";\nlet resolver = createResolver({});\nresolver = {};\nexport default resolver;',
-      "require-service-default-export",
-      "The resolver created by createResolver() must be the default export.",
-    );
-  });
-
-  test("accepts a service binding changed after a default-export snapshot", () => {
-    expectClean(
-      'import { createResolver } from "@tailor-platform/sdk";\nlet resolver = createResolver({});\nexport default resolver;\nresolver = {};',
-      "require-service-default-export",
-    );
-  });
-
-  test("ignores service factories in class fields", () => {
-    expectClean(
-      'import { createResolver } from "@tailor-platform/sdk";\nexport class Helper { resolver = createResolver({}); }',
-      "require-service-default-export",
-    );
-  });
-});
-
-describe("require-named-workflow-job-export", () => {
-  test("rejects unexported and default-exported jobs", () => {
-    expectViolation(
-      'import { createWorkflowJob } from "@tailor-platform/sdk";\nconst job = createWorkflowJob({});',
-      "require-named-workflow-job-export",
-      "The job created by createWorkflowJob() must be a named export.",
-    );
-    expectViolation(
-      'import { createWorkflowJob } from "@tailor-platform/sdk";\nexport default createWorkflowJob({});',
-      "require-named-workflow-job-export",
-      "The job created by createWorkflowJob() must be a named export.",
-    );
-  });
-
-  test("accepts direct and later named exports", () => {
-    expectClean(
-      'import { createWorkflowJob } from "@tailor-platform/sdk";\nexport const job = createWorkflowJob({});',
-      "require-named-workflow-job-export",
-    );
-    expectClean(
-      'import { createWorkflowJob } from "@tailor-platform/sdk";\nconst job = createWorkflowJob({});\nexport { job };',
-      "require-named-workflow-job-export",
-    );
-    expectClean(
-      'import { createWorkflowJob } from "@tailor-platform/sdk";\nconst job = createWorkflowJob({});\nconst entry = job;\nexport { entry };',
-      "require-named-workflow-job-export",
-    );
-    expectClean(
-      'import { createWorkflowJob } from "@tailor-platform/sdk";\nconst job = createWorkflowJob({});\nexport const entry = job satisfies unknown;',
-      "require-named-workflow-job-export",
-    );
-  });
-
-  test("does not treat a re-export from another module as a local job export", () => {
-    expectViolation(
-      'import { createWorkflowJob } from "@tailor-platform/sdk";\nconst job = createWorkflowJob({});\nexport { job } from "./other";',
-      "require-named-workflow-job-export",
-      "The job created by createWorkflowJob() must be a named export.",
-    );
   });
 });
 
@@ -288,52 +137,19 @@ describe("no-api-prefix-in-path-pattern", () => {
       "pathPattern is matched after the /api prefix; remove the leading /api.",
     );
   });
-});
 
-describe("no-deprecated-api", () => {
-  test("rejects defineGenerators and SDK auth invoker calls", () => {
-    expectViolation(
-      'import { defineGenerators as generators } from "@tailor-platform/sdk";\nexport const value = generators();',
-      "no-deprecated-api",
-      "defineGenerators() is deprecated; use definePlugins() instead.",
-    );
-    expectViolation(
-      'import { auth } from "../tailor.config";\nexport const invoker = auth.invoker("automation");',
-      "no-deprecated-api",
-      "auth.invoker() is deprecated; pass the machine-user name as a string.",
-    );
-    expectViolation(
-      'import { defineAuth } from "@tailor-platform/sdk";\nconst auth = defineAuth("main", {});\nexport const invoker = auth.invoker("automation");',
-      "no-deprecated-api",
-      "auth.invoker() is deprecated; pass the machine-user name as a string.",
-    );
-    expectViolation(
-      'import config from "../tailor.config";\nexport const invoker = config.auth.invoker("automation");',
-      "no-deprecated-api",
-      "auth.invoker() is deprecated; pass the machine-user name as a string.",
+  test("ignores same-named factories from other packages", () => {
+    expectClean(
+      'import { createHttpAdapter } from "another-sdk";\nexport default createHttpAdapter({ pathPattern: "/api/users/*" });',
+      "no-api-prefix-in-path-pattern",
     );
   });
 
-  test("ignores unrelated invoker methods", () => {
-    expectClean(
-      'import { client } from "another-sdk";\nexport const invoker = client.invoker("automation");',
-      "no-deprecated-api",
-    );
-    expectClean(
-      'import { client } from "../tailor.config";\nexport const invoker = client.invoker("automation");',
-      "no-deprecated-api",
-    );
-    expectClean(
-      'import { startWorkflow } from "@tailor-platform/sdk/cli";\nimport config from "../tailor.config";\nstartWorkflow({ workflow, authInvoker: config.auth.invoker("automation"), arg: {} });',
-      "no-deprecated-api",
-    );
-    expectClean(
-      'import { startWorkflow } from "@tailor-platform/sdk/cli";\nimport config from "../tailor.config";\nconst options = { workflow, authInvoker: config.auth.invoker("automation"), arg: {} };\nstartWorkflow(options);',
-      "no-deprecated-api",
-    );
-    expectClean(
-      'import { startWorkflow } from "@tailor-platform/sdk/cli";\nimport config from "../tailor.config";\nconst authInvoker = config.auth.invoker("automation");\nstartWorkflow({ workflow, authInvoker, arg: {} });',
-      "no-deprecated-api",
+  test("supports namespace imports", () => {
+    expectViolation(
+      'import * as sdk from "@tailor-platform/sdk";\nexport default sdk.createHttpAdapter({ pathPattern: "/api/users/*" });',
+      "no-api-prefix-in-path-pattern",
+      "pathPattern is matched after the /api prefix; remove the leading /api.",
     );
   });
 });
