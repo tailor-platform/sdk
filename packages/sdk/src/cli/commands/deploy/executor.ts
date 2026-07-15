@@ -703,11 +703,12 @@ function protoExecutor(
           case: "workflow",
           value: {
             workflowName: target.workflowName,
-            variables: target.args
-              ? typeof target.args === "function"
-                ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
-                : { expr: JSON.stringify(target.args) }
-              : undefined,
+            variables:
+              target.args !== undefined
+                ? typeof target.args === "function"
+                  ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
+                  : { expr: JSON.stringify(target.args) }
+                : undefined,
             invoker: normalizeInvoker(target.invoker, authNamespace, invokerContext),
           },
         },

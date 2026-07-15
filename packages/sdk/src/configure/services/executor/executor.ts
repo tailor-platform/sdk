@@ -1,14 +1,8 @@
 import { brandValue } from "#/utils/brand";
 import type { Workflow } from "#/configure/services/workflow/workflow";
-import type { MachineUserName } from "#/configure/types/machine-user";
 import type { ExecutorInput } from "#/types/executor.generated";
-import type { Operation } from "./operation";
+import type { Operation, WorkflowOperation } from "./operation";
 import type { Trigger } from "./trigger";
-
-/**
- * Extract mainJob's Input type from Workflow.
- */
-type WorkflowInput<W extends Workflow> = Parameters<W["start"]>[0];
 
 type TriggerArgs<T extends Trigger<unknown>> = T extends { __args: infer Args } ? Args : never;
 
@@ -26,12 +20,7 @@ type Executor<T extends Trigger<unknown>, O> = O extends {
   workflow: infer W extends Workflow;
 }
   ? ExecutorBase<T> & {
-      operation: {
-        kind: "workflow";
-        workflow: W;
-        args?: WorkflowInput<W> | ((args: TriggerArgs<T>) => WorkflowInput<W>);
-        invoker?: MachineUserName;
-      };
+      operation: WorkflowOperation<TriggerArgs<T>, W>;
     }
   : ExecutorBase<T> & {
       operation: O;
