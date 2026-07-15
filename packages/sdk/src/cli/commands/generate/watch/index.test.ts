@@ -161,6 +161,27 @@ describe("DependencyWatcher", () => {
       const status = watcher.getWatchStatus();
       expect(status.fileCount).toBe(1);
     });
+
+    test("falls back to process.cwd() when baseDir matches nothing (legacy cwd-relative config)", async () => {
+      // baseDir has no "src" directory at all; the pattern only matches
+      // something under a different cwd, mirroring a config written before
+      // baseDir-relative resolution existed.
+      const legacyCwd = await createTempDir();
+      const legacyFile = path.join(legacyCwd, "src", "legacy.ts");
+      await createTestFile(legacyFile, 'export const legacy = "hello";');
+
+      const originalCwd = process.cwd();
+      process.chdir(legacyCwd);
+      try {
+        await watcher.addWatchGroup("test-group", ["src/*.ts"], tempDir);
+      } finally {
+        process.chdir(originalCwd);
+        await fs.rm(legacyCwd, { recursive: true, force: true });
+      }
+
+      const status = watcher.getWatchStatus();
+      expect(status.fileCount).toBe(1);
+    });
   });
 
   describe("validation", () => {
