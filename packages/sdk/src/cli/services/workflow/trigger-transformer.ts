@@ -23,12 +23,12 @@ export interface ResolvedTriggerCall extends StartCallInfo {
   targetName: string;
 }
 
-const START_CALL_RE = /\.start\s*\(/;
+const START_CALL_RE = /\.start(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*\n)*\(/;
 
 /**
  * Fast pre-check for whether `code` contains a `.start(` call, tolerating
- * whitespace/newlines between `.start` and `(` that a plain substring check
- * would miss.
+ * whitespace, newlines, and comments between `.start` and `(` that a plain
+ * substring check would miss.
  * @param code - Source text to scan
  * @returns Whether `code` contains a `.start(` call
  */

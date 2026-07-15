@@ -10,7 +10,10 @@ import {
 } from "#/cli/shared/trigger-context";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
-import { transformFunctionTriggers as transformFunctionTriggersWithContext } from "./trigger-transformer";
+import {
+  hasStartCall,
+  transformFunctionTriggers as transformFunctionTriggersWithContext,
+} from "./trigger-transformer";
 import { findAllWorkflows } from "./workflow-detector";
 
 function parseProgram(source: string) {
@@ -1242,5 +1245,27 @@ unknown.start(fetchCustomer.start({ customerId: "123" }));
       );
       expect(result).toContain("unknown.start(");
     });
+  });
+});
+
+describe("AST Transformer - hasStartCall", () => {
+  test("detects a plain .start( call", () => {
+    expect(hasStartCall("job.start({ id: 1 });")).toBe(true);
+  });
+
+  test("detects .start( split across whitespace/newlines", () => {
+    expect(hasStartCall("job.start\n  (\n  { id: 1 }\n  );")).toBe(true);
+  });
+
+  test("detects .start( with a block comment before the parens", () => {
+    expect(hasStartCall("job.start/* why */({ id: 1 });")).toBe(true);
+  });
+
+  test("detects .start( with a line comment before the parens", () => {
+    expect(hasStartCall("job.start // why\n({ id: 1 });")).toBe(true);
+  });
+
+  test("returns false when there is no .start( call", () => {
+    expect(hasStartCall("job.stop({ id: 1 });")).toBe(false);
   });
 });
