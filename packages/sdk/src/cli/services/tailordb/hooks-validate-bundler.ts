@@ -468,7 +468,7 @@ async function bundleScriptTarget(args: {
     fnSource,
     sourceFilePath,
   );
-  const entry = createVirtualEntry(`tailordb-script:${typeName}:${targetIndex}`, entryContent);
+  const entry = createVirtualEntry(`tailordb-script:${typeName}:${targetIndex}.ts`, entryContent);
 
   const buildResult = await rolldown.build({
     plugins: [entry.plugin, platformBundleDefinePlugin],

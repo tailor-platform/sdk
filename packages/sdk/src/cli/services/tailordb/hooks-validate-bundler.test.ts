@@ -64,6 +64,31 @@ const bindingsMap = (
   );
 
 describe("precompileTailorDBTypeScripts", () => {
+  test("bundles captured declarations with TypeScript syntax", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-typescript-entry-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, 'const prefix: string = "PREFIX";\n');
+    const prefix = "unused";
+    const createHook = ({ value }: { value: string }) => prefix + value;
+    const type = {
+      name: "SharedType",
+      fields: {
+        value: {
+          type: "string",
+          metadata: { hooks: { create: createHook } },
+        },
+      },
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(createHook)).toBeDefined();
+  });
+
   test("uses an in-memory entry for scripts with source dependencies", async () => {
     const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-entry-"));
     const sourceFile = join(tempDir, "type.ts");
