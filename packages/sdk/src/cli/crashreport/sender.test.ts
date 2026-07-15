@@ -22,6 +22,13 @@ function makeCrashReport(): CrashReport {
   };
 }
 
+function mockFetchResolvedValue(response: unknown): void {
+  globalThis.fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve(response),
+  });
+}
+
 describe("sendCrashReport", () => {
   const originalFetch = globalThis.fetch;
   const originalEndpoint = process.env.TAILOR_CRASH_REPORT_ENDPOINT;
@@ -41,10 +48,7 @@ describe("sendCrashReport", () => {
   });
 
   test("sends GraphQL mutation with variables", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
-    });
+    mockFetchResolvedValue({ data: { submitCrashReport: { success: true } } });
     const report = makeCrashReport();
 
     await sendCrashReport(report, "tailor-sdk/1.0.0");
@@ -60,10 +64,7 @@ describe("sendCrashReport", () => {
   });
 
   test("includes all CrashReport fields as variables", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
-    });
+    mockFetchResolvedValue({ data: { submitCrashReport: { success: true } } });
     const report = makeCrashReport();
 
     await sendCrashReport(report, "tailor-sdk/1.0.0");
@@ -73,56 +74,33 @@ describe("sendCrashReport", () => {
     expect(variables).toEqual(report);
   });
 
-  test("returns true when server responds with success", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
-    });
+  test.each([
+    [
+      "returns true when server responds with success",
+      { data: { submitCrashReport: { success: true } } },
+      true,
+    ],
+    [
+      "returns false when response contains GraphQL errors",
+      { errors: [{ message: "permission denied" }], data: { submitCrashReport: null } },
+      false,
+    ],
+    [
+      "returns true when server returns empty errors array",
+      { errors: [], data: { submitCrashReport: { success: true } } },
+      true,
+    ],
+    [
+      "returns false when mutation returns success: false",
+      { data: { submitCrashReport: { success: false } } },
+      false,
+    ],
+  ])("%s", async (_name, response, expected) => {
+    mockFetchResolvedValue(response);
 
     const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
 
-    expect(result).toBe(true);
-  });
-
-  test("returns false when response contains GraphQL errors", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          errors: [{ message: "permission denied" }],
-          data: { submitCrashReport: null },
-        }),
-    });
-
-    const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
-
-    expect(result).toBe(false);
-  });
-
-  test("returns true when server returns empty errors array", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () =>
-        Promise.resolve({
-          errors: [],
-          data: { submitCrashReport: { success: true } },
-        }),
-    });
-
-    const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
-
-    expect(result).toBe(true);
-  });
-
-  test("returns false when mutation returns success: false", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: { submitCrashReport: { success: false } } }),
-    });
-
-    const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
-
-    expect(result).toBe(false);
+    expect(result).toBe(expected);
   });
 
   test("returns false on non-ok HTTP response", async () => {
@@ -146,10 +124,7 @@ describe("sendCrashReport", () => {
   });
 
   test("uses TAILOR_CRASH_REPORT_ENDPOINT env var", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
-    });
+    mockFetchResolvedValue({ data: { submitCrashReport: { success: true } } });
 
     process.env.TAILOR_CRASH_REPORT_ENDPOINT = "https://custom.example.com/query";
     await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
@@ -161,10 +136,7 @@ describe("sendCrashReport", () => {
   });
 
   test("sends Content-Type application/json and User-Agent headers", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: { submitCrashReport: { success: true } } }),
-    });
+    mockFetchResolvedValue({ data: { submitCrashReport: { success: true } } });
 
     await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
 

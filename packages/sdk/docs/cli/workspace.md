@@ -106,6 +106,7 @@ tailor-sdk workspace create [options]
 | `--organization-id <ORGANIZATION_ID>` | `-o`  | Organization ID to workspace associate with                                                                 | No       | -         | `TAILOR_PLATFORM_ORGANIZATION_ID` |
 | `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                       | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
 | `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                      | No       | -         | -                                 |
+| `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                            | No       | -         | `TAILOR_PLATFORM_PROFILE`         |
 | `--profile-user <PROFILE_USER>`       | -     | User email for the profile (defaults to current user)                                                       | No       | -         | -                                 |
 | `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active. | No       | `"write"` | -                                 |
 
@@ -161,10 +162,11 @@ tailor-sdk workspace list [options]
 
 **Options**
 
-| Option            | Alias | Description                                              | Required | Default  |
-| ----------------- | ----- | -------------------------------------------------------- | -------- | -------- |
-| `--order <ORDER>` | -     | Sort order (asc or desc)                                 | No       | `"desc"` |
-| `--limit <LIMIT>` | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        |
+| Option                | Alias | Description                                                      | Required | Default  | Env                       |
+| --------------------- | ----- | ---------------------------------------------------------------- | -------- | -------- | ------------------------- |
+| `--order <ORDER>`     | -     | Sort order (asc or desc)                                         | No       | `"desc"` | -                         |
+| `--limit <LIMIT>`     | `-l`  | Maximum number of items to return (0 or omit: unlimited)         | No       | -        | -                         |
+| `--profile <PROFILE>` | -     | Workspace profile used for authentication and Platform selection | No       | -        | `TAILOR_PLATFORM_PROFILE` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -331,13 +333,16 @@ tailor-sdk profile create [options] <name>
 
 **Options**
 
-| Option                                            | Alias | Description                                                                                                                            | Required | Default   |
-| ------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------- |
-| `--user <USER>`                                   | `-u`  | User email                                                                                                                             | Yes      | -         |
-| `--workspace-id <WORKSPACE_ID>`                   | `-w`  | Workspace ID                                                                                                                           | Yes      | -         |
-| `--permission <PERMISSION>`                       | -     | Profile permission. 'read' blocks all write commands while the profile is active.                                                      | No       | `"write"` |
-| `--machine-user <MACHINE_USER>`                   | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token).                 | No       | -         |
-| `--machine-user-override <MACHINE_USER_OVERRIDE>` | -     | Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user. | No       | -         |
+| Option                                            | Alias | Description                                                                                                                            | Required | Default   | Env                                |
+| ------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------- | ---------------------------------- |
+| `--user <USER>`                                   | `-u`  | User email                                                                                                                             | Yes      | -         | -                                  |
+| `--workspace-id <WORKSPACE_ID>`                   | `-w`  | Workspace ID                                                                                                                           | Yes      | -         | -                                  |
+| `--permission <PERMISSION>`                       | -     | Profile permission. 'read' blocks all write commands while the profile is active.                                                      | No       | `"write"` | -                                  |
+| `--machine-user <MACHINE_USER>`                   | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token).                 | No       | -         | -                                  |
+| `--machine-user-override <MACHINE_USER_OVERRIDE>` | -     | Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user. | No       | -         | -                                  |
+| `--platform-url <PLATFORM_URL>`                   | -     | Platform API base URL for this profile.                                                                                                | No       | -         | `TAILOR_PLATFORM_URL`              |
+| `--oauth2-client-id <OAUTH2_CLIENT_ID>`           | -     | OAuth2 client ID for logging in to this profile's platform.                                                                            | No       | -         | `TAILOR_PLATFORM_OAUTH2_CLIENT_ID` |
+| `--console-url <CONSOLE_URL>`                     | -     | Console base URL for this profile.                                                                                                     | No       | -         | `TAILOR_PLATFORM_CONSOLE_URL`      |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -396,5 +401,8 @@ tailor-sdk profile update [options] <name>
 | `--permission <PERMISSION>`                       | -     | Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.                                                                                  | No       | -       |
 | `--machine-user <MACHINE_USER>`                   | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.                 | No       | -       |
 | `--machine-user-override <MACHINE_USER_OVERRIDE>` | -     | Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user; 'allow' lifts the restriction. | No       | -       |
+| `--platform-url <PLATFORM_URL>`                   | -     | Platform API base URL for this profile. Pass an empty string to clear.                                                                                                | No       | -       |
+| `--oauth2-client-id <OAUTH2_CLIENT_ID>`           | -     | OAuth2 client ID for logging in to this profile's platform. Pass an empty string to clear.                                                                            | No       | -       |
+| `--console-url <CONSOLE_URL>`                     | -     | Console base URL for this profile. Pass an empty string to clear.                                                                                                     | No       | -       |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.

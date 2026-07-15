@@ -1,5 +1,6 @@
 {
   "name": "resolver",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,11 +16,11 @@
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
-    "@types/node": "24.13.2",
-    "oxfmt": "0.55.0",
-    "oxlint": "1.70.0",
-    "oxlint-tsgolint": "0.23.0",
+    "@types/node": "24.13.3",
+    "oxfmt": "0.58.0",
+    "oxlint": "1.73.0",
+    "oxlint-tsgolint": "0.24.0",
     "typescript": "6.0.3",
-    "vitest": "4.1.9"
+    "vitest": "4.1.10"
   }
 }

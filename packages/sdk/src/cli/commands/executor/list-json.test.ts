@@ -28,25 +28,20 @@ describe("executor list --json", () => {
     vi.mocked(fetchPaged).mockResolvedValue([]);
   });
 
-  test("honors logger jsonMode when parent command delegates without json args", async () => {
-    using stdout = captureStdout();
-    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    using _json = jsonMode();
+  test.each([
+    ["executor list", executorCommand],
+    ["webhook list", webhookCommand],
+  ])(
+    "%s honors logger jsonMode when parent command delegates without json args",
+    async (_desc, command) => {
+      using stdout = captureStdout();
+      using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+      using _json = jsonMode();
 
-    await runCommand(executorCommand, []);
+      await runCommand(command, []);
 
-    expect(stdout.output).not.toBe("");
-    expect(JSON.parse(stdout.output)).toEqual([]);
-  });
-
-  test("webhook list honors logger jsonMode when parent command delegates without json args", async () => {
-    using stdout = captureStdout();
-    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    using _json = jsonMode();
-
-    await runCommand(webhookCommand, []);
-
-    expect(stdout.output).not.toBe("");
-    expect(JSON.parse(stdout.output)).toEqual([]);
-  });
+      expect(stdout.output).not.toBe("");
+      expect(JSON.parse(stdout.output)).toEqual([]);
+    },
+  );
 });

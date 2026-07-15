@@ -354,19 +354,10 @@ describe("tailordb migration sync", () => {
     });
   });
 
-  test("rejects an invalid migration number format", async () => {
-    const result = await runCommand(syncCommand, ["abc", "--yes"]);
+  test.each(["abc", "00", "01"])("rejects invalid migration number format %j", async (input) => {
+    const result = await runCommand(syncCommand, [input, "--yes"]);
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/Invalid migration number format/);
-    expect(state.setMetadata).not.toHaveBeenCalled();
-  });
-
-  test("rejects integer forms with leading zeros", async () => {
-    for (const input of ["00", "01"]) {
-      const result = await runCommand(syncCommand, [input, "--yes"]);
-      expect(result.success).toBe(false);
-      expect(String(result.error)).toMatch(/Invalid migration number format/);
-    }
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 

@@ -95,6 +95,13 @@ async function listGeneratedFiles(dirPath: string, depth = 0, maxDepth = 3): Pro
 const generatorsCompatDir = "tests/fixtures/generators";
 const pluginsCompatDir = "tests/fixtures/plugins";
 
+function bundledScriptFileName(kind: string, name: string): string {
+  if (kind !== "resolvers") return name;
+
+  const separatorIndex = name.indexOf(":");
+  return separatorIndex === -1 ? name : name.slice(separatorIndex + 1);
+}
+
 export async function generateCompatFiles(): Promise<void> {
   for (const dir of [generatorsCompatDir, pluginsCompatDir]) {
     if (fs.existsSync(dir)) fs.rmSync(dir, { recursive: true });
@@ -122,7 +129,7 @@ export async function generateCompatFiles(): Promise<void> {
       if (scripts.size === 0) continue;
       fs.mkdirSync(dirPath, { recursive: true });
       for (const [name, code] of scripts) {
-        fs.writeFileSync(path.join(dirPath, `${name}.js`), code);
+        fs.writeFileSync(path.join(dirPath, `${bundledScriptFileName(kind, name)}.js`), code);
       }
     }
   }

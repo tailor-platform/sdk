@@ -19,6 +19,14 @@ const mockAuthInvoker: AuthInvoker = {
   machineUserName: "test-machine-user",
 } as AuthInvoker;
 
+function execution(
+  status: FunctionExecution_Status,
+  logs: string,
+  result: string,
+): { execution: { status: FunctionExecution_Status; logs: string; result: string } } {
+  return { execution: { status, logs, result } };
+}
+
 describe("waitForExecution", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -28,23 +36,30 @@ describe("waitForExecution", () => {
     vi.useRealTimers();
   });
 
-  test("returns immediately when execution is SUCCESS", async () => {
+  test.each([
+    [FunctionExecution_Status.SUCCESS, "test logs", '{"success":true}'],
+    [FunctionExecution_Status.FAILED, "error logs", "Error: something went wrong"],
+  ])("returns immediately when execution is %s", async (status, logs, result) => {
     const client = createMockClient({
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: {
-          status: FunctionExecution_Status.SUCCESS,
-          logs: "test logs",
-          result: '{"success":true}',
-        },
-      }),
+      getFunctionExecution: vi.fn().mockResolvedValue(execution(status, logs, result)),
     });
 
-    const resultPromise = waitForExecution(client, "workspace-1", "exec-1");
-    const result = await resultPromise;
+    const outcome = await waitForExecution(client, "workspace-1", "exec-1");
 
-    expect(result.status).toBe(FunctionExecution_Status.SUCCESS);
-    expect(result.logs).toBe("test logs");
-    expect(result.result).toBe('{"success":true}');
+    expect(outcome.status).toBe(status);
+    expect(outcome.logs).toBe(logs);
+    expect(outcome.result).toBe(result);
+  });
+
+  test("calls getFunctionExecution with the expected arguments", async () => {
+    const client = createMockClient({
+      getFunctionExecution: vi
+        .fn()
+        .mockResolvedValue(execution(FunctionExecution_Status.SUCCESS, "test logs", "{}")),
+    });
+
+    await waitForExecution(client, "workspace-1", "exec-1");
+
     expect(client.getFunctionExecution).toHaveBeenCalledTimes(1);
     expect(client.getFunctionExecution).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
@@ -52,29 +67,9 @@ describe("waitForExecution", () => {
     });
   });
 
-  test("returns immediately when execution is FAILED", async () => {
-    const client = createMockClient({
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: {
-          status: FunctionExecution_Status.FAILED,
-          logs: "error logs",
-          result: "Error: something went wrong",
-        },
-      }),
-    });
-
-    const result = await waitForExecution(client, "workspace-1", "exec-1");
-
-    expect(result.status).toBe(FunctionExecution_Status.FAILED);
-    expect(result.logs).toBe("error logs");
-    expect(result.result).toBe("Error: something went wrong");
-  });
-
   test("throws error when execution is not found", async () => {
     const client = createMockClient({
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: null,
-      }),
+      getFunctionExecution: vi.fn().mockResolvedValue({ execution: null }),
     });
 
     await expect(waitForExecution(client, "workspace-1", "exec-1")).rejects.toThrow(
@@ -85,27 +80,11 @@ describe("waitForExecution", () => {
   test("polls until execution completes", async () => {
     const getFunctionExecution = vi
       .fn()
-      .mockResolvedValueOnce({
-        execution: {
-          status: FunctionExecution_Status.RUNNING,
-          logs: "",
-          result: "",
-        },
-      })
-      .mockResolvedValueOnce({
-        execution: {
-          status: FunctionExecution_Status.RUNNING,
-          logs: "partial logs",
-          result: "",
-        },
-      })
-      .mockResolvedValueOnce({
-        execution: {
-          status: FunctionExecution_Status.SUCCESS,
-          logs: "final logs",
-          result: '{"done":true}',
-        },
-      });
+      .mockResolvedValueOnce(execution(FunctionExecution_Status.RUNNING, "", ""))
+      .mockResolvedValueOnce(execution(FunctionExecution_Status.RUNNING, "partial logs", ""))
+      .mockResolvedValueOnce(
+        execution(FunctionExecution_Status.SUCCESS, "final logs", '{"done":true}'),
+      );
 
     const client = createMockClient({ getFunctionExecution });
 
@@ -131,20 +110,8 @@ describe("waitForExecution", () => {
   test("uses default poll interval", async () => {
     const getFunctionExecution = vi
       .fn()
-      .mockResolvedValueOnce({
-        execution: {
-          status: FunctionExecution_Status.RUNNING,
-          logs: "",
-          result: "",
-        },
-      })
-      .mockResolvedValueOnce({
-        execution: {
-          status: FunctionExecution_Status.SUCCESS,
-          logs: "done",
-          result: "",
-        },
-      });
+      .mockResolvedValueOnce(execution(FunctionExecution_Status.RUNNING, "", ""))
+      .mockResolvedValueOnce(execution(FunctionExecution_Status.SUCCESS, "done", ""));
 
     const client = createMockClient({ getFunctionExecution });
 
@@ -174,21 +141,26 @@ describe("executeScript", () => {
     vi.useRealTimers();
   });
 
-  test("executes script and returns success result", async () => {
-    const client = createMockClient({
-      testExecScript: vi.fn().mockResolvedValue({
-        executionId: "exec-123",
-      }),
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: {
-          status: FunctionExecution_Status.SUCCESS,
-          logs: "Script executed successfully",
-          result: '{"data":"test"}',
-        },
-      }),
+  function createExecScriptMockClient(
+    execResult: { execution: { status: FunctionExecution_Status; logs: string; result: string } },
+    testExecScriptResponse: { executionId: string; result?: string } = { executionId: "exec-123" },
+  ) {
+    return createMockClient({
+      testExecScript: vi.fn().mockResolvedValue(testExecScriptResponse),
+      getFunctionExecution: vi.fn().mockResolvedValue(execResult),
     });
+  }
 
-    const resultPromise = executeScript({
+  test("executes script and returns success result", async () => {
+    const client = createExecScriptMockClient(
+      execution(
+        FunctionExecution_Status.SUCCESS,
+        "Script executed successfully",
+        '{"data":"test"}',
+      ),
+    );
+
+    const result = await executeScript({
       client,
       workspaceId: "workspace-1",
       name: "test-script.js",
@@ -196,8 +168,6 @@ describe("executeScript", () => {
       arg: '{"input":"value"}',
       invoker: mockAuthInvoker,
     });
-
-    const result = await resultPromise;
 
     expect(result.success).toBe(true);
     expect(result.logs).toBe("Script executed successfully");
@@ -214,18 +184,7 @@ describe("executeScript", () => {
   });
 
   test("executes script with default empty arg", async () => {
-    const client = createMockClient({
-      testExecScript: vi.fn().mockResolvedValue({
-        executionId: "exec-123",
-      }),
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: {
-          status: FunctionExecution_Status.SUCCESS,
-          logs: "",
-          result: "",
-        },
-      }),
-    });
+    const client = createExecScriptMockClient(execution(FunctionExecution_Status.SUCCESS, "", ""));
 
     await executeScript({
       client,
@@ -235,26 +194,17 @@ describe("executeScript", () => {
       invoker: mockAuthInvoker,
     });
 
-    expect(client.testExecScript).toHaveBeenCalledWith(
-      expect.objectContaining({
-        arg: "{}",
-      }),
-    );
+    expect(client.testExecScript).toHaveBeenCalledWith(expect.objectContaining({ arg: "{}" }));
   });
 
   test("returns failure result when script fails", async () => {
-    const client = createMockClient({
-      testExecScript: vi.fn().mockResolvedValue({
-        executionId: "exec-123",
-      }),
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: {
-          status: FunctionExecution_Status.FAILED,
-          logs: "Error: TypeError: undefined is not a function",
-          result: "Script execution failed",
-        },
-      }),
-    });
+    const client = createExecScriptMockClient(
+      execution(
+        FunctionExecution_Status.FAILED,
+        "Error: TypeError: undefined is not a function",
+        "Script execution failed",
+      ),
+    );
 
     const result = await executeScript({
       client,
@@ -271,18 +221,7 @@ describe("executeScript", () => {
   });
 
   test("returns error message when logs and result are empty", async () => {
-    const client = createMockClient({
-      testExecScript: vi.fn().mockResolvedValue({
-        executionId: "exec-123",
-      }),
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: {
-          status: FunctionExecution_Status.FAILED,
-          logs: "",
-          result: "",
-        },
-      }),
-    });
+    const client = createExecScriptMockClient(execution(FunctionExecution_Status.FAILED, "", ""));
 
     const result = await executeScript({
       client,
@@ -299,25 +238,11 @@ describe("executeScript", () => {
   test("uses custom poll interval", async () => {
     const getFunctionExecution = vi
       .fn()
-      .mockResolvedValueOnce({
-        execution: {
-          status: FunctionExecution_Status.RUNNING,
-          logs: "",
-          result: "",
-        },
-      })
-      .mockResolvedValueOnce({
-        execution: {
-          status: FunctionExecution_Status.SUCCESS,
-          logs: "",
-          result: "",
-        },
-      });
+      .mockResolvedValueOnce(execution(FunctionExecution_Status.RUNNING, "", ""))
+      .mockResolvedValueOnce(execution(FunctionExecution_Status.SUCCESS, "", ""));
 
     const client = createMockClient({
-      testExecScript: vi.fn().mockResolvedValue({
-        executionId: "exec-123",
-      }),
+      testExecScript: vi.fn().mockResolvedValue({ executionId: "exec-123" }),
       getFunctionExecution,
     });
 
@@ -346,18 +271,9 @@ describe("executeScript", () => {
   });
 
   test("uses response.result as fallback when execution result is empty", async () => {
-    const client = createMockClient({
-      testExecScript: vi.fn().mockResolvedValue({
-        executionId: "exec-123",
-        result: "compilation error: invalid syntax",
-      }),
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: {
-          status: FunctionExecution_Status.FAILED,
-          logs: "",
-          result: "",
-        },
-      }),
+    const client = createExecScriptMockClient(execution(FunctionExecution_Status.FAILED, "", ""), {
+      executionId: "exec-123",
+      result: "compilation error: invalid syntax",
     });
 
     const result = await executeScript({
@@ -374,19 +290,10 @@ describe("executeScript", () => {
   });
 
   test("includes response.result in error details alongside execution result", async () => {
-    const client = createMockClient({
-      testExecScript: vi.fn().mockResolvedValue({
-        executionId: "exec-123",
-        result: "initial error info",
-      }),
-      getFunctionExecution: vi.fn().mockResolvedValue({
-        execution: {
-          status: FunctionExecution_Status.FAILED,
-          logs: "runtime error log",
-          result: "execution failed",
-        },
-      }),
-    });
+    const client = createExecScriptMockClient(
+      execution(FunctionExecution_Status.FAILED, "runtime error log", "execution failed"),
+      { executionId: "exec-123", result: "initial error info" },
+    );
 
     const result = await executeScript({
       client,

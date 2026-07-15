@@ -4,17 +4,24 @@ import { parseYAML } from "confbox";
 import * as path from "pathe";
 import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
 import {
+  loadConsoleBaseUrl,
   loadAccessToken,
   loadConfigPath,
   loadMachineUserName,
   loadWorkspaceId,
+  platformConfigFromProfile,
+  readPlatformConfig,
+  saveUserTokens,
+  tryLoadWorkspaceId,
   writePlatformConfig,
 } from "./context";
 import { isCLIError } from "./errors";
 import { logger } from "./logger";
 import { resetKeyringState } from "./token-store";
+import type * as ClientModule from "./client";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-xdg-${Date.now()}-${Math.random()}`);
+const refreshTokenMock = vi.hoisted(() => vi.fn());
 
 vi.mock("xdg-basedir", () => ({
   xdgConfig: xdgTempDir,
@@ -29,6 +36,69 @@ vi.mock("@napi-rs/keyring", () => ({
     deletePassword() {}
   },
 }));
+
+vi.mock("./client", async (importOriginal) => {
+  const actual = await importOriginal<typeof ClientModule>();
+  return {
+    ...actual,
+    initOAuth2Client: vi.fn(() => ({
+      refreshToken: refreshTokenMock,
+    })),
+  };
+});
+
+function writeFuturePlatformConfig() {
+  const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(
+    configPath,
+    "version: 999\nmin_sdk_version: 999.0.0\nusers: {}\nprofiles: {}\ncurrent_user: null\n",
+  );
+}
+
+type PfProfile = {
+  user: string;
+  workspace_id: string;
+  readonly?: boolean;
+  machine_user?: string;
+  machine_user_override?: "allow" | "deny";
+};
+
+type PfUserV2 =
+  | { storage: "keyring"; token_expires_at: string }
+  | { storage: "file"; access_token: string; refresh_token?: string; token_expires_at: string };
+
+type PfConfig = {
+  version: 2;
+  min_sdk_version: `${number}.${number}.${number}`;
+  users: Record<string, PfUserV2>;
+  profiles: Record<string, PfProfile>;
+  current_user: string | null;
+};
+
+function v2Config(overrides: Partial<PfConfig> = {}): PfConfig {
+  return {
+    version: 2,
+    min_sdk_version: "1.29.0",
+    users: {},
+    profiles: {},
+    current_user: null,
+    ...overrides,
+  };
+}
+
+function fileUser(accessToken: string, tokenExpiresAt: string): PfUserV2 {
+  return {
+    access_token: accessToken,
+    refresh_token: "refresh",
+    token_expires_at: tokenExpiresAt,
+    storage: "file",
+  };
+}
+
+function profile(user: string, overrides: Partial<PfProfile> = {}): PfProfile {
+  return { user, workspace_id: "12345678-1234-4abc-8def-123456789012", ...overrides };
+}
 
 describe("loadConfigPath", () => {
   const originalEnv = process.env;
@@ -67,24 +137,16 @@ describe("loadConfigPath", () => {
     expect(result).toBe(configPath);
   });
 
-  test("finds config in parent directory", () => {
-    const nestedDir = path.join(tempDir, "nested");
+  test.each([
+    ["parent", ["nested"]],
+    ["grandparent", ["nested", "deep"]],
+  ])("finds config in %s directory", (_label, segments) => {
+    const nestedDir = path.join(tempDir, ...segments);
     fs.mkdirSync(nestedDir, { recursive: true });
     const configPath = path.join(tempDir, "tailor.config.ts");
     fs.writeFileSync(configPath, "export default {}");
 
     vi.spyOn(process, "cwd").mockReturnValue(nestedDir);
-    const result = loadConfigPath();
-    expect(result).toBe(configPath);
-  });
-
-  test("finds config in grandparent directory", () => {
-    const deepNestedDir = path.join(tempDir, "nested", "deep");
-    fs.mkdirSync(deepNestedDir, { recursive: true });
-    const configPath = path.join(tempDir, "tailor.config.ts");
-    fs.writeFileSync(configPath, "export default {}");
-
-    vi.spyOn(process, "cwd").mockReturnValue(deepNestedDir);
     const result = loadConfigPath();
     expect(result).toBe(configPath);
   });
@@ -120,17 +182,12 @@ describe("loadWorkspaceId", () => {
 
   beforeEach(() => {
     vi.resetModules();
+    refreshTokenMock.mockReset();
     resetKeyringState();
     process.env = { ...originalEnv };
     delete process.env.TAILOR_PLATFORM_WORKSPACE_ID;
     delete process.env.TAILOR_PLATFORM_PROFILE;
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {},
-      current_user: null,
-    });
+    writePlatformConfig(v2Config());
   });
 
   afterEach(() => {
@@ -143,8 +200,25 @@ describe("loadWorkspaceId", () => {
       expect(result).toBe(validUUID);
     });
 
+    test("opts.workspaceId takes precedence over an unreadable env profile config", async () => {
+      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      writeFuturePlatformConfig();
+
+      const result = await loadWorkspaceId({ workspaceId: validUUID });
+
+      expect(result).toBe(validUUID);
+    });
+
     test("throws error when opts.workspaceId is invalid UUID", async () => {
       await expect(loadWorkspaceId({ workspaceId: invalidUUID })).rejects.toThrow(
+        "Invalid value from --workspace-id option: must be a valid UUID",
+      );
+    });
+
+    test("rejects an explicitly empty workspaceId instead of falling back", async () => {
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID = otherUUID;
+
+      await expect(loadWorkspaceId({ workspaceId: "" })).rejects.toThrow(
         "Invalid value from --workspace-id option: must be a valid UUID",
       );
     });
@@ -172,54 +246,43 @@ describe("loadWorkspaceId", () => {
 
     test("env takes precedence over profile", async () => {
       process.env.TAILOR_PLATFORM_WORKSPACE_ID = validUUID;
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: {
-          myprofile: { user: "test", workspace_id: otherUUID },
-        },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({ profiles: { myprofile: profile("test", { workspace_id: otherUUID }) } }),
+      );
       const result = await loadWorkspaceId({ profile: "myprofile" });
+      expect(result).toBe(validUUID);
+    });
+
+    test("env workspace ID takes precedence over an unreadable env profile config", async () => {
+      process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
+      process.env.TAILOR_PLATFORM_WORKSPACE_ID = validUUID;
+      writeFuturePlatformConfig();
+
+      const result = await loadWorkspaceId();
+
       expect(result).toBe(validUUID);
     });
   });
 
   describe("opts.profile", () => {
     test("returns workspaceId from profile when opts.profile provided", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: { myprofile: { user: "testuser", workspace_id: validUUID } },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({ profiles: { myprofile: profile("testuser", { workspace_id: validUUID }) } }),
+      );
       const result = await loadWorkspaceId({ profile: "myprofile" });
       expect(result).toBe(validUUID);
     });
 
     test("throws error when profile not found", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: {},
-        current_user: null,
-      });
       await expect(loadWorkspaceId({ profile: "nonexistent" })).rejects.toThrow(
         'Profile "nonexistent" not found',
       );
     });
 
     test("throws error when profile workspace_id is invalid UUID", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: { badprofile: { user: "testuser", workspace_id: invalidUUID } },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({ profiles: { badprofile: profile("testuser", { workspace_id: invalidUUID }) } }),
+      );
       await expect(loadWorkspaceId({ profile: "badprofile" })).rejects.toThrow(
         'Invalid value from profile "badprofile": must be a valid UUID',
       );
@@ -229,35 +292,33 @@ describe("loadWorkspaceId", () => {
   describe("env.TAILOR_PLATFORM_PROFILE", () => {
     test("returns workspaceId from env profile when set", async () => {
       process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: { envprofile: { user: "testuser", workspace_id: validUUID } },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({ profiles: { envprofile: profile("testuser", { workspace_id: validUUID }) } }),
+      );
       const result = await loadWorkspaceId();
       expect(result).toBe(validUUID);
     });
 
     test("opts.profile takes precedence over env profile", async () => {
       process.env.TAILOR_PLATFORM_PROFILE = "envprofile";
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: {
-          envprofile: { user: "testuser", workspace_id: otherUUID },
-          optsprofile: { user: "testuser", workspace_id: validUUID },
-        },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({
+          profiles: {
+            envprofile: profile("testuser", { workspace_id: otherUUID }),
+            optsprofile: profile("testuser", { workspace_id: validUUID }),
+          },
+        }),
+      );
       const result = await loadWorkspaceId({ profile: "optsprofile" });
       expect(result).toBe(validUUID);
     });
   });
 
   describe("error case: no workspace ID source", () => {
+    test("returns undefined from optional resolution", async () => {
+      await expect(tryLoadWorkspaceId()).resolves.toBeUndefined();
+    });
+
     test("throws error when no workspaceId source is available", async () => {
       await expect(loadWorkspaceId()).rejects.toThrow("Workspace ID not found");
     });
@@ -272,13 +333,7 @@ describe("loadMachineUserName", () => {
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {},
-      current_user: null,
-    });
+    writePlatformConfig(v2Config());
   });
 
   afterEach(() => {
@@ -304,37 +359,33 @@ describe("loadMachineUserName", () => {
 
   test("env takes precedence over profile default", async () => {
     vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "env-bot");
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          myprofile: profile("u", { workspace_id: validUUID, machine_user: "profile-bot" }),
+        },
+      }),
+    );
     const result = await loadMachineUserName({ profile: "myprofile" });
     expect(result).toBe("env-bot");
   });
 
   test("returns machine_user from profile when profile provided", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          myprofile: profile("u", { workspace_id: validUUID, machine_user: "profile-bot" }),
+        },
+      }),
+    );
     const result = await loadMachineUserName({ profile: "myprofile" });
     expect(result).toBe("profile-bot");
   });
 
   test("returns undefined when profile has no machine_user", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: { myprofile: { user: "u", workspace_id: validUUID } },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({ profiles: { myprofile: profile("u", { workspace_id: validUUID }) } }),
+    );
     const result = await loadMachineUserName({ profile: "myprofile" });
     expect(result).toBeUndefined();
   });
@@ -352,35 +403,33 @@ describe("loadMachineUserName", () => {
 
   test("returns machine_user from env profile when TAILOR_PLATFORM_PROFILE is set", async () => {
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        envprofile: { user: "u", workspace_id: validUUID, machine_user: "env-profile-bot" },
-      },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          envprofile: profile("u", { workspace_id: validUUID, machine_user: "env-profile-bot" }),
+        },
+      }),
+    );
     const result = await loadMachineUserName();
     expect(result).toBe("env-profile-bot");
   });
 
   describe("machine_user_override: deny", () => {
+    const envOverrideDetails =
+      'The machine user is being set to "other-bot" via the TAILOR_PLATFORM_MACHINE_USER_NAME environment variable, which conflicts with this profile\'s pinned machine user "profile-bot".';
+
     beforeEach(() => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: {
-          locked: {
-            user: "u",
-            workspace_id: validUUID,
-            machine_user: "profile-bot",
-            machine_user_override: "deny",
+      writePlatformConfig(
+        v2Config({
+          profiles: {
+            locked: profile("u", {
+              workspace_id: validUUID,
+              machine_user: "profile-bot",
+              machine_user_override: "deny",
+            }),
           },
-        },
-        current_user: null,
-      });
+        }),
+      );
     });
 
     test("rejects with PROFILE_MACHINE_USER_OVERRIDE_DENIED when opts.machineUser differs", async () => {
@@ -397,6 +446,32 @@ describe("loadMachineUserName", () => {
       const err = await loadMachineUserName({ profile: "locked" }).catch((e: unknown) => e);
       expect(isCLIError(err)).toBe(true);
       expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+      expect((err as { details?: string }).details).toBe(envOverrideDetails);
+    });
+
+    test("reports env var source when the env fallback is passed as opts.machineUser", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "other-bot");
+      const err = await loadMachineUserName({
+        machineUser: "other-bot",
+        machineUserSource: "env",
+        profile: "locked",
+      }).catch((e: unknown) => e);
+      expect(isCLIError(err)).toBe(true);
+      expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+      expect((err as { details?: string }).details).toBe(envOverrideDetails);
+    });
+
+    test("does not report env var source when opts.machineUser matches env without env source", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "other-bot");
+      const err = await loadMachineUserName({
+        machineUser: "other-bot",
+        profile: "locked",
+      }).catch((e: unknown) => e);
+      expect(isCLIError(err)).toBe(true);
+      expect((err as { code?: string }).code).toBe("PROFILE_MACHINE_USER_OVERRIDE_DENIED");
+      expect((err as { details?: string }).details).toBe(
+        'This profile fixes the machine user to "profile-bot" for application-data commands.',
+      );
     });
 
     test("resolves when opts.machineUser matches profile's machine_user", async () => {
@@ -417,15 +492,13 @@ describe("loadMachineUserName", () => {
   });
 
   test("explicit value wins over profile when profile has machine_user but no override (regression guard)", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" },
-      },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          myprofile: profile("u", { workspace_id: validUUID, machine_user: "profile-bot" }),
+        },
+      }),
+    );
     const result = await loadMachineUserName({ machineUser: "explicit-bot", profile: "myprofile" });
     expect(result).toBe("explicit-bot");
   });
@@ -443,13 +516,13 @@ describe("loadMachineUserName", () => {
   });
 
   test("rejects empty opts.machineUser instead of falling back to profile default", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: { myprofile: { user: "u", workspace_id: validUUID, machine_user: "profile-bot" } },
-      current_user: null,
-    });
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          myprofile: profile("u", { workspace_id: validUUID, machine_user: "profile-bot" }),
+        },
+      }),
+    );
     const err = await loadMachineUserName({ machineUser: "", profile: "myprofile" }).catch(
       (e: unknown) => e,
     );
@@ -472,19 +545,25 @@ describe("loadAccessToken", () => {
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
     vi.stubEnv("TAILOR_TOKEN", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {},
-      current_user: null,
-    });
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", undefined);
+    writePlatformConfig(v2Config());
   });
 
   describe("env.TAILOR_PLATFORM_TOKEN", () => {
     test("returns token from TAILOR_PLATFORM_TOKEN when set", async () => {
       vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
       const result = await loadAccessToken();
+      expect(result).toBe(validToken);
+    });
+
+    test("returns token from TAILOR_PLATFORM_TOKEN before reading an unreadable env profile config", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
+      vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
+      writeFuturePlatformConfig();
+
+      const result = await loadAccessToken();
+
       expect(result).toBe(validToken);
     });
 
@@ -497,22 +576,12 @@ describe("loadAccessToken", () => {
 
     test("TAILOR_PLATFORM_TOKEN takes precedence over profile", async () => {
       vi.stubEnv("TAILOR_PLATFORM_TOKEN", validToken);
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {
-          testuser: {
-            access_token: otherToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
-          },
-        },
-        profiles: {
-          myprofile: { user: "testuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-        },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({
+          users: { testuser: fileUser(otherToken, futureDate) },
+          profiles: { myprofile: profile("testuser") },
+        }),
+      );
       const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(validToken);
     });
@@ -532,70 +601,71 @@ describe("loadAccessToken", () => {
 
   describe("opts.profile", () => {
     test("returns token from profile when profile provided", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {
-          testuser: {
-            access_token: validToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
-          },
-        },
-        profiles: {
-          myprofile: { user: "testuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-        },
-        current_user: null,
-      });
+      writePlatformConfig(
+        v2Config({
+          users: { testuser: fileUser(validToken, futureDate) },
+          profiles: { myprofile: profile("testuser") },
+        }),
+      );
       const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(validToken);
     });
 
     test("throws error when profile not found", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {},
-        profiles: {},
-        current_user: null,
-      });
       await expect(loadAccessToken({ profile: "nonexistent" })).rejects.toThrow(
         'Profile "nonexistent" not found',
       );
     });
 
     test("prefers the profile user over current_user", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {
-          currentuser: {
-            access_token: validToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
+      writePlatformConfig(
+        v2Config({
+          users: {
+            currentuser: fileUser(validToken, futureDate),
+            profileuser: fileUser(otherToken, futureDate),
           },
-          profileuser: {
-            access_token: otherToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
-          },
-        },
-        profiles: {
-          myprofile: { user: "profileuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-        },
-        current_user: "currentuser",
-      });
+          profiles: { myprofile: profile("profileuser") },
+          current_user: "currentuser",
+        }),
+      );
       const result = await loadAccessToken({ profile: "myprofile" });
       expect(result).toBe(otherToken);
     });
-  });
 
-  describe("env.TAILOR_PLATFORM_PROFILE", () => {
-    test("returns token from env profile", async () => {
-      vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
+    test("returns the token saved for the profile platform URL", async () => {
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {},
+        profiles: {
+          dev: {
+            user: "testuser",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
+        },
+        current_user: null,
+      });
+      const config = await readPlatformConfig();
+      await saveUserTokens(
+        config,
+        "testuser",
+        {
+          accessToken: validToken,
+          refreshToken: "refresh",
+        },
+        futureDate,
+        { platformUrl: "https://api.dev.tailor.tech" },
+      );
+      writePlatformConfig(config);
+
+      const result = await loadAccessToken({ profile: "dev" });
+
+      expect(result).toBe(validToken);
+    });
+
+    test("falls back to a legacy user token for a profile platform URL without persisting it", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
@@ -608,27 +678,28 @@ describe("loadAccessToken", () => {
           },
         },
         profiles: {
-          envprofile: { user: "testuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+          dev: {
+            user: "testuser",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
         },
         current_user: null,
       });
-      const result = await loadAccessToken();
+
+      const result = await loadAccessToken({ profile: "dev" });
+
       expect(result).toBe(validToken);
+      const updatedConfig = await readPlatformConfig();
+      expect(updatedConfig.users["https://api.dev.tailor.tech|testuser"]).toBeUndefined();
     });
 
-    test("opts.profile takes precedence over env profile", async () => {
-      vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
+    test("does not fall back to an unscoped token for a profile platform URL without matching env", async () => {
       writePlatformConfig({
         version: 2,
         min_sdk_version: "1.29.0",
         users: {
-          envuser: {
-            access_token: otherToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
-          },
-          optsuser: {
+          testuser: {
             access_token: validToken,
             refresh_token: "refresh",
             token_expires_at: futureDate,
@@ -636,11 +707,85 @@ describe("loadAccessToken", () => {
           },
         },
         profiles: {
-          envprofile: { user: "envuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-          optsprofile: { user: "optsuser", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+          dev: {
+            user: "testuser",
+            workspace_id: "12345678-1234-4abc-8def-123456789012",
+            platform_url: "https://api.dev.tailor.tech",
+          },
         },
         current_user: null,
       });
+
+      await expect(loadAccessToken({ profile: "dev" })).rejects.toThrow(
+        'User "testuser" not found',
+      );
+    });
+
+    test("removes a legacy unscoped token after refreshing it into a scoped platform key", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+      const pastDate = new Date(Date.now() - 3600 * 1000).toISOString();
+      const refreshedExpiresAt = Date.now() + 3600 * 1000;
+      refreshTokenMock.mockResolvedValueOnce({
+        accessToken: "refreshed-token",
+        refreshToken: "refreshed-refresh",
+        expiresAt: refreshedExpiresAt,
+      });
+      writePlatformConfig({
+        version: 2,
+        min_sdk_version: "1.29.0",
+        users: {
+          testuser: {
+            access_token: "legacy-token",
+            refresh_token: "legacy-refresh",
+            token_expires_at: pastDate,
+            storage: "file",
+          },
+        },
+        profiles: {},
+        current_user: "testuser",
+      });
+
+      const result = await loadAccessToken();
+
+      expect(result).toBe("refreshed-token");
+      const updatedConfig = await readPlatformConfig();
+      expect(updatedConfig.users.testuser).toBeUndefined();
+      expect(updatedConfig.users["https://api.dev.tailor.tech|testuser"]).toMatchObject({
+        storage: "file",
+        access_token: "refreshed-token",
+        refresh_token: "refreshed-refresh",
+        token_expires_at: new Date(refreshedExpiresAt).toISOString(),
+      });
+    });
+  });
+
+  describe("env.TAILOR_PLATFORM_PROFILE", () => {
+    test("returns token from env profile", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
+      writePlatformConfig(
+        v2Config({
+          users: { testuser: fileUser(validToken, futureDate) },
+          profiles: { envprofile: profile("testuser") },
+        }),
+      );
+      const result = await loadAccessToken();
+      expect(result).toBe(validToken);
+    });
+
+    test("opts.profile takes precedence over env profile", async () => {
+      vi.stubEnv("TAILOR_PLATFORM_PROFILE", "envprofile");
+      writePlatformConfig(
+        v2Config({
+          users: {
+            envuser: fileUser(otherToken, futureDate),
+            optsuser: fileUser(validToken, futureDate),
+          },
+          profiles: {
+            envprofile: profile("envuser"),
+            optsprofile: profile("optsuser"),
+          },
+        }),
+      );
       const result = await loadAccessToken({ profile: "optsprofile" });
       expect(result).toBe(validToken);
     });
@@ -648,20 +793,12 @@ describe("loadAccessToken", () => {
 
   describe("config.current_user", () => {
     test("returns token from current_user when no env or profile", async () => {
-      writePlatformConfig({
-        version: 2,
-        min_sdk_version: "1.29.0",
-        users: {
-          currentuser: {
-            access_token: validToken,
-            refresh_token: "refresh",
-            token_expires_at: futureDate,
-            storage: "file",
-          },
-        },
-        profiles: {},
-        current_user: "currentuser",
-      });
+      writePlatformConfig(
+        v2Config({
+          users: { currentuser: fileUser(validToken, futureDate) },
+          current_user: "currentuser",
+        }),
+      );
       const result = await loadAccessToken();
       expect(result).toBe(validToken);
     });
@@ -674,26 +811,90 @@ describe("loadAccessToken", () => {
   });
 });
 
+describe("loadConsoleBaseUrl", () => {
+  beforeEach(() => {
+    resetKeyringState();
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {},
+      current_user: null,
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test("returns console_url from the selected profile", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+
+    await expect(loadConsoleBaseUrl({ profile: "dev" })).resolves.toBe(
+      "https://console.dev.tailor.tech",
+    );
+  });
+
+  test("falls back to the default console URL when missing profiles are allowed and config is unreadable", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "missing");
+    writeFuturePlatformConfig();
+
+    await expect(loadConsoleBaseUrl({ allowMissingProfile: true })).resolves.toBe(
+      "https://console.tailor.tech",
+    );
+  });
+});
+
+describe("platformConfigFromProfile", () => {
+  test("returns undefined when the profile has no platform settings", () => {
+    expect(platformConfigFromProfile({})).toBeUndefined();
+  });
+
+  test("returns the profile platform settings that are set", () => {
+    expect(
+      platformConfigFromProfile({
+        platform_url: "https://api.dev.tailor.tech",
+        oauth2_client_id: "dev-client",
+        console_url: "https://console.dev.tailor.tech",
+      }),
+    ).toEqual({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+      consoleUrl: "https://console.dev.tailor.tech",
+    });
+  });
+});
+
 describe("profile readonly field", () => {
   beforeEach(() => {
     resetKeyringState();
   });
 
   test("round-trips readonly: true through write/read", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {
-        ro: {
-          user: "u@example.com",
-          workspace_id: "12345678-1234-4abc-8def-123456789012",
-          readonly: true,
+    writePlatformConfig(
+      v2Config({
+        profiles: {
+          ro: profile("u@example.com", { readonly: true }),
+          rw: profile("u@example.com"),
         },
-        rw: { user: "u@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
-      },
-      current_user: null,
-    });
+      }),
+    );
     const { readPlatformConfig } = await import("./context");
     const config = await readPlatformConfig();
     expect(config.profiles.ro?.readonly).toBe(true);
@@ -720,7 +921,7 @@ describe("V1 to V2 migration", () => {
         },
       },
       profiles: {
-        default: { user: "user@example.com", workspace_id: "12345678-1234-4abc-8def-123456789012" },
+        default: profile("user@example.com"),
       },
       current_user: "user@example.com",
     });
@@ -766,21 +967,20 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
   });
 
   test("keeps the config V2 and preserves the keyring user when written without TAILOR_USE_KEYRING", async () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {
-        "keyring@example.com": { storage: "keyring", token_expires_at: futureDate },
-        "file@example.com": {
-          storage: "file",
-          access_token: "file-access-token",
-          refresh_token: "file-refresh-token",
-          token_expires_at: futureDate,
+    writePlatformConfig(
+      v2Config({
+        users: {
+          "keyring@example.com": { storage: "keyring", token_expires_at: futureDate },
+          "file@example.com": {
+            storage: "file",
+            access_token: "file-access-token",
+            refresh_token: "file-refresh-token",
+            token_expires_at: futureDate,
+          },
         },
-      },
-      profiles: {},
-      current_user: "keyring@example.com",
-    });
+        current_user: "keyring@example.com",
+      }),
+    );
 
     // Disk: stays V2 so the keyring entry is not dropped.
     const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
@@ -802,19 +1002,18 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
   });
 
   test("still downgrades a file-only config to V1 for backward compatibility", () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {
-        "file@example.com": {
-          storage: "file",
-          access_token: "file-access-token",
-          token_expires_at: futureDate,
+    writePlatformConfig(
+      v2Config({
+        users: {
+          "file@example.com": {
+            storage: "file",
+            access_token: "file-access-token",
+            token_expires_at: futureDate,
+          },
         },
-      },
-      profiles: {},
-      current_user: "file@example.com",
-    });
+        current_user: "file@example.com",
+      }),
+    );
 
     const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
       version: number;
@@ -824,7 +1023,7 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
     expect(diskConfig.current_user).toBe("file@example.com");
   });
 
-  test("clears current_user on V1 downgrade when it points at a user not representable in V1", () => {
+  test("keeps platform settings and scoped token keys in a min-SDK gated config format", async () => {
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -834,12 +1033,63 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
           access_token: "file-access-token",
           token_expires_at: futureDate,
         },
+        "https://api.dev.tailor.tech|file@example.com": {
+          storage: "file",
+          access_token: "scoped-access-token",
+          token_expires_at: futureDate,
+        },
       },
-      profiles: {},
-      // current_user references a user that is not in the users map, so it
-      // cannot be represented in V1 and must be cleared on downgrade.
-      current_user: "missing@example.com",
+      profiles: {
+        dev: {
+          user: "file@example.com",
+          workspace_id: "12345678-1234-4abc-8def-123456789012",
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+          console_url: "https://console.dev.tailor.tech",
+        },
+      },
+      current_user: "file@example.com",
     });
+
+    const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
+      version: number;
+      min_sdk_version?: string;
+      users: Record<string, unknown>;
+      profiles: Record<
+        string,
+        {
+          platform_url?: string;
+          oauth2_client_id?: string;
+          console_url?: string;
+        }
+      >;
+    };
+    expect(diskConfig.version).toBe(3);
+    expect(diskConfig.min_sdk_version).toBe("1.70.0");
+    expect(diskConfig.profiles.dev?.platform_url).toBe("https://api.dev.tailor.tech");
+    expect(diskConfig.profiles.dev?.oauth2_client_id).toBe("dev-client");
+    expect(diskConfig.profiles.dev?.console_url).toBe("https://console.dev.tailor.tech");
+    expect(diskConfig.users["https://api.dev.tailor.tech|file@example.com"]).toBeDefined();
+
+    const config = await readPlatformConfig();
+    expect(config.profiles.dev?.platform_url).toBe("https://api.dev.tailor.tech");
+  });
+
+  test("clears current_user on V1 downgrade when it points at a user not representable in V1", () => {
+    writePlatformConfig(
+      v2Config({
+        users: {
+          "file@example.com": {
+            storage: "file",
+            access_token: "file-access-token",
+            token_expires_at: futureDate,
+          },
+        },
+        // current_user references a user that is not in the users map, so it
+        // cannot be represented in V1 and must be cleared on downgrade.
+        current_user: "missing@example.com",
+      }),
+    );
 
     const diskConfig = parseYAML(fs.readFileSync(configPath, "utf-8")) as {
       version: number;
@@ -852,13 +1102,7 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
 
 describe.skipIf(process.platform === "win32")("writePlatformConfig file permissions", () => {
   test("writes the config file with mode 0600 and its directory with mode 0700", () => {
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {},
-      current_user: null,
-    });
+    writePlatformConfig(v2Config());
 
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     const fileMode = fs.statSync(configPath).mode & 0o777;
@@ -874,13 +1118,7 @@ describe.skipIf(process.platform === "win32")("writePlatformConfig file permissi
     fs.writeFileSync(configPath, "stale: true", { mode: 0o644 });
     fs.chmodSync(configPath, 0o644);
 
-    writePlatformConfig({
-      version: 2,
-      min_sdk_version: "1.29.0",
-      users: {},
-      profiles: {},
-      current_user: null,
-    });
+    writePlatformConfig(v2Config());
 
     const fileMode = fs.statSync(configPath).mode & 0o777;
     expect(fileMode).toBe(0o600);

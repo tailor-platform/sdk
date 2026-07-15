@@ -17,7 +17,19 @@
       "matchStrings": [
         "uses:\\s+(?<depName>[\\w-]+/[\\w-]+)(?<subpath>(?:/[\\w-]+)?)@(?<currentDigest>[a-f0-9]+)\\s+#\\s+(?<currentValue>v[\\d.]+)"
       ],
-      "autoReplaceStringTemplate": "uses: {{depName}}{{subpath}}@{{newDigest}} # {{newValue}}",
+      "depNameTemplate": "{{depName}}{{subpath}}",
+      "packageNameTemplate": "{{depName}}",
+      "autoReplaceStringTemplate": "uses: {{depName}}@{{newDigest}} # {{newValue}}",
+      "datasourceTemplate": "github-tags"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^packages/sdk/src/cli/commands/setup/templates\\.ts$/"],
+      "matchStrings": [
+        "const ACTIONS_SHA = \"(?<currentDigest>[a-f0-9]+)\";\\nconst ACTIONS_VERSION = \"(?<currentValue>v[\\d.]+)\";"
+      ],
+      "depNameTemplate": "tailor-platform/actions",
+      "autoReplaceStringTemplate": "const ACTIONS_SHA = \"{{newDigest}}\";\nconst ACTIONS_VERSION = \"{{newValue}}\";",
       "datasourceTemplate": "github-tags"
     }
   ],
@@ -31,6 +43,12 @@
       "matchManagers": ["npm"],
       "matchPackageNames": ["@connectrpc/*"],
       "groupName": "@connectrpc"
+    },
+    {
+      "description": "Group changesets ecosystem (cli + changelog generators must stay in sync)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@changesets/*"],
+      "groupName": "@changesets"
     },
     {
       "description": "Group ESLint ecosystem (core + plugins need compatible versions)",
@@ -56,6 +74,22 @@
       "groupName": "@opentelemetry"
     },
     {
+      "description": "Group bufbuild ecosystem (protovalidate depends on protobuf)",
+      "matchManagers": ["npm"],
+      "matchPackageNames": ["@bufbuild/*"],
+      "groupName": "@bufbuild"
+    },
+    {
+      "description": "Group pnpm with the action that installs it, so the CI-pinned version and packageManager stay in sync",
+      "matchPackageNames": ["pnpm", "pnpm/action-setup"],
+      "groupName": "pnpm"
+    },
+    {
+      "description": "Group aquaproj tooling to reduce review overhead",
+      "matchPackageNames": ["aquaproj/*"],
+      "groupName": "aquaproj"
+    },
+    {
       "matchManagers": ["npm"],
       "matchPackageNames": ["@inquirer/*"],
       "groupName": "@inquirer"
@@ -70,11 +104,6 @@
       "matchManagers": ["npm"],
       "matchPackageNames": ["rolldown", "tsdown"],
       "groupName": "rolldown"
-    },
-    {
-      "description": "Skip aquaproj/update-checksum-workflow v1.0.5 only (broken via update-checksum-action v0.2.7); see https://github.com/aquaproj/update-checksum-action/issues/364. The renovate-policy-check workflow will fail once we move past v1.0.5 so this rule can be removed.",
-      "matchPackageNames": ["aquaproj/update-checksum-workflow"],
-      "allowedVersions": "<1.0.5 || >1.0.5"
     }
   ]
 }

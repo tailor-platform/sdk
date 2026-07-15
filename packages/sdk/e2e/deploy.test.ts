@@ -208,13 +208,16 @@ describe("E2E: Service deletion order", () => {
     fs.writeFileSync(
       path.join(tailordbDir, "user.ts"),
       `
-import { db } from "@tailor-platform/sdk";
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
-  name: db.string(),
-  email: db.string(),
-  role: db.string({ optional: true }),
-});
+export const user = db
+  .type("User", {
+    name: db.string(),
+    email: db.string(),
+    role: db.string({ optional: true }),
+  })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
 
 export type user = typeof user;
 `,
@@ -230,12 +233,15 @@ export type user = typeof user;
     fs.writeFileSync(
       path.join(tailordbDir, "extra-user.ts"),
       `
-import { db } from "@tailor-platform/sdk";
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
-export const extraUser = db.type("ExtraUser", {
-  name: db.string(),
-  email: db.string(),
-});
+export const extraUser = db
+  .type("ExtraUser", {
+    name: db.string(),
+    email: db.string(),
+  })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
 
 export type extraUser = typeof extraUser;
 `,
@@ -545,14 +551,17 @@ export default defineConfig({
     fs.writeFileSync(
       path.join(tailordbDir, "user.ts"),
       `
-import { db } from "@tailor-platform/sdk";
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
-  name: db.string(),
-  email: db.string(),
-  role: db.string({ optional: true }),
-  newField: db.string({ optional: true }), // New field added
-});
+export const user = db
+  .type("User", {
+    name: db.string(),
+    email: db.string(),
+    role: db.string({ optional: true }),
+    newField: db.string({ optional: true }), // New field added
+  })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
 
 export type user = typeof user;
 `,
@@ -600,13 +609,16 @@ export default defineConfig({
     fs.writeFileSync(
       path.join(tailordbDir, "user.ts"),
       `
-import { db } from "@tailor-platform/sdk";
+import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
-  name: db.string(),
-  email: db.string(),
-  role: db.string({ optional: true }),
-});
+export const user = db
+  .type("User", {
+    name: db.string(),
+    email: db.string(),
+    role: db.string({ optional: true }),
+  })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
 
 export type user = typeof user;
 `,

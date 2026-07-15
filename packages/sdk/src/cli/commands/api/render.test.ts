@@ -8,41 +8,23 @@ function getMethod(name: string) {
   return m;
 }
 
+function getField(methodName: string, localName: string) {
+  const f = getMethod(methodName).input.fields.find((x) => x.localName === localName);
+  expect(f).toBeDefined();
+  if (!f) throw new Error(`${localName} not found`);
+  return f;
+}
+
 describe("describeFieldType", () => {
-  test("renders scalar string", () => {
-    const m = getMethod("GetApplication");
-    const f = m.input.fields.find((x) => x.localName === "applicationName");
-    expect(f).toBeDefined();
-    if (!f) return;
-    expect(describeFieldType(f)).toBe("string");
-  });
-
-  test("renders repeated scalar", () => {
-    const m = getMethod("CreateApplication");
-    const f = m.input.fields.find((x) => x.localName === "cors");
-    if (!f) throw new Error("cors not found");
-    expect(describeFieldType(f)).toBe("repeated string");
-  });
-
-  test("renders enum", () => {
-    const m = getMethod("InviteWorkspacePlatformUser");
-    const f = m.input.fields.find((x) => x.localName === "role");
-    if (!f) throw new Error("role not found");
-    expect(describeFieldType(f)).toMatch(/enum.*WorkspacePlatformUserRole/);
-  });
-
-  test("renders message reference", () => {
-    const m = getMethod("CreateTailorDBType");
-    const f = m.input.fields.find((x) => x.localName === "tailordbType");
-    if (!f) throw new Error("tailordbType not found");
-    expect(describeFieldType(f)).toMatch(/TailorDBType/);
-  });
-
-  test("renders map type", () => {
-    const m = getMethod("SetMetadata");
-    const f = m.input.fields.find((x) => x.localName === "labels");
-    if (!f) throw new Error("labels not found");
-    expect(describeFieldType(f)).toMatch(/^map</);
+  test.each`
+    name                           | method                           | field                | expected
+    ${"renders scalar string"}     | ${"GetApplication"}              | ${"applicationName"} | ${/^string$/}
+    ${"renders repeated scalar"}   | ${"CreateApplication"}           | ${"cors"}            | ${/^repeated string$/}
+    ${"renders enum"}              | ${"InviteWorkspacePlatformUser"} | ${"role"}            | ${/enum.*WorkspacePlatformUserRole/}
+    ${"renders message reference"} | ${"CreateTailorDBType"}          | ${"tailordbType"}    | ${/TailorDBType/}
+    ${"renders map type"}          | ${"SetMetadata"}                 | ${"labels"}          | ${/^map</}
+  `("$name", ({ method, field, expected }: { method: string; field: string; expected: RegExp }) => {
+    expect(describeFieldType(getField(method, field))).toMatch(expected);
   });
 });
 

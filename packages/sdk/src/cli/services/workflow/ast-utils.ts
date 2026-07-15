@@ -1,8 +1,11 @@
+import { assertDefined } from "#/utils/assert";
 import type {
   Expression,
   AwaitExpression,
   ImportExpression,
   CallExpression,
+  StaticMemberExpression,
+  IdentifierReference,
   ObjectPropertyKind,
   ObjectProperty,
   ArrowFunctionExpression,
@@ -18,11 +21,30 @@ export interface Replacement {
   text: string;
 }
 
+export interface TriggerCallInfo {
+  identifierName: string;
+  callRange: { start: number; end: number };
+  argsText: string;
+  optionsText?: string;
+}
+
 export interface FoundProperty {
   key: ObjectProperty["key"];
   value: Expression;
   start: number;
   end: number;
+}
+
+/**
+ * Read an import or export name from an OXC identifier or string-literal node.
+ * @param node - Import/export name node
+ * @returns Module binding name, or undefined for an unsupported node
+ */
+export function getModuleExportName(node: unknown): string | undefined {
+  if (!node || typeof node !== "object") return undefined;
+  const exportName = node as { name?: string; value?: unknown };
+  if (exportName.name) return exportName.name;
+  return typeof exportName.value === "string" ? exportName.value : undefined;
 }
 
 /**
@@ -68,6 +90,52 @@ export function getImportSource(node: Expression | null | undefined): string | n
     }
   }
   return null;
+}
+
+function argumentSourceText(arg: unknown, sourceText: string): string | undefined {
+  if (arg && typeof arg === "object" && "start" in arg && "end" in arg) {
+    return sourceText.slice(arg.start as number, arg.end as number);
+  }
+  return undefined;
+}
+
+/**
+ * Get metadata for a static `identifier.trigger(...)` call.
+ * @param node - AST node to inspect
+ * @param sourceText - Source code text
+ * @returns Trigger call metadata, or null when the node is not a trigger call
+ */
+export function getTriggerCallInfo(
+  node: ASTNode | null | undefined,
+  sourceText: string,
+): TriggerCallInfo | null {
+  if (!node || typeof node !== "object" || node.type !== "CallExpression") {
+    return null;
+  }
+
+  const callExpr = node as unknown as CallExpression;
+  const callee = callExpr.callee;
+  if (callee.type !== "MemberExpression") {
+    return null;
+  }
+
+  const memberExpr = callee as unknown as StaticMemberExpression;
+  if (
+    // callee may be a ComputedMemberExpression at runtime
+    // oxlint-disable-next-line typescript/no-unnecessary-condition
+    memberExpr.computed ||
+    memberExpr.property.name !== "trigger" ||
+    memberExpr.object.type !== "Identifier"
+  ) {
+    return null;
+  }
+
+  return {
+    identifierName: (memberExpr.object as IdentifierReference).name,
+    callRange: { start: callExpr.start, end: callExpr.end },
+    argsText: argumentSourceText(callExpr.arguments[0], sourceText) ?? "",
+    optionsText: argumentSourceText(callExpr.arguments[1], sourceText),
+  };
 }
 
 /**
@@ -138,12 +206,25 @@ export function findProperty(properties: ObjectPropertyKind[], name: string): Fo
 /**
  * Apply string replacements to source code
  * Replacements are applied from end to start to maintain positions
+ * Ranges must not overlap; applying an overlapping range on top of an
+ * already-shifted string would splice at stale offsets and corrupt the output,
+ * so overlap is rejected up front
  * @param source - Original source code
  * @param replacements - Replacements to apply
  * @returns Transformed source code
  */
 export function applyReplacements(source: string, replacements: Replacement[]): string {
   const sorted = replacements.toSorted((a, b) => b.start - a.start);
+  for (let i = 0; i + 1 < sorted.length; i++) {
+    const current = assertDefined(sorted[i], `replacement missing at index ${i}`);
+    const previous = assertDefined(sorted[i + 1], `replacement missing at index ${i + 1}`);
+    if (previous.end > current.start) {
+      throw new Error(
+        `applyReplacements: overlapping replacement ranges ` +
+          `[${previous.start}, ${previous.end}) and [${current.start}, ${current.end})`,
+      );
+    }
+  }
   let result = source;
   for (const r of sorted) {
     result = result.slice(0, r.start) + r.text + result.slice(r.end);
@@ -168,34 +249,4 @@ export function findStatementEnd(source: string, position: number): number {
     i++;
   }
   return i;
-}
-
-/**
- * Resolve a relative path from a base directory
- * Simple implementation that handles ./ and ../ prefixes
- * @param baseDir - Base directory
- * @param relativePath - Relative path to resolve
- * @returns Resolved absolute path
- */
-export function resolvePath(baseDir: string, relativePath: string): string {
-  // Normalize separators to forward slash
-  const normalized = relativePath.replace(/\\/g, "/");
-
-  // Split into parts
-  const parts = normalized.split("/");
-  const baseParts = baseDir.replace(/\\/g, "/").split("/");
-
-  for (const part of parts) {
-    if (part === ".") {
-      // Current directory, do nothing
-    } else if (part === "..") {
-      // Go up one directory
-      baseParts.pop();
-    } else {
-      // Add the part
-      baseParts.push(part);
-    }
-  }
-
-  return baseParts.join("/");
 }

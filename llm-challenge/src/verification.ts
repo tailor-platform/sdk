@@ -1,8 +1,17 @@
 import { spawn } from "node:child_process";
-import { promises as fs, readFileSync } from "node:fs";
+import { constants as fsConstants, promises as fs, realpathSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
-import { isObject, pathExistsSync, tailText } from "./utils";
-import { listWorkspaceFiles } from "./workspace-files";
+import { Worker } from "node:worker_threads";
+import { DEFAULT_CODEX_IMAGE } from "./runner";
+import { tailText, toPosix } from "./utils";
+import {
+  BUILT_IN_VERIFICATION_CHECK_IDS,
+  parseVerificationSpec,
+  type VerifySpec,
+  type VerifySpecCheck,
+} from "./verification-spec";
+import { isExcludedWorkspacePath, listWorkspaceFiles } from "./workspace-files";
 import type { Problem } from "./types";
 
 export type VerificationOutcome = "satisfied" | "unsatisfied" | "skipped" | "error";
@@ -30,46 +39,46 @@ export type VerificationSummary = {
   checks: VerificationCheckResult[];
 };
 
-type VerifySpec = {
-  schemaVersion?: 1;
-  checks?: VerifySpecCheck[];
-};
-
-type VerifySpecCheck =
-  | {
-      id: string;
-      kind: "file-exists";
-      description?: string;
-      path: string;
-    }
-  | {
-      id: string;
-      kind: "file-glob";
-      description?: string;
-      glob: string;
-      minCount?: number;
-    }
-  | {
-      id: string;
-      kind: "content-match";
-      description?: string;
-      glob: string;
-      pattern: string;
-      flags?: string;
-      /**
-       * Minimum number of glob-matching files that must contain the pattern (default 1).
-       * Counts files, not occurrences: a single file with several matches counts once.
-       */
-      minMatches?: number;
-    };
-
-const TYPESCRIPT_NO_EMIT_COMMAND = "node node_modules/typescript/bin/tsc --noEmit --pretty false";
+const TYPESCRIPT_COMPILER_ARGS = [
+  "--noEmit",
+  "--incremental",
+  "true",
+  "--tsBuildInfoFile",
+  "/tmp/verification.tsbuildinfo",
+  "--pretty",
+  "false",
+];
+const TYPESCRIPT_NO_EMIT_COMMAND = `podman run [isolated verifier] node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
+const TYPESCRIPT_VERIFIER_SCRIPT = `exec node /verifier/typescript/bin/tsc ${TYPESCRIPT_COMPILER_ARGS.join(" ")}`;
 const TYPECHECK_TIMEOUT_MS = 120_000;
+const PROCESS_OUTPUT_LIMIT_BYTES = 1024 * 1024;
+const CONTENT_FILE_LIMIT = 100;
+const CONTENT_FILE_BYTES_LIMIT = 1024 * 1024;
+const CONTENT_TOTAL_BYTES_LIMIT = 5 * 1024 * 1024;
+const CONTENT_MATCH_TIMEOUT_MS = 1_000;
+const TRUSTED_TYPESCRIPT_PATH = realpathSync(
+  path.dirname(createRequire(import.meta.url).resolve("typescript/package.json")),
+);
+const CONTENT_WORKER_SOURCE = `
+const { parentPort, workerData } = require("node:worker_threads");
+try {
+  const regex = new RegExp(workerData.pattern, workerData.flags);
+  const matches = [];
+  for (let index = 0; index < workerData.contents.length; index += 1) {
+    regex.lastIndex = 0;
+    if (regex.test(workerData.contents[index])) matches.push(index);
+  }
+  parentPort.postMessage({ matches });
+} catch (error) {
+  parentPort.postMessage({ error: error instanceof Error ? error.message : String(error) });
+}
+`;
 
 export async function writeVerificationSummary(options: {
   problem: Problem;
   runIndex: number;
   worktreePath: string;
+  verifierImage?: string;
   verificationSummaryPath: string;
   verificationStdoutPath: string;
   verificationStderrPath: string;
@@ -84,7 +93,9 @@ export async function writeVerificationSummary(options: {
     fs.writeFile(options.verificationStderrPath, ""),
   ]);
 
-  const files = await listWorkspaceFiles(options.worktreePath);
+  const files = (await listWorkspaceFiles(options.worktreePath)).filter(
+    (file) => resolveWorkspaceEvidenceFile(options.worktreePath, file) !== undefined,
+  );
   const checks = [
     ...commonChecks(options.problem, options.worktreePath, files),
     ...(await runProblemChecks(options.problem, options.worktreePath, files)),
@@ -93,7 +104,7 @@ export async function writeVerificationSummary(options: {
   for (const check of checks) {
     completedChecks.push(
       check.kind === "command"
-        ? await runCommandCheck(check, options.worktreePath, {
+        ? await runCommandCheck(check, options.worktreePath, options.verifierImage, {
             stdoutPath: options.verificationStdoutPath,
             stderrPath: options.verificationStderrPath,
           })
@@ -119,12 +130,17 @@ function commonChecks(
   files: string[],
 ): VerificationCheckResult[] {
   const checks: VerificationCheckResult[] = [
-    fileExistsCheck("workspace-package-json", "package.json", worktreePath, "package.json exists"),
+    fileExistsCheck(
+      BUILT_IN_VERIFICATION_CHECK_IDS.workspacePackageJson,
+      "package.json",
+      worktreePath,
+      "package.json exists",
+    ),
   ];
   if (problem.group === "sdk-api") {
     checks.push(
       fileExistsCheck(
-        "sdk-api-tailor-config",
+        BUILT_IN_VERIFICATION_CHECK_IDS.sdkApiTailorConfig,
         "tailor.config.ts",
         worktreePath,
         "sdk-api workspace exposes a Tailor config file",
@@ -134,7 +150,7 @@ function commonChecks(
 
   if (files.some((file) => file.endsWith(".ts"))) {
     checks.push({
-      id: "typescript-no-emit",
+      id: BUILT_IN_VERIFICATION_CHECK_IDS.typescriptNoEmit,
       scope: "common",
       kind: "command",
       description: "TypeScript sources compile without emitting files",
@@ -143,7 +159,7 @@ function commonChecks(
     });
   } else {
     checks.push({
-      id: "typescript-no-emit",
+      id: BUILT_IN_VERIFICATION_CHECK_IDS.typescriptNoEmit,
       scope: "common",
       kind: "assertion",
       description: "TypeScript sources compile without emitting files",
@@ -164,35 +180,33 @@ async function runProblemChecks(
   }
   let spec: VerifySpec;
   try {
-    spec = JSON.parse(await fs.readFile(problem.verifyPath, "utf8")) as VerifySpec;
+    spec = parseVerificationSpec(await fs.readFile(problem.verifyPath, "utf8"));
   } catch (error) {
     return [
       {
-        id: "problem-verify-spec",
+        id: BUILT_IN_VERIFICATION_CHECK_IDS.problemVerifySpec,
         scope: "problem",
         kind: "assertion",
-        description: "Problem verification spec can be read",
+        description: "Problem verification spec can be read and validated",
         outcome: "error",
         error: error instanceof Error ? error.message : String(error),
       },
     ];
   }
 
-  if (!Array.isArray(spec.checks)) {
-    return [];
+  const results: VerificationCheckResult[] = [];
+  for (const check of spec.checks) {
+    results.push(await evaluateProblemCheck(check, worktreePath, files));
   }
-  return spec.checks.map((check) => evaluateProblemCheck(check, worktreePath, files));
+  return results;
 }
 
-function evaluateProblemCheck(
+async function evaluateProblemCheck(
   check: VerifySpecCheck,
   worktreePath: string,
   files: string[],
-): VerificationCheckResult {
+): Promise<VerificationCheckResult> {
   try {
-    if (!isObject(check) || typeof check.id !== "string" || typeof check.kind !== "string") {
-      return invalidProblemCheck("unknown", "Problem check must include string id and kind");
-    }
     if (check.kind === "file-exists") {
       return fileExistsCheck(
         check.id,
@@ -206,10 +220,12 @@ function evaluateProblemCheck(
       return fileGlobCheck(check, files);
     }
     if (check.kind === "content-match") {
-      return contentMatchCheck(check, worktreePath, files);
+      return await contentMatchCheck(check, worktreePath, files);
     }
-    const unknownCheck = check as { id: string; kind: string };
-    return invalidProblemCheck(unknownCheck.id, `Unknown problem check kind: ${unknownCheck.kind}`);
+    if (check.kind === "content-absent") {
+      return await contentAbsentCheck(check, worktreePath, files);
+    }
+    throw new Error("Unsupported problem check kind");
   } catch (error) {
     return {
       id: typeof check.id === "string" ? check.id : "unknown",
@@ -229,13 +245,13 @@ function fileExistsCheck(
   description: string,
   scope: VerificationCheckResult["scope"] = "common",
 ): VerificationCheckResult {
-  const absolutePath = path.join(worktreePath, relativePath);
+  const absolutePath = resolveWorkspaceEvidenceFile(worktreePath, relativePath);
   return {
     id,
     scope,
     kind: "assertion",
     description,
-    outcome: pathExistsSync(absolutePath) ? "satisfied" : "unsatisfied",
+    outcome: absolutePath !== undefined ? "satisfied" : "unsatisfied",
     observations: [`path: ${relativePath}`],
   };
 }
@@ -257,22 +273,13 @@ function fileGlobCheck(
   };
 }
 
-function contentMatchCheck(
+async function contentMatchCheck(
   check: Extract<VerifySpecCheck, { kind: "content-match" }>,
   worktreePath: string,
   files: string[],
-): VerificationCheckResult {
+): Promise<VerificationCheckResult> {
   const minMatches = check.minMatches ?? 1;
-  const regex = new RegExp(check.pattern, check.flags ?? "");
-  const globRegex = globToRegExp(check.glob);
-  const matchedFiles: string[] = [];
-  for (const file of files.filter((candidate) => globRegex.test(candidate))) {
-    const text = readFileSync(path.join(worktreePath, file), "utf8");
-    regex.lastIndex = 0;
-    if (regex.test(text)) {
-      matchedFiles.push(file);
-    }
-  }
+  const matchedFiles = await matchingContentFiles(check, worktreePath, files);
   return {
     id: check.id,
     scope: "problem",
@@ -283,27 +290,189 @@ function contentMatchCheck(
   };
 }
 
-function invalidProblemCheck(id: string, message: string): VerificationCheckResult {
+async function contentAbsentCheck(
+  check: Extract<VerifySpecCheck, { kind: "content-absent" }>,
+  worktreePath: string,
+  files: string[],
+): Promise<VerificationCheckResult> {
+  const matchedFiles = await matchingContentFiles(check, worktreePath, files);
   return {
-    id,
+    id: check.id,
     scope: "problem",
     kind: "assertion",
-    description: "Problem check is valid",
-    outcome: "error",
-    error: message,
+    description: check.description ?? `${check.glob} content does not match ${check.pattern}`,
+    outcome: matchedFiles.length === 0 ? "satisfied" : "unsatisfied",
+    observations: [`matchedFiles: ${matchedFiles.length}`, ...matchedFiles.slice(0, 10)],
   };
+}
+
+async function matchingContentFiles(
+  check: Extract<VerifySpecCheck, { kind: "content-match" | "content-absent" }>,
+  worktreePath: string,
+  files: string[],
+): Promise<string[]> {
+  const globRegex = globToRegExp(check.glob);
+  const candidates = files.filter((candidate) => globRegex.test(candidate));
+  if (candidates.length > CONTENT_FILE_LIMIT) {
+    throw new Error(
+      `content evidence limit exceeded: ${candidates.length} files exceeds ${CONTENT_FILE_LIMIT}`,
+    );
+  }
+
+  const evidenceFiles: string[] = [];
+  const contents: string[] = [];
+  let totalBytes = 0;
+  for (const file of candidates) {
+    const absolutePath = resolveWorkspaceEvidenceFile(worktreePath, file);
+    if (absolutePath === undefined) {
+      continue;
+    }
+    const content = await readBoundedContentFile(absolutePath, file);
+    totalBytes += content.byteLength;
+    if (totalBytes > CONTENT_TOTAL_BYTES_LIMIT) {
+      throw new Error(
+        `content evidence limit exceeded at ${file}: total bytes exceed ${CONTENT_TOTAL_BYTES_LIMIT}`,
+      );
+    }
+    evidenceFiles.push(file);
+    contents.push(content.text);
+  }
+
+  const matchedIndexes = await matchContentInWorker(check.pattern, check.flags ?? "", contents);
+  return matchedIndexes.map((index) => evidenceFiles[index]).filter((file) => file !== undefined);
+}
+
+async function readBoundedContentFile(
+  absolutePath: string,
+  relativePath: string,
+): Promise<{ text: string; byteLength: number }> {
+  const file = await fs.open(absolutePath, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+  try {
+    if (!(await file.stat()).isFile()) {
+      throw new Error(`content evidence limit rejected non-regular file ${relativePath}`);
+    }
+    const buffer = Buffer.alloc(CONTENT_FILE_BYTES_LIMIT + 1);
+    let byteLength = 0;
+    while (byteLength < buffer.length) {
+      const { bytesRead } = await file.read(
+        buffer,
+        byteLength,
+        buffer.length - byteLength,
+        byteLength,
+      );
+      if (bytesRead === 0) {
+        break;
+      }
+      byteLength += bytesRead;
+    }
+    if (byteLength > CONTENT_FILE_BYTES_LIMIT) {
+      throw new Error(
+        `content evidence limit exceeded for ${relativePath}: file exceeds ${CONTENT_FILE_BYTES_LIMIT} bytes`,
+      );
+    }
+    return {
+      text: buffer.subarray(0, byteLength).toString("utf8"),
+      byteLength,
+    };
+  } finally {
+    await file.close();
+  }
+}
+
+async function matchContentInWorker(
+  pattern: string,
+  flags: string,
+  contents: string[],
+): Promise<number[]> {
+  if (contents.length === 0) {
+    return [];
+  }
+  return await new Promise((resolve, reject) => {
+    const worker = new Worker(CONTENT_WORKER_SOURCE, {
+      eval: true,
+      resourceLimits: { maxOldGenerationSizeMb: 32 },
+      workerData: { pattern, flags, contents },
+    });
+    let settled = false;
+    const finish = (callback: () => void) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      void worker.terminate();
+      callback();
+    };
+    const timeout = setTimeout(() => {
+      finish(() =>
+        reject(
+          new Error(`content regular expression timed out after ${CONTENT_MATCH_TIMEOUT_MS}ms`),
+        ),
+      );
+    }, CONTENT_MATCH_TIMEOUT_MS);
+
+    worker.on("message", (result: { matches?: number[]; error?: string }) => {
+      finish(() => {
+        if (result.error !== undefined) {
+          reject(new Error(result.error));
+        } else {
+          resolve(result.matches ?? []);
+        }
+      });
+    });
+    worker.on("error", (error) => finish(() => reject(error)));
+    worker.on("exit", (exitCode) => {
+      if (exitCode !== 0) {
+        finish(() => reject(new Error(`content worker exited with code ${exitCode}`)));
+      }
+    });
+  });
+}
+
+function resolveWorkspaceEvidenceFile(
+  worktreePath: string,
+  relativePath: string,
+): string | undefined {
+  const absolutePath = path.join(worktreePath, relativePath);
+  try {
+    const realWorktreePath = realpathSync(worktreePath);
+    const realAbsolutePath = realpathSync(absolutePath);
+    const resolvedRelativePath = path.relative(realWorktreePath, realAbsolutePath);
+    if (
+      resolvedRelativePath === ".." ||
+      resolvedRelativePath.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(resolvedRelativePath)
+    ) {
+      return undefined;
+    }
+    if (
+      isExcludedWorkspacePath(toPosix(resolvedRelativePath)) ||
+      !statSync(realAbsolutePath).isFile()
+    ) {
+      return undefined;
+    }
+    return realAbsolutePath;
+  } catch {
+    return undefined;
+  }
 }
 
 async function runCommandCheck(
   check: VerificationCheckResult,
   worktreePath: string,
+  verifierImage: string | undefined,
   logPaths: { stdoutPath: string; stderrPath: string },
 ): Promise<VerificationCheckResult> {
   if (check.command === undefined) {
     return check;
   }
   const startedAt = Date.now();
-  const result = await runProcess(check.command, worktreePath, TYPECHECK_TIMEOUT_MS);
+  const result = await runProcess(
+    "podman",
+    typeScriptVerifierArgs(worktreePath, verifierImage),
+    worktreePath,
+    TYPECHECK_TIMEOUT_MS,
+  );
   await Promise.all([
     appendCommandLog(logPaths.stdoutPath, check.command, result.stdout),
     appendCommandLog(logPaths.stderrPath, check.command, result.stderr),
@@ -314,23 +483,62 @@ async function runCommandCheck(
     exitCode: result.exitCode,
     durationMs: Date.now() - startedAt,
     outputTail: tailText(`${result.stdout}${result.stderr}`),
-    observations: result.timedOut ? ["command timed out"] : undefined,
+    observations: [
+      ...(result.timedOut ? ["command timed out"] : []),
+      ...(result.outputTruncated ? ["command output truncated"] : []),
+    ],
   };
+}
+
+function typeScriptVerifierArgs(
+  worktreePath: string,
+  verifierImage = DEFAULT_CODEX_IMAGE,
+): string[] {
+  return [
+    "run",
+    "--rm",
+    "--network=none",
+    "--cap-drop=all",
+    "--security-opt=no-new-privileges",
+    "--memory=1g",
+    "--pids-limit=256",
+    "--cpus=2",
+    "-v",
+    `${worktreePath}:/workspace:ro,Z`,
+    "-v",
+    `${TRUSTED_TYPESCRIPT_PATH}:/verifier/typescript:ro,z`,
+    "-w",
+    "/workspace",
+    "--entrypoint",
+    "/bin/bash",
+    verifierImage,
+    "-lc",
+    TYPESCRIPT_VERIFIER_SCRIPT,
+  ];
 }
 
 async function runProcess(
   command: string,
+  args: string[],
   cwd: string,
   timeoutMs: number,
-): Promise<{ stdout: string; stderr: string; exitCode: number; timedOut: boolean }> {
+): Promise<{
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+  timedOut: boolean;
+  outputTruncated: boolean;
+}> {
   return await new Promise((resolve) => {
-    const child = spawn(command, {
+    const child = spawn(command, args, {
       cwd,
-      shell: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let outputTruncated = false;
     let settled = false;
     let timedOut = false;
     const timeout = setTimeout(() => {
@@ -342,15 +550,35 @@ async function runProcess(
     }, timeoutMs);
     timeout.unref();
 
-    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    child.stdout.on("data", (chunk: Buffer) => {
+      const remaining = PROCESS_OUTPUT_LIMIT_BYTES - stdoutBytes;
+      if (remaining > 0) {
+        stdout.push(chunk.subarray(0, remaining));
+        stdoutBytes += Math.min(chunk.length, remaining);
+      }
+      outputTruncated ||= chunk.length > remaining;
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      const remaining = PROCESS_OUTPUT_LIMIT_BYTES - stderrBytes;
+      if (remaining > 0) {
+        stderr.push(chunk.subarray(0, remaining));
+        stderrBytes += Math.min(chunk.length, remaining);
+      }
+      outputTruncated ||= chunk.length > remaining;
+    });
     child.on("error", (error) => {
       if (settled) {
         return;
       }
       settled = true;
       clearTimeout(timeout);
-      resolve({ stdout: "", stderr: error.message, exitCode: 127, timedOut });
+      resolve({
+        stdout: "",
+        stderr: error.message,
+        exitCode: 127,
+        timedOut,
+        outputTruncated,
+      });
     });
     child.on("close", (exitCode) => {
       if (settled) {
@@ -363,6 +591,7 @@ async function runProcess(
         stderr: Buffer.concat(stderr).toString("utf8"),
         exitCode: exitCode ?? 1,
         timedOut,
+        outputTruncated,
       });
     });
   });

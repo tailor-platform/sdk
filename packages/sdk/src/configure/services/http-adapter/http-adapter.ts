@@ -1,5 +1,6 @@
 import { brandValue } from "#/utils/brand";
 import type { HttpAdapterConfigInput } from "#/types/http-adapter.generated";
+import type { DocumentNode } from "graphql";
 
 /**
  * Lowercase HTTP method keys accepted in `input`, derived from the config
@@ -17,18 +18,58 @@ export type HttpAdapterRequest = {
 };
 
 /** GraphQL request returned by an `input` handler. */
-export type HttpAdapterGraphQLRequest = {
-  query: string;
-  variables?: Record<string, unknown>;
+export type HttpAdapterGraphQLRequest<Query extends HttpAdapterGraphQLQuery = string> = {
+  query: Query;
   operationName?: string;
+} & HttpAdapterGraphQLRequestVariables<Query>;
+
+/**
+ * Typed GraphQL document accepted by an HTTP adapter input handler.
+ * Compatible with generated `TypedDocumentNode` values.
+ */
+export type HttpAdapterTypedDocumentNode<
+  TResult = unknown,
+  TVariables = Record<string, unknown>,
+> = DocumentNode & {
+  __apiType?: (variables: TVariables) => TResult;
+  __ensureTypesOfVariablesAndResultMatching?: (variables: TVariables) => TResult;
 };
 
-/** Converts an incoming HTTP request into a GraphQL request. */
-export type HttpAdapterInputFn = (req: HttpAdapterRequest) => HttpAdapterGraphQLRequest;
+/** GraphQL query value accepted by an HTTP adapter input handler. */
+export type HttpAdapterGraphQLQuery = string | DocumentNode;
+
+type HttpAdapterGraphQLData<Query> =
+  Query extends HttpAdapterTypedDocumentNode<infer Result, infer _Variables> ? Result : unknown;
+
+type HttpAdapterGraphQLVariables<Query> =
+  Query extends HttpAdapterTypedDocumentNode<infer _Result, infer Variables>
+    ? Variables
+    : Record<string, unknown>;
+
+type HttpAdapterHasRequiredVariables<T> = [T] extends [never]
+  ? false
+  : T extends object
+    ? Record<never, never> extends T
+      ? false
+      : true
+    : false;
+
+type HttpAdapterGraphQLRequestVariables<Query> =
+  true extends HttpAdapterHasRequiredVariables<HttpAdapterGraphQLVariables<Query>>
+    ? { variables: HttpAdapterGraphQLVariables<Query> }
+    : { variables?: HttpAdapterGraphQLVariables<Query> };
+
+/**
+ * Converts an incoming HTTP request into a GraphQL request.
+ * Pass a typed document type as `Query` when annotating extracted handlers.
+ */
+export type HttpAdapterInputFn<Query extends HttpAdapterGraphQLQuery = string> = (
+  req: HttpAdapterRequest,
+) => HttpAdapterGraphQLRequest<Query>;
 
 /** GraphQL execution result passed to the `output` handler. */
-export type HttpAdapterGraphQLResponse = {
-  data?: unknown;
+export type HttpAdapterGraphQLResponse<Data = unknown> = {
+  data?: Data | null;
   errors?: unknown;
   extensions?: unknown;
 };
@@ -41,13 +82,43 @@ export type HttpAdapterResponse = {
 };
 
 /** Converts a GraphQL response into an HTTP response. */
-export type HttpAdapterOutputFn = (resp: HttpAdapterGraphQLResponse) => HttpAdapterResponse;
+export type HttpAdapterOutputFn<Data = unknown> = (
+  resp: HttpAdapterGraphQLResponse<Data>,
+) => HttpAdapterResponse;
 
 /**
  * Per-method input handlers. At least one method must be provided.
  * Each handler transforms an HTTP request into a GraphQL request.
  */
-export type HttpAdapterInput = Partial<Record<HttpMethodKey, HttpAdapterInputFn>>;
+export type HttpAdapterInput = Partial<
+  Record<HttpMethodKey, HttpAdapterInputFn<HttpAdapterGraphQLQuery>>
+>;
+
+type HttpAdapterInputHandlerData<Handler> = Handler extends (
+  req: HttpAdapterRequest,
+) => infer Request
+  ? Request extends { query: infer Query }
+    ? HttpAdapterGraphQLData<Query>
+    : unknown
+  : never;
+
+type HttpAdapterInputData<Input extends HttpAdapterInput> = [
+  HttpAdapterInputHandlerData<Input[keyof Input]>,
+] extends [never]
+  ? unknown
+  : HttpAdapterInputHandlerData<Input[keyof Input]>;
+
+type HttpAdapterValidatedRequest<Request> = Request extends {
+  query: infer Query extends HttpAdapterGraphQLQuery;
+}
+  ? Request & HttpAdapterGraphQLRequest<Query>
+  : never;
+
+type HttpAdapterValidatedInput<Input extends HttpAdapterInput> = {
+  [Method in keyof Input]: Input[Method] extends (req: HttpAdapterRequest) => infer Request
+    ? (req: HttpAdapterRequest) => HttpAdapterValidatedRequest<Request>
+    : Input[Method];
+};
 
 /**
  * HTTP adapter configuration accepted by `createHttpAdapter` with typed
@@ -56,9 +127,12 @@ export type HttpAdapterInput = Partial<Record<HttpMethodKey, HttpAdapterInputFn>
 // Internally, the parser-side representation is the looser `HttpAdapterConfig`
 // from `@/types/http-adapter.generated`, where the function fields are typed
 // as `Function`.
-export type HttpAdapter = Omit<HttpAdapterConfigInput, "input" | "output"> & {
-  input: HttpAdapterInput;
-  output?: HttpAdapterOutputFn;
+export type HttpAdapter<Input extends HttpAdapterInput = HttpAdapterInput> = Omit<
+  HttpAdapterConfigInput,
+  "input" | "output"
+> & {
+  input: Input & HttpAdapterValidatedInput<Input>;
+  output?: HttpAdapterOutputFn<HttpAdapterInputData<Input>>;
 };
 
 /**
@@ -69,12 +143,14 @@ export type HttpAdapter = Omit<HttpAdapterConfigInput, "input" | "output"> & {
  * Files are discovered via the `httpAdapter.files` glob in `defineConfig()`.
  *
  * `input` is an object keyed by lowercase HTTP method (`get`, `post`, `put`,
- * `patch`, `delete`). At least one method must be declared; the methods the
+ * `patch`, `delete`). Each handler can return a GraphQL query string or a
+ * typed document node. At least one method must be declared; the methods the
  * adapter serves are derived from these keys.
  *
- * `output` is optional and shared across all methods. If you need different
- * response shapes per method, discriminate inside `output` based on the
- * GraphQL response shape.
+ * `output` is optional and shared across all methods. If `input` returns typed
+ * document nodes, `output` receives the corresponding result type as
+ * `resp.data`. If you need different response shapes per method, discriminate
+ * inside `output` based on the GraphQL response shape.
  *
  * Each handler runs server-side and must be synchronous: Node APIs, `fetch`,
  * `async`/`await`, Promises, and top-level `await` are not available.
@@ -101,6 +177,8 @@ export type HttpAdapter = Omit<HttpAdapterConfigInput, "input" | "output"> & {
  *   }),
  * });
  */
-export function createHttpAdapter(config: HttpAdapter): HttpAdapter {
+export function createHttpAdapter<const Input extends HttpAdapterInput>(
+  config: HttpAdapter<Input>,
+): HttpAdapter<Input> {
   return brandValue({ ...config }, "http-adapter");
 }

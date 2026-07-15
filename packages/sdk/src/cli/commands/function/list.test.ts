@@ -43,37 +43,26 @@ describe("listFunctionRegistries", () => {
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
   });
 
-  test("passes pageDirection=ASC when order is 'asc'", async () => {
-    listMock.mockResolvedValue({ functions: [fakeRegistry("a")], nextPageToken: "" });
+  test.each([
+    { order: "asc" as const, pageDirection: PageDirection.ASC },
+    { order: "desc" as const, pageDirection: PageDirection.DESC },
+    { order: undefined, pageDirection: undefined },
+  ])(
+    "passes pageDirection=$pageDirection when order is $order",
+    async ({ order, pageDirection }) => {
+      listMock.mockResolvedValue({ functions: [fakeRegistry("a")], nextPageToken: "" });
 
-    await listFunctionRegistries({ order: "asc" });
+      await listFunctionRegistries({ order });
 
-    expect(listMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        workspaceId: "workspace-1",
-        sortBy: "updated_at",
-        pageDirection: PageDirection.ASC,
-      }),
-    );
-  });
-
-  test("passes pageDirection=DESC when order is 'desc'", async () => {
-    listMock.mockResolvedValue({ functions: [], nextPageToken: "" });
-
-    await listFunctionRegistries({ order: "desc" });
-
-    expect(listMock).toHaveBeenCalledWith(
-      expect.objectContaining({ pageDirection: PageDirection.DESC }),
-    );
-  });
-
-  test("omits pageDirection when order is undefined", async () => {
-    listMock.mockResolvedValue({ functions: [], nextPageToken: "" });
-
-    await listFunctionRegistries({});
-
-    expect(listMock).toHaveBeenCalledWith(expect.objectContaining({ pageDirection: undefined }));
-  });
+      expect(listMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workspaceId: "workspace-1",
+          sortBy: "updated_at",
+          pageDirection,
+        }),
+      );
+    },
+  );
 
   test("enforces limit across paginated calls", async () => {
     listMock

@@ -2,11 +2,16 @@ import { create, type DescMessage } from "@bufbuild/protobuf";
 import { pathToString } from "@bufbuild/protobuf/reflect";
 import { createValidator, type Validator } from "@bufbuild/protovalidate";
 import {
+  CreateAIGatewayRequestSchema,
+  UpdateAIGatewayRequestSchema,
+} from "@tailor-platform/tailor-proto/aigateway_pb";
+import {
   CreateApplicationRequestSchema,
   UpdateApplicationRequestSchema,
 } from "@tailor-platform/tailor-proto/application_pb";
 import {
   CreateAuthConnectionRequestSchema,
+  UpdateAuthConnectionRequestSchema,
   CreateAuthHookRequestSchema,
   CreateAuthIDPConfigRequestSchema,
   CreateAuthMachineUserRequestSchema,
@@ -56,38 +61,21 @@ import {
   UpdateTailorDBTypeRequestSchema,
 } from "@tailor-platform/tailor-proto/tailordb_pb";
 import {
+  CreateWorkflowJobFunctionExecutionPolicyRequestSchema,
   CreateWorkflowJobFunctionRequestSchema,
   CreateWorkflowRequestSchema,
+  UpdateWorkflowJobFunctionExecutionPolicyRequestSchema,
   UpdateWorkflowRequestSchema,
 } from "@tailor-platform/tailor-proto/workflow_pb";
 import { logger, styles } from "#/cli/shared/logger";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
 import { secretCreateRequest, secretUpdateRequest, vaultCreateRequest } from "./secret-manager";
 import { buildWorkflowValidationShape } from "./workflow";
-import type { planApplication } from "./application";
-import type { planAuth } from "./auth";
-import type { planExecutor } from "./executor";
-import type { planFunctionRegistry } from "./function-registry";
-import type { planIdP } from "./idp";
-import type { planPipeline } from "./resolver";
-import type { planSecretManager } from "./secret-manager";
-import type { planStaticWebsite } from "./staticwebsite";
-import type { planTailorDB } from "./tailordb/index";
-import type { planWorkflow } from "./workflow";
+import { toPlatformExecutionPolicyKey } from "./workflow-execution-policy";
+import type { PlannedDeployment } from "./apply-phases";
 
 /** Plan results passed to validatePlan. */
-export type ValidatePlanInput = {
-  functionRegistry: Awaited<ReturnType<typeof planFunctionRegistry>>;
-  tailorDB: Awaited<ReturnType<typeof planTailorDB>>;
-  staticWebsite: Awaited<ReturnType<typeof planStaticWebsite>>;
-  idp: Awaited<ReturnType<typeof planIdP>>;
-  auth: Awaited<ReturnType<typeof planAuth>>;
-  pipeline: Awaited<ReturnType<typeof planPipeline>>;
-  app: Awaited<ReturnType<typeof planApplication>>;
-  executor: Awaited<ReturnType<typeof planExecutor>>;
-  workflow: Awaited<ReturnType<typeof planWorkflow>>;
-  secretManager: Awaited<ReturnType<typeof planSecretManager>>;
-};
+export type ValidatePlanInput = Omit<PlannedDeployment, "application">;
 
 type ViolationEntry = {
   kind: string;
@@ -99,14 +87,15 @@ type ViolationEntry = {
 
 type HasRequest = { name: string; request: unknown };
 type HasCreateRequest = { name: string; createRequest: unknown };
+type HasUpdateRequest = { name: string; updateRequest: unknown };
 
 type ValidateItemsParams<Desc extends DescMessage> = {
   validator: Validator;
   schema: Desc;
   kind: string;
   action: "create" | "update" | "replace";
-  items: ReadonlyArray<HasRequest | HasCreateRequest>;
-  requestKey: "request" | "createRequest";
+  items: ReadonlyArray<HasRequest | HasCreateRequest | HasUpdateRequest>;
+  requestKey: "request" | "createRequest" | "updateRequest";
   violations: ViolationEntry[];
 };
 
@@ -139,13 +128,14 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  *
  * Collections not validated: idp client, tailorDB gqlPermission, functionRegistry — no
  * buf.validate annotations.
- * Application cors and IdP userAuthPolicy.allowedReturnOrigins receive special
- * handling: static-website URL placeholders are resolved at apply time, so the
+ * Application cors, AIGateway cors, and IdP userAuthPolicy.allowedReturnOrigins receive
+ * special handling: static-website URL placeholders are resolved at apply time, so the
  * relevant origin/URL constraints would false-positive on `<name>:url` entries
- * here. Application cors is dropped entirely (no other constraint to lose); IdP
- * `allowedReturnOrigins` substitutes placeholder entries with a dummy origin so
- * the per-item regex and the cross-field `enable_mfa requires ≥1 origin` rule
- * still get exercised on the rest of the payload.
+ * here. Application cors and AIGateway cors are dropped entirely, forgoing their
+ * per-item URL/origin constraints for the whole list rather than substituting
+ * placeholders; IdP `allowedReturnOrigins` instead substitutes placeholder entries
+ * with a dummy origin so the per-item regex and the cross-field `enable_mfa requires
+ * ≥1 origin` rule still get exercised on the rest of the payload.
  * Workflow jobFunctions map excluded: versions are registered at apply time (registerJobFunctions)
  * and the map field carries no min_items constraint. Job names are validated separately via
  * CreateWorkflowJobFunctionRequestSchema using usedJobNames from the workflow change set.
@@ -155,8 +145,19 @@ function validateItems<Desc extends DescMessage>(params: ValidateItemsParams<Des
  * @param input - Plan results from the plan phase
  */
 export async function validatePlan(input: ValidatePlanInput): Promise<void> {
-  const { tailorDB, staticWebsite, idp, auth, pipeline, app, executor, workflow, secretManager } =
-    input;
+  const {
+    tailorDB,
+    staticWebsite,
+    aiGateway,
+    idp,
+    auth,
+    pipeline,
+    app,
+    executor,
+    workflow,
+    workflowExecutionPolicy,
+    secretManager,
+  } = input;
 
   const validator = createValidator();
   const violations: ViolationEntry[] = [];
@@ -209,6 +210,22 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     });
   }
 
+  function inPlaceReplaces<Desc extends DescMessage>(
+    schema: Desc,
+    kind: string,
+    items: ReadonlyArray<HasUpdateRequest>,
+  ): void {
+    validateItems({
+      validator,
+      schema,
+      kind,
+      action: "replace",
+      items,
+      requestKey: "updateRequest",
+      violations,
+    });
+  }
+
   // TailorDB service creates (UpdateService has no request field — only metaRequest)
   creates(
     CreateTailorDBServiceRequestSchema,
@@ -241,6 +258,24 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     AddCustomDomainRequestSchema,
     "StaticWebsite custom domain",
     staticWebsite.customDomainChangeSet.creates as HasRequest[],
+  );
+
+  // cors is excluded: static-website URL placeholders are resolved at apply time.
+  creates(
+    CreateAIGatewayRequestSchema,
+    "AIGateway",
+    (aiGateway.changeSet.creates as HasRequest[]).map((item) => ({
+      name: item.name,
+      request: { ...(item.request as Record<string, unknown>), cors: undefined },
+    })),
+  );
+  updates(
+    UpdateAIGatewayRequestSchema,
+    "AIGateway",
+    (aiGateway.changeSet.updates as HasRequest[]).map((item) => ({
+      name: item.name,
+      request: { ...(item.request as Record<string, unknown>), cors: undefined },
+    })),
   );
 
   // userAuthPolicy.allowedReturnOrigins: static-website URL placeholders
@@ -502,6 +537,45 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
   }
 
   creates(
+    CreateWorkflowJobFunctionExecutionPolicyRequestSchema,
+    "Workflow execution policy",
+    // Replaces re-create the resource after deleting it (execution_policy_key is
+    // immutable), so their Create-shaped request must clear validation too.
+    [
+      ...workflowExecutionPolicy.changeSet.creates,
+      ...workflowExecutionPolicy.changeSet.replaces,
+    ].map((item) => ({
+      name: item.name,
+      request: {
+        workspaceId: item.workspaceId,
+        executionPolicyName: item.policy.name,
+        executionPolicyKey: toPlatformExecutionPolicyKey(item.policy),
+        ...(item.policy.concurrencyPolicy && {
+          concurrencyPolicy: {
+            maxConcurrentExecutions: item.policy.concurrencyPolicy.maxConcurrentExecutions,
+          },
+        }),
+      },
+    })),
+  );
+  updates(
+    UpdateWorkflowJobFunctionExecutionPolicyRequestSchema,
+    "Workflow execution policy",
+    workflowExecutionPolicy.changeSet.updates.map((item) => ({
+      name: item.name,
+      request: {
+        workspaceId: item.workspaceId,
+        executionPolicyName: item.policy.name,
+        ...(item.policy.concurrencyPolicy && {
+          concurrencyPolicy: {
+            maxConcurrentExecutions: item.policy.concurrencyPolicy.maxConcurrentExecutions,
+          },
+        }),
+      },
+    })),
+  );
+
+  creates(
     CreateSecretManagerVaultRequestSchema,
     "Secret Manager vault",
     secretManager.vaultChangeSet.creates.map((item) => ({
@@ -549,10 +623,10 @@ export async function validatePlan(input: ValidatePlanInput): Promise<void> {
     "Auth connection",
     auth.changeSet.connection.creates as HasRequest[],
   );
-  replaces(
-    CreateAuthConnectionRequestSchema,
+  inPlaceReplaces(
+    UpdateAuthConnectionRequestSchema,
     "Auth connection",
-    auth.changeSet.connection.replaces as HasCreateRequest[],
+    auth.changeSet.connection.replaces as HasUpdateRequest[],
   );
 
   if (violations.length === 0) {

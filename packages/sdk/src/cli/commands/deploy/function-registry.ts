@@ -1,18 +1,16 @@
 import * as crypto from "node:crypto";
-import { Code, ConnectError } from "@connectrpc/connect";
-import { fetchAll, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
 import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import type { Application } from "#/cli/services/application";
 import type { CollectedJob } from "#/cli/services/workflow/service";
+import type { OperatorClient } from "#/cli/shared/client";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { BundledScripts, FunctionEntry } from "./function-registry-types";
 import type { ApplyPhase } from "./phase";
@@ -178,9 +176,13 @@ export function collectFunctionEntries(
   for (const app of application.applications) {
     for (const pipeline of app.resolverServices) {
       for (const resolver of Object.values(pipeline.resolvers)) {
-        const content = bundledScripts.resolvers.get(resolver.name);
+        const content = bundledScripts.resolvers.get(
+          resolverBundleKey(pipeline.namespace, resolver.name),
+        );
         if (!content) {
-          logger.warn(`Bundled code not found for resolver: ${resolver.name}`);
+          logger.warn(
+            `Bundled code not found for resolver: ${pipeline.namespace}/${resolver.name}`,
+          );
           continue;
         }
         entries.push({
@@ -294,9 +296,9 @@ export async function planFunctionRegistry(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  // Fetch existing function registry entries
-  const existingFunctions = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingMap = await fetchExistingResourcesWithLabels({
+    client,
+    fetchPage: async (pageToken, maxPageSize) => {
       const response = await client.listFunctionRegistries({
         workspaceId,
         pageToken,
@@ -311,28 +313,10 @@ export async function planFunctionRegistry(
         ),
         response.nextPageToken,
       ];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (func) => func.name,
+    getTrn: (name) => resourceTrn(workspaceId, "function_registry", name),
   });
-
-  // Build map of existing functions with their labels
-  const existingMap: WithLabel<ExistingFunction> = {};
-  await Promise.all(
-    existingFunctions.map(async (func) => {
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "function_registry", func.name),
-      });
-      existingMap[func.name] = {
-        resource: func,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   // Process desired entries
   for (const entry of entries) {
@@ -344,21 +328,16 @@ export async function planFunctionRegistry(
     });
 
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "Function registry",
-            resourceName: entry.name,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "Function registry",
-            resourceName: entry.name,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName,
+        appId,
+        resourceType: "Function registry",
+        resourceName: entry.name,
+        conflicts,
+        unmanaged,
+      });
 
       if (
         existing.resource.contentHash === entry.contentHash &&
@@ -388,11 +367,13 @@ export async function planFunctionRegistry(
   // Remaining entries in existingMap are candidates for deletion
   for (const [name, existing] of Object.entries(existingMap)) {
     if (!existing) continue;
-    const label = existing.label;
-    const owned = isOwnedByApp(existing.allLabels, appName, appId);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: existing.allLabels,
+      ownerLabel: existing.label,
+      appName,
+      appId,
+      resourceOwners,
+    });
     if (owned) {
       changeSet.deletes.push({
         name,

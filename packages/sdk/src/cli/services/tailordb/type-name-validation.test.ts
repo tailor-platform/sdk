@@ -32,6 +32,10 @@ function localService(namespace: string, typeNames: string[]) {
   };
 }
 
+function page(names: string[], nextPageToken = ""): ListTailorDBTypesResult {
+  return { tailordbTypes: names.map((name) => ({ name })), nextPageToken };
+}
+
 describe("assertUniqueLocalTailorDBTypeNames", () => {
   test("allows unique type names across local namespaces", () => {
     expect(() =>
@@ -60,14 +64,8 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
     const client = {
       listTailorDBTypes: vi
         .fn()
-        .mockResolvedValueOnce({
-          tailordbTypes: [{ name: "User" }],
-          nextPageToken: "next",
-        })
-        .mockResolvedValueOnce({
-          tailordbTypes: [{ name: "Order" }],
-          nextPageToken: "",
-        }),
+        .mockResolvedValueOnce(page(["User"], "next"))
+        .mockResolvedValueOnce(page(["Order"])),
     };
 
     const result = await fetchExternalTailorDBTypeNameSources({
@@ -106,24 +104,15 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
     });
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(2);
 
-    pending.get("shared-a:")?.({
-      tailordbTypes: [{ name: "User" }],
-      nextPageToken: "next",
-    });
+    pending.get("shared-a:")?.(page(["User"], "next"));
 
     await vi.waitFor(() => {
       expect(pending.has("shared-a:next")).toBe(true);
     });
     expect(client.listTailorDBTypes).toHaveBeenCalledTimes(3);
 
-    pending.get("shared-a:next")?.({
-      tailordbTypes: [{ name: "Order" }],
-      nextPageToken: "",
-    });
-    pending.get("shared-b:")?.({
-      tailordbTypes: [{ name: "Event" }],
-      nextPageToken: "",
-    });
+    pending.get("shared-a:next")?.(page(["Order"]));
+    pending.get("shared-b:")?.(page(["Event"]));
 
     await expect(promise).resolves.toEqual([
       { namespace: "shared-a", typeName: "User", kind: "external" },
@@ -150,10 +139,7 @@ describe("fetchExternalTailorDBTypeNameSources", () => {
 describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
   test("rejects duplicate type names between local and external namespaces", async () => {
     const client = {
-      listTailorDBTypes: vi.fn().mockResolvedValue({
-        tailordbTypes: [{ name: "User" }],
-        nextPageToken: "",
-      }),
+      listTailorDBTypes: vi.fn().mockResolvedValue(page(["User"])),
     };
 
     await expect(
@@ -170,14 +156,8 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
     const client = {
       listTailorDBTypes: vi
         .fn()
-        .mockResolvedValueOnce({
-          tailordbTypes: [{ name: "User" }],
-          nextPageToken: "",
-        })
-        .mockResolvedValueOnce({
-          tailordbTypes: [{ name: "User" }],
-          nextPageToken: "",
-        }),
+        .mockResolvedValueOnce(page(["User"]))
+        .mockResolvedValueOnce(page(["User"])),
     };
 
     await expect(
@@ -188,5 +168,22 @@ describe("assertUniqueTailorDBTypeNamesWithExternal", () => {
         externalTailorDBNamespaces: ["shared-a", "shared-b"],
       }),
     ).rejects.toThrow(/external namespace "shared-a".*external namespace "shared-b"/);
+  });
+
+  test("validates planned external namespaces without fetching remote types", async () => {
+    const client = {
+      listTailorDBTypes: vi.fn(),
+    };
+
+    await expect(
+      assertUniqueTailorDBTypeNamesWithExternal({
+        client,
+        workspaceId: "workspace-id",
+        tailorDBServices: [localService("local", ["User"])],
+        externalTailorDBNamespaces: ["shared"],
+        plannedExternalTailorDBServices: [localService("shared", ["User"])],
+      }),
+    ).rejects.toThrow(/namespace "local".*external namespace "shared"/);
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
   });
 });

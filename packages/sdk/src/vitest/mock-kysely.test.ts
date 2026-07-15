@@ -251,7 +251,6 @@ describe("createKyselyMock", () => {
       });
 
       expect(result).toEqual({ id: "1", email: "a@b.com", age: 30 });
-      // begin/commit are not recorded; only the select is.
       expect(mock.executedQueries).toHaveLength(1);
     });
   });

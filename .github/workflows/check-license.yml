@@ -5,11 +5,11 @@ on:
     branches: [main]
     paths:
       - "pnpm-lock.yaml"
-      - "scripts/check-license.js"
+      - ".github/workflows/check-license.yml"
   pull_request:
     paths:
       - "pnpm-lock.yaml"
-      - "scripts/check-license.js"
+      - ".github/workflows/check-license.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,4 +34,8 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Check licenses
-        run: node scripts/check-license.js
+        uses: tailor-platform/actions/check-licenses@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        with:
+          license-groups: ${{ vars.CHECK_LICENSES_ALLOWED_LICENSE_GROUPS }}
+          additional-licenses: ${{ vars.CHECK_LICENSES_ALLOWED_LICENSES }}
+          denied-licenses: ${{ vars.CHECK_LICENSES_DENIED_LICENSES }}

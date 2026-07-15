@@ -1,5 +1,4 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreatePipelineResolverRequestSchema,
   type CreatePipelineServiceRequestSchema,
@@ -17,7 +16,7 @@ import {
 } from "@tailor-platform/tailor-proto/pipeline_resource_pb";
 import * as inflection from "inflection";
 import { type ResolverService } from "#/cli/services/resolver/service";
-import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { normalizeAuthInvoker } from "./auth-invoker";
@@ -29,14 +28,12 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
 import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
@@ -135,6 +132,7 @@ export async function planPipeline(context: PlanContext) {
     workspaceId,
     pipelines,
     executors,
+    context.executorUsedResolvers ?? new Set<string>(),
     deletedServices,
     application.env,
     application.authService?.config.name,
@@ -183,37 +181,19 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingServices = await fetchExistingResourcesWithLabels({
+    client,
+    fetchPage: async (pageToken, maxPageSize) => {
       const { pipelineServices, nextPageToken } = await client.listPipelineServices({
         workspaceId,
         pageToken,
         pageSize: maxPageSize,
       });
       return [pipelineServices, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.namespace?.name,
+    getTrn: (name) => resourceTrn(workspaceId, "pipeline", name),
   });
-  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      if (!resource.namespace?.name) {
-        return;
-      }
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "pipeline", resource.namespace.name),
-      });
-      existingServices[resource.namespace.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   for (const pipeline of pipelines) {
     const existing = existingServices[pipeline.namespace];
@@ -223,21 +203,16 @@ async function planServices(
       appId,
     });
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "Pipeline service",
-            resourceName: pipeline.namespace,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "Pipeline service",
-            resourceName: pipeline.namespace,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName,
+        appId,
+        resourceType: "Pipeline service",
+        resourceName: pipeline.namespace,
+        conflicts,
+        unmanaged,
+      });
 
       if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
         changeSet.unchanged.push({ name: pipeline.namespace });
@@ -265,11 +240,13 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const label = entry?.label;
-    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry?.allLabels,
+      ownerLabel: entry?.label,
+      appName,
+      appId,
+      resourceOwners,
+    });
     // Only delete services managed by this application (by name or stable id)
     if (owned) {
       changeSet.deletes.push({
@@ -305,6 +282,7 @@ async function planResolvers(
   workspaceId: string,
   pipelines: ReadonlyArray<Readonly<ResolverService>>,
   executors: ReadonlyArray<Executor>,
+  initialExecutorUsedResolvers: ReadonlySet<string>,
   deletedServices: ReadonlyArray<string>,
   env: Record<string, string | number | boolean>,
   authNamespace: string | undefined,
@@ -315,25 +293,18 @@ async function planResolvers(
   );
 
   const fetchResolvers = (namespaceName: string) => {
-    return fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { pipelineResolvers, nextPageToken } = await client.listPipelineResolvers({
-          workspaceId,
-          namespaceName,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [pipelineResolvers, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
-        }
-        throw error;
-      }
+    return fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { pipelineResolvers, nextPageToken } = await client.listPipelineResolvers({
+        workspaceId,
+        namespaceName,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [pipelineResolvers, nextPageToken];
     });
   };
 
-  const executorUsedResolvers = new Set<string>();
+  const executorUsedResolvers = new Set(initialExecutorUsedResolvers);
   for (const executor of executors) {
     if (executor.trigger.kind === "resolverExecuted") {
       executorUsedResolvers.add(executor.trigger.resolverName);

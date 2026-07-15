@@ -35,20 +35,10 @@ beforeEach(() => {
   manager = createDependencyGraphManager();
 });
 
-/**
- * Create temporary directory for testing
- * @returns Path to the created temporary directory
- */
 async function createTempDir(): Promise<string> {
   return await fs.mkdtemp(path.join(os.tmpdir(), "dependency-watcher-test-"));
 }
 
-/**
- * Create files for testing
- * @param filePath - Path of the file to create
- * @param content - File contents
- * @returns Promise that resolves when the file is created
- */
 async function createTestFile(filePath: string, content: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, content);
@@ -130,12 +120,11 @@ describe("DependencyWatcher", () => {
   });
 
   describe("validation", () => {
-    test("invalid group ID causes error", async () => {
-      await expect(watcher.addWatchGroup("", ["test.ts"])).rejects.toThrow(WatcherError);
-    });
-
-    test("empty pattern array causes error", async () => {
-      await expect(watcher.addWatchGroup("test-group", [])).rejects.toThrow(WatcherError);
+    test.each([
+      ["invalid group ID", "", ["test.ts"]],
+      ["empty pattern array", "test-group", []],
+    ])("%s causes error", async (_, groupId, patterns) => {
+      await expect(watcher.addWatchGroup(groupId, patterns)).rejects.toThrow(WatcherError);
     });
   });
 

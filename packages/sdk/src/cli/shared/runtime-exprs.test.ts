@@ -7,26 +7,24 @@ describe("buildExecutorArgsExpr", () => {
   describe("event triggers (with actor)", () => {
     const eventTriggerKinds = ["schedule", "tailordb", "idpUser", "authAccessToken"] as const;
 
-    for (const kind of eventTriggerKinds) {
-      test(`${kind} includes appNamespace, actor transform, and env`, () => {
-        const expr = buildExecutorArgsExpr(kind, env);
-        expect(expr).toContain("...args");
-        expect(expr).toContain("appNamespace: args.namespaceName");
-        expect(expr).toContain("actor: args.actor");
-        expect(expr).toContain("attributeMap");
-        expect(expr).toContain("attributeList");
-        expect(expr).toContain(`env: ${JSON.stringify(env)}`);
-      });
-    }
+    test.each(eventTriggerKinds)("%s includes appNamespace, actor transform, and env", (kind) => {
+      const expr = buildExecutorArgsExpr(kind, env);
+      expect(expr).toContain("...args");
+      expect(expr).toContain("appNamespace: args.namespaceName");
+      expect(expr).toContain("actor: args.actor");
+      expect(expr).toContain("attributeMap");
+      expect(expr).toContain("attributeList");
+      expect(expr).toContain(`env: ${JSON.stringify(env)}`);
+    });
 
-    test("event triggers inject kind and rawKind from args.eventType", () => {
-      const eventKinds = ["tailordb", "idpUser", "authAccessToken"] as const;
-      for (const kind of eventKinds) {
+    test.each(["tailordb", "idpUser", "authAccessToken"] as const)(
+      "%s trigger injects kind and rawKind from args.eventType",
+      (kind) => {
         const expr = buildExecutorArgsExpr(kind, env);
         expect(expr).toContain('event: args.eventType?.split(".").pop()');
         expect(expr).toContain("rawEvent: args.eventType");
-      }
-    });
+      },
+    );
 
     test("schedule trigger does not inject event", () => {
       const expr = buildExecutorArgsExpr("schedule", env);
@@ -35,38 +33,22 @@ describe("buildExecutorArgsExpr", () => {
   });
 
   describe("resolverExecuted trigger", () => {
-    test("includes success/result/error transformations", () => {
+    test("includes success/result/error transformations, actor, appNamespace, and env", () => {
       const expr = buildExecutorArgsExpr("resolverExecuted", env);
       expect(expr).toContain("success: !!args.succeeded");
       expect(expr).toContain("result: args.succeeded?.result.resolver");
       expect(expr).toContain("error: args.failed?.error");
-    });
-
-    test("includes actor transform and appNamespace", () => {
-      const expr = buildExecutorArgsExpr("resolverExecuted", env);
       expect(expr).toContain("actor: args.actor");
       expect(expr).toContain("appNamespace: args.namespaceName");
-    });
-
-    test("includes env", () => {
-      const expr = buildExecutorArgsExpr("resolverExecuted", env);
       expect(expr).toContain(`env: ${JSON.stringify(env)}`);
     });
   });
 
   describe("incomingWebhook trigger", () => {
-    test("includes rawBody mapping", () => {
+    test("includes rawBody mapping, appNamespace, and env, but not actor transform", () => {
       const expr = buildExecutorArgsExpr("incomingWebhook", env);
       expect(expr).toContain("rawBody: args.raw_body");
-    });
-
-    test("does NOT include actor transform", () => {
-      const expr = buildExecutorArgsExpr("incomingWebhook", env);
       expect(expr).not.toContain("actor:");
-    });
-
-    test("includes appNamespace and env", () => {
-      const expr = buildExecutorArgsExpr("incomingWebhook", env);
       expect(expr).toContain("appNamespace: args.namespaceName");
       expect(expr).toContain(`env: ${JSON.stringify(env)}`);
     });

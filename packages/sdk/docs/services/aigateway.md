@@ -97,3 +97,19 @@ export default defineConfig({
   aiGateways: [aiGateway],
 });
 ```
+
+## Runtime Usage
+
+Resolvers, executors, and workflow jobs can resolve a gateway's platform-assigned URL by name via `aigateway.get()`. The name is type-checked and autocompleted against the AI Gateways defined in `aiGateways`:
+
+```typescript
+import { aigateway } from "@tailor-platform/sdk/runtime";
+
+const { url } = await aigateway.get("my-aigateway");
+
+// await aigateway.get("unknown"); // Type error — only "my-aigateway" is allowed
+```
+
+Type narrowing is provided by the generated `tailor.d.ts` (the `AIGatewayNameRegistry` interface). Run `tailor-sdk generate` (or `deploy`) after defining new AI Gateways to refresh it. Before the first generate run, `get()` accepts any string.
+
+The same URL is also shown by `tailor-sdk show`, which lists the URL of each AI Gateway defined in `aiGateways` once it has been deployed.

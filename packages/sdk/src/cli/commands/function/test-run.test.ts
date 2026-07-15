@@ -9,7 +9,7 @@ import { loadMachineUserName } from "#/cli/shared/context";
 import { executeScript } from "#/cli/shared/script-executor";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
-import { testRunCommand } from "./test-run";
+import { resolveResolverArg, testRunCommand } from "./test-run";
 
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
@@ -122,10 +122,39 @@ describe("function test-run --json", () => {
     await runCommand(testRunCommand, [scriptPath, "--machine-user", "flag-bot"]);
 
     expect(loadMachineUserName).toHaveBeenCalledWith(
-      expect.objectContaining({ machineUser: "flag-bot" }),
+      expect.objectContaining({ machineUser: "flag-bot", machineUserSource: "option" }),
     );
     expect(getAuthMachineUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ name: "flag-or-profile-bot" }),
     );
+  });
+});
+
+describe("resolveResolverArg", () => {
+  const machineUser = {
+    name: "admin",
+    id: "00000000-0000-0000-0000-000000000000",
+    attributes: null,
+    attributeList: [],
+  };
+  const rejectingSchema = {
+    parse: () => ({ issues: [{ message: "Required field is missing" }] }),
+  };
+
+  test("passes a null arg through for the server to report", () => {
+    const result = resolveResolverArg("null", rejectingSchema, machineUser, "ws-id");
+    expect(result).toBe("null");
+  });
+
+  test("unwraps the deprecated input wrapper when only the wrapped value parses", () => {
+    using _stderr = captureStderr();
+    const inputSchema = {
+      parse: ({ value }: { value: unknown }) =>
+        (value as Record<string, unknown>).a === 1
+          ? {}
+          : { issues: [{ message: "Required field is missing" }] },
+    };
+    const result = resolveResolverArg('{"input":{"a":1}}', inputSchema, machineUser, "ws-id");
+    expect(result).toBe('{"a":1}');
   });
 });

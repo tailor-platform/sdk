@@ -14,6 +14,7 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
+import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { AIGateway as ProtoAIGateway } from "@tailor-platform/tailor-proto/aigateway_resource_pb";
@@ -126,7 +127,6 @@ export async function planAIGateway(context: PlanContext) {
 
   const existingGateways = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, pageSize) => {
       const { aigateways, nextPageToken } = await client.listAIGateways({
         workspaceId,
@@ -136,13 +136,11 @@ export async function planAIGateway(context: PlanContext) {
       return [aigateways, nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "aigateway", name),
+    getTrn: (name) => resourceTrn(workspaceId, "aigateway", name),
   });
 
   const aiGatewayServices = forRemoval ? [] : application.aiGatewayServices;
-  const expectedLocalWebsites = new Set(
-    application.staticWebsiteServices.map((website) => website.name),
-  );
+  const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   for (const gatewayService of aiGatewayServices) {
     const config = gatewayService;
     const name = gatewayService.name;

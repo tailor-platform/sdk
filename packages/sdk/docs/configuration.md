@@ -286,6 +286,30 @@ export default defineConfig({
 
 **ignores**: Glob patterns to exclude files. Optional.
 
+### Workflow Execution Policies
+
+Register workspace-scoped execution policies that workflow job functions reference at runtime for per-key concurrency control. See [Execution Policies](./services/workflow.md#execution-policies) in the Workflow guide for the declaration API.
+
+```typescript
+import { defineWorkflowExecutionPolicies } from "@tailor-platform/sdk";
+
+const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
+  premium: define({ concurrencyPolicy: { maxConcurrentExecutions: 5 } }),
+  tenantApi: define({
+    name: "tenant-api",
+    matchType: "prefix",
+    concurrencyPolicy: { maxConcurrentExecutions: 3 },
+  }),
+}));
+
+export default defineConfig({
+  workflow: {
+    files: ["workflows/**/*.ts"],
+    executionPolicies,
+  },
+});
+```
+
 ### Plugins
 
 Configure plugins using `definePlugins()`. Plugins must be exported as a named export.

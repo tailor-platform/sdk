@@ -186,9 +186,9 @@ tailor-sdk machineuser token [options] [name]
 
 **Arguments**
 
-| Argument | Description                                                                 | Required |
-| -------- | --------------------------------------------------------------------------- | -------- |
-| `name`   | Machine user name. Falls back to the active profile's default machine user. | No       |
+| Argument | Description                                                                                                         | Required |
+| -------- | ------------------------------------------------------------------------------------------------------------------- | -------- |
+| `name`   | Machine user name. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user. | No       |
 
 **Options**
 

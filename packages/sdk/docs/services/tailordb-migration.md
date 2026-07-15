@@ -275,6 +275,8 @@ Namespace: tailordb
     - Field 'email': required: remote=false, expected=true
 ```
 
+The error also points you at `migration status`, `migration generate`, `migration sync`, and `migration set` — see [Remote schema drift detected](#remote-schema-drift-detected) for which one applies.
+
 To bypass both checks (not recommended outside of recovery scenarios):
 
 ```bash

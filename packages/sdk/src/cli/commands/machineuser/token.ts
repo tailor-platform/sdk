@@ -1,6 +1,10 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs } from "#/cli/shared/args";
+import {
+  deploymentArgs,
+  resolveMachineUserInputSource,
+  type MachineUserInputSource,
+} from "#/cli/shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -14,22 +18,25 @@ export interface GetMachineUserTokenOptions {
   configPath?: string;
 }
 
+type GetMachineUserTokenInternalOptions = GetMachineUserTokenOptions & {
+  nameSource?: MachineUserInputSource;
+};
+
 export interface MachineUserTokenInfo {
   accessToken: string;
   tokenType: string;
   expiresAt: string;
 }
 
-/**
- * Get a machine user access token for the current application.
- * @param options - Token retrieval options
- * @returns Machine user token info
- */
-export async function getMachineUserToken(
-  options: GetMachineUserTokenOptions,
+async function getMachineUserTokenInternal(
+  options: GetMachineUserTokenInternalOptions,
 ): Promise<MachineUserTokenInfo> {
   // Load and validate options
-  const name = await loadMachineUserName({ machineUser: options.name, profile: options.profile });
+  const name = await loadMachineUserName({
+    machineUser: options.name,
+    machineUserSource: options.nameSource,
+    profile: options.profile,
+  });
   if (!name) {
     throw new Error(
       "Machine user is required. Provide the NAME positional argument, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
@@ -81,6 +88,17 @@ export async function getMachineUserToken(
   };
 }
 
+/**
+ * Get a machine user access token for the current application.
+ * @param options - Token retrieval options
+ * @returns Machine user token info
+ */
+export async function getMachineUserToken(
+  options: GetMachineUserTokenOptions,
+): Promise<MachineUserTokenInfo> {
+  return await getMachineUserTokenInternal(options);
+}
+
 export const tokenCommand = defineAppCommand({
   name: "token",
   description: "Get an access token for a machine user.",
@@ -89,15 +107,18 @@ export const tokenCommand = defineAppCommand({
       ...deploymentArgs,
       name: arg(z.string().optional(), {
         positional: true,
-        description: "Machine user name. Falls back to the active profile's default machine user.",
-        env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
+        description:
+          "Machine user name. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user.",
       }),
     })
     .strict(),
   run: async (args) => {
     // Execute machineuser token logic
-    const token = await getMachineUserToken({
+    const token = await getMachineUserTokenInternal({
       name: args.name,
+      nameSource: resolveMachineUserInputSource(args.name, process.argv.slice(2), {
+        valueIsExplicit: args.name !== undefined,
+      }),
       workspaceId: args["workspace-id"],
       profile: args.profile,
       configPath: args.config,

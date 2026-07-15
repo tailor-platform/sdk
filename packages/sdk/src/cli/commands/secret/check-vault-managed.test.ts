@@ -9,22 +9,25 @@ vi.mock("#/cli/shared/logger", () => ({
   },
 }));
 
+const TRN = "trn:v1:workspace:ws-1:vault:my-vault";
+
+const clientWithMetadata = (metadata: unknown) =>
+  ({ getMetadata: vi.fn().mockResolvedValue({ metadata }) }) as unknown as OperatorClient;
+
 describe("checkVaultManaged", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   test("returns isManaged: true with labels when vault has sdk-name label", async () => {
-    const client = {
-      getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: { "sdk-name": "my-app", "sdk-version": "v1-0-0", custom: "value" } },
-      }),
-    } as unknown as OperatorClient;
+    const client = clientWithMetadata({
+      labels: { "sdk-name": "my-app", "sdk-version": "v1-0-0", custom: "value" },
+    });
 
     const result = await checkVaultManaged({ client, workspaceId: "ws-1", vaultName: "my-vault" });
 
     expect(result.isManaged).toBe(true);
-    expect(result.trn).toBe("trn:v1:workspace:ws-1:vault:my-vault");
+    expect(result.trn).toBe(TRN);
     expect(result.existingLabels).toEqual({
       "sdk-name": "my-app",
       "sdk-version": "v1-0-0",
@@ -33,11 +36,7 @@ describe("checkVaultManaged", () => {
   });
 
   test("returns isManaged: false when vault has no sdk-name label", async () => {
-    const client = {
-      getMetadata: vi.fn().mockResolvedValue({
-        metadata: { labels: {} },
-      }),
-    } as unknown as OperatorClient;
+    const client = clientWithMetadata({ labels: {} });
 
     const result = await checkVaultManaged({ client, workspaceId: "ws-1", vaultName: "my-vault" });
 
@@ -56,44 +55,22 @@ describe("checkVaultManaged", () => {
 });
 
 describe("releaseVaultOwnership", () => {
-  test("removes sdk-name and sdk-version labels via setMetadata", async () => {
-    const client = {
-      setMetadata: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
+  test.each([
+    [
+      "removes sdk-name and sdk-version labels via setMetadata",
+      { "sdk-name": "my-app", "sdk-version": "v1-0-0", custom: "value" },
+      { custom: "value" },
+    ],
+    [
+      "sets empty labels when only sdk labels exist",
+      { "sdk-name": "my-app", "sdk-version": "v1-0-0" },
+      {},
+    ],
+  ])("%s", async (_name, existingLabels, expectedLabels) => {
+    const client = { setMetadata: vi.fn().mockResolvedValue({}) } as unknown as OperatorClient;
 
-    await releaseVaultOwnership({
-      client,
-      trn: "trn:v1:workspace:ws-1:vault:my-vault",
-      existingLabels: {
-        "sdk-name": "my-app",
-        "sdk-version": "v1-0-0",
-        custom: "value",
-      },
-    });
+    await releaseVaultOwnership({ client, trn: TRN, existingLabels });
 
-    expect(client.setMetadata).toHaveBeenCalledWith({
-      trn: "trn:v1:workspace:ws-1:vault:my-vault",
-      labels: { custom: "value" },
-    });
-  });
-
-  test("sets empty labels when only sdk labels exist", async () => {
-    const client = {
-      setMetadata: vi.fn().mockResolvedValue({}),
-    } as unknown as OperatorClient;
-
-    await releaseVaultOwnership({
-      client,
-      trn: "trn:v1:workspace:ws-1:vault:my-vault",
-      existingLabels: {
-        "sdk-name": "my-app",
-        "sdk-version": "v1-0-0",
-      },
-    });
-
-    expect(client.setMetadata).toHaveBeenCalledWith({
-      trn: "trn:v1:workspace:ws-1:vault:my-vault",
-      labels: {},
-    });
+    expect(client.setMetadata).toHaveBeenCalledWith({ trn: TRN, labels: expectedLabels });
   });
 });

@@ -31,6 +31,24 @@ describe("mock types match @tailor-platform/sdk/runtime/globals", () => {
         Promise<string>
       >();
     });
+
+    test("startWorkflow returns Promise<string>", () => {
+      expectTypeOf(() => tailor.workflow.startWorkflow("wf", {})).returns.toEqualTypeOf<
+        Promise<string>
+      >();
+    });
+
+    test("resumeWorkflow returns Promise<string>", () => {
+      expectTypeOf(() => tailor.workflow.resumeWorkflow("exec-1")).returns.toEqualTypeOf<
+        Promise<string>
+      >();
+    });
+
+    test("resumeWorkflowExecution returns Promise<string>", () => {
+      expectTypeOf(() => tailor.workflow.resumeWorkflowExecution("exec-1")).returns.toEqualTypeOf<
+        Promise<string>
+      >();
+    });
   });
 
   describe("tailor.context", () => {

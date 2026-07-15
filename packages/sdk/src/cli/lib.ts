@@ -47,7 +47,13 @@ export { fileUtilsPlugin } from "#/plugin/builtin/file-utils/index";
 /** @deprecated Import from '@tailor-platform/sdk/plugin/seed' instead */
 export { seedPlugin } from "#/plugin/builtin/seed/index";
 
-export { show, type ShowOptions, type ApplicationInfo } from "./commands/show";
+export {
+  show,
+  type ShowOptions,
+  type ApplicationInfo,
+  type ShowInfo,
+  type AIGatewayInfo,
+} from "./commands/show";
 export { remove, type RemoveOptions } from "./commands/remove";
 export { createWorkspace, type CreateWorkspaceOptions } from "./commands/workspace/create";
 export { listWorkspaces, type ListWorkspacesOptions } from "./commands/workspace/list";
@@ -212,9 +218,9 @@ export {
   getMigrationDirPath,
   getMigrationFilePath,
   type SchemaSnapshot,
+  type NormalizedSchemaSnapshot,
   type TailorDBSnapshotType,
   type SnapshotFieldConfig,
-  type MigrationInfo,
 } from "./commands/tailordb/migrate/snapshot";
 export { MIGRATION_LABEL_KEY } from "./commands/tailordb/migrate/types";
 

@@ -173,7 +173,7 @@ function filterJobFunctionVersions(
  * @param client - Operator client instance
  * @param changeSet - Workflow change set
  * @param appName - Application name
- * @param appId
+ * @param appId - Application ID used for job function metadata when available
  * @param unchangedWorkflowJobNames - Job function names used by unchanged workflows
  * @returns Map of job function names to versions
  */
@@ -339,7 +339,7 @@ export function buildWorkflowValidationShape(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param appName - Application name
- * @param appId
+ * @param appId - Application ID used for workflow metadata when available
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
  * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
@@ -363,7 +363,6 @@ export async function planWorkflow(
 
   const existingWorkflows = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, pageSize) => {
       const response = await client.listWorkflows({
         workspaceId,
@@ -373,7 +372,7 @@ export async function planWorkflow(
       return [response.workflows, response.nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "workflow", name),
+    getTrn: (name) => resourceTrn(workspaceId, "workflow", name),
   });
 
   for (const workflow of Object.values(workflows)) {

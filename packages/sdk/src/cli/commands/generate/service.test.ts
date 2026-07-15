@@ -125,6 +125,30 @@ function applicationWithTailorDBServices(
   };
 }
 
+function emptyGeneratorResult() {
+  return {
+    tailordbResults: {},
+    resolverResults: {},
+    tailordbNamespaceResults: {},
+    resolverNamespaceResults: {},
+    executorResults: {},
+  };
+}
+
+function testResolver(name: string) {
+  return createResolver({
+    name,
+    operation: "query",
+    body: () => ({ string: "" }),
+    output: t.object({ string: t.string() }),
+  });
+}
+
+function parsedTestTypes(typeNames: string[], namespace = "test-namespace", sourceInfo = {}) {
+  const types = Object.fromEntries(typeNames.map((name) => [name, db.type(name, {})]));
+  return parseTypes(toSchemaOutputs(types), namespace, sourceInfo);
+}
+
 describe("GenerationManager", () => {
   let tempDir: string;
   // For test-only access to private members
@@ -199,9 +223,7 @@ describe("GenerationManager", () => {
     test("executes complete generation process", async () => {
       await manager.generate(false);
 
-      // Generators are configured but may be 0 if actual type files do not exist
       expect(manager.generators.length).toBeGreaterThan(0);
-      // services will be empty if actual files do not exist
       expect(manager.services).toBeDefined();
     });
 
@@ -252,32 +274,17 @@ describe("GenerationManager", () => {
   });
 
   describe("runGenerators (via generate)", () => {
-    beforeEach(async () => {
-      const types = {
-        testType: db.type("TestType", {}),
-      };
-      const parsedTypes = parseTypes(
-        toSchemaOutputs({ TestType: types.testType }),
-        "test-namespace",
-        {},
-      );
-
+    beforeEach(() => {
       manager.services = {
         tailordb: {
           "test-namespace": {
-            types: parsedTypes,
+            types: parsedTestTypes(["TestType"]),
             sourceInfo: {},
           },
         },
         resolver: {
           "test-namespace": {
-            testResolver: createResolver({
-              name: "testResolver",
-              operation: "query",
-              // input removed
-              body: () => ({ string: "" }),
-              output: t.object({ string: t.string() }),
-            }),
+            testResolver: testResolver("testResolver"),
           },
         },
         executor: {},
@@ -285,14 +292,11 @@ describe("GenerationManager", () => {
     });
 
     test("processes all generators through generate method", async () => {
-      // Spy on the generator's aggregate method to verify it was called
       const testGenerator = manager.generators[0];
       using aggregateSpy = vi.spyOn(testGenerator, "aggregate");
 
-      // Use generate method which orchestrates all generator processing
       await manager.generate(false);
 
-      // Should process the generator by calling its aggregate method
       expect(aggregateSpy).toHaveBeenCalled();
     });
 
@@ -315,12 +319,8 @@ describe("GenerationManager", () => {
 
       manager.generators.push(errorGenerator);
 
-      // Verify that processing continues even if an error occurs
-      // Use generate method to trigger processing
       await manager.generate(false);
 
-      // After generate runs, the error generator's methods should have been called
-      // The test validates that errors don't prevent the generate from completing
       expect(errorGenerator.aggregate).toHaveBeenCalled();
     });
   });
@@ -332,53 +332,33 @@ describe("GenerationManager", () => {
       testGenerator = new TestGenerator();
       manager.generators = [testGenerator];
 
-      const types = {
-        testType: db.type("TestType", {}),
-      };
-      const parsedTypes = parseTypes(
-        toSchemaOutputs({ TestType: types.testType }),
-        "test-namespace",
-        {},
-      );
-
-      // Modify existing object instead of reassigning (closure pattern)
       manager.services.tailordb["test-namespace"] = {
-        types: parsedTypes,
+        types: parsedTestTypes(["TestType"]),
         sourceInfo: {},
         pluginAttachments: new Map(),
       };
       manager.services.resolver["test-namespace"] = {
-        testResolver: createResolver({
-          name: "testResolver",
-          operation: "query",
-          // input removed
-          body: () => ({ string: "" }),
-          output: t.object({ string: t.string() }),
-        }),
+        testResolver: testResolver("testResolver"),
       };
     });
 
     test("complete processing of single generator", async () => {
-      // Clear existing generatorResults (closure pattern - must not reassign)
       Object.keys(manager.generatorResults).forEach((key) => {
         delete manager.generatorResults[key];
       });
 
-      // Spy on the generator's methods to verify they were called
       using processTypeSpy = vi.spyOn(testGenerator, "processType");
       using processResolverSpy = vi.spyOn(testGenerator, "processResolver");
       using aggregateSpy = vi.spyOn(testGenerator, "aggregate");
 
       await manager.processGenerator(testGenerator);
 
-      // Verify generator methods were called during processing
       expect(processTypeSpy).toHaveBeenCalled();
       expect(processResolverSpy).toHaveBeenCalled();
       expect(aggregateSpy).toHaveBeenCalled();
     });
 
     test("types and resolvers are processed in parallel", async () => {
-      // Clear existing generatorResults (closure pattern - must not reassign)
       Object.keys(manager.generatorResults).forEach((key) => {
         delete manager.generatorResults[key];
       });
@@ -396,38 +376,14 @@ describe("GenerationManager", () => {
 
     beforeEach(() => {
       testGenerator = new TestGenerator();
-      // Modify the existing object instead of reassigning (closure pattern)
-      manager.generatorResults[testGenerator.id] = {
-        tailordbResults: {},
-        resolverResults: {},
-        tailordbNamespaceResults: {},
-        resolverNamespaceResults: {},
-        executorResults: {},
-      };
+      manager.generatorResults[testGenerator.id] = emptyGeneratorResult();
     });
 
     test("processes all types", async () => {
       using processTypeSpy = vi.spyOn(testGenerator, "processType");
-      const types = {
-        type1: db.type("Type1", {}),
-        type2: db.type("Type2", {}),
-        type3: db.type("Type3", {}),
-      };
+      const parsedTypes = parsedTestTypes(["Type1", "Type2", "Type3"]);
 
-      const parsedTypes = parseTypes(
-        toSchemaOutputs({ Type1: types.type1, Type2: types.type2, Type3: types.type3 }),
-        "test-namespace",
-        {},
-      );
-
-      // Initialize generatorResults
-      manager.generatorResults[testGenerator.id] = {
-        tailordbResults: {},
-        resolverResults: {},
-        tailordbNamespaceResults: {},
-        resolverNamespaceResults: {},
-        executorResults: {},
-      };
+      manager.generatorResults[testGenerator.id] = emptyGeneratorResult();
 
       await manager.processTailorDBNamespace(testGenerator, "test-namespace", {
         types: parsedTypes,
@@ -445,14 +401,7 @@ describe("GenerationManager", () => {
     });
 
     test("does not error with empty types", async () => {
-      // Initialize generatorResults
-      manager.generatorResults[testGenerator.id] = {
-        tailordbResults: {},
-        resolverResults: {},
-        tailordbNamespaceResults: {},
-        resolverNamespaceResults: {},
-        executorResults: {},
-      };
+      manager.generatorResults[testGenerator.id] = emptyGeneratorResult();
 
       await expect(
         manager.processTailorDBNamespace(testGenerator, "test-namespace", {
@@ -465,30 +414,15 @@ describe("GenerationManager", () => {
 
     test("sourceInfo is correctly passed to processType", async () => {
       using processTypeSpy = vi.spyOn(testGenerator, "processType");
-      const types = {
-        TestType: db.type("TestType", {}),
-      };
-
       const sourceInfo = {
         TestType: {
           filePath: "test.ts",
           exportName: "TestType",
         },
       };
-      const parsedTypes = parseTypes(
-        toSchemaOutputs({ TestType: types.TestType }),
-        "test-namespace",
-        sourceInfo,
-      );
+      const parsedTypes = parsedTestTypes(["TestType"], "test-namespace", sourceInfo);
 
-      // Initialize generatorResults
-      manager.generatorResults[testGenerator.id] = {
-        tailordbResults: {},
-        resolverResults: {},
-        tailordbNamespaceResults: {},
-        resolverNamespaceResults: {},
-        executorResults: {},
-      };
+      manager.generatorResults[testGenerator.id] = emptyGeneratorResult();
 
       await manager.processTailorDBNamespace(testGenerator, "test-namespace", {
         types: parsedTypes,
@@ -515,33 +449,14 @@ describe("GenerationManager", () => {
 
     beforeEach(() => {
       testGenerator = new TestGenerator();
-      // Modify the existing object instead of reassigning (closure pattern)
-      manager.generatorResults[testGenerator.id] = {
-        tailordbResults: {},
-        resolverResults: {},
-        tailordbNamespaceResults: {},
-        resolverNamespaceResults: {},
-        executorResults: {},
-      };
+      manager.generatorResults[testGenerator.id] = emptyGeneratorResult();
     });
 
     test("processes all resolvers", async () => {
       using processResolverSpy = vi.spyOn(testGenerator, "processResolver");
       const resolvers = {
-        resolver1: createResolver({
-          name: "resolver1",
-          operation: "query",
-          // input removed
-          body: () => ({ string: "" }),
-          output: t.object({ string: t.string() }),
-        }),
-        resolver2: createResolver({
-          name: "resolver2",
-          operation: "query",
-          // input removed
-          body: () => ({ string: "" }),
-          output: t.object({ string: t.string() }),
-        }),
+        resolver1: testResolver("resolver1"),
+        resolver2: testResolver("resolver2"),
       };
 
       await manager.processResolverNamespace(testGenerator, "test-namespace", resolvers);
@@ -561,17 +476,14 @@ describe("GenerationManager", () => {
 
     beforeEach(() => {
       testGenerator = new TestGenerator();
-      // Modify the existing object instead of reassigning (closure pattern)
       manager.generatorResults[testGenerator.id] = {
-        tailordbResults: {},
-        resolverResults: {},
+        ...emptyGeneratorResult(),
         tailordbNamespaceResults: {
           "test-namespace": { types: "processed" },
         },
         resolverNamespaceResults: {
           "test-namespace": { resolvers: "processed" },
         },
-        executorResults: {},
       };
     });
 
@@ -610,7 +522,6 @@ describe("GenerationManager", () => {
     });
 
     test("parallel writing of multiple files", async () => {
-      // Clear previous calls
       vi.mocked(fs.writeFile).mockClear();
 
       const multiFileGenerator = {
@@ -626,14 +537,7 @@ describe("GenerationManager", () => {
         }),
       };
 
-      // Modify existing object instead of reassigning (closure pattern)
-      manager.generatorResults[multiFileGenerator.id] = {
-        tailordbResults: {},
-        resolverResults: {},
-        tailordbNamespaceResults: {},
-        resolverNamespaceResults: {},
-        executorResults: {},
-      };
+      manager.generatorResults[multiFileGenerator.id] = emptyGeneratorResult();
 
       await manager.aggregate(multiFileGenerator);
 
@@ -655,14 +559,7 @@ describe("GenerationManager", () => {
         }),
       };
 
-      // Modify existing object instead of reassigning (closure pattern)
-      manager.generatorResults[errorGenerator.id] = {
-        tailordbResults: {},
-        resolverResults: {},
-        tailordbNamespaceResults: {},
-        resolverNamespaceResults: {},
-        executorResults: {},
-      };
+      manager.generatorResults[errorGenerator.id] = emptyGeneratorResult();
 
       await expect(manager.aggregate(errorGenerator)).rejects.toThrow("Write permission denied");
     });
@@ -818,13 +715,7 @@ describe("Integration Tests", () => {
             .fill(0)
             .forEach((_, resolverIdx) => {
               manager.services.resolver[namespace][`resolver${nsIdx}_${resolverIdx}`] =
-                createResolver({
-                  name: `resolver${nsIdx}_${resolverIdx}`,
-                  operation: "query",
-                  // input removed
-                  body: () => ({ string: "" }),
-                  output: t.object({ string: t.string() }),
-                });
+                testResolver(`resolver${nsIdx}_${resolverIdx}`);
             });
         });
 

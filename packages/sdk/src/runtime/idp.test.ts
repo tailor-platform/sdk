@@ -73,33 +73,22 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
   test("Client.sendPasswordResetEmail forwards", async () => {
     using idpM = mockIdp();
     const client = new idp.Client({ namespace: "ns" });
-    const ok = await client.sendPasswordResetEmail({
-      userId: "u-1",
-      redirectUri: "https://example.com/reset",
-    });
+    const args = { userId: "u-1", redirectUri: "https://example.com/reset" };
+    const ok = await client.sendPasswordResetEmail(args);
 
     expect(ok).toBe(true);
     expect(idpM.calls).toEqual([
-      {
-        method: "sendPasswordResetEmail",
-        args: [{ userId: "u-1", redirectUri: "https://example.com/reset" }],
-        namespace: "ns",
-      },
+      { method: "sendPasswordResetEmail", args: [args], namespace: "ns" },
     ]);
   });
 
   test("Client.unenrollMfa forwards", async () => {
     using idpM = mockIdp();
     const client = new idp.Client({ namespace: "ns" });
-    const ok = await client.unenrollMfa({ userId: "u-1", mfaFactorId: "f-1" });
+    const args = { userId: "u-1", mfaFactorId: "f-1" };
+    const ok = await client.unenrollMfa(args);
 
     expect(ok).toBe(true);
-    expect(idpM.calls).toEqual([
-      {
-        method: "unenrollMfa",
-        args: [{ userId: "u-1", mfaFactorId: "f-1" }],
-        namespace: "ns",
-      },
-    ]);
+    expect(idpM.calls).toEqual([{ method: "unenrollMfa", args: [args], namespace: "ns" }]);
   });
 });

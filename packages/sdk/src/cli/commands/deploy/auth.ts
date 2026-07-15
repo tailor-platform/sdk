@@ -1,6 +1,5 @@
 import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   AuthHookPoint,
   AuthIDPConfig_AuthType,
@@ -22,7 +21,12 @@ import {
   type UserProfileProviderConfigSchema,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { type AuthService } from "#/cli/services/auth/service";
-import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "#/cli/shared/client";
+import {
+  fetchAllTolerant,
+  getOrNull,
+  resolveStaticWebsiteUrls,
+  type OperatorClient,
+} from "#/cli/shared/client";
 import { assertDefined } from "#/utils/assert";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
@@ -34,13 +38,13 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
+import { buildMetaRequest, resourceTrn } from "./label";
 import {
-  buildMetaRequest,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
+import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { AuthAttributeValue } from "#/configure/services/auth/types";
 import type {
@@ -84,6 +88,11 @@ import type {
 } from "@tailor-platform/tailor-proto/auth_pb";
 import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
+type AuthApplyPhase =
+  | Exclude<ApplyPhase, "delete">
+  | "create-update-prerequisites"
+  | "create-update-dependents";
+
 /**
  * Apply auth-related changes for the given phase.
  * @param client - Operator client instance
@@ -94,11 +103,10 @@ import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/met
 export async function applyAuth(
   client: OperatorClient,
   result: Awaited<ReturnType<typeof planAuth>>,
-  phase: Exclude<ApplyPhase, "delete"> = "create-update",
+  phase: AuthApplyPhase = "create-update",
 ) {
   const { changeSet } = result;
-  if (phase === "create-update") {
-    // Services
+  const applyServices = async () => {
     await Promise.all([
       ...changeSet.service.creates.map(async (create) => {
         await client.createAuthService(create.request);
@@ -109,15 +117,29 @@ export async function applyAuth(
         await client.setMetadata(update.metaRequest);
       }),
     ]);
+  };
 
-    // Auth Connections
+  const applyMachineUsers = async () => {
+    await Promise.all([
+      ...changeSet.machineUser.creates.map((create) =>
+        client.createAuthMachineUser(create.request),
+      ),
+      ...changeSet.machineUser.updates.map((update) =>
+        client.updateAuthMachineUser(update.request),
+      ),
+    ]);
+  };
+
+  const applyCreateUpdateDependents = async () => {
     await applyAuthConnections(
       client,
-      { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+      {
+        changeSet: changeSet.connection,
+        stateScope: result.connectionStateScope,
+      },
       "create-update",
     );
 
-    // IdPConfigs
     await Promise.all([
       ...changeSet.idpConfig.creates.map(async (create) => {
         if (create.idpConfig.kind === "BuiltInIdP") {
@@ -143,7 +165,6 @@ export async function applyAuth(
       }),
     ]);
 
-    // UserProfileConfigs
     await Promise.all([
       ...changeSet.userProfileConfig.creates.map((create) =>
         client.createUserProfileConfig(create.request),
@@ -153,29 +174,16 @@ export async function applyAuth(
       ),
     ]);
 
-    // TenantConfigs
     await Promise.all([
       ...changeSet.tenantConfig.creates.map((create) => client.createTenantConfig(create.request)),
       ...changeSet.tenantConfig.updates.map((update) => client.updateTenantConfig(update.request)),
     ]);
 
-    // MachineUsers
-    await Promise.all([
-      ...changeSet.machineUser.creates.map((create) =>
-        client.createAuthMachineUser(create.request),
-      ),
-      ...changeSet.machineUser.updates.map((update) =>
-        client.updateAuthMachineUser(update.request),
-      ),
-    ]);
-
-    // AuthHooks (after machine users, since hooks reference invokers)
     await Promise.all([
       ...changeSet.authHook.creates.map((create) => client.createAuthHook(create.request)),
       ...changeSet.authHook.updates.map((update) => client.updateAuthHook(update.request)),
     ]);
 
-    // OAuth2Clients
     await Promise.all([
       ...changeSet.oauth2Client.creates.map(async (create) => {
         const oauth2Client = assertDefined(
@@ -205,7 +213,6 @@ export async function applyAuth(
       }),
     ]);
 
-    // OAuth2Clients replaces (client type changed): delete then create sequentially
     for (const replace of changeSet.oauth2Client.replaces) {
       await client.deleteAuthOAuth2Client(replace.deleteRequest);
       const replaceOauth2Client = assertDefined(
@@ -221,13 +228,11 @@ export async function applyAuth(
       await client.createAuthOAuth2Client(replace.createRequest);
     }
 
-    // SCIMConfigs
     await Promise.all([
       ...changeSet.scim.creates.map((create) => client.createAuthSCIMConfig(create.request)),
       ...changeSet.scim.updates.map((update) => client.updateAuthSCIMConfig(update.request)),
     ]);
 
-    // SCIMResources
     await Promise.all([
       ...changeSet.scimResource.creates.map((create) =>
         client.createAuthSCIMResource(create.request),
@@ -236,7 +241,16 @@ export async function applyAuth(
         client.updateAuthSCIMResource(update.request),
       ),
     ]);
-  } else if (phase === "delete-resources") {
+  };
+
+  if (phase === "create-update-prerequisites" || phase === "create-update") {
+    await applyServices();
+    await applyMachineUsers();
+  }
+  if (phase === "create-update-dependents" || phase === "create-update") {
+    await applyCreateUpdateDependents();
+  }
+  if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
     // SCIMResources
     await Promise.all(
@@ -279,10 +293,13 @@ export async function applyAuth(
     // Auth Connections
     await applyAuthConnections(
       client,
-      { changeSet: changeSet.connection } as Awaited<ReturnType<typeof planAuthConnections>>,
+      {
+        changeSet: changeSet.connection,
+        stateScope: result.connectionStateScope,
+      },
       "delete-resources",
     );
-  } else {
+  } else if (phase === "delete-services") {
     // Services only
     await Promise.all(
       changeSet.service.deletes.map((del) => client.deleteAuthService(del.request)),
@@ -316,9 +333,7 @@ export async function planAuth(context: PlanContext) {
     forceApplyAll,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
-  const expectedLocalWebsites = new Set(
-    application.staticWebsiteServices.map((website) => website.name),
-  );
+  const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const [
     idpConfigChangeSet,
     userProfileConfigChangeSet,
@@ -364,6 +379,7 @@ export async function planAuth(context: PlanContext) {
     conflicts: [...conflicts, ...connectionResult.conflicts],
     unmanaged: [...unmanaged, ...connectionResult.unmanaged],
     resourceOwners: new Set([...resourceOwners, ...connectionResult.resourceOwners]),
+    connectionStateScope: connectionResult.stateScope,
   };
 }
 
@@ -397,37 +413,19 @@ async function planServices(
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingServices = await fetchExistingResourcesWithLabels({
+    client,
+    fetchPage: async (pageToken, maxPageSize) => {
       const { authServices, nextPageToken } = await client.listAuthServices({
         workspaceId,
         pageToken,
         pageSize: maxPageSize,
       });
       return [authServices, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.namespace?.name,
+    getTrn: (name) => resourceTrn(workspaceId, "auth", name),
   });
-  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      if (!resource.namespace?.name) {
-        return;
-      }
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "auth", resource.namespace.name),
-      });
-      existingServices[resource.namespace.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   for (const auth of auths) {
     const { config } = auth;
@@ -443,21 +441,16 @@ async function planServices(
       publishSessionEvents: config.publishSessionEvents,
     };
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "Auth service",
-            resourceName: config.name,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "Auth service",
-            resourceName: config.name,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName,
+        appId,
+        resourceType: "Auth service",
+        resourceName: config.name,
+        conflicts,
+        unmanaged,
+      });
 
       if (
         !forceApplyAll &&
@@ -483,11 +476,13 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const label = entry?.label;
-    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry?.allLabels,
+      ownerLabel: entry?.label,
+      appName,
+      appId,
+      resourceOwners,
+    });
     if (owned) {
       changeSet.deletes.push({
         name: namespaceName,
@@ -531,21 +526,14 @@ async function planIdPConfigs(
   );
 
   const fetchIdPConfigs = (namespaceName: string) => {
-    return fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
-          workspaceId,
-          namespaceName,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [idpConfigs, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
-        }
-        throw error;
-      }
+    return fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
+        workspaceId,
+        namespaceName,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [idpConfigs, nextPageToken];
     });
   };
 
@@ -810,31 +798,23 @@ async function tryProtoBuiltinIdPConfig(
   workspaceId: string,
   builtinIdPConfig: BuiltinIdP,
 ): Promise<MessageInitShape<typeof AuthIDPConfig_ConfigSchema> | undefined> {
-  let idpService;
-  try {
-    idpService = await client.getIdPService({
+  const idpService = await getOrNull(async () => {
+    return await client.getIdPService({
       workspaceId,
       namespaceName: builtinIdPConfig.namespace,
     });
-  } catch (error) {
-    if (error instanceof ConnectError && error.code === Code.NotFound) {
-      return undefined;
-    }
-    throw error;
-  }
-  let idpClient;
-  try {
-    idpClient = await client.getIdPClient({
+  });
+  if (!idpService) return undefined;
+
+  const idpClient = await getOrNull(async () => {
+    return await client.getIdPClient({
       workspaceId,
       namespaceName: builtinIdPConfig.namespace,
       name: builtinIdPConfig.clientName,
     });
-  } catch (error) {
-    if (error instanceof ConnectError && error.code === Code.NotFound) {
-      return undefined;
-    }
-    throw error;
-  }
+  });
+  if (!idpClient) return undefined;
+
   const vaultName = idpClientVaultName(builtinIdPConfig.namespace, builtinIdPConfig.clientName);
   const secretKey = idpClientSecretName(builtinIdPConfig.namespace, builtinIdPConfig.clientName);
   return {
@@ -884,69 +864,64 @@ async function planUserProfileConfigs(
   for (const auth of auths) {
     const { config } = auth;
     const name = `${config.name}-user-profile-config`;
-    try {
-      const { userProfileProviderConfig } = await client.getUserProfileConfig({
+    const existing = await getOrNull(async () => {
+      return await client.getUserProfileConfig({
         workspaceId,
         namespaceName: config.name,
       });
+    });
+    if (!existing) {
       const userProfileForUpdate = auth.userProfile;
       if (userProfileForUpdate) {
-        const desired = protoUserProfileConfig(userProfileForUpdate);
-        if (
-          !forceApplyAll &&
-          areUserProfileConfigsEqual(userProfileProviderConfig ?? {}, desired)
-        ) {
-          changeSet.unchanged.push({ name });
-        } else {
-          changeSet.updates.push({
-            name,
-            request: {
-              workspaceId,
-              namespaceName: config.name,
-              userProfileProviderConfig: desired,
-            },
-          });
-        }
-      } else {
-        changeSet.deletes.push({
+        changeSet.creates.push({
           name,
           request: {
             workspaceId,
             namespaceName: config.name,
+            userProfileProviderConfig: protoUserProfileConfig(userProfileForUpdate),
           },
         });
       }
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        const userProfileForCreate = auth.userProfile;
-        if (userProfileForCreate) {
-          changeSet.creates.push({
-            name,
-            request: {
-              workspaceId,
-              namespaceName: config.name,
-              userProfileProviderConfig: protoUserProfileConfig(userProfileForCreate),
-            },
-          });
-        }
-        continue;
+      continue;
+    }
+
+    const userProfileForUpdate = auth.userProfile;
+    if (userProfileForUpdate) {
+      const desired = protoUserProfileConfig(userProfileForUpdate);
+      if (
+        !forceApplyAll &&
+        areUserProfileConfigsEqual(existing.userProfileProviderConfig ?? {}, desired)
+      ) {
+        changeSet.unchanged.push({ name });
+      } else {
+        changeSet.updates.push({
+          name,
+          request: {
+            workspaceId,
+            namespaceName: config.name,
+            userProfileProviderConfig: desired,
+          },
+        });
       }
-      throw error;
+    } else {
+      changeSet.deletes.push({
+        name,
+        request: {
+          workspaceId,
+          namespaceName: config.name,
+        },
+      });
     }
   }
 
   for (const namespaceName of deletedServices) {
-    try {
-      await client.getUserProfileConfig({
+    const existing = await getOrNull(async () => {
+      return await client.getUserProfileConfig({
         workspaceId,
         namespaceName,
       });
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        continue;
-      }
-      throw error;
-    }
+    });
+    if (!existing) continue;
     changeSet.deletes.push({
       name: `${namespaceName}-user-profile-config`,
       request: {
@@ -1014,64 +989,59 @@ async function planTenantConfigs(
   for (const auth of auths) {
     const { config } = auth;
     const name = `${config.name}-tenant-config`;
-    try {
-      const { tenantProviderConfig } = await client.getTenantConfig({
+    const existing = await getOrNull(async () => {
+      return await client.getTenantConfig({
         workspaceId,
         namespaceName: config.name,
       });
+    });
+    if (!existing) {
       if (config.tenantProvider) {
-        const desired = protoTenantConfig(config.tenantProvider);
-        if (!forceApplyAll && areTenantProviderConfigsEqual(tenantProviderConfig, desired)) {
-          changeSet.unchanged.push({ name });
-        } else {
-          changeSet.updates.push({
-            name,
-            request: {
-              workspaceId,
-              namespaceName: config.name,
-              tenantProviderConfig: desired,
-            },
-          });
-        }
-      } else {
-        changeSet.deletes.push({
+        changeSet.creates.push({
           name,
           request: {
             workspaceId,
             namespaceName: config.name,
+            tenantProviderConfig: protoTenantConfig(config.tenantProvider),
           },
         });
       }
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        if (config.tenantProvider) {
-          changeSet.creates.push({
-            name,
-            request: {
-              workspaceId,
-              namespaceName: config.name,
-              tenantProviderConfig: protoTenantConfig(config.tenantProvider),
-            },
-          });
-        }
-        continue;
+      continue;
+    }
+
+    if (config.tenantProvider) {
+      const desired = protoTenantConfig(config.tenantProvider);
+      if (!forceApplyAll && areTenantProviderConfigsEqual(existing.tenantProviderConfig, desired)) {
+        changeSet.unchanged.push({ name });
+      } else {
+        changeSet.updates.push({
+          name,
+          request: {
+            workspaceId,
+            namespaceName: config.name,
+            tenantProviderConfig: desired,
+          },
+        });
       }
-      throw error;
+    } else {
+      changeSet.deletes.push({
+        name,
+        request: {
+          workspaceId,
+          namespaceName: config.name,
+        },
+      });
     }
   }
 
   for (const namespaceName of deletedServices) {
-    try {
-      await client.getTenantConfig({
+    const existing = await getOrNull(async () => {
+      return await client.getTenantConfig({
         workspaceId,
         namespaceName,
       });
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        continue;
-      }
-      throw error;
-    }
+    });
+    if (!existing) continue;
     changeSet.deletes.push({
       name: `${namespaceName}-tenant-config`,
       request: {
@@ -1128,21 +1098,14 @@ async function planMachineUsers(
   );
 
   const fetchMachineUsers = (authNamespace: string) => {
-    return fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
-          workspaceId,
-          authNamespace,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [machineUsers, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
-        }
-        throw error;
-      }
+    return fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { machineUsers, nextPageToken } = await client.listAuthMachineUsers({
+        workspaceId,
+        authNamespace,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [machineUsers, nextPageToken];
     });
   };
 
@@ -1451,21 +1414,14 @@ async function planOAuth2Clients(
   >("Auth oauth2Clients");
 
   const fetchOAuth2Clients = (namespaceName: string) => {
-    return fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
-          workspaceId,
-          namespaceName,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [oauth2Clients, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
-        }
-        throw error;
-      }
+    return fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { oauth2Clients, nextPageToken } = await client.listAuthOAuth2Clients({
+        workspaceId,
+        namespaceName,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [oauth2Clients, nextPageToken];
     });
   };
 
@@ -1643,28 +1599,24 @@ async function planSCIMConfigs(
   for (const auth of auths) {
     const { config } = auth;
     const name = `${config.name}-scim-config`;
-    try {
-      await client.getAuthSCIMConfig({
+    const existing = await getOrNull(async () => {
+      return await client.getAuthSCIMConfig({
         workspaceId,
         namespaceName: config.name,
       });
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        if (config.scim) {
-          changeSet.creates.push({
-            name,
-            request: {
-              workspaceId,
-              namespaceName: config.name,
-              scimConfig: protoSCIMConfig(config.scim),
-            },
-          });
-        }
-        continue;
+    });
+    if (!existing) {
+      if (config.scim) {
+        changeSet.creates.push({
+          name,
+          request: {
+            workspaceId,
+            namespaceName: config.name,
+            scimConfig: protoSCIMConfig(config.scim),
+          },
+        });
       }
-      throw error;
-    }
-    if (config.scim) {
+    } else if (config.scim) {
       changeSet.updates.push({
         name,
         request: {
@@ -1685,17 +1637,13 @@ async function planSCIMConfigs(
   }
 
   for (const namespaceName of deletedServices) {
-    try {
-      await client.getAuthSCIMConfig({
+    const existing = await getOrNull(async () => {
+      return await client.getAuthSCIMConfig({
         workspaceId,
         namespaceName,
       });
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        continue;
-      }
-      throw error;
-    }
+    });
+    if (!existing) continue;
     changeSet.deletes.push({
       name: `${namespaceName}-scim-config`,
       request: {
@@ -1761,18 +1709,14 @@ async function planSCIMResources(
   );
 
   const fetchSCIMResources = async (namespaceName: string) => {
-    try {
+    const response = await getOrNull(async () => {
       const { scimResources } = await client.getAuthSCIMResources({
         workspaceId,
         namespaceName,
       });
       return scimResources;
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [];
-      }
-      throw error;
-    }
+    });
+    return response ?? [];
   };
 
   for (const auth of auths) {
@@ -2010,7 +1954,7 @@ async function planAuthHooks(
     const { config } = auth;
     const beforeLogin = config.hooks?.beforeLogin;
 
-    let existingHook:
+    const existingHook:
       | {
           scriptRef?: string;
           invoker?: {
@@ -2018,21 +1962,14 @@ async function planAuthHooks(
             machineUserName?: string;
           };
         }
-      | undefined;
-    try {
+      | undefined = await getOrNull(async () => {
       const { hook } = await client.getAuthHook({
         workspaceId,
         namespaceName: config.name,
         hookPoint: AuthHookPoint.BEFORE_LOGIN,
       });
-      existingHook = hook;
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        existingHook = undefined;
-      } else {
-        throw error;
-      }
-    }
+      return hook;
+    });
 
     if (beforeLogin) {
       const hookRequest = {
@@ -2078,12 +2015,14 @@ async function planAuthHooks(
   }
 
   for (const namespaceName of deletedServices) {
-    try {
-      await client.getAuthHook({
+    const existingHookResponse = await getOrNull(async () => {
+      return await client.getAuthHook({
         workspaceId,
         namespaceName,
         hookPoint: AuthHookPoint.BEFORE_LOGIN,
       });
+    });
+    if (existingHookResponse) {
       changeSet.deletes.push({
         name: `${namespaceName}/before-login`,
         request: {
@@ -2092,12 +2031,6 @@ async function planAuthHooks(
           hookPoint: AuthHookPoint.BEFORE_LOGIN,
         },
       });
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        // No existing hook to delete
-      } else {
-        throw error;
-      }
     }
   }
 

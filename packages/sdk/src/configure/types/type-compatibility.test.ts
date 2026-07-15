@@ -41,6 +41,11 @@ describe("configure/ full types extend types/ minimal structural interfaces", ()
     expectTypeOf<FullTailorAnyDBField>().toExtend<MinimalTailorAnyDBField>();
   });
 
+  test("TailorAnyDBField exposes all TailorDBField builder methods", () => {
+    type MissingKeys = Exclude<keyof FullTailorDBField, keyof FullTailorAnyDBField>;
+    expectTypeOf<MissingKeys>().toEqualTypeOf<never>();
+  });
+
   test("TailorDBType (full) extends TailorDBType (minimal)", () => {
     expectTypeOf<FullTailorDBType>().toExtend<MinimalTailorDBType>();
   });

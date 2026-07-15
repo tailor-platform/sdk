@@ -59,22 +59,79 @@ tailor-sdk deploy [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                       | Required | Default              | Env                               |
-| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
-| `--config <CONFIG>`             | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                                 |
-| `--dry-run`                     | `-d`  | Run the command without making any changes                        | No       | -                    | -                                 |
-| `--no-schema-check`             | -     | Skip schema diff check against migration snapshots                | No       | -                    | -                                 |
-| `--no-validate`                 | -     | Skip client-side validation against platform resource constraints | No       | -                    | -                                 |
-| `--no-cache`                    | -     | Disable bundle caching for this run                               | No       | -                    | -                                 |
-| `--clean-cache`                 | -     | Clean the bundle cache before building                            | No       | -                    | -                                 |
+| Option                                  | Alias | Description                                                                          | Required | Default              | Env                               |
+| --------------------------------------- | ----- | ------------------------------------------------------------------------------------ | -------- | -------------------- | --------------------------------- |
+| `--workspace-id <WORKSPACE_ID>`         | `-w`  | Workspace ID                                                                         | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID`    |
+| `--profile <PROFILE>`                   | `-p`  | Workspace profile                                                                    | No       | -                    | `TAILOR_PLATFORM_PROFILE`         |
+| `--config <CONFIG>`                     | `-c`  | Path to SDK config file. Use comma-separated paths to deploy multiple apps together. | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--yes`                                 | `-y`  | Skip confirmation prompts                                                            | No       | `false`              | -                                 |
+| `--create-workspace`                    | -     | Create a workspace when the account has none                                         | No       | -                    | -                                 |
+| `--workspace-name <WORKSPACE_NAME>`     | -     | Name for a workspace created during deploy                                           | No       | -                    | -                                 |
+| `--workspace-region <WORKSPACE_REGION>` | -     | Region for a workspace created during deploy                                         | No       | -                    | -                                 |
+| `--organization-id <ORGANIZATION_ID>`   | -     | Organization ID for a workspace created during deploy                                | No       | -                    | `TAILOR_PLATFORM_ORGANIZATION_ID` |
+| `--folder-id <FOLDER_ID>`               | -     | Folder ID for a workspace created during deploy                                      | No       | -                    | `TAILOR_PLATFORM_FOLDER_ID`       |
+| `--dry-run`                             | `-d`  | Run the command without making any changes                                           | No       | -                    | -                                 |
+| `--no-schema-check`                     | -     | Skip schema diff check against migration snapshots                                   | No       | -                    | -                                 |
+| `--no-validate`                         | -     | Skip client-side validation against platform resource constraints                    | No       | -                    | -                                 |
+| `--no-cache`                            | -     | Disable bundle caching for this run                                                  | No       | -                    | -                                 |
+| `--clean-cache`                         | -     | Clean the bundle cache before building                                               | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+**Workspace Selection:**
+
+After validating the configuration file, `deploy` resolves a workspace before bundling the
+application. Explicit configuration takes precedence in this order: `--workspace-id`,
+`TAILOR_PLATFORM_WORKSPACE_ID`, and the selected profile. Otherwise, `deploy` reuses the workspace
+previously selected for that configuration from project-local state. Each config file keeps an
+independent selection, including when multiple configs share a directory. An explicit workspace also
+updates this selection. Saved selections are verified against the workspaces currently visible to
+the authenticated user before reuse, and `deploy` warns when it uses one.
+
+When the project has no saved selection, `deploy` discovers the account's workspaces:
+
+- One or more workspaces open a selection prompt in an interactive terminal, with an option to
+  create a new workspace. With one workspace in non-interactive or JSON mode, it is selected
+  automatically. With multiple workspaces, pass `--workspace-id` instead.
+- No workspaces open a guided creation flow in an interactive terminal. The flow asks for a name,
+  fetches the available regions from the Platform, and confirms before creating anything. After
+  creation, the output shows how to reuse the workspace with `--workspace-id` or
+  `TAILOR_PLATFORM_WORKSPACE_ID` from CI or another machine.
+
+In CI and other non-interactive environments, workspace creation must be explicit:
+
+```bash
+tailor-sdk deploy \
+  --create-workspace \
+  --workspace-name example-workspace \
+  --workspace-region us-west
+```
+
+`--create-workspace` only creates when the account has no workspace. If the existing workspace
+matches the requested name, region, organization, and folder, `deploy` reuses it so the same command
+is safe to rerun. If multiple workspaces exist, the flag never creates another one or guesses which
+workspace to use. `--yes` skips deployment confirmation but does not authorize workspace creation.
+
+If a saved workspace has been deleted or is no longer accessible, interactive terminals return to
+workspace selection. Non-interactive environments stop with `WORKSPACE_CONTEXT_STALE` instead of
+silently switching to another workspace. Automatically selected targets are printed with their
+region, organization, and workspace ID.
+
+`--dry-run` never creates a workspace or writes project context. When an account has no workspace,
+create one explicitly before requesting a deployment plan.
+
 **Config File Modification:**
 
 On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into your `defineConfig({...})` call in `tailor.config.ts`. This UUID is used to track your application across renames so the SDK can recognize ownership across renames. Commit the generated id to version control. See [Configuration](../configuration.md#application-settings) for details.
+
+**Multiple Config Deploys:**
+
+To deploy interdependent applications to the same workspace in one run, pass comma-separated config paths:
+
+```bash
+tailor-sdk deploy --config apps/buyer/tailor.config.ts,apps/supplier/tailor.config.ts
+```
+
+When multiple configs are provided, `deploy` creates or updates all configured services first, then updates the applications. This lets one application reference resources owned by another config with `external: true` during the same deploy.
 
 **Migration Handling:**
 

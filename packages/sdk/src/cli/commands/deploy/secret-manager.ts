@@ -1,15 +1,12 @@
-import { Code, ConnectError } from "@connectrpc/connect";
-import { fetchAll, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
 import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
 import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
@@ -125,37 +122,26 @@ export async function planSecretManager(context: PlanContext) {
   const resourceOwners = new Set<string>();
 
   // Fetch all existing vaults with metadata to track managed resources
-  const existingVaultList = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingVaults = await fetchExistingResourcesWithLabels({
+    client,
+    fetchPage: async (pageToken, maxPageSize) => {
       const { vaults, nextPageToken } = await client.listSecretManagerVaults({
         workspaceId,
         pageToken,
         pageSize: maxPageSize,
       });
       return [vaults, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.name,
+    getTrn: (name) => resourceTrn(workspaceId, "vault", name),
   });
 
-  const existingVaults: WithLabel<(typeof existingVaultList)[number]> = {};
-  await Promise.all(
-    existingVaultList.map(async (resource) => {
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "vault", resource.name),
-      });
-      existingVaults[resource.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
-
-  const state = loadSecretsState();
+  const stateScope = {
+    workspaceId,
+    applicationId: application.id,
+    applicationName: application.name,
+  };
+  const state = loadSecretsState(stateScope);
   const skippedSecrets: string[] = [];
 
   await Promise.all(
@@ -169,21 +155,16 @@ export async function planSecretManager(context: PlanContext) {
           appName: application.name,
           appId: application.id,
         });
-        const owned = isOwnedByApp(existing.allLabels, application.name, application.id);
-        if (!owned) {
-          if (!existing.label) {
-            unmanaged.push({
-              resourceType: "Secret Manager vault",
-              resourceName: vaultName,
-            });
-          } else {
-            conflicts.push({
-              resourceType: "Secret Manager vault",
-              resourceName: vaultName,
-              currentOwner: existing.label,
-            });
-          }
-        }
+        const owned = trackDesiredResourceOwnership({
+          labels: existing.allLabels,
+          ownerLabel: existing.label,
+          appName: application.name,
+          appId: application.id,
+          resourceType: "Secret Manager vault",
+          resourceName: vaultName,
+          conflicts,
+          unmanaged,
+        });
         if (owned && hasMatchingSdkVersion(existing.allLabels, metaRequest.labels)) {
           vaultChangeSet.unchanged.push({ name: vaultName });
         } else {
@@ -203,21 +184,14 @@ export async function planSecretManager(context: PlanContext) {
       // Fetch existing secrets in this vault
       let existingSecrets: string[] = [];
       if (existing) {
-        const secrets = await fetchAll(async (pageToken, maxPageSize) => {
-          try {
-            const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
-              workspaceId,
-              secretmanagerVaultName: vaultName,
-              pageToken,
-              pageSize: maxPageSize,
-            });
-            return [secrets, nextPageToken];
-          } catch (error) {
-            if (error instanceof ConnectError && error.code === Code.NotFound) {
-              return [[], ""];
-            }
-            throw error;
-          }
+        const secrets = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+          const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
+            workspaceId,
+            secretmanagerVaultName: vaultName,
+            pageToken,
+            pageSize: maxPageSize,
+          });
+          return [secrets, nextPageToken];
         });
         existingSecrets = secrets.map((s) => s.name);
       }
@@ -272,28 +246,23 @@ export async function planSecretManager(context: PlanContext) {
   // Remaining existing vaults not in config - mark managed ones for deletion
   for (const [name, entry] of Object.entries(existingVaults)) {
     if (!entry) continue;
-    const label = entry.label;
-    const owned = isOwnedByApp(entry.allLabels, application.name, application.id);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry.allLabels,
+      ownerLabel: entry.label,
+      appName: application.name,
+      appId: application.id,
+      resourceOwners,
+    });
     if (owned) {
       // Delete secrets inside the vault before deleting the vault itself
-      const secrets = await fetchAll(async (pageToken, maxPageSize) => {
-        try {
-          const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
-            workspaceId,
-            secretmanagerVaultName: name,
-            pageToken,
-            pageSize: maxPageSize,
-          });
-          return [secrets, nextPageToken];
-        } catch (error) {
-          if (error instanceof ConnectError && error.code === Code.NotFound) {
-            return [[], ""];
-          }
-          throw error;
-        }
+      const secrets = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+        const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
+          workspaceId,
+          secretmanagerVaultName: name,
+          pageToken,
+          pageSize: maxPageSize,
+        });
+        return [secrets, nextPageToken];
       });
       for (const secret of secrets) {
         secretChangeSet.deletes.push({
@@ -311,7 +280,15 @@ export async function planSecretManager(context: PlanContext) {
     }
   }
 
-  return { vaultChangeSet, secretChangeSet, skippedSecrets, conflicts, unmanaged, resourceOwners };
+  return {
+    vaultChangeSet,
+    secretChangeSet,
+    skippedSecrets,
+    conflicts,
+    unmanaged,
+    resourceOwners,
+    stateScope,
+  };
 }
 
 /**
@@ -319,7 +296,7 @@ export async function planSecretManager(context: PlanContext) {
  * @param client - Operator client instance
  * @param result - Planned secret changes
  * @param phase - Apply phase
- * @param application - Application to read secrets from for hash state persistence
+ * @param application - Application used for ownership metadata and hash state persistence
  * @returns Promise that resolves when secret changes are applied
  */
 export async function applySecretManager(
@@ -328,7 +305,7 @@ export async function applySecretManager(
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
   application?: Readonly<Application>,
 ) {
-  const { vaultChangeSet, secretChangeSet } = result;
+  const { vaultChangeSet, secretChangeSet, stateScope } = result;
 
   if (phase === "create-update") {
     // Create vaults first and set metadata
@@ -374,21 +351,18 @@ export async function applySecretManager(
       ),
     );
 
-    // Persist hash state for all secrets after successful apply
-    if (application) {
-      const state = loadSecretsState();
-      for (const vault of application.secrets) {
-        if (!Object.hasOwn(state.vaults, vault.vaultName)) {
-          state.vaults[vault.vaultName] = {};
+    const secretHashUpdates = [...secretChangeSet.creates, ...secretChangeSet.updates];
+    if (application && secretHashUpdates.length > 0) {
+      const state = loadSecretsState(stateScope);
+      for (const secret of secretHashUpdates) {
+        if (!Object.hasOwn(state.vaults, secret.vaultName)) {
+          state.vaults[secret.vaultName] = {};
         }
-        for (const secret of vault.secrets) {
-          if (secret.value != null) {
-            assertDefined(state.vaults[vault.vaultName], "vault state entry missing")[secret.name] =
-              hashValue(secret.value);
-          }
-        }
+        assertDefined(state.vaults[secret.vaultName], "vault state entry missing")[
+          secret.secretName
+        ] = hashValue(secret.value);
       }
-      saveSecretsState(state);
+      saveSecretsState(stateScope, state);
     }
   } else {
     // Delete orphan secrets
@@ -414,7 +388,7 @@ export async function applySecretManager(
 
     // Remove deleted secrets and vaults from hash state
     if (secretChangeSet.deletes.length > 0 || vaultChangeSet.deletes.length > 0) {
-      const state = loadSecretsState();
+      const state = loadSecretsState(stateScope);
       for (const del of secretChangeSet.deletes) {
         if (Object.hasOwn(state.vaults, del.vaultName)) {
           delete assertDefined(state.vaults[del.vaultName], "vault state entry missing")[
@@ -431,7 +405,7 @@ export async function applySecretManager(
       for (const del of vaultChangeSet.deletes) {
         delete state.vaults[del.name];
       }
-      saveSecretsState(state);
+      saveSecretsState(stateScope, state);
     }
   }
 }

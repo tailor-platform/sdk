@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { hashContent } from "./hasher";
 import { cacheManifestSchema } from "./types";
 import type { CacheConfig, CacheEntry, CacheManifest } from "./types";
 
@@ -48,7 +49,7 @@ function createCacheStore(config: CacheConfig): CacheStore {
   }
 
   function bundlePath(cacheKey: string): string {
-    return path.join(bundlesDir(), `${cacheKey.replaceAll(":", "_")}.js`);
+    return path.join(bundlesDir(), `${hashContent(cacheKey)}.js`);
   }
 
   function loadManifest(): CacheManifest | undefined {

@@ -50,24 +50,14 @@ describe("summarizeChangeSets", () => {
 
 describe("formatPlanSummary", () => {
   test("omits replace count when there are no replacements", () => {
-    expect(
-      formatPlanSummary({
-        create: 1,
-        update: 2,
-        delete: 0,
-        replace: 0,
-      }),
-    ).toBe("Plan: 1 to create, 2 to update, 0 to delete");
+    expect(formatPlanSummary({ create: 1, update: 2, delete: 0, replace: 0 })).toBe(
+      "Plan: 1 to create, 2 to update, 0 to delete",
+    );
   });
 
   test("includes replace count when replacements exist", () => {
-    expect(
-      formatPlanSummary({
-        create: 1,
-        update: 2,
-        delete: 0,
-        replace: 3,
-      }),
-    ).toBe("Plan: 1 to create, 2 to update, 0 to delete, 3 to replace");
+    expect(formatPlanSummary({ create: 1, update: 2, delete: 0, replace: 3 })).toBe(
+      "Plan: 1 to create, 2 to update, 0 to delete, 3 to replace",
+    );
   });
 });

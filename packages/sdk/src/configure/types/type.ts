@@ -1,3 +1,8 @@
+import {
+  parseInternal as parseFieldInternal,
+  type FieldParseArgs,
+  type FieldParseInternalArgs,
+} from "#/runtime/field-parse";
 import { type AllowedValues, type AllowedValuesOutput, mapAllowedValues } from "./field";
 import type {
   DefinedFieldMetadata,
@@ -9,13 +14,58 @@ import type {
   TailorField as TailorFieldBase,
   FieldValidateInput,
 } from "#/configure/types/field.types";
-import type { TailorUser } from "#/runtime/types";
-import type { InferFieldsOutput, Prettify } from "#/types/helpers";
+import type { InferFieldsOutput, TypeLevelError } from "#/types/helpers";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
-// This helper type intentionally uses `any` as a placeholder for unknown field output.
+// Erased fields stay assignable across builder method-state changes.
 // oxlint-disable-next-line no-explicit-any
-export type TailorAnyField = TailorField<any>;
+type AnyBuilderMethod = any;
+
+export type TailorAnyField = Omit<
+  TailorFieldBase<AnyBuilderMethod, AnyBuilderMethod, FieldMetadata, TailorFieldType>,
+  "fields"
+> & {
+  readonly fields: Record<string, AnyBuilderMethod>;
+  _metadata: FieldMetadata;
+  description: AnyBuilderMethod;
+  typeName: AnyBuilderMethod;
+  validate: AnyBuilderMethod;
+  parse: AnyBuilderMethod;
+};
+
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type WithFieldDescription<Defined> = Defined & { description: true };
+type WithFieldTypeName<Defined> = Defined & { typeName: true };
+type WithFieldValidate<Defined> = Defined & { validate: true };
+type FieldDescriptionFn<Defined extends DefinedFieldMetadata, Output> = (
+  description: string,
+) => TailorField<WithFieldDescription<Defined>, Output>;
+type FieldTypeNameFn<Defined extends DefinedFieldMetadata, Output> = (
+  typeName: string,
+) => TailorField<WithFieldTypeName<Defined>, Output>;
+type FieldValidateFn<Defined extends DefinedFieldMetadata, Output> = (
+  ...validate: FieldValidateInput<Output>[]
+) => TailorField<WithFieldValidate<Defined>, Output>;
+type FieldDescriptionMethod<Defined extends DefinedFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? FieldDescriptionFn<Defined, Output>
+    : Defined extends { description: unknown }
+      ? TypeLevelError<".description() has already been set">
+      : FieldDescriptionFn<Defined, Output>;
+type FieldTypeNameMethod<Defined extends DefinedFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? TypeLevelError<string>
+    : Defined extends { typeName: unknown }
+      ? TypeLevelError<".typeName() has already been set">
+      : Defined extends { type: "enum" | "nested" }
+        ? FieldTypeNameFn<Defined, Output>
+        : TypeLevelError<"typeName can only be set on enum or object fields">;
+type FieldValidateMethod<Defined extends DefinedFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? FieldValidateFn<Defined, Output>
+    : Defined extends { validate: unknown }
+      ? TypeLevelError<".validate() has already been set">
+      : FieldValidateFn<Defined, Output>;
 
 /**
  * Full TailorField interface with builder methods.
@@ -37,38 +87,21 @@ export interface TailorField<
    * @param description - The description text
    * @returns The field with updated metadata
    */
-  description<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { description: unknown }
-      ? never
-      : TailorField<CurrentDefined, Output>,
-    description: string,
-  ): TailorField<Prettify<CurrentDefined & { description: true }>, Output>;
+  description: FieldDescriptionMethod<Defined, Output>;
 
   /**
    * Set a custom type name for enum or nested types
    * @param typeName - The custom type name
    * @returns The field with updated metadata
    */
-  typeName<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { typeName: unknown }
-      ? never
-      : CurrentDefined extends { type: "enum" | "nested" }
-        ? TailorField<CurrentDefined, Output>
-        : never,
-    typeName: string,
-  ): TailorField<Prettify<CurrentDefined & { typeName: true }>, Output>;
+  typeName: FieldTypeNameMethod<Defined, Output>;
 
   /**
    * Add validation functions to the field
    * @param validate - One or more validation functions
    * @returns The field with updated metadata
    */
-  validate<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { validate: unknown }
-      ? never
-      : TailorField<CurrentDefined, Output>,
-    ...validate: FieldValidateInput<Output>[]
-  ): TailorField<Prettify<CurrentDefined & { validate: true }>, Output>;
+  validate: FieldValidateMethod<Defined, Output>;
 
   /**
    * Parse and validate a value against this field's validation rules
@@ -77,14 +110,6 @@ export interface TailorField<
    * @returns Validation result
    */
   parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
-
-  /**
-   * Internal parse method that tracks field path for nested validation
-   * @private
-   * @param args - Parse arguments
-   * @returns Validation result
-   */
-  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
 }
 
 /**
@@ -98,35 +123,19 @@ export interface TailorField<
  */
 type CloneableField = { clone(): TailorAnyField };
 
-const regex = {
-  uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
-  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
-  datetime:
-    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
-  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
-} as const;
-
-type FieldParseArgs = {
-  value: unknown;
-  data: unknown;
-  user: TailorUser;
-};
-
-type FieldValidateValueArgs<T extends TailorFieldType> = {
-  value: TailorToTs[T];
-  data: unknown;
-  user: TailorUser;
-  pathArray: string[];
-};
-
-type FieldParseInternalArgs = {
-  // Runtime input is unknown/untyped; we validate and narrow it inside the parser.
-  // oxlint-disable-next-line no-explicit-any
-  value: any;
-  data: unknown;
-  user: TailorUser;
-  pathArray: string[];
+type TailorFieldRuntime<
+  Defined extends DefinedFieldMetadata,
+  Output,
+  M extends FieldMetadata = FieldMetadata,
+  T extends TailorFieldType = TailorFieldType,
+> = TailorFieldBase<Defined, Output, M, T> & {
+  readonly fields: Record<string, TailorAnyField>;
+  _metadata: M;
+  description(description: string): object;
+  typeName(typeName: string): object;
+  validate(...validate: FieldValidateInput<Output>[]): object;
+  parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
+  clone(): TailorAnyField;
 };
 
 /**
@@ -153,7 +162,20 @@ function createTailorField<
 ): TailorField<
   { type: T; array: TOptions extends { array: true } ? true : false },
   FieldOutput<OutputBase, TOptions>
-> {
+>;
+function createTailorField<
+  const T extends TailorFieldType,
+  const TOptions extends FieldOptions,
+  const OutputBase = TailorToTs[T],
+>(
+  type: T,
+  options?: TOptions,
+  fields?: Record<string, TailorAnyField>,
+  values?: AllowedValues,
+  metadata?: FieldMetadata,
+): object {
+  type FieldValue = FieldOutput<OutputBase, TOptions>;
+
   // When cloning, take ownership of the source metadata and deep-copy its mutable
   // containers (enum value objects and `[fn, message]` validator tuples; validator
   // functions are kept by reference) so no two instances share mutable state.
@@ -183,230 +205,13 @@ function createTailorField<
     }
   }
 
-  /**
-   * Validate a single value (not an array element)
-   * Used internally for array element validation
-   * @param args - Value, context data, and user
-   * @returns Array of validation issues
-   */
-  function validateValue(args: FieldValidateValueArgs<T>): StandardSchemaV1.Issue[] {
-    const { value, data, user, pathArray } = args;
-    const issues: StandardSchemaV1.Issue[] = [];
-    const path = pathArray.length > 0 ? pathArray : undefined;
-
-    // Type-specific validation
-    switch (type) {
-      case "string":
-        if (typeof value !== "string") {
-          issues.push({
-            message: `Expected a string: received ${String(value)}`,
-            path,
-          });
-        }
-        break;
-
-      case "integer":
-        if (typeof value !== "number" || !Number.isInteger(value)) {
-          issues.push({
-            message: `Expected an integer: received ${String(value)}`,
-            path,
-          });
-        }
-        break;
-
-      case "float":
-        if (typeof value !== "number" || !Number.isFinite(value)) {
-          issues.push({
-            message: `Expected a number: received ${String(value)}`,
-            path,
-          });
-        }
-        break;
-
-      case "boolean":
-        if (typeof value !== "boolean") {
-          issues.push({
-            message: `Expected a boolean: received ${String(value)}`,
-            path,
-          });
-        }
-        break;
-
-      case "uuid":
-        if (typeof value !== "string" || !regex.uuid.test(value)) {
-          issues.push({
-            message: `Expected a valid UUID: received ${String(value)}`,
-            path,
-          });
-        }
-        break;
-      case "date":
-        if (typeof value !== "string" || !regex.date.test(value)) {
-          issues.push({
-            message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
-            path,
-          });
-        }
-        break;
-      case "datetime":
-        if (typeof value !== "string" || !regex.datetime.test(value)) {
-          issues.push({
-            message: `Expected to match ISO format: received ${String(value)}`,
-            path,
-          });
-        }
-        break;
-      case "time":
-        if (typeof value !== "string" || !regex.time.test(value)) {
-          issues.push({
-            message: `Expected to match "HH:mm" format: received ${String(value)}`,
-            path,
-          });
-        }
-        break;
-      case "decimal":
-        if (typeof value !== "string" || !regex.decimal.test(value)) {
-          issues.push({
-            message: `Expected a decimal string: received ${String(value)}`,
-            path,
-          });
-        }
-        break;
-
-      case "enum":
-        if (field._metadata.allowedValues) {
-          const allowedValues = field._metadata.allowedValues.map((v) => v.value);
-          if (typeof value !== "string" || !allowedValues.includes(value)) {
-            issues.push({
-              message: `Must be one of [${allowedValues.join(", ")}]: received ${String(value)}`,
-              path,
-            });
-          }
-        }
-        break;
-
-      case "nested":
-        // Validate nested object fields
-        // runtime value may not match the declared type
-        // oxlint-disable typescript/no-unnecessary-condition
-        if (
-          typeof value !== "object" ||
-          value === null ||
-          Array.isArray(value) ||
-          value instanceof Date
-        ) {
-          // oxlint-enable typescript/no-unnecessary-condition
-          issues.push({
-            message: `Expected an object: received ${String(value)}`,
-            path,
-          });
-        } else if (Object.keys(field.fields).length > 0) {
-          for (const [fieldName, nestedField] of Object.entries(field.fields)) {
-            const fieldValue = (value as Record<string, unknown>)[fieldName];
-            const result = nestedField._parseInternal({
-              value: fieldValue,
-              data,
-              user,
-              pathArray: pathArray.concat(fieldName),
-            });
-            if (result.issues) {
-              issues.push(...result.issues);
-            }
-          }
-        }
-        break;
-    }
-
-    // Custom validation functions
-    const validateFns = field._metadata.validate;
-    if (validateFns && validateFns.length > 0) {
-      for (const validateInput of validateFns) {
-        const { fn, message } =
-          typeof validateInput === "function"
-            ? { fn: validateInput, message: "Validation failed" }
-            : { fn: validateInput[0], message: validateInput[1] };
-
-        if (!fn({ value, data, user })) {
-          issues.push({
-            message,
-            path,
-          });
-        }
-      }
-    }
-
-    return issues;
-  }
-
-  /**
-   * Internal parse method that tracks field path for nested validation
-   * @param args - Parse arguments
-   * @returns Parse result with value or issues
-   */
   function parseInternal(
     args: FieldParseInternalArgs,
   ): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
-    const { value, data, user, pathArray } = args;
-    const issues: StandardSchemaV1.Issue[] = [];
-    const path = pathArray.length > 0 ? pathArray : undefined;
-
-    // 1. Check required/optional
-    const isNullOrUndefined = value === null || value === undefined;
-    if (field._metadata.required && isNullOrUndefined) {
-      issues.push({
-        message: "Required field is missing",
-        path,
-      });
-      return { issues };
-    }
-
-    // If optional and null/undefined, skip further validation and normalize to null
-    if (!field._metadata.required && isNullOrUndefined) {
-      return { value: value ?? null };
-    }
-
-    // 2. Check array type
-    if (field._metadata.array) {
-      if (!Array.isArray(value)) {
-        issues.push({
-          message: "Expected an array",
-          path,
-        });
-        return { issues };
-      }
-
-      // Validate each array element (without array flag)
-      for (let i = 0; i < value.length; i++) {
-        const elementValue = value[i];
-        const elementPath = pathArray.concat(`[${i}]`);
-
-        // Validate element with same type but without array flag
-        const elementIssues = validateValue({
-          value: elementValue,
-          data,
-          user,
-          pathArray: elementPath,
-        });
-        if (elementIssues.length > 0) {
-          issues.push(...elementIssues);
-        }
-      }
-
-      if (issues.length > 0) {
-        return { issues };
-      }
-      return { value: value as FieldOutput<OutputBase, TOptions> };
-    }
-
-    // 3. Type-specific validation and custom validation
-    const valueIssues = validateValue({ value, data, user, pathArray });
-    issues.push(...valueIssues);
-
-    if (issues.length > 0) {
-      return { issues };
-    }
-
-    return { value };
+    return parseFieldInternal<T, FieldOutput<OutputBase, TOptions>>({
+      ...args,
+      field,
+    });
   }
 
   /**
@@ -422,11 +227,12 @@ function createTailorField<
     return cloned;
   }
 
-  const field: TailorField<
+  const field: TailorFieldRuntime<
     { type: T; array: TOptions extends { array: true } ? true : false },
-    FieldOutput<OutputBase, TOptions>
-  > &
-    CloneableField = {
+    FieldValue,
+    FieldMetadata,
+    T
+  > = {
     type,
     fields: fields ?? {},
     _defined: undefined as unknown as {
@@ -442,20 +248,17 @@ function createTailorField<
 
     description(description: string) {
       // Clone-on-write so a shared field instance never leaks metadata.
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ description }) as any;
+      return cloneWith({ description });
     },
 
     typeName(typeName: string) {
       // Clone-on-write so a shared field instance never leaks metadata.
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ typeName }) as any;
+      return cloneWith({ typeName });
     },
 
-    validate(...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) {
+    validate(...validateInputs: FieldValidateInput<FieldValue>[]) {
       // Clone-on-write so a shared field instance never leaks metadata.
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ validate: validateInputs }) as any;
+      return cloneWith({ validate: validateInputs });
     },
 
     parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
@@ -466,8 +269,6 @@ function createTailorField<
         pathArray: [],
       });
     },
-
-    _parseInternal: parseInternal,
 
     clone() {
       // Deep clone nested object fields so the new instance shares no mutable state.
@@ -482,8 +283,7 @@ function createTailorField<
       }
 
       // Rebuild via the factory, handing it this field's metadata so the new
-      // parseInternal/validateValue closures rebind to the clone and the factory
-      // owns the metadata deep-copy.
+      // parseInternal closure rebinds to the clone and the factory owns the metadata deep-copy.
       // oxlint-disable-next-line no-explicit-any
       return createTailorField(type, options, clonedFields, values, this._metadata) as any;
     },

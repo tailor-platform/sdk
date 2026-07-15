@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
+import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import {
   applyFunctionRegistry,
   authHookFunctionName,
@@ -45,16 +46,20 @@ vi.mock("./change-set", async (importOriginal) => {
 });
 
 describe("naming functions", () => {
-  test("resolverFunctionName", () => {
-    expect(resolverFunctionName("my-resolver", "getUser")).toBe("resolver--my-resolver--getUser");
-  });
-
-  test("executorFunctionName", () => {
-    expect(executorFunctionName("user-created")).toBe("executor--user-created");
-  });
-
-  test("workflowJobFunctionName", () => {
-    expect(workflowJobFunctionName("process-order")).toBe("workflow--process-order");
+  test.each([
+    [
+      "resolverFunctionName",
+      () => resolverFunctionName("my-resolver", "getUser"),
+      "resolver--my-resolver--getUser",
+    ],
+    ["executorFunctionName", () => executorFunctionName("user-created"), "executor--user-created"],
+    [
+      "workflowJobFunctionName",
+      () => workflowJobFunctionName("process-order"),
+      "workflow--process-order",
+    ],
+  ] as const)("%s", (_name, fn, expected) => {
+    expect(fn()).toBe(expected);
   });
 });
 
@@ -171,6 +176,31 @@ describe("planFunctionRegistry", () => {
       expect(result.changeSet.deletes).toHaveLength(0);
     });
 
+    test.each([
+      ["ownership metadata is missing", {}, { unmanaged: 1, conflicts: 0 }],
+      ["owned by another app", { label: "other-app" }, { unmanaged: 0, conflicts: 1 }],
+      [
+        "sdk version differs",
+        { label: appName, sdkVersion: "v0-9-0" },
+        { unmanaged: 0, conflicts: 0 },
+      ],
+    ] as const)(
+      "matching function content is updated when %s",
+      async (_desc, existingOverrides, expected) => {
+        const entry = createEntry("resolver/ns/getUser");
+        const client = createMockClient([
+          { name: "resolver/ns/getUser", contentHash: entry.contentHash, ...existingOverrides },
+        ]);
+
+        const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
+
+        expect(result.changeSet.updates).toHaveLength(1);
+        expect(result.changeSet.unchanged).toHaveLength(0);
+        expect(result.unmanaged).toHaveLength(expected.unmanaged);
+        expect(result.conflicts).toHaveLength(expected.conflicts);
+      },
+    );
+
     test("existing function is updated even when content hash matches", async () => {
       const entry = createEntry("resolver/ns/getUser");
       const client = createMockClient([
@@ -184,49 +214,6 @@ describe("planFunctionRegistry", () => {
       expect(result.changeSet.unchanged[0]!.name).toBe("resolver/ns/getUser");
       expect(result.changeSet.creates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
-    });
-
-    test("matching function content is updated when ownership metadata is missing", async () => {
-      const entry = createEntry("resolver/ns/getUser");
-      const client = createMockClient([
-        { name: "resolver/ns/getUser", contentHash: entry.contentHash },
-      ]);
-
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
-
-      expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.unchanged).toHaveLength(0);
-      expect(result.unmanaged).toHaveLength(1);
-    });
-
-    test("matching function content is updated when owned by another app", async () => {
-      const entry = createEntry("resolver/ns/getUser");
-      const client = createMockClient([
-        { name: "resolver/ns/getUser", contentHash: entry.contentHash, label: "other-app" },
-      ]);
-
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
-
-      expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.unchanged).toHaveLength(0);
-      expect(result.conflicts).toHaveLength(1);
-    });
-
-    test("matching function content is updated when sdk version differs", async () => {
-      const entry = createEntry("resolver/ns/getUser");
-      const client = createMockClient([
-        {
-          name: "resolver/ns/getUser",
-          contentHash: entry.contentHash,
-          label: appName,
-          sdkVersion: "v0-9-0",
-        },
-      ]);
-
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, [entry]);
-
-      expect(result.changeSet.updates).toHaveLength(1);
-      expect(result.changeSet.unchanged).toHaveLength(0);
     });
   });
 
@@ -267,25 +254,24 @@ describe("planFunctionRegistry", () => {
   });
 
   describe("label ownership scenarios", () => {
-    test("function without label is NOT deleted", async () => {
-      const client = createMockClient([
-        { name: "resolver/ns/unmanaged", contentHash: "hash" }, // No label
-      ]);
+    test.each([
+      {
+        name: "function without label",
+        existingFunctions: [{ name: "resolver/ns/unmanaged", contentHash: "hash" }],
+        resourceOwners: [],
+      },
+      {
+        name: "function owned by different app",
+        existingFunctions: [{ name: "resolver/ns/other", contentHash: "hash", label: "other-app" }],
+        resourceOwners: ["other-app"],
+      },
+    ] as const)("$name is NOT deleted", async ({ existingFunctions, resourceOwners }) => {
+      const client = createMockClient([...existingFunctions]);
 
       const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
 
       expect(result.changeSet.deletes).toHaveLength(0);
-    });
-
-    test("function owned by different app is NOT deleted", async () => {
-      const client = createMockClient([
-        { name: "resolver/ns/other", contentHash: "hash", label: "other-app" },
-      ]);
-
-      const result = await planFunctionRegistry(client, workspaceId, appName, undefined, []);
-
-      expect(result.changeSet.deletes).toHaveLength(0);
-      expect(result.resourceOwners.has("other-app")).toBe(true);
+      expect([...result.resourceOwners]).toEqual(resourceOwners);
     });
 
     test("mixed ownership - only delete own functions", async () => {
@@ -496,8 +482,8 @@ describe("collectFunctionEntries", () => {
   test("collects resolver entries with correct names and hashes", () => {
     const scripts = createBundledScripts({
       resolvers: new Map([
-        ["getUser", "// getUser code"],
-        ["listUsers", "// listUsers code"],
+        [resolverBundleKey("my-ns", "getUser"), "// getUser code"],
+        [resolverBundleKey("my-ns", "listUsers"), "// listUsers code"],
       ]),
     });
 
@@ -521,6 +507,40 @@ describe("collectFunctionEntries", () => {
     expect(entries[0]!.contentHash).toBeTruthy();
     expect(entries[0]!.description).toBe("Resolver: my-ns/getUser");
     expect(entries[1]!.name).toBe(resolverFunctionName("my-ns", "listUsers"));
+  });
+
+  test("keeps resolver entries separate when namespaces share resolver names", () => {
+    const scripts = createBundledScripts({
+      resolvers: new Map([
+        [resolverBundleKey("first", "getUser"), "// first getUser code"],
+        [resolverBundleKey("second", "getUser"), "// second getUser code"],
+      ]),
+    });
+
+    const app = createMockApplication({
+      resolverServices: [
+        {
+          namespace: "first",
+          resolvers: {
+            getUser: { name: "getUser" },
+          },
+        },
+        {
+          namespace: "second",
+          resolvers: {
+            getUser: { name: "getUser" },
+          },
+        },
+      ],
+    });
+
+    const entries = collectFunctionEntries(app, [], scripts);
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0]!.name).toBe(resolverFunctionName("first", "getUser"));
+    expect(entries[0]!.scriptContent).toBe("// first getUser code");
+    expect(entries[1]!.name).toBe(resolverFunctionName("second", "getUser"));
+    expect(entries[1]!.scriptContent).toBe("// second getUser code");
   });
 
   test("collects executor entries only for function/jobFunction kinds", () => {

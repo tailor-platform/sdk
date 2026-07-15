@@ -77,13 +77,24 @@ function createCacheManager(options: CacheManagerOptions): CacheManager {
     enabled: true,
     bundleCache,
     finalize() {
-      // Use in-memory manifest to preserve entries added during the session
-      const manifest = store.getCurrentManifest() ?? {
+      const currentManifest = store.getCurrentManifest() ?? {
         version: 1 as const,
         sdkVersion: options.sdkVersion,
         lockfileHash: options.lockfileHash,
         entries: {},
       };
+      const latestManifest = store.loadManifest();
+      const manifest =
+        latestManifest?.sdkVersion === options.sdkVersion &&
+        latestManifest.lockfileHash === options.lockfileHash
+          ? {
+              ...latestManifest,
+              entries: {
+                ...latestManifest.entries,
+                ...currentManifest.entries,
+              },
+            }
+          : currentManifest;
       manifest.sdkVersion = options.sdkVersion;
       manifest.lockfileHash = options.lockfileHash;
       store.saveManifest(manifest);

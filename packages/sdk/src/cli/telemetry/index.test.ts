@@ -1,5 +1,18 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 
+async function registerTestProvider() {
+  const { NodeTracerProvider } = await import("@opentelemetry/sdk-trace-node");
+  const { InMemorySpanExporter, SimpleSpanProcessor } =
+    await import("@opentelemetry/sdk-trace-base");
+
+  const exporter = new InMemorySpanExporter();
+  const provider = new NodeTracerProvider({
+    spanProcessors: [new SimpleSpanProcessor(exporter)],
+  });
+  provider.register();
+  return { exporter, provider };
+}
+
 describe("telemetry", () => {
   const originalEnv = process.env;
 
@@ -11,16 +24,13 @@ describe("telemetry", () => {
 
   afterEach(async () => {
     process.env = originalEnv;
-    // Clean up OTel global state to avoid leaking between tests
     const { trace } = await import("@opentelemetry/api");
     trace.disable();
   });
 
   test("withSpan executes fn with noop span when no provider is registered", async () => {
     const { withSpan } = await import("./index");
-    const result = await withSpan("test-span", async () => {
-      return "hello";
-    });
+    const result = await withSpan("test-span", async () => "hello");
     expect(result).toBe("hello");
   });
 
@@ -41,29 +51,16 @@ describe("telemetry", () => {
 
   test("initTelemetry enables telemetry when endpoint is set", async () => {
     process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318";
-    const { initTelemetry, isTelemetryEnabled } = await import("./index");
+    const { initTelemetry, isTelemetryEnabled, shutdownTelemetry } = await import("./index");
     await initTelemetry();
     expect(isTelemetryEnabled()).toBe(true);
-
-    // Clean up: shutdown the provider
-    const { shutdownTelemetry } = await import("./index");
     await shutdownTelemetry();
   });
 
   test("withSpan creates spans when provider is registered", async () => {
     const { trace } = await import("@opentelemetry/api");
-    const { NodeTracerProvider } = await import("@opentelemetry/sdk-trace-node");
-    const { InMemorySpanExporter, SimpleSpanProcessor } =
-      await import("@opentelemetry/sdk-trace-base");
-
     const { withSpan } = await import("./index");
-
-    // Register test provider to capture spans
-    const exporter = new InMemorySpanExporter();
-    const provider = new NodeTracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
-    });
-    provider.register();
+    const { exporter, provider } = await registerTestProvider();
 
     const result = await withSpan("test-operation", async (span) => {
       span.setAttribute("test.key", "test-value");
@@ -72,30 +69,18 @@ describe("telemetry", () => {
 
     expect(result).toBe(42);
 
-    const spans = exporter.getFinishedSpans();
-    const testSpan = spans.find((s) => s.name === "test-operation");
+    const testSpan = exporter.getFinishedSpans().find((s) => s.name === "test-operation");
     expect(testSpan).toBeDefined();
     expect(testSpan?.attributes["test.key"]).toBe("test-value");
 
-    // Clean up
     await provider.shutdown();
     trace.disable();
   });
 
   test("withSpan records exceptions on error when provider is registered", async () => {
     const { trace, SpanStatusCode } = await import("@opentelemetry/api");
-    const { NodeTracerProvider } = await import("@opentelemetry/sdk-trace-node");
-    const { InMemorySpanExporter, SimpleSpanProcessor } =
-      await import("@opentelemetry/sdk-trace-base");
-
     const { withSpan } = await import("./index");
-
-    // Register test provider to capture spans
-    const exporter = new InMemorySpanExporter();
-    const provider = new NodeTracerProvider({
-      spanProcessors: [new SimpleSpanProcessor(exporter)],
-    });
-    provider.register();
+    const { exporter, provider } = await registerTestProvider();
 
     await expect(
       withSpan("failing-operation", async () => {
@@ -103,13 +88,11 @@ describe("telemetry", () => {
       }),
     ).rejects.toThrow("something went wrong");
 
-    const spans = exporter.getFinishedSpans();
-    const failedSpan = spans.find((s) => s.name === "failing-operation");
+    const failedSpan = exporter.getFinishedSpans().find((s) => s.name === "failing-operation");
     expect(failedSpan).toBeDefined();
     expect(failedSpan?.status.code).toBe(SpanStatusCode.ERROR);
     expect(failedSpan?.events.length).toBeGreaterThan(0);
 
-    // Clean up
     await provider.shutdown();
     trace.disable();
   });

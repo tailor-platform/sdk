@@ -1,5 +1,46 @@
 # @tailor-platform/create-sdk
 
+## 1.78.0
+
+### Patch Changes
+
+- [#1753](https://github.com/tailor-platform/sdk/pull/1753) [`6bff945`](https://github.com/tailor-platform/sdk/commit/6bff94505f3dbe11a8be36ef301e3641ee2cba89) Thanks [@dqn](https://github.com/dqn)! - Add typed, service-specific Vitest mock controls for runtime APIs and update generated project tests to use them.
+
+## 1.77.0
+
+## 1.76.2
+
+## 1.76.1
+
+## 1.76.0
+
+## 1.75.0
+
+## 1.74.1
+
+## 1.74.0
+
+## 1.73.3
+
+## 1.73.2
+
+## 1.73.1
+
+## 1.73.0
+
+## 1.72.0
+
+## 1.71.0
+
+## 1.70.1
+### Patch Changes
+
+
+
+- [#1569](https://github.com/tailor-platform/sdk/pull/1569) [`259dec9`](https://github.com/tailor-platform/sdk/commit/259dec92592c7927bcfb0e2d5dcbbd0e206eeba3) Thanks [@dqn](https://github.com/dqn)! - Fix TailorDB migration drift checks to normalize reconstructed snapshots and remote schemas through the same snapshot shape before comparison.
+
+## 1.70.0
+
 ## 1.69.0
 ### Patch Changes
 

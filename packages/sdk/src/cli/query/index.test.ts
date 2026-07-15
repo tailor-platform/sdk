@@ -3,6 +3,7 @@ import {
   getReplHistoryPath,
   query,
   queryCommand,
+  type QueryEngine,
   resolveQueryCommandInput,
   resolveReplCommand,
 } from "./index";
@@ -70,6 +71,10 @@ vi.mock("./sql-type-extractor", () => ({
 vi.mock("./type-field-order", () => ({
   loadTypeFieldOrder: vi.fn(),
 }));
+
+function sqlRowKeys(result: unknown): string[] {
+  return Object.keys((result as { rows: Record<string, unknown>[] }).rows[0]!);
+}
 
 describe("query", () => {
   beforeEach(async () => {
@@ -405,11 +410,7 @@ describe("query", () => {
     });
 
     expect(result.engine).toBe("sql");
-    const sqlResult = result.result as {
-      rows: Record<string, unknown>[];
-      rowCount: number;
-    };
-    expect(Object.keys(sqlResult.rows[0]!)).toEqual([
+    expect(sqlRowKeys(result.result)).toEqual([
       "id",
       "name",
       "email",
@@ -462,11 +463,7 @@ describe("query", () => {
     });
 
     expect(result.engine).toBe("sql");
-    const sqlResult = result.result as {
-      rows: Record<string, unknown>[];
-      rowCount: number;
-    };
-    expect(Object.keys(sqlResult.rows[0]!)).toEqual([
+    expect(sqlRowKeys(result.result)).toEqual([
       "orderId",
       "id",
       "name",
@@ -500,11 +497,7 @@ describe("query", () => {
       query: 'select email, name from "User";',
     });
 
-    const sqlResult = result.result as {
-      rows: Record<string, unknown>[];
-      rowCount: number;
-    };
-    expect(Object.keys(sqlResult.rows[0]!)).toEqual(["email", "name"]);
+    expect(sqlRowKeys(result.result)).toEqual(["email", "name"]);
   });
 
   test("matches columns case-insensitively for unquoted SQL aliases", async () => {
@@ -545,17 +538,7 @@ describe("query", () => {
         'select u.id as UID, o.* from "Customer" u join "SalesOrder" o on u.id = o."customerID";',
     });
 
-    const sqlResult = result.result as {
-      rows: Record<string, unknown>[];
-      rowCount: number;
-    };
-    expect(Object.keys(sqlResult.rows[0]!)).toEqual([
-      "UID",
-      "id",
-      "customerID",
-      "total",
-      "createdAt",
-    ]);
+    expect(sqlRowKeys(result.result)).toEqual(["UID", "id", "customerID", "total", "createdAt"]);
   });
 
   test("uses machine user resolved from profile default when machineUser option is absent", async () => {
@@ -745,79 +728,53 @@ describe("resolveQueryCommandInput", () => {
 });
 
 describe("resolveReplCommand", () => {
-  test("accepts quit aliases", () => {
-    expect(resolveReplCommand("\\q")).toBe("quit");
-    expect(resolveReplCommand("\\quit")).toBe("quit");
-  });
-
-  test("accepts help aliases", () => {
-    expect(resolveReplCommand("\\help")).toBe("help");
-    expect(resolveReplCommand("\\h")).toBe("help");
-    expect(resolveReplCommand("\\?")).toBe("help");
-  });
-
-  test("accepts clear aliases", () => {
-    expect(resolveReplCommand("\\clear")).toBe("clear");
-    expect(resolveReplCommand("\\c")).toBe("clear");
+  test.each([
+    ["\\q", "quit"],
+    ["\\quit", "quit"],
+    ["\\help", "help"],
+    ["\\h", "help"],
+    ["\\?", "help"],
+    ["\\clear", "clear"],
+    ["\\c", "clear"],
+    ["\\noop", "unknown"],
+  ])("resolves %s to %s", (input, expected) => {
+    expect(resolveReplCommand(input)).toBe(expected);
   });
 
   test("returns null for non-command input", () => {
     expect(resolveReplCommand("select 1;")).toBeNull();
   });
-
-  test("returns unknown for unsupported backslash command", () => {
-    expect(resolveReplCommand("\\noop")).toBe("unknown");
-  });
 });
 
 describe("queryCommand args", () => {
-  test("rejects when query and file are both passed", () => {
-    const result = queryCommand.args.safeParse({
-      engine: "sql",
-      query: "select 1;",
-      file: "query.sql",
-      "machine-user": "bot",
-    });
-
-    expect(result.success).toBe(false);
-    if (result.success) {
-      throw new Error("expected args parsing to fail");
-    }
-    expect(result.error.issues[0]?.message).toBe("Pass either -q/--query or -f/--file, not both.");
-  });
-
-  test("rejects when edit and query are both passed", () => {
-    const result = queryCommand.args.safeParse({
-      engine: "sql",
-      edit: true,
-      query: "select 1;",
-      "machine-user": "bot",
-    });
-
-    expect(result.success).toBe(false);
-    if (result.success) {
-      throw new Error("expected args parsing to fail");
-    }
-    expect(result.error.issues[0]?.message).toBe(
+  test.each([
+    [
+      "query and file",
+      { query: "select 1;", file: "query.sql" },
+      "Pass either -q/--query or -f/--file, not both.",
+    ],
+    [
+      "edit and query",
+      { edit: true, query: "select 1;" },
       "Pass only one of --edit, -q/--query, or -f/--file.",
-    );
-  });
-
-  test("rejects when edit and file are both passed", () => {
+    ],
+    [
+      "edit and file",
+      { edit: true, file: "query.sql" },
+      "Pass only one of --edit, -q/--query, or -f/--file.",
+    ],
+  ])("rejects when %s are both passed", (_label, extraArgs, expectedMessage) => {
     const result = queryCommand.args.safeParse({
       engine: "sql",
-      edit: true,
-      file: "query.sql",
       "machine-user": "bot",
+      ...extraArgs,
     });
 
     expect(result.success).toBe(false);
     if (result.success) {
       throw new Error("expected args parsing to fail");
     }
-    expect(result.error.issues[0]?.message).toBe(
-      "Pass only one of --edit, -q/--query, or -f/--file.",
-    );
+    expect(result.error.issues[0]?.message).toBe(expectedMessage);
   });
 
   test("newline-on-enter is optional and passes boolean through", () => {
@@ -841,42 +798,47 @@ describe("queryCommand args", () => {
 });
 
 describe("getReplHistoryPath", () => {
-  test("returns an unscoped filename when neither profile nor workspaceId is set", () => {
-    expect(getReplHistoryPath("sql", undefined, undefined)).toBe(
-      `${xdgTempDir}/tailor-platform/query-history-sql.json`,
-    );
-    expect(getReplHistoryPath("gql", undefined, undefined)).toBe(
-      `${xdgTempDir}/tailor-platform/query-history-gql.json`,
-    );
-  });
-
-  test("treats an empty-string profile or workspaceId as unset", () => {
-    expect(getReplHistoryPath("sql", "", "")).toBe(
-      `${xdgTempDir}/tailor-platform/query-history-sql.json`,
-    );
-  });
-
-  test("scopes by profile when only profile is set", () => {
-    expect(getReplHistoryPath("sql", "dev", undefined)).toBe(
-      `${xdgTempDir}/tailor-platform/query-history-sql-dev.json`,
-    );
-  });
-
-  test("scopes by workspaceId when only workspaceId is set", () => {
-    expect(getReplHistoryPath("gql", undefined, "ws-abc-123")).toBe(
-      `${xdgTempDir}/tailor-platform/query-history-gql-ws-abc-123.json`,
-    );
-  });
-
-  test("combines profile and workspaceId when both are set", () => {
-    expect(getReplHistoryPath("sql", "prod", "ws-abc-123")).toBe(
-      `${xdgTempDir}/tailor-platform/query-history-sql-prod-ws-abc-123.json`,
-    );
-  });
-
-  test("sanitizes unsafe characters in the scope so the filename stays safe", () => {
-    expect(getReplHistoryPath("sql", "team/dev prod", "ws/1..2")).toBe(
-      `${xdgTempDir}/tailor-platform/query-history-sql-team_dev_prod-ws_1..2.json`,
+  test.each<[string, QueryEngine, string | undefined, string | undefined, string]>([
+    [
+      "neither profile nor workspaceId is set",
+      "sql",
+      undefined,
+      undefined,
+      "query-history-sql.json",
+    ],
+    [
+      "neither profile nor workspaceId is set",
+      "gql",
+      undefined,
+      undefined,
+      "query-history-gql.json",
+    ],
+    ["profile and workspaceId are empty strings", "sql", "", "", "query-history-sql.json"],
+    ["only profile is set", "sql", "dev", undefined, "query-history-sql-dev.json"],
+    [
+      "only workspaceId is set",
+      "gql",
+      undefined,
+      "ws-abc-123",
+      "query-history-gql-ws-abc-123.json",
+    ],
+    [
+      "both profile and workspaceId are set",
+      "sql",
+      "prod",
+      "ws-abc-123",
+      "query-history-sql-prod-ws-abc-123.json",
+    ],
+    [
+      "the scope has unsafe characters",
+      "sql",
+      "team/dev prod",
+      "ws/1..2",
+      "query-history-sql-team_dev_prod-ws_1..2.json",
+    ],
+  ])("resolves the path when %s (%s)", (_desc, engine, profile, workspaceId, expectedFile) => {
+    expect(getReplHistoryPath(engine, profile, workspaceId)).toBe(
+      `${xdgTempDir}/tailor-platform/${expectedFile}`,
     );
   });
 });

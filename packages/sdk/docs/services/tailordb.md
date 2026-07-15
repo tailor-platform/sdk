@@ -254,6 +254,29 @@ type User {
 - `toward.as` - Customizes the field name for accessing the related type from this type
 - `backward` - Customizes the field name for accessing this type from the related type
 
+Relation names share the same GraphQL field namespace as fields, files, and other relations on
+the type. The SDK rejects duplicate or empty relation names. Use `toward.as` when multiple fields
+on the same type point to the same target type, because their default forward names are derived
+from the target type name:
+
+```typescript
+const post = db.type("Post", {
+  authorID: db.uuid().relation({
+    type: "n-1",
+    toward: { type: user, as: "author" },
+    backward: "authoredPosts",
+  }),
+  reviewerID: db.uuid().relation({
+    type: "n-1",
+    toward: { type: user, as: "reviewer" },
+    backward: "reviewedPosts",
+  }),
+});
+```
+
+Use `toward.as` or `backward` when a generated relation name would conflict with an existing
+field, files entry, or relation on the same type.
+
 ### Hooks
 
 Add hooks to execute functions during data creation or update. Hooks receive three arguments:
@@ -317,15 +340,24 @@ export const user = db
   });
 ```
 
+**Note:** `.hooks()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
+
 ### Validation
 
-Add validation rules to fields. Validators receive three arguments (executed after hooks):
+Add validation rules to fields. Validators receive three arguments (executed after hooks and built-in type validation):
 
 - `value`: Field value after hook transformation
 - `data`: Entire record data after hook transformations (for accessing other field values)
 - `user`: User performing the operation
 
 Validators return `true` for success, `false` for failure. Use array form `[validator, errorMessage]` for custom error messages.
+
+**Note:** Custom validators run only when built-in type validation succeeds, so `value` always has the field's declared type. For array fields, the validator is called once with the complete array, not per element:
+
+```typescript
+// value is string[], not string
+db.string({ array: true }).validate(({ value }) => value.length >= 2);
+```
 
 #### Field-level Validation
 
@@ -380,6 +412,8 @@ export const user = db
   });
 ```
 
+**Note:** `.validate()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
+
 ### Vector Search
 
 ```typescript
@@ -410,6 +444,22 @@ export const user = db.type("User", {
 ```
 
 ## Type Modifiers
+
+Type builder methods that set one type-level configuration can be called only once on the same type. Duplicate calls fail at compile time and throw at runtime. This applies to `.description()`, `.hooks()`, `.validate()`, `.features()`, `.indexes()`, `.files()`, `.permission()`, and `.gqlPermission()`.
+
+Conditional assignment is still supported when only one branch calls the method:
+
+```typescript
+let user = db.type("User", {
+  name: db.string(),
+});
+
+if (enableFiles) {
+  user = user.files({
+    avatar: "profile image",
+  });
+}
+```
 
 ### Composite Indexes
 
@@ -500,6 +550,48 @@ db.type("User", {
    });
    ```
 
+#### GraphQL Operations
+
+Control which GraphQL operations (`create`, `update`, `delete`, `read`) are exposed for a type. All operations are enabled by default.
+
+```typescript
+db.type("Order", {
+  status: db.string(),
+}).features({
+  gqlOperations: {
+    delete: false, // Disable the delete mutation
+  },
+});
+```
+
+Use the `"query"` alias to disable all mutations at once (read-only type: `create`/`update`/`delete` false, `read` true):
+
+```typescript
+db.type("AuditLog", {
+  action: db.string(),
+}).features({
+  gqlOperations: "query",
+});
+```
+
+**Namespace-level default**
+
+Set a default for every type in a TailorDB namespace in `tailor.config.ts`. A type's own `.features({ gqlOperations })` always takes precedence over this default.
+
+```typescript
+// tailor.config.ts
+export default defineConfig({
+  db: {
+    tailordb: {
+      files: ["./tailordb/*.ts"],
+      gqlOperations: { delete: false }, // Default for every type in this namespace
+    },
+  },
+});
+```
+
+This default is re-evaluated on every `tailor-sdk deploy`, so changing it also updates types that already exist on the platform, not only newly created ones.
+
 ### Field Extraction (`pickFields` / `omitFields`)
 
 Extract subsets of fields from a `TailorDBType` for reuse in resolvers, executors, seed schemas, etc.
@@ -526,6 +618,8 @@ Available options:
 | ---------- | ------------------------------------- |
 | `optional` | Makes the selected fields optional    |
 | `array`    | Makes the selected fields array types |
+
+**Note:** The `array` option cannot change fields with custom validation — their validators expect the original value shape. Define a new field with a matching validator instead.
 
 #### `omitFields(keys)`
 
@@ -577,6 +671,8 @@ const schemaType = t.object({
 Configure Permission and GQLPermission. For details, see the [TailorDB Permission documentation](https://docs.tailor.tech/guides/tailordb/permission).
 
 **Important**: Following the secure-by-default principle, all operations are denied if permissions are not configured. You must explicitly grant permissions for each operation (create, read, update, delete).
+
+`generate`/`deploy` reject a type that has no `.permission()`, or no `.gqlPermission()` while GraphQL operations are enabled for it (see [GraphQL Operations](#graphql-operations) above). Disable GraphQL exposure entirely with `.features({ gqlOperations: { create: false, update: false, delete: false, read: false } })` if a type only needs record-level permission.
 
 ```typescript
 db.type("User", {

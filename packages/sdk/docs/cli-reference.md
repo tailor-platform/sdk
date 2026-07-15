@@ -11,12 +11,13 @@ tailor-sdk <command> [options]
 ## Global Options
 
 <a id="global-options"></a>
-| Option | Alias | Description | Required | Default |
-|--------|-------|-------------|----------|---------|
-| `--env-file <ENV_FILE>` | `-e` | Path to the environment file (error if not found) | No | - |
-| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | - | Path to the environment file (ignored if not found) | No | - |
-| `--verbose` | - | Enable verbose logging | No | `false` |
-| `--json` | `-j` | Output as JSON | No | `false` |
+
+| Option                                      | Alias | Description                                         | Required | Default |
+| ------------------------------------------- | ----- | --------------------------------------------------- | -------- | ------- |
+| `--env-file <ENV_FILE>`                     | `-e`  | Path to the environment file (error if not found)   | No       | -       |
+| `--env-file-if-exists <ENV_FILE_IF_EXISTS>` | -     | Path to the environment file (ignored if not found) | No       | -       |
+| `--verbose`                                 | -     | Enable verbose logging                              | No       | `false` |
+| `--json`                                    | `-j`  | Output as JSON                                      | No       | `false` |
 
 ### JSON Output
 
@@ -27,8 +28,11 @@ human-readable text or empty stdout.
 Commands that only perform side effects and do not define a structured result may leave stdout empty
 even when `--json` is passed.
 
-Errors, warnings, progress, and diagnostic messages are written to stderr. On failure, check the
-non-zero exit code and read stderr; stdout is not guaranteed to contain a JSON error object.
+Errors, warnings, progress, and diagnostic messages are written to stderr. After argument parsing,
+a command failure under `--json` emits a JSON error envelope to stderr. CLI errors include a stable
+`error.code` and may include structured `error.next` and `error.context` fields for automated
+recovery. Diagnostic lines may precede the error envelope, and stdout is not guaranteed to contain
+an error object.
 
 ## Common Options
 
@@ -74,6 +78,9 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                                         |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                                     |
 | `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run`, `machineuser token`            |
+| `TAILOR_PLATFORM_URL`                        | Platform API base URL. Saved into profiles created with `profile create --platform-url`                      |
+| `TAILOR_PLATFORM_OAUTH2_CLIENT_ID`           | OAuth2 client ID for user login. Saved into profiles created with `profile create --oauth2-client-id`        |
+| `TAILOR_PLATFORM_CONSOLE_URL`                | Console base URL. Saved into profiles created with `profile create --console-url`                            |
 | `TAILOR_BUNDLE_CONCURRENCY`                  | Max concurrent bundle workers for `deploy` (resolvers/executors/workflows). Defaults to CPU count            |
 | `TAILOR_APPLY_CONCURRENCY`                   | Max concurrent unary platform RPCs during `apply`/`deploy` (streaming uploads are not gated). Defaults to 16 |
 | `VISUAL` / `EDITOR`                          | Preferred editor for commands that open files (e.g., `vim`, `code`, `nano`)                                  |
@@ -88,6 +95,8 @@ Token resolution follows this priority order:
 2. `TAILOR_TOKEN` environment variable (deprecated)
 3. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
 4. Current user from platform config (`~/.config/tailor-platform/config.yaml`)
+
+Config-backed login tokens are scoped to the Platform API URL. Profiles with `--platform-url` use the token saved for that URL, so switching profiles can also switch between Platform API environments.
 
 ### Workspace ID Priority
 
@@ -131,6 +140,7 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | [tailordb migration sync](./cli/tailordb.md#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                     |
 | [tailordb erd](./cli/tailordb.md#tailordb-erd)                               | Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)                                                 |
 | [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export TailorDB ERD static viewer from local TailorDB schema.                                                             |
+| [tailordb erd diff](./cli/tailordb.md#tailordb-erd-diff)                     | Render TailorDB ERD schema diff HTML from exported ERD viewers.                                                           |
 | [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve TailorDB ERD locally with watch reload. (beta)                                                         |
 | [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
 
@@ -307,10 +317,16 @@ Commands for managing crash reports.
 
 Commands for setting up project infrastructure.
 
-| Command                                   | Description                                                                      |
-| ----------------------------------------- | -------------------------------------------------------------------------------- |
-| [setup](./cli/setup.md#setup)             | Generate a CI deploy workflow for your project. (beta)                           |
-| [setup check](./cli/setup.md#setup-check) | Audit generated workflows for drift against the current config/repo (read-only). |
+| Command                                             | Description                                                                                      |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| [setup](./cli/setup.md#setup)                       | Generate CI deploy workflows for your project. (beta)                                            |
+| [setup action](./cli/setup.md#setup-action)         | Generate a per-app composite action for use with setup coordinate (monorepo multi-app deploys).  |
+| [setup branch](./cli/setup.md#setup-branch)         | Generate a branch-target deploy workflow (push to branch triggers deploy).                       |
+| [setup check](./cli/setup.md#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
+| [setup coordinate](./cli/setup.md#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
+| [setup delete](./cli/setup.md#setup-delete)         | Delete managed workflow/action file(s) and their .github/tailor-sdk.lock entries.                |
+| [setup preview](./cli/setup.md#setup-preview)       | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
+| [setup tag](./cli/setup.md#setup-tag)               | Generate a tag-target deploy workflow (tag push triggers deploy).                                |
 
 ### [Upgrade Commands](./cli/upgrade.md)
 

@@ -35,6 +35,7 @@ export type ResourceKind =
   | "executor"
   | "workflow"
   | "workflow_job_function"
+  | "workflow_job_function_execution_policy"
   | "staticwebsite"
   | "aigateway"
   | "tailordb"

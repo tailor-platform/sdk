@@ -5,7 +5,7 @@ Guide for new SDK contributors.
 ## Prerequisites
 
 - **Node.js** >= 22.14.0
-- **pnpm** 10.28.0 (see `packageManager` in root `package.json`)
+- **pnpm** (version pinned by `packageManager` in root `package.json`)
 - **GPG key** for commit signing (enforced by Lefthook post-commit hook)
 
 ## Setup
@@ -19,12 +19,12 @@ pnpm build
 
 ## Key Commands
 
-| Command         | Description                   |
-| --------------- | ----------------------------- |
-| `pnpm build`    | Build all packages            |
-| `pnpm test`     | Run all tests                 |
-| `pnpm check`    | Format, lint, typecheck, knip |
-| `pnpm generate` | Run code generation           |
+| Command         | Description                                                                |
+| --------------- | -------------------------------------------------------------------------- |
+| `pnpm build`    | Build all packages                                                         |
+| `pnpm test`     | Run all tests                                                              |
+| `pnpm check`    | Build, generate, format, and every `check:*` script in root `package.json` |
+| `pnpm generate` | Run code generation                                                        |
 
 In `packages/sdk/`:
 
@@ -53,11 +53,13 @@ pnpm test:e2e        # Run E2E tests (requires deployed workspace)
 
 [Lefthook](https://lefthook.dev/) runs on every commit (see [`lefthook.yml`](../lefthook.yml)):
 
-1. **Build** — Rebuild SDK if `.ts` files changed
-2. **Format** — Check formatting with oxfmt
-3. **Lint** — Run standard and Vitest-specific oxlint passes, and check public API JSDoc
+1. **Format** — Check staged files with oxfmt
+2. **Build & Generate** — Rebuild the SDK and run code generation
+3. **Lint** — Run standard and Vitest-specific oxlint passes, plus create-sdk template lint
 4. **Typecheck** — Run tsgo
 5. **Knip** — Detect unused dependencies and exports
+
+Steps 2–5 run as a single command, and only when staged files include `.ts`/`.js`.
 
 Post-commit verifies GPG signature.
 

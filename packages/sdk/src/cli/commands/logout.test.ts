@@ -1,0 +1,259 @@
+import * as fs from "node:fs";
+import * as path from "pathe";
+import { runCommand } from "politty";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { initOAuth2Client } from "#/cli/shared/client";
+import {
+  loadAccessToken,
+  readPlatformConfig,
+  saveUserTokens,
+  writePlatformConfig,
+} from "#/cli/shared/context";
+import { resetKeyringState } from "#/cli/shared/token-store";
+import { logoutCommand } from "./logout";
+
+const xdgTempDir = vi.hoisted(() => `/tmp/tailor-logout-${Date.now()}-${Math.random()}`);
+
+const revokeMock = vi.hoisted(() => vi.fn());
+
+vi.mock("xdg-basedir", () => ({
+  xdgConfig: xdgTempDir,
+}));
+
+vi.mock("@napi-rs/keyring", () => ({
+  Entry: class {
+    setPassword() {}
+    getPassword(): string | null {
+      return null;
+    }
+    deletePassword() {}
+  },
+}));
+
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
+  ...(await importOriginal()),
+  initOAuth2Client: vi.fn(() => ({
+    revoke: revokeMock,
+  })),
+}));
+
+const validUUID = "12345678-1234-4abc-8def-123456789012";
+const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
+
+beforeAll(() => {
+  fs.mkdirSync(xdgTempDir, { recursive: true });
+});
+
+afterAll(() => {
+  fs.rmSync(xdgTempDir, { recursive: true, force: true });
+});
+
+describe("logout --profile", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    resetKeyringState();
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {},
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+        },
+      },
+      current_user: "u@example.com",
+    });
+    const config = await readPlatformConfig();
+    await saveUserTokens(
+      config,
+      "u@example.com",
+      {
+        accessToken: "default-access-token",
+        refreshToken: "default-refresh-token",
+      },
+      futureDate,
+    );
+    await saveUserTokens(
+      config,
+      "u@example.com",
+      {
+        accessToken: "dev-access-token",
+        refreshToken: "dev-refresh-token",
+      },
+      futureDate,
+      { platformUrl: "https://api.dev.tailor.tech", oauth2ClientId: "dev-client" },
+    );
+    config.current_user = "u@example.com";
+    writePlatformConfig(config);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
+    if (fs.existsSync(configPath)) fs.rmSync(configPath);
+  });
+
+  test("revokes and deletes the token scoped to the selected profile platform", async () => {
+    const result = await runCommand(logoutCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(true);
+    expect(initOAuth2Client).toHaveBeenCalledWith({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+    });
+    expect(revokeMock).toHaveBeenCalledWith(
+      {
+        accessToken: "dev-access-token",
+        refreshToken: "dev-refresh-token",
+        expiresAt: Date.parse(futureDate),
+      },
+      "refresh_token",
+    );
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBe("u@example.com");
+    await expect(loadAccessToken()).resolves.toBe("default-access-token");
+    await expect(loadAccessToken({ profile: "dev" })).rejects.toThrow(
+      'User "u@example.com" not found',
+    );
+  });
+
+  test("clears current user when profile logout removes the default token while env selects another platform", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "u@example.com": {
+          storage: "file",
+          access_token: "default-access-token",
+          refresh_token: "default-refresh-token",
+          token_expires_at: futureDate,
+        },
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "dev-access-token",
+          refresh_token: "dev-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {
+        prod: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.tailor.tech",
+        },
+      },
+      current_user: "u@example.com",
+    });
+
+    const result = await runCommand(logoutCommand, ["--profile", "prod"]);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBeNull();
+    expect(config.users["u@example.com"]).toBeUndefined();
+    expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeDefined();
+  });
+
+  test("clears current user when profile logout removes the only token for that user", async () => {
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "dev-access-token",
+          refresh_token: "dev-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+          oauth2_client_id: "dev-client",
+        },
+      },
+      current_user: "u@example.com",
+    });
+
+    const result = await runCommand(logoutCommand, ["--profile", "dev"]);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBeNull();
+    expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeUndefined();
+  });
+
+  test("preserves default login when logging out an env-selected platform", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "u@example.com": {
+          storage: "file",
+          access_token: "default-access-token",
+          refresh_token: "default-refresh-token",
+          token_expires_at: futureDate,
+        },
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          access_token: "dev-access-token",
+          refresh_token: "dev-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {},
+      current_user: "u@example.com",
+    });
+
+    const result = await runCommand(logoutCommand, []);
+
+    expect(result.success).toBe(true);
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBe("u@example.com");
+    expect(config.users["u@example.com"]).toBeDefined();
+    expect(config.users["https://api.dev.tailor.tech|u@example.com"]).toBeUndefined();
+
+    vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
+    await expect(loadAccessToken()).resolves.toBe("default-access-token");
+  });
+
+  test("falls back to an env-platform legacy token when logging out without a profile", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "u@example.com": {
+          storage: "file",
+          access_token: "legacy-access-token",
+          refresh_token: "legacy-refresh-token",
+          token_expires_at: futureDate,
+        },
+      },
+      profiles: {},
+      current_user: "u@example.com",
+    });
+
+    const result = await runCommand(logoutCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(revokeMock).toHaveBeenCalledWith(
+      {
+        accessToken: "legacy-access-token",
+        refreshToken: "legacy-refresh-token",
+        expiresAt: Date.parse(futureDate),
+      },
+      "refresh_token",
+    );
+    const config = await readPlatformConfig();
+    expect(config.current_user).toBeNull();
+    expect(config.users["u@example.com"]).toBeUndefined();
+  });
+});

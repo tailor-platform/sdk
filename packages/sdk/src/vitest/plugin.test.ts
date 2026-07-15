@@ -27,6 +27,31 @@ function transformWith(
   return (plugin.transform as any).call(parseCtx, code, id);
 }
 
+function importNode(specifier: string, end: number, start = 0): ImportNode {
+  return { type: "ImportDeclaration", start, end, source: { value: specifier } };
+}
+
+function resolveConfig(
+  plugin: ReturnType<typeof createBlockPlugin>,
+  config: Record<string, unknown>,
+) {
+  (plugin.configResolved as any)(config);
+}
+
+function callTransform(
+  plugin: ReturnType<typeof createBlockPlugin>,
+  code: string,
+  body: ImportNode[],
+  id: string,
+) {
+  const parseCtx = { parse: () => ({ body }) };
+  return (plugin.transform as any).call(parseCtx, code, id);
+}
+
+function applyConfig(plugin: ReturnType<typeof createEnvironmentPlugin>, userConfig: any) {
+  return (plugin.config as any).call({}, userConfig);
+}
+
 describe("createBlockPlugin", () => {
   test("replaces a blocked import with a throwing statement", () => {
     const plugin = createBlockPlugin();
@@ -34,7 +59,7 @@ describe("createBlockPlugin", () => {
     const result = transformWith(
       plugin,
       code,
-      [{ type: "ImportDeclaration", start: 0, end: code.length, source: { value: "node:crypto" } }],
+      [importNode("node:crypto", code.length)],
       "/src/file.ts",
     );
     expect(result.code).toMatch(/throw new Error\(/);
@@ -53,7 +78,7 @@ describe("createBlockPlugin", () => {
     const result = transformWith(
       plugin,
       code,
-      [{ type: "ImportDeclaration", start: 0, end: code.length, source: { value: "node:crypto" } }],
+      [importNode("node:crypto", code.length)],
       "/src/file.ts",
     );
     expect(() => new Function(result.code)).not.toThrow();
@@ -101,7 +126,7 @@ describe("createBlockPlugin", () => {
     const result = transformWith(
       plugin,
       code,
-      [{ type: "ImportDeclaration", start: 0, end: code.length, source: { value: "node:crypto" } }],
+      [importNode("node:crypto", code.length)],
       "/src/file.ts",
     );
     expect(result.code).toMatch(/throw new Error\(/);
@@ -275,7 +300,7 @@ describe("createBlockPlugin", () => {
     const result = transformWith(
       plugin,
       code,
-      [{ type: "ImportDeclaration", start: 0, end: code.length, source: { value: "node:crypto" } }],
+      [importNode("node:crypto", code.length)],
       "/src/file.ts",
     );
     expect(result.code).toMatch(/throw new Error\(/);
@@ -291,13 +316,8 @@ describe("createBlockPlugin", () => {
       plugin,
       code,
       [
-        { type: "ImportDeclaration", start: 0, end: stmt1.length, source: { value: "@x" } },
-        {
-          type: "ImportDeclaration",
-          start: stmt1.length + sep.length,
-          end: code.length,
-          source: { value: "node:fs" },
-        },
+        importNode("@x", stmt1.length),
+        importNode("node:fs", code.length, stmt1.length + sep.length),
       ],
       "/src/file.ts",
     );
@@ -312,46 +332,29 @@ describe("createBlockPlugin", () => {
     const result = transformWith(
       plugin,
       code,
-      [
-        {
-          type: "ImportDeclaration",
-          start: 0,
-          end: stmt.length,
-          source: { value: "@tailor-platform/sdk" },
-        },
-      ],
+      [importNode("@tailor-platform/sdk", stmt.length)],
       "/src/file.ts",
     );
     expect(result).toBeUndefined();
   });
 
-  test("exempts test files when matched via root-relative include glob", () => {
+  test.each([
+    [
+      "exempts test files when matched via root-relative include glob",
+      "/abs/project/tests/foo.test.ts",
+    ],
+    [
+      "skips files outside the project root (e.g. symlinked workspace deps)",
+      "/abs/other/packages/sdk/dist/index.mjs",
+    ],
+  ])("%s", (_name, id) => {
     const plugin = createBlockPlugin();
     const root = "/abs/project";
-    const testFile = "/abs/project/tests/foo.test.ts";
     const code = `import { randomUUID } from "node:crypto";`;
-    const result = transformWith(
-      plugin,
-      code,
-      [{ type: "ImportDeclaration", start: 0, end: code.length, source: { value: "node:crypto" } }],
-      testFile,
-      { include: ["tests/**/*.test.ts"], root },
-    );
-    expect(result).toBeUndefined();
-  });
-
-  test("skips files outside the project root (e.g. symlinked workspace deps)", () => {
-    const plugin = createBlockPlugin();
-    const root = "/abs/project";
-    const externalId = "/abs/other/packages/sdk/dist/index.mjs";
-    const code = `import { randomUUID } from "node:crypto";`;
-    const result = transformWith(
-      plugin,
-      code,
-      [{ type: "ImportDeclaration", start: 0, end: code.length, source: { value: "node:crypto" } }],
-      externalId,
-      { include: ["tests/**/*.test.ts"], root },
-    );
+    const result = transformWith(plugin, code, [importNode("node:crypto", code.length)], id, {
+      include: ["tests/**/*.test.ts"],
+      root,
+    });
     expect(result).toBeUndefined();
   });
 
@@ -359,12 +362,7 @@ describe("createBlockPlugin", () => {
     const plugin = createBlockPlugin();
     const root = "/abs/project";
     const code = `import { randomUUID } from "node:crypto";`;
-    const node = {
-      type: "ImportDeclaration" as const,
-      start: 0,
-      end: code.length,
-      source: { value: "node:crypto" },
-    };
+    const node = importNode("node:crypto", code.length);
     for (const id of ["\0vite/preload-helper.js", "virtual:my-mod", "vite/dist/client/env.mjs"]) {
       const result = transformWith(plugin, code, [node], id, {
         include: ["tests/**/*.test.ts"],
@@ -378,20 +376,10 @@ describe("createBlockPlugin", () => {
     const plugin = createBlockPlugin();
     const setupPath = "/abs/path/setup.ts";
     const code = `import { pathToFileURL } from "node:url";\nexport const x = pathToFileURL("/x").href;`;
-    const result = transformWith(
-      plugin,
-      code,
-      [
-        {
-          type: "ImportDeclaration",
-          start: 0,
-          end: 41,
-          source: { value: "node:url" },
-        },
-      ],
-      setupPath,
-      { include: [], setupFiles: [setupPath] },
-    );
+    const result = transformWith(plugin, code, [importNode("node:url", 41)], setupPath, {
+      include: [],
+      setupFiles: [setupPath],
+    });
     expect(result).toBeUndefined();
   });
 
@@ -403,22 +391,16 @@ describe("createBlockPlugin", () => {
     const projectSetup = "/abs/path/project/setup.ts";
     const projectGlobal = "/abs/path/project/global-setup.ts";
     const code = `import { pathToFileURL } from "node:url";\nexport const x = pathToFileURL("/x").href;`;
-    const node = {
-      type: "ImportDeclaration" as const,
-      start: 0,
-      end: 41,
-      source: { value: "node:url" },
-    };
-    (plugin.configResolved as any)({
+    const node = importNode("node:url", 41);
+    resolveConfig(plugin, {
       root: "/",
       test: {
         include: [],
         projects: [{ test: { setupFiles: [projectSetup], globalSetup: projectGlobal } }],
       },
     });
-    const parseCtx = { parse: () => ({ body: [node] }) };
-    expect((plugin.transform as any).call(parseCtx, code, projectSetup)).toBeUndefined();
-    expect((plugin.transform as any).call(parseCtx, code, projectGlobal)).toBeUndefined();
+    expect(callTransform(plugin, code, [node], projectSetup)).toBeUndefined();
+    expect(callTransform(plugin, code, [node], projectGlobal)).toBeUndefined();
   });
 
   test("resolves per-project setup paths against the project's own root", () => {
@@ -427,13 +409,8 @@ describe("createBlockPlugin", () => {
     // outside cwd correctly exempt their host files.
     const plugin = createBlockPlugin();
     const code = `import { pathToFileURL } from "node:url";\nexport const x = pathToFileURL("/x").href;`;
-    const node = {
-      type: "ImportDeclaration" as const,
-      start: 0,
-      end: 41,
-      source: { value: "node:url" },
-    };
-    (plugin.configResolved as any)({
+    const node = importNode("node:url", 41);
+    resolveConfig(plugin, {
       root: "/top-root",
       test: {
         include: [],
@@ -447,21 +424,13 @@ describe("createBlockPlugin", () => {
         ],
       },
     });
-    const parseCtx = { parse: () => ({ body: [node] }) };
     // Resolved as /proj-root/host-setup.ts (NOT /top-root/host-setup.ts).
-    expect(
-      (plugin.transform as any).call(parseCtx, code, "/proj-root/host-setup.ts"),
-    ).toBeUndefined();
+    expect(callTransform(plugin, code, [node], "/proj-root/host-setup.ts")).toBeUndefined();
   });
 
   test("exempts files listed in test.globalSetup (string and array forms)", () => {
     const code = `import { pathToFileURL } from "node:url";\nexport const x = pathToFileURL("/x").href;`;
-    const node = {
-      type: "ImportDeclaration" as const,
-      start: 0,
-      end: 41,
-      source: { value: "node:url" },
-    };
+    const node = importNode("node:url", 41);
 
     const stringForm = createBlockPlugin();
     const stringPath = "/abs/path/global-setup.ts";
@@ -488,13 +457,8 @@ describe("createBlockPlugin", () => {
     // node:* imports will be rewritten as if it were production source.
     const plugin = createBlockPlugin();
     const code = `import { randomUUID } from "node:crypto";`;
-    const node = {
-      type: "ImportDeclaration" as const,
-      start: 0,
-      end: code.length,
-      source: { value: "node:crypto" },
-    };
-    (plugin.configResolved as any)({
+    const node = importNode("node:crypto", code.length);
+    resolveConfig(plugin, {
       root: "/top-root",
       test: {
         // Top-level patterns intentionally do NOT cover the project file.
@@ -509,10 +473,7 @@ describe("createBlockPlugin", () => {
         ],
       },
     });
-    const parseCtx = { parse: () => ({ body: [node] }) };
-    expect(
-      (plugin.transform as any).call(parseCtx, code, "/proj-root/e2e/foo.spec.ts"),
-    ).toBeUndefined();
+    expect(callTransform(plugin, code, [node], "/proj-root/e2e/foo.spec.ts")).toBeUndefined();
   });
 
   test("strips query/hash suffixes from id before path lookups", () => {
@@ -524,19 +485,10 @@ describe("createBlockPlugin", () => {
     const plugin = createBlockPlugin();
     const setupPath = "/abs/path/setup.ts";
     const code = `import { pathToFileURL } from "node:url";\nexport const x = pathToFileURL("/x").href;`;
-    const node = {
-      type: "ImportDeclaration" as const,
-      start: 0,
-      end: 41,
-      source: { value: "node:url" },
-    };
-    (plugin.configResolved as any)({
-      root: "/",
-      test: { include: [], setupFiles: [setupPath] },
-    });
-    const parseCtx = { parse: () => ({ body: [node] }) };
+    const node = importNode("node:url", 41);
+    resolveConfig(plugin, { root: "/", test: { include: [], setupFiles: [setupPath] } });
     for (const suffix of ["?import", "?direct", "?raw", "?v=abc123", "#frag"]) {
-      expect((plugin.transform as any).call(parseCtx, code, setupPath + suffix)).toBeUndefined();
+      expect(callTransform(plugin, code, [node], setupPath + suffix)).toBeUndefined();
     }
   });
 });
@@ -558,7 +510,7 @@ describe("createEnvironmentPlugin", () => {
   test("rewrites top-level `environment: 'tailor-runtime'` to an absolute file path", () => {
     const plugin = createEnvironmentPlugin();
     const userConfig = { test: { environment: "tailor-runtime" } };
-    const merged = (plugin.config as any).call({}, userConfig);
+    const merged = applyConfig(plugin, userConfig);
 
     expect(userConfig.test.environment).toMatch(/environment\.mjs$/);
     expect(merged.test.setupFiles).toHaveLength(1);
@@ -575,7 +527,7 @@ describe("createEnvironmentPlugin", () => {
         ],
       },
     };
-    (plugin.config as any).call({}, userConfig);
+    applyConfig(plugin, userConfig);
 
     expect(userConfig.test.projects[0]!.test.environment).toMatch(/environment\.mjs$/);
     // Other environments untouched.
@@ -585,14 +537,14 @@ describe("createEnvironmentPlugin", () => {
   test("leaves non-tailor environments untouched", () => {
     const plugin = createEnvironmentPlugin();
     const userConfig = { test: { environment: "node" } };
-    (plugin.config as any).call({}, userConfig);
+    applyConfig(plugin, userConfig);
 
     expect(userConfig.test.environment).toBe("node");
   });
 
   test("propagates options.config to process.env.__TAILOR_RUNTIME_CONFIG", () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
-    (plugin.config as any).call({}, { test: { environment: "tailor-runtime" } });
+    applyConfig(plugin, { test: { environment: "tailor-runtime" } });
 
     expect(process.env[ENV_VAR]).toBeDefined();
     expect(process.env[ENV_VAR]).toMatch(/tailor\.config\.ts$/);
@@ -605,7 +557,7 @@ describe("createEnvironmentPlugin", () => {
     // the env var points at a file in the wrong directory.
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
     const customRoot = "/abs/custom/project-root";
-    (plugin.config as any).call({}, { root: customRoot, test: { environment: "tailor-runtime" } });
+    applyConfig(plugin, { root: customRoot, test: { environment: "tailor-runtime" } });
 
     expect(process.env[ENV_VAR]).toBe(`${customRoot}/tailor.config.ts`);
   });
@@ -614,17 +566,17 @@ describe("createEnvironmentPlugin", () => {
     // Absolute paths must pass through `resolve` unchanged so users can pin
     // a config location explicitly.
     const plugin = createEnvironmentPlugin({ config: "/abs/elsewhere/tailor.config.ts" });
-    (plugin.config as any).call(
-      {},
-      { root: "/abs/custom/project-root", test: { environment: "tailor-runtime" } },
-    );
+    applyConfig(plugin, {
+      root: "/abs/custom/project-root",
+      test: { environment: "tailor-runtime" },
+    });
 
     expect(process.env[ENV_VAR]).toBe("/abs/elsewhere/tailor.config.ts");
   });
 
   test("does not set the env var when options.config is omitted", () => {
     const plugin = createEnvironmentPlugin();
-    (plugin.config as any).call({}, { test: { environment: "tailor-runtime" } });
+    applyConfig(plugin, { test: { environment: "tailor-runtime" } });
 
     expect(process.env[ENV_VAR]).toBeUndefined();
   });
@@ -634,7 +586,7 @@ describe("createEnvironmentPlugin", () => {
     // Even with options.config, the env var must not be set if the user only
     // configured non-tailor environments — otherwise it would leak into
     // unrelated projects/runs sharing the same parent process.
-    (plugin.config as any).call({}, { test: { environment: "node" } });
+    applyConfig(plugin, { test: { environment: "node" } });
 
     expect(process.env[ENV_VAR]).toBeUndefined();
   });
@@ -643,7 +595,7 @@ describe("createEnvironmentPlugin", () => {
     process.env[ENV_VAR] = "/old/stale/path.ts";
 
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
-    (plugin.config as any).call({}, { test: { environment: "node" } });
+    applyConfig(plugin, { test: { environment: "node" } });
 
     // Stale value from a prior watch-mode iteration must not survive.
     expect(process.env[ENV_VAR]).toBeUndefined();
@@ -653,24 +605,21 @@ describe("createEnvironmentPlugin", () => {
     process.env[ENV_VAR] = "/old/stale/path.ts";
 
     const plugin = createEnvironmentPlugin();
-    (plugin.config as any).call({}, { test: { environment: "tailor-runtime" } });
+    applyConfig(plugin, { test: { environment: "tailor-runtime" } });
 
     expect(process.env[ENV_VAR]).toBeUndefined();
   });
 
   test("sets the env var when at least one project selects tailor-runtime", () => {
     const plugin = createEnvironmentPlugin({ config: "./tailor.config.ts" });
-    (plugin.config as any).call(
-      {},
-      {
-        test: {
-          projects: [
-            { test: { environment: "node", name: "e2e" } },
-            { test: { environment: "tailor-runtime", name: "unit" } },
-          ],
-        },
+    applyConfig(plugin, {
+      test: {
+        projects: [
+          { test: { environment: "node", name: "e2e" } },
+          { test: { environment: "tailor-runtime", name: "unit" } },
+        ],
       },
-    );
+    });
 
     expect(process.env[ENV_VAR]).toBeDefined();
     expect(isAbsolute(process.env[ENV_VAR] ?? "")).toBe(true);
@@ -681,7 +630,7 @@ describe("createEnvironmentPlugin", () => {
     const userConfig = {
       test: { environment: "tailor-runtime", setupFiles: "./user-setup.ts" },
     };
-    (plugin.config as any).call({}, userConfig);
+    applyConfig(plugin, userConfig);
 
     // Vite's array-concat merge needs both sides as arrays so the user's
     // string form is not replaced by ours.
@@ -692,7 +641,7 @@ describe("createEnvironmentPlugin", () => {
     const plugin = createEnvironmentPlugin();
     const original = ["./a.ts", "./b.ts"];
     const userConfig = { test: { environment: "tailor-runtime", setupFiles: original } };
-    (plugin.config as any).call({}, userConfig);
+    applyConfig(plugin, userConfig);
 
     // Plugin should not duplicate or reorder user entries; Vite concatenates
     // the user array with our returned [setupPath] at merge time.

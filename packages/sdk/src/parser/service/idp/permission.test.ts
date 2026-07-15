@@ -73,36 +73,17 @@ describe("normalizeIdPActionPermission", () => {
   });
 
   describe("operator mapping", () => {
-    test("maps = to eq", () => {
+    test.each([
+      ["=", "eq", { idpUser: "name" }, "test@example.com"],
+      ["!=", "ne", { idpUser: "name" }, "test@example.com"],
+      ["in", "in", { user: "role" }, ["ADMIN", "MANAGER"]],
+      ["not in", "nin", { user: "role" }, ["GUEST"]],
+    ])("maps %s to %s", (rawOp, mappedOp, operand, value) => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ idpUser: "name" }, "=", "test@example.com"]],
+        conditions: [[operand, rawOp as never, value]],
         permit: true,
       });
-      expect(result.conditions[0]![1]).toBe("eq");
-    });
-
-    test("maps != to ne", () => {
-      const result = normalizeIdPActionPermission({
-        conditions: [[{ idpUser: "name" }, "!=", "test@example.com"]],
-        permit: true,
-      });
-      expect(result.conditions[0]![1]).toBe("ne");
-    });
-
-    test("maps in to in", () => {
-      const result = normalizeIdPActionPermission({
-        conditions: [[{ user: "role" }, "in", ["ADMIN", "MANAGER"]]],
-        permit: true,
-      });
-      expect(result.conditions[0]![1]).toBe("in");
-    });
-
-    test("maps not in to nin", () => {
-      const result = normalizeIdPActionPermission({
-        conditions: [[{ user: "role" }, "not in", ["GUEST"]]],
-        permit: true,
-      });
-      expect(result.conditions[0]![1]).toBe("nin");
+      expect(result.conditions[0]![1]).toBe(mappedOp);
     });
   });
 
@@ -115,36 +96,17 @@ describe("normalizeIdPActionPermission", () => {
       expect(result.conditions[0]![0]).toEqual({ user: "_id" });
     });
 
-    test("passes through { user: 'role' } as-is", () => {
+    test.each([
+      [{ user: "role" }, "ADMIN"],
+      [{ idpUser: "name" }, "test"],
+      [{ oldIdpUser: "name" }, "test"],
+      [{ newIdpUser: "name" }, "test"],
+    ])("passes through %o as-is", (operand, value) => {
       const result = normalizeIdPActionPermission({
-        conditions: [[{ user: "role" }, "=", "ADMIN"]],
+        conditions: [[operand, "=", value]],
         permit: true,
       });
-      expect(result.conditions[0]![0]).toEqual({ user: "role" });
-    });
-
-    test("passes through { idpUser: 'name' } as-is", () => {
-      const result = normalizeIdPActionPermission({
-        conditions: [[{ idpUser: "name" }, "=", "test"]],
-        permit: true,
-      });
-      expect(result.conditions[0]![0]).toEqual({ idpUser: "name" });
-    });
-
-    test("passes through { oldIdpUser: 'name' } as-is", () => {
-      const result = normalizeIdPActionPermission({
-        conditions: [[{ oldIdpUser: "name" }, "=", "test"]],
-        permit: true,
-      });
-      expect(result.conditions[0]![0]).toEqual({ oldIdpUser: "name" });
-    });
-
-    test("passes through { newIdpUser: 'name' } as-is", () => {
-      const result = normalizeIdPActionPermission({
-        conditions: [[{ newIdpUser: "name" }, "=", "test"]],
-        permit: true,
-      });
-      expect(result.conditions[0]![0]).toEqual({ newIdpUser: "name" });
+      expect(result.conditions[0]![0]).toEqual(operand);
     });
 
     test("passes through string literals", () => {
@@ -235,52 +197,58 @@ describe("normalizeIdPPermission", () => {
 describe("findOmittedPermitRules", () => {
   type RawIdPPermission = NonNullable<Parameters<typeof findOmittedPermitRules>[0]>;
 
-  test("flags object-form rules that omit permit", () => {
-    const result = findOmittedPermitRules({
-      create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]] }],
-      read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
-      update: [],
-      delete: [],
-      sendPasswordResetEmail: [],
-      unenrollMfa: [],
-    } as RawIdPPermission);
-    expect(result).toEqual(["create[0]"]);
-  });
-
-  test("ignores array-shorthand rules (they default to allow)", () => {
-    const result = findOmittedPermitRules({
-      create: [[{ user: "role" }, "=", "ADMIN"]],
-      read: [],
-      update: [],
-      delete: [],
-      sendPasswordResetEmail: [],
-      unenrollMfa: [],
-    } as RawIdPPermission);
-    expect(result).toEqual([]);
-  });
-
-  test("flags single-array object form", () => {
-    const result = findOmittedPermitRules({
-      create: [{ conditions: [{ user: "role" }, "=", "ADMIN"] }],
-      read: [],
-      update: [],
-      delete: [],
-      sendPasswordResetEmail: [],
-      unenrollMfa: [],
-    } as RawIdPPermission);
-    expect(result).toEqual(["create[0]"]);
-  });
-
-  test("flags object-form rules in unenrollMfa that omit permit", () => {
-    const result = findOmittedPermitRules({
-      create: [],
-      read: [],
-      update: [],
-      delete: [],
-      sendPasswordResetEmail: [],
-      unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]] }],
-    } as RawIdPPermission);
-    expect(result).toEqual(["unenrollMfa[0]"]);
+  test.each([
+    [
+      "flags object-form rules that omit permit",
+      {
+        create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]] }],
+        read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+        unenrollMfa: [],
+      },
+      ["create[0]"],
+    ],
+    [
+      "ignores array-shorthand rules (they default to allow)",
+      {
+        create: [[{ user: "role" }, "=", "ADMIN"]],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+        unenrollMfa: [],
+      },
+      [],
+    ],
+    [
+      "flags single-array object form",
+      {
+        create: [{ conditions: [{ user: "role" }, "=", "ADMIN"] }],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+        unenrollMfa: [],
+      },
+      ["create[0]"],
+    ],
+    [
+      "flags object-form rules in unenrollMfa that omit permit",
+      {
+        create: [],
+        read: [],
+        update: [],
+        delete: [],
+        sendPasswordResetEmail: [],
+        unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]] }],
+      },
+      ["unenrollMfa[0]"],
+    ],
+  ] as const)("%s", (_name, permission, expected) => {
+    const result = findOmittedPermitRules(permission as RawIdPPermission);
+    expect(result).toEqual(expected);
   });
 
   test("returns empty for undefined permission", () => {

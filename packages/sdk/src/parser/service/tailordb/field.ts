@@ -1,3 +1,5 @@
+import { parseSync } from "oxc-parser";
+import { assertParsableExpression } from "#/utils/script-expr";
 import { getPrecompiledScriptExpr } from "./hooks-validate-precompiled-expr";
 import type {
   TailorAnyDBField,
@@ -7,56 +9,122 @@ import type {
 import type { OperatorFieldConfig } from "#/parser/service/tailordb/types";
 import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
+type FieldScriptContext = {
+  typeName: string;
+  fieldPath: readonly string[];
+};
+
+type ScriptFunction = (...args: never[]) => unknown;
+
+type ScriptContextKind = "hooks.create" | "hooks.update" | "validate";
+
 // Since there's naming difference between platform and sdk,
 // use this mapping in all scripts to provide variables that match sdk types.
 export const tailorUserMap = /* js */ `{ id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes }`;
 
 /**
+ * Parse `wrapped` and return the first property of the top-level parenthesized
+ * object expression, or `undefined` if it does not parse as one.
+ * @param wrapped - Source wrapped as `({ ... })`
+ * @returns The first object property, or `undefined`
+ */
+const firstObjectProperty = (wrapped: string) => {
+  const parseResult = parseSync("stringify-function.ts", wrapped, { sourceType: "module" });
+  if (parseResult.errors.length > 0) {
+    return undefined;
+  }
+  const expressionStatement = parseResult.program.body[0];
+  const objectExpression =
+    expressionStatement?.type === "ExpressionStatement" &&
+    expressionStatement.expression.type === "ParenthesizedExpression"
+      ? expressionStatement.expression.expression
+      : undefined;
+  return objectExpression?.type === "ObjectExpression" ? objectExpression.properties[0] : undefined;
+};
+
+/**
  * Convert a function to a string representation.
  * Handles method shorthand syntax (e.g., `create() { ... }`) by converting it to
- * a function expression (e.g., `function create() { ... }`).
+ * an anonymous function expression (e.g., `function () { ... }`), including
+ * `async` and generator variants and shorthand bodies that themselves contain
+ * arrow functions. The result is anonymous (rather than reusing the method
+ * name) so a body that references an outer variable of the same name is not
+ * shadowed by the generated function's own binding.
  * @param fn - Function to stringify
  * @returns Stringified function source
  */
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 export const stringifyFunction = (fn: Function): string => {
   const src = fn.toString().trim();
-  // Method shorthand pattern: methodName(...) { ... }
-  // Needs to be converted to: function methodName(...) { ... }
+  // `src` is already a valid function/arrow expression (e.g. `function () {}`,
+  // `() => {}`) if it parses as an object property value as-is; leave it untouched.
+  if (firstObjectProperty(`({m: ${src}})`)) {
+    return src;
+  }
+  // Otherwise, method shorthand (e.g. `create() {}`, `async create() {}`) is
+  // only valid inside an object literal, so parse it as an object property to
+  // detect and convert it via the AST rather than guessing from source text.
+  const wrapped = `({${src}})`;
+  const property = firstObjectProperty(wrapped);
+
+  if (property?.type === "Property" && property.method && property.computed) {
+    throw new Error(
+      "Computed-key method shorthand cannot be converted to a TailorDB script expression. " +
+        "Use an arrow function or function expression instead.",
+    );
+  }
   if (
-    /^[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/.test(src) &&
-    !src.startsWith("function") &&
-    !src.startsWith("(") &&
-    !src.includes("=>")
+    property?.type === "Property" &&
+    property.method &&
+    property.value.type === "FunctionExpression"
   ) {
-    return `function ${src}`;
+    const { async, generator } = property.value;
+    const body = wrapped.slice(property.value.start, property.value.end);
+    return `${async ? "async " : ""}function${generator ? "*" : ""} ${body}`;
   }
   return src;
 };
 
+function formatScriptContext(kind: ScriptContextKind, context: FieldScriptContext | undefined) {
+  if (!context) {
+    return kind === "validate" ? kind : "hooks";
+  }
+  return `${kind} for ${context.typeName}.${context.fieldPath.join(".")}`;
+}
+
 /**
- * Convert a hook function to a script expression.
- * @param fn - Hook function
- * @returns JavaScript expression calling the hook
+ * Convert a hook or validator function to a script expression.
+ * @param fn - Hook or validator function
+ * @param kind - Label naming the source of the expression in conversion errors
+ * @param context - Optional field context for conversion errors
+ * @returns JavaScript expression calling the function
  */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
-const convertHookToExpr = (fn: Function): string => {
-  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+const convertToScriptExpr = (
+  fn: ScriptFunction,
+  kind: ScriptContextKind,
+  context: FieldScriptContext | undefined,
+): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn);
   if (precompiledExpr) {
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
-  return `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`;
+  return assertParsableExpression(
+    `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+    formatScriptContext(kind, context),
+  );
 };
 
 /**
  * Parse TailorDBField into OperatorFieldConfig.
  * This transforms user-defined functions into script expressions.
  * @param field - TailorDB field definition
+ * @param context - Optional field context for conversion errors
  * @returns Parsed operator field configuration
  */
 export function parseFieldConfig(
   field: TailorDBTypeSchemaOutput["fields"][string],
+  context?: FieldScriptContext,
 ): OperatorFieldConfig {
   const metadata = field.metadata as DBFieldMetadata;
   const fieldType = field.type;
@@ -72,7 +140,13 @@ export function parseFieldConfig(
       ? {
           fields: Object.entries(nestedFields).reduce(
             (acc, [key, nestedField]) => {
-              acc[key] = parseFieldConfig(nestedField);
+              acc[key] = parseFieldConfig(
+                nestedField,
+                context && {
+                  ...context,
+                  fieldPath: [...context.fieldPath, key],
+                },
+              );
               return acc;
             },
             {} as Record<string, OperatorFieldConfig>,
@@ -87,9 +161,7 @@ export function parseFieldConfig(
 
       return {
         script: {
-          expr:
-            getPrecompiledScriptExpr(fn) ??
-            `(${fn.toString().trim()})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+          expr: convertToScriptExpr(fn, "validate", context),
         },
         errorMessage: message,
       };
@@ -98,12 +170,20 @@ export function parseFieldConfig(
       ? {
           create: metadata.hooks.create
             ? {
-                expr: convertHookToExpr(metadata.hooks.create),
+                expr: convertToScriptExpr(
+                  metadata.hooks.create as ScriptFunction,
+                  "hooks.create",
+                  context,
+                ),
               }
             : undefined,
           update: metadata.hooks.update
             ? {
-                expr: convertHookToExpr(metadata.hooks.update),
+                expr: convertToScriptExpr(
+                  metadata.hooks.update as ScriptFunction,
+                  "hooks.update",
+                  context,
+                ),
               }
             : undefined,
         }
