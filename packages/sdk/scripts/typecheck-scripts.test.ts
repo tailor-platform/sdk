@@ -99,9 +99,10 @@ describe("workspace typecheck scripts", () => {
     expect(() => validateParallelTypecheckScripts(scripts)).toThrow(/typecheck .* mismatch/);
   });
 
-  test.concurrent.each(lanes)(
+  test.concurrent.for(lanes)(
     "reports every branch when %s fails",
-    async (failedLane) => {
+    { timeout: 30_000 },
+    async (failedLane, { expect }) => {
       const fixture = mkdtempSync(join(tmpdir(), "typecheck-fanout-"));
       const scripts: Scripts = {
         "check:typecheck": expectedCoordinator,
@@ -130,6 +131,5 @@ describe("workspace typecheck scripts", () => {
         rmSync(fixture, { force: true, recursive: true });
       }
     },
-    30_000,
   );
 });
