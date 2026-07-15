@@ -201,7 +201,7 @@ export type TypeValidateFn<
     oldRecord: DeepReadonly<TData> | null;
     invoker: TailorPrincipal | null;
   },
-  issues: <P extends DottedPaths<Omit<TData, "id">>>(field: P, message: string) => void,
+  issues: (field: DottedPaths<Omit<TData, "id">>, message: string) => void,
 ) => void;
 
 type TypeCreateHookFn<
