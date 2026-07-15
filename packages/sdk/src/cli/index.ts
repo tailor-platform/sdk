@@ -36,7 +36,7 @@ import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
 import { commonArgs, isVerbose } from "./shared/args";
-import { isCLIError } from "./shared/errors";
+import { errorToJson, isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
 import { dispatchPluginWithInstallHint } from "./shared/plugin";
@@ -168,7 +168,9 @@ runMain(mainCommand, {
     }),
   cleanup: async ({ error }) => {
     if (error) {
-      if (isCLIError(error)) {
+      if (logger.jsonMode) {
+        logger.log(JSON.stringify(errorToJson(error, { includeStack: isVerbose() })));
+      } else if (isCLIError(error)) {
         logger.log(error.format());
         if (isVerbose() && error.stack) {
           logger.debug(`\nStack trace:\n${error.stack}`);

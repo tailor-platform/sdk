@@ -329,6 +329,11 @@ createExecutor({
 });
 ```
 
+`args` must match the workflow's main job input. It is required when that input is required
+and can be omitted when the workflow has no input. Static arguments can be JSON-compatible
+primitives, arrays, or plain objects; top-level `null` is not supported. An argument callback
+must return the same input type.
+
 ### Authentication for Operations
 
 GraphQL and Workflow operations can specify an `invoker` to execute with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names defined in your auth config:
