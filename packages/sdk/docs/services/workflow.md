@@ -139,7 +139,7 @@ for (const region of regions) {
 // ❌ Bad: non-deterministic — argument changes between executions
 processJob.start({ timestamp: Date.now() });
 
-// ✅ OK: call Date.now() in separated job
+// ✅ OK: call Date.now() in a separate job
 const timestamp = timestampJob.start();
 processJob.start({ timestamp });
 ```
@@ -151,7 +151,7 @@ for (const item of items) {
   processItem.start({ id: item.id });
 }
 
-// ✅ OK: call fetch("https://api.example.com/items").then((r) => r.json()); in separated job
+// ✅ OK: call fetch("https://api.example.com/items").then((r) => r.json()); in a separate job
 const items = fetchItemsJob.start();
 for (const item of items) {
   processItem.start({ id: item.id });
