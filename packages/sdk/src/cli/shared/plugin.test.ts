@@ -3,8 +3,10 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { getOAuth2ClientId, getPlatformBaseUrl } from "./client";
+import { logger } from "./logger";
 import {
   dispatchPlugin,
+  dispatchPluginWithInstallHint,
   explicitProfileFromArgs,
   hasEnvFileFlag,
   listPlugins,
@@ -394,6 +396,65 @@ describe("dispatchPlugin", () => {
     process.env.PATH = "";
 
     expect(await dispatchPlugin({ name: "missing", args: [], cliName: CLI })).toBeUndefined();
+  });
+});
+
+describe("dispatchPluginWithInstallHint", () => {
+  let tempDir: string;
+  let originalCwd: string;
+  let originalPath: string | undefined;
+
+  beforeEach(() => {
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tailor-hint-")));
+    originalCwd = process.cwd();
+    originalPath = process.env.PATH;
+    const project = path.join(tempDir, "project");
+    fs.mkdirSync(project, { recursive: true });
+    process.chdir(project);
+    process.env.PATH = "";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.chdir(originalCwd);
+    process.env.PATH = originalPath;
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  test("prints an install hint when a known plugin package is not installed", async () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    const code = await dispatchPluginWithInstallHint({
+      commandPath: ["tailordb"],
+      name: "erd",
+      args: ["export"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      `"${CLI} tailordb erd" is provided by the @tailor-platform/sdk-tailordb-erd-plugin CLI plugin, which is not installed.`,
+    );
+    expect(infoSpy).toHaveBeenCalledWith(
+      "Install it with: npm install -D @tailor-platform/sdk-tailordb-erd-plugin",
+    );
+  });
+
+  test("returns undefined for an unknown subcommand with no known package", async () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    const code = await dispatchPluginWithInstallHint({
+      commandPath: [],
+      name: "missing",
+      args: [],
+      cliName: CLI,
+    });
+
+    expect(code).toBeUndefined();
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(infoSpy).not.toHaveBeenCalled();
   });
 });
 
