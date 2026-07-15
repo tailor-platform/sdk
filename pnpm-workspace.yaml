@@ -1,4 +1,5 @@
-nodeLinker: hoisted
+nodeLinker: isolated
+enableGlobalVirtualStore: true
 saveExact: true
 
 minimumReleaseAge: 4320 # 3 days

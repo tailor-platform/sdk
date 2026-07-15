@@ -45,6 +45,8 @@ describe("workspace transform", () => {
     expect(info).toMatchObject({
       name: "sample-space",
       folderName: "dev",
+      organizationId: "organization-1",
+      folderId: "folder-1",
     });
     expect(workspaceDisplayName(info)).toBe("dev/sample-space");
   });

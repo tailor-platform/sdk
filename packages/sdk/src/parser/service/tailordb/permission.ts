@@ -6,7 +6,7 @@ import type {
   StandardGqlPermissionPolicy,
   Permissions,
 } from "#/parser/service/tailordb/types";
-import type { RawPermissions } from "#/types/tailordb.generated";
+import type { GqlOperations, RawPermissions } from "#/types/tailordb.generated";
 
 // Raw permission types for normalize function parameters
 type PermissionOperator = "=" | "!=" | "in" | "not in" | "hasAny" | "not hasAny";
@@ -221,4 +221,57 @@ export function findOmittedPermitRules(rawPermissions: RawPermissions): string[]
   }
 
   return locations;
+}
+
+/**
+ * Check whether GraphQL exposure is fully disabled for a type, given its
+ * effective gqlOperations (the type's own setting, falling back to the
+ * TailorDB namespace default). `undefined` means the default of all
+ * operations enabled, so it is never considered fully disabled.
+ * @param gqlOperations - Effective, normalized gqlOperations configuration
+ * @returns Whether create, update, delete, and read are all explicitly disabled
+ */
+export function isGqlOperationsFullyDisabled(gqlOperations: GqlOperations | undefined): boolean {
+  if (!gqlOperations) {
+    return false;
+  }
+  return (
+    gqlOperations.create === false &&
+    gqlOperations.update === false &&
+    gqlOperations.delete === false &&
+    gqlOperations.read === false
+  );
+}
+
+/**
+ * Missing permission configuration detected for a TailorDB type.
+ */
+export interface MissingTypePermissionConfig {
+  /** Whether record-level permission (`.permission()`) is missing */
+  missingPermission: boolean;
+  /** Whether GraphQL permission (`.gqlPermission()`) is missing while GraphQL exposure is enabled */
+  missingGqlPermission: boolean;
+}
+
+/**
+ * Find missing permission configuration for a TailorDB type.
+ *
+ * Record-level permission is always required: TailorDB denies all record
+ * operations for a type without it, regardless of whether the type is
+ * exposed via GraphQL. GraphQL permission is required whenever GraphQL
+ * exposure is enabled for the type (the default, unless every operation is
+ * explicitly disabled via `gqlOperations`).
+ * @param rawPermissions - Raw permissions definition for the type
+ * @param effectiveGqlOperations - The type's own gqlOperations, falling back to the namespace default
+ * @returns Which permission configuration, if any, is missing
+ */
+export function findMissingPermissionConfig(
+  rawPermissions: RawPermissions,
+  effectiveGqlOperations: GqlOperations | undefined,
+): MissingTypePermissionConfig {
+  return {
+    missingPermission: !rawPermissions.record,
+    missingGqlPermission:
+      !rawPermissions.gql && !isGqlOperationsFullyDisabled(effectiveGqlOperations),
+  };
 }

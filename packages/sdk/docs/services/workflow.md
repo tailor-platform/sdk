@@ -397,11 +397,11 @@ export default defineConfig({
 
 `key` accepts `[a-z0-9_:.-]` and must start with `[a-z0-9]`. An exact key must also end with `[a-z0-9]`; a wildcard prefix (`matchType: "prefix"`) may end with any of those characters, since the platform appends a trailing `*` after it. The platform-registered key — including that trailing `*` when wildcarded — is 2 to 64 characters long, so a wildcard prefix must be at most 63 characters. `foo:bar` is a valid exact key; `tenant-api` with `matchType: "prefix"` registers `tenant-api*` as a wildcard prefix.
 
-An exact-key policy applies to dispatches whose runtime key equals the policy key. A wildcard policy applies to every dispatch whose runtime key begins with the prefix; each concrete resolved key gets its own independent pool of the declared size (a `cap = 3` wildcard yields three concurrent dispatches per resolved key, not three across every match). The longest matching prefix wins when a dispatch could match more than one wildcard.
+An exact-key policy applies to dispatches whose runtime key equals the policy key. A wildcard policy applies to every dispatch whose runtime key begins with the prefix; each concrete resolved key gets its own independent pool of the declared size (a `cap = 3` wildcard yields three concurrent dispatches per resolved key, not three across every match). When a dispatch matches more than one policy (for example, an exact key that also falls under a wildcard prefix, or two wildcard prefixes where one starts with the other), every matching policy's cap is enforced independently, and the tightest one blocks.
 
 ### Referencing a Policy from a Workflow
 
-Pass the runtime key through the `executionPolicyKey` option on `job.trigger()` or `tailor.workflow.triggerJobFunction()`. For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`matchType: "prefix"`), there is no `<policy>.key` — call `<policy>.keyFor(suffix)` to build the concrete key. `keyFor` joins the prefix and suffix with `.` by default; override it with `separator` — the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group), or a `def` field on a single `defineWorkflowExecutionPolicy`.
+Pass the runtime key through the `executionPolicyKey` option on `job.trigger()` or `tailor.workflow.startJobFunction()` (or its frozen alias `triggerJobFunction`). For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`matchType: "prefix"`), there is no `<policy>.key` — call `<policy>.keyFor(suffix)` to build the concrete key. `keyFor` joins the prefix and suffix with `.` by default; override it with `separator` — the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group), or a `def` field on a single `defineWorkflowExecutionPolicy`.
 
 ```typescript
 import { createWorkflowJob } from "@tailor-platform/sdk";
@@ -427,7 +427,7 @@ export const mainJob = createWorkflowJob({
 });
 ```
 
-The same `executionPolicyKey` option is available on `tailor.workflow.triggerJobFunction(name, args, options)` for jobs invoked by name.
+The same `executionPolicyKey` option is available on `tailor.workflow.startJobFunction(name, args, options)` (or the frozen alias `tailor.workflow.triggerJobFunction`) for jobs invoked by name.
 
 ## Triggering a Workflow from a Resolver
 

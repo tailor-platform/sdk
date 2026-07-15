@@ -1,5 +1,5 @@
 import type { FieldMetadata, TailorFieldType } from "#/configure/types/field.types";
-import type { TailorUser } from "#/runtime/types";
+import type { TailorUser } from "./types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 const regex = {
@@ -7,7 +7,7 @@ const regex = {
   date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
   time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
   datetime:
-    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
+    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(\.(?<millisec>\d{3}))?Z$/,
   decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
 } as const;
 
@@ -28,27 +28,20 @@ export type FieldRuntime<T extends TailorFieldType = TailorFieldType> = {
   readonly type: T;
   readonly fields: Record<string, FieldRuntime>;
   _metadata: FieldMetadata;
-  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<unknown>;
-};
-
-type FieldValidateValueArgs<T extends TailorFieldType> = {
-  field: FieldRuntime<T>;
-  value: unknown;
-  data: unknown;
-  user: TailorUser;
-  pathArray: string[];
 };
 
 type FieldParseRuntimeArgs<T extends TailorFieldType> = FieldParseInternalArgs & {
   field: FieldRuntime<T>;
 };
 
-function validateValue<T extends TailorFieldType>(
-  args: FieldValidateValueArgs<T>,
-): StandardSchemaV1.Issue[] {
-  const { field, value, data, user, pathArray } = args;
-  const issues: StandardSchemaV1.Issue[] = [];
+type FieldValidationArgs<T extends TailorFieldType> = FieldParseRuntimeArgs<T> & {
+  issues: StandardSchemaV1.Issue[];
+};
+
+function validateBaseValue<T extends TailorFieldType>(args: FieldValidationArgs<T>): boolean {
+  const { field, value, pathArray, issues } = args;
   const path = pathArray.length > 0 ? pathArray : undefined;
+  const initialIssueCount = issues.length;
 
   switch (field.type) {
     case "string":
@@ -140,7 +133,7 @@ function validateValue<T extends TailorFieldType>(
       }
       break;
 
-    case "nested":
+    case "nested": {
       // Runtime input may not match the declared field type.
       // oxlint-disable typescript/no-unnecessary-condition
       if (
@@ -154,48 +147,54 @@ function validateValue<T extends TailorFieldType>(
           message: `Expected an object: received ${String(value)}`,
           path,
         });
-      } else if (Object.keys(field.fields).length > 0) {
-        for (const [fieldName, nestedField] of Object.entries(field.fields)) {
-          const fieldValue = (value as Record<string, unknown>)[fieldName];
-          const result = nestedField._parseInternal({
+        return false;
+      }
+
+      let nestedBaseValid = true;
+      for (const [fieldName, nestedField] of Object.entries(field.fields)) {
+        const fieldValue = (value as Record<string, unknown>)[fieldName];
+        if (
+          !validateBaseField({
+            ...args,
+            field: nestedField,
             value: fieldValue,
-            data,
-            user,
             pathArray: pathArray.concat(fieldName),
-          });
-          if (result.issues) {
-            issues.push(...result.issues);
-          }
+          })
+        ) {
+          nestedBaseValid = false;
         }
       }
-      break;
-  }
-
-  const validateFns = field._metadata.validate;
-  if (validateFns && validateFns.length > 0) {
-    for (const validateInput of validateFns) {
-      const { fn, message } =
-        typeof validateInput === "function"
-          ? { fn: validateInput, message: "Validation failed" }
-          : { fn: validateInput[0], message: validateInput[1] };
-
-      if (!fn({ value, data, user })) {
-        issues.push({
-          message,
-          path,
-        });
-      }
+      return nestedBaseValid;
     }
   }
 
-  return issues;
+  return issues.length === initialIssueCount;
 }
 
-export function parseInternal<T extends TailorFieldType, Output>(
-  args: FieldParseRuntimeArgs<T>,
-): StandardSchemaV1.Result<Output> {
-  const { field, value, data, user, pathArray } = args;
-  const issues: StandardSchemaV1.Issue[] = [];
+function validateCustomValue<T extends TailorFieldType>(
+  args: FieldValidationArgs<T>,
+  validateFns: NonNullable<FieldMetadata["validate"]>,
+): void {
+  const { value, data, user, pathArray, issues } = args;
+  const path = pathArray.length > 0 ? pathArray : undefined;
+
+  for (const validateInput of validateFns) {
+    const { fn, message } =
+      typeof validateInput === "function"
+        ? { fn: validateInput, message: "Validation failed" }
+        : { fn: validateInput[0], message: validateInput[1] };
+
+    if (!fn({ value, data, user })) {
+      issues.push({
+        message,
+        path,
+      });
+    }
+  }
+}
+
+function validateBaseField<T extends TailorFieldType>(args: FieldValidationArgs<T>): boolean {
+  const { field, value, pathArray, issues } = args;
   const path = pathArray.length > 0 ? pathArray : undefined;
 
   const isNullOrUndefined = value === null || value === undefined;
@@ -204,50 +203,105 @@ export function parseInternal<T extends TailorFieldType, Output>(
       message: "Required field is missing",
       path,
     });
-    return { issues };
+    return false;
   }
 
   if (!field._metadata.required && isNullOrUndefined) {
-    return { value: (value ?? null) as Output };
+    return true;
   }
 
+  let baseValid = true;
   if (field._metadata.array) {
     if (!Array.isArray(value)) {
       issues.push({
         message: "Expected an array",
         path,
       });
-      return { issues };
+      return false;
     }
 
     for (let i = 0; i < value.length; i++) {
-      const elementValue = value[i];
-      const elementPath = pathArray.concat(`[${i}]`);
-
-      const elementIssues = validateValue({
-        field,
-        value: elementValue,
-        data,
-        user,
-        pathArray: elementPath,
-      });
-      if (elementIssues.length > 0) {
-        issues.push(...elementIssues);
+      if (
+        !validateBaseValue({
+          ...args,
+          value: value[i],
+          pathArray: pathArray.concat(`[${i}]`),
+        })
+      ) {
+        baseValid = false;
       }
     }
-
-    if (issues.length > 0) {
-      return { issues };
-    }
-    return { value: value as Output };
+  } else {
+    baseValid = validateBaseValue(args);
   }
 
-  const valueIssues = validateValue({ field, value, data, user, pathArray });
-  issues.push(...valueIssues);
+  return baseValid;
+}
 
+function validateCustomField<T extends TailorFieldType>(args: FieldValidationArgs<T>): void {
+  const { field, value, pathArray } = args;
+  if (value === null || value === undefined) {
+    return;
+  }
+
+  if (field.type === "nested") {
+    const records = field._metadata.array
+      ? (value as Record<string, unknown>[])
+      : [value as Record<string, unknown>];
+
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i] as Record<string, unknown>;
+      const recordPath = field._metadata.array ? pathArray.concat(`[${i}]`) : pathArray;
+      for (const [fieldName, nestedField] of Object.entries(field.fields)) {
+        validateCustomField({
+          ...args,
+          field: nestedField,
+          value: record[fieldName],
+          pathArray: recordPath.concat(fieldName),
+        });
+      }
+    }
+  }
+
+  const validateFns = field._metadata.validate;
+  if (validateFns?.length) {
+    validateCustomValue(args, validateFns);
+  }
+}
+
+export function parseInternal<T extends TailorFieldType, Output>(
+  args: FieldParseRuntimeArgs<T>,
+): StandardSchemaV1.Result<Output> {
+  const { value } = args;
+  const issues: StandardSchemaV1.Issue[] = [];
+  const validationArgs = { ...args, issues };
+  const baseValid = validateBaseField(validationArgs);
+  if (baseValid) {
+    validateCustomField(validationArgs);
+  }
   if (issues.length > 0) {
     return { issues };
   }
 
-  return { value: value as Output };
+  return { value: (value ?? null) as Output };
+}
+
+type ParseInputFieldsArgs = FieldParseArgs & {
+  fields: Record<string, FieldRuntime>;
+};
+
+/**
+ * Validate a value against a record of input fields, treating the record as a
+ * single required object — the same code path deployed functions run via
+ * `t.object(fields).parse(...)`, so local validation matches platform behavior.
+ * @param args - Input field definitions plus the value, context data, and user
+ * @returns Validation result
+ */
+export function parseInputFields(args: ParseInputFieldsArgs): StandardSchemaV1.Result<unknown> {
+  const { fields, ...parseArgs } = args;
+  return parseInternal({
+    ...parseArgs,
+    field: { type: "nested", fields, _metadata: { required: true } },
+    pathArray: [],
+  });
 }

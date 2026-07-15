@@ -163,10 +163,10 @@ export function defineWorkflowExecutionPolicy<
  * }));
  *
  * // In a workflow job function:
- * await tailor.workflow.triggerJobFunction("worker", args, {
+ * await tailor.workflow.startJobFunction("worker", args, {
  *   executionPolicyKey: executionPolicies.premium.key,
  * });
- * await tailor.workflow.triggerJobFunction("worker", args, {
+ * await tailor.workflow.startJobFunction("worker", args, {
  *   executionPolicyKey: executionPolicies["tenant-api"].keyFor(input.tenantId),
  * });
  */
