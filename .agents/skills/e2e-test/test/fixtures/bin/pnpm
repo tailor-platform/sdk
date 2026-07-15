@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+printf '%s\n' "$*" >>"$E2E_PNPM_MARKER"
+
+case "$*" in
+  "run test -- --project e2e")
+    if [[ -n ${E2E_RUN_ID_MARKER:-} ]]; then
+      printf '%s' "${TAILOR_PLATFORM_E2E_RUN_ID:-}" >"$E2E_RUN_ID_MARKER"
+    fi
+    if [[ -n ${E2E_TMPDIR_MARKER:-} ]]; then
+      printf '%s' "${TMPDIR:-}" >"$E2E_TMPDIR_MARKER"
+    fi
+    if [[ -n ${E2E_TEST_SIGNAL:-} ]]; then
+      kill -s "$E2E_TEST_SIGNAL" "$PPID"
+    fi
+    exit "${E2E_TEST_STATUS:-0}"
+    ;;
+  "exec tsx scripts/cleanup-e2e-workspaces.ts --dry-run --run-id="*)
+    preview_count=$(grep -c -- '--dry-run' "$E2E_PNPM_MARKER")
+    if [[ $preview_count -eq 1 ]]; then
+      echo "Found a workspace for this run"
+      exit "${E2E_PREVIEW_STATUS:-0}"
+    fi
+    if [[ -n ${E2E_RESIDUAL_WORKSPACE:-} ]]; then
+      echo "Found 1 e2e workspace(s):"
+    elif [[ -n ${E2E_VERIFY_MISSING:-} ]]; then
+      :
+    elif [[ -n ${E2E_VERIFY_MALFORMED:-} ]]; then
+      echo "✅ No e2e workspaces found to delete."
+      echo "Found 1 e2e workspace(s):"
+    else
+      echo "✅ No e2e workspaces found to delete."
+    fi
+    exit "${E2E_VERIFY_STATUS:-0}"
+    ;;
+  "exec tsx scripts/cleanup-e2e-workspaces.ts --run-id="*)
+    exit "${E2E_CLEANUP_STATUS:-0}"
+    ;;
+  "exec tailor-sdk --json workspace list")
+    if [[ -n ${E2E_RAW_MISSING:-} ]]; then
+      :
+    elif [[ -n ${E2E_RAW_MALFORMED:-} ]]; then
+      printf '{"not":"a workspace list"}\n'
+    elif [[ -n ${E2E_RAW_RESIDUAL:-} ]]; then
+      printf '[{"name":"e2e-ws-%s-leftover"}]\n' "$TAILOR_PLATFORM_E2E_RUN_ID"
+    elif [[ -n ${E2E_RAW_OTHER_RUN:-} ]]; then
+      printf '[{"name":"e2e-ws-other-run-12345-leftover"}]\n'
+    else
+      printf '[]\n'
+    fi
+    exit "${E2E_RAW_STATUS:-0}"
+    ;;
+  *)
+    exit 99
+    ;;
+esac
