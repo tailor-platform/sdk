@@ -379,7 +379,7 @@ const job = createWorkflowJob({
 
 describe("AST Transformer - transformation logic", () => {
   describe("transformWorkflowSource", () => {
-    test("transforms trigger calls to triggerJobFunction", () => {
+    test("transforms start calls to startJobFunction", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -413,7 +413,7 @@ const mainJob = createWorkflowJob({
       expect(result).not.toContain("const fetchData");
     });
 
-    test("forwards a second options argument to triggerJobFunction", () => {
+    test("forwards a second options argument to startJobFunction", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -484,7 +484,7 @@ const mainJob = createWorkflowJob({
       expect(result).not.toContain("getDB");
       // mainJob body is preserved
       expect(result).toContain('result: "main"');
-      // trigger is transformed (job name appears in triggerJobFunction call)
+      // start is transformed (job name appears in startJobFunction call)
       expect(result).toContain('tailor.workflow.startJobFunction("heavy-job", undefined)');
     });
 
@@ -531,7 +531,7 @@ const mainJob = createWorkflowJob({
       expect(result).toContain('"main"');
       // heavy code is removed (part of job1/job2 body)
       expect(result).not.toContain("heavy code");
-      // triggers are transformed (job names appear in triggerJobFunction calls)
+      // starts are transformed (job names appear in startJobFunction calls)
       expect(result).toContain('tailor.workflow.startJobFunction("job-one", undefined)');
       expect(result).toContain('tailor.workflow.startJobFunction("job-two", undefined)');
     });
@@ -996,7 +996,7 @@ const result = await simpleJob.start();
       expect(result).toContain('tailor.workflow.startJobFunction("simple-job", undefined)');
     });
 
-    test("forwards a second options argument to triggerJobFunction", () => {
+    test("forwards a second options argument to startJobFunction", () => {
       const source = `
 const result = await fetchCustomer.start({ id: "123" }, { executionPolicyKey: "premium" });
 `;
