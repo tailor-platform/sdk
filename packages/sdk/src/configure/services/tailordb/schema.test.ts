@@ -1357,6 +1357,31 @@ describe("TailorDBType type-level validate (function form) tests", () => {
     });
   });
 
+  test("table with custom fields stays assignable across generic module factory boundaries", () => {
+    function defineItemModule<CustomFields extends Record<string, TailorAnyDBField>>(params: {
+      fields: CustomFields;
+    }) {
+      return {
+        item: db.table("Item", {
+          unitId: db.string(),
+          ...params.fields,
+        }),
+      };
+    }
+
+    const itemModule = defineItemModule({
+      fields: { customField: db.string({ optional: true }).description("test") },
+    });
+
+    function defineProductModule<CustomFields extends Record<string, TailorAnyDBField>>(params: {
+      item: ReturnType<typeof defineItemModule<CustomFields>>["item"];
+    }) {
+      return params;
+    }
+
+    defineProductModule({ item: itemModule.item });
+  });
+
   test("type-level validate function stores in metadata", () => {
     const type = db
       .table("Test", {
