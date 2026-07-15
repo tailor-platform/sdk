@@ -17,6 +17,7 @@ declare module "@tailor-platform/sdk" {
   interface IdpNameRegistry {}
   interface ConnectionNameRegistry {}
   interface AIGatewayNameRegistry {}
+  interface ConfigIdRegistry {}
 }
 
 export {};
