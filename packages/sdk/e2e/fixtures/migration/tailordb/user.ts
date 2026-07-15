@@ -1,9 +1,16 @@
-import { db } from "@tailor-platform/sdk";
+import {
+  db,
+  unsafeAllowAllGqlPermission,
+  unsafeAllowAllTypePermission,
+} from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
-  name: db.string(),
-  email: db.string().unique(),
-  role: db.string({ optional: true }),
-});
+export const user = db
+  .type("User", {
+    name: db.string(),
+    email: db.string().unique(),
+    role: db.string({ optional: true }),
+  })
+  .permission(unsafeAllowAllTypePermission)
+  .gqlPermission(unsafeAllowAllGqlPermission);
 
 export type user = typeof user;

@@ -672,6 +672,8 @@ Configure Permission and GQLPermission. For details, see the [TailorDB Permissio
 
 **Important**: Following the secure-by-default principle, all operations are denied if permissions are not configured. You must explicitly grant permissions for each operation (create, read, update, delete).
 
+`generate`/`deploy` reject a type that has no `.permission()`, or no `.gqlPermission()` while GraphQL operations are enabled for it (see [GraphQL Operations](#graphql-operations) above). Disable GraphQL exposure entirely with `.features({ gqlOperations: { create: false, update: false, delete: false, read: false } })` if a type only needs record-level permission.
+
 ```typescript
 db.type("User", {
   name: db.string(),
