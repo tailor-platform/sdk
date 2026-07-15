@@ -236,6 +236,88 @@ describe("planAuthConnections", () => {
     expect(replace!.updateRequest.updateMask?.paths).toContain("oauth2.provider_url");
     expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
   });
+
+  test("updates an existing same-name connection when state belongs to another workspace", async () => {
+    mockLoadSecretsState.mockImplementation((scope?: { workspaceId: string }) =>
+      scope?.workspaceId === "ws-a"
+        ? { vaults: {}, connections: { "shared-connection": "fixed-hash" } }
+        : { vaults: {}, connections: {} },
+    );
+    const client = createMockClient({
+      connections: [{ name: "shared-connection", ownerLabel: appName }],
+    });
+
+    const resultA = await planAuthConnections(
+      client,
+      "ws-a",
+      appName,
+      "shared-app-id",
+      authsWith(["shared-connection"]),
+    );
+    const resultB = await planAuthConnections(
+      client,
+      "ws-b",
+      appName,
+      "shared-app-id",
+      authsWith(["shared-connection"]),
+    );
+
+    expect(resultA.changeSet.unchanged.map((connection) => connection.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces.map((replace) => replace.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
+      "oauth2.client_secret",
+    );
+    expect(mockLoadSecretsState).toHaveBeenCalledWith({
+      workspaceId: "ws-b",
+      applicationId: "shared-app-id",
+      applicationName: appName,
+    });
+  });
+
+  test("updates an existing same-name connection when state belongs to another application", async () => {
+    mockLoadSecretsState.mockImplementation((scope?: { applicationId: string }) =>
+      scope?.applicationId === "app-a"
+        ? { vaults: {}, connections: { "shared-connection": "fixed-hash" } }
+        : { vaults: {}, connections: {} },
+    );
+    const client = createMockClient({
+      connections: [{ name: "shared-connection", ownerLabel: appName }],
+    });
+
+    const resultA = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      "app-a",
+      authsWith(["shared-connection"]),
+    );
+    const resultB = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      "app-b",
+      authsWith(["shared-connection"]),
+    );
+
+    expect(resultA.changeSet.unchanged.map((connection) => connection.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces.map((replace) => replace.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
+      "oauth2.client_secret",
+    );
+    expect(mockLoadSecretsState).toHaveBeenCalledWith({
+      workspaceId,
+      applicationId: "app-b",
+      applicationName: appName,
+    });
+  });
 });
 
 describe("applyAuthConnections", () => {
@@ -304,7 +386,7 @@ describe("applyAuthConnections", () => {
     expect(client.createAuthConnection).not.toHaveBeenCalled();
   });
 
-  test("does not save secret hash when clientSecret is absent from update mask (CI scenario)", async () => {
+  test("does not save state when clientSecret is absent from update mask (CI scenario)", async () => {
     const client = createMockClient({
       connections: [{ name: "conn", ownerLabel: appName }],
     });
@@ -321,14 +403,12 @@ describe("applyAuthConnections", () => {
     const [replace] = result.changeSet.replaces;
     expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
 
-    const initialState = { vaults: {}, connections: { conn: "old-hash" } };
-    mockLoadSecretsState.mockReturnValue(initialState);
+    mockLoadSecretsState.mockClear();
+    mockSaveSecretsState.mockClear();
     await applyAuthConnections(client, result, "create-update");
 
-    const savedState = mockSaveSecretsState.mock.calls[0]?.[0] as
-      | { connections: Record<string, string> }
-      | undefined;
-    expect(savedState?.connections["conn"]).toBe("old-hash");
+    expect(mockLoadSecretsState).not.toHaveBeenCalled();
+    expect(mockSaveSecretsState).not.toHaveBeenCalled();
   });
 
   test("warns user to re-authorize when the server responds UNAUTHORIZED", async () => {

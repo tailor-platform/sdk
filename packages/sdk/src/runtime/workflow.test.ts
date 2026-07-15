@@ -2,9 +2,13 @@
  * Tests for `@tailor-platform/sdk/runtime/workflow` typed wrappers.
  */
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
-import { workflow, type TailorWorkflowAPI, type TriggerWorkflowOptions } from "#/runtime/workflow";
+import {
+  workflow,
+  type ExecutionPolicyKey,
+  type TailorWorkflowAPI,
+  type TriggerWorkflowOptions,
+} from "#/runtime/workflow";
 import { cleanupMocks, injectMocks, mockWorkflow } from "#/vitest/mock";
-import type { ExecutionPolicyKey } from "#/runtime/workflow";
 
 describe("@tailor-platform/sdk/runtime/workflow", () => {
   beforeEach(() => {
@@ -102,5 +106,55 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
     expect(invoked).toBe(false);
     expect(wf.resolve).toHaveBeenCalledTimes(1);
     expect(wf.resolveCalls).toEqual([{ executionId: "exec-1", key: "key-1" }]);
+  });
+
+  describe("canonical aliases", () => {
+    test("startWorkflow behaves as an alias of triggerWorkflow", async () => {
+      using wf = mockWorkflow();
+      wf.setTriggerHandler("exec-canonical");
+
+      const promise = workflow.startWorkflow("my-workflow", { a: 1 });
+
+      expectTypeOf(promise).toEqualTypeOf<Promise<string>>();
+      await expect(promise).resolves.toBe("exec-canonical");
+      expect(wf.startWorkflow.mock.calls).toEqual([["my-workflow", { a: 1 }]]);
+      expect(wf.startWorkflow).toBe(wf.triggerWorkflow);
+    });
+
+    test("resumeWorkflowExecution behaves as an alias of resumeWorkflow", async () => {
+      using wf = mockWorkflow();
+      wf.setResumeHandler("exec-canonical-resumed");
+
+      const promise = workflow.resumeWorkflowExecution("exec-1");
+
+      expectTypeOf(promise).toEqualTypeOf<Promise<string>>();
+      await expect(promise).resolves.toBe("exec-canonical-resumed");
+      expect(wf.resumeWorkflowExecution.mock.calls).toEqual([["exec-1"]]);
+      expect(wf.resumeWorkflowExecution).toBe(wf.resumeWorkflow);
+    });
+
+    test("startJobFunction behaves as an alias of triggerJobFunction", () => {
+      using wf = mockWorkflow();
+      wf.enqueueResult({ canonical: true });
+
+      const result = workflow.startJobFunction("my-job", { id: 1 });
+
+      expect(result).toEqual({ canonical: true });
+      expect(wf.startJobFunction.mock.calls).toEqual([["my-job", { id: 1 }]]);
+      expect(wf.startJobFunction).toBe(wf.triggerJobFunction);
+    });
+
+    test("calls through canonical and legacy names share the same call log", () => {
+      using wf = mockWorkflow();
+      wf.setJobHandler(() => ({ ok: true }));
+
+      workflow.startJobFunction("job-a", { via: "canonical" });
+      workflow.triggerJobFunction("job-b", { via: "legacy" });
+
+      expect(wf.triggeredJobs).toEqual([
+        { jobName: "job-a", args: { via: "canonical" } },
+        { jobName: "job-b", args: { via: "legacy" } },
+      ]);
+    });
   });
 });

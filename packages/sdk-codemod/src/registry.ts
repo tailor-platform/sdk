@@ -97,6 +97,7 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_3 = "2.0.0-next.3";
+const V2_NEXT_4 = "2.0.0-next.4";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -616,6 +617,55 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/forward-relation-name",
+    name: "TailorDB forward relation names derive from field names",
+    description:
+      "Review TailorDB relations that omit `toward.as`. Their forward GraphQL field names now derive from the relation field name with a trailing `ID`, `Id`, or `id` removed, instead of from the target table name.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_4,
+    scriptPath: "v2/forward-relation-name/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
+    suspiciousPatterns: [
+      /\.relation\b(?!\s*\()/,
+      /\{[^}\n]*\brelation\b[^}\n]*\}\s*=/,
+      /\[\s*["']relation["']\s*\]/,
+    ],
+    examples: [
+      {
+        caption: "Preserve the v1 GraphQL field name by making it explicit:",
+        before: [
+          "ownerId: db.uuid().relation({",
+          '  type: "n-1",',
+          "  toward: { type: user },",
+          "}),",
+        ].join("\n"),
+        after: [
+          "ownerId: db.uuid().relation({",
+          '  type: "n-1",',
+          '  toward: { type: user, as: "user" },',
+          "}),",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "Tailor SDK v2 derives a default forward GraphQL relation name from the source",
+      "field name by removing a trailing ID, Id, or id. V1 derived it from the target",
+      "table name. Review each reported non-self relation that omits toward.as.",
+      "",
+      "If consumers must keep using the v1 GraphQL field name, inspect the v1 schema and",
+      "copy that exact field name into toward.as. Otherwise, update GraphQL operations",
+      "and consumer code to use the new field-based name. No change is needed when the old",
+      "and new names are identical. Relations with a guaranteed non-empty toward.as,",
+      "self-relations, and keyOnly relations are unchanged. For an empty or dynamic",
+      "toward.as, determine whether its runtime value can be falsy; if so, treat the",
+      "relation as using the default name.",
+      "",
+      "A relation field without a trailing ID, Id, or id would default to its own scalar",
+      "field name and therefore conflict. Give that relation an explicit toward.as.",
+    ].join("\n"),
+  },
+  {
     id: "v2/execute-script-arg",
     name: "executeScript arg JSON.stringify → value",
     description:
@@ -898,6 +948,111 @@ export const allCodemods: CodemodPackage[] = [
         after: ".tailor/",
       },
     ],
+  },
+  {
+    id: "v2/tailordb-validate-simplify",
+    name: "ValidateFn simplification and type-level validate",
+    description:
+      "Field-level `ValidateFn` is simplified from `(args: { value, data, invoker }) => boolean` to `(args: { value }) => string | void` — the function now returns the error message directly instead of a separate `[fn, message]` tuple. The `ValidateConfig` tuple form and `Validators<F>` record syntax on `db.type().validate()` are removed. Type-level validation uses `db.type().validate((args, issues) => void)` with `{ newRecord, oldRecord, invoker }` args and an `issues(field, message)` callback for cross-field rules.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_4,
+    suspiciousPatterns: ["ValidateConfig", "Validators<", "ValidatorsBase", ".validate("],
+    examples: [
+      {
+        caption:
+          "Field-level validate: return an error message string instead of a boolean (tuple form removed):",
+        before:
+          '.validate(\n  [({ value }) => value.length > 5, "Name must be longer than 5 characters"],\n)',
+        after:
+          '.validate(({ value }) =>\n  value.length <= 5 ? "Name must be longer than 5 characters" : undefined,\n)',
+      },
+      {
+        caption:
+          "Type-level validate: per-field record syntax replaced by a single function with `issues()` callback:",
+        before:
+          '.validate({\n  name: [({ value }) => value.length > 5, "Name must be longer than 5"],\n})',
+        after:
+          '.validate(({ newRecord }, issues) => {\n  if (newRecord.name && newRecord.name.length <= 5) {\n    issues("name", "Name must be longer than 5");\n  }\n})',
+      },
+    ],
+    prompt: [
+      "The v2 SDK simplifies field validation and introduces type-level validation.",
+      "",
+      "Field-level `.validate()` changes:",
+      "- Signature: `(args: { value, data, invoker }) => boolean` → `(args: { value }) => string | void`",
+      "- The function now returns the error message string directly (or undefined/void to pass)",
+      "  instead of returning a boolean with the message in a separate tuple.",
+      "- The `[fn, errorMessage]` tuple form (`ValidateConfig`) is removed.",
+      "- `data` and `invoker` are no longer available in field-level validators.",
+      "  Use type-level `.validate()` for cross-field or invoker-dependent rules.",
+      "",
+      "Type-level `.validate()` on `db.type()` changes:",
+      "- Old: `.validate({ fieldName: fn | [fn, msg] | fn[] })` (per-field record, `Validators<F>` type)",
+      "- New: `.validate((args, issues) => void)` (single function, `TypeValidateFn<F>` type)",
+      "- Args: `{ newRecord, oldRecord, invoker }` — `newRecord` is the record after hooks run",
+      "- Call `issues(field, message)` to report validation errors; `field` supports dotted paths",
+      "- Move per-field validators that need `data`/`invoker` to the type-level function",
+      "",
+      "For each remaining `ValidateConfig`, `Validators<`, or old-signature `.validate()` usage:",
+      "1. Rewrite field-level validators to return the error string directly",
+      "2. Move cross-field / invoker-dependent validators to the type-level function",
+      "3. Remove unused `ValidateConfig` / `Validators` type imports",
+    ].join("\n"),
+  },
+  {
+    id: "v2/tailordb-hook-redesign",
+    name: "TailorDB hook redesign: field-level args and type-level hooks",
+    description:
+      "Field-level `HookFn` args change from `{ value, data, invoker }` to create `{ input, invoker, now }` / update `{ input, oldValue, invoker, now }` — `value` is renamed to `input`, matching the `input` arg on type-level hooks (same pre-hook data, narrowed to one field); `data` (the full record) is removed; `oldValue` (previous field value) is added for update hooks only; `now` (operation timestamp) is shared across all hooks. Type-level hooks on `db.type().hooks()` change from per-field mapping `{ fieldName: { create, update } }` (`Hooks<F>`) to a single `{ create, update }` object (`TypeHook<F>`) — create hooks take `{ input, invoker, now }`, update hooks take `{ input, oldRecord, invoker, now }` (oldRecord is always non-null). Both return partial field overrides.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_4,
+    suspiciousPatterns: ["Hooks<", "HookFn<", "Hook<", ".hooks("],
+    examples: [
+      {
+        caption:
+          "Field-level hooks: `value` renamed to `input`, `data` replaced by `oldValue` and `now`; use `now` instead of `new Date()`:",
+        before:
+          "db.datetime().hooks({\n  create: ({ value }) => value ?? new Date(),\n  update: () => new Date(),\n})",
+        after:
+          "db.datetime().hooks({\n  create: ({ input, now }) => input ?? now,\n  update: ({ now }) => now,\n})",
+      },
+      {
+        caption: "Type-level hooks: per-field mapping replaced by single create/update functions:",
+        before:
+          ".hooks({\n  fullAddress: {\n    create: ({ data }) => `${data.postalCode} ${data.address}`,\n    update: ({ data }) => `${data.postalCode} ${data.address}`,\n  },\n})",
+        after:
+          ".hooks({\n  create: ({ input }) => ({\n    fullAddress: `${input.postalCode} ${input.address}`,\n  }),\n  update: ({ input }) => ({\n    fullAddress: `${input.postalCode} ${input.address}`,\n  }),\n})",
+      },
+    ],
+    prompt: [
+      "The v2 SDK redesigns TailorDB hooks at both field and type levels.",
+      "",
+      "Field-level `.hooks()` on individual fields:",
+      "- Create args: `{ value, data, invoker }` → `{ input, invoker, now }` (no `oldValue`)",
+      "- Update args: `{ value, data, invoker }` → `{ input, oldValue, invoker, now }`",
+      "- `value` is renamed to `input`, matching the type-level hook's `input` arg — both are",
+      "  the same pre-hook data, at different granularity",
+      "- `data` (full record) is removed; update hooks get `oldValue` (previous field value) instead",
+      "- `now` provides the operation timestamp — use `now` instead of `new Date()`",
+      "- If a field-level hook needs the full record (other fields), move it to a type-level hook",
+      "",
+      "Type-level `.hooks()` on `db.type()`:",
+      "- Old: `.hooks({ fieldName: { create: fn, update: fn } })` (per-field mapping, `Hooks<F>` type)",
+      "- New: `.hooks({ create: fn, update: fn })` (single object, `TypeHook<F>` type)",
+      "- Each function: `({ input, oldRecord, invoker, now }) => ({ fieldName: value, ... })`",
+      "- `input` is the pre-hook input (may have nullish values for optional/defaulted fields)",
+      "- Create hooks do not receive `oldRecord`; update hooks receive `oldRecord` (always non-null)",
+      "- Return an object with only the fields to override; unmentioned fields are unchanged",
+      "",
+      "Migration steps for each `.hooks()` call on a `db.type()`:",
+      "1. If the old per-field hooks only use `value`/`invoker` and don't reference `data`,",
+      "   convert them to field-level hooks with the new args (`value` → `input`, plus `oldValue`, `now`)",
+      "2. If the old hooks reference `data` (cross-field access), convert to a type-level hook",
+      "   using `input`/`oldRecord`",
+      "3. Remove unused `Hooks<F>` / `HookFn<>` type imports",
+    ].join("\n"),
   },
   {
     id: "v2/node-minimum-22-15-0",

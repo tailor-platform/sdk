@@ -6,16 +6,16 @@ import type {
   DefinedFieldMetadata,
   FieldMetadata,
   TailorField,
+  TailorFieldType,
 } from "#/configure/types/field.types";
 import type { InferredAttributes, TailorPrincipal } from "#/runtime/types";
-import type { InferFieldsOutput, output, Prettify } from "#/types/helpers";
+import type { DeepReadonly, InferFieldsOutput, output, Prettify } from "#/types/helpers";
 import type {
   DBFieldMetadata as DBFieldMetadataGenerated,
   GqlOperationsInput,
   RawPermissions,
   TailorDBServiceConfigInput,
 } from "#/types/tailordb.generated";
-import type { NonEmptyObject } from "type-fest";
 
 export type SerialConfig<T extends "string" | "integer" = "string" | "integer"> = Prettify<
   {
@@ -40,6 +40,7 @@ export interface DBFieldMetadata extends FieldMetadata {
   serial?: SerialConfig;
   relation?: boolean;
   scale?: number;
+  default?: unknown;
 }
 
 export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
@@ -55,6 +56,7 @@ export interface DefinedDBFieldMetadata extends DefinedFieldMetadata {
   };
   serial?: boolean;
   relation?: boolean;
+  default?: boolean;
 }
 
 export type GqlOperationsConfig = GqlOperationsInput;
@@ -88,6 +90,10 @@ export interface TailorDBTypeMetadata {
       unique?: boolean;
     }
   >;
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
+  typeHook?: { create?: Function; update?: Function };
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
+  typeValidate?: Function;
 }
 
 /**
@@ -143,31 +149,82 @@ export type TailorDBInstance<
 
 // --- Hook types (UX-focused, for configure layer) ---
 
-type HookFn<TValue, TData, TReturn> = (args: {
-  value: TValue;
-  data: TData extends Record<string, unknown>
-    ? { readonly [K in keyof TData]?: TData[K] | null | undefined }
+type HookArgs<TData> =
+  TData extends Record<string, unknown>
+    ? { readonly [K in keyof TData]?: DeepReadonly<TData[K]> | null | undefined }
     : unknown;
+
+type CreateHookFn<TValue, TReturn> = (args: {
+  input: TValue;
   invoker: TailorPrincipal | null;
+  now: Date;
 }) => TReturn;
 
-export type Hook<TData, TReturn> = {
-  create?: HookFn<TReturn | null, TData, TReturn>;
-  update?: HookFn<TReturn | null, TData, TReturn>;
+type UpdateHookFn<TValue, TReturn> = (args: {
+  input: TValue;
+  oldValue: TReturn;
+  invoker: TailorPrincipal | null;
+  now: Date;
+}) => TReturn;
+
+export type Hook<TReturn, TCreateReturn = TReturn> = {
+  create?: CreateHookFn<TReturn | null, TCreateReturn>;
+  update?: UpdateHookFn<TReturn | null, TReturn>;
 };
 
-export type Hooks<
+type DotJoin<A extends string, B extends string> = A extends "" ? B : `${A}.${B}`;
+
+type DottedPaths<T, Prefix extends string = ""> = string extends keyof T
+  ? string
+  : T extends readonly (infer E)[]
+    ? E extends Record<string, unknown>
+      ? {
+          [K in keyof E & string]:
+            | `${Prefix}[${number}].${K}`
+            | DottedPaths<NonNullable<E[K]>, `${Prefix}[${number}].${K}`>;
+        }[keyof E & string]
+      : never
+    : T extends Record<string, unknown>
+      ? {
+          [K in keyof T & string]:
+            | DotJoin<Prefix, K>
+            | DottedPaths<NonNullable<T[K]>, DotJoin<Prefix, K>>;
+        }[keyof T & string]
+      : never;
+
+export type TypeValidateFn<
   F extends Record<string, TailorAnyDBField>,
   TData = { [K in keyof F]: output<F[K]> },
-> = NonEmptyObject<{
-  [K in Exclude<keyof F, "id"> as F[K]["_defined"] extends {
-    hooks: unknown;
-  }
-    ? never
-    : F[K]["_defined"] extends { type: "nested" }
-      ? never
-      : K]?: Hook<TData, output<F[K]>>;
-}>;
+> = (
+  args: {
+    newRecord: DeepReadonly<TData>;
+    oldRecord: DeepReadonly<TData> | null;
+    invoker: TailorPrincipal | null;
+  },
+  issues: <P extends DottedPaths<Omit<TData, "id">>>(field: P, message: string) => void,
+) => void;
+
+type TypeCreateHookFn<
+  F extends Record<string, TailorAnyDBField>,
+  TData = { [K in keyof F]: output<F[K]> },
+> = (args: { input: DeepReadonly<TData>; invoker: TailorPrincipal | null; now: Date }) => {
+  [K in Exclude<keyof TData & string, "id">]?: TData[K] | null;
+};
+
+type TypeUpdateHookFn<
+  F extends Record<string, TailorAnyDBField>,
+  TData = { [K in keyof F]: output<F[K]> },
+> = (args: {
+  input: HookArgs<TData>;
+  oldRecord: DeepReadonly<TData>;
+  invoker: TailorPrincipal | null;
+  now: Date;
+}) => { [K in Exclude<keyof TData & string, "id">]?: TData[K] | null };
+
+export type TypeHook<F extends Record<string, TailorAnyDBField>> = {
+  create?: TypeCreateHookFn<F>;
+  update?: TypeUpdateHookFn<F>;
+};
 
 // --- Field helper types ---
 
@@ -178,6 +235,31 @@ export type ExcludeNestedDBFields<T extends Record<string, TailorAnyDBField>> = 
     ? never
     : T[K];
 };
+
+// oxlint-disable no-explicit-any -- conditional type matching requires `any` for the output param
+export type ExcludeHookedDBFields<T extends Record<string, TailorAnyDBField>> = {
+  [K in keyof T]: T[K] extends TailorDBField<
+    { type: TailorFieldType; array: boolean; hooks: { create: true; update: boolean } },
+    any
+  >
+    ? never
+    : T[K] extends TailorDBField<
+          { type: TailorFieldType; array: boolean; hooks: { create: boolean; update: true } },
+          any
+        >
+      ? never
+      : T[K];
+};
+
+export type ExcludeDefaultedDBFields<T extends Record<string, TailorAnyDBField>> = {
+  [K in keyof T]: T[K] extends TailorDBField<
+    { type: TailorFieldType; array: boolean; default: true },
+    any
+  >
+    ? never
+    : T[K];
+};
+// oxlint-enable no-explicit-any
 
 // --- Type features ---
 

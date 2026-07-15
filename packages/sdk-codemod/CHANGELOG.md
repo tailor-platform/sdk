@@ -1,5 +1,24 @@
 # @tailor-platform/sdk-codemod
 
+## 0.3.0-next.5
+
+### Patch Changes
+
+- [#1719](https://github.com/tailor-platform/sdk/pull/1719) [`4a05aec`](https://github.com/tailor-platform/sdk/commit/4a05aecfb100a1ea7292a6ae5809a2d1e6eddbfe) Thanks [@dqn](https://github.com/dqn)! - Derive default TailorDB forward relation names from the relation field name by removing a trailing `ID`, `Id`, or `id`, instead of deriving them from the target table name.
+  
+  The v2 migration review identifies non-self relations without `toward.as`. Add an explicit name to preserve the v1 GraphQL field name, or update consumers to use the new field-based name.
+
+- [#1678](https://github.com/tailor-platform/sdk/pull/1678) [`e0e768d`](https://github.com/tailor-platform/sdk/commit/e0e768d77470d13806ed7b2ee2117fe374d51d40) Thanks [@toiroakr](https://github.com/toiroakr)! - Redesign TailorDB hooks and validators with several breaking changes:
+  
+  - Add shared `now` timestamp to all hooks — multiple fields stamped with the same `Date`
+  - Field-level hooks: `{ value, data, invoker }` → create `{ input, invoker, now }` / update `{ input, oldValue, invoker, now }` (`data` removed, `oldValue` added for update only)
+  - Type-level hooks: per-field mapping (`Hooks<F>`) → single `{ create, update }` object (`TypeHook<F>`) returning partial field overrides
+  - Type-level create hooks no longer receive `oldRecord`; update hooks receive non-nullable `oldRecord`
+  - Field-level validators: return type changed from `boolean` to `string | void` (return error message or void to pass); `[fn, message]` tuple form removed
+  - Type-level validators: `Validators<F>` per-field record → `TypeValidateFn<F>` single function with `issues(field, message)` callback
+  - Add `.default(value)` on fields to set a create-time default (makes required fields optional in create input)
+  - Remove exported types: `Hooks<F>`, `Validators<F>`, `ValidateConfig`
+
 ## 0.3.0-next.4
 
 ### Patch Changes
@@ -174,6 +193,18 @@
 
 
 - [#1435](https://github.com/tailor-platform/sdk/pull/1435) [`49c0cc9`](https://github.com/tailor-platform/sdk/commit/49c0cc99171d7e317a50a18804a21067d89f9493) Thanks [@dqn](https://github.com/dqn)! - Add the `v2/plugin-cli-import` codemod so `tailor-sdk upgrade` rewrites deprecated plugin imports from `@tailor-platform/sdk/cli` (`kyselyTypePlugin`, `enumConstantsPlugin`, `fileUtilsPlugin`, `seedPlugin`) to their dedicated `@tailor-platform/sdk/plugin/*` subpaths, splitting any non-plugin specifiers onto a separate import.
+
+## 0.3.7
+
+### Patch Changes
+
+- [#1744](https://github.com/tailor-platform/sdk/pull/1744) [`3ca5b48`](https://github.com/tailor-platform/sdk/commit/3ca5b48fca4e8e1f0878350afc11d42d36bf3cab) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.2
+
+## 0.3.6
+
+### Patch Changes
+
+- [#1688](https://github.com/tailor-platform/sdk/pull/1688) [`7f67996`](https://github.com/tailor-platform/sdk/commit/7f679963adc1df438e49200f1170415629817f44) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.44.1
 
 ## 0.3.5
 

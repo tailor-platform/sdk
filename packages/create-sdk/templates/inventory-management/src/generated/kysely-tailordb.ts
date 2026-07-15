@@ -63,7 +63,7 @@ export interface Namespace {
       productId: string;
       quantity: number;
       unitPrice: number;
-      totalPrice: Generated<number | null>;
+      totalPrice: Generated<number>;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }

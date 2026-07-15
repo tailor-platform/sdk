@@ -80,8 +80,9 @@ describe("createTailorDBHook", () => {
     test("invokes nested sub-field hooks", () => {
       const type = db.table("Test", {
         user: db.object({
+          // @ts-expect-error hooks on nested inner fields are now type-blocked
           name: db.string().hooks({
-            create: ({ value }) => `hooked:${value as string}`,
+            create: ({ input }) => `hooked:${input as string}`,
           }),
         }),
       });
@@ -121,10 +122,11 @@ describe("createTailorDBHook", () => {
       const type = db.table("Test", {
         lines: db.object(
           {
+            // @ts-expect-error hooks on nested inner fields are now type-blocked
             stamp: db.string().hooks({
-              create: ({ value }) => {
-                calls.push(value);
-                return `stamped:${value as string}`;
+              create: ({ input }) => {
+                calls.push(input);
+                return `stamped:${input as string}`;
               },
             }),
           },
@@ -168,49 +170,74 @@ describe("createTailorDBHook", () => {
     });
   });
 
-  describe("create hook on a top-level field", () => {
-    test("invokes the create hook with value, full data, and a null invoker", () => {
-      const seen: { value: unknown; data: unknown; invoker: unknown }[] = [];
+  describe("type-level create hook", () => {
+    test("invokes the create hook and applies field overrides", () => {
+      const seen: { input: unknown; invoker: unknown }[] = [];
       const type = db.table("Order", { total: db.float(), tax: db.float() }).hooks({
-        tax: {
-          create: ({ value, data, invoker }) => {
-            seen.push({ value, data, invoker });
-            return (data as { total: number }).total * 0.1;
-          },
+        create: ({ input, invoker }) => {
+          seen.push({ input, invoker });
+          return { tax: (input as { total: number }).total * 0.1 };
         },
       });
       const result = createTailorDBHook(type)({ total: 100, tax: undefined });
       expect(result.tax).toBe(10);
       expect(seen).toEqual([
         {
-          value: undefined,
-          data: { total: 100, tax: undefined },
+          input: { total: 100, tax: undefined },
           invoker: null,
         },
       ]);
     });
 
-    test("normalizes a Date returned from the create hook to an ISO string", () => {
+    test("normalizes a Date returned from the type hook to an ISO string", () => {
       const fixed = new Date("2026-04-15T00:00:00.000Z");
       const type = db
         .table("Test", { createdAt: db.datetime() })
-        .hooks({ createdAt: { create: () => fixed } });
+        .hooks({ create: () => ({ createdAt: fixed }) });
       expect(createTailorDBHook(type)({}).createdAt).toBe("2026-04-15T00:00:00.000Z");
+    });
+
+    test("shares the same now timestamp between field-level and type-level hooks", () => {
+      let fieldNow: Date | undefined;
+      let typeNow: Date | undefined;
+      const type = db
+        .table("Test", {
+          createdAt: db.datetime().hooks({ create: ({ now }) => (fieldNow = now) }),
+          label: db.string(),
+        })
+        .hooks({ create: ({ now }) => ((typeNow = now), { label: "x" }) });
+      createTailorDBHook(type)({});
+      expect(fieldNow).toBeInstanceOf(Date);
+      expect(typeNow).toBe(fieldNow);
+    });
+
+    test("runs type-level validate and throws on validation failure", () => {
+      const type = db
+        .table("Range", {
+          start: db.int(),
+          end: db.int(),
+        })
+        .validate(({ newRecord }, issues) => {
+          if ((newRecord.start as number) > (newRecord.end as number)) {
+            issues("start", "start must be <= end");
+          }
+        });
+      expect(() => createTailorDBHook(type)({ start: 10, end: 5 })).toThrow(
+        "Validation failed on field 'start': start must be <= end",
+      );
+      expect(() => createTailorDBHook(type)({ start: 1, end: 10 })).not.toThrow();
     });
 
     test("does not invoke a hook that only defines update (createTailorDBHook is create-only)", () => {
       let updateCalled = false;
       const type = db.table("Test", { updatedAt: db.datetime() }).hooks({
-        updatedAt: {
-          update: () => {
-            updateCalled = true;
-            return new Date();
-          },
+        update: () => {
+          updateCalled = true;
+          return { updatedAt: new Date() };
         },
       });
       const result = createTailorDBHook(type)({ updatedAt: "2026-01-01T00:00:00.000Z" });
       expect(updateCalled).toBe(false);
-      // Falls through to plain passthrough
       expect(result.updatedAt).toBe("2026-01-01T00:00:00.000Z");
     });
   });

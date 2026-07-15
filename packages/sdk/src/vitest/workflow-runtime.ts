@@ -3,15 +3,18 @@
 // realm where `vi` is unavailable, hence relative imports only (no `@/` alias).
 import { TRIGGER_DEFAULT } from "../configure/services/workflow/registry";
 import { platformSerialize } from "../utils/test/platform-serialize";
-import type { TriggerJobFunctionOptions } from "../runtime/workflow";
+import type { StartJobFunctionOptions, StartWorkflowOptions } from "../runtime/workflow";
 
 export interface DefaultWorkflowRuntime {
-  triggerJobFunction: (
+  startJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
+  triggerJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
+  startWorkflow: (name: string, args?: unknown, options?: StartWorkflowOptions) => Promise<string>;
+  triggerWorkflow: (
     name: string,
     args?: unknown,
-    options?: TriggerJobFunctionOptions,
-  ) => unknown;
-  triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
+    options?: StartWorkflowOptions,
+  ) => Promise<string>;
+  resumeWorkflowExecution: (executionId: string) => Promise<string>;
   resumeWorkflow: (executionId: string) => Promise<string>;
   wait: (key: string, payload?: unknown) => unknown;
   resolve: (
@@ -22,17 +25,25 @@ export interface DefaultWorkflowRuntime {
 }
 
 export function createDefaultWorkflowRuntime(): DefaultWorkflowRuntime {
+  const startJobFunction: DefaultWorkflowRuntime["startJobFunction"] = (name) => {
+    throw new Error(
+      `No workflow job mock for "${name}". Acquire mockWorkflow() and call setJobHandler(...) or enqueueResult(...), or use runWorkflowLocally() for local workflow execution.`,
+    );
+  };
+  const startWorkflow: DefaultWorkflowRuntime["startWorkflow"] = async (_name, args) => {
+    platformSerialize(args);
+    return TRIGGER_DEFAULT;
+  };
+  const resumeWorkflowExecution: DefaultWorkflowRuntime["resumeWorkflowExecution"] = async (
+    executionId,
+  ) => executionId;
   return {
-    triggerJobFunction: (name) => {
-      throw new Error(
-        `No workflow job mock for "${name}". Acquire mockWorkflow() and call setJobHandler(...) or enqueueResult(...), or use runWorkflowLocally() for local workflow execution.`,
-      );
-    },
-    triggerWorkflow: async (_name, args) => {
-      platformSerialize(args);
-      return TRIGGER_DEFAULT;
-    },
-    resumeWorkflow: async (executionId: string): Promise<string> => executionId,
+    startJobFunction,
+    triggerJobFunction: startJobFunction,
+    startWorkflow,
+    triggerWorkflow: startWorkflow,
+    resumeWorkflowExecution,
+    resumeWorkflow: resumeWorkflowExecution,
     wait: (key: string): unknown => {
       throw new Error(
         `No wait handler for "${key}". Acquire mockWorkflow() and call setWaitHandler(...).`,

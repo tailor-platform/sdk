@@ -124,8 +124,8 @@ describe("parseFieldConfig validator expressions", () => {
   test("normalizes a method-shorthand validator whose body contains an arrow function", () => {
     // Method shorthand syntax, obtained the same way a user's helper object would produce it.
     const validators = {
-      isValid({ value }: { value: string }) {
-        return [value].map((v) => v.includes("@"))[0] ?? false;
+      isValid({ value }: { value: string }): string | void {
+        if (!([value].map((v) => v.includes("@"))[0] ?? false)) return "invalid email";
       },
     };
     const type = db.table("User", {
@@ -146,8 +146,8 @@ describe("parseFieldConfig script expression validation", () => {
   test("throws a clear error when a hook cannot be converted to valid JavaScript", () => {
     const key = "create";
     const hooks = {
-      [key]({ value }: { value: string | null }) {
-        return value ?? "generated";
+      [key]({ input }: { input: string | null }) {
+        return input ?? "generated";
       },
     };
     const type = db.table("User", {
@@ -162,8 +162,8 @@ describe("parseFieldConfig script expression validation", () => {
   });
 
   test("throws a clear error when a validator cannot be converted to valid JavaScript", () => {
-    const check = function check({ value }: { value: string }) {
-      return value.length > 0;
+    const check = function check({ value }: { value: string }): string | void {
+      if (value.length === 0) return "must not be empty";
     }.bind(null);
     const type = db.table("User", {
       email: db.string().validate(check),
@@ -177,8 +177,8 @@ describe("parseFieldConfig script expression validation", () => {
   });
 
   test("includes the type and field path in conversion errors from type parsing", () => {
-    const check = function check({ value }: { value: string }) {
-      return value.length > 0;
+    const check = function check({ value }: { value: string }): string | void {
+      if (value.length === 0) return "must not be empty";
     }.bind(null);
     const type = db.table("User", {
       email: db.string().validate(check),
@@ -189,5 +189,44 @@ describe("parseFieldConfig script expression validation", () => {
     expect(() => parseTypes(schema, "default")).toThrow(
       /Generated validate for User\.email script is not valid JavaScript/,
     );
+  });
+});
+
+describe("parseFieldConfig nested inner field restrictions", () => {
+  test("throws on .hooks() on nested inner fields", () => {
+    const field = {
+      type: "nested" as const,
+      fields: {
+        name: {
+          type: "string" as const,
+          fields: {},
+          rawRelation: undefined,
+          metadata: {
+            hooks: {
+              create: ({ input }: { input: string }) => input,
+            },
+          },
+        },
+      },
+      rawRelation: undefined,
+      metadata: {},
+    };
+
+    expect(() =>
+      parseFieldConfig(field as never, { typeName: "Test", fieldPath: ["items", "name"] }),
+    ).toThrow(".hooks() cannot be used on nested inner fields");
+  });
+
+  test("throws on .default() on nested inner fields", () => {
+    const field = {
+      type: "string" as const,
+      fields: {},
+      rawRelation: undefined,
+      metadata: { default: "pending" },
+    };
+
+    expect(() =>
+      parseFieldConfig(field as never, { typeName: "Test", fieldPath: ["items", "status"] }),
+    ).toThrow(".default() cannot be used on nested inner fields");
   });
 });
