@@ -365,7 +365,9 @@ function buildSpawnTarget(
 
 /**
  * Check whether args forwarded to a plugin carry an explicit env-file flag.
- * Scanning stops at a `--` terminator.
+ * Scanning stops at a `--` terminator. The check is presence-only:
+ * `--env-file-if-exists` counts even when the named file does not exist, so
+ * no platform context is injected in that case either.
  * @param args - Args forwarded to the plugin
  * @returns Whether an `--env-file`/`-e`/`--env-file-if-exists` flag is present
  */
