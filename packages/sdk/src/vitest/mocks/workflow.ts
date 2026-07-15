@@ -10,18 +10,15 @@ import { tailorRoot, withDispose } from "./shared";
 import type { WorkflowJob } from "#/configure/services/workflow/job";
 import type { WaitPointInstance } from "#/configure/services/workflow/wait-point";
 import type { Workflow } from "#/configure/services/workflow/workflow";
-import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
+import type { StartJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
 import type { TailorEnv } from "../../runtime/types";
 
-type JobHandler = (jobName: string, args: unknown, options?: TriggerJobFunctionOptions) => unknown;
+type JobHandler = (jobName: string, args: unknown, options?: StartJobFunctionOptions) => unknown;
 
-type TriggerWorkflowOptions = {
-  authInvoker?: { namespace: string; machineUserName: string };
-};
 type TriggerHandlerFn = (
   workflowName: string,
   args: unknown,
-  options?: TriggerWorkflowOptions,
+  options?: StartWorkflowOptions,
 ) => string;
 type ResumeHandlerFn = (executionId: string) => string;
 type WaitHandlerFn = (key: string, payload: unknown) => unknown;
@@ -43,7 +40,7 @@ type SetWaitHandler = {
 interface TriggeredJob {
   jobName: string;
   args: unknown;
-  options?: TriggerJobFunctionOptions;
+  options?: StartJobFunctionOptions;
 }
 
 interface ScopedMock {
@@ -102,6 +99,11 @@ function replaceTrigger<Trigger extends TriggerProcedure>(definition: {
 /**
  * Acquire a disposable mock for workflow operations (`tailor.workflow`).
  * Restored on dispose.
+ *
+ * Canonical names (`startWorkflow`, `startJobFunction`, `resumeWorkflowExecution`)
+ * and their frozen aliases (`triggerWorkflow`, `triggerJobFunction`, `resumeWorkflow`)
+ * share the same underlying `vi.fn`, so calls through either name are recorded
+ * once and handlers configured on either name apply to both.
  * @returns Disposable workflow mock control object
  * @example
  * ```typescript
@@ -128,7 +130,7 @@ export function mockWorkflow() {
   const defaultTriggerJob = (
     jobName: string,
     _args?: unknown,
-    _options?: TriggerJobFunctionOptions,
+    _options?: StartJobFunctionOptions,
   ): unknown => {
     throw new Error(
       `No workflow job mock for "${jobName}". Call mockWorkflow().setJobHandler(...) or enqueueResult(...), or use runWorkflowLocally() for local workflow execution.`,
@@ -137,7 +139,7 @@ export function mockWorkflow() {
   const defaultTriggerWorkflow = async (
     _workflowName: string,
     _args?: unknown,
-    _options?: TriggerWorkflowOptions,
+    _options?: StartWorkflowOptions,
   ): Promise<string> => {
     return TRIGGER_DEFAULT;
   };
@@ -157,25 +159,31 @@ export function mockWorkflow() {
     ): Promise<void> => {},
   );
 
-  root.workflow = {
-    // Preserve arity: recording `undefined` as the third element only when the
-    // caller supplied it, mirroring `.triggerJobFunction(name, args, options)`.
-    triggerJobFunction: (...call: [string, unknown?, TriggerJobFunctionOptions?]) => {
-      const out =
-        call.length >= 3
-          ? triggerJobFunction(call[0], platformSerialize(call[1]), call[2])
-          : triggerJobFunction(call[0], platformSerialize(call[1]));
-      return out instanceof Promise
-        ? out.then((v) => platformSerialize(v))
-        : platformSerialize(out);
-    },
-    // Preserve arity so a forwarded third `options` arg — even `undefined` — is
-    // recorded, matching the real `.trigger(args, options)` call shape.
-    triggerWorkflow: (...call: [string, unknown?, TriggerWorkflowOptions?]) =>
+  // Preserve arity: recording `undefined` as the third element only when the
+  // caller supplied it, mirroring `.triggerJobFunction(name, args, options)`.
+  const jobFunctionShim = (...call: [string, unknown?, StartJobFunctionOptions?]) => {
+    const out =
       call.length >= 3
-        ? triggerWorkflow(call[0], platformSerialize(call[1]), call[2])
-        : triggerWorkflow(call[0], platformSerialize(call[1])),
-    resumeWorkflow: (executionId: string) => resumeWorkflow(executionId),
+        ? triggerJobFunction(call[0], platformSerialize(call[1]), call[2])
+        : triggerJobFunction(call[0], platformSerialize(call[1]));
+    return out instanceof Promise ? out.then((v) => platformSerialize(v)) : platformSerialize(out);
+  };
+  // Preserve arity so a forwarded third `options` arg — even `undefined` — is
+  // recorded, matching the real `.trigger(args, options)` call shape.
+  const workflowShim = (...call: [string, unknown?, StartWorkflowOptions?]) =>
+    call.length >= 3
+      ? triggerWorkflow(call[0], platformSerialize(call[1]), call[2])
+      : triggerWorkflow(call[0], platformSerialize(call[1]));
+  const resumeShim = (executionId: string) => resumeWorkflow(executionId);
+  root.workflow = {
+    // Canonical and frozen alias names share a single shim so calls through
+    // either name are recorded on the same underlying vi.fn.
+    startJobFunction: jobFunctionShim,
+    triggerJobFunction: jobFunctionShim,
+    startWorkflow: workflowShim,
+    triggerWorkflow: workflowShim,
+    resumeWorkflowExecution: resumeShim,
+    resumeWorkflow: resumeShim,
     wait: (key: string, payload?: unknown) => wait(key, platformSerialize(payload)),
     resolve: (executionId: string, key: string, callback: (payload: unknown) => unknown) =>
       resolve(executionId, key, (payload: unknown) => {
@@ -187,11 +195,26 @@ export function mockWorkflow() {
   };
 
   const facade = {
-    /** The `triggerJobFunction` `vi.fn`. */
+    /** The `startJobFunction` `vi.fn`. */
+    startJobFunction: triggerJobFunction,
+    /**
+     * Frozen alias of `startJobFunction` (same `vi.fn` reference).
+     * @deprecated Use `startJobFunction` instead.
+     */
     triggerJobFunction,
-    /** The `triggerWorkflow` `vi.fn`. */
+    /** The `startWorkflow` `vi.fn`. */
+    startWorkflow: triggerWorkflow,
+    /**
+     * Frozen alias of `startWorkflow` (same `vi.fn` reference).
+     * @deprecated Use `startWorkflow` instead.
+     */
     triggerWorkflow,
-    /** The `resumeWorkflow` `vi.fn`. */
+    /** The `resumeWorkflowExecution` `vi.fn`. */
+    resumeWorkflowExecution: resumeWorkflow,
+    /**
+     * Frozen alias of `resumeWorkflowExecution` (same `vi.fn` reference).
+     * @deprecated Use `resumeWorkflowExecution` instead.
+     */
     resumeWorkflow,
     /** The `wait` `vi.fn`. */
     wait,
@@ -312,7 +335,7 @@ export function mockWorkflow() {
       return triggerJobFunction.mock.calls.map(([jobName, args, options]) => ({
         jobName: jobName as string,
         args,
-        ...(options !== undefined && { options: options as TriggerJobFunctionOptions }),
+        ...(options !== undefined && { options: options as StartJobFunctionOptions }),
       }));
     },
 

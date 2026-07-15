@@ -49,7 +49,8 @@ import type {
 } from "./idp";
 import type {
   Invoker as WorkflowInvoker,
-  PlatformTriggerWorkflowOptions as WorkflowTriggerWorkflowOptions,
+  StartWorkflowOptions as WorkflowStartWorkflowOptions,
+  TriggerWorkflowOptions as WorkflowTriggerWorkflowOptions,
 } from "./workflow";
 
 type TailorIdpClientConfig = IdpClientConfig;
@@ -64,6 +65,7 @@ type TailorIdpUser = IdpUser;
 type TailorIdpUserQuery = IdpUserQuery;
 type TailorWorkflowInvoker = WorkflowInvoker;
 type TailorWorkflowTriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
+type TailorWorkflowStartWorkflowOptions = WorkflowStartWorkflowOptions;
 
 declare global {
   namespace tailordb {
@@ -95,6 +97,8 @@ declare global {
 
     namespace workflow {
       type Invoker = TailorWorkflowInvoker;
+      type StartWorkflowOptions = TailorWorkflowStartWorkflowOptions;
+      /** @deprecated Use `StartWorkflowOptions` instead. */
       type TriggerWorkflowOptions = TailorWorkflowTriggerWorkflowOptions;
     }
 
