@@ -64,7 +64,7 @@ grep -q '^name: e2e-test$' "$skill_dir/SKILL.md" || fail "skill name was not upd
 if grep -q '\.managed-pgid' "$helper_source"; then
   fail "authentication helper still uses a racy PID-file handoff"
 fi
-grep -q 'cleanup_supervisor' "$runner_source" ||
+grep -q 'process_supervisor' "$runner_source" ||
   fail "isolated cleanup does not use a direct-owner supervisor"
 grep -q '!.claude/skills/e2e-test' "$repo_root/.gitignore" || fail "new Claude skill is not unignored"
 if grep -q '!.claude/skills/e2e-setup' "$repo_root/.gitignore"; then
@@ -538,6 +538,18 @@ e2e_tmpdir=$(<"$e2e_tmpdir_marker")
   fail "SDK cleanup command changed"
 [[ $(sed -n '5p' "$pnpm_marker") == "exec tailor-sdk --json workspace list" ]] ||
   fail "SDK raw cleanup verification command changed"
+
+runner_orphan_pnpm_marker="$tmp_dir/runner-orphan-pnpm-marker"
+runner_orphan_pid_marker="$tmp_dir/runner-orphan-pid-marker"
+PATH="$fake_bin:$PATH" \
+  E2E_PNPM_MARKER="$runner_orphan_pnpm_marker" \
+  E2E_TEST_SPAWN_ORPHAN=1 \
+  E2E_TEST_ORPHAN_PID_MARKER="$runner_orphan_pid_marker" \
+  TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+  "$runner"
+wait_for_process_exit \
+  "$(<"$runner_orphan_pid_marker")" \
+  "test descendant survived normal SDK runner exit"
 
 outside_cwd_marker="$tmp_dir/outside-cwd-pnpm-marker"
 (

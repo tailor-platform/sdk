@@ -19,7 +19,8 @@ signal_cleanup_stage() {
     fi
   fi
   if [[ ${E2E_CLEANUP_SIGNAL_AT:-} == "$stage" ]]; then
-    kill -s "${E2E_CLEANUP_SIGNAL:-TERM}" "$PPID"
+    runner_pid=$(/bin/ps -o ppid= -p "$PPID" | /usr/bin/tr -d ' ')
+    kill -s "${E2E_CLEANUP_SIGNAL:-TERM}" "$runner_pid"
     if [[ -n ${E2E_CLEANUP_SIGNAL_EXIT_IMMEDIATELY:-} ]]; then
       exit 0
     fi
@@ -35,6 +36,10 @@ case "$*" in
     if [[ -n ${E2E_TEST_PID_MARKER:-} ]]; then
       printf '%s' "$$" >"$E2E_TEST_PID_MARKER"
     fi
+    if [[ -n ${E2E_TEST_SPAWN_ORPHAN:-} ]]; then
+      /bin/sleep 2 </dev/null >/dev/null 2>&1 &
+      printf '%s' "$!" >"$E2E_TEST_ORPHAN_PID_MARKER"
+    fi
     if [[ -n ${E2E_RUN_ID_MARKER:-} ]]; then
       printf '%s' "${TAILOR_PLATFORM_E2E_RUN_ID:-}" >"$E2E_RUN_ID_MARKER"
     fi
@@ -42,7 +47,8 @@ case "$*" in
       printf '%s' "${TMPDIR:-}" >"$E2E_TMPDIR_MARKER"
     fi
     if [[ -n ${E2E_TEST_SIGNAL:-} ]]; then
-      kill -s "$E2E_TEST_SIGNAL" "$PPID"
+      runner_pid=$(/bin/ps -o ppid= -p "$PPID" | /usr/bin/tr -d ' ')
+      kill -s "$E2E_TEST_SIGNAL" "$runner_pid"
       /bin/sleep "${E2E_SIGNAL_DELAY:-1}"
       if [[ -n ${E2E_SIGNAL_COMPLETION_MARKER:-} ]]; then
         printf 'completed' >"$E2E_SIGNAL_COMPLETION_MARKER"
