@@ -26,6 +26,7 @@ import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { assertDefined } from "#/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import { detectFunctionType, type DetectedFunction } from "./detect";
+import type { TailorUser } from "#/runtime/types";
 
 export const testRunCommand = defineAppCommand({
   name: "test-run",
@@ -359,8 +360,8 @@ export function resolveResolverArg(
     id: machineUser.id,
     type: "machine_user" as const,
     workspaceId,
-    attributes: machineUser.attributes ?? null,
-    attributeList: machineUser.attributeList,
+    attributes: machineUser.attributes as TailorUser["attributes"],
+    attributeList: machineUser.attributeList as TailorUser["attributeList"],
   };
 
   const newResult = inputSchema.parse({ value: parsed, data: parsed, user });
@@ -370,6 +371,8 @@ export function resolveResolverArg(
 
   // New format failed — check if old format works
   if (
+    typeof parsed === "object" &&
+    parsed !== null &&
     Object.keys(parsed).length === 1 &&
     parsed.input != null &&
     typeof parsed.input === "object" &&

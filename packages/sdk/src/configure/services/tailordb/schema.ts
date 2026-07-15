@@ -8,7 +8,7 @@ import {
   parseInternal as parseFieldInternal,
   type FieldParseArgs,
   type FieldParseInternalArgs,
-} from "#/configure/types/field-runtime";
+} from "#/runtime/field-parse";
 import { brandValue } from "#/utils/brand";
 import type {
   TailorDBField as TailorDBFieldBase,
@@ -49,7 +49,6 @@ export type TailorAnyDBField = Omit<
   readonly fields: Record<string, AnyBuilderMethod>;
   _metadata: DBFieldMetadata;
   parse: AnyBuilderMethod;
-  _parseInternal: AnyBuilderMethod;
   readonly typeName: TypeLevelError<string>;
   description: AnyBuilderMethod;
   relation: AnyBuilderMethod;
@@ -301,12 +300,6 @@ export interface TailorDBField<
   parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
 
   /**
-   * Internal parse method that tracks field path for nested validation
-   * @private
-   */
-  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
-
-  /**
    * typeName is not available on TailorDB fields.
    * Use typeName on pipeline fields (t.enum / t.object) instead.
    */
@@ -538,7 +531,6 @@ type TailorDBFieldRuntime<Defined extends DefinedDBFieldMetadata, Output> = Omit
   serial(config: SerialConfig): object;
   clone(options?: FieldOptions): TailorDBFieldRuntime<DefinedDBFieldMetadata, AnyBuilderMethod>;
   parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
-  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
   _setRawRelation(relation: RawRelationConfig): void;
 };
 
@@ -645,8 +637,6 @@ function createTailorDBFieldRuntime<
         pathArray: [],
       });
     },
-
-    _parseInternal: parseInternal,
 
     // TailorDBField specific methods
     relation(config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig) {

@@ -24,6 +24,8 @@ src/
 
 These modules have strict import boundaries enforced by oxlint. See [`packages/sdk/.oxlintrc.json`](../packages/sdk/.oxlintrc.json) for the full rules.
 
+Besides these, `src/runtime/` holds SDK code that executes inside deployed functions on the platform — typed `tailor.*` API wrappers and field value validation (`runtime/field-parse.ts`). It is importable at runtime from every layer, so it is where configure and cli share runtime behavior without crossing their closed boundaries.
+
 The essential constraint: **configure cannot depend on parser/cli at runtime**, because configure code is bundled into user output (resolvers, executors, workflows). Any runtime dependency pulled into configure inflates user bundle sizes.
 
 The configure module's import boundaries enforced by oxlint:
