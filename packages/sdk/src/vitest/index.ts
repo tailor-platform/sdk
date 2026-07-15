@@ -68,6 +68,16 @@ export {
   mockFile,
   mockIconv,
   mockAigateway,
+  type MockAigatewayOptions,
+  type MockAuthconnectionOptions,
+  type MockFileOptions,
+  type MockIconvOptions,
+  type MockIdpOptions,
+  type MockSecretmanagerOptions,
+  type MockTailordbOptions,
+  type QueryBehavior,
+  type QueryMatch,
+  type QueryMatcher,
 } from "./mock";
 
 export { runWorkflowLocally, type RunWorkflowLocallyOptions } from "./workflow-local";

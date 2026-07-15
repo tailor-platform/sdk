@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { detectFunctionType } from "./detect";
@@ -70,6 +71,45 @@ export default resolver;
       await expect(detectFunctionType({ filePath })).rejects.toThrow(
         "Could not detect function type",
       );
+    });
+
+    test("builds a working local input parser from real t.* fields", async () => {
+      const configureTypesUrl = pathToFileURL(
+        path.join(__dirname, "../../../configure/types/index.ts"),
+      ).href;
+      const filePath = writeFile(
+        "resolver.mjs",
+        `
+import { t } from "${configureTypesUrl}";
+export default {
+  operation: "query",
+  name: "my-resolver",
+  input: { name: t.string(), age: t.int({ optional: true }) },
+  body: (ctx) => ctx.input,
+  output: { type: "string", metadata: {}, fields: {} },
+};
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.hasInput).toBe(true);
+
+      const valid = result.inputSchema?.parse({
+        value: { name: "a", age: 1 },
+        data: {},
+        invoker: null,
+      });
+      expect(valid?.issues).toBeUndefined();
+
+      const invalid = result.inputSchema?.parse({
+        value: { age: "not-a-number" },
+        data: {},
+        invoker: null,
+      });
+      expect(invalid?.issues).toEqual([
+        { message: "Required field is missing", path: ["name"] },
+        { message: "Expected an integer: received not-a-number", path: ["age"] },
+      ]);
     });
   });
 

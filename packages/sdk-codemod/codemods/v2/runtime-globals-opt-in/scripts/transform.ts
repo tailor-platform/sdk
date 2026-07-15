@@ -104,7 +104,7 @@ function buildAddRuntimeImportEdit(root: SgNode, source: string, imports: SgNode
 }
 
 function argumentExpressions(args: SgNode): SgNode[] {
-  return args.children().filter((child) => !NON_ARGUMENT_KINDS.has(child.kind()));
+  return args.children().filter((child) => !NON_ARGUMENT_KINDS.has(child.kind() as string));
 }
 
 function hasConstructorArguments(newExpression: SgNode): boolean {

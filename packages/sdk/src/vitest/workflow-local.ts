@@ -243,20 +243,38 @@ function createLocalWorkflowRuntime(
   previous: PlatformWorkflowAPI | undefined,
   triggerJobFunction: (name: string, args?: unknown) => unknown,
 ): PlatformWorkflowAPI {
+  const startWorkflow: PlatformWorkflowAPI["startWorkflow"] = async (name, args, options) => {
+    if (previous) {
+      return await previous.startWorkflow(name, args, options);
+    }
+    platformSerialize(args);
+    return TRIGGER_DEFAULT;
+  };
+  const resumeWorkflowExecution: PlatformWorkflowAPI["resumeWorkflowExecution"] = async (
+    executionId,
+  ) => {
+    if (previous) {
+      return await previous.resumeWorkflowExecution(executionId);
+    }
+    return executionId;
+  };
+
   return {
     triggerJobFunction,
+    startJobFunction: triggerJobFunction,
+    startWorkflow,
     triggerWorkflow: async (name, args, options) => {
       if (previous) {
         return await previous.triggerWorkflow(name, args, options);
       }
-      platformSerialize(args);
-      return TRIGGER_DEFAULT;
+      return await startWorkflow(name, args);
     },
+    resumeWorkflowExecution,
     resumeWorkflow: async (executionId) => {
       if (previous) {
         return await previous.resumeWorkflow(executionId);
       }
-      return executionId;
+      return await resumeWorkflowExecution(executionId);
     },
     wait: (key, payload) => {
       if (previous) {

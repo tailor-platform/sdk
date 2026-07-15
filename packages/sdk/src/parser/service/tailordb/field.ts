@@ -142,7 +142,7 @@ const firstObjectProperty = (wrapped: string) => {
  * @param fn - Function to stringify
  * @returns Stringified function source
  */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+// oxlint-disable-next-line typescript/no-unsafe-function-type
 export const stringifyFunction = (fn: Function): string => {
   const src = fn.toString().trim();
   // `src` is already a valid function/arrow expression (e.g. `function () {}`,
@@ -198,9 +198,41 @@ const convertToScriptExpr = (
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
+  const argsObject =
+    kind === "validate"
+      ? `{ value: _value }`
+      : kind === "hooks.create"
+        ? `{ input: _value, invoker: ${tailorPrincipalMap}, now: _now }`
+        : `{ input: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`;
   return assertParsableExpression(
-    `(${normalized})({ value: _value, data: _data, invoker: ${tailorPrincipalMap} })`,
+    `(${normalized})(${argsObject})`,
     formatScriptContext(kind, context),
+  );
+};
+
+// oxlint-disable-next-line typescript/no-unsafe-function-type
+export const convertTypeHookToExpr = (fn: Function): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+  if (precompiledExpr) {
+    return precompiledExpr;
+  }
+  const normalized = stringifyFunction(fn);
+  return assertParsableExpression(
+    `(${normalized})({ input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now })`,
+    "type-hook",
+  );
+};
+
+// oxlint-disable-next-line typescript/no-unsafe-function-type
+export const convertTypeValidateToExpr = (fn: Function): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+  if (precompiledExpr) {
+    return precompiledExpr;
+  }
+  const normalized = stringifyFunction(fn);
+  return assertParsableExpression(
+    `(${normalized})({ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap} }, __issues)`,
+    "type-validate",
   );
 };
 
@@ -219,6 +251,20 @@ export function parseFieldConfig(
   const fieldType = field.type;
   // Access rawRelation via getter (if available)
   const rawRelation = (field as unknown as { rawRelation?: RawRelationConfig }).rawRelation;
+
+  if (context && context.fieldPath.length > 1 && metadata.default !== undefined) {
+    throw new Error(
+      `Field "${context.fieldPath.join(".")}" on type "${context.typeName}": ` +
+        `.default() cannot be used on nested inner fields`,
+    );
+  }
+
+  if (context && context.fieldPath.length > 1 && metadata.hooks) {
+    throw new Error(
+      `Field "${context.fieldPath.join(".")}" on type "${context.typeName}": ` +
+        `.hooks() cannot be used on nested inner fields`,
+    );
+  }
 
   const nestedFields = field.fields as Record<string, TailorAnyDBField> | undefined;
   return {
@@ -242,19 +288,12 @@ export function parseFieldConfig(
           ),
         }
       : {}),
-    validate: metadata.validate?.map((v) => {
-      const { fn, message } =
-        typeof v === "function"
-          ? { fn: v, message: `failed by \`${v.toString().trim()}\`` }
-          : { fn: v[0], message: v[1] };
-
-      return {
-        script: {
-          expr: convertToScriptExpr(fn, "validate", context),
-        },
-        errorMessage: message,
-      };
-    }),
+    validate: metadata.validate?.map((fn) => ({
+      script: {
+        expr: convertToScriptExpr(fn, "validate", context),
+      },
+      errorMessage: "",
+    })),
     hooks: metadata.hooks
       ? {
           create: metadata.hooks.create

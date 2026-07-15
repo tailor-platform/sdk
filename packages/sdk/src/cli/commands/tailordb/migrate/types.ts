@@ -157,7 +157,8 @@ export type SchemaDriftKind =
   | "relationship_missing_remote"
   | "relationship_missing_local"
   | "relationship_mismatch"
-  | "permission_mismatch";
+  | "permission_mismatch"
+  | "script_mismatch";
 
 /**
  * Single schema drift item

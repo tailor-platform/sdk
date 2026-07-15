@@ -8,6 +8,7 @@ import {
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import { describe, expect, expectTypeOf, test, beforeEach, afterAll, vi } from "vitest";
+import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
 import {
   createSnapshotFromLocalTypes,
   loadSnapshot,
@@ -964,6 +965,135 @@ describe("snapshot", () => {
           reason: expect.stringContaining("description changed"),
         }),
       ]);
+    });
+
+    test("detects typeHookExpr addition", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            typeHookExpr: { create: "({input}) => ({fullName: input.first + input.last})" },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "type_scripts_modified",
+          typeName: "User",
+          before: {},
+          after: {
+            typeHookExpr: {
+              create: "({input}) => ({fullName: input.first + input.last})",
+            },
+          },
+        }),
+      ]);
+    });
+
+    test("detects typeHookExpr removal", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            typeHookExpr: { create: "old-expr" },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "type_scripts_modified",
+          typeName: "User",
+          before: { typeHookExpr: { create: "old-expr" } },
+          after: {},
+        }),
+      ]);
+    });
+
+    test("detects typeValidateExpr change", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            typeValidateExpr: "old-validate",
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            typeValidateExpr: "new-validate",
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes).toEqual([
+        expect.objectContaining({
+          kind: "type_scripts_modified",
+          typeName: "User",
+          before: { typeValidateExpr: "old-validate" },
+          after: { typeValidateExpr: "new-validate" },
+        }),
+      ]);
+    });
+
+    test("no diff when typeHookExpr unchanged", () => {
+      const snapshot: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true } },
+            typeHookExpr: { create: "same-expr", update: "same-update" },
+            typeValidateExpr: "same-validate",
+          },
+        },
+      };
+
+      const diff = compareSnapshots(snapshot, snapshot);
+
+      expect(diff.changes).toEqual([]);
     });
   });
 
@@ -3234,7 +3364,7 @@ describe("snapshot", () => {
       expect(drifts[0]!.details).toContain("allowedValues");
     });
 
-    test("reports detailed drift for hooks, validation, serial, and nested fields", () => {
+    test("reports detailed drift for serial and nested fields", () => {
       const snapshot: SchemaSnapshot = {
         version: SCHEMA_SNAPSHOT_VERSION,
         namespace,
@@ -3248,13 +3378,6 @@ describe("snapshot", () => {
               metadata: {
                 type: "nested",
                 required: false,
-                hooks: { create: { expr: "snapshotCreate" } },
-                validate: [
-                  {
-                    script: { expr: "snapshotValid" },
-                    errorMessage: "Snapshot validation",
-                  },
-                ],
                 serial: { start: 10, maxValue: 99, format: "S-%02d" },
                 fields: {
                   child: { type: "string", required: false },
@@ -3271,14 +3394,6 @@ describe("snapshot", () => {
           metadata: {
             type: "nested",
             required: false,
-            hooks: { create: { expr: "remoteCreate" } },
-            validate: [
-              {
-                action: TailorDBType_PermitAction.ALLOW,
-                script: { expr: "remoteValid" },
-                errorMessage: "Remote validation",
-              },
-            ],
             serial: { start: 1, maxValue: 9, format: "R-%02d" },
             fields: {
               child: { type: "number", required: false },
@@ -3290,8 +3405,6 @@ describe("snapshot", () => {
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts).toHaveLength(1);
       expect(drifts[0]!.kind).toBe("field_mismatch");
-      expect(drifts[0]!.details).toContain("hooks.create");
-      expect(drifts[0]!.details).toContain("validate[0].script");
       expect(drifts[0]!.details).toContain("serial.start");
       expect(drifts[0]!.details).toContain("fields.child.type");
     });
@@ -3400,6 +3513,187 @@ describe("snapshot", () => {
       const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
       expect(drifts.length).toBe(1);
       expect(drifts[0]!.kind).toBe("type_missing_local");
+    });
+
+    test("detects script_mismatch when remote has no hash", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              name: {
+                type: "string",
+                required: true,
+                hooks: { create: { expr: "_value.trim()" } },
+              },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          {
+            id: { type: "uuid", required: true },
+            name: { type: "string", required: true },
+          },
+          {
+            typeHook: {
+              create: { expr: '((_invoker) => { return { "name": _value.trim() }; })()' },
+            },
+          },
+        ),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.some((d) => d.kind === "script_mismatch")).toBe(true);
+    });
+
+    test("detects script_mismatch when hashes differ", () => {
+      const snapshotFields = {
+        name: {
+          type: "string",
+          required: true,
+          hooks: { create: { expr: "_value.trim()" } },
+        },
+      };
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true }, ...snapshotFields },
+          },
+        },
+      };
+
+      const differentFields = {
+        name: {
+          type: "string",
+          required: true as const,
+          hooks: { create: { expr: "_value.toLowerCase()" } },
+        },
+      };
+      const { typeHook } = buildTypeScripts(differentFields);
+
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          { id: { type: "uuid", required: true }, name: { type: "string", required: true } },
+          { typeHook },
+        ),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.some((d) => d.kind === "script_mismatch")).toBe(true);
+    });
+
+    test("no script drift when hashes match", () => {
+      const snapshotFields = {
+        name: {
+          type: "string",
+          required: true,
+          hooks: { create: { expr: "_value.trim()" } },
+        },
+      };
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: { id: { type: "uuid", required: true }, ...snapshotFields },
+          },
+        },
+      };
+
+      const { typeHook } = buildTypeScripts(snapshotFields);
+
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          { id: { type: "uuid", required: true }, name: { type: "string", required: true } },
+          { typeHook },
+        ),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.some((d) => d.kind === "script_mismatch")).toBe(false);
+    });
+
+    test("detects script drift when remote has scripts but snapshot does not", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              name: { type: "string", required: true },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType(
+          "User",
+          {
+            id: { type: "uuid", required: true },
+            name: { type: "string", required: true },
+          },
+          {
+            typeHook: {
+              create: { expr: "someExpr() // @sdk-source-hash:abcdef0123456789" },
+            },
+          },
+        ),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.some((d) => d.kind === "script_mismatch")).toBe(true);
+    });
+
+    test("no script drift when neither side has scripts", () => {
+      const snapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              name: { type: "string", required: true },
+            },
+          },
+        },
+      };
+
+      const remoteTypes = [
+        createMockRemoteType("User", {
+          id: { type: "uuid", required: true },
+          name: { type: "string", required: true },
+        }),
+      ];
+
+      const drifts = compareRemoteWithSnapshot(remoteTypes, snapshot);
+      expect(drifts.some((d) => d.kind === "script_mismatch")).toBe(false);
     });
   });
 

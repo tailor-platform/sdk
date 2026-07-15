@@ -81,10 +81,7 @@ export const DBFieldMetadataSchema = z.strictObject({
     })
     .optional()
     .describe("Lifecycle hooks for the field"),
-  validate: z
-    .array(z.union([functionSchema, z.tuple([functionSchema, z.string()])]))
-    .optional()
-    .describe("Validation functions for the field"),
+  validate: z.array(functionSchema).optional().describe("Validation functions for the field"),
   serial: z
     .strictObject({
       start: z.number().describe("Starting value for the serial sequence"),
@@ -100,6 +97,7 @@ export const DBFieldMetadataSchema = z.strictObject({
     .max(12)
     .optional()
     .describe("Decimal scale (number of digits after decimal point, 0-12)"),
+  default: z.unknown().optional().describe("Default value for the field on create"),
 });
 
 const RelationTypeSchema = z.enum(relationTypesKeys);
@@ -269,6 +267,13 @@ export const TailorDBTypeSchema = z.strictObject({
           }),
         )
         .optional(),
+      typeHook: z
+        .strictObject({
+          create: functionSchema.optional(),
+          update: functionSchema.optional(),
+        })
+        .optional(),
+      typeValidate: functionSchema.optional(),
     })
     .strict(),
 });

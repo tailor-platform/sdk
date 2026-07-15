@@ -645,7 +645,7 @@ function rebuildImportStatement(
   };
 }
 
-const SCOPE_KINDS = new Set([
+const SCOPE_KINDS = new Set<ReturnType<SgNode["kind"]>>([
   "statement_block",
   "function_body",
   "for_statement",
@@ -1495,7 +1495,7 @@ function transformPrincipalCallbackParamType(
 function transformPrincipalCallbackParam(
   fn: SgNode,
   edits: Edit[],
-  typeContext?: CallbackTypeContext,
+  typeContext: CallbackTypeContext,
 ): void {
   const param = getFirstFunctionParam(fn);
   if (!param) return;

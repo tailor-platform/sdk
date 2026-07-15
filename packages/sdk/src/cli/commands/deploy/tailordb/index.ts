@@ -848,14 +848,6 @@ const migrationSnapshotCache = {
   },
 };
 
-/**
- * Build the TailorDBType manifest for `typeName` from migration N's snapshot.
- * @param migration - The pending migration whose snapshot to consult
- * @param typeName - The type name to look up in the snapshot
- * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations
- * @param executorUsedTypes - Types used by executors (drives publishRecordEvents default)
- * @returns The manifest, or undefined if `typeName` is not in that snapshot.
- */
 function buildSnapshotTypeManifest(
   migration: PendingMigration,
   typeName: string,
@@ -1736,6 +1728,8 @@ function normalizeComparableTailorDBType(type: unknown) {
       indexes?: Record<string, unknown>;
       files?: Record<string, unknown>;
       permission?: Record<string, unknown>;
+      typeHook?: Record<string, unknown>;
+      typeValidate?: Record<string, unknown>;
     };
   } | null;
   return normalizeTailorDBCompareValue(
@@ -1749,6 +1743,10 @@ function normalizeComparableTailorDBType(type: unknown) {
         indexes: normalized?.schema?.indexes ?? {},
         files: normalized?.schema?.files ?? {},
         permission: normalized?.schema?.permission ?? {},
+        // Hooks/validators are sent as type-level scripts; include them so a
+        // changed hook or validator is detected as an update.
+        typeHook: normalized?.schema?.typeHook ?? {},
+        typeValidate: normalized?.schema?.typeValidate ?? {},
       },
     },
     [],
@@ -1763,13 +1761,17 @@ function normalizeTailorDBCompareValue(
     return value;
   }
 
+  if (typeof value === "boolean") {
+    if (path.at(-1) === "optionalOnCreate" && value === false) {
+      return undefined;
+    }
+    return value;
+  }
+
   if (typeof value === "number" || typeof value === "bigint" || typeof value === "string") {
     if (matchesNumericStringPath(path) && isNumericLikeValue(value)) {
       return String(value);
     }
-    // Platform returns an empty string for `expr` (validate scripts) and field/type
-    // `description` when the SDK omitted them, while local manifests omit the key
-    // entirely. Treat the empty string as unset so it matches an omitted value.
     if (
       (path.at(-1) === "expr" || path.at(-1) === "description") &&
       value === tailordbCompareKnownDefaults.emptyExpression
@@ -1780,9 +1782,16 @@ function normalizeTailorDBCompareValue(
   }
 
   if (Array.isArray(value)) {
-    return value
+    const items = value
       .map((item, index) => normalizeTailorDBCompareValue(item, [...path, index]))
       .filter((item) => item !== undefined);
+    // Field-level validators are no longer emitted by the SDK (they are aggregated
+    // into type-level type_validate). The platform still returns an empty `validate`
+    // array per field; treat it as unset so it matches the omitted local value.
+    if (items.length === 0 && path.at(-1) === "validate") {
+      return undefined;
+    }
+    return items;
   }
 
   if (!isPlainObject(value)) {

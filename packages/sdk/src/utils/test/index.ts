@@ -23,46 +23,79 @@ export {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
-  return (data: unknown) => {
-    return Object.entries(type.fields).reduce(
+  return (data: unknown, now: Date = new Date()) => {
+    const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : undefined;
+    const hooked = Object.entries(type.fields).reduce(
       (hooked, [key, value]) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const field = value as TailorField<any, any, any>;
         if (key === "id") {
-          // Use existing id from data if provided, otherwise generate new UUID
-          const existingId =
-            data && typeof data === "object" ? (data as Record<string, unknown>)[key] : undefined;
-          hooked[key] = existingId ?? crypto.randomUUID();
+          hooked[key] = obj?.[key] ?? crypto.randomUUID();
         } else if (field.type === "nested") {
-          const nestedValue =
-            data && typeof data === "object" ? (data as Record<string, unknown>)[key] : undefined;
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const nestedHook = createTailorDBHook({ fields: field.fields } as any);
           if (field.metadata.array) {
-            // For nested array fields, recurse per element and pass through non-array values
-            // (e.g. null/undefined for optional fields) so validation sees the original value.
+            const nestedValue = obj?.[key];
             hooked[key] = Array.isArray(nestedValue)
-              ? nestedValue.map((item) => nestedHook(item))
+              ? nestedValue.map((item) => nestedHook(item, now))
               : nestedValue;
           } else {
-            hooked[key] = nestedHook(nestedValue);
+            hooked[key] = nestedHook(obj?.[key], now);
           }
         } else if (field.metadata.hooks?.create) {
           hooked[key] = field.metadata.hooks.create({
-            value: (data as Record<string, unknown>)[key],
-            data: data,
+            input: obj?.[key],
             invoker: null,
+            now,
           });
           if (hooked[key] instanceof Date) {
             hooked[key] = hooked[key].toISOString();
           }
-        } else if (data && typeof data === "object") {
-          hooked[key] = (data as Record<string, unknown>)[key];
+        } else if (obj) {
+          hooked[key] = obj[key];
+        }
+        if (hooked[key] == null && field.metadata.default !== undefined) {
+          const isTimeType =
+            field.type === "datetime" || field.type === "date" || field.type === "time";
+          hooked[key] =
+            field.metadata.default === "now" && isTimeType
+              ? now.toISOString()
+              : field.metadata.default;
         }
         return hooked;
       },
       {} as Record<string, unknown>,
-    ) as Partial<output<T>>;
+    );
+
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- metadata absent in recursive nested calls
+    if (type.metadata?.typeHook?.create) {
+      const { id: _id, ...typeHookInput } = hooked;
+      // oxlint-disable-next-line typescript/no-unsafe-function-type
+      const overrides = (type.metadata.typeHook.create as Function)({
+        input: typeHookInput,
+        invoker: null,
+        now,
+      });
+      if (overrides && typeof overrides === "object") {
+        for (const [key, value] of Object.entries(overrides as Record<string, unknown>)) {
+          hooked[key] = value instanceof Date ? value.toISOString() : value;
+        }
+      }
+    }
+
+    // oxlint-disable-next-line typescript/no-unnecessary-condition -- metadata absent in recursive nested calls
+    if (type.metadata?.typeValidate) {
+      const { id: _id, ...newRecord } = hooked;
+      // oxlint-disable-next-line typescript/no-unsafe-function-type
+      (type.metadata.typeValidate as Function)(
+        { newRecord, oldRecord: null, invoker: null },
+        (field: string, message: string) => {
+          throw new Error(`Validation failed on field '${field}': ${message}`);
+        },
+      );
+    }
+
+    return hooked as Partial<output<T>>;
   };
 }
 

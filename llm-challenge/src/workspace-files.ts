@@ -13,6 +13,19 @@ const EXCLUDED_DIRS = new Set([
 ]);
 const EXCLUDED_PATHS = new Set([".tailor/cache"]);
 
+export function isExcludedWorkspacePath(relativePath: string): boolean {
+  const segments = relativePath.split("/");
+  if (segments.some((segment) => EXCLUDED_DIRS.has(segment))) {
+    return true;
+  }
+  for (const excludedPath of EXCLUDED_PATHS) {
+    if (relativePath === excludedPath || relativePath.startsWith(`${excludedPath}/`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Recursively list workspace files as posix-style paths relative to
  * `worktreePath`, skipping challenge-internal and generated directories so the
@@ -26,7 +39,7 @@ export async function listWorkspaceFiles(worktreePath: string): Promise<string[]
       const absolutePath = path.join(directory, entry.name);
       const relativePath = toPosix(path.relative(worktreePath, absolutePath));
       if (entry.isDirectory()) {
-        if (EXCLUDED_DIRS.has(entry.name) || EXCLUDED_PATHS.has(relativePath)) {
+        if (isExcludedWorkspacePath(relativePath)) {
           continue;
         }
         await walk(absolutePath);

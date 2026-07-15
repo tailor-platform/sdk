@@ -220,10 +220,13 @@ const user = db.table("User", {
 const userProfile = db.table("UserProfile", {
   userEmail: db.string().relation({
     type: "1-1",
-    toward: { type: user, key: "email" },
+    toward: { type: user, key: "email", as: "user" },
   }),
 });
 ```
+
+`userEmail` does not end in `ID`, `Id`, or `id`, so this example specifies the forward relation
+name with `toward.as`.
 
 Customize relation names using `toward.as` / `backward` options:
 
@@ -255,52 +258,72 @@ type User {
 - `backward` - Customizes the field name for accessing this type from the related type
 
 Relation names share the same GraphQL field namespace as fields, files, and other relations on
-the type. The SDK rejects duplicate or empty relation names. Use `toward.as` when multiple fields
-on the same type point to the same target type, because their default forward names are derived
-from the target type name:
+the table. The SDK rejects duplicate or empty relation names. When `toward.as` is omitted, the
+default forward name comes from the relation field name with a trailing `ID`, `Id`, or `id`
+removed. This lets multiple fields point to the same target table with distinct forward names:
 
 ```typescript
 const post = db.table("Post", {
   authorID: db.uuid().relation({
     type: "n-1",
-    toward: { type: user, as: "author" },
+    toward: { type: user },
     backward: "authoredPosts",
   }),
   reviewerID: db.uuid().relation({
     type: "n-1",
-    toward: { type: user, as: "reviewer" },
+    toward: { type: user },
     backward: "reviewedPosts",
   }),
 });
 ```
 
+These fields generate the forward names `author` and `reviewer`. A relation field without one of
+the recognized ID suffixes needs an explicit `toward.as`, because its generated forward name
+would conflict with the field itself.
+
 Use `toward.as` or `backward` when a generated relation name would conflict with an existing
-field, files entry, or relation on the same type.
+field, files entry, or relation on the same table.
 
 ### Hooks
 
-Add hooks to execute functions during data creation or update. Hooks receive three arguments:
-
-- `value`: User input if provided, otherwise existing value on update or null on create
-- `data`: Entire record data (for accessing other field values)
-- `invoker`: Principal performing the operation
+Add hooks to execute functions during data creation or update.
 
 #### Field-level Hooks
 
-Set hooks directly on individual fields:
+Set hooks directly on individual fields.
+
+Create hooks receive:
+
+- `input`: The field value from the input (null when not provided)
+- `invoker`: Principal performing the operation
+- `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
+
+Update hooks receive the same arguments plus:
+
+- `oldValue`: The previous field value (null only for optional fields)
 
 ```typescript
 db.string().hooks({
   create: ({ invoker }) => invoker?.id ?? "",
-  update: ({ value }) => value,
+  update: ({ input, oldValue }) => input ?? oldValue,
 });
 ```
 
-**Note:** When setting hooks at the field level, the `data` argument type is `unknown` since the field doesn't know about other fields in the type. Use type-level hooks if you need to access other fields with type safety.
+Field-level hooks operate on a single field and cannot access other fields. Use type-level hooks for cross-field logic.
 
 #### Type-level Hooks
 
-Set hooks for multiple fields at once using `db.table().hooks()`:
+Set hooks across multiple fields using `db.table().hooks()`. The hook returns an object with the fields to override. When both field-level and type-level hooks exist for the same field, type-level hooks take priority.
+
+Create hooks receive:
+
+- `input`: The submitted record data. When field-level hooks or defaults exist, `input` reflects their applied results
+- `invoker`: Principal performing the operation
+- `now`: Operation timestamp (`Date`), shared across all hooks in the same operation
+
+Update hooks receive the same arguments plus:
+
+- `oldRecord`: The existing record (non-null)
 
 ```typescript
 export const customer = db
@@ -310,60 +333,56 @@ export const customer = db
     fullName: db.string(),
   })
   .hooks({
-    fullName: {
-      create: ({ data }) => `${data.firstName} ${data.lastName}`,
-      update: ({ data }) => `${data.firstName} ${data.lastName}`,
-    },
+    create: ({ input }) => ({
+      fullName: `${input.firstName} ${input.lastName}`,
+    }),
+    update: ({ input, oldRecord }) => ({
+      fullName: `${input.firstName ?? oldRecord.firstName} ${input.lastName ?? oldRecord.lastName}`,
+    }),
   });
 ```
 
-**Important:** Field-level and type-level hooks cannot coexist on the same field. TypeScript will prevent this at compile time:
+Use `now` to stamp several fields with the exact same instant:
 
 ```typescript
-// Compile error - cannot set hooks on the same field twice
-export const user = db
-  .table("User", {
-    name: db.string().hooks({ create: ({ data }) => data.firstName }), // Field-level
+export const order = db
+  .table("Order", {
+    createdAt: db.datetime(),
+    updatedAt: db.datetime(),
   })
   .hooks({
-    name: { create: ({ data }) => data.lastName }, // Type-level - ERROR
-  });
-
-// OK - set hooks on different fields
-export const user = db
-  .table("User", {
-    firstName: db.string().hooks({ create: () => "John" }), // Field-level on firstName
-    lastName: db.string(),
-  })
-  .hooks({
-    lastName: { create: () => "Doe" }, // Type-level on lastName
+    create: ({ now }) => ({ createdAt: now, updatedAt: now }),
+    update: ({ now }) => ({ updatedAt: now }),
   });
 ```
+
+**Note:** `.hooks()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
 
 ### Validation
 
-Add validation rules to fields. Validators receive three arguments (executed after hooks):
+Add validation rules to fields. Validators run after hooks.
 
-- `value`: Field value after hook transformation
-- `data`: Entire record data after hook transformations (for accessing other field values)
-- `invoker`: Principal performing the operation
+**Note:** Custom validators run only when built-in type validation succeeds, so `value` always has the field's declared type. For array fields, the validator is called once with the complete array, not per element:
 
-Validators return `true` for success, `false` for failure. Use array form `[validator, errorMessage]` for custom error messages.
+```typescript
+// value is string[], not string
+db.string({ array: true }).validate(({ value }) => value.length >= 2);
+```
 
 #### Field-level Validation
 
-Set validators directly on individual fields:
+Set validators directly on individual fields. Each validator receives `{ value }` (the field value after hooks) and returns an error message string to fail, or void to pass:
 
 ```typescript
 db.string().validate(
-  ({ value }) => value.includes("@"),
-  [({ value }) => value.length >= 5, "Email must be at least 5 characters"],
+  ({ value }) => (value.includes("@") ? undefined : "Must contain @"),
+  ({ value }) => (value.length >= 5 ? undefined : "Must be at least 5 characters"),
 );
 ```
 
 #### Type-level Validation
 
-Set validators for multiple fields at once using `db.table().validate()`:
+Set a validator across all fields using `db.table().validate()`. The validator receives `{ newRecord, oldRecord, invoker }` and an `issues()` callback to report errors per field:
 
 ```typescript
 export const user = db
@@ -371,37 +390,32 @@ export const user = db
     name: db.string(),
     email: db.string(),
   })
-  .validate({
-    name: [({ value }) => value.length > 5, "Name must be longer than 5 characters"],
-    email: [
-      ({ value }) => value.includes("@"),
-      [({ value }) => value.length >= 5, "Email must be at least 5 characters"],
-    ],
+  .validate(({ newRecord }, issues) => {
+    if (newRecord.name.length <= 5) {
+      issues("name", "Name must be longer than 5 characters");
+    }
+    if (!newRecord.email.includes("@")) {
+      issues("email", "Must contain @");
+    }
   });
 ```
 
-**Important:** Field-level and type-level validation cannot coexist on the same field. TypeScript will prevent this at compile time:
+### Defaults
+
+Set a default value for a required field on create. The field becomes optional in the create input — the default fills in when no value is provided:
 
 ```typescript
-// Compile error - cannot set validation on the same field twice
-export const user = db
-  .table("User", {
-    name: db.string().validate(({ value }) => value.length > 0), // Field-level
-  })
-  .validate({
-    name: [({ value }) => value.length < 100, "Too long"], // Type-level - ERROR
-  });
-
-// OK - set validation on different fields
-export const user = db
-  .table("User", {
-    name: db.string().validate(({ value }) => value.length > 0), // Field-level on name
-    email: db.string(),
-  })
-  .validate({
-    email: [({ value }) => value.includes("@"), "Invalid email"], // Type-level on email
-  });
+db.int().default(0);
+db.string().default("pending");
 ```
+
+For datetime/date/time fields, pass `"now"` to use the operation timestamp:
+
+```typescript
+db.datetime().default("now");
+```
+
+**Note:** `.validate()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
 
 ### Vector Search
 
@@ -435,6 +449,22 @@ export const user = db.table("User", {
 `db.fields.timestamps()` adds non-null `createdAt` and `updatedAt` datetime fields. Both fields are populated when a record is created; provided values are preserved so seed data can use historical timestamps. `updatedAt` is also refreshed automatically when a record is updated.
 
 ## Type Modifiers
+
+Type builder methods that set one type-level configuration can be called only once on the same type. Duplicate calls fail at compile time and throw at runtime. This applies to `.description()`, `.hooks()`, `.validate()`, `.features()`, `.indexes()`, `.files()`, `.permission()`, and `.gqlPermission()`.
+
+Conditional assignment is still supported when only one branch calls the method:
+
+```typescript
+let user = db.type("User", {
+  name: db.string(),
+});
+
+if (enableFiles) {
+  user = user.files({
+    avatar: "profile image",
+  });
+}
+```
 
 ### Composite Indexes
 
@@ -525,6 +555,48 @@ db.table("User", {
    });
    ```
 
+#### GraphQL Operations
+
+Control which GraphQL operations (`create`, `update`, `delete`, `read`) are exposed for a type. All operations are enabled by default.
+
+```typescript
+db.type("Order", {
+  status: db.string(),
+}).features({
+  gqlOperations: {
+    delete: false, // Disable the delete mutation
+  },
+});
+```
+
+Use the `"query"` alias to disable all mutations at once (read-only type: `create`/`update`/`delete` false, `read` true):
+
+```typescript
+db.type("AuditLog", {
+  action: db.string(),
+}).features({
+  gqlOperations: "query",
+});
+```
+
+**Namespace-level default**
+
+Set a default for every type in a TailorDB namespace in `tailor.config.ts`. A type's own `.features({ gqlOperations })` always takes precedence over this default.
+
+```typescript
+// tailor.config.ts
+export default defineConfig({
+  db: {
+    tailordb: {
+      files: ["./tailordb/*.ts"],
+      gqlOperations: { delete: false }, // Default for every type in this namespace
+    },
+  },
+});
+```
+
+This default is re-evaluated on every `tailor-sdk deploy`, so changing it also updates types that already exist on the platform, not only newly created ones.
+
 ### Field Extraction (`pickFields` / `omitFields`)
 
 Extract subsets of fields from a `TailorDBType` for reuse in resolvers, executors, seed schemas, etc.
@@ -551,6 +623,8 @@ Available options:
 | ---------- | ------------------------------------- |
 | `optional` | Makes the selected fields optional    |
 | `array`    | Makes the selected fields array types |
+
+**Note:** The `array` option cannot change fields with custom validation — their validators expect the original value shape. Define a new field with a matching validator instead.
 
 #### `omitFields(keys)`
 

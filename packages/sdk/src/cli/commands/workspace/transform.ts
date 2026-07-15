@@ -9,6 +9,8 @@ export interface WorkspaceInfo {
   id: string;
   name: string;
   folderName?: string;
+  organizationId?: string;
+  folderId?: string;
   region: string;
   createdAt: Date | null;
   updatedAt: Date | null;
@@ -25,6 +27,8 @@ export const workspaceInfo = (workspace: Workspace, folderName?: string): Worksp
     id: workspace.id,
     name: workspace.name,
     region: workspace.region,
+    ...(workspace.organizationId ? { organizationId: workspace.organizationId } : {}),
+    ...(workspace.folderId ? { folderId: workspace.folderId } : {}),
     createdAt: formatTimestamp(workspace.createTime),
     updatedAt: formatTimestamp(workspace.updateTime),
   };

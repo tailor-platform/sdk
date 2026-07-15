@@ -1,9 +1,9 @@
 import { createResolver, t } from "@tailor-platform/sdk";
 
-const validators: [(a: { value: number }) => boolean, string][] = [
-  [({ value }) => value >= 0, "Value must be non-negative"],
-  [({ value }) => value < 10, "Value must be less than 10"],
-];
+const validators = [
+  ({ value }: { value: number }) => (value >= 0 ? undefined : "Value must be non-negative"),
+  ({ value }: { value: number }) => (value < 10 ? undefined : "Value must be less than 10"),
+] as const;
 export default createResolver({
   name: "add",
   description: "Addition operation",
