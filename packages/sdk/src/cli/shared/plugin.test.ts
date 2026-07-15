@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { getOAuth2ClientId, getPlatformBaseUrl } from "./client";
-import { dispatchPlugin, listPlugins, resolvePlugin } from "./plugin";
+import { dispatchPlugin, explicitProfileFromArgs, listPlugins, resolvePlugin } from "./plugin";
 
 const contextMocks = vi.hoisted(() => ({
   loadAccessToken: vi.fn(),
@@ -323,5 +323,21 @@ describe("dispatchPlugin", () => {
     process.env.PATH = "";
 
     expect(await dispatchPlugin({ name: "missing", args: [], cliName: CLI })).toBeUndefined();
+  });
+});
+
+describe("explicitProfileFromArgs", () => {
+  test.each([
+    [["deploy", "--profile", "staging"], "staging"],
+    [["deploy", "-p", "staging"], "staging"],
+    [["deploy", "--profile=staging"], "staging"],
+    [["deploy", "-p=staging"], "staging"],
+    [["--profile", "a", "deploy", "--profile", "b"], "b"],
+    [["deploy"], undefined],
+    [["deploy", "--profile"], undefined],
+    [["deploy", "--profile", "--json"], undefined],
+    [["deploy", "--", "--profile", "staging"], undefined],
+  ])("extracts profile from %j", (args, expected) => {
+    expect(explicitProfileFromArgs(args)).toBe(expected);
   });
 });

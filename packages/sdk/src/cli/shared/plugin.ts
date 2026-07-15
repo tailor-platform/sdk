@@ -355,6 +355,35 @@ function buildSpawnTarget(
 }
 
 /**
+ * Extract an explicit `--profile`/`-p` value from args forwarded to a plugin,
+ * so the injected platform context matches the profile the plugin will use.
+ * Scanning stops at a `--` terminator; the last occurrence wins.
+ * @param args - Args forwarded to the plugin
+ * @returns The explicit profile value, or undefined when not present
+ */
+export function explicitProfileFromArgs(args: readonly string[]): string | undefined {
+  let profile: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i];
+    if (token === undefined || token === "--") break;
+    if (token === "--profile" || token === "-p") {
+      const next = args[i + 1];
+      if (next !== undefined && !next.startsWith("-")) {
+        profile = next;
+        i++;
+      }
+      continue;
+    }
+    if (token.startsWith("--profile=")) {
+      profile = token.slice("--profile=".length);
+    } else if (token.startsWith("-p=")) {
+      profile = token.slice("-p=".length);
+    }
+  }
+  return profile || undefined;
+}
+
+/**
  * Resolve and execute a plugin, forwarding stdio and propagating its exit code.
  * @param params - Dispatch parameters
  * @param params.name - Plugin name (without the `<cli>-` prefix)
@@ -378,7 +407,8 @@ export async function dispatchPlugin(params: {
     return undefined;
   }
 
-  const env = { ...process.env, ...(await buildPluginEnv({ profile: params.profile })) };
+  const profile = explicitProfileFromArgs(params.args) ?? params.profile;
+  const env = { ...process.env, ...(await buildPluginEnv({ profile })) };
   const { command, args, shell } = buildSpawnTarget(plugin.path, params.args);
 
   return await new Promise<number>((resolve) => {

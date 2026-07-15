@@ -6,11 +6,13 @@ on:
     branches: [main, v2]
     paths:
       - packages/sdk-tailordb-erd-plugin/**
+      - packages/sdk/src/cli/shared/tailordb-namespaces.ts
       - example/**
       - .github/workflows/erd-schema.yml
   pull_request:
     paths:
       - packages/sdk-tailordb-erd-plugin/**
+      - packages/sdk/src/cli/shared/tailordb-namespaces.ts
       - example/**
       - .github/workflows/erd-schema.yml
 
@@ -104,6 +106,7 @@ jobs:
           always-relevant-paths: |
             example/tailor.config.ts
             packages/sdk-tailordb-erd-plugin/
+            packages/sdk/src/cli/shared/tailordb-namespaces.ts
           relevant-path-prefix: example/
           github-token: ${{ github.token }}
 

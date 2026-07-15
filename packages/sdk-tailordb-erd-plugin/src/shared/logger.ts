@@ -25,6 +25,7 @@ const TYPE_COLORS: Record<string, (text: string) => string> = {
 
 // In JSON mode, all logs go to stderr to keep stdout clean for JSON data
 let _jsonMode = false;
+let _verbose = false;
 
 function writeLog(type: string, message: string, opts?: LogOptions): void {
   const mode = opts?.mode ?? "default";
@@ -49,6 +50,13 @@ export const logger = {
     _jsonMode = value;
   },
 
+  get verbose(): boolean {
+    return _verbose;
+  },
+  set verbose(value: boolean) {
+    _verbose = value;
+  },
+
   info(message: string, opts?: LogOptions): void {
     writeLog("info", message, opts);
   },
@@ -71,6 +79,12 @@ export const logger = {
 
   newline(): void {
     process.stderr.write("\n");
+  },
+
+  debug(message: string): void {
+    if (_verbose) {
+      writeLog("log", chalk.gray(message), { mode: "plain" });
+    }
   },
 
   out(data: string | object | object[]): void {
