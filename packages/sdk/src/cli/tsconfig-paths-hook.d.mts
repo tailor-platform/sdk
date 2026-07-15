@@ -1,1 +1,1 @@
-export declare function resolveSync(...args: unknown[]): unknown;
+export declare function resolve(...args: unknown[]): Promise<unknown>;

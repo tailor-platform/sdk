@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { resolveSync } from "./tsconfig-paths-hook.mjs";
+import { resolve } from "./tsconfig-paths-hook.mjs";
 
 const notFound = (specifier: string) =>
   Object.assign(new Error(`Cannot find '${specifier}'`), { code: "ERR_MODULE_NOT_FOUND" });
@@ -14,40 +14,36 @@ function makeProject(tsconfig: object): { dir: string; parentURL: string } {
   return { dir, parentURL: pathToFileURL(path.join(dir, "resolver.ts")).href };
 }
 
-describe("resolveSync", () => {
+describe("resolve", () => {
   const dirs: string[] = [];
 
   afterEach(() => {
     for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  test("delegates to nextResolve first and returns its result on success", () => {
+  test("delegates to nextResolve first and returns its result on success", async () => {
     const resolved = { url: "file:///node_modules/some-package/index.js" };
-    const nextResolve = vi.fn().mockReturnValue(resolved);
-    const result = resolveSync("some-package", {}, nextResolve);
+    const nextResolve = vi.fn().mockResolvedValue(resolved);
+    const result = await resolve("some-package", {}, nextResolve);
     expect(result).toEqual(resolved);
   });
 
-  test("rethrows ERR_MODULE_NOT_FOUND for non-relative specifiers with no matching tsconfig", () => {
+  test("rethrows ERR_MODULE_NOT_FOUND for non-relative specifiers with no matching tsconfig", async () => {
     const { dir, parentURL } = makeProject({ compilerOptions: { baseUrl: ".", paths: {} } });
     dirs.push(dir);
-    const nextResolve = vi.fn().mockImplementation(() => {
-      throw notFound("some-package");
-    });
-    expect(() => resolveSync("some-package", { parentURL }, nextResolve)).toThrow(
+    const nextResolve = vi.fn().mockRejectedValue(notFound("some-package"));
+    await expect(resolve("some-package", { parentURL }, nextResolve)).rejects.toThrow(
       "Cannot find 'some-package'",
     );
   });
 
-  test("does not intercept relative specifiers, leaving them to tsx/Node", () => {
-    const nextResolve = vi.fn().mockImplementation(() => {
-      throw notFound("./foo");
-    });
-    expect(() => resolveSync("./foo", {}, nextResolve)).toThrow("Cannot find './foo'");
+  test("does not intercept relative specifiers, leaving them to tsx/Node", async () => {
+    const nextResolve = vi.fn().mockRejectedValue(notFound("./foo"));
+    await expect(resolve("./foo", {}, nextResolve)).rejects.toThrow("Cannot find './foo'");
     expect(nextResolve).toHaveBeenCalledTimes(1);
   });
 
-  test("resolves non-relative specifier via tsconfig path alias from the importing file's own directory", () => {
+  test("resolves non-relative specifier via tsconfig path alias from the importing file's own directory", async () => {
     const { dir, parentURL } = makeProject({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./src/*"] } },
     });
@@ -58,11 +54,11 @@ describe("resolveSync", () => {
       if (specifier === expectedCandidate + ".ts") return resolved;
       throw notFound(specifier);
     });
-    const result = resolveSync("@/utils", { parentURL }, nextResolve);
+    const result = await resolve("@/utils", { parentURL }, nextResolve);
     expect(result).toEqual(resolved);
   });
 
-  test("resolves each importing file's alias against its own project, not a previously loaded one", () => {
+  test("resolves each importing file's alias against its own project, not a previously loaded one", async () => {
     const projectA = makeProject({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./a-src/*"] } },
     });
@@ -77,9 +73,9 @@ describe("resolveSync", () => {
       if (specifier === candidateA + ".ts") return resolvedA;
       throw notFound(specifier);
     });
-    expect(resolveSync("@/utils", { parentURL: projectA.parentURL }, nextResolveA)).toEqual(
-      resolvedA,
-    );
+    await expect(
+      resolve("@/utils", { parentURL: projectA.parentURL }, nextResolveA),
+    ).resolves.toEqual(resolvedA);
 
     const resolvedB = { url: "file:///b-src/utils.ts" };
     const candidateB = pathToFileURL(path.join(projectB.dir, "b-src", "utils")).href;
@@ -87,12 +83,12 @@ describe("resolveSync", () => {
       if (specifier === candidateB + ".ts") return resolvedB;
       throw notFound(specifier);
     });
-    expect(resolveSync("@/utils", { parentURL: projectB.parentURL }, nextResolveB)).toEqual(
-      resolvedB,
-    );
+    await expect(
+      resolve("@/utils", { parentURL: projectB.parentURL }, nextResolveB),
+    ).resolves.toEqual(resolvedB);
   });
 
-  test("strips search/hash from parentURL before deriving the importing file's directory", () => {
+  test("strips search/hash from parentURL before deriving the importing file's directory", async () => {
     const { dir, parentURL } = makeProject({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./src/*"] } },
     });
@@ -103,7 +99,7 @@ describe("resolveSync", () => {
       if (specifier === expectedCandidate + ".ts") return resolved;
       throw notFound(specifier);
     });
-    const result = resolveSync(
+    const result = await resolve(
       "@/utils",
       { parentURL: `${parentURL}?tailorImportNonce=1` },
       nextResolve,
@@ -111,7 +107,7 @@ describe("resolveSync", () => {
     expect(result).toEqual(resolved);
   });
 
-  test("resolves paths inherited through an extends chain", () => {
+  test("resolves paths inherited through an extends chain", async () => {
     const dir = fs.realpathSync(
       fs.mkdtempSync(path.join(os.tmpdir(), "tsconfig-paths-hook-test-")),
     );
@@ -132,11 +128,11 @@ describe("resolveSync", () => {
       if (specifier === expectedCandidate + ".ts") return resolved;
       throw notFound(specifier);
     });
-    const result = resolveSync("@/utils", { parentURL }, nextResolve);
+    const result = await resolve("@/utils", { parentURL }, nextResolve);
     expect(result).toEqual(resolved);
   });
 
-  test("prefers the more specific wildcard alias", () => {
+  test("prefers the more specific wildcard alias", async () => {
     const { dir, parentURL } = makeProject({
       compilerOptions: {
         baseUrl: ".",
@@ -150,11 +146,11 @@ describe("resolveSync", () => {
       if (specifier === expectedCandidate + ".ts") return resolved;
       throw notFound(specifier);
     });
-    const result = resolveSync("@/foo/bar", { parentURL }, nextResolve);
+    const result = await resolve("@/foo/bar", { parentURL }, nextResolve);
     expect(result).toEqual(resolved);
   });
 
-  test("resolves a directory-style alias target via its index file", () => {
+  test("resolves a directory-style alias target via its index file", async () => {
     const { dir, parentURL } = makeProject({
       compilerOptions: { baseUrl: ".", paths: { "@/*": ["./src/*"] } },
     });
@@ -165,7 +161,7 @@ describe("resolveSync", () => {
       if (specifier === expectedCandidate + "/index.ts") return resolved;
       throw notFound(specifier);
     });
-    const result = resolveSync("@/models", { parentURL }, nextResolve);
+    const result = await resolve("@/models", { parentURL }, nextResolve);
     expect(result).toEqual(resolved);
   });
 });

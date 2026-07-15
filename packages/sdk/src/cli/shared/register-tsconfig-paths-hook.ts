@@ -11,17 +11,17 @@ import { isNativeTypeScriptRuntime } from "./runtime";
  * re-derives `paths` from each importing file's own directory as a resolve
  * fallback, without touching TypeScript transformation (left to tsx).
  *
- * `module.registerHooks` (synchronous hooks) isn't available on every
- * Node.js version this CLI still supports, so registration is skipped
- * silently where it's missing — the pre-existing tsx-only behavior applies.
+ * Uses `module.register()` rather than `module.registerHooks()`: tsx itself
+ * picks between the two APIs depending on the Node.js version, and a
+ * `registerHooks()`-registered hook never gets a chance to run when tsx's
+ * own hook was registered via `register()` — chaining another `register()`
+ * loader after tsx's is the combination that composes correctly regardless
+ * of which API tsx picked.
  * @param hookUrl - URL of the tsconfig-paths-hook.mjs module.
  */
 export async function registerTsconfigPathsHook(hookUrl: URL): Promise<void> {
   if (isNativeTypeScriptRuntime()) return;
-  if (typeof mod.registerHooks !== "function") return;
+  if (typeof mod.register !== "function") return;
 
-  const { resolveSync } = (await import(hookUrl.href)) as {
-    resolveSync: Parameters<typeof mod.registerHooks>[0]["resolve"];
-  };
-  mod.registerHooks({ resolve: resolveSync });
+  mod.register(hookUrl);
 }

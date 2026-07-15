@@ -14,6 +14,15 @@ import { createPathsMatcher, getTsconfig } from "get-tsconfig";
 // regardless of process cwd or which other tsconfig-bearing projects have
 // already been loaded in the same process.
 //
+// Registered via module.register() (not module.registerHooks()): tsx picks
+// between the async register() and sync registerHooks() APIs internally
+// depending on the Node.js version, and a sync-registered hook's nextResolve
+// never reaches back into an active register()-based loader chain — it
+// would silently never fire on the Node.js versions where tsx still uses
+// register(). Chaining another register()-based loader after tsx's,
+// regardless of which API tsx itself picked, is the only combination that
+// composes correctly on every supported Node.js version.
+//
 // TypeScript transformation itself is left to tsx's already-registered load
 // hook; this only supplies the resolve fallback tsx's cwd-scoped resolver
 // misses.
@@ -33,12 +42,12 @@ function getMatcher(startDir) {
   return matcher;
 }
 
-function tryResolveWithExtensionsSync(base, context, nextResolve) {
+async function tryResolveWithExtensions(base, context, nextResolve) {
   if (!TS_EXTENSIONS.some((ext) => base.endsWith(ext))) {
     for (const ext of TS_EXTENSIONS) {
       for (const suffix of ["", "/index"]) {
         try {
-          return nextResolve(base + suffix + ext, context);
+          return await nextResolve(base + suffix + ext, context);
         } catch (e) {
           if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
         }
@@ -46,7 +55,7 @@ function tryResolveWithExtensionsSync(base, context, nextResolve) {
     }
   }
   try {
-    return nextResolve(base, context);
+    return await nextResolve(base, context);
   } catch (e) {
     const code = e?.code;
     if (code !== "ERR_MODULE_NOT_FOUND" && code !== "ERR_UNSUPPORTED_DIR_IMPORT") throw e;
@@ -54,14 +63,14 @@ function tryResolveWithExtensionsSync(base, context, nextResolve) {
   return null;
 }
 
-// Sync hook for module.registerHooks(). Only handles the case default
-// resolution (including tsx's own tsconfig-paths support) already failed on:
-// a non-relative bare specifier that maps to a tsconfig `paths` alias
-// declared by a tsconfig.json above the importing file's own directory.
-// Relative imports and anything tsx/Node already resolves are left alone.
-export function resolveSync(specifier, context, nextResolve) {
+// Hook for module.register(). Only handles the case default resolution
+// (including tsx's own tsconfig-paths support) already failed on: a
+// non-relative bare specifier that maps to a tsconfig `paths` alias declared
+// by a tsconfig.json above the importing file's own directory. Relative
+// imports and anything tsx/Node already resolves are left alone.
+export async function resolve(specifier, context, nextResolve) {
   try {
-    return nextResolve(specifier, context);
+    return await nextResolve(specifier, context);
   } catch (err) {
     if (err?.code !== "ERR_MODULE_NOT_FOUND") throw err;
     if (specifier.startsWith(".") || specifier.startsWith("/")) throw err;
@@ -78,7 +87,7 @@ export function resolveSync(specifier, context, nextResolve) {
     if (!candidates || candidates.length === 0) throw err;
 
     for (const candidatePath of candidates) {
-      const result = tryResolveWithExtensionsSync(
+      const result = await tryResolveWithExtensions(
         pathToFileURL(candidatePath).href,
         context,
         nextResolve,
