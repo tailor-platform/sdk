@@ -25,6 +25,11 @@ if [[ -n ${PARENT_ENV_MARKER:-} ]]; then
   fi
 fi
 
+if [[ -n ${GUARDIAN_COMMAND_MARKER:-} ]]; then
+  guardian_pid=$(/bin/ps -o ppid= -p "$PPID" | /usr/bin/tr -d ' ')
+  /bin/ps -p "$guardian_pid" -o command= >"$GUARDIAN_COMMAND_MARKER"
+fi
+
 if [[ -n ${TARGET_MARKER:-} ]]; then
   printf '%s' "$XDG_CONFIG_HOME" >"$TARGET_MARKER"
 fi
@@ -46,7 +51,8 @@ if [[ -n ${SPAWN_ORPHAN:-} ]]; then
 fi
 
 if [[ -n ${TARGET_PARENT_SIGNAL:-} ]]; then
-  kill -s "$TARGET_PARENT_SIGNAL" "$PPID"
+  helper_pid=$(/bin/ps -o ppid= -p "$PPID" | /usr/bin/tr -d ' ')
+  kill -s "$TARGET_PARENT_SIGNAL" "$helper_pid"
 fi
 
 if [[ -n ${TARGET_DELAY:-} ]]; then

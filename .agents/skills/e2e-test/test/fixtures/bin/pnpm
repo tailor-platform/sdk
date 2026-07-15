@@ -6,6 +6,18 @@ printf '%s\n' "$*" >>"$E2E_PNPM_MARKER"
 
 signal_cleanup_stage() {
   local stage=$1
+  if [[ ${E2E_CLEANUP_DELAY_AT:-} == "$stage" ]]; then
+    if [[ -n ${E2E_CLEANUP_STARTED_MARKER:-} ]]; then
+      printf 'started' >"$E2E_CLEANUP_STARTED_MARKER"
+    fi
+    if [[ -n ${E2E_CLEANUP_PID_MARKER:-} ]]; then
+      printf '%s' "$$" >"$E2E_CLEANUP_PID_MARKER"
+    fi
+    /bin/sleep "${E2E_CLEANUP_DELAY:-1}"
+    if [[ -n ${E2E_CLEANUP_COMPLETION_MARKER:-} ]]; then
+      printf 'completed' >"$E2E_CLEANUP_COMPLETION_MARKER"
+    fi
+  fi
   if [[ ${E2E_CLEANUP_SIGNAL_AT:-} == "$stage" ]]; then
     kill -s "${E2E_CLEANUP_SIGNAL:-TERM}" "$PPID"
     /bin/sleep 0.1
@@ -14,6 +26,12 @@ signal_cleanup_stage() {
 
 case "$*" in
   "run test -- --project e2e")
+    if [[ -n ${E2E_TEST_STARTED_MARKER:-} ]]; then
+      printf 'started' >"$E2E_TEST_STARTED_MARKER"
+    fi
+    if [[ -n ${E2E_TEST_PID_MARKER:-} ]]; then
+      printf '%s' "$$" >"$E2E_TEST_PID_MARKER"
+    fi
     if [[ -n ${E2E_RUN_ID_MARKER:-} ]]; then
       printf '%s' "${TAILOR_PLATFORM_E2E_RUN_ID:-}" >"$E2E_RUN_ID_MARKER"
     fi
@@ -26,6 +44,12 @@ case "$*" in
       if [[ -n ${E2E_SIGNAL_COMPLETION_MARKER:-} ]]; then
         printf 'completed' >"$E2E_SIGNAL_COMPLETION_MARKER"
       fi
+    fi
+    if [[ -n ${E2E_TEST_DELAY:-} ]]; then
+      /bin/sleep "$E2E_TEST_DELAY"
+    fi
+    if [[ -n ${E2E_TEST_COMPLETION_MARKER:-} ]]; then
+      printf 'completed' >"$E2E_TEST_COMPLETION_MARKER"
     fi
     exit "${E2E_TEST_STATUS:-0}"
     ;;

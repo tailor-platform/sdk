@@ -29,6 +29,7 @@ if [[ ${#run_id} -lt 8 || ${#run_id} -gt 40 || ! "$run_id" =~ ^[a-z0-9-]+$ ]]; t
 fi
 export TAILOR_PLATFORM_E2E_RUN_ID="$run_id"
 workspace_name_prefix="e2e-ws-${run_id}-"
+isolated_auth_run=0
 
 run_tmp=$(mktemp -d "${TMPDIR:-/tmp}/tailor-sdk-e2e.XXXXXX") || exit 1
 chmod 700 "$run_tmp"
@@ -41,10 +42,18 @@ trap cleanup_local_tmp EXIT
 run_cleanup_command() {
   local command_pid command_status signal_count_before
 
-  set -m
-  "$@" &
-  command_pid=$!
-  set +m
+  if [[ $isolated_auth_run -eq 1 ]]; then
+    /bin/bash -c '
+      trap "" HUP INT TERM
+      exec "$@"
+    ' bash "$@" &
+    command_pid=$!
+  else
+    set -m
+    "$@" &
+    command_pid=$!
+    set +m
+  fi
 
   while true; do
     signal_count_before=$cleanup_signal_count
@@ -54,6 +63,23 @@ run_cleanup_command() {
       continue
     fi
     return "$command_status"
+  done
+}
+
+signal_process_tree() {
+  local root_pid=$1 signal_name=$2 child_pid index
+  local -a process_ids=("$root_pid")
+
+  index=0
+  while [[ $index -lt ${#process_ids[@]} ]]; do
+    for child_pid in $(/usr/bin/pgrep -P "${process_ids[$index]}" 2>/dev/null); do
+      process_ids+=("$child_pid")
+    done
+    ((index += 1))
+  done
+
+  for ((index = ${#process_ids[@]} - 1; index >= 0; index--)); do
+    kill -s "$signal_name" "${process_ids[$index]}" 2>/dev/null || true
   done
 }
 
@@ -147,7 +173,11 @@ handle_signal() {
 
   interrupted_status=$signal_status
   if [[ -n ${test_pid:-} ]]; then
-    kill -s "$signal_name" -- "-$test_pid" 2>/dev/null || true
+    if [[ $isolated_auth_run -eq 1 ]]; then
+      signal_process_tree "$test_pid" "$signal_name"
+    else
+      kill -s "$signal_name" -- "-$test_pid" 2>/dev/null || true
+    fi
     wait "$test_pid" 2>/dev/null || true
     test_pid=""
   fi
@@ -165,10 +195,16 @@ trap 'handle_signal INT 130' INT
 trap 'handle_signal TERM 143' TERM
 
 test_pid=""
-set -m
-pnpm run test -- --project e2e &
-test_pid=$!
-set +m
+if [[ -n ${TAILOR_E2E_TRUSTED_NODE:-} ]]; then
+  isolated_auth_run=1
+  pnpm run test -- --project e2e &
+  test_pid=$!
+else
+  set -m
+  pnpm run test -- --project e2e &
+  test_pid=$!
+  set +m
+fi
 wait "$test_pid"
 test_status=$?
 test_pid=""

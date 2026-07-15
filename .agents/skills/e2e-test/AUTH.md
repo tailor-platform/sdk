@@ -46,7 +46,7 @@ login process:
   PATH="$PATH" \
   /bin/bash /absolute/path/to/trusted-checkout/.agents/skills/e2e-test/scripts/with-machine-user-auth.sh \
   /absolute/path/to/trusted/node /absolute/path/to/trusted/tailor-sdk -- \
-  /absolute/path/to/trusted-checkout/.agents/skills/e2e-test/scripts/with-e2e-ids.sh \
+  /bin/bash /absolute/path/to/trusted-checkout/.agents/skills/e2e-test/scripts/with-e2e-ids.sh \
   /absolute/path/to/trusted-checkout/.agents/skills/e2e-test/ids.local.env -- <suite-command> \
   3< <(set +x; /usr/bin/env -i HOME="$HOME" PATH="/usr/bin:/bin" \
     /absolute/path/to/trusted-credential-provider --format=nul)
@@ -73,10 +73,11 @@ The helper:
 - stores the resulting short-lived access token under a temporary `XDG_CONFIG_HOME`;
 - replaces itself after removing client credentials and stale token/profile overrides, so no
   long-lived process retains the secret;
-- runs the suite as a child of a credential-free guardian that forwards HUP, INT, and TERM; and
-- uses a separate credential-free watchdog to terminate the managed process group and delete the
-  temporary configuration if authentication or the guardian is killed, without waiting for
-  orphaned suite descendants.
+- replaces the credential-reading process with a credential-free guardian that forwards HUP, INT,
+  and TERM; and
+- supervises authentication and the suite through a credential-free parent that directly owns the
+  managed process group, terminates it, and deletes the temporary configuration if the helper or
+  guardian is killed, without a racy PID-file handoff or orphaned suite descendants.
 
 The code under test can still read the short-lived access token it needs. Dedicated test-only scope
 and prompt workspace cleanup therefore remain mandatory.

@@ -10,7 +10,7 @@ the current `example/tailor.config.ts` output as application `my-app`.
 Confirm the saved workspace still hosts `my-app`:
 
 ```sh
-.agents/skills/e2e-test/scripts/with-e2e-ids.sh \
+/bin/bash .agents/skills/e2e-test/scripts/with-e2e-ids.sh \
   .agents/skills/e2e-test/ids.local.env -- \
   pnpm exec tailor-sdk workspace app list
 ```
@@ -48,7 +48,7 @@ Use `run deploy`; pnpm's built-in `deploy` shadows the package script when `run`
 ### Run and Repair Drift
 
 ```sh
-.agents/skills/e2e-test/scripts/with-e2e-ids.sh \
+/bin/bash .agents/skills/e2e-test/scripts/with-e2e-ids.sh \
   .agents/skills/e2e-test/ids.local.env -- pnpm --filter example test:e2e
 ```
 
@@ -78,9 +78,9 @@ pnpm exec tailor-sdk organization folder list --organization-id <organization-id
 ### Run with Existing Login
 
 ```sh
-.agents/skills/e2e-test/scripts/with-e2e-ids.sh \
+/bin/bash .agents/skills/e2e-test/scripts/with-e2e-ids.sh \
   .agents/skills/e2e-test/ids.local.env -- \
-  .agents/skills/e2e-test/scripts/run-sdk-e2e.sh
+  /bin/bash .agents/skills/e2e-test/scripts/run-sdk-e2e.sh
 ```
 
 ### Run with Isolated Machine-User Login
@@ -88,7 +88,7 @@ pnpm exec tailor-sdk organization folder list --organization-id <organization-id
 Follow [AUTH.md](AUTH.md), using this target command:
 
 ```sh
-.agents/skills/e2e-test/scripts/run-sdk-e2e.sh
+/bin/bash .agents/skills/e2e-test/scripts/run-sdk-e2e.sh
 ```
 
 The runner requires the organization and folder UUIDs, assigns a lowercase run ID of at most 40

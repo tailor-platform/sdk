@@ -51,7 +51,7 @@ Never source the file. Run commands through the loader, which accepts only the t
 rejects duplicate, malformed, or executable content:
 
 ```sh
-.agents/skills/e2e-test/scripts/with-e2e-ids.sh \
+/bin/bash .agents/skills/e2e-test/scripts/with-e2e-ids.sh \
   .agents/skills/e2e-test/ids.local.env -- <command> [args...]
 ```
 

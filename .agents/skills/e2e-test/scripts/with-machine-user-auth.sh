@@ -7,6 +7,15 @@ usage() {
   echo "Usage: $0 /absolute/path/to/trusted/node /absolute/path/to/trusted/tailor-sdk -- <command> [args...] (credentials on FD 3)" >&2
 }
 
+script_path=${BASH_SOURCE[0]}
+[[ "$script_path" == /* ]] || script_path="$PWD/$script_path"
+script_dir=${script_path%/*}
+supervisor="$script_dir/supervise-process-group.sh"
+if [[ ! -r "$supervisor" ]]; then
+  echo "Process-group supervisor is missing." >&2
+  exit 1
+fi
+
 if [[ $# -lt 4 || ${3:-} != "--" ]]; then
   usage
   exit 64
@@ -54,89 +63,50 @@ unset extra_byte
 config_home=$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/tailor-e2e-auth.XXXXXX")
 /bin/chmod 700 "$config_home"
 /bin/mkdir -p "$config_home/home"
-managed_pid_file="$config_home/.managed-pgid"
 cleanup_config() {
   /bin/rm -rf -- "$config_home"
 }
 trap cleanup_config EXIT
 
 helper_pid=$$
-/usr/bin/env -i PATH=/usr/bin:/bin /bin/bash -c '
-  trap "" HUP INT TERM
-  helper_pid=$1
-  config_home=$2
-  managed_pid_file=$3
-
-  managed_pid=""
-  observed_candidate=""
-  while kill -0 "$helper_pid" 2>/dev/null; do
-    candidate_pid=""
-    if [[ -r "$managed_pid_file" ]]; then
-      IFS= read -r candidate_pid <"$managed_pid_file" || true
-    fi
-    if [[ "$candidate_pid" != "$observed_candidate" ]]; then
-      observed_candidate=$candidate_pid
-      candidate_parent=""
-      if [[ "$candidate_pid" =~ ^[0-9]+$ ]]; then
-        candidate_parent=$(/bin/ps -o ppid= -p "$candidate_pid" 2>/dev/null | /usr/bin/tr -d " ")
-      fi
-      if [[ "$candidate_parent" == "$helper_pid" ]]; then
-        managed_pid=$candidate_pid
-      else
-        managed_pid=""
-      fi
-    fi
-    /bin/sleep 0.05
-  done
-
-  if [[ "$managed_pid" =~ ^[0-9]+$ ]]; then
-    kill -KILL -- "-$managed_pid" 2>/dev/null || true
-  else
-    for child_pid in $(/usr/bin/pgrep -P "$helper_pid" 2>/dev/null); do
-      if [[ "$child_pid" != "$$" ]]; then
-        kill -KILL -- "-$child_pid" 2>/dev/null || kill -KILL "$child_pid" 2>/dev/null || true
-      fi
-    done
-  fi
-  /bin/rm -rf -- "$config_home"
-' bash "$helper_pid" "$config_home" "$managed_pid_file" </dev/null >/dev/null 2>&1 &
-
-auth_pid=""
-handle_auth_signal() {
+managed_supervisor_pid=""
+handle_signal() {
   local signal_name=$1 signal_status=$2
   trap - HUP INT TERM
-  if [[ "$auth_pid" =~ ^[0-9]+$ ]]; then
-    kill -s "$signal_name" -- "-$auth_pid" 2>/dev/null || true
-    wait "$auth_pid" 2>/dev/null || true
+  if [[ "$managed_supervisor_pid" =~ ^[0-9]+$ ]]; then
+    kill -s "$signal_name" "$managed_supervisor_pid" 2>/dev/null || true
+    wait "$managed_supervisor_pid" 2>/dev/null || true
   fi
-  /bin/rm -f -- "$managed_pid_file"
   exit "$signal_status"
 }
-trap 'handle_auth_signal HUP 129' HUP
-trap 'handle_auth_signal INT 130' INT
-trap 'handle_auth_signal TERM 143' TERM
+trap 'handle_signal HUP 129' HUP
+trap 'handle_signal INT 130' INT
+trap 'handle_signal TERM 143' TERM
 
 set +e
 set -m
-/usr/bin/env -i \
+/usr/bin/env -i PATH=/usr/bin:/bin /bin/bash "$supervisor" \
+  "$helper_pid" "$config_home" 4 -- \
+  /usr/bin/env -i \
   HOME="$config_home/home" \
   XDG_CONFIG_HOME="$config_home" \
   /bin/bash -c '
     set +x
-    IFS= read -r -d "" client_id || exit 64
-    IFS= read -r -d "" client_secret || exit 64
+    IFS= read -r -d "" client_id <&4 || exit 64
+    IFS= read -r -d "" client_secret <&4 || exit 64
+    exec 4<&-
     export TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID="$client_id"
     export TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET="$client_secret"
     exec "$1" "$2" login --machine-user
-  ' bash "$auth_node" "$auth_cli" < <(printf '%s\0%s\0' "$client_id" "$client_secret") &
-auth_pid=$!
+  ' bash "$auth_node" "$auth_cli" \
+  4< <(printf '%s\0%s\0' "$client_id" "$client_secret") &
+managed_supervisor_pid=$!
 set +m
-printf '%s\n' "$auth_pid" >"$managed_pid_file"
-wait "$auth_pid"
+unset client_id client_secret
+wait "$managed_supervisor_pid"
 auth_status=$?
-/bin/rm -f -- "$managed_pid_file"
 set -e
-unset auth_pid client_id client_secret
+managed_supervisor_pid=""
 
 if [[ $auth_status -ne 0 ]]; then
   exit "$auth_status"
@@ -158,36 +128,38 @@ exec /usr/bin/env -u TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID \
   TAILOR_E2E_TRUSTED_NODE="$auth_node" \
   TAILOR_E2E_TRUSTED_CLI="$auth_cli" \
   /bin/bash -c '
-    config_home=$1
-    shift
-    managed_pid_file="$config_home/.managed-pgid"
+    set -uo pipefail
+    supervisor=$1
+    config_home=$2
+    shift 2
 
-    cleanup_and_exit() {
-      status=$1
-      trap - HUP INT TERM
+    cleanup_config() {
       /bin/rm -rf -- "$config_home"
-      exit "$status"
     }
+    trap cleanup_config EXIT
 
-    forward_signal() {
+    managed_supervisor_pid=""
+    handle_signal() {
       signal_name=$1
       signal_status=$2
       trap - HUP INT TERM
-      kill -s "$signal_name" -- "-$target_pid" 2>/dev/null || true
-      wait "$target_pid" 2>/dev/null || true
-      cleanup_and_exit "$signal_status"
+      if [[ "$managed_supervisor_pid" =~ ^[0-9]+$ ]]; then
+        kill -s "$signal_name" "$managed_supervisor_pid" 2>/dev/null || true
+        wait "$managed_supervisor_pid" 2>/dev/null || true
+      fi
+      exit "$signal_status"
     }
+    trap "handle_signal HUP 129" HUP
+    trap "handle_signal INT 130" INT
+    trap "handle_signal TERM 143" TERM
 
+    guardian_pid=$$
     set -m
-    "$@" &
-    target_pid=$!
+    /bin/bash "$supervisor" "$guardian_pid" "$config_home" - -- "$@" &
+    managed_supervisor_pid=$!
     set +m
-    printf "%s\n" "$target_pid" >"$managed_pid_file"
-    trap "forward_signal HUP 129" HUP
-    trap "forward_signal INT 130" INT
-    trap "forward_signal TERM 143" TERM
-
-    wait "$target_pid"
+    wait "$managed_supervisor_pid"
     target_status=$?
-    cleanup_and_exit "$target_status"
-  ' bash "$config_home" "$@"
+    managed_supervisor_pid=""
+    exit "$target_status"
+  ' bash "$supervisor" "$config_home" "$@"

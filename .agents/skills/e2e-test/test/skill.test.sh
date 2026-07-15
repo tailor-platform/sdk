@@ -4,11 +4,9 @@ set -euo pipefail
 
 repo_root=$(git rev-parse --show-toplevel)
 skill_dir="$repo_root/.agents/skills/e2e-test"
-helper="$skill_dir/scripts/with-machine-user-auth.sh"
-ids_helper="$skill_dir/scripts/with-e2e-ids.sh"
-fixtures="$skill_dir/test/fixtures"
-fake_node="$fixtures/fake-node.sh"
-credential_provider="$fixtures/fake-credential-provider.sh"
+helper_source="$skill_dir/scripts/with-machine-user-auth.sh"
+supervisor_source="$skill_dir/scripts/supervise-process-group.sh"
+ids_helper_source="$skill_dir/scripts/with-e2e-ids.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -26,7 +24,7 @@ wait_for_path_removal() {
 
 wait_for_path() {
   local path=$1 message=$2
-  for _ in 1 2 3 4 5 6 7 8 9 10; do
+  for _ in {1..40}; do
     [[ -e "$path" ]] && return 0
     sleep 0.05
   done
@@ -42,15 +40,29 @@ wait_for_empty_directory() {
   fail "$message"
 }
 
+wait_for_process_exit() {
+  local pid=$1 message=$2
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    ! kill -0 "$pid" 2>/dev/null && return 0
+    sleep 0.05
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+  fail "$message"
+}
+
 [[ ! -f "$repo_root/.agents/skills/e2e-setup/SKILL.md" ]] || fail "legacy SKILL.md remains"
 [[ ! -f "$repo_root/.agents/skills/e2e-setup/.gitignore" ]] || fail "legacy skill ignore remains"
 [[ -f "$skill_dir/SKILL.md" ]] || fail "SKILL.md is missing"
 [[ -f "$skill_dir/AUTH.md" ]] || fail "AUTH.md is missing"
 [[ -f "$skill_dir/SUITES.md" ]] || fail "SUITES.md is missing"
-[[ -x "$helper" ]] || fail "authentication helper is not executable"
-[[ -x "$ids_helper" ]] || fail "ID loader is not executable"
+[[ -f "$supervisor_source" ]] || fail "process-group supervisor is missing"
+[[ -f "$helper_source" ]] || fail "authentication helper is missing"
+[[ -f "$ids_helper_source" ]] || fail "ID loader is missing"
 [[ $(wc -l <"$skill_dir/SKILL.md") -le 100 ]] || fail "SKILL.md exceeds 100 lines"
 grep -q '^name: e2e-test$' "$skill_dir/SKILL.md" || fail "skill name was not updated"
+if grep -q '\.managed-pgid' "$helper_source"; then
+  fail "authentication helper still uses a racy PID-file handoff"
+fi
 grep -q '!.claude/skills/e2e-test' "$repo_root/.gitignore" || fail "new Claude skill is not unignored"
 if grep -q '!.claude/skills/e2e-setup' "$repo_root/.gitignore"; then
   fail "legacy skill ignore exception remains"
@@ -61,8 +73,27 @@ fi
 git check-ignore -q .agents/skills/e2e-setup/ids.local.env ||
   fail "legacy local ID file is not ignored during migration"
 
-tmp_dir=$(mktemp -d)
+executable_files=$(git ls-files | while read -r file; do
+  [[ -L "$file" || ! -x "$file" ]] || echo "$file"
+done || true)
+[[ -z "$executable_files" ]] || fail "tracked executable files found: $executable_files"
+
+mkdir -p "$repo_root/.agent"
+tmp_dir=$(mktemp -d "$repo_root/.agent/e2e-test-skill.XXXXXX")
 trap 'rm -rf "$tmp_dir"' EXIT
+runtime_skill_dir="$tmp_dir/e2e-test"
+mkdir -p "$runtime_skill_dir/test"
+cp -R "$skill_dir/scripts" "$runtime_skill_dir/scripts"
+cp -R "$skill_dir/test/fixtures" "$runtime_skill_dir/test/fixtures"
+chmod u+x "$runtime_skill_dir/scripts/"*.sh
+chmod u+x "$runtime_skill_dir/test/fixtures/"*.sh "$runtime_skill_dir/test/fixtures/bin/pnpm"
+helper="$runtime_skill_dir/scripts/with-machine-user-auth.sh"
+supervisor="$runtime_skill_dir/scripts/supervise-process-group.sh"
+ids_helper="$runtime_skill_dir/scripts/with-e2e-ids.sh"
+runner="$runtime_skill_dir/scripts/run-sdk-e2e.sh"
+fixtures="$runtime_skill_dir/test/fixtures"
+fake_node="$fixtures/fake-node.sh"
+credential_provider="$fixtures/fake-credential-provider.sh"
 ids_file="$tmp_dir/ids.local.env"
 ids_marker="$tmp_dir/ids-marker"
 cat >"$ids_file" <<'EOF'
@@ -113,6 +144,7 @@ auth_marker="$tmp_dir/auth-marker"
 auth_argv_marker="$tmp_dir/auth-argv-marker"
 target_marker="$tmp_dir/target-marker"
 parent_env_marker="$tmp_dir/parent-env-marker"
+guardian_command_marker="$tmp_dir/guardian-command-marker"
 secret='test-secret-that-must-not-leak'
 
 set +e
@@ -153,6 +185,7 @@ output=$(
     AUTH_ARGV_MARKER="$auth_argv_marker" \
     TARGET_MARKER="$target_marker" \
     PARENT_ENV_MARKER="$parent_env_marker" \
+    GUARDIAN_COMMAND_MARKER="$guardian_command_marker" \
     TAILOR_PLATFORM_TOKEN=stale-token \
     TAILOR_PLATFORM_PROFILE=developer \
     NODE_OPTIONS=--trace-warnings \
@@ -168,11 +201,15 @@ output=$(
 [[ -s "$auth_argv_marker" ]] || fail "authentication argv was not captured"
 [[ -s "$target_marker" ]] || fail "target command did not run"
 [[ -s "$parent_env_marker" ]] || fail "target did not capture its parent environment"
+[[ -s "$guardian_command_marker" ]] || fail "target did not capture its guardian command"
 if grep -Fq "$secret" "$parent_env_marker"; then
   fail "long-lived parent process retained the client secret"
 fi
 if grep -Fq "$secret" "$auth_argv_marker"; then
   fail "authentication command exposed the client secret in argv"
+fi
+if grep -Fq 'with-machine-user-auth.sh' "$guardian_command_marker"; then
+  fail "credential-reading helper remained in memory while the target ran"
 fi
 isolated_config_home=$(<"$auth_marker")
 [[ "$isolated_config_home" == "$(<"$target_marker")" ]] ||
@@ -257,6 +294,33 @@ for auth_signal_case in TERM:143 KILL:137; do
   sleep 0.35
   [[ ! -e "$auth_kill_config_home" ]] || fail "authentication child survived helper $auth_signal"
 done
+
+auth_race_tmp="$tmp_dir/auth-kill-race"
+mkdir "$auth_race_tmp"
+TMPDIR="$auth_race_tmp" \
+  "$helper" "$fake_node" "$fixtures/fake-tailor-sdk.sh" -- "$fixtures/fake-target.sh" \
+  3< <(set +x; /usr/bin/env -i /bin/bash "$credential_provider" kill-parent-auth) &
+auth_race_helper_pid=$!
+auth_race_started=""
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  auth_race_started=$(find "$auth_race_tmp" -name auth-race-started -print -quit)
+  [[ -z "$auth_race_started" ]] || break
+  sleep 0.05
+done
+[[ -n "$auth_race_started" ]] || fail "authentication race fixture did not start"
+auth_race_config_home=${auth_race_started%/auth-race-started}
+auth_race_child_pid=$(<"$auth_race_config_home/auth-race-child-pid")
+set +e
+wait "$auth_race_helper_pid" 2>/dev/null
+auth_race_status=$?
+set -e
+[[ $auth_race_status -eq 137 ]] || fail "authentication race did not kill the helper"
+wait_for_process_exit \
+  "$auth_race_child_pid" \
+  "authentication child survived the helper-to-watchdog handoff race"
+wait_for_path_removal \
+  "$auth_race_config_home" \
+  "temporary config home survived the helper-to-watchdog handoff race"
 
 extra_stream_target_marker="$tmp_dir/extra-stream-target-marker"
 set +e
@@ -355,12 +419,75 @@ folder_id="00000000-0000-4000-8000-000000000002"
 export TAILOR_PLATFORM_ORGANIZATION_ID="$organization_id"
 export TAILOR_PLATFORM_FOLDER_ID="$folder_id"
 
+nested_group_tmp="$tmp_dir/nested-group"
+mkdir "$nested_group_tmp"
+nested_group_started="$tmp_dir/nested-group-started"
+nested_group_pid_marker="$tmp_dir/nested-group-pid"
+nested_group_completion="$tmp_dir/nested-group-completed"
+nested_group_pnpm_marker="$tmp_dir/nested-group-pnpm-marker"
+TMPDIR="$nested_group_tmp" \
+  PATH="$fake_bin:$PATH" \
+  E2E_PNPM_MARKER="$nested_group_pnpm_marker" \
+  E2E_TEST_STARTED_MARKER="$nested_group_started" \
+  E2E_TEST_PID_MARKER="$nested_group_pid_marker" \
+  E2E_TEST_DELAY=1 \
+  E2E_TEST_COMPLETION_MARKER="$nested_group_completion" \
+  TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+  "$helper" "$fake_node" "$fixtures/fake-tailor-sdk.sh" -- \
+  "$runner" \
+  3< <(set +x; /usr/bin/env -i /bin/bash "$credential_provider") &
+nested_group_helper_pid=$!
+wait_for_path "$nested_group_started" "nested e2e test process did not start"
+nested_group_test_pid=$(<"$nested_group_pid_marker")
+/bin/kill -KILL "$nested_group_helper_pid"
+set +e
+wait "$nested_group_helper_pid" 2>/dev/null
+nested_group_status=$?
+set -e
+[[ $nested_group_status -eq 137 ]] || fail "nested e2e helper lost its SIGKILL status"
+wait_for_process_exit \
+  "$nested_group_test_pid" \
+  "nested e2e test process survived guardian SIGKILL"
+[[ ! -e "$nested_group_completion" ]] || fail "nested e2e test completed after guardian SIGKILL"
+
+nested_cleanup_tmp="$tmp_dir/nested-cleanup"
+mkdir "$nested_cleanup_tmp"
+nested_cleanup_started="$tmp_dir/nested-cleanup-started"
+nested_cleanup_pid_marker="$tmp_dir/nested-cleanup-pid"
+nested_cleanup_completion="$tmp_dir/nested-cleanup-completed"
+nested_cleanup_pnpm_marker="$tmp_dir/nested-cleanup-pnpm-marker"
+TMPDIR="$nested_cleanup_tmp" \
+  PATH="$fake_bin:$PATH" \
+  E2E_PNPM_MARKER="$nested_cleanup_pnpm_marker" \
+  E2E_CLEANUP_DELAY_AT=preview \
+  E2E_CLEANUP_STARTED_MARKER="$nested_cleanup_started" \
+  E2E_CLEANUP_PID_MARKER="$nested_cleanup_pid_marker" \
+  E2E_CLEANUP_DELAY=1 \
+  E2E_CLEANUP_COMPLETION_MARKER="$nested_cleanup_completion" \
+  TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+  "$helper" "$fake_node" "$fixtures/fake-tailor-sdk.sh" -- \
+  "$runner" \
+  3< <(set +x; /usr/bin/env -i /bin/bash "$credential_provider") &
+nested_cleanup_helper_pid=$!
+wait_for_path "$nested_cleanup_started" "nested e2e cleanup process did not start"
+nested_cleanup_pid=$(<"$nested_cleanup_pid_marker")
+/bin/kill -KILL "$nested_cleanup_helper_pid"
+set +e
+wait "$nested_cleanup_helper_pid" 2>/dev/null
+nested_cleanup_status=$?
+set -e
+[[ $nested_cleanup_status -eq 137 ]] || fail "nested cleanup helper lost its SIGKILL status"
+wait_for_process_exit \
+  "$nested_cleanup_pid" \
+  "nested e2e cleanup process survived guardian SIGKILL"
+[[ ! -e "$nested_cleanup_completion" ]] || fail "nested e2e cleanup completed after guardian SIGKILL"
+
 set +e
 credential_output=$(
   PATH="$fake_bin:$PATH" \
     E2E_PNPM_MARKER="$pnpm_marker" \
     TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET="$secret" \
-    "$skill_dir/scripts/run-sdk-e2e.sh" 2>&1
+    "$runner" 2>&1
 )
 credential_status=$?
 set -e
@@ -376,7 +503,7 @@ missing_id_output=$(
     PATH="$fake_bin:$PATH" \
     E2E_PNPM_MARKER="$pnpm_marker" \
     TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
-    "$skill_dir/scripts/run-sdk-e2e.sh" 2>&1
+    "$runner" 2>&1
 )
 missing_id_status=$?
 set -e
@@ -389,7 +516,7 @@ PATH="$fake_bin:$PATH" \
   E2E_TMPDIR_MARKER="$e2e_tmpdir_marker" \
     TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
     TAILOR_PLATFORM_PROFILE=stale-profile \
-    "$skill_dir/scripts/run-sdk-e2e.sh"
+    "$runner"
 [[ $(wc -l <"$pnpm_marker") -eq 5 ]] ||
   fail "SDK runner did not run test, preview, cleanup, and both verifications"
 [[ $(sed -n '1p' "$pnpm_marker") == "run test -- --project e2e" ]] ||
@@ -413,7 +540,7 @@ outside_cwd_marker="$tmp_dir/outside-cwd-pnpm-marker"
   PATH="$fake_bin:$PATH" \
     E2E_PNPM_MARKER="$outside_cwd_marker" \
     TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
-    "$skill_dir/scripts/run-sdk-e2e.sh"
+    "$runner"
 )
 [[ $(wc -l <"$outside_cwd_marker") -eq 5 ]] || fail "SDK runner depended on the caller's cwd"
 
@@ -423,7 +550,7 @@ PATH="$fake_bin:$PATH" \
   E2E_PNPM_MARKER="$pnpm_marker" \
   E2E_TEST_STATUS=23 \
   TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
-  "$skill_dir/scripts/run-sdk-e2e.sh"
+  "$runner"
 sdk_failure_status=$?
 set -e
 [[ $sdk_failure_status -eq 23 ]] || fail "SDK runner lost the test failure status"
@@ -435,7 +562,7 @@ PATH="$fake_bin:$PATH" \
   E2E_PNPM_MARKER="$pnpm_marker" \
   E2E_PREVIEW_STATUS=24 \
   TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
-  "$skill_dir/scripts/run-sdk-e2e.sh"
+  "$runner"
 preview_failure_status=$?
 set -e
 [[ $preview_failure_status -eq 24 ]] || fail "SDK runner lost the preview failure status"
@@ -447,7 +574,7 @@ PATH="$fake_bin:$PATH" \
   E2E_PNPM_MARKER="$pnpm_marker" \
   E2E_RAW_RESIDUAL=1 \
   TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
-  "$skill_dir/scripts/run-sdk-e2e.sh"
+  "$runner"
 raw_residual_status=$?
 set -e
 [[ $raw_residual_status -ne 0 ]] || fail "SDK runner accepted raw residual workspace evidence"
@@ -459,7 +586,7 @@ PATH="$fake_bin:$PATH" \
   E2E_PNPM_MARKER="$pnpm_marker" \
   E2E_RAW_AMBIGUOUS=1 \
   TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
-  "$skill_dir/scripts/run-sdk-e2e.sh"
+  "$runner"
 ambiguous_status=$?
 set -e
 [[ $ambiguous_status -ne 0 ]] || fail "SDK runner accepted an overlapping cleanup candidate"
@@ -471,7 +598,7 @@ PATH="$fake_bin:$PATH" \
   E2E_PNPM_MARKER="$pnpm_marker" \
   E2E_RAW_MISSING=1 \
   TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
-  "$skill_dir/scripts/run-sdk-e2e.sh"
+  "$runner"
 raw_missing_status=$?
 set -e
 [[ $raw_missing_status -ne 0 ]] || fail "SDK runner accepted missing raw workspace evidence"
@@ -482,7 +609,7 @@ PATH="$fake_bin:$PATH" \
   E2E_PNPM_MARKER="$pnpm_marker" \
   E2E_RAW_MALFORMED=1 \
   TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
-  "$skill_dir/scripts/run-sdk-e2e.sh"
+  "$runner"
 raw_malformed_status=$?
 set -e
 [[ $raw_malformed_status -ne 0 ]] || fail "SDK runner accepted malformed raw workspace evidence"
@@ -492,7 +619,7 @@ PATH="$fake_bin:$PATH" \
   E2E_PNPM_MARKER="$pnpm_marker" \
   E2E_RAW_OTHER_RUN=1 \
   TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
-  "$skill_dir/scripts/run-sdk-e2e.sh"
+  "$runner"
 [[ $(wc -l <"$pnpm_marker") -eq 5 ]] ||
   fail "SDK runner did not keep raw workspace verification scoped to its run ID"
 
@@ -502,7 +629,7 @@ for unsafe_run_id in unsafe/run UPPERCASE12 unsafe.name unsafe_name "$(printf 'a
   PATH="$fake_bin:$PATH" \
     E2E_PNPM_MARKER="$pnpm_marker" \
     TAILOR_PLATFORM_E2E_RUN_ID="$unsafe_run_id" \
-    "$skill_dir/scripts/run-sdk-e2e.sh"
+    "$runner"
   unsafe_run_id_status=$?
   set -e
   [[ $unsafe_run_id_status -eq 64 ]] || fail "SDK runner accepted unsafe run ID: $unsafe_run_id"
@@ -520,7 +647,7 @@ for signal_case in HUP:129 INT:130 TERM:143; do
     E2E_TEST_SIGNAL="$target_signal" \
     E2E_SIGNAL_COMPLETION_MARKER="$signal_completion_marker" \
     TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
-    "$skill_dir/scripts/run-sdk-e2e.sh"
+    "$runner"
   signal_status=$?
   set -e
   [[ $signal_status -eq $expected_status ]] || fail "SDK runner lost the $target_signal status"
@@ -540,7 +667,7 @@ for cleanup_signal_case in preview:HUP:129 pre-audit:INT:130 delete:TERM:143; do
     E2E_CLEANUP_SIGNAL_AT="$cleanup_stage" \
     E2E_CLEANUP_SIGNAL="$cleanup_signal" \
     TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
-    "$skill_dir/scripts/run-sdk-e2e.sh"
+    "$runner"
   cleanup_signal_status=$?
   set -e
   [[ $cleanup_signal_status -eq $expected_status ]] ||
@@ -548,5 +675,12 @@ for cleanup_signal_case in preview:HUP:129 pre-audit:INT:130 delete:TERM:143; do
   [[ $(wc -l <"$pnpm_marker") -eq 5 ]] ||
     fail "SDK runner did not finish cleanup after $cleanup_signal during $cleanup_stage"
 done
+
+node -e '
+  const scripts = JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).scripts;
+  if (scripts["check:e2e-test-skill"] !== "bash .agents/skills/e2e-test/test/skill.test.sh") process.exit(1);
+' || fail "e2e-test skill checks are not registered in the root check"
+grep -q 'pnpm run check:e2e-test-skill' "$repo_root/.github/workflows/ci.yml" ||
+  fail "e2e-test skill checks are not registered in CI"
 
 echo "e2e-test skill checks passed"

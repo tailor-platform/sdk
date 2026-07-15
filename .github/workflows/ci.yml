@@ -57,6 +57,9 @@ jobs:
       - name: Check format
         run: pnpm format:check
 
+      - name: Check e2e test skill
+        run: pnpm run check:e2e-test-skill
+
       - name: Generate code
         run: pnpm -r run generate
 
