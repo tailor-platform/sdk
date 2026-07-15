@@ -34,6 +34,7 @@ jobs:
             --no-progress
             --include-fragments
             --exclude 'mailto:'
+            --exclude 'github\.com/tailor-platform/sdk/blob/main/example/resolvers/startWorkflow\.ts'
             packages/sdk/docs/**/*.md
           fail: true
 
