@@ -271,6 +271,50 @@ describe("dispatchPlugin", () => {
     expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBe("cpoc_staging");
   });
 
+  test("resolves injected context from an explicit --profile in forwarded args", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["deploy", "--profile", "staging"],
+      cliName: CLI,
+      profile: "prod",
+    });
+
+    expect(code).toBe(0);
+    expect(contextMocks.loadAccessToken).toHaveBeenCalledWith({ profile: "staging" });
+    expect(contextMocks.loadWorkspaceId).toHaveBeenCalledWith({ profile: "staging" });
+  });
+
+  test("skips platform context injection when the forwarded args carry an env-file flag", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+    // Node itself also parses --env-file after the script path
+    // (https://github.com/nodejs/node/issues/54232), so the file must exist for
+    // the capture plugin process to start.
+    fs.writeFileSync(path.join(project, ".env.staging"), "");
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["deploy", "--env-file", ".env.staging"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(0);
+    const { env } = readCapture();
+    expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_WORKSPACE_ID).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_USER).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_URL).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBeUndefined();
+    expect(env.TAILOR_CONFIG_PATH).toBe("/proj/tailor.config.ts");
+  });
+
   test("omits best-effort context when it cannot be resolved but still dispatches", async () => {
     contextMocks.loadAccessToken.mockRejectedValue(new Error("not logged in"));
     contextMocks.loadWorkspaceId.mockRejectedValue(new Error("no workspace"));
