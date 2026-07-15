@@ -1,5 +1,21 @@
 # @tailor-platform/sdk
 
+## 1.78.0
+
+### Minor Changes
+
+- [#1753](https://github.com/tailor-platform/sdk/pull/1753) [`6bff945`](https://github.com/tailor-platform/sdk/commit/6bff94505f3dbe11a8be36ef301e3641ee2cba89) Thanks [@dqn](https://github.com/dqn)! - Add typed, service-specific Vitest mock controls for runtime APIs and update generated project tests to use them.
+
+- [#1754](https://github.com/tailor-platform/sdk/pull/1754) [`10392ff`](https://github.com/tailor-platform/sdk/commit/10392ff07fa50d90ba7e4846bf1dc14011dde2eb) Thanks [@dqn](https://github.com/dqn)! - Guide workspace selection and optional creation during deploy when no workspace is configured, with machine-readable recovery actions that preserve environment and profile settings
+
+### Patch Changes
+
+- [#1763](https://github.com/tailor-platform/sdk/pull/1763) [`2abbe40`](https://github.com/tailor-platform/sdk/commit/2abbe409ed77eb5e1c50d4aa0b65fbf26843fdb1) Thanks [@dqn](https://github.com/dqn)! - Reduce duplicated schema-derived type declarations.
+
+- [#1770](https://github.com/tailor-platform/sdk/pull/1770) [`9ca5eaa`](https://github.com/tailor-platform/sdk/commit/9ca5eaa4c92b699aa49c79913975cdcfd702214d) Thanks [@toiroakr](https://github.com/toiroakr)! - Document the type-level `gqlOperations` feature (`.features({ gqlOperations })`, including the `"query"` read-only alias) and the namespace-level `db.tailordb.gqlOperations` default in `tailor.config.ts`, clarifying that the namespace default also updates types that already exist on the platform.
+
+- [#1764](https://github.com/tailor-platform/sdk/pull/1764) [`7895ed6`](https://github.com/tailor-platform/sdk/commit/7895ed621dc87ec0307ddb511307a0daac637556) Thanks [@k1LoW](https://github.com/k1LoW)! - Correct the execution policy matching semantics in the workflow docs: overlapping policies now stack (every matching cap is enforced independently and the tightest blocks), not longest-prefix-wins.
+
 ## 1.77.0
 
 ### Minor Changes
