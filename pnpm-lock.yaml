@@ -451,6 +451,9 @@ importers:
       find-up-simple:
         specifier: 1.0.1
         version: 1.0.1
+      get-tsconfig:
+        specifier: 4.14.0
+        version: 4.14.0
       globals:
         specifier: 17.7.0
         version: 17.7.0
@@ -1608,9 +1611,6 @@ packages:
 
   '@oxc-project/types@0.137.0':
     resolution: {integrity: sha512-WT+Gb24i8hmvo85AIv2oEYouEXkRlKAlT9WaCa3TfLgNCN+GhrJOGZuIlMouAh38Qe4QOx26eUOVsq70qXrywA==}
-
-  '@oxc-project/types@0.138.0':
-    resolution: {integrity: sha512-1a7ZKmrRTCoN1XMZ4L0PyyqrMnrNlLyPuOkdSX2MZg7IiIGRUyurNhAm73ptDOraoBcIordsIGKNPKUzy3ZmfA==}
 
   '@oxc-project/types@0.139.0':
     resolution: {integrity: sha512-r9gHphtCs+1M7J0pw6Sn/hh/Wpa/iQrOOkrNAlVLF/gHq+/CJmHIWKKUUhdWjcD6CIa8idarspCsASiXCXvFUw==}
@@ -4620,8 +4620,6 @@ snapshots:
     optional: true
 
   '@oxc-project/types@0.137.0': {}
-
-  '@oxc-project/types@0.138.0': {}
 
   '@oxc-project/types@0.139.0': {}
 

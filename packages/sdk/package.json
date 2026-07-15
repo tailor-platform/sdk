@@ -195,6 +195,7 @@
     "date-fns": "4.4.0",
     "es-toolkit": "1.49.0",
     "find-up-simple": "1.0.1",
+    "get-tsconfig": "4.14.0",
     "globals": "17.7.0",
     "graphql": "17.0.2",
     "inflection": "3.0.2",
