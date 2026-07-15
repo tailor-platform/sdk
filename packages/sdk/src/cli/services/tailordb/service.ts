@@ -129,14 +129,19 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           type.metadata.permissions,
           effectiveGqlOperations,
         );
+        if (!missingPermission && !missingGqlPermission) {
+          continue;
+        }
+        const source = formatTailorDBTypeSourceInfo(typeSourceInfo[typeName]);
+        const location = source ? ` (${source})` : "";
         if (missingPermission) {
           errors.push(
-            `TailorDB type "${typeName}" has no .permission() configured. TailorDB denies all record operations for types without permission; call .permission(...) to grant access explicitly.`,
+            `TailorDB type "${typeName}"${location} has no .permission() configured. TailorDB denies all record operations for types without permission; call .permission(...) to grant access explicitly.`,
           );
         }
         if (missingGqlPermission) {
           errors.push(
-            `TailorDB type "${typeName}" has no .gqlPermission() configured, but GraphQL operations are enabled for it. Call .gqlPermission(...) to grant GraphQL access explicitly, or disable GraphQL exposure with .features({ gqlOperations: { create: false, update: false, delete: false, read: false } }).`,
+            `TailorDB type "${typeName}"${location} has no .gqlPermission() configured, but GraphQL operations are enabled for it. Call .gqlPermission(...) to grant GraphQL access explicitly, or disable GraphQL exposure with .features({ gqlOperations: { create: false, update: false, delete: false, read: false } }).`,
           );
         }
       }
@@ -361,6 +366,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       // Re-parse types to include namespace plugin types
       if (hasGeneratedTypes || hadPreviousGeneratedTypes) {
         doParseTypes();
+        validateRequiredPermissions();
       }
     },
   };
