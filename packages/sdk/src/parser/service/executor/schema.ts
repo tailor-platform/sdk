@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AuthInvokerSchema } from "../auth";
 import { functionSchema } from "../common";
+import type { JsonValue } from "#/types/helpers";
 
 export const TailorDBTriggerSchema = z.strictObject({
   kind: z.literal("tailordb").describe("TailorDB record event trigger"),
@@ -111,33 +112,61 @@ export const WebhookOperationSchema = z.strictObject({
     .describe("HTTP headers for the webhook request"),
 });
 
-export const WorkflowOperationSchema = z.preprocess(
-  (val) => {
-    if (
-      val == null ||
-      typeof val !== "object" ||
-      !("workflow" in val) ||
-      typeof val.workflow !== "object" ||
-      val.workflow === null
-    ) {
-      return val;
-    }
-
-    const { workflow, ...rest } = val as { workflow: { name: string } };
-    return { ...rest, workflowName: workflow.name };
-  },
-  z.strictObject({
-    kind: z.literal("workflow"),
-    workflowName: z.string().describe("Name of the workflow to execute"),
-    args: z
-      .union([z.record(z.string(), z.unknown()), functionSchema])
-      .optional()
-      .describe("Arguments to pass to the workflow"),
-    invoker: AuthInvokerSchema.optional().describe("Invoker for the workflow execution"),
-  }),
+export const JsonValueSchema: z.ZodType<JsonValue, JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(JsonValueSchema),
+    z.record(z.string(), JsonValueSchema),
+  ]),
 );
 
-const OperationSchema = z.union([
+export const WorkflowInputSchema: z.ZodType<
+  Exclude<JsonValue, null>,
+  Exclude<JsonValue, null>
+> = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(JsonValueSchema),
+  z.record(z.string(), JsonValueSchema),
+]);
+
+export const WorkflowOperationArgsSchema = z
+  .union([WorkflowInputSchema, functionSchema])
+  .describe("Arguments to pass to the workflow");
+
+const workflowOperationShape = {
+  kind: z.literal("workflow"),
+  args: WorkflowOperationArgsSchema.optional(),
+  invoker: AuthInvokerSchema.optional().describe("Invoker for the workflow execution"),
+};
+
+const WorkflowOperationByNameSchema = z.strictObject({
+  ...workflowOperationShape,
+  workflowName: z.string().describe("Name of the workflow to execute"),
+  workflow: z.never().optional(),
+});
+
+const WorkflowOperationByReferenceSchema = z
+  .strictObject({
+    ...workflowOperationShape,
+    workflow: z.looseObject({ name: z.string() }),
+    workflowName: z.string().optional(),
+  })
+  .transform(({ workflow, ...operation }) => ({
+    ...operation,
+    workflowName: workflow.name,
+  }));
+
+export const WorkflowOperationSchema = z.union([
+  WorkflowOperationByReferenceSchema,
+  WorkflowOperationByNameSchema,
+]);
+
+export const OperationSchema = z.union([
   FunctionOperationSchema,
   GqlOperationSchema,
   WebhookOperationSchema,

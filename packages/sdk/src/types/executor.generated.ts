@@ -163,25 +163,96 @@ export type WebhookOperation = {
 };
 export type WebhookOperationInput = WebhookOperation;
 
-export type WorkflowOperationInput = unknown;
+export type JsonValueInput =
+  | string
+  | number
+  | boolean
+  | JsonValueInput[]
+  | { [key: string]: JsonValueInput }
+  | null;
 
-export type WorkflowOperation = {
-  kind: "workflow";
-  workflowName: string;
-  args?:
-    | Function
-    | {
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | JsonValue[]
+  | { [key: string]: JsonValue }
+  | null;
+
+export type WorkflowInput = string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
+export type WorkflowInputInput = WorkflowInput;
+
+/**
+ * Arguments to pass to the workflow
+ */
+export type WorkflowOperationArgs = WorkflowInput | Function;
+export type WorkflowOperationArgsInput = WorkflowOperationArgs;
+
+export type WorkflowOperationInput =
+  | {
+      workflow: {
         [x: string]: unknown;
-      }
-    | undefined;
-  invoker?:
-    | string
-    | {
-        namespace: string;
-        machineUserName: string;
-      }
-    | undefined;
-};
+        name: string;
+      };
+      kind: "workflow";
+      workflowName?: string | undefined;
+      args?: WorkflowOperationArgs;
+      invoker?:
+        | string
+        | {
+            namespace: string;
+            machineUserName: string;
+          }
+        | undefined;
+    }
+  | {
+      workflowName: string;
+      kind: "workflow";
+      workflow?: undefined;
+      args?: WorkflowOperationArgs;
+      invoker?:
+        | string
+        | {
+            namespace: string;
+            machineUserName: string;
+          }
+        | undefined;
+    };
+
+export type WorkflowOperation =
+  | {
+      workflowName: string;
+      kind: "workflow";
+      args?: WorkflowOperationArgs;
+      invoker?:
+        | string
+        | {
+            namespace: string;
+            machineUserName: string;
+          }
+        | undefined;
+    }
+  | {
+      workflowName: string;
+      kind: "workflow";
+      workflow?: undefined;
+      args?: WorkflowOperationArgs;
+      invoker?:
+        | string
+        | {
+            namespace: string;
+            machineUserName: string;
+          }
+        | undefined;
+    };
+
+export type OperationInput =
+  | FunctionOperation
+  | GqlOperationInput
+  | WebhookOperation
+  | WorkflowOperationInput;
+
+export type Operation = FunctionOperation | GqlOperation | WebhookOperation | WorkflowOperation;
 
 export type ExecutorInput = {
   /** Executor name */
@@ -189,7 +260,7 @@ export type ExecutorInput = {
   /** Event trigger configuration */
   trigger: TriggerInput;
   /** Operation to execute when triggered */
-  operation: unknown;
+  operation: OperationInput;
   /** Executor description */
   description?: string | undefined;
   /** Whether the executor is disabled */
@@ -204,63 +275,7 @@ export type Executor = {
   /** Event trigger configuration */
   trigger: Trigger;
   /** Operation to execute when triggered */
-  operation:
-    | {
-        kind: "workflow";
-        workflowName: string;
-        args?:
-          | Function
-          | {
-              [x: string]: unknown;
-            }
-          | undefined;
-        invoker?:
-          | string
-          | {
-              namespace: string;
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "function" | "jobFunction";
-        body: Function;
-        invoker?:
-          | string
-          | {
-              namespace: string;
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "graphql";
-        query: string;
-        appName?: string | undefined;
-        variables?: Function | undefined;
-        invoker?:
-          | string
-          | {
-              namespace: string;
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "webhook";
-        url: Function;
-        requestBody?: Function | undefined;
-        headers?:
-          | {
-              [x: string]:
-                | string
-                | {
-                    vault: string;
-                    key: string;
-                  };
-            }
-          | undefined;
-      };
+  operation: Operation;
   /** Executor description */
   description?: string | undefined;
 };
