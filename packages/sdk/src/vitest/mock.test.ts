@@ -864,6 +864,34 @@ describe("mock", () => {
       expect(wf.triggerWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }, undefined]]);
     });
 
+    test("createWorkflow().trigger(args) without options records a 2-arg call", async () => {
+      using wf = mockWorkflow();
+      const arityJob = createWorkflowJob({
+        name: "arity-workflow-main",
+        body: (_input: undefined) => ({ ok: true }),
+      });
+      const arityWorkflow = createWorkflow({ name: "arity-workflow", mainJob: arityJob });
+
+      await arityWorkflow.trigger(undefined);
+
+      expect(wf.triggerWorkflow.mock.calls).toEqual([["arity-workflow", undefined]]);
+    });
+
+    test("createWorkflow().trigger(args, undefined) records a 3-arg call", async () => {
+      using wf = mockWorkflow();
+      const arityJob = createWorkflowJob({
+        name: "arity-workflow-main-3arg",
+        body: (_input: undefined) => ({ ok: true }),
+      });
+      const arityWorkflow = createWorkflow({ name: "arity-workflow-3arg", mainJob: arityJob });
+
+      await arityWorkflow.trigger(undefined, undefined);
+
+      expect(wf.triggerWorkflow.mock.calls).toEqual([
+        ["arity-workflow-3arg", undefined, undefined],
+      ]);
+    });
+
     test("setTriggerHandler with string controls triggerWorkflow response", async () => {
       using wf = mockWorkflow();
       wf.setTriggerHandler("exec-123");
@@ -969,6 +997,41 @@ describe("mock", () => {
       });
       expect(callbackRan).toBe(false);
       expect(wf.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
+    });
+
+    describe("canonical aliases", () => {
+      test("startJobFunction and triggerJobFunction share the same call log", () => {
+        using wf = mockWorkflow();
+        const start = (globalThis as any).tailor.workflow.startJobFunction;
+        const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
+
+        start("job-a", { via: "canonical" });
+        trigger("job-b", { via: "legacy" });
+
+        expect(wf.triggeredJobs).toEqual([
+          { jobName: "job-a", args: { via: "canonical" } },
+          { jobName: "job-b", args: { via: "legacy" } },
+        ]);
+        expect(wf.startJobFunction).toBe(wf.triggerJobFunction);
+      });
+
+      test("startWorkflow honors setTriggerHandler", async () => {
+        using wf = mockWorkflow();
+        wf.setTriggerHandler("exec-canonical");
+        const result = await (globalThis as any).tailor.workflow.startWorkflow("wf", {});
+        expect(result).toBe("exec-canonical");
+        expect(wf.startWorkflow.mock.calls).toEqual([["wf", {}]]);
+        expect(wf.startWorkflow).toBe(wf.triggerWorkflow);
+      });
+
+      test("resumeWorkflowExecution honors setResumeHandler", async () => {
+        using wf = mockWorkflow();
+        wf.setResumeHandler("exec-canonical-resumed");
+        const result = await (globalThis as any).tailor.workflow.resumeWorkflowExecution("exec-1");
+        expect(result).toBe("exec-canonical-resumed");
+        expect(wf.resumeWorkflowExecution.mock.calls).toEqual([["exec-1"]]);
+        expect(wf.resumeWorkflowExecution).toBe(wf.resumeWorkflow);
+      });
     });
   });
 
