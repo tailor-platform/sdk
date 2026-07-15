@@ -136,6 +136,28 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain('"my-aigateway": true;');
     expect(result).toContain('"second-gateway": true;');
   });
+
+  test("should generate empty ConfigIdRegistry when the config has no id", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface ConfigIdRegistry {}");
+  });
+
+  test("should generate ConfigIdRegistry with hasId marker when the config has an id", () => {
+    const result = generateTypeDefinition(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true,
+    );
+
+    expect(result).toContain("interface ConfigIdRegistry");
+    expect(result).toContain("hasId: true;");
+  });
 });
 
 describe("resolveTypeDefinitionPath", () => {
@@ -329,5 +351,18 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
 
     const { aiGatewayNames } = extractAttributesFromConfig(config);
     expect(aiGatewayNames).toEqual(["my-aigateway", "second-gateway"]);
+  });
+
+  test("extracts hasConfigId as false when the config has no id", () => {
+    const { hasConfigId } = extractAttributesFromConfig({ name: "test-app" });
+    expect(hasConfigId).toBe(false);
+  });
+
+  test("extracts hasConfigId as true when the config has an id", () => {
+    const { hasConfigId } = extractAttributesFromConfig({
+      name: "test-app",
+      id: "d0a3398a-f79c-4c2e-be1e-b81469bb0a43",
+    });
+    expect(hasConfigId).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import type { AppConfig } from "#/configure/config/types";
+import type { RequireConfigId } from "#/configure/types/config-id";
 import type { GeneratorConfig, Plugin } from "#/plugin/types";
 
 /**
@@ -10,6 +11,7 @@ import type { GeneratorConfig, Plugin } from "#/plugin/types";
 /* @__NO_SIDE_EFFECTS__ */
 export function defineConfig<
   const Config extends AppConfig &
+    RequireConfigId &
     // type-fest's Exact works recursively and causes type errors, so we use a shallow version here.
     Record<Exclude<keyof Config, keyof AppConfig>, never>,
 >(config: Config) {

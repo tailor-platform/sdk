@@ -64,6 +64,12 @@ export interface AppConfig<
    * copied from another project and the new application should not share
    * the original's id. Existing resources are re-tagged with the new id;
    * data is preserved.
+   *
+   * Once an id has been resolved, `tailor.d.ts` records that fact and
+   * `defineConfig()` requires this field at typecheck time — so accidentally
+   * deleting it (e.g. during a merge) is caught in the editor instead of at
+   * deploy time. Regenerate `tailor.d.ts` (`tailor-sdk generate`) if it goes
+   * stale after copying a config to a new project without its `id`.
    */
   id?: string;
   /** Environment variables accessible via `context.env` in resolvers and via the second argument `{ env }` in workflow job bodies. */

@@ -31,6 +31,7 @@ export {
   type ConnectionName,
 } from "#/configure/types/connection-name";
 export { type AIGatewayNameRegistry, type AIGatewayName } from "#/configure/types/aigateway-name";
+export { type ConfigIdRegistry } from "#/configure/types/config-id";
 
 export * from "#/configure/services/index";
 
