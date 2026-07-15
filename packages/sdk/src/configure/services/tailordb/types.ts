@@ -201,7 +201,9 @@ export type TypeValidateFn<
     oldRecord: DeepReadonly<TData> | null;
     invoker: TailorPrincipal | null;
   },
-  issues: <P extends DottedPaths<Omit<TData, "id">>>(field: P, message: string) => void,
+  // `field` stays non-generic: a self-generic `issues<P extends ...>` makes TS compare
+  // call signatures by identity, spuriously rejecting equal Fields from separate module paths.
+  issues: (field: DottedPaths<Omit<TData, "id">>, message: string) => void,
 ) => void;
 
 type TypeCreateHookFn<
