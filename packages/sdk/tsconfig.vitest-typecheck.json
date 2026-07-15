@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "tsBuildInfoFile": null,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.test-d.ts", "src/runtime/globals.ts"]
+}
