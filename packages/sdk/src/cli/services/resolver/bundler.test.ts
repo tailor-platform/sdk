@@ -9,7 +9,6 @@ let buildTracker: { active: number; maxActive: number } | undefined;
 let concurrentBuildBarrier:
   | {
       calls: number;
-      firstBuildStarted: Promise<void>;
       secondBuildStarted: Promise<void>;
       resolveFirstBuildStarted: () => void;
       resolveSecondBuildStarted: () => void;
@@ -127,8 +126,10 @@ describe("bundleResolvers", () => {
 
     const first = await build();
     const second = await build();
+    const firstCode = first.get("stable");
 
-    expect(first.get("stable")).toBe(second.get("stable"));
+    expect(firstCode).toBeDefined();
+    expect(firstCode).toBe(second.get("stable"));
   });
 
   describe("concurrency", () => {
@@ -174,7 +175,6 @@ describe("bundleResolvers", () => {
       });
       concurrentBuildBarrier = {
         calls: 0,
-        firstBuildStarted,
         secondBuildStarted,
         resolveFirstBuildStarted,
         resolveSecondBuildStarted,
@@ -196,7 +196,9 @@ describe("bundleResolvers", () => {
       expect(firstCode).not.toContain("SECOND_NAMESPACE_MARKER");
       expect(secondCode).toContain("SECOND_NAMESPACE_MARKER");
       expect(secondCode).not.toContain("FIRST_NAMESPACE_MARKER");
-      expect(fs.existsSync(path.join(tmp.dir, ".tailor-sdk/.entries"))).toBe(false);
+      expect(fs.existsSync(path.join(tmp.dir, ".tailor-sdk/resolvers/shared.entry.js"))).toBe(
+        false,
+      );
     });
 
     test("caps concurrent rolldown.build invocations to TAILOR_BUNDLE_CONCURRENCY", async () => {

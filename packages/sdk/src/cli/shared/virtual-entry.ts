@@ -19,8 +19,8 @@ export function createVirtualEntry(name: string, code: string): VirtualEntry {
     input,
     plugin: {
       name: "tailor-sdk-virtual-entry",
-      resolveId(source) {
-        return source === input ? resolvedId : null;
+      resolveId(source, importer) {
+        return source === input && importer === undefined ? resolvedId : null;
       },
       load(id) {
         return id === resolvedId ? code : null;

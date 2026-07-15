@@ -74,8 +74,13 @@ describe("deploy command integration tests", () => {
     expect(pluginFiles.length).toBeGreaterThan(0);
 
     // Deployment bundling should not leave entry files on disk
-    const entryFiles = actualFiles.filter((f) => f.endsWith(".entry.js"));
+    const entryFiles = actualFiles.filter(
+      (f) => f.endsWith(".entry.js") || f.endsWith(".entry.ts"),
+    );
     expect(entryFiles).toEqual([]);
+
+    // Unrelated files in former bundle directories should be preserved
+    expect(actualFiles).toContain("resolvers/keep.txt");
 
     // Bundle output files should NOT exist on disk (in-memory only)
     const bundleOutputFiles = actualFiles.filter(
