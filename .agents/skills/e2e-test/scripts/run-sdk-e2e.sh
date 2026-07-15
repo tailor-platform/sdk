@@ -5,6 +5,7 @@ set -uo pipefail
 script_path=${BASH_SOURCE[0]}
 [[ "$script_path" == /* ]] || script_path="$PWD/$script_path"
 script_dir=${script_path%/*}
+cleanup_supervisor="$script_dir/supervise-process-group.sh"
 
 if [[ -n ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID:-} || -n ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET:-} ]]; then
   echo "Machine-user client credentials must not be present in the e2e process." >&2
@@ -43,11 +44,14 @@ run_cleanup_command() {
   local command_pid command_status signal_count_before
 
   if [[ $isolated_auth_run -eq 1 ]]; then
-    /bin/bash -c '
-      trap "" HUP INT TERM
-      exec "$@"
-    ' bash "$@" &
+    if [[ ! -r "$cleanup_supervisor" ]]; then
+      echo "Cleanup process-group supervisor is missing." >&2
+      return 1
+    fi
+    set -m
+    /bin/bash "$cleanup_supervisor" "$$" "$run_tmp" - -- "$@" &
     command_pid=$!
+    set +m
   else
     set -m
     "$@" &
@@ -59,7 +63,7 @@ run_cleanup_command() {
     signal_count_before=$cleanup_signal_count
     wait "$command_pid"
     command_status=$?
-    if [[ $cleanup_signal_count -ne $signal_count_before ]] && kill -0 "$command_pid" 2>/dev/null; then
+    if [[ $cleanup_signal_count -ne $signal_count_before ]]; then
       continue
     fi
     return "$command_status"

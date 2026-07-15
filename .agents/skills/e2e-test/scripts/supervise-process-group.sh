@@ -36,6 +36,19 @@ remove_cleanup_path() {
   /bin/rm -rf -- "$cleanup_path"
 }
 
+terminate_child_group() {
+  local attempt
+  if ! kill -0 -- "-$child_pid" 2>/dev/null; then
+    return
+  fi
+  kill -TERM -- "-$child_pid" 2>/dev/null || true
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    ! kill -0 -- "-$child_pid" 2>/dev/null && return
+    /bin/sleep 0.01
+  done
+  kill -KILL -- "-$child_pid" 2>/dev/null || true
+}
+
 forward_signal() {
   local signal_name=$1 signal_status=$2
   [[ $forwarded_status -ne 0 ]] || forwarded_status=$signal_status
@@ -80,6 +93,7 @@ done
 
 wait "$child_pid" 2>/dev/null
 child_status=$?
+terminate_child_group
 
 if [[ $parent_lost -eq 1 ]] || ! parent_is_alive; then
   kill -KILL -- "-$child_pid" 2>/dev/null || true

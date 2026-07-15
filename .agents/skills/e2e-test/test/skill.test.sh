@@ -7,6 +7,7 @@ skill_dir="$repo_root/.agents/skills/e2e-test"
 helper_source="$skill_dir/scripts/with-machine-user-auth.sh"
 supervisor_source="$skill_dir/scripts/supervise-process-group.sh"
 ids_helper_source="$skill_dir/scripts/with-e2e-ids.sh"
+runner_source="$skill_dir/scripts/run-sdk-e2e.sh"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -63,6 +64,8 @@ grep -q '^name: e2e-test$' "$skill_dir/SKILL.md" || fail "skill name was not upd
 if grep -q '\.managed-pgid' "$helper_source"; then
   fail "authentication helper still uses a racy PID-file handoff"
 fi
+grep -q 'cleanup_supervisor' "$runner_source" ||
+  fail "isolated cleanup does not use a direct-owner supervisor"
 grep -q '!.claude/skills/e2e-test' "$repo_root/.gitignore" || fail "new Claude skill is not unignored"
 if grep -q '!.claude/skills/e2e-setup' "$repo_root/.gitignore"; then
   fail "legacy skill ignore exception remains"
@@ -346,7 +349,9 @@ orphan_config_home=$(<"$orphan_auth_marker")
 wait_for_path_removal \
   "$orphan_config_home" \
   "an orphaned target child delayed temporary config cleanup"
-kill "$(<"$orphan_pid_marker")" 2>/dev/null || true
+wait_for_process_exit \
+  "$(<"$orphan_pid_marker")" \
+  "target descendant survived normal supervisor exit"
 
 for signal_case in TERM:143 KILL:137; do
   target_signal=${signal_case%%:*}
@@ -675,6 +680,21 @@ for cleanup_signal_case in preview:HUP:129 pre-audit:INT:130 delete:TERM:143; do
   [[ $(wc -l <"$pnpm_marker") -eq 5 ]] ||
     fail "SDK runner did not finish cleanup after $cleanup_signal during $cleanup_stage"
 done
+
+: >"$pnpm_marker"
+set +e
+PATH="$fake_bin:$PATH" \
+  E2E_PNPM_MARKER="$pnpm_marker" \
+  E2E_CLEANUP_SIGNAL_AT=preview \
+  E2E_CLEANUP_SIGNAL=TERM \
+  E2E_CLEANUP_SIGNAL_EXIT_IMMEDIATELY=1 \
+  TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+  "$runner"
+cleanup_exit_race_status=$?
+set -e
+[[ $cleanup_exit_race_status -eq 143 ]] || fail "SDK runner lost the cleanup race signal status"
+[[ $(wc -l <"$pnpm_marker") -eq 5 ]] ||
+  fail "SDK runner aborted cleanup when the signaled child exited immediately"
 
 node -e '
   const scripts = JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).scripts;

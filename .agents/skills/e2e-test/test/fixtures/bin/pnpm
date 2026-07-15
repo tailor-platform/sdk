@@ -20,6 +20,9 @@ signal_cleanup_stage() {
   fi
   if [[ ${E2E_CLEANUP_SIGNAL_AT:-} == "$stage" ]]; then
     kill -s "${E2E_CLEANUP_SIGNAL:-TERM}" "$PPID"
+    if [[ -n ${E2E_CLEANUP_SIGNAL_EXIT_IMMEDIATELY:-} ]]; then
+      exit 0
+    fi
     /bin/sleep 0.1
   fi
 }
