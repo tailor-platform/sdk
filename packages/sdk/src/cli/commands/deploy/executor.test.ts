@@ -371,6 +371,29 @@ describe("planExecutor", () => {
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
     });
+
+    test.each([
+      ["false", false, "false"],
+      ["zero", 0, "0"],
+      ["empty string", "", '""'],
+    ])("preserves %s workflow args", async (_description, args, expectedExpression) => {
+      const executor = createMockExecutor("workflow-executor");
+      executor.operation = {
+        kind: "workflow",
+        workflowName: "test-workflow",
+        args,
+      };
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client: createMockClient([]) }),
+      );
+      const targetConfig = result.changeSet.creates[0]?.request.executor?.targetConfig?.config;
+      if (targetConfig?.case !== "workflow") {
+        throw new Error("Expected workflow target config");
+      }
+
+      expect(targetConfig.value.variables?.expr).toBe(expectedExpression);
+    });
   });
 
   describe("update scenarios", () => {
