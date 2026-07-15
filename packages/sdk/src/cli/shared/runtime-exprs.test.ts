@@ -254,6 +254,36 @@ describe("buildResolverPermissionGuardExpr", () => {
     expect(() => runGuard(permission, { type: "" })).toThrow(/must be logged in/);
   });
 
+  test("only includes the description of the policy that actually caused the denial", () => {
+    const permission = [
+      {
+        conditions: [[{ user: "_loggedIn" }, "=", true]],
+        permit: true,
+        description: "must be logged in",
+      },
+      {
+        conditions: [[{ user: "role" }, "=", "BANNED"]],
+        permit: false,
+        description: "banned users are rejected",
+      },
+    ] as const;
+
+    // Denied for failing the allow-list (not logged in) — only that policy's
+    // description should appear, not the unrelated deny policy's.
+    expect(() => runGuard(permission, { type: "" })).toThrow("access denied: must be logged in");
+
+    // Denied for matching the deny policy (logged in but banned) — only that
+    // policy's description should appear, not the unrelated allow policy's.
+    expect(() => runGuard(permission, { type: "user", attributes: { role: "BANNED" } })).toThrow(
+      "access denied: banned users are rejected",
+    );
+
+    // Allowed: logged in and not banned.
+    expect(() =>
+      runGuard(permission, { type: "user", attributes: { role: "MEMBER" } }),
+    ).not.toThrow();
+  });
+
   test("throws at bundle time on an empty permission array (schema should reject this, but guard defensively too)", () => {
     expect(() => buildResolverPermissionGuardExpr([])).toThrow(/at least one policy/);
   });

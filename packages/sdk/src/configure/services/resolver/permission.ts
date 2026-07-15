@@ -1,22 +1,10 @@
+import type {
+  UserBooleanOperand,
+  UserStringOperand,
+} from "#/configure/types/permission-operand.types";
 import type { InferredAttributeMap } from "#/runtime/types";
 
 type EqualityOperator = "=" | "!=";
-
-type StringFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends string ? K : never;
-}[keyof User];
-
-type BooleanFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends boolean ? K : never;
-}[keyof User];
-
-type UserStringOperand<User extends object = InferredAttributeMap> = {
-  user: StringFieldKeys<User> | "id";
-};
-
-type UserBooleanOperand<User extends object = InferredAttributeMap> = {
-  user: BooleanFieldKeys<User> | "_loggedIn";
-};
 
 type StringEqualityCondition<User extends object> =
   | readonly [UserStringOperand<User>, EqualityOperator, string]
@@ -35,7 +23,8 @@ type BooleanEqualityCondition<User extends object> =
  *
  * The User type is extended by `tailor.d.ts`, which is automatically generated
  * when running `tailor-sdk generate`. Attributes enabled in the config file's
- * `auth.userProfile.attributes` become available as types.
+ * `auth.userProfile.attributes` (or `auth.machineUserAttributes` when
+ * `userProfile` is omitted) become available as types.
  */
 export type ResolverPermissionCondition<User extends object = InferredAttributeMap> =
   | StringEqualityCondition<User>

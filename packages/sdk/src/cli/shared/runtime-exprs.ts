@@ -151,6 +151,16 @@ function resolverPermissionPolicyExpr(policy: ResolverPermissionPolicy): string 
 }
 
 /**
+ * Build a JS object literal capturing whether `policy` matched and its
+ * (possibly empty) description, for runtime denial-reason attribution.
+ * @param policy - The policy to compile
+ * @returns A JS object literal expression: `{ matched, description }`
+ */
+function policyEntryExpr(policy: ResolverPermissionPolicy): string {
+  return `{ matched: ${resolverPermissionPolicyExpr(policy)}, description: ${JSON.stringify(policy.description ?? "")} }`;
+}
+
+/**
  * Build the permission guard statement injected at resolver entry.
  *
  * Rejects the call with `TailorErrorMessage` when the caller doesn't match
@@ -158,9 +168,11 @@ function resolverPermissionPolicyExpr(policy: ResolverPermissionPolicy): string 
  * unaffected by `authInvoker`. A `permit: false` policy always denies matching
  * callers. With no `permit: true` policy, `permission` is a pure blocklist
  * (everyone else is allowed); with at least one, it's an allow-list (deny by
- * default, granted only by a matching `permit: true` policy).
+ * default, granted only by a matching `permit: true` policy). The thrown
+ * message only includes the description(s) of the policy/policies that
+ * actually caused the denial.
  * @param permission - The resolver's `permission` config
- * @returns A JS `if (...) throw ...;` statement, or `undefined` when `permission` is omitted or `"public"`
+ * @returns A JS statement, or `undefined` when `permission` is omitted or `"public"`
  */
 export function buildResolverPermissionGuardExpr(
   permission: Resolver["permission"],
@@ -174,21 +186,19 @@ export function buildResolverPermissionGuardExpr(
   const denyPolicies = permission.filter((policy) => policy.permit === false);
   const allowPolicies = permission.filter((policy) => policy.permit !== false);
 
-  const deniedExpr =
-    denyPolicies.length > 0
-      ? denyPolicies.map((policy) => `(${resolverPermissionPolicyExpr(policy)})`).join(" || ")
-      : "false";
+  const denyEntriesExpr = `[${denyPolicies.map(policyEntryExpr).join(", ")}]`;
+  const allowEntriesExpr = `[${allowPolicies.map(policyEntryExpr).join(", ")}]`;
 
-  // With no allow policies, `permission` is a pure blocklist: deny only callers matching
-  // a deny policy, allow everyone else. With at least one allow policy, `permission` is
-  // an allow-list: deny anyone that doesn't match an allow policy (in addition to
-  // the deny-policy override above).
-  const denyExpr =
-    allowPolicies.length > 0
-      ? `(${deniedExpr}) || !(${allowPolicies.map((policy) => `(${resolverPermissionPolicyExpr(policy)})`).join(" || ")})`
-      : deniedExpr;
-  const descriptions = permission.map((policy) => policy.description).filter((d) => !!d);
-  const message =
-    descriptions.length > 0 ? `access denied: ${descriptions.join("; ")}` : "access denied";
-  return `if (${denyExpr}) { throw new TailorErrorMessage(${JSON.stringify(message)}); }`;
+  return `{
+    const $denyPolicies = ${denyEntriesExpr};
+    const $allowPolicies = ${allowEntriesExpr};
+    const $matchedDeny = $denyPolicies.filter((p) => p.matched);
+    const $anyAllowMatched = $allowPolicies.some((p) => p.matched);
+    if ($matchedDeny.length > 0 || ($allowPolicies.length > 0 && !$anyAllowMatched)) {
+      const $reasons = ($matchedDeny.length > 0 ? $matchedDeny : $allowPolicies)
+        .map((p) => p.description)
+        .filter(Boolean);
+      throw new TailorErrorMessage($reasons.length > 0 ? "access denied: " + $reasons.join("; ") : "access denied");
+    }
+  }`;
 }
