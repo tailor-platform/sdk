@@ -81,4 +81,9 @@ environment=()
 [[ $organization_seen -eq 0 ]] || environment+=("TAILOR_PLATFORM_ORGANIZATION_ID=$organization_id")
 [[ $folder_seen -eq 0 ]] || environment+=("TAILOR_PLATFORM_FOLDER_ID=$folder_id")
 
-exec /usr/bin/env "${environment[@]}" "$@"
+exec /usr/bin/env \
+  -u TAILOR_PLATFORM_WORKSPACE_ID \
+  -u TAILOR_PLATFORM_ORGANIZATION_ID \
+  -u TAILOR_PLATFORM_FOLDER_ID \
+  "${environment[@]}" \
+  "$@"

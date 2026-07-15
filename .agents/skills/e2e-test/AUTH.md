@@ -80,6 +80,6 @@ The helper:
 The code under test can still read the short-lived access token it needs. Dedicated test-only scope
 and prompt workspace cleanup therefore remain mandatory.
 
-For `packages/sdk/e2e`, make the helper's target
-`.agents/skills/e2e-test/scripts/run-sdk-e2e.sh`; it performs cleanup while the isolated login is
-still available.
+For `packages/sdk/e2e`, make the ID loader the helper's target and make
+`.agents/skills/e2e-test/scripts/run-sdk-e2e.sh` the loader's command, as in the example. The runner
+performs cleanup while the isolated login is still available.

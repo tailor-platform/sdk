@@ -51,7 +51,7 @@ wait_for_empty_directory() {
 [[ -x "$ids_helper" ]] || fail "ID loader is not executable"
 [[ $(wc -l <"$skill_dir/SKILL.md") -le 100 ]] || fail "SKILL.md exceeds 100 lines"
 grep -q '^name: e2e-test$' "$skill_dir/SKILL.md" || fail "skill name was not updated"
-grep -q '!.claude/skills/e2e-test' "$repo_root/.gitignore" || fail "new skill is ignored"
+grep -q '!.claude/skills/e2e-test' "$repo_root/.gitignore" || fail "new Claude skill is not unignored"
 if grep -q '!.claude/skills/e2e-setup' "$repo_root/.gitignore"; then
   fail "legacy skill ignore exception remains"
 fi
@@ -77,6 +77,19 @@ EOF
     "$TAILOR_PLATFORM_FOLDER_ID" >"$1"
 ' bash "$ids_marker"
 [[ $(wc -l <"$ids_marker") -eq 3 ]] || fail "ID loader did not export all stored IDs"
+
+workspace_only_ids_file="$tmp_dir/workspace-only-ids.local.env"
+printf '%s\n' \
+  'TAILOR_PLATFORM_WORKSPACE_ID=00000000-0000-4000-8000-000000000000' \
+  >"$workspace_only_ids_file"
+/usr/bin/env \
+  TAILOR_PLATFORM_ORGANIZATION_ID=stale-organization \
+  TAILOR_PLATFORM_FOLDER_ID=stale-folder \
+  "$ids_helper" "$workspace_only_ids_file" -- /bin/bash -c '
+    [[ -n ${TAILOR_PLATFORM_WORKSPACE_ID:-} ]]
+    [[ -z ${TAILOR_PLATFORM_ORGANIZATION_ID:-} ]]
+    [[ -z ${TAILOR_PLATFORM_FOLDER_ID:-} ]]
+  '
 
 malicious_ids_file="$tmp_dir/malicious-ids.local.env"
 malicious_marker="$tmp_dir/malicious-marker"
