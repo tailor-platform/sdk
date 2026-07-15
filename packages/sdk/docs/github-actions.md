@@ -77,7 +77,7 @@ The generated workflow runs `tailor tailordb erd`, which is provided by the
 dev-dependency in your project:
 
 ```bash
-npm install -D @tailor-platform/sdk-tailordb-erd-plugin
+npm install -D @tailor-platform/sdk-tailordb-erd-plugin@next
 ```
 
 The generated workflow builds one self-contained ERD viewer HTML file for each
