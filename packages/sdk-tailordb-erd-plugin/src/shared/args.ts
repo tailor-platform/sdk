@@ -65,6 +65,9 @@ export const commonArgs = {
   }),
   verbose: arg(z.boolean().default(false), {
     description: "Enable verbose logging",
+    effect: (value) => {
+      logger.verbose = value;
+    },
   }),
   json: arg(z.boolean().default(false), {
     alias: "j",
