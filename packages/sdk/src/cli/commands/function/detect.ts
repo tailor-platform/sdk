@@ -19,7 +19,7 @@ export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
 interface InputParseArgs {
   value: unknown;
   data: unknown;
-  user: Record<string, unknown>;
+  user: TailorUser;
 }
 
 /** Minimal schema interface for local format detection (subset of TailorField) */
@@ -75,7 +75,7 @@ export async function detectFunctionType(
       // FieldRuntime structurally; the cast stays at this import boundary.
       const fields = rawInput as Record<string, FieldRuntime>;
       inputSchema = {
-        parse: (args) => parseInputFields({ ...args, user: args.user as TailorUser, fields }),
+        parse: (args) => parseInputFields({ ...args, fields }),
       };
     }
     return {

@@ -3,8 +3,16 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
 import { detectFunctionType } from "./detect";
+import type { TailorUser } from "#/runtime/types";
 
 const TEST_BASE = path.join(__dirname, "__test_detect__");
+const user: TailorUser = {
+  id: "00000000-0000-0000-0000-000000000000",
+  type: "machine_user",
+  workspaceId: "test-workspace",
+  attributes: null,
+  attributeList: [],
+};
 
 describe("detectFunctionType", () => {
   let testDir: string;
@@ -68,13 +76,13 @@ export default {
       const result = await detectFunctionType({ filePath });
       expect(result.hasInput).toBe(true);
 
-      const valid = result.inputSchema?.parse({ value: { name: "a", age: 1 }, data: {}, user: {} });
+      const valid = result.inputSchema?.parse({ value: { name: "a", age: 1 }, data: {}, user });
       expect(valid?.issues).toBeUndefined();
 
       const invalid = result.inputSchema?.parse({
         value: { age: "not-a-number" },
         data: {},
-        user: {},
+        user,
       });
       expect(invalid?.issues).toEqual([
         { message: "Required field is missing", path: ["name"] },
