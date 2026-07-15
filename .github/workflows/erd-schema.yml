@@ -42,16 +42,21 @@ jobs:
         with:
           persist-credentials: false
 
+      # pnpm links a package's bin only when its target file exists at install
+      # time, and neither a same-lockfile re-install nor `rebuild --pending`
+      # retries a skipped link. Stub the plugin's dist entry before install;
+      # the build below replaces it.
+      - name: Stub ERD plugin bin target
+        run: |
+          mkdir -p packages/sdk-tailordb-erd-plugin/dist
+          printf '#!/usr/bin/env node\n' > packages/sdk-tailordb-erd-plugin/dist/index.js
+
       - uses: ./.github/actions/install-deps
 
       # install-deps only builds the SDK; `tailor tailordb erd` dispatches to
-      # this plugin's bin, which must also point at a real dist file. Relink
-      # bins afterwards — pnpm skips bin links whose target is missing at
-      # install time.
+      # this plugin's bin.
       - name: Build ERD plugin
-        run: |
-          pnpm --filter @tailor-platform/sdk-tailordb-erd-plugin run build
-          pnpm rebuild --pending
+        run: pnpm --filter @tailor-platform/sdk-tailordb-erd-plugin run build
 
       - uses: tailor-platform/actions/erd-schema-export@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
         with:
@@ -87,18 +92,23 @@ jobs:
         with:
           persist-credentials: false
 
+      # pnpm links a package's bin only when its target file exists at install
+      # time, and neither a same-lockfile re-install nor `rebuild --pending`
+      # retries a skipped link. Stub the plugin's dist entry before install;
+      # the build below replaces it.
+      - name: Stub ERD plugin bin target
+        run: |
+          mkdir -p packages/sdk-tailordb-erd-plugin/dist
+          printf '#!/usr/bin/env node\n' > packages/sdk-tailordb-erd-plugin/dist/index.js
+
       # install-deps builds the SDK once, so the `tailor-sdk` CLI bin resolves.
       - name: Install deps
         uses: ./.github/actions/install-deps
 
       # install-deps only builds the SDK; `tailor tailordb erd` dispatches to
-      # this plugin's bin, which must also point at a real dist file. Relink
-      # bins afterwards — pnpm skips bin links whose target is missing at
-      # install time.
+      # this plugin's bin.
       - name: Build ERD plugin
-        run: |
-          pnpm --filter @tailor-platform/sdk-tailordb-erd-plugin run build
-          pnpm rebuild --pending
+        run: pnpm --filter @tailor-platform/sdk-tailordb-erd-plugin run build
 
       - uses: tailor-platform/actions/erd-schema-preview@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
         with:
