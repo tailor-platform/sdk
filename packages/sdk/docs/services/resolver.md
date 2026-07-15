@@ -350,7 +350,7 @@ createResolver({
    });
    ```
 
-## Authentication
+## Permissions
 
 ### Access Requirement (`permission`)
 
