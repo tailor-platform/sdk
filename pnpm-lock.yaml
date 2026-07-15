@@ -97,8 +97,8 @@ importers:
         specifier: 0.24.0
         version: 0.24.0
       tsdown:
-        specifier: 0.22.4
-        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3)
+        specifier: 0.22.5
+        version: 0.22.5(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3)
       tsx:
         specifier: 4.23.0
         version: 4.23.0
@@ -161,8 +161,8 @@ importers:
         specifier: 0.24.0
         version: 0.24.0
       tsdown:
-        specifier: 0.22.4
-        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3)
+        specifier: 0.22.5
+        version: 0.22.5(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3)
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -573,8 +573,8 @@ importers:
         specifier: 0.14.0
         version: 0.14.0
       tsdown:
-        specifier: 0.22.4
-        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3)
+        specifier: 0.22.5
+        version: 0.22.5(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3)
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -628,8 +628,8 @@ importers:
         specifier: 1.73.0
         version: 1.73.0(oxlint-tsgolint@0.24.0)
       tsdown:
-        specifier: 0.22.4
-        version: 0.22.4(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3)
+        specifier: 0.22.5
+        version: 0.22.5(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3)
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -3644,18 +3644,18 @@ packages:
     resolution: {integrity: sha512-NoZ4roiN7LnbKn9QqE1amc9DJfzvZXxF4xDavcOWt1BPkdx+m+0gJuPM+S0vCe7zTJMYUP0R8pO2XMr+Y8oLIg==}
     engines: {node: '>=6'}
 
-  tsdown@0.22.4:
-    resolution: {integrity: sha512-3a5FsNL2fH2jw3ozvFUuPMBgS0xXjX9wpZShHyB4klXelVhyaNw5Q5WA9TPCNeoGYpRZEc4OZdMx5wT4Fkma3A==}
+  tsdown@0.22.5:
+    resolution: {integrity: sha512-0iEpnuOVBGo7mPW+FlyglErHBExYOAlpLBlCl/QcTrRUJ+TF2prfzl6ipQS5VsjJejFXnmbkdh0Ta53B3stWxg==}
     engines: {node: ^22.18.0 || >=24.11.0}
     hasBin: true
     peerDependencies:
       '@arethetypeswrong/core': ^0.18.1
-      '@tsdown/css': 0.22.4
-      '@tsdown/exe': 0.22.4
+      '@tsdown/css': 0.22.5
+      '@tsdown/exe': 0.22.5
       '@vitejs/devtools': '*'
       publint: ^0.3.8
       tsx: '*'
-      typescript: ^5.0.0 || ^6.0.0
+      typescript: ^5.0.0 || ^6.0.0 || ^7.0.0
       unplugin-unused: ^0.5.0
       unrun: '*'
     peerDependenciesMeta:
@@ -6369,7 +6369,7 @@ snapshots:
       minimist: 1.2.8
       strip-bom: 3.0.0
 
-  tsdown@0.22.4(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3):
+  tsdown@0.22.5(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3):
     dependencies:
       ansis: 4.3.1
       cac: 7.0.0
