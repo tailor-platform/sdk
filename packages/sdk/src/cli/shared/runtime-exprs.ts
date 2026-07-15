@@ -172,12 +172,12 @@ function policyEntryExpr(policy: ResolverPermissionPolicy): string {
  * message only includes the description(s) of the policy/policies that
  * actually caused the denial.
  * @param permission - The resolver's `permission` config
- * @returns A JS statement, or `undefined` when `permission` is omitted or `"public"`
+ * @returns A JS statement, or `undefined` when `permission` is omitted or `"allowAnonymous"`
  */
 export function buildResolverPermissionGuardExpr(
   permission: Resolver["permission"],
 ): string | undefined {
-  if (!permission || permission === "public") {
+  if (!permission || permission === "allowAnonymous") {
     return undefined;
   }
   if (permission.length === 0) {

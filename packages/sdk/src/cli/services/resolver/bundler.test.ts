@@ -71,7 +71,7 @@ describe("bundleResolvers", () => {
     expect(entryContent).toContain("access denied");
   });
 
-  test("does not inject a guard when permission is omitted or public", async () => {
+  test("does not inject a guard when permission is omitted or allowAnonymous", async () => {
     using tmp = tempCwd("sdk-bundler-nopermission-");
     const resolverDir = path.join(tmp.dir, "src/backend/nopermission/resolver");
     fs.mkdirSync(resolverDir, { recursive: true });
@@ -80,7 +80,7 @@ describe("bundleResolvers", () => {
       `export default {\n` +
         `  operation: "query",\n` +
         `  name: "open",\n` +
-        `  permission: "public",\n` +
+        `  permission: "allowAnonymous",\n` +
         `  body: async () => 1,\n` +
         `  output: { type: "integer", metadata: {}, fields: {} },\n` +
         `};\n`,

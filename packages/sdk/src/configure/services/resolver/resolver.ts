@@ -42,7 +42,7 @@ type ResolverReturn<
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
     authInvoker?: AuthInvoker<string> | MachineUserName;
-    permission?: ResolverPermission | "public";
+    permission?: ResolverPermission | "allowAnonymous";
   }>;
 
 /**
@@ -62,8 +62,8 @@ type ResolverReturn<
  *
  * `permission` declares the resolver's access requirement, checked against `context.user` (the
  * original caller, unaffected by `authInvoker`) before `body` runs. Omitted (default):
- * unchanged, anonymous callers can reach the resolver. `"public"`: explicitly documents that
- * anonymous callers are allowed. An array of `{ conditions, permit }` policies (in the same
+ * unchanged, anonymous callers can reach the resolver. `"allowAnonymous"`: explicitly documents
+ * that anonymous callers are allowed. An array of `{ conditions, permit }` policies (in the same
  * style as TailorDB's `.permission()`) rejects non-matching callers: with no `permit: true`
  * policy it's a blocklist (only `permit: false` matches are denied), with at least one it's
  * an allow-list (denied unless a `permit: true` policy matches).
@@ -103,7 +103,7 @@ export function createResolver<
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
       authInvoker?: AuthInvoker<string> | MachineUserName;
-      permission?: ResolverPermission | "public";
+      permission?: ResolverPermission | "allowAnonymous";
     }>,
 ): ResolverReturn<Input, Output> {
   // Check if output is already a TailorField using duck typing.

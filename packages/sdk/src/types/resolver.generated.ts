@@ -7,10 +7,10 @@ export type QueryType = "query" | "mutation";
 export type QueryTypeInput = QueryType;
 
 /**
- * Access requirement for this resolver, evaluated against the original caller (unaffected by `authInvoker`) before `body` runs. "public" documents that anonymous callers are allowed. Omitted (default): unchanged, anonymous callers can reach the resolver
+ * Access requirement for this resolver, evaluated against the original caller (unaffected by `authInvoker`) before `body` runs. "allowAnonymous" documents that anonymous callers are allowed. Omitted (default): unchanged, anonymous callers can reach the resolver
  */
 export type ResolverPermission =
-  | "public"
+  | "allowAnonymous"
   | readonly {
       conditions:
         | readonly [
@@ -92,7 +92,7 @@ export type Resolver = {
       }
     | undefined;
   permission?:
-    | "public"
+    | "allowAnonymous"
     | readonly {
         conditions:
           | readonly [

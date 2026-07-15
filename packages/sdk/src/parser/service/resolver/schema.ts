@@ -41,12 +41,13 @@ export const ResolverPermissionSchema = z
       .array(ResolverPermissionPolicySchema)
       .min(1, "Resolver permission must have at least one policy")
       .readonly(),
-    z.literal("public"),
+    z.literal("allowAnonymous"),
   ])
   .describe(
     "Access requirement for this resolver, evaluated against the original caller " +
-      '(unaffected by `authInvoker`) before `body` runs. "public" documents that anonymous ' +
-      "callers are allowed. Omitted (default): unchanged, anonymous callers can reach the resolver",
+      '(unaffected by `authInvoker`) before `body` runs. "allowAnonymous" documents that ' +
+      "anonymous callers are allowed. Omitted (default): unchanged, anonymous callers can " +
+      "reach the resolver",
   );
 
 export const ResolverSchema = z.object({

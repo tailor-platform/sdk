@@ -481,18 +481,18 @@ describe("createResolver", () => {
       ]);
     });
 
-    test("creates resolver with permission: public", () => {
+    test("creates resolver with permission: allowAnonymous", () => {
       const outputType = t.object({ result: t.string() });
 
       const resolver = createResolver({
-        name: "withPermissionPublic",
+        name: "withPermissionAllowAnonymous",
         operation: "query",
         output: outputType,
         body: () => ({ result: "ok" }),
-        permission: "public",
+        permission: "allowAnonymous",
       });
 
-      expect(resolver.permission).toBe("public");
+      expect(resolver.permission).toBe("allowAnonymous");
     });
 
     test("creates minimal resolver without optional fields", () => {

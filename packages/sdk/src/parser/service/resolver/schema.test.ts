@@ -33,8 +33,8 @@ describe("ResolverPermissionSchema", () => {
     ).not.toThrow();
   });
 
-  test('accepts "public"', () => {
-    expect(() => ResolverPermissionSchema.parse("public")).not.toThrow();
+  test('accepts "allowAnonymous"', () => {
+    expect(() => ResolverPermissionSchema.parse("allowAnonymous")).not.toThrow();
   });
 
   test("rejects an empty policy array", () => {

@@ -388,7 +388,7 @@ permission: [
 
 Besides a policy array, `permission` also accepts:
 
-- `"public"` — explicitly documents that anonymous callers are allowed. Behaves the same as omitting `permission`, but records the decision so it isn't mistaken for an oversight.
+- `"allowAnonymous"` — explicitly documents that anonymous callers are allowed. Behaves the same as omitting `permission`, but records the decision so it isn't mistaken for an oversight.
 - Omitted (default) — unchanged: anonymous callers can still reach the resolver.
 
 This check is based on `context.user`, the original caller, so it still applies even when `authInvoker` swaps in a machine user for database access.

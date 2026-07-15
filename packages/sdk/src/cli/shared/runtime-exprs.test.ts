@@ -128,8 +128,8 @@ describe("buildResolverPermissionGuardExpr", () => {
     expect(buildResolverPermissionGuardExpr(undefined)).toBeUndefined();
   });
 
-  test("returns undefined when permission is public", () => {
-    expect(buildResolverPermissionGuardExpr("public")).toBeUndefined();
+  test("returns undefined when permission is allowAnonymous", () => {
+    expect(buildResolverPermissionGuardExpr("allowAnonymous")).toBeUndefined();
   });
 
   test("_loggedIn permit:true allows an authenticated user", () => {
