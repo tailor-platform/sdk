@@ -216,6 +216,34 @@ describe("no-unconditional-permit", () => {
     );
   });
 
+  test("rejects unconditional shorthand entries", () => {
+    expectViolation(
+      'import { db } from "@tailor-platform/sdk";\nexport const user = db.type("User", {}).permission({ create: [[]], read: [], update: [], delete: [] });',
+      "no-unconditional-permit",
+      "This permission entry permits access without any conditions; add conditions or remove it.",
+    );
+    expectViolation(
+      'import { db } from "@tailor-platform/sdk";\nexport const user = db.type("User", {}).permission({ create: [[true]], read: [], update: [], delete: [] });',
+      "no-unconditional-permit",
+      "This permission entry permits access without any conditions; add conditions or remove it.",
+    );
+  });
+
+  test("accepts conditional shorthand entries and empty action lists", () => {
+    expectClean(
+      'import { db } from "@tailor-platform/sdk";\nexport const user = db.type("User", {}).permission({ create: [[{ user: "role" }, "=", "MANAGER"]], read: [], update: [], delete: [] });',
+      "no-unconditional-permit",
+    );
+    expectClean(
+      'import { db } from "@tailor-platform/sdk";\nexport const user = db.type("User", {}).permission({ create: [[false]], read: [], update: [], delete: [] });',
+      "no-unconditional-permit",
+    );
+    expectClean(
+      'import { db } from "@tailor-platform/sdk";\nexport const user = db.type("User", {}).gqlPermission([]);',
+      "no-unconditional-permit",
+    );
+  });
+
   test("accepts conditional and deny entries", () => {
     expectClean(
       'import { db } from "@tailor-platform/sdk";\nexport const user = db.type("User", {}).permission({ create: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }], read: [], update: [], delete: [] });',

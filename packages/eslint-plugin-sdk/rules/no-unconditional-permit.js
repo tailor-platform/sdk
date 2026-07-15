@@ -11,8 +11,6 @@ const UNSAFE_CONSTANTS = new Set([
   "unsafeAllowAllIdPPermission",
 ]);
 
-const MAX_SCAN_DEPTH = 6;
-
 function isValueReference(node) {
   const parent = node.parent;
   if (!parent) return false;
@@ -81,7 +79,7 @@ function permissionArgument(context, imports, call) {
   return call.arguments[0] ?? null;
 }
 
-function isUnconditionalEntry(context, entry) {
+function isUnconditionalObjectEntry(context, entry) {
   const conditions = objectProperty(entry, "conditions");
   const permit = objectProperty(entry, "permit");
   if (conditions?.type !== "Property" || permit?.type !== "Property") return false;
@@ -95,26 +93,44 @@ function isUnconditionalEntry(context, entry) {
   );
 }
 
-function reportUnconditionalEntries(context, node, depth = 0) {
-  if (depth > MAX_SCAN_DEPTH) return;
+function isUnconditionalShorthandEntry(entry) {
+  let permit = true;
+  for (const element of entry.elements) {
+    if (element === null || element.type === "SpreadElement") return false;
+    const value = unwrapExpression(element);
+    if (value?.type !== "Literal" || typeof value.value !== "boolean") return false;
+    permit = value.value;
+  }
+  return permit;
+}
+
+function reportEntry(context, node) {
+  const entry = resolveValue(context, node);
+  if (
+    (entry?.type === "ObjectExpression" && isUnconditionalObjectEntry(context, entry)) ||
+    (entry?.type === "ArrayExpression" && isUnconditionalShorthandEntry(entry))
+  ) {
+    context.report({ node: entry, messageId: "unconditionalEntry" });
+  }
+}
+
+function reportEntryList(context, node) {
+  const entries = resolveValue(context, node);
+  if (entries?.type !== "ArrayExpression") return;
+  for (const element of entries.elements) {
+    if (element !== null && element.type !== "SpreadElement") reportEntry(context, element);
+  }
+}
+
+function reportUnconditionalEntries(context, node) {
   const value = resolveValue(context, node);
   if (value?.type === "ArrayExpression") {
-    for (const element of value.elements) {
-      if (element !== null && element.type !== "SpreadElement") {
-        reportUnconditionalEntries(context, element, depth + 1);
-      }
-    }
+    reportEntryList(context, value);
     return;
   }
   if (value?.type !== "ObjectExpression") return;
-  if (isUnconditionalEntry(context, value)) {
-    context.report({ node: value, messageId: "unconditionalEntry" });
-    return;
-  }
   for (const property of value.properties) {
-    if (property.type === "Property") {
-      reportUnconditionalEntries(context, property.value, depth + 1);
-    }
+    if (property.type === "Property") reportEntryList(context, property.value);
   }
 }
 
