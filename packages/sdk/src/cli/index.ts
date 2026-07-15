@@ -39,7 +39,7 @@ import { commonArgs, isVerbose } from "./shared/args";
 import { isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
-import { dispatchPlugin, KNOWN_PLUGIN_PACKAGES } from "./shared/plugin";
+import { dispatchPluginWithInstallHint } from "./shared/plugin";
 import { registerTsHook } from "./shared/register-ts-hook";
 
 await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
@@ -158,27 +158,14 @@ runMain(mainCommand, {
   displayErrors: false,
   // CLI plugin dispatch: an unknown subcommand at any level execs the external
   // `tailor-<path...>-<name>` binary, forwarding args and injecting context.
-  onUnknownSubcommand: async ({ commandPath, name, args }) => {
-    const exitCode = await dispatchPlugin({
+  onUnknownSubcommand: ({ commandPath, name, args }) =>
+    dispatchPluginWithInstallHint({
       commandPath,
       name,
       args,
       cliName,
       profile: process.env.TAILOR_PLATFORM_PROFILE,
-    });
-    if (exitCode !== undefined) {
-      return exitCode;
-    }
-    const knownPackage = KNOWN_PLUGIN_PACKAGES[[...commandPath, name].join("-")];
-    if (!knownPackage) {
-      return undefined;
-    }
-    logger.error(
-      `"${cliName} ${[...commandPath, name].join(" ")}" is provided by the ${knownPackage} CLI plugin, which is not installed.`,
-    );
-    logger.info(`Install it with: npm install -D ${knownPackage}`);
-    return 1;
-  },
+    }),
   cleanup: async ({ error }) => {
     if (error) {
       if (isCLIError(error)) {

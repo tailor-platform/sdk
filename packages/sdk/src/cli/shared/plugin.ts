@@ -18,7 +18,7 @@ import { readPackageJson } from "./package-json";
  * dispatcher resolves (command path joined with `-`). Used to suggest an
  * install command when the plugin executable is not found.
  */
-export const KNOWN_PLUGIN_PACKAGES: Record<string, string> = {
+const KNOWN_PLUGIN_PACKAGES: Record<string, string> = {
   "tailordb-erd": "@tailor-platform/sdk-tailordb-erd-plugin",
 };
 
@@ -418,24 +418,39 @@ export function explicitProfileFromArgs(args: readonly string[]): string | undef
 }
 
 /**
+ * Parameters for {@link dispatchPlugin}.
+ */
+interface DispatchPluginParams {
+  /** Plugin name (the part after the `<cli>-` prefix). */
+  name: string;
+  /** Args to forward to the plugin. */
+  args: readonly string[];
+  /** The host CLI name (e.g. `tailor`). */
+  cliName: string;
+  /** Parent command path preceding the unknown subcommand, if any. */
+  commandPath?: readonly string[] | undefined;
+  /** Active profile name, if any. */
+  profile?: string | undefined;
+}
+
+/**
+ * Build the plugin slug from the known command path plus the unknown name,
+ * so `tailor tailordb erd` resolves `tailor-tailordb-erd`.
+ * @param commandPath - Parent command path preceding the unknown subcommand
+ * @param name - Unknown subcommand name
+ * @returns The plugin slug
+ */
+function pluginSlug(commandPath: readonly string[] | undefined, name: string): string {
+  return [...(commandPath ?? []), name].join("-");
+}
+
+/**
  * Resolve and execute a plugin, forwarding stdio and propagating its exit code.
  * @param params - Dispatch parameters
- * @param params.name - Plugin name (without the `<cli>-` prefix)
- * @param params.args - Args to forward to the plugin
- * @param params.cliName - The host CLI name
- * @param params.profile - Active profile name, if any
  * @returns The plugin's exit code, or undefined when no matching plugin exists
  */
-export async function dispatchPlugin(params: {
-  name: string;
-  args: readonly string[];
-  cliName: string;
-  commandPath?: readonly string[] | undefined;
-  profile?: string | undefined;
-}): Promise<number | undefined> {
-  // Build the plugin slug from the known command path plus the unknown name,
-  // so `tailor tailordb erd` resolves `tailor-tailordb-erd`.
-  const slug = [...(params.commandPath ?? []), params.name].join("-");
+export async function dispatchPlugin(params: DispatchPluginParams): Promise<number | undefined> {
+  const slug = pluginSlug(params.commandPath, params.name);
   const plugin = resolvePlugin(slug, params.cliName);
   if (!plugin) {
     return undefined;
@@ -462,4 +477,30 @@ export async function dispatchPlugin(params: {
       }
     });
   });
+}
+
+/**
+ * Dispatch a plugin, printing an install hint when the subcommand maps to a
+ * known plugin package that is not installed.
+ * @param params - Dispatch parameters
+ * @returns The plugin's exit code (1 after an install hint), or undefined when
+ * the subcommand matches no plugin and no known package
+ */
+export async function dispatchPluginWithInstallHint(
+  params: DispatchPluginParams,
+): Promise<number | undefined> {
+  const exitCode = await dispatchPlugin(params);
+  if (exitCode !== undefined) {
+    return exitCode;
+  }
+  const knownPackage = KNOWN_PLUGIN_PACKAGES[pluginSlug(params.commandPath, params.name)];
+  if (!knownPackage) {
+    return undefined;
+  }
+  const fullCommand = [params.cliName, ...(params.commandPath ?? []), params.name].join(" ");
+  logger.error(
+    `"${fullCommand}" is provided by the ${knownPackage} CLI plugin, which is not installed.`,
+  );
+  logger.info(`Install it with: npm install -D ${knownPackage}`);
+  return 1;
 }
