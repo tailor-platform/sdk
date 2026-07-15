@@ -10,7 +10,7 @@ Tailor CLI plugin that provides the `tailor tailordb erd` commands: export, diff
 Install it next to `@tailor-platform/sdk` in your project:
 
 ```bash
-npm install -D @tailor-platform/sdk-tailordb-erd-plugin
+npm install -D @tailor-platform/sdk-tailordb-erd-plugin@next
 ```
 
 The Tailor CLI discovers the plugin automatically from `node_modules/.bin` (or your `PATH`). Run `tailor plugin list` to confirm it resolves.
