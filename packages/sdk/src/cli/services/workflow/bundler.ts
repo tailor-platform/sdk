@@ -13,9 +13,9 @@ import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
-import { detectTriggerCalls, findAllJobs } from "./job-detector";
+import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
-import { transformFunctionTriggers } from "./trigger-transformer";
+import { detectResolvedTriggerCalls, transformFunctionTriggers } from "./trigger-transformer";
 import type { LogLevel } from "#/configure/config/types";
 
 function safeRealpath(p: string): string {
@@ -65,7 +65,7 @@ export async function bundleWorkflowJobs(
   allJobs: JobInfo[],
   mainJobNames: string[],
   env: Record<string, string | number | boolean> = {},
-  triggerContext?: TriggerContext,
+  triggerContext: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
@@ -76,7 +76,7 @@ export async function bundleWorkflowJobs(
   }
 
   // Filter to only used jobs and get per-mainJob dependencies
-  const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames);
+  const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames, triggerContext);
 
   logger.newline();
   logger.log(
@@ -133,11 +133,13 @@ interface FilterUsedJobsResult {
  * Also returns a map of mainJob -> all jobs it depends on (for metadata).
  * @param allJobs - All available job infos
  * @param mainJobNames - Names of main jobs
+ * @param triggerContext - Module binding metadata for resolving trigger targets
  * @returns Used jobs and main job dependency map
  */
 async function filterUsedJobs(
   allJobs: JobInfo[],
   mainJobNames: string[],
+  triggerContext: TriggerContext,
 ): Promise<FilterUsedJobsResult> {
   if (allJobs.length === 0 || mainJobNames.length === 0) {
     return { usedJobs: [], mainJobDeps: {} };
@@ -149,12 +151,6 @@ async function filterUsedJobs(
     const existing = jobsBySourceFile.get(job.sourceFile) || [];
     existing.push(job);
     jobsBySourceFile.set(job.sourceFile, existing);
-  }
-
-  // Build export name -> job name map for all jobs
-  const exportNameToJobName = new Map<string, string>();
-  for (const job of allJobs) {
-    exportNameToJobName.set(job.exportName, job.name);
   }
 
   // Detect trigger calls and build dependency graph
@@ -170,15 +166,12 @@ async function filterUsedJobs(
 
         // Find all jobs in this file to get body ranges
         const detectedJobs = findAllJobs(program, source);
-        const localExportNameToJobName = new Map<string, string>();
-        for (const detected of detectedJobs) {
-          if (detected.exportName) {
-            localExportNameToJobName.set(detected.exportName, detected.name);
-          }
-        }
-
-        // Detect trigger calls
-        const triggerCalls = detectTriggerCalls(program, source);
+        const triggerCalls = detectResolvedTriggerCalls(
+          program,
+          source,
+          triggerContext,
+          sourceFile,
+        );
 
         // For each job in this file, find which triggers are inside its body
         const jobDependencies: Array<{ jobName: string; deps: Set<string> }> = [];
@@ -192,16 +185,11 @@ async function filterUsedJobs(
           for (const call of triggerCalls) {
             // Check if this trigger call is inside the job's body
             if (
+              call.kind === "job" &&
               call.callRange.start >= detectedJob.bodyValueRange.start &&
               call.callRange.end <= detectedJob.bodyValueRange.end
             ) {
-              // Look up the job name from the identifier
-              const triggeredJobName =
-                localExportNameToJobName.get(call.identifierName) ||
-                exportNameToJobName.get(call.identifierName);
-              if (triggeredJobName) {
-                jobDeps.add(triggeredJobName);
-              }
+              jobDeps.add(call.targetName);
             }
           }
 
@@ -264,7 +252,7 @@ async function bundleSingleJob(
   allJobs: JobInfo[],
   tsconfig: string | undefined,
   env: Record<string, string | number | boolean>,
-  triggerContext?: TriggerContext,
+  triggerContext: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
@@ -304,19 +292,18 @@ async function bundleSingleJob(
       `;
       const entry = createVirtualEntry(`workflow-job:${job.name}`, entryContent);
 
-      // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
-      const otherJobExportNames = allJobs
-        .filter((j) => j.name !== job.name)
-        .map((j) => j.exportName);
-
-      // Build a map from export name to job name for trigger transformation
-      const allJobsMap = new Map<string, string>();
-      for (const j of allJobs) {
-        allJobsMap.set(j.exportName, j.name);
-      }
-
       // Pre-compute once to avoid redundant realpathSync calls per module
       const resolvedSourceFile = safeRealpath(job.sourceFile);
+
+      // Step 2: Bundle with a transform plugin that transforms trigger calls
+      // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
+      const otherJobExportNames = allJobs
+        .filter(
+          (candidate) =>
+            candidate.name !== job.name &&
+            safeRealpath(candidate.sourceFile) === resolvedSourceFile,
+        )
+        .map((j) => j.exportName);
 
       // Create transform plugin to transform trigger calls and remove other job declarations
       const transformPlugin: rolldown.Plugin = {
@@ -337,10 +324,9 @@ async function bundleSingleJob(
               return null;
             }
 
-            // Only apply workflow source transformation (job removal, default
-            // export removal, intra-file trigger rewriting) to the job's own
-            // source file. Dependency files imported by the source file must
-            // keep their exports intact for rolldown to resolve cross-file
+            // Only remove other jobs and the default workflow export from the job's
+            // own source file. Dependency files imported by the source file must keep
+            // their exports intact for rolldown to resolve cross-file
             // imports (e.g. `import workflow from "./other-workflow"`).
             let transformed = code;
             const isJobSourceFile = safeRealpath(id) === resolvedSourceFile;
@@ -350,20 +336,12 @@ async function bundleSingleJob(
                 job.name,
                 job.exportName,
                 otherJobExportNames,
-                allJobsMap,
               );
             }
 
-            // Apply workflow.trigger / job.trigger transformation if context is provided
-            if (triggerContext && transformed.includes(".trigger(")) {
-              transformed = transformFunctionTriggers(
-                transformed,
-                triggerContext.workflowNameMap,
-                triggerContext.jobNameMap,
-                triggerContext.workflowFileMap,
-                id,
-                triggerContext.authNamespace,
-              );
+            // Apply workflow.trigger / job.trigger transformation.
+            if (transformed.includes(".trigger(")) {
+              transformed = transformFunctionTriggers(transformed, triggerContext, id);
             }
 
             if (transformed === code) return null;

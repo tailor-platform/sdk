@@ -31,7 +31,7 @@ const token = await authconnection.getConnectionToken("google");
 const client = new idp.Client({ namespace: "my-namespace" });
 const { users } = await client.users({ first: 10 });
 
-const executionId = await workflow.triggerWorkflow("approval", { reportId });
+const executionId = await workflow.startWorkflow("approval", { reportId });
 
 const invoker = context.getInvoker();
 
@@ -79,7 +79,7 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 - `secretmanager` — secret-vault access (`getSecret`, `getSecrets`)
 - `authconnection` — OAuth-style connection tokens (`getConnectionToken`)
 - `idp` — IdP user management (`new Client({ namespace })`)
-- `workflow` — workflow & job control (`triggerWorkflow`, `resumeWorkflow`, `triggerJobFunction`, `wait`, `resolve`)
+- `workflow` — workflow & job control (`startWorkflow`, `resumeWorkflowExecution`, `startJobFunction`, `wait`, `resolve`; the pre-alignment names `triggerWorkflow`, `resumeWorkflow`, `triggerJobFunction` are kept as frozen aliases)
 - `context` — execution context (`getInvoker`)
 - `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `downloadStream`, `uploadStream`, `openDownloadStream` _(deprecated)_)
 - `aigateway` — AI Gateway URL resolution (`get`)
@@ -95,17 +95,16 @@ import { expect, test } from "vitest";
 
 test("encodes via iconv", () => {
   using iconvM = mockIconv();
-  iconvM.setResolver(() => new Uint8Array([0x82, 0xa0]));
+  iconvM.convert.mockReturnValue(new Uint8Array([0x82, 0xa0]));
 
   const out = iconv.convert("あ", "UTF-8", "Shift_JIS");
 
   expect(out).toEqual(new Uint8Array([0x82, 0xa0]));
-  expect(iconvM.calls[0]?.method).toBe("convert");
+  expect(iconvM.convert).toHaveBeenCalledWith("あ", "UTF-8", "Shift_JIS");
 }); // iconvM disposed here — the iconv mock is removed (previous state restored)
 
 test("reads from a vault", async () => {
-  using sm = mockSecretmanager();
-  sm.setSecrets({ "my-vault": { API_KEY: "sk-123" } });
+  using sm = mockSecretmanager({ secrets: { "my-vault": { API_KEY: "sk-123" } } });
 
   await expect(secretmanager.getSecret("my-vault", "API_KEY")).resolves.toBe("sk-123");
 });

@@ -5,13 +5,13 @@ import { getBorderCharacters, table } from "table";
 import { parseBoolean } from "./parse-boolean";
 
 /**
- * Error thrown when a prompt is attempted in a CI environment
+ * Error thrown when a prompt is attempted in a non-interactive environment
  */
 export class CIPromptError extends Error {
   constructor(message?: string) {
     super(
       message ??
-        "Interactive prompts are not available in CI environments. Use --yes flag to skip confirmation prompts.",
+        "Interactive prompts are not available in this environment. Provide the required options explicitly.",
     );
     this.name = "CIPromptError";
   }

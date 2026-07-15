@@ -344,13 +344,20 @@ export const user = db
 
 ### Validation
 
-Add validation rules to fields. Validators receive three arguments (executed after hooks):
+Add validation rules to fields. Validators receive three arguments (executed after hooks and built-in type validation):
 
 - `value`: Field value after hook transformation
 - `data`: Entire record data after hook transformations (for accessing other field values)
 - `user`: User performing the operation
 
 Validators return `true` for success, `false` for failure. Use array form `[validator, errorMessage]` for custom error messages.
+
+**Note:** Custom validators run only when built-in type validation succeeds, so `value` always has the field's declared type. For array fields, the validator is called once with the complete array, not per element:
+
+```typescript
+// value is string[], not string
+db.string({ array: true }).validate(({ value }) => value.length >= 2);
+```
 
 #### Field-level Validation
 
@@ -543,6 +550,48 @@ db.type("User", {
    });
    ```
 
+#### GraphQL Operations
+
+Control which GraphQL operations (`create`, `update`, `delete`, `read`) are exposed for a type. All operations are enabled by default.
+
+```typescript
+db.type("Order", {
+  status: db.string(),
+}).features({
+  gqlOperations: {
+    delete: false, // Disable the delete mutation
+  },
+});
+```
+
+Use the `"query"` alias to disable all mutations at once (read-only type: `create`/`update`/`delete` false, `read` true):
+
+```typescript
+db.type("AuditLog", {
+  action: db.string(),
+}).features({
+  gqlOperations: "query",
+});
+```
+
+**Namespace-level default**
+
+Set a default for every type in a TailorDB namespace in `tailor.config.ts`. A type's own `.features({ gqlOperations })` always takes precedence over this default.
+
+```typescript
+// tailor.config.ts
+export default defineConfig({
+  db: {
+    tailordb: {
+      files: ["./tailordb/*.ts"],
+      gqlOperations: { delete: false }, // Default for every type in this namespace
+    },
+  },
+});
+```
+
+This default is re-evaluated on every `tailor-sdk deploy`, so changing it also updates types that already exist on the platform, not only newly created ones.
+
 ### Field Extraction (`pickFields` / `omitFields`)
 
 Extract subsets of fields from a `TailorDBType` for reuse in resolvers, executors, seed schemas, etc.
@@ -569,6 +618,8 @@ Available options:
 | ---------- | ------------------------------------- |
 | `optional` | Makes the selected fields optional    |
 | `array`    | Makes the selected fields array types |
+
+**Note:** The `array` option cannot change fields with custom validation — their validators expect the original value shape. Define a new field with a matching validator instead.
 
 #### `omitFields(keys)`
 
@@ -620,6 +671,8 @@ const schemaType = t.object({
 Configure Permission and GQLPermission. For details, see the [TailorDB Permission documentation](https://docs.tailor.tech/guides/tailordb/permission).
 
 **Important**: Following the secure-by-default principle, all operations are denied if permissions are not configured. You must explicitly grant permissions for each operation (create, read, update, delete).
+
+`generate`/`deploy` reject a type that has no `.permission()`, or no `.gqlPermission()` while GraphQL operations are enabled for it (see [GraphQL Operations](#graphql-operations) above). Disable GraphQL exposure entirely with `.features({ gqlOperations: { create: false, update: false, delete: false, read: false } })` if a type only needs record-level permission.
 
 ```typescript
 db.type("User", {

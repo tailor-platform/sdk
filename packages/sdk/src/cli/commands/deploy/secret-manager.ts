@@ -136,7 +136,12 @@ export async function planSecretManager(context: PlanContext) {
     getTrn: (name) => resourceTrn(workspaceId, "vault", name),
   });
 
-  const state = loadSecretsState();
+  const stateScope = {
+    workspaceId,
+    applicationId: application.id,
+    applicationName: application.name,
+  };
+  const state = loadSecretsState(stateScope);
   const skippedSecrets: string[] = [];
 
   await Promise.all(
@@ -275,7 +280,15 @@ export async function planSecretManager(context: PlanContext) {
     }
   }
 
-  return { vaultChangeSet, secretChangeSet, skippedSecrets, conflicts, unmanaged, resourceOwners };
+  return {
+    vaultChangeSet,
+    secretChangeSet,
+    skippedSecrets,
+    conflicts,
+    unmanaged,
+    resourceOwners,
+    stateScope,
+  };
 }
 
 /**
@@ -283,7 +296,7 @@ export async function planSecretManager(context: PlanContext) {
  * @param client - Operator client instance
  * @param result - Planned secret changes
  * @param phase - Apply phase
- * @param application - Application to read secrets from for hash state persistence
+ * @param application - Application used for ownership metadata and hash state persistence
  * @returns Promise that resolves when secret changes are applied
  */
 export async function applySecretManager(
@@ -292,7 +305,7 @@ export async function applySecretManager(
   phase: Extract<ApplyPhase, "create-update" | "delete"> = "create-update",
   application?: Readonly<Application>,
 ) {
-  const { vaultChangeSet, secretChangeSet } = result;
+  const { vaultChangeSet, secretChangeSet, stateScope } = result;
 
   if (phase === "create-update") {
     // Create vaults first and set metadata
@@ -338,21 +351,18 @@ export async function applySecretManager(
       ),
     );
 
-    // Persist hash state for all secrets after successful apply
-    if (application) {
-      const state = loadSecretsState();
-      for (const vault of application.secrets) {
-        if (!Object.hasOwn(state.vaults, vault.vaultName)) {
-          state.vaults[vault.vaultName] = {};
+    const secretHashUpdates = [...secretChangeSet.creates, ...secretChangeSet.updates];
+    if (application && secretHashUpdates.length > 0) {
+      const state = loadSecretsState(stateScope);
+      for (const secret of secretHashUpdates) {
+        if (!Object.hasOwn(state.vaults, secret.vaultName)) {
+          state.vaults[secret.vaultName] = {};
         }
-        for (const secret of vault.secrets) {
-          if (secret.value != null) {
-            assertDefined(state.vaults[vault.vaultName], "vault state entry missing")[secret.name] =
-              hashValue(secret.value);
-          }
-        }
+        assertDefined(state.vaults[secret.vaultName], "vault state entry missing")[
+          secret.secretName
+        ] = hashValue(secret.value);
       }
-      saveSecretsState(state);
+      saveSecretsState(stateScope, state);
     }
   } else {
     // Delete orphan secrets
@@ -378,7 +388,7 @@ export async function applySecretManager(
 
     // Remove deleted secrets and vaults from hash state
     if (secretChangeSet.deletes.length > 0 || vaultChangeSet.deletes.length > 0) {
-      const state = loadSecretsState();
+      const state = loadSecretsState(stateScope);
       for (const del of secretChangeSet.deletes) {
         if (Object.hasOwn(state.vaults, del.vaultName)) {
           delete assertDefined(state.vaults[del.vaultName], "vault state entry missing")[
@@ -395,7 +405,7 @@ export async function applySecretManager(
       for (const del of vaultChangeSet.deletes) {
         delete state.vaults[del.name];
       }
-      saveSecretsState(state);
+      saveSecretsState(stateScope, state);
     }
   }
 }

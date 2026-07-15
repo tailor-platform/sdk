@@ -133,7 +133,7 @@ function rebuildImportStatement(
   };
 }
 
-const SCOPE_KINDS = new Set([
+const SCOPE_KINDS = new Set<ReturnType<SgNode["kind"]>>([
   "statement_block",
   "function_body",
   "for_statement",

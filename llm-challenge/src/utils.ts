@@ -1,4 +1,4 @@
-import { accessSync, promises as fs } from "node:fs";
+import { promises as fs } from "node:fs";
 import path from "node:path";
 
 export function toPosix(value: string): string {
@@ -16,15 +16,6 @@ export function tailText(value: string, max = 1_000): string {
 export async function pathExists(filePath: string): Promise<boolean> {
   try {
     await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export function pathExistsSync(filePath: string): boolean {
-  try {
-    accessSync(filePath);
     return true;
   } catch {
     return false;

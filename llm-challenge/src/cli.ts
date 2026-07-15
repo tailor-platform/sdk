@@ -178,6 +178,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
           problem: task.problem,
           runIndex: task.runIndex,
           worktreePath: paths.worktreePath,
+          verifierImage: runtime.image,
           verificationSummaryPath: paths.verificationSummaryPath,
           verificationStdoutPath: paths.verificationStdoutPath,
           verificationStderrPath: paths.verificationStderrPath,

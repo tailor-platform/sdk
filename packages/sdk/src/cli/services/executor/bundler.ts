@@ -3,17 +3,14 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
+import { createTriggerTransformPlugin } from "#/cli/services/workflow/trigger-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
-import {
-  createTriggerTransformPlugin,
-  serializeTriggerContext,
-  type TriggerContext,
-} from "#/cli/shared/trigger-context";
+import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
