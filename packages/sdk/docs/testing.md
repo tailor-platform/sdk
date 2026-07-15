@@ -591,7 +591,7 @@ describe("resolveApproval resolver", () => {
 
 #### Resolvers that resume failed workflows
 
-Resolvers or executors that call `workflow.resumeWorkflow(executionId)` delegate to `tailor.workflow.resumeWorkflow` at runtime. With the `tailor-runtime` environment active, use `mockWorkflow().setResumeHandler` to control the returned execution ID and inspect `resumeWorkflow.mock.calls`:
+Resolvers or executors that call `workflow.resumeWorkflowExecution(executionId)` delegate to `tailor.workflow.resumeWorkflowExecution` at runtime. With the `tailor-runtime` environment active, use `mockWorkflow().setResumeHandler` to control the returned execution ID and inspect `resumeWorkflowExecution.mock.calls`:
 
 ```typescript
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
@@ -611,7 +611,7 @@ describe("retryFailedWorkflow resolver", () => {
     });
 
     expect(result).toEqual({ resumedExecutionId: "exec-resumed-123" });
-    expect(wf.resumeWorkflow.mock.calls).toEqual([["exec-failed-456"]]);
+    expect(wf.resumeWorkflowExecution.mock.calls).toEqual([["exec-failed-456"]]);
   });
 });
 ```
