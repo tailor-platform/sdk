@@ -1,6 +1,6 @@
 import { memberName, nodeStart, unwrapExpression } from "./ast.js";
 
-const SDK_CONFIGURE_MODULE = "@tailor-platform/sdk";
+export const SDK_CONFIGURE_MODULE = "@tailor-platform/sdk";
 
 function findVariable(sourceCode, node) {
   let scope = sourceCode.getScope(node);
@@ -66,6 +66,12 @@ function createImportTracker(context, modules) {
       const object = unwrapExpression(callee.object);
       if (object?.type !== "Identifier" || !this.isNamespace(object)) return null;
       return memberName(callee);
+    },
+
+    importedAs(node, importedName) {
+      if (node?.type !== "Identifier") return false;
+      const entry = named.get(node.name);
+      return entry?.imported === importedName && isBindingReference(context, node, entry.binding);
     },
 
     isNamespace(node) {

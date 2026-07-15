@@ -1,7 +1,9 @@
 import noApiPrefixInPathPattern from "./rules/no-api-prefix-in-path-pattern.js";
+import noUnconditionalPermit from "./rules/no-unconditional-permit.js";
 
 const rules = {
   "no-api-prefix-in-path-pattern": noApiPrefixInPathPattern,
+  "no-unconditional-permit": noUnconditionalPermit,
 };
 
 const plugin = {
@@ -19,6 +21,7 @@ plugin.configs.recommended = {
   },
   rules: {
     "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
+    "tailor-sdk/no-unconditional-permit": "warn",
   },
 };
 

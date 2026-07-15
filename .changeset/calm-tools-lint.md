@@ -3,4 +3,4 @@
 "@tailor-platform/create-sdk": minor
 ---
 
-Add a lint rule that flags the external /api prefix in HTTP adapter path patterns, and enable it in newly scaffolded projects.
+Add lint rules that flag the external /api prefix in HTTP adapter path patterns and permission settings that grant access unconditionally, and enable them in newly scaffolded projects.

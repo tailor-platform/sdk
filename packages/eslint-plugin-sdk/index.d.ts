@@ -1,6 +1,6 @@
 import type { ESLint, Linter, Rule } from "eslint";
 
-export type TailorSdkRuleName = "no-api-prefix-in-path-pattern";
+export type TailorSdkRuleName = "no-api-prefix-in-path-pattern" | "no-unconditional-permit";
 
 type RecommendedRules = {
   readonly [RuleName in TailorSdkRuleName as `tailor-sdk/${RuleName}`]: Linter.RuleEntry;

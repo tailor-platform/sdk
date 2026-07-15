@@ -1,0 +1,180 @@
+import { memberName, objectProperty, unwrapExpression } from "../lib/ast.js";
+import {
+  configureImportTracker,
+  SDK_CONFIGURE_MODULE,
+  variableInitializer,
+} from "../lib/sdk-bindings.js";
+
+const UNSAFE_CONSTANTS = new Set([
+  "unsafeAllowAllTypePermission",
+  "unsafeAllowAllGqlPermission",
+  "unsafeAllowAllIdPPermission",
+]);
+
+const MAX_SCAN_DEPTH = 6;
+
+function isValueReference(node) {
+  const parent = node.parent;
+  if (!parent) return false;
+  switch (parent.type) {
+    case "ImportSpecifier":
+    case "ImportDefaultSpecifier":
+    case "ImportNamespaceSpecifier":
+      return false;
+    case "MemberExpression":
+    case "OptionalMemberExpression":
+      return parent.object === node || parent.computed;
+    case "Property":
+      return parent.value === node || parent.computed;
+    default:
+      return true;
+  }
+}
+
+function resolveValue(context, node) {
+  let current = unwrapExpression(node);
+  const seen = new Set();
+  while (current?.type === "Identifier" && !seen.has(current.name)) {
+    seen.add(current.name);
+    const initializer = variableInitializer(context, current);
+    if (initializer === null) break;
+    current = unwrapExpression(initializer);
+  }
+  return current;
+}
+
+function isDbReference(imports, node) {
+  const object = unwrapExpression(node);
+  if (object?.type === "Identifier") return imports.importedAs(object, "db");
+  if (object?.type === "MemberExpression" || object?.type === "OptionalMemberExpression") {
+    return memberName(object) === "db" && imports.isNamespace(unwrapExpression(object.object));
+  }
+  return false;
+}
+
+function isDbTypeReceiver(context, imports, node) {
+  let current = resolveValue(context, node);
+  while (current?.type === "CallExpression") {
+    const callee = unwrapExpression(current.callee);
+    if (callee?.type !== "MemberExpression" && callee?.type !== "OptionalMemberExpression") {
+      return false;
+    }
+    if (memberName(callee) === "type" && isDbReference(imports, callee.object)) return true;
+    current = resolveValue(context, callee.object);
+  }
+  return false;
+}
+
+function permissionArgument(context, imports, call) {
+  if (imports.callName(call) === "defineIdp") {
+    const options = resolveValue(context, call.arguments[1]);
+    const property = objectProperty(options, "permission");
+    return property?.type === "Property" ? property.value : null;
+  }
+  const callee = unwrapExpression(call.callee);
+  if (callee?.type !== "MemberExpression" && callee?.type !== "OptionalMemberExpression") {
+    return null;
+  }
+  const method = memberName(callee);
+  if (method !== "permission" && method !== "gqlPermission") return null;
+  if (!isDbTypeReceiver(context, imports, callee.object)) return null;
+  return call.arguments[0] ?? null;
+}
+
+function isUnconditionalEntry(context, entry) {
+  const conditions = objectProperty(entry, "conditions");
+  const permit = objectProperty(entry, "permit");
+  if (conditions?.type !== "Property" || permit?.type !== "Property") return false;
+  const conditionsValue = resolveValue(context, conditions.value);
+  const permitValue = unwrapExpression(permit.value);
+  return (
+    conditionsValue?.type === "ArrayExpression" &&
+    conditionsValue.elements.length === 0 &&
+    permitValue?.type === "Literal" &&
+    permitValue.value === true
+  );
+}
+
+function reportUnconditionalEntries(context, node, depth = 0) {
+  if (depth > MAX_SCAN_DEPTH) return;
+  const value = resolveValue(context, node);
+  if (value?.type === "ArrayExpression") {
+    for (const element of value.elements) {
+      if (element !== null && element.type !== "SpreadElement") {
+        reportUnconditionalEntries(context, element, depth + 1);
+      }
+    }
+    return;
+  }
+  if (value?.type !== "ObjectExpression") return;
+  if (isUnconditionalEntry(context, value)) {
+    context.report({ node: value, messageId: "unconditionalEntry" });
+    return;
+  }
+  for (const property of value.properties) {
+    if (property.type === "Property") {
+      reportUnconditionalEntries(context, property.value, depth + 1);
+    }
+  }
+}
+
+export default {
+  meta: {
+    type: "problem",
+    docs: {
+      description: "Disallow permission settings that grant access unconditionally.",
+    },
+    messages: {
+      unsafeConstant:
+        "{{name}} grants access unconditionally; define restrictive permission conditions instead.",
+      unconditionalEntry:
+        "This permission entry permits access without any conditions; add conditions or remove it.",
+    },
+    schema: [],
+  },
+  create(context) {
+    const imports = configureImportTracker(context);
+    const unsafeLocals = new Map();
+    const calls = [];
+    const identifiers = [];
+    const members = [];
+
+    return {
+      ImportDeclaration(node) {
+        imports.track(node);
+        if (node.source.value !== SDK_CONFIGURE_MODULE) return;
+        for (const specifier of node.specifiers) {
+          if (specifier.type !== "ImportSpecifier" || specifier.importKind === "type") continue;
+          const imported =
+            specifier.imported.type === "Identifier"
+              ? specifier.imported.name
+              : String(specifier.imported.value);
+          if (UNSAFE_CONSTANTS.has(imported)) unsafeLocals.set(specifier.local.name, imported);
+        }
+      },
+      CallExpression: (node) => calls.push(node),
+      Identifier: (node) => identifiers.push(node),
+      MemberExpression: (node) => {
+        if (UNSAFE_CONSTANTS.has(memberName(node) ?? "")) members.push(node);
+      },
+      "Program:exit"() {
+        for (const node of identifiers) {
+          const name = unsafeLocals.get(node.name);
+          if (name === undefined || !isValueReference(node) || !imports.importedAs(node, name)) {
+            continue;
+          }
+          context.report({ node, messageId: "unsafeConstant", data: { name } });
+        }
+        for (const node of members) {
+          if (!imports.isNamespace(unwrapExpression(node.object))) continue;
+          const name = memberName(node);
+          context.report({ node, messageId: "unsafeConstant", data: { name } });
+        }
+        for (const call of calls) {
+          const permission = permissionArgument(context, imports, call);
+          if (permission !== null) reportUnconditionalEntries(context, permission);
+        }
+      },
+    };
+  },
+};

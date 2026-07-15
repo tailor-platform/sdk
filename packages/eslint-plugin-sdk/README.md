@@ -24,7 +24,8 @@ Add the plugin and its rules to `.oxlintrc.json`:
     }
   ],
   "rules": {
-    "tailor-sdk/no-api-prefix-in-path-pattern": "warn"
+    "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
+    "tailor-sdk/no-unconditional-permit": "warn"
   }
 }
 ```
@@ -63,6 +64,34 @@ export default createHttpAdapter({
   pathPattern: "/orders/*",
 });
 ```
+
+### `no-unconditional-permit` (warning)
+
+Permission entries with empty `conditions` and `permit: true` grant access to every request, as do
+the `unsafeAllowAll*` constants. Use them only during local development.
+
+Incorrect:
+
+```ts
+export default db.type("User", fields).permission({
+  create: [{ conditions: [], permit: true }],
+  // ...
+});
+
+export const defaultPermission = unsafeAllowAllTypePermission;
+```
+
+Correct:
+
+```ts
+export default db.type("User", fields).permission({
+  create: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
+  // ...
+});
+```
+
+The rule checks `.permission()` / `.gqlPermission()` on `db.type()` chains and the `permission`
+option of `defineIdp()`, including values defined as `const` in the same file.
 
 The rules recognize named and namespace imports from `@tailor-platform/sdk`, including local import
 aliases. Same-named functions imported from other packages are ignored.
