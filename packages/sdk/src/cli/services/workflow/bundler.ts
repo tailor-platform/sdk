@@ -277,7 +277,7 @@ async function bundleSingleJob(
   );
   const contextHash = computeBundlerContextHash({
     sourceFile: job.sourceFile,
-    serializedStartContext,
+    extraContext: serializedStartContext,
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,

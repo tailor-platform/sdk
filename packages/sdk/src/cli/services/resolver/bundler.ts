@@ -128,7 +128,7 @@ async function bundleSingleResolver(
 
   const contextHash = computeBundlerContextHash({
     sourceFile: resolver.sourceFile,
-    serializedStartContext,
+    extraContext: serializedStartContext,
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,

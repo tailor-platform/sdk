@@ -85,7 +85,7 @@ export async function bundleAuthHooks(
   );
   const contextHash = computeBundlerContextHash({
     sourceFile: absoluteConfigPath,
-    serializedStartContext,
+    extraContext: serializedStartContext,
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
