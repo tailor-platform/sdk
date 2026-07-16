@@ -7,7 +7,6 @@
   "type": "module",
   "scripts": {
     "generate": "tailor generate -c tailor.config.ts",
-    "generate:watch": "tailor generate -c tailor.config.ts --watch",
     "deploy": "tailor deploy -c tailor.config.ts",
     "test": "pnpm test:generator",
     "test:all": "pnpm test:generator:prepare && vitest",
