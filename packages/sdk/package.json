@@ -190,7 +190,6 @@
     "@urql/core": "6.0.3",
     "amaro": "1.1.10",
     "chalk": "5.6.2",
-    "chokidar": "5.0.0",
     "confbox": "0.2.4",
     "date-fns": "4.4.0",
     "es-toolkit": "1.49.0",
@@ -199,7 +198,6 @@
     "graphql": "17.0.2",
     "inflection": "3.0.2",
     "kysely": "0.29.3",
-    "madge": "8.0.0",
     "mime-types": "3.0.2",
     "open": "11.0.0",
     "oxc-parser": "0.139.0",
@@ -222,7 +220,6 @@
   "devDependencies": {
     "@opentelemetry/sdk-trace-base": "2.9.0",
     "@tailor-platform/tailor-proto": "workspace:^",
-    "@types/madge": "5.0.3",
     "@types/mime-types": "3.0.1",
     "@types/node": "24.13.3",
     "@types/semver": "7.7.1",
