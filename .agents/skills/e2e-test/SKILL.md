@@ -10,21 +10,20 @@ metadata:
 
 # E2E Testing
 
-Run the selected suite against authenticated, current platform state and leave no disposable
-workspaces behind.
+Run the selected suite against authenticated, current platform state and clean up resources created
+by the run.
 
 ## Workflow
 
-1. If the user reported a failure, run or inspect the failing command first. Do not diagnose from
-   a paraphrase when raw output is available.
-2. Select the suite from the table below. If the request is open-ended, ask whether to run
-   `example/e2e`, `packages/sdk/e2e`, or both; do not guess.
-3. Pass the stored non-secret IDs through the validating loader described below. Do not rediscover
-   IDs already on disk.
-4. Establish authentication using [AUTH.md](AUTH.md). Never expose a long-lived client secret to
-   the code under test.
+1. If the user reported a failure, run or inspect the failing command before diagnosing it.
+2. Select `example/e2e`, `packages/sdk/e2e`, or both from the user's request. Ask when the request is
+   open-ended; the suites have different prerequisites.
+3. Load saved non-secret IDs through the validating loader below when the selected path requires
+   them. A valid profile can replace the example workspace ID. Do not rediscover saved IDs.
+4. Verify authentication using [AUTH.md](AUTH.md). If the saved session cannot refresh, ask the user
+   to log in; do not read or rewrite refresh-token data.
 5. Follow the selected suite's preflight, run, and cleanup instructions in [SUITES.md](SUITES.md).
-6. Report the first relevant failure, the exact verification command, and cleanup results.
+6. Report the first relevant failure, the exact command run, and the cleanup result.
 
 ## Suite Selection
 
@@ -41,11 +40,9 @@ Read `.agents/skills/e2e-test/ids.local.env` first. It is gitignored and may con
 - `TAILOR_PLATFORM_ORGANIZATION_ID` for `packages/sdk/e2e`
 - `TAILOR_PLATFORM_FOLDER_ID` for `packages/sdk/e2e`
 
-If the file is missing but `.agents/skills/e2e-setup/ids.local.env` exists, move that legacy file
-to the new location and set mode `0600`. Never store tokens, client IDs, or client secrets in this
-file. A valid `TAILOR_PLATFORM_PROFILE` can supply the example workspace instead. If a required ID
-remains missing, follow the discovery flow in [SUITES.md](SUITES.md); ask before creating a new
-long-lived workspace.
+If the file is missing but `.agents/skills/e2e-setup/ids.local.env` exists, move that legacy file to
+the new location and set mode `0600`. Never store tokens, client IDs, or client secrets in this file.
+A valid `TAILOR_PLATFORM_PROFILE` can supply the example workspace without this file.
 
 Never source the file. Run commands through the loader, which accepts only the three UUID fields and
 rejects duplicate, malformed, or executable content:
@@ -59,8 +56,6 @@ rejects duplicate, malformed, or executable content:
 
 - Authentication or token errors: [AUTH.md](AUTH.md)
 - Missing workspace, organization, or folder IDs: [SUITES.md](SUITES.md)
-- Missing `my-app` auth configuration or `manager-machine-user`: verify the selected workspace and
-  follow the shared-workspace and deploy-plan preflight in [SUITES.md](SUITES.md) before redeploying
-- Resolver/workflow counts or missing GraphQL fields: follow the same preflight before redeploying,
-  then rerun
-- Failed `packages/sdk/e2e`: always run the audited workspace cleanup before finishing
+- Missing auth configuration, missing machine user, resolver/workflow count mismatches, or absent
+  GraphQL fields: verify the selected example workspace and follow its deploy preflight
+- Failed `packages/sdk/e2e`: inspect both the test status and exact-namespace cleanup status

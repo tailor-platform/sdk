@@ -2,8 +2,8 @@
 
 ## `example/e2e`
 
-This suite asserts against the deployed state of `example/`. The selected workspace must contain
-the current `example/tailor.config.ts` output as application `my-app`.
+This suite asserts against the deployed state of `example/`. The selected workspace must contain the
+current `example/tailor.config.ts` output as application `my-app`.
 
 ### Preflight
 
@@ -24,34 +24,19 @@ before any redeploy:
   pnpm exec tailor-sdk workspace user list
 ```
 
-If another person or automation may rely on the workspace, confirm ownership and intended use with
-the user. Do not repair drift in a shared workspace by assumption.
+If another person or automation may rely on it, ask the user before changing it. With a valid
+profile, run both checks with the same `TAILOR_PLATFORM_PROFILE` instead of the ID loader.
 
-If a valid platform profile already selects the workspace, the stored workspace ID is optional.
-Use the same profile for both preflight checks:
-
-```sh
-TAILOR_PLATFORM_PROFILE=<profile> pnpm exec tailor-sdk workspace app list
-TAILOR_PLATFORM_PROFILE=<profile> pnpm exec tailor-sdk workspace user list
-```
-
-If the workspace is absent or no longer hosts the application:
+If the workspace is missing or no longer hosts the application:
 
 1. Verify login with `pnpm exec tailor-sdk workspace list`.
-2. Resolve the organization and folder only when their saved IDs are unavailable:
+2. Resolve existing organization and folder IDs only when they are not saved:
    ```sh
    pnpm exec tailor-sdk organization list
    pnpm exec tailor-sdk organization folder list --organization-id <organization-id>
-   # Optional: drill into a sub-folder.
-   pnpm exec tailor-sdk organization folder list --organization-id <organization-id> \
-     --parent-folder-id <folder-id>
    ```
-3. Ask before creating a long-lived workspace. Use `example-e2e` unless it collides:
-   ```sh
-   pnpm exec tailor-sdk workspace create --name example-e2e --region asia-northeast \
-     --organization-id <organization-id> --folder-id <folder-id>
-   ```
-4. Save its ID to `ids.local.env`, deploy, and confirm `my-app`:
+3. Ask before creating a long-lived workspace. Use `example-e2e` unless it collides.
+4. Save its ID to `ids.local.env`, set mode `0600`, deploy, and confirm `my-app`:
    ```sh
    TAILOR_PLATFORM_WORKSPACE_ID=<workspace-id> pnpm --filter example run deploy
    pnpm exec tailor-sdk workspace app list --workspace-id <workspace-id>
@@ -66,35 +51,31 @@ Use `run deploy`; pnpm's built-in `deploy` shadows the package script when `run`
   .agents/skills/e2e-test/ids.local.env -- pnpm --filter example test:e2e
 ```
 
-With a valid saved profile, run
-`TAILOR_PLATFORM_PROFILE=<profile> pnpm --filter example test:e2e` instead.
+With a valid saved profile and no ID file, run:
+
+```sh
+TAILOR_PLATFORM_PROFILE=<profile> pnpm --filter example test:e2e
+```
 
 Resolver/workflow count mismatches or missing GraphQL fields usually mean the deployed app is stale.
-Before redeploying with the same workspace ID, run `pnpm --filter example run deploy --dry-run` with
-the same ID loader or profile used for the test. Inspect deletes, replacements, unmanaged-resource
-warnings, ownership conflicts, and pending TailorDB migrations. Obtain explicit approval before
-applying a plan that deletes or replaces resources, conflicts with another owner, or removes a
-TailorDB field or type and its data. If ownership is unclear, stop and ask whether to use a dedicated
-workspace. After an approved deploy, rerun the same test command.
+Before redeploying, run `pnpm --filter example run deploy --dry-run` with the same ID loader or
+profile. Inspect deletes, replacements, ownership conflicts, and TailorDB migrations. Obtain explicit
+approval before applying destructive or ownership-conflicting changes, then rerun the same test.
 
 ## `packages/sdk/e2e`
 
-This suite creates workspaces, deploys into them, and must delete them after every local run. It
-uses `TAILOR_PLATFORM_ORGANIZATION_ID` and `TAILOR_PLATFORM_FOLDER_ID`; it does not reuse
-`TAILOR_PLATFORM_WORKSPACE_ID`.
+This suite creates disposable workspaces and uses `TAILOR_PLATFORM_ORGANIZATION_ID` and
+`TAILOR_PLATFORM_FOLDER_ID`; it does not reuse `TAILOR_PLATFORM_WORKSPACE_ID`.
 
-If either ID is missing, discover existing values and save both UUIDs to `ids.local.env` with mode
-`0600`:
+If either ID is missing, discover an existing value and save it to `ids.local.env` with mode `0600`:
 
 ```sh
 pnpm exec tailor-sdk organization list
 pnpm exec tailor-sdk organization folder list --organization-id <organization-id>
-# Optional: drill into a sub-folder.
-pnpm exec tailor-sdk organization folder list --organization-id <organization-id> \
-  --parent-folder-id <folder-id>
 ```
 
-### Run with Existing Login
+Run through the wrapper so every workspace created for the run receives one namespace and cleanup is
+attempted after success, failure, HUP, INT, or TERM:
 
 ```sh
 /bin/bash .agents/skills/e2e-test/scripts/with-e2e-ids.sh \
@@ -102,27 +83,14 @@ pnpm exec tailor-sdk organization folder list --organization-id <organization-id
   /bin/bash .agents/skills/e2e-test/scripts/run-sdk-e2e.sh
 ```
 
-### Run with Isolated Machine-User Login
+The wrapper runs `pnpm run test:e2e` in `packages/sdk`, deletes only valid workspace IDs whose names
+start with its exact `e2e-ws-<run-id>-` namespace, and obtains a fresh workspace list afterward. It
+tries every matching deletion even when one fails. The cleanup result overrides the test result when
+cleanup fails, and both statuses are printed.
 
-Follow [AUTH.md](AUTH.md), using this target command:
-
-```sh
-/bin/bash .agents/skills/e2e-test/scripts/run-sdk-e2e.sh
-```
-
-The runner requires the organization and folder UUIDs, assigns a lowercase run ID of at most 40
-characters and a temporary tracking directory, then executes `pnpm run test:e2e` in `packages/sdk`.
-It parses a fresh JSON workspace listing and previews and deletes only IDs in the exact
-`e2e-ws-<run-id>-...` namespace. It verifies the same exact namespace is empty after deletion,
-including after test failure or HUP, INT, or TERM; the isolated-auth flow uses the trusted CLI for
-listing and deletion. A cleanup failure makes the run fail and prints the test status separately;
-inspect both before any manual deletion.
-
-Errors stating that `my-app` has no auth configuration or that `manager-machine-user` was not found
-usually select an undeployed or stale example workspace. Confirm the app list, follow the
-shared-workspace and deploy-plan preflight above before redeploying `example/`, and rerun before
-changing authentication.
+Signal cleanup is best effort; SIGKILL and machine or network failure cannot be trapped. If the final
+audit did not complete, list workspaces and inspect the exact run namespace before deleting anything.
 
 To sweep older unscoped leftovers, run the existing
-`packages/sdk/scripts/cleanup-e2e-workspaces.ts` with `--dry-run`, inspect every listed workspace,
-and only then run it without `--dry-run`. Never automate an unscoped sweep.
+`packages/sdk/scripts/cleanup-e2e-workspaces.ts` with `--dry-run`, inspect every listed workspace, ask
+for explicit approval, and only then run it without `--dry-run`. Never automate an unscoped sweep.

@@ -5,7 +5,6 @@ set -uo pipefail
 script_path=${BASH_SOURCE[0]}
 [[ "$script_path" == /* ]] || script_path="$PWD/$script_path"
 script_dir=${script_path%/*}
-process_supervisor="$script_dir/supervise-process-group.sh"
 workspace_cleanup="$script_dir/cleanup-e2e-workspaces.mjs"
 
 if [[ -n ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID:-} || -n ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET:-} ]]; then
@@ -13,7 +12,7 @@ if [[ -n ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID:-} || -n ${TAILOR_PLATFORM_MAC
   exit 64
 fi
 
-repo_root=$(git -C "$script_dir" rev-parse --show-toplevel)
+repo_root=$(git -C "$script_dir" rev-parse --show-toplevel) || exit 1
 cd "$repo_root/packages/sdk" || exit 1
 
 for required_id in TAILOR_PLATFORM_ORGANIZATION_ID TAILOR_PLATFORM_FOLDER_ID; do
@@ -31,167 +30,43 @@ if [[ ${#run_id} -lt 8 || ${#run_id} -gt 40 || ! "$run_id" =~ ^[a-z0-9-]+$ ]]; t
 fi
 export TAILOR_PLATFORM_E2E_RUN_ID="$run_id"
 
-cleanup_node=""
-workspace_cli=()
-if [[ -n ${TAILOR_E2E_TRUSTED_NODE:-} || -n ${TAILOR_E2E_TRUSTED_CLI:-} ]]; then
-  if [[ ${TAILOR_E2E_TRUSTED_NODE:-} != /* || ! -x ${TAILOR_E2E_TRUSTED_NODE:-} ||
-    ${TAILOR_E2E_TRUSTED_CLI:-} != /* || ! -r ${TAILOR_E2E_TRUSTED_CLI:-} ]]; then
-    echo "Trusted cleanup Node.js and CLI paths must both be valid." >&2
-    exit 64
-  fi
-  cleanup_node=$TAILOR_E2E_TRUSTED_NODE
-  workspace_cli=("$TAILOR_E2E_TRUSTED_NODE" "$TAILOR_E2E_TRUSTED_CLI")
-else
-  cleanup_node=$(type -P node)
-  workspace_cli=(pnpm exec tailor-sdk)
-fi
+cleanup_node=$(type -P node)
 if [[ "$cleanup_node" != /* || ! -x "$cleanup_node" || ! -r "$workspace_cleanup" ]]; then
-  echo "An absolute executable Node.js path and the skill-owned cleanup helper are required." >&2
+  echo "An absolute executable Node.js path and the cleanup helper are required." >&2
   exit 64
 fi
 
-run_tmp=$(mktemp -d "${TMPDIR:-/tmp}/tailor-sdk-e2e.XXXXXX") || exit 1
-chmod 700 "$run_tmp"
-export TMPDIR="$run_tmp"
-cleanup_local_tmp() {
-  rm -rf -- "$run_tmp"
-}
-trap cleanup_local_tmp EXIT
-
-run_cleanup_command() {
-  local command_pid command_status signal_count_before
-
-  if [[ ! -r "$process_supervisor" ]]; then
-    echo "Cleanup process-group supervisor is missing." >&2
-    return 1
-  fi
-  set -m
-  /bin/bash "$process_supervisor" "$$" "$run_tmp" - escalate -- "$@" &
-  command_pid=$!
-  set +m
-
-  while true; do
-    signal_count_before=$cleanup_signal_count
-    wait "$command_pid"
-    command_status=$?
-    if [[ $cleanup_signal_count -ne $signal_count_before ]]; then
-      continue
-    fi
-    return "$command_status"
-  done
-}
-
-verify_raw_workspace_list() {
-  local phase=$1 workspace_output workspace_output_file workspace_status
-
-  workspace_output_file="$run_tmp/workspace-list-$phase.json"
-
-  run_cleanup_command \
-    /usr/bin/env -u TAILOR_PLATFORM_PROFILE "${workspace_cli[@]}" --json workspace list \
-    >"$workspace_output_file"
-  workspace_status=$?
-
-  if [[ $workspace_status -ne 0 ]]; then
-    return "$workspace_status"
-  fi
-  workspace_output=$(<"$workspace_output_file")
-  /bin/rm -f -- "$workspace_output_file"
-
-  run_cleanup_command \
-    "$cleanup_node" "$script_dir/verify-workspace-list.mjs" "$run_id" "$phase" \
-    <<<"$workspace_output"
-}
-
-run_cleanup() {
-  local preview_status pre_audit_status cleanup_status verification_status attempt
-
-  run_cleanup_command \
-    "$cleanup_node" "$workspace_cleanup" "$run_id" preview -- "${workspace_cli[@]}"
-  preview_status=$?
-  if [[ $preview_status -ne 0 ]]; then
-    return "$preview_status"
-  fi
-
-  verify_raw_workspace_list before-delete
-  pre_audit_status=$?
-  if [[ $pre_audit_status -ne 0 ]]; then
-    echo "Cleanup stopped because the raw workspace pre-audit was not safe." >&2
-    return "$pre_audit_status"
-  fi
-
-  run_cleanup_command \
-    "$cleanup_node" "$workspace_cleanup" "$run_id" delete -- "${workspace_cli[@]}"
-  cleanup_status=$?
-
-  verification_status=1
-  for attempt in 1 2 3; do
-    verify_raw_workspace_list after-delete
-    verification_status=$?
-    [[ $verification_status -ne 0 ]] || break
-    [[ $attempt -eq 3 ]] || sleep 1
-  done
-
-  if [[ $verification_status -ne 0 ]]; then
-    echo "Cleanup verification still found workspaces for run ID $run_id." >&2
-  fi
-  if [[ $cleanup_status -ne 0 ]]; then
-    return "$cleanup_status"
-  fi
-  return "$verification_status"
-}
-
-handle_signal() {
-  local signal_name=$1 signal_status=$2 cleanup_status
-  if [[ $cleanup_in_progress -eq 1 ]]; then
-    [[ $interrupted_status -ne 0 ]] || interrupted_status=$signal_status
-    ((cleanup_signal_count += 1))
-    echo "E2E interrupted during cleanup (status $signal_status); cleanup will continue." >&2
-    return
-  fi
-
-  interrupted_status=$signal_status
-  if [[ -n ${test_pid:-} ]]; then
-    kill -s "$signal_name" "$test_pid" 2>/dev/null || true
-    wait "$test_pid" 2>/dev/null || true
-    test_pid=""
-  fi
-  cleanup_in_progress=1
-  run_cleanup
-  cleanup_status=$?
-  echo "E2E interrupted (status $signal_status); cleanup status: $cleanup_status" >&2
-  exit "$signal_status"
-}
-cleanup_in_progress=0
-cleanup_signal_count=0
-interrupted_status=0
-trap 'handle_signal HUP 129' HUP
-trap 'handle_signal INT 130' INT
-trap 'handle_signal TERM 143' TERM
-
 test_pid=""
-if [[ ! -r "$process_supervisor" ]]; then
-  echo "Test process-group supervisor is missing." >&2
-  exit 1
-fi
+interrupted_status=0
+forward_signal() {
+  local signal_name=$1 signal_status=$2
+  [[ $interrupted_status -ne 0 ]] || interrupted_status=$signal_status
+  if [[ "$test_pid" =~ ^[0-9]+$ ]]; then
+    kill -s "$signal_name" -- "-$test_pid" 2>/dev/null || true
+  fi
+}
+trap 'forward_signal HUP 129' HUP
+trap 'forward_signal INT 130' INT
+trap 'forward_signal TERM 143' TERM
+
 set -m
-/bin/bash "$process_supervisor" "$$" "$run_tmp" - escalate -- pnpm run test:e2e &
+pnpm run test:e2e &
 test_pid=$!
 set +m
 wait "$test_pid"
 test_status=$?
+if [[ $interrupted_status -ne 0 ]]; then
+  wait "$test_pid" 2>/dev/null || true
+  test_status=$interrupted_status
+fi
 test_pid=""
-
-cleanup_in_progress=1
-run_cleanup
-cleanup_status=$?
-cleanup_in_progress=0
 trap - HUP INT TERM
+
+"$cleanup_node" "$workspace_cleanup" "$run_id" -- pnpm exec tailor-sdk
+cleanup_status=$?
 
 echo "E2E test status: $test_status; cleanup status: $cleanup_status" >&2
 
-if [[ $interrupted_status -ne 0 ]]; then
-  exit "$interrupted_status"
-fi
 if [[ $cleanup_status -ne 0 ]]; then
   exit "$cleanup_status"
 fi
