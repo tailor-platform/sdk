@@ -13,13 +13,20 @@ import type { Plugin } from "#/plugin/types";
  */
 export type LoadedConfig = AppConfig & { path: string };
 
+export interface LoadConfigOptions {
+  /** Import cache-busting value for callers that reload the config module after a rebuild. */
+  importNonce?: string;
+}
+
 /**
  * Load Tailor configuration file and associated plugins.
  * @param configPath - Optional explicit config path
+ * @param options - Optional module import behavior.
  * @returns Loaded config, plugins, and config path
  */
 export async function loadConfig(
   configPath?: string,
+  options: LoadConfigOptions = {},
 ): Promise<{ config: LoadedConfig; plugins: Plugin[] }> {
   installCliTailordbStub();
   const foundPath = loadConfigPath(configPath);
@@ -35,6 +42,9 @@ export async function loadConfig(
   }
 
   const configUrl = pathToFileURL(resolvedPath);
+  if (options.importNonce) {
+    configUrl.searchParams.set("tailorImportNonce", options.importNonce);
+  }
   const configModule = await import(configUrl.href);
   if (!configModule || !configModule.default) {
     throw new Error("Invalid Tailor config module: default export not found");
