@@ -67,7 +67,7 @@ describe("resolvePendingBoundaries", () => {
     const source = registrySource("    prereleaseUntil: V2_NEXT_PENDING,");
 
     expect(() => resolvePendingBoundaries(source, "2.0.0")).toThrow(
-      'resolvedVersion must be a "next.N" prerelease',
+      'resolvedVersion must be a "2.0.0-next.N" prerelease',
     );
   });
 
@@ -75,7 +75,18 @@ describe("resolvePendingBoundaries", () => {
     const source = registrySource("    prereleaseUntil: V2_NEXT_PENDING,");
 
     expect(() => resolvePendingBoundaries(source, "2.0.0-next.foo")).toThrow(
-      'resolvedVersion must be a "next.N" prerelease',
+      'resolvedVersion must be a "2.0.0-next.N" prerelease',
+    );
+  });
+
+  test("throws when the resolved version is not on the 2.0.0 line", () => {
+    const source = registrySource("    prereleaseUntil: V2_NEXT_PENDING,");
+
+    expect(() => resolvePendingBoundaries(source, "2.1.0-next.1")).toThrow(
+      'resolvedVersion must be a "2.0.0-next.N" prerelease',
+    );
+    expect(() => resolvePendingBoundaries(source, "3.0.0-next.1")).toThrow(
+      'resolvedVersion must be a "2.0.0-next.N" prerelease',
     );
   });
 
