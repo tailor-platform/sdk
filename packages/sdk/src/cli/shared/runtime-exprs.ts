@@ -4,7 +4,7 @@
  * Two delivery paths:
  * - Apply config: shipped with apply and evaluated by the platform before
  *   invoking user code.
- * - Bundle inline: interpolated into the generated `.entry.js` wrapper and
+ * - Bundle inline: interpolated into the generated entry module and
  *   evaluated inside the bundled script at function entry.
  *
  * The principal field mapping (server → SDK) shared across services is built by
