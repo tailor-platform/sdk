@@ -86,6 +86,23 @@ describe("createBundleCache", () => {
       expect(result).toBeUndefined();
     });
 
+    test("returns undefined when cached bundle content does not match its metadata", () => {
+      const store = createCacheStore({ cacheDir });
+      const cache = createBundleCache(store);
+      const sourceFile = writeFile("src/resolver.ts", "export default {}");
+      cache.save({
+        kind: "resolver",
+        name: "myResolver",
+        sourceFile,
+        content: "expected bundle",
+        dependencyPaths: [sourceFile],
+      });
+
+      store.storeBundleContent("resolver:myResolver", "another config's bundle");
+
+      expect(cache.tryRestore({ kind: "resolver", name: "myResolver" })).toBeUndefined();
+    });
+
     test("returns undefined when a dependency file no longer exists", () => {
       const cache = createBundleCache(createCacheStore({ cacheDir }));
       const sourceFile = writeFile("src/resolver.ts", "export default {}");
