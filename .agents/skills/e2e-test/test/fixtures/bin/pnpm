@@ -4,6 +4,10 @@ set -euo pipefail
 
 printf '%s\n' "$*" >>"$E2E_PNPM_MARKER"
 
+if [[ ${1:-} == run ]] && [[ $# -ne 2 || ${2:-} != test:e2e ]]; then
+  exit 99
+fi
+
 signal_cleanup_stage() {
   local stage=$1
   if [[ ${E2E_CLEANUP_DELAY_AT:-} == "$stage" ]]; then
@@ -29,7 +33,7 @@ signal_cleanup_stage() {
 }
 
 case "$*" in
-  "run test -- --project e2e")
+  "run test:e2e")
     if [[ -n ${E2E_TEST_STARTED_MARKER:-} ]]; then
       printf 'started' >"$E2E_TEST_STARTED_MARKER"
     fi
@@ -47,6 +51,9 @@ case "$*" in
       printf '%s' "${TMPDIR:-}" >"$E2E_TMPDIR_MARKER"
     fi
     if [[ -n ${E2E_TEST_SIGNAL:-} ]]; then
+      if [[ -n ${E2E_TEST_IGNORE_SIGNAL:-} ]]; then
+        trap '' "$E2E_TEST_SIGNAL"
+      fi
       runner_pid=$(/bin/ps -o ppid= -p "$PPID" | /usr/bin/tr -d ' ')
       kill -s "$E2E_TEST_SIGNAL" "$runner_pid"
       /bin/sleep "${E2E_SIGNAL_DELAY:-1}"

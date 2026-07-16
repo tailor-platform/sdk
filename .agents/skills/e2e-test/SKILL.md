@@ -60,6 +60,7 @@ rejects duplicate, malformed, or executable content:
 - Authentication or token errors: [AUTH.md](AUTH.md)
 - Missing workspace, organization, or folder IDs: [SUITES.md](SUITES.md)
 - Missing `my-app` auth configuration or `manager-machine-user`: verify the selected workspace and
-  redeploy `example/`
-- Resolver/workflow counts or missing GraphQL fields: redeploy `example/`, then rerun
+  follow the shared-workspace and deploy-plan preflight in [SUITES.md](SUITES.md) before redeploying
+- Resolver/workflow counts or missing GraphQL fields: follow the same preflight before redeploying,
+  then rerun
 - Failed `packages/sdk/e2e`: always run the audited workspace cleanup before finishing

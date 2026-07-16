@@ -27,6 +27,7 @@ if [[ "$inherited_fd" != "-" && ! "$inherited_fd" =~ ^[3-9]$ ]]; then
 fi
 child_pid=""
 forwarded_status=0
+forwarded_signal_attempts=0
 
 parent_is_alive() {
   kill -0 "$parent_pid" 2>/dev/null
@@ -87,6 +88,13 @@ while kill -0 "$child_pid" 2>/dev/null; do
     parent_lost=1
     kill -KILL -- "-$child_pid" 2>/dev/null || true
     break
+  fi
+  if [[ $forwarded_status -ne 0 ]]; then
+    ((forwarded_signal_attempts += 1))
+    if [[ $forwarded_signal_attempts -ge 20 ]]; then
+      kill -KILL -- "-$child_pid" 2>/dev/null || true
+      break
+    fi
   fi
   /bin/sleep 0.05
 done

@@ -15,6 +15,18 @@ Confirm the saved workspace still hosts `my-app`:
   pnpm exec tailor-sdk workspace app list
 ```
 
+Treat a reused workspace as shared until its users and ownership are known. List its Platform users
+before any redeploy:
+
+```sh
+/bin/bash .agents/skills/e2e-test/scripts/with-e2e-ids.sh \
+  .agents/skills/e2e-test/ids.local.env -- \
+  pnpm exec tailor-sdk workspace user list
+```
+
+If another person or automation may rely on the workspace, confirm ownership and intended use with
+the user. Do not repair drift in a shared workspace by assumption.
+
 If a valid platform profile already selects the workspace, the stored workspace ID is optional:
 
 ```sh
@@ -56,7 +68,12 @@ With a valid saved profile, run
 `TAILOR_PLATFORM_PROFILE=<profile> pnpm --filter example test:e2e` instead.
 
 Resolver/workflow count mismatches or missing GraphQL fields usually mean the deployed app is stale.
-Redeploy with the same workspace ID, then rerun the same test command.
+Before redeploying with the same workspace ID, run `pnpm --filter example run deploy --dry-run` with
+the same ID loader or profile used for the test. Inspect deletes, replacements, unmanaged-resource
+warnings, ownership conflicts, and pending TailorDB migrations. Obtain explicit approval before
+applying a plan that deletes or replaces resources, conflicts with another owner, or removes a
+TailorDB field or type and its data. If ownership is unclear, stop and ask whether to use a dedicated
+workspace. After an approved deploy, rerun the same test command.
 
 ## `packages/sdk/e2e`
 
@@ -92,8 +109,8 @@ Follow [AUTH.md](AUTH.md), using this target command:
 ```
 
 The runner requires the organization and folder UUIDs, assigns a lowercase run ID of at most 40
-characters and a temporary tracking directory, then executes
-`pnpm run test -- --project e2e` in `packages/sdk`. It previews and deletes only workspaces
+characters and a temporary tracking directory, then executes `pnpm run test:e2e` in `packages/sdk`.
+It previews and deletes only workspaces
 containing that run ID, but first parses a raw JSON workspace listing and rejects candidates outside
 the exact `e2e-ws-<run-id>-...` namespace. It verifies the same exact namespace is empty after
 deletion, including after test failure or HUP, INT, or TERM; the isolated-auth flow uses the trusted
@@ -101,8 +118,9 @@ CLI for both checks. A cleanup failure makes the run fail and prints the test st
 inspect both before any manual deletion.
 
 Errors stating that `my-app` has no auth configuration or that `manager-machine-user` was not found
-usually select an undeployed or stale example workspace. Confirm the app list, redeploy `example/`,
-and rerun before changing authentication.
+usually select an undeployed or stale example workspace. Confirm the app list, follow the
+shared-workspace and deploy-plan preflight above before redeploying `example/`, and rerun before
+changing authentication.
 
 To sweep older unscoped leftovers, run the cleanup script with `--dry-run`, inspect every listed
 workspace, and only then run it without `--dry-run`. Never automate an unscoped sweep.

@@ -175,7 +175,7 @@ if [[ ! -r "$process_supervisor" ]]; then
   exit 1
 fi
 set -m
-/bin/bash "$process_supervisor" "$$" "$run_tmp" - -- pnpm run test -- --project e2e &
+/bin/bash "$process_supervisor" "$$" "$run_tmp" - -- pnpm run test:e2e &
 test_pid=$!
 set +m
 wait "$test_pid"

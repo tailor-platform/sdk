@@ -101,6 +101,9 @@ async function main() {
     }
   }
 
+  if (failed > 0) {
+    throw new Error(`Cleanup failed: ${deleted} deleted, ${failed} failed.`);
+  }
   console.log(`\n✅ Cleanup complete: ${deleted} deleted, ${failed} failed`);
 }
 

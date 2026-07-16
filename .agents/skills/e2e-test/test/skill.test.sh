@@ -56,6 +56,12 @@ wait_for_process_exit() {
 [[ -f "$skill_dir/SKILL.md" ]] || fail "SKILL.md is missing"
 [[ -f "$skill_dir/AUTH.md" ]] || fail "AUTH.md is missing"
 [[ -f "$skill_dir/SUITES.md" ]] || fail "SUITES.md is missing"
+grep -q 'workspace user list' "$skill_dir/SUITES.md" ||
+  fail "example deploy preflight does not inspect workspace users"
+grep -q 'deploy --dry-run' "$skill_dir/SUITES.md" ||
+  fail "example deploy preflight does not preview destructive changes"
+grep -q 'explicit approval' "$skill_dir/SUITES.md" ||
+  fail "example deploy preflight does not require approval for destructive changes"
 [[ -f "$supervisor_source" ]] || fail "process-group supervisor is missing"
 [[ -f "$helper_source" ]] || fail "authentication helper is missing"
 [[ -f "$ids_helper_source" ]] || fail "ID loader is missing"
@@ -524,8 +530,8 @@ PATH="$fake_bin:$PATH" \
     "$runner"
 [[ $(wc -l <"$pnpm_marker") -eq 5 ]] ||
   fail "SDK runner did not run test, preview, cleanup, and both verifications"
-[[ $(sed -n '1p' "$pnpm_marker") == "run test -- --project e2e" ]] ||
-  fail "SDK test command changed"
+[[ $(sed -n '1p' "$pnpm_marker") == "run test:e2e" ]] ||
+  fail "SDK runner did not invoke the canonical test:e2e script"
 [[ $(<"$run_id_marker") == "$run_id" ]] || fail "SDK test did not receive the run ID"
 e2e_tmpdir=$(<"$e2e_tmpdir_marker")
 [[ "$e2e_tmpdir" == *"tailor-sdk-e2e."* ]] || fail "SDK test did not receive an isolated TMPDIR"
@@ -671,6 +677,25 @@ for signal_case in HUP:129 INT:130 TERM:143; do
   [[ ! -e "$signal_completion_marker" ]] || fail "SDK runner did not forward $target_signal"
   [[ $(wc -l <"$pnpm_marker") -eq 5 ]] || fail "SDK runner skipped cleanup after $target_signal"
 done
+
+ignored_signal_completion_marker="$tmp_dir/runner-signal-ignored-completed"
+: >"$pnpm_marker"
+set +e
+PATH="$fake_bin:$PATH" \
+  E2E_PNPM_MARKER="$pnpm_marker" \
+  E2E_TEST_SIGNAL=TERM \
+  E2E_TEST_IGNORE_SIGNAL=1 \
+  E2E_SIGNAL_DELAY=2 \
+  E2E_SIGNAL_COMPLETION_MARKER="$ignored_signal_completion_marker" \
+  TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+  "$runner"
+ignored_signal_status=$?
+set -e
+[[ $ignored_signal_status -eq 143 ]] || fail "SDK runner lost an ignored TERM status"
+[[ ! -e "$ignored_signal_completion_marker" ]] ||
+  fail "SDK runner did not escalate an ignored TERM"
+[[ $(wc -l <"$pnpm_marker") -eq 5 ]] ||
+  fail "SDK runner skipped cleanup after escalating an ignored TERM"
 
 for cleanup_signal_case in preview:HUP:129 pre-audit:INT:130 delete:TERM:143; do
   cleanup_stage=${cleanup_signal_case%%:*}

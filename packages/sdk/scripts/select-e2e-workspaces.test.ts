@@ -29,16 +29,27 @@ describe("selectE2EWorkspaces", () => {
     );
   });
 
-  test("preserves the existing broad run match when no exact prefix is supplied", () => {
+  test("matches a run id only at a workspace namespace boundary", () => {
     expect(
       selectE2EWorkspaces(
         [
-          { name: "e2e-ws-123-sdk" },
+          { name: "e2e-ws-123-sdk-test" },
+          { name: "e2e-ws-1123-sdk-test" },
           { name: "template-e2e-123-template" },
+          { name: "template-e2e-1123-template" },
+          { name: "sdk-ci-123-build" },
+          { name: "sdk-ci-1123-build" },
+          { name: "sdk-ci-migration-123" },
+          { name: "sdk-ci-migration-1123" },
           { name: "personal-123" },
         ],
         "123",
       ),
-    ).toEqual([{ name: "e2e-ws-123-sdk" }, { name: "template-e2e-123-template" }]);
+    ).toEqual([
+      { name: "e2e-ws-123-sdk-test" },
+      { name: "template-e2e-123-template" },
+      { name: "sdk-ci-123-build" },
+      { name: "sdk-ci-migration-123" },
+    ]);
   });
 });
