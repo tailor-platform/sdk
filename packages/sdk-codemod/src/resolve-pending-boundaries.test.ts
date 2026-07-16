@@ -71,11 +71,40 @@ describe("resolvePendingBoundaries", () => {
     );
   });
 
+  test("throws when the next identifier is not numeric", () => {
+    const source = registrySource("    prereleaseUntil: V2_NEXT_PENDING,");
+
+    expect(() => resolvePendingBoundaries(source, "2.0.0-next.foo")).toThrow(
+      'resolvedVersion must be a "next.N" prerelease',
+    );
+  });
+
   test("throws when the resolved version is not valid semver", () => {
     const source = registrySource("    prereleaseUntil: V2_NEXT_PENDING,");
 
     expect(() => resolvePendingBoundaries(source, "not-a-version")).toThrow(
       "resolvedVersion must be a valid semver version",
+    );
+  });
+
+  test("inserts the new constant above a JSDoc block preceding V2_NEXT_PENDING", () => {
+    const source = [
+      V2_NEXT_4_DECL,
+      "/**",
+      " * Sentinel for pending codemods.",
+      " */",
+      PENDING_DECL,
+      "    prereleaseUntil: V2_NEXT_PENDING,",
+    ].join("\n");
+    const result = resolvePendingBoundaries(source, "2.0.0-next.5");
+
+    const lines = result.source.split("\n");
+    const constIndex = lines.indexOf('const V2_NEXT_5 = "2.0.0-next.5";');
+    const jsdocIndex = lines.indexOf("/**");
+    expect(constIndex).toBeGreaterThanOrEqual(0);
+    expect(constIndex).toBeLessThan(jsdocIndex);
+    expect(result.source).toContain(
+      ["/**", " * Sentinel for pending codemods.", " */", PENDING_DECL].join("\n"),
     );
   });
 });
