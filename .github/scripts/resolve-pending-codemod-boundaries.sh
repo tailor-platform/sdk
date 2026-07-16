@@ -31,7 +31,7 @@ fi
 
 pnpm exec oxfmt --write "$registry_path"
 
-content_b64="$(base64 -w0 "$registry_path")"
+content_b64="$(base64 <"$registry_path" | tr -d '\n')"
 sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${registry_path}?ref=${PR_BRANCH}" -q .sha)"
 
 gh api "repos/${GITHUB_REPOSITORY}/contents/${registry_path}" \
