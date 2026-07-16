@@ -1082,13 +1082,14 @@ export function resolveCodemodScript(scriptPath: string): string {
 }
 
 function reachesCodemodBoundary(toVersion: string, codemod: CodemodPackage): boolean {
-  if (codemod.prereleaseUntil === V2_NEXT_PENDING) {
-    return false;
-  }
   if (gte(toVersion, codemod.until)) {
     return true;
   }
-  if (codemod.prereleaseUntil === undefined || !gte(toVersion, codemod.prereleaseUntil)) {
+  if (
+    codemod.prereleaseUntil === undefined ||
+    codemod.prereleaseUntil === V2_NEXT_PENDING ||
+    !gte(toVersion, codemod.prereleaseUntil)
+  ) {
     return false;
   }
 

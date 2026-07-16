@@ -1,7 +1,10 @@
 import { parse } from "semver";
 
 const PENDING_USAGE_PATTERN = /prereleaseUntil: V2_NEXT_PENDING,/g;
-const PENDING_DECLARATION_PATTERN = /^export const V2_NEXT_PENDING = "pending";$/m;
+// Includes a preceding JSDoc block (if any) so a new constant is inserted above it,
+// not between the comment and `V2_NEXT_PENDING` where it would attach to the wrong export.
+const PENDING_DECLARATION_PATTERN =
+  /(?:^\/\*\*[\s\S]*?\*\/\n)?^export const V2_NEXT_PENDING = "pending";$/m;
 
 export interface ResolvePendingBoundariesResult {
   /** Whether any `V2_NEXT_PENDING` usage was found and rewritten. */
@@ -33,7 +36,11 @@ export function resolvePendingBoundaries(
   if (parsed === null) {
     throw new Error(`resolvedVersion must be a valid semver version: ${resolvedVersion}`);
   }
-  if (parsed.prerelease.length !== 2 || parsed.prerelease[0] !== "next") {
+  if (
+    parsed.prerelease.length !== 2 ||
+    parsed.prerelease[0] !== "next" ||
+    typeof parsed.prerelease[1] !== "number"
+  ) {
     throw new Error(
       `resolvedVersion must be a "next.N" prerelease to resolve V2_NEXT_PENDING: ${resolvedVersion}`,
     );

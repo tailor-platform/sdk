@@ -9,7 +9,15 @@
 # Pushes the fixup straight to the release PR branch through the GitHub
 # Contents API (like ensure-github-releases.sh) rather than a local git
 # commit/push, since this token has no configured git identity or signing key.
+#
+# `gh pr checkout` moves the working tree onto the release PR branch, but the
+# steps after this one (notably ensure-github-releases.sh) assume HEAD is
+# still the commit that triggered the workflow. Restore it on every exit path
+# so an unpublished release-PR commit is never mistaken for that trigger.
 set -euo pipefail
+
+original_ref="$(git rev-parse HEAD)"
+trap 'git checkout --quiet "$original_ref"' EXIT
 
 PR_BRANCH="$(gh pr view "$PR_NUMBER" --json headRefName -q .headRefName)"
 gh pr checkout "$PR_NUMBER"
