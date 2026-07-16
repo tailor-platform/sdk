@@ -2,11 +2,28 @@
 
 set -euo pipefail
 
-printf '%s\n' "$*" >>"$E2E_PNPM_MARKER"
+if [[ -n ${TAILOR_E2E_CLEANUP_PHASE:-} ]]; then
+  printf '%s: %s\n' "$TAILOR_E2E_CLEANUP_PHASE" "$*" >>"$E2E_PNPM_MARKER"
+else
+  printf '%s\n' "$*" >>"$E2E_PNPM_MARKER"
+fi
 
 if [[ ${1:-} == run ]] && [[ $# -ne 2 || ${2:-} != test:e2e ]]; then
   exit 99
 fi
+
+find_runner_pid() {
+  local candidate=$PPID command
+  while [[ $candidate =~ ^[0-9]+$ && $candidate -gt 1 ]]; do
+    command=$(/bin/ps -p "$candidate" -o command=)
+    if [[ $command == *"run-sdk-e2e.sh"* && $command != *"supervise-process-group.sh"* ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+    candidate=$(/bin/ps -o ppid= -p "$candidate" | /usr/bin/tr -d ' ')
+  done
+  return 1
+}
 
 signal_cleanup_stage() {
   local stage=$1
@@ -23,9 +40,10 @@ signal_cleanup_stage() {
     fi
   fi
   if [[ ${E2E_CLEANUP_SIGNAL_AT:-} == "$stage" ]]; then
-    runner_pid=$(/bin/ps -o ppid= -p "$PPID" | /usr/bin/tr -d ' ')
+    runner_pid=$(find_runner_pid)
     kill -s "${E2E_CLEANUP_SIGNAL:-TERM}" "$runner_pid"
     if [[ -n ${E2E_CLEANUP_SIGNAL_EXIT_IMMEDIATELY:-} ]]; then
+      printf '[]\n'
       exit 0
     fi
     /bin/sleep 0.1
@@ -54,7 +72,7 @@ case "$*" in
       if [[ -n ${E2E_TEST_IGNORE_SIGNAL:-} ]]; then
         trap '' "$E2E_TEST_SIGNAL"
       fi
-      runner_pid=$(/bin/ps -o ppid= -p "$PPID" | /usr/bin/tr -d ' ')
+      runner_pid=$(find_runner_pid)
       kill -s "$E2E_TEST_SIGNAL" "$runner_pid"
       /bin/sleep "${E2E_SIGNAL_DELAY:-1}"
       if [[ -n ${E2E_SIGNAL_COMPLETION_MARKER:-} ]]; then
@@ -97,26 +115,57 @@ case "$*" in
       echo "workspace verification inherited TAILOR_PLATFORM_PROFILE" >&2
       exit 27
     fi
+    case ${TAILOR_E2E_CLEANUP_PHASE:-} in
+      preview)
+        signal_cleanup_stage preview
+        [[ ${E2E_PREVIEW_STATUS:-0} -eq 0 ]] || exit "$E2E_PREVIEW_STATUS"
+        ;;
+      delete)
+        signal_cleanup_stage delete
+        [[ ${E2E_CLEANUP_STATUS:-0} -eq 0 ]] || exit "$E2E_CLEANUP_STATUS"
+        ;;
+      "")
+        raw_count=$(grep -c -- '^exec tailor-sdk --json workspace list$' "$E2E_PNPM_MARKER")
+        if [[ $raw_count -eq 1 ]]; then
+          signal_cleanup_stage pre-audit
+        else
+          signal_cleanup_stage post-audit
+        fi
+        ;;
+      *) exit 98 ;;
+    esac
     if [[ -n ${E2E_RAW_MISSING:-} ]]; then
       :
     elif [[ -n ${E2E_RAW_MALFORMED:-} ]]; then
       printf '{"not":"a workspace list"}\n'
+    elif [[ -n ${E2E_EXACT_MISSING_ID:-} ]]; then
+      printf '[{"name":"e2e-ws-%s-missing-id"}]\n' "$TAILOR_PLATFORM_E2E_RUN_ID"
+    elif [[ -n ${E2E_EXACT_CANDIDATES:-} ]]; then
+      if [[ $E2E_EXACT_CANDIDATES -eq 2 ]]; then
+        printf '[{"id":"00000000-0000-4000-8000-000000000010","name":"e2e-ws-%s-first"},{"id":"00000000-0000-4000-8000-000000000011","name":"e2e-ws-%s-second"},{"id":"00000000-0000-4000-8000-000000000012","name":"template-e2e-%s-outside"}]\n' \
+          "$TAILOR_PLATFORM_E2E_RUN_ID" "$TAILOR_PLATFORM_E2E_RUN_ID" "$TAILOR_PLATFORM_E2E_RUN_ID"
+      else
+        printf '[{"id":"00000000-0000-4000-8000-000000000010","name":"e2e-ws-%s-first"},{"id":"00000000-0000-4000-8000-000000000012","name":"template-e2e-%s-outside"}]\n' \
+          "$TAILOR_PLATFORM_E2E_RUN_ID" "$TAILOR_PLATFORM_E2E_RUN_ID"
+      fi
     elif [[ -n ${E2E_RAW_AMBIGUOUS:-} ]]; then
       printf '[{"name":"template-e2e-%s-leftover"}]\n' "$TAILOR_PLATFORM_E2E_RUN_ID"
     elif [[ -n ${E2E_RAW_RESIDUAL:-} ]]; then
-      printf '[{"name":"e2e-ws-%s-leftover"}]\n' "$TAILOR_PLATFORM_E2E_RUN_ID"
+      printf '[{"id":"00000000-0000-4000-8000-000000000010","name":"e2e-ws-%s-leftover"}]\n' \
+        "$TAILOR_PLATFORM_E2E_RUN_ID"
     elif [[ -n ${E2E_RAW_OTHER_RUN:-} ]]; then
       printf '[{"name":"e2e-ws-other-run-12345-leftover"}]\n'
     else
       printf '[]\n'
     fi
-    raw_count=$(grep -c -- 'exec tailor-sdk --json workspace list' "$E2E_PNPM_MARKER")
-    if [[ $raw_count -eq 1 ]]; then
-      signal_cleanup_stage pre-audit
-    else
-      signal_cleanup_stage post-audit
-    fi
     exit "${E2E_RAW_STATUS:-0}"
+    ;;
+  "exec tailor-sdk workspace delete --workspace-id "*" --yes")
+    [[ -z ${E2E_DELETE_MARKER:-} ]] || printf '%s\n' "$6" >>"$E2E_DELETE_MARKER"
+    if [[ $6 == "00000000-0000-4000-8000-000000000010" && -n ${E2E_FIRST_DELETE_STATUS:-} ]]; then
+      exit "$E2E_FIRST_DELETE_STATUS"
+    fi
+    exit "${E2E_DELETE_STATUS:-0}"
     ;;
   *)
     exit 99

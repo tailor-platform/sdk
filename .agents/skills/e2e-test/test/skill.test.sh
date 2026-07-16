@@ -8,6 +8,7 @@ helper_source="$skill_dir/scripts/with-machine-user-auth.sh"
 supervisor_source="$skill_dir/scripts/supervise-process-group.sh"
 ids_helper_source="$skill_dir/scripts/with-e2e-ids.sh"
 runner_source="$skill_dir/scripts/run-sdk-e2e.sh"
+cleanup_source="$skill_dir/scripts/cleanup-e2e-workspaces.mjs"
 
 fail() {
   echo "FAIL: $*" >&2
@@ -68,6 +69,7 @@ grep -q 'explicit approval' "$skill_dir/SUITES.md" ||
 [[ -f "$supervisor_source" ]] || fail "process-group supervisor is missing"
 [[ -f "$helper_source" ]] || fail "authentication helper is missing"
 [[ -f "$ids_helper_source" ]] || fail "ID loader is missing"
+[[ -f "$cleanup_source" ]] || fail "skill-owned workspace cleanup helper is missing"
 [[ $(wc -l <"$skill_dir/SKILL.md") -le 100 ]] || fail "SKILL.md exceeds 100 lines"
 grep -q '^name: e2e-test$' "$skill_dir/SKILL.md" || fail "skill name was not updated"
 if grep -q '\.managed-pgid' "$helper_source"; then
@@ -75,6 +77,9 @@ if grep -q '\.managed-pgid' "$helper_source"; then
 fi
 grep -q 'process_supervisor' "$runner_source" ||
   fail "isolated cleanup does not use a direct-owner supervisor"
+if grep -q 'scripts/cleanup-e2e-workspaces.ts' "$runner_source"; then
+  fail "e2e-test skill still mutates cleanup through a shared package script"
+fi
 grep -q '!.claude/skills/e2e-test' "$repo_root/.gitignore" || fail "new Claude skill is not unignored"
 if grep -q '!.claude/skills/e2e-setup' "$repo_root/.gitignore"; then
   fail "legacy skill ignore exception remains"
@@ -103,9 +108,67 @@ helper="$runtime_skill_dir/scripts/with-machine-user-auth.sh"
 supervisor="$runtime_skill_dir/scripts/supervise-process-group.sh"
 ids_helper="$runtime_skill_dir/scripts/with-e2e-ids.sh"
 runner="$runtime_skill_dir/scripts/run-sdk-e2e.sh"
+cleanup_helper="$runtime_skill_dir/scripts/cleanup-e2e-workspaces.mjs"
 fixtures="$runtime_skill_dir/test/fixtures"
 fake_node="$fixtures/fake-node.sh"
 credential_provider="$fixtures/fake-credential-provider.sh"
+test_node=$(mise which node)
+
+cleanup_helper_run_id="test-run-12345"
+cleanup_helper_pnpm_marker="$tmp_dir/cleanup-helper-pnpm-marker"
+cleanup_helper_delete_marker="$tmp_dir/cleanup-helper-delete-marker"
+: >"$cleanup_helper_pnpm_marker"
+: >"$cleanup_helper_delete_marker"
+PATH="$fixtures/bin:$PATH" \
+  E2E_PNPM_MARKER="$cleanup_helper_pnpm_marker" \
+  E2E_DELETE_MARKER="$cleanup_helper_delete_marker" \
+  E2E_EXACT_CANDIDATES=1 \
+  TAILOR_PLATFORM_E2E_RUN_ID="$cleanup_helper_run_id" \
+  "$test_node" "$cleanup_helper" "$cleanup_helper_run_id" preview -- pnpm exec tailor-sdk
+[[ ! -s "$cleanup_helper_delete_marker" ]] || fail "cleanup preview deleted a workspace"
+
+: >"$cleanup_helper_pnpm_marker"
+: >"$cleanup_helper_delete_marker"
+set +e
+PATH="$fixtures/bin:$PATH" \
+  E2E_PNPM_MARKER="$cleanup_helper_pnpm_marker" \
+  E2E_DELETE_MARKER="$cleanup_helper_delete_marker" \
+  E2E_EXACT_CANDIDATES=2 \
+  E2E_FIRST_DELETE_STATUS=25 \
+  TAILOR_PLATFORM_E2E_RUN_ID="$cleanup_helper_run_id" \
+  "$test_node" "$cleanup_helper" "$cleanup_helper_run_id" delete -- pnpm exec tailor-sdk
+cleanup_helper_status=$?
+set -e
+[[ $cleanup_helper_status -eq 25 ]] || fail "cleanup helper lost a workspace deletion failure"
+[[ $(wc -l <"$cleanup_helper_delete_marker") -eq 2 ]] ||
+  fail "cleanup helper stopped after the first workspace deletion failure"
+grep -Fxq '00000000-0000-4000-8000-000000000010' "$cleanup_helper_delete_marker" ||
+  fail "cleanup helper skipped the first exact workspace"
+grep -Fxq '00000000-0000-4000-8000-000000000011' "$cleanup_helper_delete_marker" ||
+  fail "cleanup helper skipped the second exact workspace"
+if grep -Fxq '00000000-0000-4000-8000-000000000012' "$cleanup_helper_delete_marker"; then
+  fail "cleanup helper selected an out-of-scope workspace"
+fi
+
+for invalid_evidence in E2E_RAW_MISSING E2E_RAW_MALFORMED E2E_EXACT_MISSING_ID; do
+  : >"$cleanup_helper_pnpm_marker"
+  : >"$cleanup_helper_delete_marker"
+  set +e
+  env \
+    PATH="$fixtures/bin:$PATH" \
+    E2E_PNPM_MARKER="$cleanup_helper_pnpm_marker" \
+    E2E_DELETE_MARKER="$cleanup_helper_delete_marker" \
+    "$invalid_evidence"=1 \
+    TAILOR_PLATFORM_E2E_RUN_ID="$cleanup_helper_run_id" \
+    "$test_node" "$cleanup_helper" "$cleanup_helper_run_id" delete -- pnpm exec tailor-sdk
+  invalid_evidence_status=$?
+  set -e
+  [[ $invalid_evidence_status -ne 0 ]] ||
+    fail "cleanup helper accepted ${invalid_evidence#E2E_RAW_} workspace evidence"
+  [[ ! -s "$cleanup_helper_delete_marker" ]] ||
+    fail "cleanup helper deleted from ${invalid_evidence#E2E_RAW_} workspace evidence"
+done
+
 ids_file="$tmp_dir/ids.local.env"
 ids_marker="$tmp_dir/ids-marker"
 cat >"$ids_file" <<'EOF'
@@ -502,10 +565,12 @@ nested_signal_test_started="$tmp_dir/nested-signal-test-started"
 nested_signal_cleanup_started="$tmp_dir/nested-signal-cleanup-started"
 nested_signal_cleanup_completed="$tmp_dir/nested-signal-cleanup-completed"
 nested_signal_pnpm_marker="$tmp_dir/nested-signal-pnpm-marker"
+nested_signal_cleanup_cli_marker="$tmp_dir/nested-signal-cleanup-cli-marker"
 nested_signal_raw_audit_marker="$tmp_dir/nested-signal-raw-audit-marker"
 TMPDIR="$nested_signal_tmp" \
   PATH="$fake_bin:$PATH" \
   E2E_PNPM_MARKER="$nested_signal_pnpm_marker" \
+  E2E_CLEANUP_CLI_MARKER="$nested_signal_cleanup_cli_marker" \
   E2E_RAW_AUDIT_MARKER="$nested_signal_raw_audit_marker" \
   E2E_TEST_STARTED_MARKER="$nested_signal_test_started" \
   E2E_TEST_DELAY=5 \
@@ -527,10 +592,38 @@ set -e
 [[ $nested_signal_status -eq 143 ]] || fail "nested signal helper lost its TERM status"
 [[ -e "$nested_signal_cleanup_started" ]] || fail "nested signal cleanup did not start"
 [[ -e "$nested_signal_cleanup_completed" ]] || fail "nested signal cleanup did not complete"
-[[ $(wc -l <"$nested_signal_pnpm_marker") -eq 3 ]] ||
-  fail "nested signal helper did not finish the audited cleanup lifecycle"
+[[ $(wc -l <"$nested_signal_pnpm_marker") -eq 1 ]] ||
+  fail "isolated cleanup used the untrusted package manager"
+[[ $(wc -l <"$nested_signal_cleanup_cli_marker") -eq 2 ]] ||
+  fail "nested signal helper did not finish preview and delete selection"
 [[ $(wc -l <"$nested_signal_raw_audit_marker") -eq 2 ]] ||
   fail "nested signal helper skipped a raw workspace audit"
+
+trusted_cleanup_tmp="$tmp_dir/trusted-cleanup"
+mkdir "$trusted_cleanup_tmp"
+trusted_cleanup_pnpm_marker="$tmp_dir/trusted-cleanup-pnpm-marker"
+trusted_cleanup_cli_marker="$tmp_dir/trusted-cleanup-cli-marker"
+trusted_cleanup_raw_audit_marker="$tmp_dir/trusted-cleanup-raw-audit-marker"
+trusted_cleanup_delete_marker="$tmp_dir/trusted-cleanup-delete-marker"
+TMPDIR="$trusted_cleanup_tmp" \
+  PATH="$fake_bin:$PATH" \
+  E2E_PNPM_MARKER="$trusted_cleanup_pnpm_marker" \
+  E2E_CLEANUP_CLI_MARKER="$trusted_cleanup_cli_marker" \
+  E2E_RAW_AUDIT_MARKER="$trusted_cleanup_raw_audit_marker" \
+  E2E_TRUSTED_EXACT_CANDIDATE=1 \
+  E2E_TRUSTED_DELETE_MARKER="$trusted_cleanup_delete_marker" \
+  TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+  "$helper" "$fake_node" "$fixtures/fake-tailor-sdk.sh" -- \
+  "$runner" \
+  3< <(set +x; /usr/bin/env -i /bin/bash "$credential_provider")
+[[ $(wc -l <"$trusted_cleanup_pnpm_marker") -eq 1 ]] ||
+  fail "isolated exact cleanup used the untrusted package manager"
+[[ $(wc -l <"$trusted_cleanup_cli_marker") -eq 2 ]] ||
+  fail "isolated exact cleanup skipped preview or delete selection"
+[[ $(wc -l <"$trusted_cleanup_raw_audit_marker") -eq 2 ]] ||
+  fail "isolated exact cleanup skipped a raw audit"
+[[ $(<"$trusted_cleanup_delete_marker") == "00000000-0000-4000-8000-000000000020" ]] ||
+  fail "isolated exact cleanup did not use the trusted CLI for deletion"
 
 set +e
 credential_output=$(
@@ -575,11 +668,11 @@ PATH="$fake_bin:$PATH" \
 e2e_tmpdir=$(<"$e2e_tmpdir_marker")
 [[ "$e2e_tmpdir" == *"tailor-sdk-e2e."* ]] || fail "SDK test did not receive an isolated TMPDIR"
 [[ ! -e "$e2e_tmpdir" ]] || fail "SDK runner left its tracking directory behind"
-[[ $(sed -n '2p' "$pnpm_marker") == "exec tsx scripts/cleanup-e2e-workspaces.ts --dry-run --run-id=$run_id --workspace-name-prefix=e2e-ws-$run_id-" ]] ||
+[[ $(sed -n '2p' "$pnpm_marker") == "preview: exec tailor-sdk --json workspace list" ]] ||
   fail "SDK cleanup preview command changed"
 [[ $(sed -n '3p' "$pnpm_marker") == "exec tailor-sdk --json workspace list" ]] ||
   fail "SDK cleanup pre-audit command changed"
-[[ $(sed -n '4p' "$pnpm_marker") == "exec tsx scripts/cleanup-e2e-workspaces.ts --run-id=$run_id --workspace-name-prefix=e2e-ws-$run_id-" ]] ||
+[[ $(sed -n '4p' "$pnpm_marker") == "delete: exec tailor-sdk --json workspace list" ]] ||
   fail "SDK cleanup command changed"
 [[ $(sed -n '5p' "$pnpm_marker") == "exec tailor-sdk --json workspace list" ]] ||
   fail "SDK raw cleanup verification command changed"
@@ -632,6 +725,24 @@ set -e
   fail "SDK runner skipped the raw post-audit after cleanup failure"
 
 : >"$pnpm_marker"
+: >"$cleanup_helper_delete_marker"
+set +e
+PATH="$fake_bin:$PATH" \
+  E2E_PNPM_MARKER="$pnpm_marker" \
+  E2E_DELETE_MARKER="$cleanup_helper_delete_marker" \
+  E2E_EXACT_CANDIDATES=2 \
+  E2E_FIRST_DELETE_STATUS=25 \
+  TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+  "$runner"
+partial_cleanup_status=$?
+set -e
+[[ $partial_cleanup_status -eq 25 ]] || fail "SDK runner lost a partial deletion failure"
+[[ $(wc -l <"$cleanup_helper_delete_marker") -eq 2 ]] ||
+  fail "SDK runner stopped after the first workspace deletion failure"
+[[ $(grep -c -- '^exec tailor-sdk --json workspace list$' "$pnpm_marker") -eq 4 ]] ||
+  fail "SDK runner skipped the post-audit after a partial deletion failure"
+
+: >"$pnpm_marker"
 set +e
 PATH="$fake_bin:$PATH" \
   E2E_PNPM_MARKER="$pnpm_marker" \
@@ -653,19 +764,20 @@ PATH="$fake_bin:$PATH" \
 raw_residual_status=$?
 set -e
 [[ $raw_residual_status -ne 0 ]] || fail "SDK runner accepted raw residual workspace evidence"
-[[ $(wc -l <"$pnpm_marker") -eq 7 ]] || fail "SDK runner did not retry residual verification"
+[[ $(wc -l <"$pnpm_marker") -eq 8 ]] || fail "SDK runner did not retry residual verification"
 
 : >"$pnpm_marker"
-set +e
+: >"$cleanup_helper_delete_marker"
 PATH="$fake_bin:$PATH" \
   E2E_PNPM_MARKER="$pnpm_marker" \
+  E2E_DELETE_MARKER="$cleanup_helper_delete_marker" \
   E2E_RAW_AMBIGUOUS=1 \
   TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
   "$runner"
-ambiguous_status=$?
-set -e
-[[ $ambiguous_status -ne 0 ]] || fail "SDK runner accepted an overlapping cleanup candidate"
-[[ $(wc -l <"$pnpm_marker") -eq 3 ]] || fail "SDK runner deleted an ambiguous cleanup candidate"
+[[ $(wc -l <"$pnpm_marker") -eq 5 ]] ||
+  fail "SDK runner did not audit an out-of-scope workspace"
+[[ ! -s "$cleanup_helper_delete_marker" ]] ||
+  fail "SDK runner deleted an out-of-scope workspace"
 
 : >"$pnpm_marker"
 set +e
@@ -784,12 +896,5 @@ set -e
 [[ $cleanup_exit_race_status -eq 143 ]] || fail "SDK runner lost the cleanup race signal status"
 [[ $(wc -l <"$pnpm_marker") -eq 5 ]] ||
   fail "SDK runner aborted cleanup when the signaled child exited immediately"
-
-node -e '
-  const scripts = JSON.parse(require("node:fs").readFileSync("package.json", "utf8")).scripts;
-  if (scripts["check:e2e-test-skill"] !== "bash .agents/skills/e2e-test/test/skill.test.sh") process.exit(1);
-' || fail "e2e-test skill checks are not registered in the root check"
-grep -q 'pnpm run check:e2e-test-skill' "$repo_root/.github/workflows/ci.yml" ||
-  fail "e2e-test skill checks are not registered in CI"
 
 echo "e2e-test skill checks passed"

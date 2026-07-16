@@ -28,10 +28,10 @@ workspaces behind.
 
 ## Suite Selection
 
-| Suite              | Workspace lifecycle           | Pre-deploy                     | CI  |
-| ------------------ | ----------------------------- | ------------------------------ | --- |
-| `example/e2e`      | Reuses one workspace          | Deploy `example/` when drifted | No  |
-| `packages/sdk/e2e` | Creates disposable workspaces | Test deploys itself            | Yes |
+| Suite              | Workspace lifecycle           | Pre-deploy                     |
+| ------------------ | ----------------------------- | ------------------------------ |
+| `example/e2e`      | Reuses one workspace          | Deploy `example/` when drifted |
+| `packages/sdk/e2e` | Creates disposable workspaces | Test deploys itself            |
 
 ## Stored IDs
 

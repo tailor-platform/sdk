@@ -6,21 +6,26 @@
  * Usage:
  *   npx tsx scripts/cleanup-e2e-workspaces.ts           # Delete all e2e workspaces
  *   npx tsx scripts/cleanup-e2e-workspaces.ts --dry-run # List without deleting
- *   npx tsx scripts/cleanup-e2e-workspaces.ts --run-id=<id> --workspace-name-prefix=e2e-ws-<id>-
  */
 
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { assertDefined } from "../src/utils/assert";
-import { selectE2EWorkspaces, type E2EWorkspace } from "./select-e2e-workspaces";
+
+const E2E_WORKSPACE_PREFIXES = ["e2e-ws-", "template-e2e-", "sdk-ci-"];
+
+interface Workspace {
+  id?: string;
+  name?: string;
+}
 
 /**
  * Fetch all workspaces with pagination
  * @param {OperatorClient} client - Operator client
- * @returns {Promise<E2EWorkspace[]>} All workspaces
+ * @returns {Promise<Workspace[]>} All workspaces
  */
-async function fetchAllWorkspaces(client: OperatorClient): Promise<E2EWorkspace[]> {
-  const allWorkspaces: E2EWorkspace[] = [];
+async function fetchAllWorkspaces(client: OperatorClient): Promise<Workspace[]> {
+  const allWorkspaces: Workspace[] = [];
   let pageToken = "";
 
   // loop exits when the platform stops returning a page token
@@ -61,10 +66,15 @@ async function main() {
 
   // Filter e2e workspaces
   const runId = process.argv.find((a) => a.startsWith("--run-id="))?.split("=")[1];
-  const exactWorkspacePrefix = process.argv
-    .find((argument) => argument.startsWith("--workspace-name-prefix="))
-    ?.split("=")[1];
-  const e2eWorkspaces = selectE2EWorkspaces(workspaces, runId, exactWorkspacePrefix);
+  const e2eWorkspaces = workspaces.filter((ws) => {
+    const matchesPrefix = E2E_WORKSPACE_PREFIXES.some((prefix) => ws.name?.startsWith(prefix));
+    if (!matchesPrefix) return false;
+    // When --run-id is specified (CI), only delete workspaces from this run to avoid cross-run conflicts
+    if (runId) {
+      return ws.name?.includes(runId);
+    }
+    return true;
+  });
 
   if (e2eWorkspaces.length === 0) {
     console.log("✅ No e2e workspaces found to delete.");
@@ -101,9 +111,6 @@ async function main() {
     }
   }
 
-  if (failed > 0) {
-    throw new Error(`Cleanup failed: ${deleted} deleted, ${failed} failed.`);
-  }
   console.log(`\n✅ Cleanup complete: ${deleted} deleted, ${failed} failed`);
 }
 

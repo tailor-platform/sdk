@@ -37,29 +37,18 @@ if (
 }
 
 const workspaceNames = workspaces.map((workspace) => workspace.name);
-const cleanupPrefixes = ["e2e-ws-", "template-e2e-", "sdk-ci-"];
 const expectedPrefix = `e2e-ws-${runId}-`;
 
 if (phase === "before-delete") {
-  const ambiguousNames = workspaceNames.filter(
-    (name) =>
-      cleanupPrefixes.some((prefix) => name.startsWith(prefix)) &&
-      name.includes(runId) &&
-      !name.startsWith(expectedPrefix),
-  );
-  if (ambiguousNames.length > 0) {
-    console.error(
-      `Raw workspace pre-audit found ambiguous run ${runId}: ${ambiguousNames.join(", ")}`,
-    );
-    process.exit(1);
-  }
   console.log(`Raw workspace pre-audit accepted the exact namespace for run ${runId}.`);
   process.exit(0);
 }
 
 const residualNames = workspaceNames.filter((name) => name.startsWith(expectedPrefix));
 if (residualNames.length > 0) {
-  console.error(`Raw workspace verification found run ${runId}: ${residualNames.join(", ")}`);
+  console.error(
+    `Raw workspace verification found run ${runId}: ${residualNames.map((name) => JSON.stringify(name)).join(", ")}`,
+  );
   process.exit(1);
 }
 

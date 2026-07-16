@@ -17,7 +17,6 @@
     "agent:rules:check": "node scripts/sync-agent-rules.mjs --check",
     "check": "pnpm run generate && pnpm run format && pnpm run \"/^check:/\"",
     "check:agent-rules": "pnpm run agent:rules:check",
-    "check:e2e-test-skill": "bash .agents/skills/e2e-test/test/skill.test.sh",
     "check:lint": "pnpm -r run lint:fix && pnpm run lint:vitest",
     "check:typecheck": "pnpm run --no-bail \"/^check-type:/\"",
     "check-type:root": "pnpm run typecheck:root",

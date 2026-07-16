@@ -6,6 +6,7 @@ script_path=${BASH_SOURCE[0]}
 [[ "$script_path" == /* ]] || script_path="$PWD/$script_path"
 script_dir=${script_path%/*}
 process_supervisor="$script_dir/supervise-process-group.sh"
+workspace_cleanup="$script_dir/cleanup-e2e-workspaces.mjs"
 
 if [[ -n ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID:-} || -n ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET:-} ]]; then
   echo "Machine-user client credentials must not be present in the e2e process." >&2
@@ -29,7 +30,25 @@ if [[ ${#run_id} -lt 8 || ${#run_id} -gt 40 || ! "$run_id" =~ ^[a-z0-9-]+$ ]]; t
   exit 64
 fi
 export TAILOR_PLATFORM_E2E_RUN_ID="$run_id"
-workspace_name_prefix="e2e-ws-${run_id}-"
+
+cleanup_node=""
+workspace_cli=()
+if [[ -n ${TAILOR_E2E_TRUSTED_NODE:-} || -n ${TAILOR_E2E_TRUSTED_CLI:-} ]]; then
+  if [[ ${TAILOR_E2E_TRUSTED_NODE:-} != /* || ! -x ${TAILOR_E2E_TRUSTED_NODE:-} ||
+    ${TAILOR_E2E_TRUSTED_CLI:-} != /* || ! -r ${TAILOR_E2E_TRUSTED_CLI:-} ]]; then
+    echo "Trusted cleanup Node.js and CLI paths must both be valid." >&2
+    exit 64
+  fi
+  cleanup_node=$TAILOR_E2E_TRUSTED_NODE
+  workspace_cli=("$TAILOR_E2E_TRUSTED_NODE" "$TAILOR_E2E_TRUSTED_CLI")
+else
+  cleanup_node=$(type -P node)
+  workspace_cli=(pnpm exec tailor-sdk)
+fi
+if [[ "$cleanup_node" != /* || ! -x "$cleanup_node" || ! -r "$workspace_cleanup" ]]; then
+  echo "An absolute executable Node.js path and the skill-owned cleanup helper are required." >&2
+  exit 64
+fi
 
 run_tmp=$(mktemp -d "${TMPDIR:-/tmp}/tailor-sdk-e2e.XXXXXX") || exit 1
 chmod 700 "$run_tmp"
@@ -63,52 +82,31 @@ run_cleanup_command() {
 }
 
 verify_raw_workspace_list() {
-  local phase=$1 workspace_output workspace_output_file workspace_status verification_node
+  local phase=$1 workspace_output workspace_output_file workspace_status
 
   workspace_output_file="$run_tmp/workspace-list-$phase.json"
 
-  if [[ -n ${TAILOR_E2E_TRUSTED_NODE:-} || -n ${TAILOR_E2E_TRUSTED_CLI:-} ]]; then
-    if [[ ${TAILOR_E2E_TRUSTED_NODE:-} != /* || ! -x ${TAILOR_E2E_TRUSTED_NODE:-} ||
-      ${TAILOR_E2E_TRUSTED_CLI:-} != /* || ! -r ${TAILOR_E2E_TRUSTED_CLI:-} ]]; then
-      echo "Trusted raw-verification Node.js and CLI paths must both be valid." >&2
-      return 64
-    fi
-    run_cleanup_command \
-      /usr/bin/env -u TAILOR_PLATFORM_PROFILE \
-      "$TAILOR_E2E_TRUSTED_NODE" "$TAILOR_E2E_TRUSTED_CLI" --json workspace list \
-      >"$workspace_output_file"
-    workspace_status=$?
-    verification_node=$TAILOR_E2E_TRUSTED_NODE
-  else
-    run_cleanup_command \
-      /usr/bin/env -u TAILOR_PLATFORM_PROFILE pnpm exec tailor-sdk --json workspace list \
-      >"$workspace_output_file"
-    workspace_status=$?
-    verification_node=$(type -P node)
-  fi
+  run_cleanup_command \
+    /usr/bin/env -u TAILOR_PLATFORM_PROFILE "${workspace_cli[@]}" --json workspace list \
+    >"$workspace_output_file"
+  workspace_status=$?
 
   if [[ $workspace_status -ne 0 ]]; then
     return "$workspace_status"
   fi
   workspace_output=$(<"$workspace_output_file")
   /bin/rm -f -- "$workspace_output_file"
-  if [[ "$verification_node" != /* || ! -x "$verification_node" ]]; then
-    echo "An absolute executable Node.js path is required for raw cleanup verification." >&2
-    return 64
-  fi
 
   run_cleanup_command \
-    "$verification_node" "$script_dir/verify-workspace-list.mjs" "$run_id" "$phase" \
+    "$cleanup_node" "$script_dir/verify-workspace-list.mjs" "$run_id" "$phase" \
     <<<"$workspace_output"
 }
 
 run_cleanup() {
   local preview_status pre_audit_status cleanup_status verification_status attempt
 
-  run_cleanup_command pnpm exec tsx scripts/cleanup-e2e-workspaces.ts \
-    --dry-run \
-    "--run-id=$run_id" \
-    "--workspace-name-prefix=$workspace_name_prefix"
+  run_cleanup_command \
+    "$cleanup_node" "$workspace_cleanup" "$run_id" preview -- "${workspace_cli[@]}"
   preview_status=$?
   if [[ $preview_status -ne 0 ]]; then
     return "$preview_status"
@@ -121,9 +119,8 @@ run_cleanup() {
     return "$pre_audit_status"
   fi
 
-  run_cleanup_command pnpm exec tsx scripts/cleanup-e2e-workspaces.ts \
-    "--run-id=$run_id" \
-    "--workspace-name-prefix=$workspace_name_prefix"
+  run_cleanup_command \
+    "$cleanup_node" "$workspace_cleanup" "$run_id" delete -- "${workspace_cli[@]}"
   cleanup_status=$?
 
   verification_status=1

@@ -16,7 +16,7 @@ Official references:
    failed. Expiry, revocation, OAuth service errors, and network failures share this message.
 4. For interactive recovery, ask the user to run `pnpm exec tailor-sdk login`; browser login is a
    user-only action.
-5. For unattended runs, use the isolated machine-user flow below.
+5. For agent runs that must not pause for browser login, use the isolated machine-user flow below.
 
 An environment token has no refresh metadata and is returned as-is. A saved platform machine-user
 login also has no refresh token; mint a new access token from its client credentials before the run.

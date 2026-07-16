@@ -6,11 +6,36 @@ if [[ ${1:-} == "--json" && ${2:-} == "workspace" && ${3:-} == "list" ]]; then
   [[ -z ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID:-} ]]
   [[ -z ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET:-} ]]
   [[ -z ${TAILOR_PLATFORM_PROFILE:-} ]]
-  if [[ -n ${E2E_RAW_AUDIT_MARKER:-} ]]; then
+  if [[ -n ${TAILOR_E2E_CLEANUP_PHASE:-} ]]; then
+    if [[ -n ${E2E_CLEANUP_CLI_MARKER:-} ]]; then
+      printf '%s\n' "$TAILOR_E2E_CLEANUP_PHASE" >>"$E2E_CLEANUP_CLI_MARKER"
+    fi
+    if [[ ${E2E_CLEANUP_DELAY_AT:-} == "$TAILOR_E2E_CLEANUP_PHASE" ]]; then
+      [[ -z ${E2E_CLEANUP_STARTED_MARKER:-} ]] || printf 'started' >"$E2E_CLEANUP_STARTED_MARKER"
+      [[ -z ${E2E_CLEANUP_PID_MARKER:-} ]] || printf '%s' "$$" >"$E2E_CLEANUP_PID_MARKER"
+      /bin/sleep "${E2E_CLEANUP_DELAY:-1}"
+      [[ -z ${E2E_CLEANUP_COMPLETION_MARKER:-} ]] ||
+        printf 'completed' >"$E2E_CLEANUP_COMPLETION_MARKER"
+    fi
+  elif [[ -n ${E2E_RAW_AUDIT_MARKER:-} ]]; then
     printf 'audit\n' >>"$E2E_RAW_AUDIT_MARKER"
   fi
-  printf '[]\n'
+  if [[ -n ${E2E_TRUSTED_EXACT_CANDIDATE:-} && ! -s ${E2E_TRUSTED_DELETE_MARKER:-/dev/null} ]]; then
+    printf '[{"id":"00000000-0000-4000-8000-000000000020","name":"e2e-ws-%s-trusted"}]\n' \
+      "$TAILOR_PLATFORM_E2E_RUN_ID"
+  else
+    printf '[]\n'
+  fi
   exit 0
+fi
+
+if [[ ${1:-} == "workspace" && ${2:-} == "delete" ]]; then
+  [[ -z ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID:-} ]]
+  [[ -z ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET:-} ]]
+  [[ -z ${TAILOR_PLATFORM_PROFILE:-} ]]
+  [[ ${3:-} == "--workspace-id" && -n ${4:-} && ${5:-} == "--yes" ]]
+  [[ -z ${E2E_TRUSTED_DELETE_MARKER:-} ]] || printf '%s\n' "$4" >>"$E2E_TRUSTED_DELETE_MARKER"
+  exit "${E2E_DELETE_STATUS:-0}"
 fi
 
 [[ ${1:-} == "login" ]]

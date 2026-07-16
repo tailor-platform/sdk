@@ -112,11 +112,10 @@ Follow [AUTH.md](AUTH.md), using this target command:
 
 The runner requires the organization and folder UUIDs, assigns a lowercase run ID of at most 40
 characters and a temporary tracking directory, then executes `pnpm run test:e2e` in `packages/sdk`.
-It previews and deletes only workspaces
-containing that run ID, but first parses a raw JSON workspace listing and rejects candidates outside
-the exact `e2e-ws-<run-id>-...` namespace. It verifies the same exact namespace is empty after
-deletion, including after test failure or HUP, INT, or TERM; the isolated-auth flow uses the trusted
-CLI for both checks. A cleanup failure makes the run fail and prints the test status separately;
+It parses a fresh JSON workspace listing and previews and deletes only IDs in the exact
+`e2e-ws-<run-id>-...` namespace. It verifies the same exact namespace is empty after deletion,
+including after test failure or HUP, INT, or TERM; the isolated-auth flow uses the trusted CLI for
+listing and deletion. A cleanup failure makes the run fail and prints the test status separately;
 inspect both before any manual deletion.
 
 Errors stating that `my-app` has no auth configuration or that `manager-machine-user` was not found
@@ -124,5 +123,6 @@ usually select an undeployed or stale example workspace. Confirm the app list, f
 shared-workspace and deploy-plan preflight above before redeploying `example/`, and rerun before
 changing authentication.
 
-To sweep older unscoped leftovers, run the cleanup script with `--dry-run`, inspect every listed
-workspace, and only then run it without `--dry-run`. Never automate an unscoped sweep.
+To sweep older unscoped leftovers, run the existing
+`packages/sdk/scripts/cleanup-e2e-workspaces.ts` with `--dry-run`, inspect every listed workspace,
+and only then run it without `--dry-run`. Never automate an unscoped sweep.
