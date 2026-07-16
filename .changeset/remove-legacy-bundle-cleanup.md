@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": patch
 ---
 
-Remove the internal cleanup step that deleted on-disk bundle artifacts left by SDK versions predating the in-memory bundling approach
+`tailor deploy` no longer automatically deletes on-disk bundle artifacts left by SDK versions predating the in-memory bundling approach; delete your output directory manually if stale files remain from a very old SDK version
