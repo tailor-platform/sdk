@@ -482,7 +482,7 @@ describe("applyFunctionRegistry phase separation", () => {
     expect(probe.maxInFlight()).toBeGreaterThan(1);
   });
 
-  test("caps concurrent uploads at TAILOR_APPLY_CONCURRENCY", async () => {
+  test("caps concurrent upload and metadata RPCs at TAILOR_APPLY_CONCURRENCY", async () => {
     vi.stubEnv("TAILOR_APPLY_CONCURRENCY", "2");
     try {
       const probe = createConcurrencyProbe();
@@ -490,7 +490,7 @@ describe("applyFunctionRegistry phase separation", () => {
         createFunctionRegistry: vi.fn().mockImplementation(probe.run),
         updateFunctionRegistry: vi.fn().mockImplementation(probe.run),
         deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
-        setMetadata: vi.fn().mockResolvedValue({}),
+        setMetadata: vi.fn().mockImplementation(probe.run),
       } as unknown as OperatorClient;
 
       const changeOf = (name: string) => ({

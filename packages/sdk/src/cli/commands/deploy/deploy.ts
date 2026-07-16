@@ -387,7 +387,7 @@ export async function shouldForceApplyAll(
     candidateTrns.add(resourceTrn(workspaceId, "function_registry", entry.name));
   });
 
-  const metadataList = await Promise.all(
+  const results = await Promise.allSettled(
     [...candidateTrns].map((trn) =>
       getOrNull(async () => {
         const { metadata } = await client.getMetadata({ trn });
@@ -396,11 +396,20 @@ export async function shouldForceApplyAll(
     ),
   );
 
-  return metadataList.some(
-    (metadata) =>
-      metadata?.labels[sdkNameLabelKey] === application.name &&
-      !hasMatchingSdkVersion(metadata.labels, desiredLabels),
+  const hasMismatch = results.some(
+    (result) =>
+      result.status === "fulfilled" &&
+      result.value?.labels[sdkNameLabelKey] === application.name &&
+      !hasMatchingSdkVersion(result.value.labels, desiredLabels),
   );
+  if (hasMismatch) {
+    return true;
+  }
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure) {
+    throw failure.reason;
+  }
+  return false;
 }
 
 /**

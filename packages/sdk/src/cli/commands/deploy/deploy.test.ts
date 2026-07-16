@@ -198,6 +198,34 @@ describe("shouldForceApplyAll", () => {
 
     expect(result).toBe(true);
   });
+
+  test("prefers a detected sdk-version mismatch over an unrelated fetch failure", async () => {
+    const getMetadata = vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      if (trn.endsWith(":fn-a")) {
+        return Promise.resolve({
+          metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
+        });
+      }
+      return Promise.reject(new Error("unavailable"));
+    });
+    const client = { getMetadata } as unknown as Client;
+
+    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
+      { name: "fn-a" },
+      { name: "fn-b" },
+    ]);
+
+    expect(result).toBe(true);
+  });
+
+  test("propagates a fetch failure when no mismatch was detected", async () => {
+    const getMetadata = vi.fn().mockRejectedValue(new Error("unavailable"));
+    const client = { getMetadata } as unknown as Client;
+
+    await expect(
+      shouldForceApplyAll(client, "test-workspace", minimalApplication(), [{ name: "fn-a" }]),
+    ).rejects.toThrow("unavailable");
+  });
 });
 
 describe("summarizePlanResults", () => {
