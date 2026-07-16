@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { buildTriggerContext, normalizeFilePath } from "#/cli/shared/trigger-context";
+import { buildStartContext, normalizeFilePath } from "#/cli/shared/start-context";
 import { bundleWorkflowJobs } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
@@ -14,7 +14,7 @@ describe("bundleWorkflowJobs", () => {
     });
   });
 
-  describe("job trigger binding resolution", () => {
+  describe("job start binding resolution", () => {
     let tmpDir: string | undefined;
 
     afterEach(() => {
@@ -59,7 +59,7 @@ export const mainB = createWorkflowJob({
 export default createWorkflow({ name: "workflow-b", mainJob: mainB });
 `,
       );
-      const context = await buildTriggerContext({ files: [firstFile, secondFile] });
+      const context = await buildStartContext({ files: [firstFile, secondFile] });
 
       const result = await bundleWorkflowJobs(
         [
@@ -103,7 +103,7 @@ export const mainJob = createWorkflowJob({
 export default createWorkflow({ name: "workflow", mainJob });
 `,
       );
-      const context = await buildTriggerContext({ files: [jobsFile, callerFile] });
+      const context = await buildStartContext({ files: [jobsFile, callerFile] });
 
       const result = await bundleWorkflowJobs(
         [
@@ -136,7 +136,7 @@ export const mainJob = createWorkflowJob({
 export default createWorkflow({ name: "workflow", mainJob });
 `,
       );
-      const context = await buildTriggerContext({ files: [workflowFile] });
+      const context = await buildStartContext({ files: [workflowFile] });
 
       const result = await bundleWorkflowJobs(
         [
@@ -160,7 +160,7 @@ export default createWorkflow({ name: "workflow", mainJob });
     type BuildBundleFixtureOptions = {
       ext: string;
       importPath: string;
-      triggerArgs?: string;
+      startArgs?: string;
     };
 
     afterEach(() => {
@@ -171,7 +171,7 @@ export default createWorkflow({ name: "workflow", mainJob });
     });
 
     const buildBundleFixture = (options: BuildBundleFixtureOptions) => {
-      const { ext, importPath, triggerArgs = `{ input: 0 }, { invoker: "admin" }` } = options;
+      const { ext, importPath, startArgs = `{ input: 0 }, { invoker: "admin" }` } = options;
 
       // Use realpathSync to avoid macOS symlink mismatch (/var -> /private/var)
       tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundler-test-")));
@@ -206,7 +206,7 @@ import simpleWorkflow from "${importPath}";
 export const callerJob = createWorkflowJob({
   name: "caller-job",
   body: async () => {
-    const executionId = await simpleWorkflow.start(${triggerArgs});
+    const executionId = await simpleWorkflow.start(${startArgs});
     return { executionId };
   },
 });
@@ -224,7 +224,7 @@ export default createWorkflow({
       ];
       const mainJobNames = ["caller-job"];
 
-      const triggerContext = {
+      const startContext = {
         modules: new Map([
           [
             normalizeFilePath(simpleFile),
@@ -250,7 +250,7 @@ export default createWorkflow({
         authNamespace: "default",
       };
 
-      return bundleWorkflowJobs(allJobs, mainJobNames, {}, triggerContext);
+      return bundleWorkflowJobs(allJobs, mainJobNames, {}, startContext);
     };
 
     test.each([
@@ -263,7 +263,7 @@ export default createWorkflow({
       expect(result.bundledCode.has("caller-job")).toBe(true);
       const callerCode = result.bundledCode.get("caller-job")!;
 
-      // The trigger call should be transformed to startWorkflow
+      // The start call should be transformed to startWorkflow
       expect(callerCode).toContain("startWorkflow");
       // The raw simpleWorkflow.start() should NOT remain in the bundle
       expect(callerCode).not.toContain("simpleWorkflow.start");
@@ -288,7 +288,7 @@ export default createWorkflow({
       const result = await buildBundleFixture({
         ext: "ts",
         importPath: "./simple",
-        triggerArgs: "{ input: 0 }",
+        startArgs: "{ input: 0 }",
       });
 
       expect(result.bundledCode.has("caller-job")).toBe(true);

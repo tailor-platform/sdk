@@ -7,23 +7,23 @@ import { findAllJobs } from "#/cli/services/workflow/job-detector";
 import { findAllWorkflows } from "#/cli/services/workflow/workflow-detector";
 import { logger } from "#/cli/shared/logger";
 
-export interface TriggerTarget {
+export interface StartTarget {
   kind: "job" | "workflow";
   name: string;
 }
 
-export interface TriggerModuleBindings {
-  localBindings: Map<string, TriggerTarget>;
-  exports: Map<string, TriggerTarget>;
+export interface StartModuleBindings {
+  localBindings: Map<string, StartTarget>;
+  exports: Map<string, StartTarget>;
 }
 
-export interface TriggerContext {
-  modules: Map<string, TriggerModuleBindings>;
+export interface StartContext {
+  modules: Map<string, StartModuleBindings>;
   authNamespace?: string;
 }
 
 /**
- * Normalize a source module path for trigger binding lookup.
+ * Normalize a source module path for start-call binding lookup.
  * @param filePath - Source file path or extensionless relative import path
  * @returns Absolute path without a JavaScript or TypeScript extension
  */
@@ -32,8 +32,8 @@ export function normalizeFilePath(filePath: string): string {
 }
 
 function createModuleBindings(program: ReturnType<typeof parseSync>["program"], source: string) {
-  const localBindings = new Map<string, TriggerTarget>();
-  const exports = new Map<string, TriggerTarget>();
+  const localBindings = new Map<string, StartTarget>();
+  const exports = new Map<string, StartTarget>();
 
   for (const workflow of findAllWorkflows(program, source)) {
     const target = { kind: "workflow", name: workflow.name } as const;
@@ -79,20 +79,20 @@ function createModuleBindings(program: ReturnType<typeof parseSync>["program"], 
     }
   }
 
-  return { localBindings, exports } satisfies TriggerModuleBindings;
+  return { localBindings, exports } satisfies StartModuleBindings;
 }
 
 /**
- * Build trigger context from configured workflow source files.
+ * Build start-call context from configured workflow source files.
  * @param workflowConfig - Workflow file loading configuration
  * @param authNamespace - Auth service namespace (optional, used for string-literal invoker expansion)
  * @returns Module-local workflow and job binding metadata
  */
-export async function buildTriggerContext(
+export async function buildStartContext(
   workflowConfig: FileLoadConfig | undefined,
   authNamespace?: string,
-): Promise<TriggerContext> {
-  const modules = new Map<string, TriggerModuleBindings>();
+): Promise<StartContext> {
+  const modules = new Map<string, StartModuleBindings>();
   if (!workflowConfig) return { modules, authNamespace };
 
   for (const file of loadFilesWithIgnores(workflowConfig)) {
@@ -111,18 +111,18 @@ export async function buildTriggerContext(
   return { modules, authNamespace };
 }
 
-function sortedTargets(bindings: Map<string, TriggerTarget>) {
+function sortedTargets(bindings: Map<string, StartTarget>) {
   return [...bindings]
     .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([binding, target]) => [binding, target.kind, target.name]);
 }
 
 /**
- * Serialize trigger context to a deterministic cache input.
- * @param context - Trigger context to serialize
+ * Serialize start-call context to a deterministic cache input.
+ * @param context - Start-call context to serialize
  * @returns Deterministic string, or an empty string when context is absent
  */
-export function serializeTriggerContext(context: TriggerContext | undefined): string {
+export function serializeStartContext(context: StartContext | undefined): string {
   if (!context) return "";
   const modules = [...context.modules]
     .toSorted(([a], [b]) => a.localeCompare(b))

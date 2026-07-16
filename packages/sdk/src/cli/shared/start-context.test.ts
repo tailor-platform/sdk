@@ -2,30 +2,30 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { transformFunctionTriggers } from "#/cli/services/workflow/trigger-transformer";
+import { transformStartCalls } from "#/cli/services/workflow/start-transformer";
 import {
-  buildTriggerContext,
+  buildStartContext,
   normalizeFilePath,
-  serializeTriggerContext,
-  type TriggerContext,
-  type TriggerModuleBindings,
-} from "./trigger-context";
+  serializeStartContext,
+  type StartContext,
+  type StartModuleBindings,
+} from "./start-context";
 
-describe("serializeTriggerContext", () => {
-  function emptyContext(): TriggerContext {
+describe("serializeStartContext", () => {
+  function emptyContext(): StartContext {
     return { modules: new Map() };
   }
 
-  function bindings(localBindings: TriggerModuleBindings["localBindings"]) {
+  function bindings(localBindings: StartModuleBindings["localBindings"]) {
     return { localBindings, exports: new Map(localBindings) };
   }
 
   test("returns empty string for undefined", () => {
-    expect(serializeTriggerContext(undefined)).toBe("");
+    expect(serializeStartContext(undefined)).toBe("");
   });
 
   test("returns deterministic output for empty maps", () => {
-    expect(serializeTriggerContext(emptyContext())).toBe("[]");
+    expect(serializeStartContext(emptyContext())).toBe("[]");
   });
 
   test("returns same output regardless of map insertion order", () => {
@@ -49,7 +49,7 @@ describe("serializeTriggerContext", () => {
       bindings(new Map([["workflow", { kind: "workflow", name: "WorkflowB" }]])),
     );
 
-    expect(serializeTriggerContext(first)).toBe(serializeTriggerContext(second));
+    expect(serializeStartContext(first)).toBe(serializeStartContext(second));
   });
 
   test("returns different output when map content differs", () => {
@@ -61,7 +61,7 @@ describe("serializeTriggerContext", () => {
       bindings(new Map([["job", { kind: "job", name: "ProcessPayment" }]])),
     );
 
-    expect(serializeTriggerContext(first)).not.toBe(serializeTriggerContext(second));
+    expect(serializeStartContext(first)).not.toBe(serializeStartContext(second));
   });
 
   test("distinguishes entries in different maps", () => {
@@ -73,11 +73,11 @@ describe("serializeTriggerContext", () => {
     const second = emptyContext();
     second.modules.set("/module", bindings(new Map([["target", { kind: "job", name: "Name" }]])));
 
-    expect(serializeTriggerContext(first)).not.toBe(serializeTriggerContext(second));
+    expect(serializeStartContext(first)).not.toBe(serializeStartContext(second));
   });
 });
 
-describe("buildTriggerContext", () => {
+describe("buildStartContext", () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
@@ -87,7 +87,7 @@ describe("buildTriggerContext", () => {
   });
 
   async function createDuplicateExportContext() {
-    const tempDir = mkdtempSync(path.join(tmpdir(), "trigger-context-"));
+    const tempDir = mkdtempSync(path.join(tmpdir(), "start-context-"));
     tempDirs.push(tempDir);
     const firstPath = path.join(tempDir, "first.ts");
     const secondPath = path.join(tempDir, "second.ts");
@@ -101,12 +101,12 @@ export const step = createWorkflowJob({ name: "step-b", body: async () => "b" })
 `;
     writeFileSync(firstPath, firstSource);
     writeFileSync(secondPath, secondSource);
-    const context = await buildTriggerContext({ files: [firstPath, secondPath] });
+    const context = await buildStartContext({ files: [firstPath, secondPath] });
     return { context, firstPath, firstSource, tempDir };
   }
 
-  function transform(source: string, currentFilePath: string, context: TriggerContext) {
-    return transformFunctionTriggers(source, context, currentFilePath);
+  function transform(source: string, currentFilePath: string, context: StartContext) {
+    return transformStartCalls(source, context, currentFilePath);
   }
 
   test("resolves duplicate local export names from the current module", async () => {
@@ -142,7 +142,7 @@ const mainJob = createWorkflowJob({ name: "main-job", body: async () => "done" }
 export default createWorkflow({ name: "workflow-a", mainJob });
 `,
     );
-    const context = await buildTriggerContext({ files: [workflowPath] });
+    const context = await buildStartContext({ files: [workflowPath] });
     const source = `
 import workflow from "./workflow";
 await workflow.start();
@@ -165,7 +165,7 @@ const mainJob = createWorkflowJob({ name: "main-job", body: async () => "done" }
 export default createWorkflow({ name: "workflow-a", mainJob });
 `,
     );
-    const context = await buildTriggerContext({ files: [workflowPath] });
+    const context = await buildStartContext({ files: [workflowPath] });
     const source = `
 import workflow, * as helpers from "./workflow";
 console.log(helpers);

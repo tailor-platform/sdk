@@ -5,7 +5,7 @@ import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
 import { removeStaleEntryFiles } from "#/cli/services/stale-cleanup";
-import { createTriggerTransformPlugin } from "#/cli/services/workflow/trigger-transformer";
+import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { getDistDir } from "#/cli/shared/dist-dir";
@@ -13,7 +13,7 @@ import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
-import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
 import type { LogLevel } from "#/configure/config/types";
@@ -29,8 +29,8 @@ interface ExecutorInfo {
 export interface BundleExecutorsOptions {
   /** Executor file loading configuration */
   config: FileLoadConfig;
-  /** Trigger context for workflow/job transformations */
-  triggerContext?: TriggerContext;
+  /** Start context for workflow/job transformations */
+  startContext?: StartContext;
   /** Additional files to bundle (e.g., plugin-generated executors) */
   additionalFiles?: string[];
   /** Optional bundle cache for skipping unchanged builds */
@@ -56,7 +56,7 @@ export async function bundleExecutors(
   const bundledCode = new Map<string, string>();
   const {
     config,
-    triggerContext,
+    startContext,
     additionalFiles = [],
     cache,
     inlineSourcemap,
@@ -123,7 +123,7 @@ export async function bundleExecutors(
       executor,
       outputDir,
       tsconfig,
-      triggerContext,
+      startContext,
       cache,
       inlineSourcemap,
       bundleLogLevel,
@@ -143,16 +143,16 @@ async function bundleSingleExecutor(
   executor: ExecutorInfo,
   outputDir: string,
   tsconfig: string | undefined,
-  triggerContext?: TriggerContext,
+  startContext?: StartContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<[string, string]> {
-  const serializedTriggerContext = serializeTriggerContext(triggerContext);
+  const serializedStartContext = serializeStartContext(startContext);
 
   const contextHash = computeBundlerContextHash({
     sourceFile: executor.sourceFile,
-    serializedTriggerContext,
+    serializedStartContext,
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -182,8 +182,8 @@ async function bundleSingleExecutor(
       fs.writeFileSync(entryPath, entryContent);
 
       // Step 2: Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
-      const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-      const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+      const startPlugin = createStartTransformPlugin(startContext);
+      const plugins: rolldown.Plugin[] = startPlugin ? [startPlugin] : [];
       plugins.push(platformBundleDefinePlugin, ...cachePlugins);
 
       const result = await rolldown.build({
