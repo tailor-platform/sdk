@@ -156,6 +156,7 @@ async function assertMigrationsReproduceLocalTypes(
     (pluginExecutorFiles.length > 0
       ? (await import("#/cli/services/executor/service")).createExecutorService({
           config: { files: [] },
+          baseDir: path.dirname(config.path),
         })
       : undefined);
   await executorService?.loadExecutors();

@@ -93,6 +93,14 @@ interface GraphStats {
   circularDependencyCount: number;
 }
 
+// addWatchGroup is called once per watch group, so a single `generate --watch`
+// run can call it multiple times for the same baseDir (once per
+// resolver/executor/tailordb/etc. config sharing that directory). Track which
+// (baseDir, groupId) pairs have already warned so each one only warns once per
+// run — keyed by groupId too, since different groups sharing a baseDir each
+// need their own warning.
+const warnedFallbacks = new Set<string>();
+
 /**
  * Error codes.
  */
@@ -325,7 +333,7 @@ export function createDependencyGraphManager(
  */
 export type DependencyWatcher = {
   initialize: () => Promise<void>;
-  addWatchGroup: (groupId: string, patterns: string[]) => Promise<void>;
+  addWatchGroup: (groupId: string, patterns: string[], baseDir: string) => Promise<void>;
   removeWatchGroup: (groupId: string) => Promise<void>;
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -336,6 +344,31 @@ export type DependencyWatcher = {
   getWatchStatus: () => WatchStatus;
   setRestartCallback: (callback: () => void) => void;
 };
+
+/**
+ * Resolve a watch group's glob patterns against baseDir into absolute file paths.
+ * @param groupId - Watch group identifier, used only for the progress log line
+ * @param patterns - Glob patterns to resolve
+ * @param baseDir - Directory relative patterns are resolved against
+ * @returns Absolute paths of every matched file
+ */
+async function globPatterns(
+  groupId: string,
+  patterns: string[],
+  baseDir: string,
+): Promise<Set<string>> {
+  const files = new Set<string>();
+  for (const pattern of patterns) {
+    const absolutePattern = path.resolve(baseDir, pattern);
+    logger.log(
+      `${styles.dim(`Watch pattern for`)} ${styles.dim(groupId + ":")} ${path.relative(process.cwd(), absolutePattern)}`,
+    );
+    for await (const file of glob(absolutePattern)) {
+      files.add(path.resolve(file));
+    }
+  }
+  return files;
+}
 
 /**
  * Creates a dependency watcher.
@@ -617,21 +650,30 @@ export function createDependencyWatcher(options: WatcherOptions = {}): Dependenc
   return {
     initialize,
 
-    async addWatchGroup(groupId: string, patterns: string[]): Promise<void> {
+    async addWatchGroup(groupId: string, patterns: string[], baseDir: string): Promise<void> {
       validateWatchGroup(groupId, patterns);
 
       if (!isInitialized) {
         await initialize();
       }
 
-      const files = new Set<string>();
-      for (const pattern of patterns) {
-        logger.log(
-          `${styles.dim(`Watch pattern for`)} ${styles.dim(groupId + ":")} ${path.relative(process.cwd(), pattern)}`,
-        );
-        for await (const file of glob(pattern)) {
-          files.add(path.resolve(file));
+      let files = await globPatterns(groupId, patterns, baseDir);
+
+      if (files.size === 0 && baseDir !== process.cwd()) {
+        // v1 compatibility fallback: pre-existing configs may have relative
+        // patterns written against the invocation cwd rather than baseDir.
+        // Remove this fallback in v2, once such configs are expected to have
+        // migrated.
+        const fallbackKey = `${baseDir}\0${groupId}`;
+        if (!warnedFallbacks.has(fallbackKey)) {
+          warnedFallbacks.add(fallbackKey);
+          logger.warn(
+            `No files matched watch patterns for "${groupId}" relative to "${baseDir}"; ` +
+              `falling back to process.cwd(). Update this config's file patterns to be ` +
+              `relative to its own directory before v2, when this fallback will be removed.`,
+          );
         }
+        files = await globPatterns(groupId, patterns, process.cwd());
       }
 
       const watchGroup: WatchGroup = {
@@ -655,7 +697,7 @@ export function createDependencyWatcher(options: WatcherOptions = {}): Dependenc
       if (!watchGroup) return;
 
       if (chokidarWatcher) {
-        chokidarWatcher.unwatch(watchGroup.patterns);
+        chokidarWatcher.unwatch(Array.from(watchGroup.files));
       }
 
       for (const filePath of watchGroup.files) {

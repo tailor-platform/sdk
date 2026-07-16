@@ -55,6 +55,7 @@ export const account = db.type("User", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [userFile, accountFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -77,6 +78,7 @@ export const objectPrototype = db.type("toString", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -98,6 +100,7 @@ export const proto = db.type("__proto__", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -120,6 +123,7 @@ export const user = db.type("User", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [userFile, userFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -148,6 +152,7 @@ export const user = db.type("User", {
       namespace: "main",
       config: { files: [] },
       pluginManager,
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -175,6 +180,7 @@ export const user = db.type("User", {
       namespace: "main",
       config: { files: [] },
       pluginManager,
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log");
@@ -198,6 +204,7 @@ export const noPermission = db.type("NoPermission", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log", "warn");
@@ -222,6 +229,7 @@ export const noGqlPermission = db.type("NoGqlPermission", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log", "warn");
@@ -246,6 +254,7 @@ export const gqlDisabled = db.type("GqlDisabled", {
     const service = createTailorDBService({
       namespace: "main",
       config: { files: [typeFile] },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log", "warn");
@@ -270,6 +279,7 @@ export const namespaceGqlDisabled = db.type("NamespaceGqlDisabled", {
         files: [typeFile],
         gqlOperations: { create: false, update: false, delete: false, read: false },
       },
+      baseDir: process.cwd(),
     });
 
     using _logger = silenceLogger("error", "log", "warn");

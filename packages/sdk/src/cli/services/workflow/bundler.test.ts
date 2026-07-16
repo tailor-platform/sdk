@@ -7,7 +7,9 @@ import { bundleWorkflowJobs } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
   test("does not throw when no workflow jobs are provided", async () => {
-    await expect(bundleWorkflowJobs([], [], {}, { modules: new Map() })).resolves.toEqual({
+    await expect(
+      bundleWorkflowJobs([], [], {}, { modules: new Map() }, process.cwd()),
+    ).resolves.toEqual({
       mainJobDeps: {},
       usedJobNames: [],
       bundledCode: new Map(),
@@ -46,6 +48,7 @@ export const mainJob = createWorkflowJob({
         ["main-job"],
         {},
         { modules: new Map() },
+        tmpDir,
         undefined,
         true,
       );
@@ -124,6 +127,7 @@ export default createWorkflow({ name: "workflow-b", mainJob: mainB });
         ["main-a"],
         {},
         context,
+        dir,
       );
 
       expect(result.mainJobDeps["main-a"]).toEqual(["main-a", "step-a"]);
@@ -166,6 +170,7 @@ export default createWorkflow({ name: "workflow", mainJob });
         ["main-job"],
         {},
         context,
+        dir,
       );
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job", "step-a"]);
@@ -199,6 +204,7 @@ export default createWorkflow({ name: "workflow", mainJob });
         ["main-job"],
         {},
         context,
+        dir,
       );
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job"]);
@@ -303,7 +309,7 @@ export default createWorkflow({
         authNamespace: "default",
       };
 
-      return bundleWorkflowJobs(allJobs, mainJobNames, {}, triggerContext);
+      return bundleWorkflowJobs(allJobs, mainJobNames, {}, triggerContext, tmpDir);
     };
 
     test.each([

@@ -1,7 +1,6 @@
 import { createRequire } from "node:module";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { isNodeBuiltinImport } from "#/cli/services/http-adapter/node-builtins";
@@ -9,6 +8,7 @@ import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { HTTP_METHODS, type HttpMethodKey } from "#/parser/service/http-adapter/index";
 import type { LogLevel } from "#/configure/config/types";
@@ -37,12 +37,14 @@ export interface HttpAdapterBundleResult {
  * IIFE defining a global `transform(input)` entry point. `input` gets a
  * generated dispatcher that routes by `req.method`; `output` is used as is.
  * @param adapters - Detected adapters to bundle
+ * @param baseDir - Directory the owning config's tsconfig is resolved against
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
  * @returns Bundled scripts keyed by adapter name
  */
 export async function bundleHttpAdapters(
   adapters: HttpAdapterBundleInput[],
+  baseDir: string,
   cache?: BundleCache,
   bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<HttpAdapterBundleResult> {
@@ -55,12 +57,7 @@ export async function bundleHttpAdapters(
     `Bundling ${styles.highlight(adapters.length.toString())} files for ${styles.info('"http-adapter"')}`,
   );
 
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   // rolldown.build() is memory-intensive; cap parallelism like the other SDK bundlers.
   const tasks = adapters.flatMap((adapter) => {

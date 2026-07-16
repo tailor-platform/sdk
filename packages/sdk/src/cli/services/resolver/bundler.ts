@@ -1,5 +1,4 @@
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { type BundleCache, computeBundlerContextHash, withCache } from "#/cli/cache/bundle-cache";
 import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
@@ -9,6 +8,7 @@ import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
@@ -30,6 +30,7 @@ interface ResolverInfo {
  * 3. Bundles in a single step with tree-shaking
  * @param namespace - Resolver namespace name
  * @param config - Resolver file loading configuration
+ * @param baseDir - Directory the config's file patterns are resolved against
  * @param triggerContext - Trigger context for workflow/job transformations
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
@@ -39,13 +40,14 @@ interface ResolverInfo {
 export async function bundleResolvers(
   namespace: string,
   config: FileLoadConfig,
+  baseDir: string,
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<Map<string, string>> {
   const bundledCode = new Map<string, string>();
-  const files = loadFilesWithIgnores(config);
+  const files = loadFilesWithIgnores(config, baseDir);
   if (files.length === 0) {
     logger.warn(`No resolver files found for patterns: ${config.files.join(", ")}`);
     return bundledCode;
@@ -72,12 +74,7 @@ export async function bundleResolvers(
     });
   }
 
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   // Process each resolver, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
