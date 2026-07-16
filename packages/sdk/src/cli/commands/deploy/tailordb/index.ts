@@ -682,12 +682,12 @@ export async function applyTailorDB(
 
       // Types
       try {
-        await Promise.all(
-          changeSet.type.creates.map((create) => client.createTailorDBType(create.request)),
-        );
-        await Promise.all(
-          changeSet.type.updates.map((update) => client.updateTailorDBType(update.request)),
-        );
+        for (const create of changeSet.type.creates) {
+          await client.createTailorDBType(create.request);
+        }
+        for (const update of changeSet.type.updates) {
+          await client.updateTailorDBType(update.request);
+        }
       } catch (error) {
         handleOptionalToRequiredError(error, [
           "Run 'tailor-sdk tailordb migration generate' to create migration files.",

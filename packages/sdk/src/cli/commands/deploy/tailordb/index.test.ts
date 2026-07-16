@@ -1301,7 +1301,7 @@ describe("applyTailorDB migration label reconciliation", () => {
 });
 
 describe("applyTailorDB type apply concurrency", () => {
-  test("applies type creates and updates concurrently", async () => {
+  test("applies type creates and updates sequentially", async () => {
     const probe = createConcurrencyProbe();
     const client = {
       createTailorDBType: vi.fn().mockImplementation(probe.run),
@@ -1360,6 +1360,6 @@ describe("applyTailorDB type apply concurrency", () => {
 
     expect(client.createTailorDBType).toHaveBeenCalledTimes(3);
     expect(client.updateTailorDBType).toHaveBeenCalledTimes(3);
-    expect(probe.maxInFlight()).toBeGreaterThan(1);
+    expect(probe.maxInFlight()).toBe(1);
   });
 });

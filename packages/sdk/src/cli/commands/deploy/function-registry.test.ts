@@ -481,6 +481,51 @@ describe("applyFunctionRegistry phase separation", () => {
     expect(client.updateFunctionRegistry).toHaveBeenCalledTimes(3);
     expect(probe.maxInFlight()).toBeGreaterThan(1);
   });
+
+  test("caps concurrent uploads at TAILOR_APPLY_CONCURRENCY", async () => {
+    vi.stubEnv("TAILOR_APPLY_CONCURRENCY", "2");
+    try {
+      const probe = createConcurrencyProbe();
+      const client = {
+        createFunctionRegistry: vi.fn().mockImplementation(probe.run),
+        updateFunctionRegistry: vi.fn().mockImplementation(probe.run),
+        deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
+        setMetadata: vi.fn().mockResolvedValue({}),
+      } as unknown as OperatorClient;
+
+      const changeOf = (name: string) => ({
+        name,
+        entry: {
+          name,
+          scriptContent: "// script",
+          contentHash: `hash-${name}`,
+          description: `Function: ${name}`,
+        },
+        metaRequest: { trn: `trn:${name}`, labels: {} },
+      });
+      const planResult = {
+        changeSet: {
+          creates: [],
+          updates: ["update-a", "update-b", "update-c", "update-d"].map(changeOf),
+          deletes: [],
+          unchanged: [],
+          title: "Function registry",
+          isEmpty: () => false,
+          lines: () => [],
+        },
+        conflicts: [],
+        unmanaged: [],
+        resourceOwners: new Set<string>(),
+      } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
+
+      await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
+
+      expect(client.updateFunctionRegistry).toHaveBeenCalledTimes(4);
+      expect(probe.maxInFlight()).toBeLessThanOrEqual(2);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 describe("collectFunctionEntries", () => {
