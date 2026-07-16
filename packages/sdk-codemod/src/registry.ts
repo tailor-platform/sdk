@@ -98,6 +98,7 @@ const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_4 = "2.0.0-next.4";
 const V2_NEXT_5 = "2.0.0-next.5";
+const V2_NEXT_6 = "2.0.0-next.6";
 /**
  * Sentinel `prereleaseUntil` for a codemod whose exact `2.0.0-next.N` release is not
  * known yet. `pnpm codemod:resolve-pending`, run in CI against the release PR, replaces
@@ -1061,6 +1062,48 @@ export const allCodemods: CodemodPackage[] = [
       "2. If the old hooks reference `data` (cross-field access), convert to a type-level hook",
       "   using `input`/`oldRecord`",
       "3. Remove unused `Hooks<F>` / `HookFn<>` type imports",
+    ].join("\n"),
+  },
+  {
+    id: "v2/generate-watch-flag",
+    name: "generate --watch flag removed",
+    description:
+      "Review and remove `tailor generate --watch` / `-W` invocations and the `watch` option on `GenerateOptions`. The flag, its dependency watcher, and the self-restart-on-change logic are removed; `generate` now always performs a single generation pass.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_6,
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,yml,yaml}",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+      "**/*.md",
+    ],
+    suspiciousPatterns: [
+      /\bgenerate\b[^\n]*(?:--watch\b|\s-W\b)/,
+      [/\bgenerate\s*\(/, /\bwatch\s*:/],
+    ],
+    examples: [
+      {
+        lang: "sh",
+        caption: "The --watch/-W flag no longer exists; re-run generate after each change:",
+        before: "tailor generate --watch",
+        after: "tailor generate",
+      },
+    ],
+    prompt: [
+      "Tailor SDK v2 removes the `generate --watch` (`-W`) flag along with the",
+      "dependency watcher and self-restart logic that powered it. `tailor generate`",
+      "now always runs a single generation pass and exits.",
+      "",
+      "For each flagged `tailor generate ... --watch` / `-W` invocation (package.json",
+      "scripts, shell scripts, CI configs, or docs), drop the flag and re-run",
+      "`tailor generate` after each change instead. If automatic regeneration on file",
+      "change is still needed, wrap the command with a general-purpose file watcher",
+      "(e.g. `chokidar-cli`, `nodemon`) at the project level.",
+      "",
+      "For programmatic use of `generate()` from `@tailor-platform/sdk/cli`, remove the",
+      "`watch` field from the `GenerateOptions` argument — the function now performs a",
+      "single generation pass and resolves once it completes.",
     ].join("\n"),
   },
   {

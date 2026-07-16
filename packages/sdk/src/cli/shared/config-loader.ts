@@ -14,7 +14,7 @@ import type { Plugin } from "#/plugin/types";
 export type LoadedConfig = AppConfig & { path: string };
 
 export interface LoadConfigOptions {
-  /** Import cache-busting value for watch-mode reloads. */
+  /** Import cache-busting value for callers that reload the config module after a rebuild. */
   importNonce?: string;
 }
 

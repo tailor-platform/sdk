@@ -1,14 +1,52 @@
-import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "pathe";
-import { describe, expect, test, beforeAll, afterAll } from "vitest";
+import { describe, expect, test, beforeAll, afterAll, afterEach, vi } from "vitest";
+import { getPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import {
   findUndefinedReferences,
   collectSourceBindings,
   resolveNeededBindings,
   buildMinimalEntryFromResolved,
+  precompileTailorDBTypeScripts,
   type SourceBinding,
 } from "./hooks-validate-bundler";
+import type { TailorDBTypeRaw } from "#/types/tailordb.generated";
+import type * as rolldown from "rolldown";
+
+let expectVirtualEntry = false;
+
+type RolldownModule = typeof rolldown;
+
+vi.mock("rolldown", async (importOriginal) => {
+  const original = await importOriginal<RolldownModule>();
+  return {
+    ...original,
+    build: async (...args: Parameters<RolldownModule["build"]>) => {
+      if (!expectVirtualEntry) {
+        return original.build(...args);
+      }
+
+      const options = args[0] as unknown as rolldown.BuildOptions;
+      const input = options.input;
+      if (typeof input !== "string" || existsSync(input)) {
+        throw new Error(`Expected a virtual TailorDB script entry, received ${String(input)}`);
+      }
+      const plugins = options.plugins as rolldown.Plugin[];
+      if (!plugins.some((plugin) => plugin.name === "tailor-sdk-virtual-entry")) {
+        throw new Error("Virtual entry plugin was not configured");
+      }
+
+      return {
+        output: [{ code: "module.exports.main = input => input.value;" }],
+      } as unknown as Awaited<ReturnType<RolldownModule["build"]>>;
+    },
+  };
+});
+
+afterEach(() => {
+  expectVirtualEntry = false;
+});
 
 /**
  * Extract free variables from a function source for testing.
@@ -24,6 +62,61 @@ const bindingsMap = (
   new Map<string, SourceBinding>(
     entries.map(([name, sourceText, kind]) => [name, { name, sourceText, kind }]),
   );
+
+describe("precompileTailorDBTypeScripts", () => {
+  test("bundles captured declarations with TypeScript syntax", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-typescript-entry-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, 'const prefix: string = "PREFIX";\n');
+    const prefix = "unused";
+    const createHook = ({ value }: { value: string }) => prefix + value;
+    const type = {
+      name: "SharedType",
+      fields: {
+        value: {
+          type: "string",
+          metadata: { hooks: { create: createHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(createHook)).toBeDefined();
+  });
+
+  test("uses an in-memory entry for scripts with source dependencies", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-entry-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, 'const prefix = "PREFIX";\n');
+    const prefix = "unused";
+    const createHook = ({ value }: { value: string }) => prefix + value;
+    const type = {
+      name: "SharedType",
+      fields: {
+        value: {
+          type: "string",
+          metadata: { hooks: { create: createHook } },
+        },
+      },
+      metadata: {},
+    } as unknown as TailorDBTypeRaw;
+
+    expectVirtualEntry = true;
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(createHook)).toContain("module.exports.main");
+  });
+});
 
 describe("findUndefinedReferences", () => {
   test.each<[name: string, fnSource: string, expected: string[]]>([

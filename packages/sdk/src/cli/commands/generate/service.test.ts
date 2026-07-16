@@ -145,7 +145,7 @@ describe("GenerationManager", () => {
         config: mockConfig,
       });
 
-      await manager.generate(false);
+      await manager.generate();
 
       expect(manager.services).toBeDefined();
     });
@@ -169,7 +169,7 @@ describe("GenerationManager", () => {
         pluginManager,
       });
 
-      await manager.generate(false);
+      await manager.generate();
 
       expect(onTailorDBReady).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -200,60 +200,9 @@ describe("GenerationManager", () => {
         config: mockConfig,
       });
 
-      await expect(duplicateManager.generate(false)).rejects.toThrow(
+      await expect(duplicateManager.generate()).rejects.toThrow(
         /Duplicate TailorDB type names detected/,
       );
-    });
-
-    test("does not exit watch mode for duplicate TailorDB type names", async () => {
-      const duplicateApp = applicationWithTailorDBServices(mockConfig, [
-        loadedTailorDBService("main", ["User"]),
-        loadedTailorDBService("analytics", ["User"]),
-      ]);
-      const duplicateManager = createGenerationManager({
-        application: duplicateApp,
-        config: mockConfig,
-      });
-
-      await expect(duplicateManager.generate(true)).resolves.not.toThrow();
-    });
-  });
-
-  describe("watch", () => {
-    test("watch method exists", () => {
-      const application = defineApplication({ config: mockConfig });
-      const manager = createGenerationManager({
-        application,
-        config: mockConfig,
-      });
-
-      expect(typeof manager.watch).toBe("function");
-    });
-
-    test("application has tailorDBServices for watch", () => {
-      const application = defineApplication({ config: mockConfig });
-      const manager = createGenerationManager({
-        application,
-        config: mockConfig,
-      });
-
-      expect(manager.application.tailorDBServices).toBeDefined();
-      expect(manager.application.tailorDBServices.length).toBeGreaterThan(0);
-      expect(manager.application.tailorDBServices[0]?.namespace).toBe("main");
-      expect(manager.application.tailorDBServices[0]?.config.files).toEqual(["src/types/*.ts"]);
-    });
-
-    test("application has resolverServices for watch", () => {
-      const application = defineApplication({ config: mockConfig });
-      const manager = createGenerationManager({
-        application,
-        config: mockConfig,
-      });
-
-      expect(manager.application.resolverServices).toBeDefined();
-      expect(manager.application.resolverServices.length).toBeGreaterThan(0);
-      expect(manager.application.resolverServices[0]?.namespace).toBe("main");
-      expect(manager.application.resolverServices[0]?.config.files).toEqual(["src/resolvers/*.ts"]);
     });
   });
 });
