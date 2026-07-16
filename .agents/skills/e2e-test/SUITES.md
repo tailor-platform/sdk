@@ -27,10 +27,12 @@ before any redeploy:
 If another person or automation may rely on the workspace, confirm ownership and intended use with
 the user. Do not repair drift in a shared workspace by assumption.
 
-If a valid platform profile already selects the workspace, the stored workspace ID is optional:
+If a valid platform profile already selects the workspace, the stored workspace ID is optional.
+Use the same profile for both preflight checks:
 
 ```sh
 TAILOR_PLATFORM_PROFILE=<profile> pnpm exec tailor-sdk workspace app list
+TAILOR_PLATFORM_PROFILE=<profile> pnpm exec tailor-sdk workspace user list
 ```
 
 If the workspace is absent or no longer hosts the application:

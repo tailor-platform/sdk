@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { selectE2EWorkspaces } from "./select-e2e-workspaces";
+import { isE2EWorkspaceForRun, selectE2EWorkspaces } from "./select-e2e-workspaces";
 
 describe("selectE2EWorkspaces", () => {
   test("selects only the exact SDK run namespace when a prefix is supplied", () => {
@@ -51,5 +51,10 @@ describe("selectE2EWorkspaces", () => {
       { name: "sdk-ci-123-build" },
       { name: "sdk-ci-migration-123" },
     ]);
+  });
+
+  test("matches overlapping namespaces without depending on prefix order", () => {
+    expect(isE2EWorkspaceForRun("sdk-ci-migration-123", "123")).toBe(true);
+    expect(isE2EWorkspaceForRun("sdk-ci-migration-1123", "123")).toBe(false);
   });
 });

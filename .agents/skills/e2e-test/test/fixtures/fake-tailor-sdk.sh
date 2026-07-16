@@ -2,6 +2,17 @@
 
 set -euo pipefail
 
+if [[ ${1:-} == "--json" && ${2:-} == "workspace" && ${3:-} == "list" ]]; then
+  [[ -z ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID:-} ]]
+  [[ -z ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET:-} ]]
+  [[ -z ${TAILOR_PLATFORM_PROFILE:-} ]]
+  if [[ -n ${E2E_RAW_AUDIT_MARKER:-} ]]; then
+    printf 'audit\n' >>"$E2E_RAW_AUDIT_MARKER"
+  fi
+  printf '[]\n'
+  exit 0
+fi
+
 [[ ${1:-} == "login" ]]
 [[ ${2:-} == "--machine-user" ]]
 [[ -n ${TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID:-} ]]

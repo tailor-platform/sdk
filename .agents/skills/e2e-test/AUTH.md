@@ -74,10 +74,12 @@ The helper:
 - replaces itself after removing client credentials and stale token/profile overrides, so no
   long-lived process retains the secret;
 - replaces the credential-reading process with a credential-free guardian that forwards HUP, INT,
-  and TERM; and
+  and TERM, while allowing the suite runner to finish its audited cleanup after the first signal;
+  and
 - supervises authentication and the suite through a credential-free parent that directly owns the
-  managed process group, terminates it, and deletes the temporary configuration if the helper or
-  guardian is killed, without a racy PID-file handoff or orphaned suite descendants.
+  managed process group, escalates signals for short-lived authentication and test subprocesses,
+  and force-terminates the group and deletes the temporary configuration if the helper or guardian
+  is killed, without a racy PID-file handoff or orphaned suite descendants.
 
 The code under test can still read the short-lived access token it needs. Dedicated test-only scope
 and prompt workspace cleanup therefore remain mandatory.

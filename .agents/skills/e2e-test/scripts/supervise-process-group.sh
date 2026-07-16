@@ -4,10 +4,10 @@ set +x
 set -uo pipefail
 
 usage() {
-  echo "Usage: $0 <parent-pid> <cleanup-path> <inherited-fd|-> -- <command> [args...]" >&2
+  echo "Usage: $0 <parent-pid> <cleanup-path> <inherited-fd|-> <signal-mode> -- <command> [args...]" >&2
 }
 
-if [[ $# -lt 5 || ${4:-} != "--" ]]; then
+if [[ $# -lt 6 || ${5:-} != "--" ]]; then
   usage
   exit 64
 fi
@@ -15,13 +15,18 @@ fi
 parent_pid=$1
 cleanup_path=$2
 inherited_fd=$3
-shift 4
+signal_mode=$4
+shift 5
 
 if [[ ! "$parent_pid" =~ ^[0-9]+$ || "$cleanup_path" != /* ]]; then
   usage
   exit 64
 fi
 if [[ "$inherited_fd" != "-" && ! "$inherited_fd" =~ ^[3-9]$ ]]; then
+  usage
+  exit 64
+fi
+if [[ "$signal_mode" != "escalate" && "$signal_mode" != "wait" ]]; then
   usage
   exit 64
 fi
@@ -89,7 +94,7 @@ while kill -0 "$child_pid" 2>/dev/null; do
     kill -KILL -- "-$child_pid" 2>/dev/null || true
     break
   fi
-  if [[ $forwarded_status -ne 0 ]]; then
+  if [[ $forwarded_status -ne 0 && "$signal_mode" == "escalate" ]]; then
     ((forwarded_signal_attempts += 1))
     if [[ $forwarded_signal_attempts -ge 20 ]]; then
       kill -KILL -- "-$child_pid" 2>/dev/null || true

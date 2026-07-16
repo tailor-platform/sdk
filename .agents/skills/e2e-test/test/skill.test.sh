@@ -58,6 +58,9 @@ wait_for_process_exit() {
 [[ -f "$skill_dir/SUITES.md" ]] || fail "SUITES.md is missing"
 grep -q 'workspace user list' "$skill_dir/SUITES.md" ||
   fail "example deploy preflight does not inspect workspace users"
+grep -Fq 'TAILOR_PLATFORM_PROFILE=<profile> pnpm exec tailor-sdk workspace user list' \
+  "$skill_dir/SUITES.md" ||
+  fail "example deploy preflight does not support a profile-only workspace"
 grep -q 'deploy --dry-run' "$skill_dir/SUITES.md" ||
   fail "example deploy preflight does not preview destructive changes"
 grep -q 'explicit approval' "$skill_dir/SUITES.md" ||
@@ -493,6 +496,42 @@ wait_for_process_exit \
   "nested e2e cleanup process survived guardian SIGKILL"
 [[ ! -e "$nested_cleanup_completion" ]] || fail "nested e2e cleanup completed after guardian SIGKILL"
 
+nested_signal_tmp="$tmp_dir/nested-signal"
+mkdir "$nested_signal_tmp"
+nested_signal_test_started="$tmp_dir/nested-signal-test-started"
+nested_signal_cleanup_started="$tmp_dir/nested-signal-cleanup-started"
+nested_signal_cleanup_completed="$tmp_dir/nested-signal-cleanup-completed"
+nested_signal_pnpm_marker="$tmp_dir/nested-signal-pnpm-marker"
+nested_signal_raw_audit_marker="$tmp_dir/nested-signal-raw-audit-marker"
+TMPDIR="$nested_signal_tmp" \
+  PATH="$fake_bin:$PATH" \
+  E2E_PNPM_MARKER="$nested_signal_pnpm_marker" \
+  E2E_RAW_AUDIT_MARKER="$nested_signal_raw_audit_marker" \
+  E2E_TEST_STARTED_MARKER="$nested_signal_test_started" \
+  E2E_TEST_DELAY=5 \
+  E2E_CLEANUP_DELAY_AT=preview \
+  E2E_CLEANUP_STARTED_MARKER="$nested_signal_cleanup_started" \
+  E2E_CLEANUP_DELAY=2 \
+  E2E_CLEANUP_COMPLETION_MARKER="$nested_signal_cleanup_completed" \
+  TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+  "$helper" "$fake_node" "$fixtures/fake-tailor-sdk.sh" -- \
+  "$runner" \
+  3< <(set +x; /usr/bin/env -i /bin/bash "$credential_provider") &
+nested_signal_helper_pid=$!
+wait_for_path "$nested_signal_test_started" "nested signal e2e test process did not start"
+/bin/kill -TERM "$nested_signal_helper_pid"
+set +e
+wait "$nested_signal_helper_pid" 2>/dev/null
+nested_signal_status=$?
+set -e
+[[ $nested_signal_status -eq 143 ]] || fail "nested signal helper lost its TERM status"
+[[ -e "$nested_signal_cleanup_started" ]] || fail "nested signal cleanup did not start"
+[[ -e "$nested_signal_cleanup_completed" ]] || fail "nested signal cleanup did not complete"
+[[ $(wc -l <"$nested_signal_pnpm_marker") -eq 3 ]] ||
+  fail "nested signal helper did not finish the audited cleanup lifecycle"
+[[ $(wc -l <"$nested_signal_raw_audit_marker") -eq 2 ]] ||
+  fail "nested signal helper skipped a raw workspace audit"
+
 set +e
 credential_output=$(
   PATH="$fake_bin:$PATH" \
@@ -578,6 +617,19 @@ sdk_failure_status=$?
 set -e
 [[ $sdk_failure_status -eq 23 ]] || fail "SDK runner lost the test failure status"
 [[ $(wc -l <"$pnpm_marker") -eq 5 ]] || fail "SDK runner skipped cleanup after test failure"
+
+: >"$pnpm_marker"
+set +e
+PATH="$fake_bin:$PATH" \
+  E2E_PNPM_MARKER="$pnpm_marker" \
+  E2E_CLEANUP_STATUS=25 \
+  TAILOR_PLATFORM_E2E_RUN_ID="$run_id" \
+  "$runner"
+cleanup_failure_status=$?
+set -e
+[[ $cleanup_failure_status -eq 25 ]] || fail "SDK runner lost the cleanup failure status"
+[[ $(wc -l <"$pnpm_marker") -eq 5 ]] ||
+  fail "SDK runner skipped the raw post-audit after cleanup failure"
 
 : >"$pnpm_marker"
 set +e

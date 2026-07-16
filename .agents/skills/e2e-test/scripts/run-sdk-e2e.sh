@@ -47,7 +47,7 @@ run_cleanup_command() {
     return 1
   fi
   set -m
-  /bin/bash "$process_supervisor" "$$" "$run_tmp" - -- "$@" &
+  /bin/bash "$process_supervisor" "$$" "$run_tmp" - escalate -- "$@" &
   command_pid=$!
   set +m
 
@@ -125,19 +125,21 @@ run_cleanup() {
     "--run-id=$run_id" \
     "--workspace-name-prefix=$workspace_name_prefix"
   cleanup_status=$?
-  if [[ $cleanup_status -ne 0 ]]; then
-    return "$cleanup_status"
-  fi
 
   verification_status=1
   for attempt in 1 2 3; do
     verify_raw_workspace_list after-delete
     verification_status=$?
-    [[ $verification_status -ne 0 ]] || return 0
+    [[ $verification_status -ne 0 ]] || break
     [[ $attempt -eq 3 ]] || sleep 1
   done
 
-  echo "Cleanup verification still found workspaces for run ID $run_id." >&2
+  if [[ $verification_status -ne 0 ]]; then
+    echo "Cleanup verification still found workspaces for run ID $run_id." >&2
+  fi
+  if [[ $cleanup_status -ne 0 ]]; then
+    return "$cleanup_status"
+  fi
   return "$verification_status"
 }
 
@@ -175,7 +177,7 @@ if [[ ! -r "$process_supervisor" ]]; then
   exit 1
 fi
 set -m
-/bin/bash "$process_supervisor" "$$" "$run_tmp" - -- pnpm run test:e2e &
+/bin/bash "$process_supervisor" "$$" "$run_tmp" - escalate -- pnpm run test:e2e &
 test_pid=$!
 set +m
 wait "$test_pid"

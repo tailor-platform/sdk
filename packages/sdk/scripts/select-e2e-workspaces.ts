@@ -1,8 +1,14 @@
-const E2E_WORKSPACE_PREFIXES = ["sdk-ci-migration-", "e2e-ws-", "template-e2e-", "sdk-ci-"];
+const E2E_WORKSPACE_PREFIXES = ["sdk-ci-", "sdk-ci-migration-", "e2e-ws-", "template-e2e-"];
 
 export interface E2EWorkspace {
   id?: string;
   name?: string;
+}
+
+export function isE2EWorkspaceForRun(name: string, runId: string): boolean {
+  return E2E_WORKSPACE_PREFIXES.some(
+    (prefix) => name === `${prefix}${runId}` || name.startsWith(`${prefix}${runId}-`),
+  );
 }
 
 export function selectE2EWorkspaces(
@@ -22,13 +28,9 @@ export function selectE2EWorkspaces(
 
   return workspaces.filter((workspace) => {
     const name = workspace.name;
-    const workspacePrefix = E2E_WORKSPACE_PREFIXES.find((prefix) => name?.startsWith(prefix));
-    if (!name || !workspacePrefix) return false;
+    if (!name || !E2E_WORKSPACE_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
     if (exactWorkspacePrefix !== undefined) return name.startsWith(exactWorkspacePrefix);
-    if (runId !== undefined) {
-      const runName = name.slice(workspacePrefix.length);
-      return runName === runId || runName.startsWith(`${runId}-`);
-    }
+    if (runId !== undefined) return isE2EWorkspaceForRun(name, runId);
     return true;
   });
 }

@@ -86,7 +86,7 @@ trap 'handle_signal TERM 143' TERM
 set +e
 set -m
 /usr/bin/env -i PATH=/usr/bin:/bin /bin/bash "$supervisor" \
-  "$helper_pid" "$config_home" 4 -- \
+  "$helper_pid" "$config_home" 4 escalate -- \
   /usr/bin/env -i \
   HOME="$config_home/home" \
   XDG_CONFIG_HOME="$config_home" \
@@ -155,7 +155,7 @@ exec /usr/bin/env -u TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID \
 
     guardian_pid=$$
     set -m
-    /bin/bash "$supervisor" "$guardian_pid" "$config_home" - -- "$@" &
+    /bin/bash "$supervisor" "$guardian_pid" "$config_home" - wait -- "$@" &
     managed_supervisor_pid=$!
     set +m
     wait "$managed_supervisor_pid"
