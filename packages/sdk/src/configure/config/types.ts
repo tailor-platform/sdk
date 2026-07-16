@@ -49,7 +49,7 @@ export type WorkflowServiceInput = WorkflowServiceConfig;
  * - `idp`: Array of IdP configs, e.g. `[myIdp]`
  * - `staticWebsites`: Array of static website configs, e.g. `[website]`
  * - `aiGateways`: Array of AI Gateway configs, e.g. `[gateway]`
- * - `db`, `resolver`, `executor`, `workflow`: Service configs with file globs (resolved relative to this config file's own directory, not the invocation directory)
+ * - `db`, `resolver`, `executor`, `workflow`, `httpAdapter`: Service configs with file globs (resolved relative to this config file's own directory, not the invocation directory)
  */
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,
