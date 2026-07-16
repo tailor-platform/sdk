@@ -2,18 +2,18 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import { glob } from "node:fs/promises";
 import * as http from "node:http";
+import { loadConfig, type LoadedConfig } from "@tailor-platform/sdk/cli";
 import { watch, type FSWatcher } from "chokidar";
 import { lookup as lookupMime } from "mime-types";
 import open from "open";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { configArg } from "#/cli/shared/args";
-import { defineAppCommand } from "#/cli/shared/command";
-import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
-import { logger } from "#/cli/shared/logger";
 import { prepareErdBuildsFromContext, type ErdBuildResult } from "./export";
 import { loadLocalErdSchema, type LocalErdSchemaContext } from "./local-schema";
+import { configArg } from "./shared/args";
+import { defineAppCommand } from "./shared/command";
+import { logger } from "./shared/logger";
 import { initErdCommand } from "./utils";
 
 const DEFAULT_ERD_BASE_DIR = ".tailor/erd";
@@ -272,7 +272,7 @@ function freshErdExportArgs(options: FreshErdExportOptions): string[] {
     throw new Error("Cannot rebuild ERD schema in a fresh process: CLI entrypoint is unavailable.");
   }
 
-  const args = [cliEntry, "tailordb", "erd", "export", "--output", options.outputDir, "--json"];
+  const args = [cliEntry, "export", "--output", options.outputDir, "--json"];
   if (options.configPath) {
     args.push("--config", options.configPath);
   }

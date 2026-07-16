@@ -10,8 +10,26 @@ export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
 export { generateUserTypes } from "./shared/type-generator";
-export type { GeneratorResult, PluginAttachment } from "#/plugin/types";
-export type { TailorDBType, TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
+export {
+  loadTailorDBNamespaces,
+  type TailorDBNamespaceSelector,
+  type LoadTailorDBNamespacesOptions,
+  type LoadedTailorDBNamespaces,
+} from "./shared/tailordb-namespaces";
+export {
+  deployStaticWebsite,
+  type DeployResult as StaticWebsiteDeployResult,
+} from "./commands/staticwebsite/deploy";
+export { assertWritable } from "./shared/readonly-guard";
+export { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
+export type { GeneratorResult, PluginAttachment, TailorDBNamespaceData } from "#/plugin/types";
+export type {
+  TailorDBType,
+  TypeSourceInfoEntry,
+  ParsedField,
+  OperatorFieldConfig,
+  PluginGeneratedTypeSource,
+} from "#/parser/service/tailordb/types";
 export type { Resolver } from "#/types/resolver.generated";
 export type { Executor } from "#/types/executor.generated";
 

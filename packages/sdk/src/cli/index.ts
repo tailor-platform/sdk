@@ -39,7 +39,7 @@ import { commonArgs, isVerbose } from "./shared/args";
 import { errorToJson, isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
-import { dispatchPlugin } from "./shared/plugin";
+import { dispatchPluginWithInstallHint } from "./shared/plugin";
 import { registerTsHook } from "./shared/register-ts-hook";
 
 await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
@@ -159,7 +159,7 @@ runMain(mainCommand, {
   // CLI plugin dispatch: an unknown subcommand at any level execs the external
   // `tailor-<path...>-<name>` binary, forwarding args and injecting context.
   onUnknownSubcommand: ({ commandPath, name, args }) =>
-    dispatchPlugin({
+    dispatchPluginWithInstallHint({
       commandPath,
       name,
       args,

@@ -35,6 +35,7 @@
     "@bufbuild/protobuf": "2.12.1",
     "@connectrpc/connect": "2.1.2",
     "@connectrpc/connect-node": "2.1.2",
+    "@tailor-platform/sdk-tailordb-erd-plugin": "workspace:^",
     "@types/node": "24.13.3",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "eslint-plugin-zod": "4.7.0",
