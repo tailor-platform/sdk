@@ -9,16 +9,24 @@ import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { stripExecutorTriggerArgs } from "#/cli/services/executor/loader";
 import { ExecutorSchema } from "#/parser/service/executor/index";
-import { buildLocalInputParser, ResolverSchema } from "#/parser/service/resolver/index";
+import { ResolverSchema } from "#/parser/service/resolver/index";
 import { WorkflowJobSchema } from "#/parser/service/workflow/index";
+import { type FieldRuntime, parseInputFields } from "#/runtime/field-parse";
 import { assertDefined } from "#/utils/assert";
+import type { TailorPrincipal } from "#/runtime/types";
 
 export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
 
+interface InputParseArgs {
+  value: unknown;
+  data: unknown;
+  invoker: TailorPrincipal | null;
+}
+
 /** Minimal schema interface for local format detection (subset of TailorField) */
 interface InputSchema {
-  parse(args: { value: unknown; data: unknown; invoker: Record<string, unknown> | null }): {
-    issues?: readonly { message: string; path?: readonly (string | number | symbol)[] }[];
+  parse(args: InputParseArgs): {
+    issues?: readonly { message: string; path?: readonly unknown[] }[];
   };
 }
 
@@ -64,7 +72,12 @@ export async function detectFunctionType(
     const rawInput = module.default.input;
     let inputSchema: DetectedFunction["inputSchema"];
     if (rawInput) {
-      inputSchema = buildLocalInputParser(rawInput);
+      // Fields built by the user's dynamically imported module match
+      // FieldRuntime structurally; the cast stays at this import boundary.
+      const fields = rawInput as Record<string, FieldRuntime>;
+      inputSchema = {
+        parse: (args) => parseInputFields({ ...args, fields }),
+      };
     }
     return {
       type: "resolver",

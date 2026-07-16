@@ -28,7 +28,6 @@ export type FieldRuntime<T extends TailorFieldType = TailorFieldType> = {
   readonly type: T;
   readonly fields: Record<string, FieldRuntime>;
   _metadata: FieldMetadata;
-  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<unknown>;
 };
 
 type FieldParseRuntimeArgs<T extends TailorFieldType> = FieldParseInternalArgs & {
@@ -281,4 +280,24 @@ export function parseInternal<T extends TailorFieldType, Output>(
   }
 
   return { value: (value ?? null) as Output };
+}
+
+type ParseInputFieldsArgs = FieldParseArgs & {
+  fields: Record<string, FieldRuntime>;
+};
+
+/**
+ * Validate a value against a record of input fields, treating the record as a
+ * single required object — the same code path deployed functions run via
+ * `t.object(fields).parse(...)`, so local validation matches platform behavior.
+ * @param args - Input field definitions plus the value, context data, and user
+ * @returns Validation result
+ */
+export function parseInputFields(args: ParseInputFieldsArgs): StandardSchemaV1.Result<unknown> {
+  const { fields, ...parseArgs } = args;
+  return parseInternal({
+    ...parseArgs,
+    field: { type: "nested", fields, _metadata: { required: true } },
+    pathArray: [],
+  });
 }
