@@ -6,7 +6,7 @@ const PENDING_USAGE_PATTERN = /prereleaseUntil:\s*V2_NEXT_PENDING\s*,/g;
 // Includes a preceding JSDoc block (if any) so a new constant is inserted above it,
 // not between the comment and `V2_NEXT_PENDING` where it would attach to the wrong export.
 const PENDING_DECLARATION_PATTERN =
-  /(?:^\/\*\*[\s\S]*?\*\/\r?\n)?^export const\s+V2_NEXT_PENDING\s*=\s*"pending";$/m;
+  /(?:^\/\*\*[\s\S]*?\*\/\r?\n)?^export\s+const\s+V2_NEXT_PENDING\s*=\s*"pending";$/m;
 
 export interface ResolvePendingBoundariesResult {
   /** Whether any `V2_NEXT_PENDING` usage was found and rewritten. */
@@ -53,7 +53,9 @@ export function resolvePendingBoundaries(
   const constantName = `V${parsed.major}_NEXT_${parsed.prerelease[1]}`;
 
   let updated = source;
-  const existingDeclaration = new RegExp(`^const ${constantName} = "([^"]+)";$`, "m").exec(source);
+  const existingDeclaration = new RegExp(`^const\\s+${constantName}\\s*=\\s*"([^"]+)";$`, "m").exec(
+    source,
+  );
   if (existingDeclaration) {
     if (existingDeclaration[1] !== resolvedVersion) {
       throw new Error(

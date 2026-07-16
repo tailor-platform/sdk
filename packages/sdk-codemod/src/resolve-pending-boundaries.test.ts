@@ -131,6 +131,30 @@ describe("resolvePendingBoundaries", () => {
     expect(result.source).toContain("prereleaseUntil: V2_NEXT_5,");
   });
 
+  test("tolerates extra whitespace between export and const", () => {
+    const source = [
+      V2_NEXT_4_DECL,
+      'export    const V2_NEXT_PENDING = "pending";',
+      "    prereleaseUntil: V2_NEXT_PENDING,",
+    ].join("\n");
+    const result = resolvePendingBoundaries(source, "2.0.0-next.5");
+
+    expect(result.changed).toBe(true);
+    expect(result.source).toContain('const V2_NEXT_5 = "2.0.0-next.5";');
+  });
+
+  test("reuses an existing constant even when its spacing is non-canonical", () => {
+    const source = [
+      'const   V2_NEXT_5="2.0.0-next.5";',
+      PENDING_DECL,
+      "    prereleaseUntil: V2_NEXT_PENDING,",
+    ].join("\n");
+    const result = resolvePendingBoundaries(source, "2.0.0-next.5");
+
+    expect(result.source.match(/V2_NEXT_5\s*=/g)).toHaveLength(1);
+    expect(result.source).toContain("prereleaseUntil: V2_NEXT_5,");
+  });
+
   test("tolerates CRLF line endings before the declaration", () => {
     const source = [V2_NEXT_4_DECL, PENDING_DECL, "    prereleaseUntil: V2_NEXT_PENDING,"].join(
       "\r\n",
