@@ -67,9 +67,10 @@ export function resolvePendingBoundaries(
     if (declarationMatch === null) {
       throw new Error("Could not find the V2_NEXT_PENDING declaration in registry.ts");
     }
+    const eol = source.includes("\r\n") ? "\r\n" : "\n";
     updated = updated.replace(
       declarationMatch[0],
-      `const ${constantName} = "${resolvedVersion}";\n${declarationMatch[0]}`,
+      `const ${constantName} = "${resolvedVersion}";${eol}${declarationMatch[0]}`,
     );
   }
 
