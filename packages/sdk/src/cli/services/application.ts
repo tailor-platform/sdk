@@ -26,7 +26,7 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
-import { buildTriggerContext } from "#/cli/shared/trigger-context";
+import { buildStartContext } from "#/cli/shared/start-context";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -526,8 +526,8 @@ export async function loadApplication(
     await httpAdapterService.loadAdapters();
   }
 
-  // 7. Build trigger context for workflow/job trigger transformation
-  const triggerContext = await buildTriggerContext(
+  // 7. Build start context for workflow/job start transformation
+  const startContext = await buildStartContext(
     config.workflow,
     getApplicationAuthNamespace({ authService: authResult.authService, config }),
   );
@@ -549,7 +549,7 @@ export async function loadApplication(
     const resolverBundles = await bundleResolvers(
       pipeline.namespace,
       pipeline.config,
-      triggerContext,
+      startContext,
       bundleCache,
       inlineSourcemap,
       bundleLogLevel,
@@ -563,7 +563,7 @@ export async function loadApplication(
   if (executorService) {
     bundledScripts.executors = await bundleExecutors({
       config: executorService.config,
-      triggerContext,
+      startContext,
       additionalFiles: [...pluginExecutorFiles],
       cache: bundleCache,
       inlineSourcemap,
@@ -579,7 +579,7 @@ export async function loadApplication(
       workflowService.jobs,
       mainJobNames,
       config.env ?? {},
-      triggerContext,
+      startContext,
       bundleCache,
       inlineSourcemap,
       bundleLogLevel,
@@ -610,7 +610,7 @@ export async function loadApplication(
       authName,
       handlerAccessPath: `auth.hooks.beforeLogin.handler`,
       env: config.env ?? {},
-      triggerContext,
+      startContext,
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,

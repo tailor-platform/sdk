@@ -4,16 +4,16 @@ import { describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import {
   normalizeFilePath,
-  type TriggerContext,
-  type TriggerModuleBindings,
-  type TriggerTarget,
-} from "#/cli/shared/trigger-context";
+  type StartContext,
+  type StartModuleBindings,
+  type StartTarget,
+} from "#/cli/shared/start-context";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import {
   hasStartCall,
-  transformFunctionTriggers as transformFunctionTriggersWithContext,
-} from "./trigger-transformer";
+  transformStartCalls as transformStartCallsWithContext,
+} from "./start-transformer";
 import { findAllWorkflows } from "./workflow-detector";
 
 function parseProgram(source: string) {
@@ -28,7 +28,7 @@ function findWorkflows(source: string) {
   return findAllWorkflows(parseProgram(source), source);
 }
 
-function transformFunctionTriggers(
+function transformStartCalls(
   source: string,
   workflowNameMap: Map<string, string>,
   jobNameMap: Map<string, string>,
@@ -36,7 +36,7 @@ function transformFunctionTriggers(
   currentFilePath = path.resolve("test.ts"),
   authNamespace?: string,
 ) {
-  const localBindings = new Map<string, TriggerTarget>();
+  const localBindings = new Map<string, StartTarget>();
   for (const [name, jobName] of jobNameMap) {
     localBindings.set(name, { kind: "job", name: jobName });
   }
@@ -44,7 +44,7 @@ function transformFunctionTriggers(
     localBindings.set(name, { kind: "workflow", name: workflowName });
   }
 
-  const modules = new Map<string, TriggerModuleBindings>([
+  const modules = new Map<string, StartModuleBindings>([
     [normalizeFilePath(currentFilePath), { localBindings, exports: new Map(localBindings) }],
   ]);
   for (const [file, workflowName] of workflowFileMap ?? []) {
@@ -54,8 +54,8 @@ function transformFunctionTriggers(
     });
   }
 
-  const context: TriggerContext = { modules, authNamespace };
-  return transformFunctionTriggersWithContext(source, context, currentFilePath);
+  const context: StartContext = { modules, authNamespace };
+  return transformStartCallsWithContext(source, context, currentFilePath);
 }
 
 function transformWorkflowJobSource(
@@ -71,7 +71,7 @@ function transformWorkflowJobSource(
     targetJobExportName,
     otherJobExportNames,
   );
-  return transformFunctionTriggers(stripped, new Map(), jobNameMap);
+  return transformStartCalls(stripped, new Map(), jobNameMap);
 }
 
 describe("AST Transformer - createWorkflowJob call detection", () => {
@@ -539,7 +539,7 @@ const mainJob = createWorkflowJob({
       expect(result).toContain('tailor.workflow.startJobFunction("job-two", undefined)');
     });
 
-    test("does not transform trigger calls inside fallback-removed job bodies", () => {
+    test("does not transform start calls inside fallback-removed job bodies", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -568,7 +568,7 @@ const mainJob = createWorkflowJob({
       expect(result).not.toContain("startJobFunction");
     });
 
-    test("does not modify jobs without trigger calls", () => {
+    test("does not modify jobs without start calls", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -758,8 +758,8 @@ const workflow2 = createWorkflow({ name: "workflow-two", mainJob: job2 });
   });
 });
 
-describe("AST Transformer - transformFunctionTriggers", () => {
-  describe("workflow trigger transformation", () => {
+describe("AST Transformer - transformStartCalls", () => {
+  describe("workflow start transformation", () => {
     test("transforms workflow.start() calls to tailor.workflow.startWorkflow()", () => {
       const source = `
 const workflowRunId = await orderWorkflow.start(
@@ -770,7 +770,7 @@ const workflowRunId = await orderWorkflow.start(
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.startWorkflow("order-processing"');
       expect(result).toContain('{ orderId: "123", customerId: "456" }');
@@ -785,7 +785,7 @@ const result = await myWorkflow.start({ id: 1 }, { invoker });
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.startWorkflow("my-workflow"');
       expect(result).toContain("{ invoker }");
@@ -798,7 +798,7 @@ const result = await myWorkflow.start({ id: 1 });
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
+      const result = transformStartCalls(
         source,
         workflowNameMap,
         jobNameMap,
@@ -808,7 +808,7 @@ const result = await myWorkflow.start({ id: 1 });
       );
 
       expect(result).toContain('tailor.workflow.startWorkflow("my-workflow", { id: 1 })');
-      expect(result).not.toContain("__tailor_normalizeTriggerOptions");
+      expect(result).not.toContain("__tailor_normalizeStartOptions");
     });
 
     test("wraps a string-literal invoker with the runtime normalizer when authNamespace is provided", () => {
@@ -818,7 +818,7 @@ const result = await myWorkflow.start({ id: 1 }, { invoker: "kiosk" });
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
+      const result = transformStartCalls(
         source,
         workflowNameMap,
         jobNameMap,
@@ -828,10 +828,10 @@ const result = await myWorkflow.start({ id: 1 }, { invoker: "kiosk" });
       );
 
       expect(result).toContain('tailor.workflow.startWorkflow("my-workflow"');
-      expect(result).toContain('__tailor_normalizeTriggerOptions({ invoker: "kiosk" })');
+      expect(result).toContain('__tailor_normalizeStartOptions({ invoker: "kiosk" })');
       // Helper injected at the top of the file with the namespace baked in
       expect(result).toContain(
-        'const __tailor_normalizeTriggerOptions = (o) => { if (!o) return o; const { invoker, ...rest } = o; return typeof invoker === "string" ? { ...rest, authInvoker: { namespace: "my-auth", machineUserName: invoker } } : typeof invoker === "object" ? { ...rest, authInvoker: invoker } : o; };',
+        'const __tailor_normalizeStartOptions = (o) => { if (!o) return o; const { invoker, ...rest } = o; return typeof invoker === "string" ? { ...rest, authInvoker: { namespace: "my-auth", machineUserName: invoker } } : typeof invoker === "object" ? { ...rest, authInvoker: invoker } : o; };',
       );
     });
 
@@ -843,7 +843,7 @@ const result = await myWorkflow.start({ id: 1 }, { invoker: machineUser });
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
+      const result = transformStartCalls(
         source,
         workflowNameMap,
         jobNameMap,
@@ -852,7 +852,7 @@ const result = await myWorkflow.start({ id: 1 }, { invoker: machineUser });
         "my-auth",
       );
 
-      expect(result).toContain("__tailor_normalizeTriggerOptions({ invoker: machineUser })");
+      expect(result).toContain("__tailor_normalizeStartOptions({ invoker: machineUser })");
     });
 
     test("wraps a shorthand invoker with the runtime normalizer", () => {
@@ -863,7 +863,7 @@ const result = await myWorkflow.start({ id: 1 }, { invoker });
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
+      const result = transformStartCalls(
         source,
         workflowNameMap,
         jobNameMap,
@@ -872,7 +872,7 @@ const result = await myWorkflow.start({ id: 1 }, { invoker });
         "my-auth",
       );
 
-      expect(result).toContain("__tailor_normalizeTriggerOptions({ invoker })");
+      expect(result).toContain("__tailor_normalizeStartOptions({ invoker })");
     });
 
     test("wraps a variable options argument with the runtime normalizer", () => {
@@ -883,7 +883,7 @@ const result = await myWorkflow.start({ id: 1 }, opts);
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
+      const result = transformStartCalls(
         source,
         workflowNameMap,
         jobNameMap,
@@ -893,7 +893,7 @@ const result = await myWorkflow.start({ id: 1 }, opts);
       );
 
       expect(result).toContain(
-        'tailor.workflow.startWorkflow("my-workflow", { id: 1 }, __tailor_normalizeTriggerOptions(opts))',
+        'tailor.workflow.startWorkflow("my-workflow", { id: 1 }, __tailor_normalizeStartOptions(opts))',
       );
     });
 
@@ -904,7 +904,7 @@ const result = await myWorkflow.start({ id: 1 }, { ...base });
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
+      const result = transformStartCalls(
         source,
         workflowNameMap,
         jobNameMap,
@@ -913,7 +913,7 @@ const result = await myWorkflow.start({ id: 1 }, { ...base });
         "my-auth",
       );
 
-      expect(result).toContain("__tailor_normalizeTriggerOptions({ ...base })");
+      expect(result).toContain("__tailor_normalizeStartOptions({ ...base })");
     });
 
     test("transforms workflow.start() with an empty options object", () => {
@@ -923,7 +923,7 @@ const result = await myWorkflow.start({ id: 1 }, {});
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
+      const result = transformStartCalls(
         source,
         workflowNameMap,
         jobNameMap,
@@ -933,11 +933,11 @@ const result = await myWorkflow.start({ id: 1 }, {});
       );
 
       expect(result).toContain(
-        'tailor.workflow.startWorkflow("my-workflow", { id: 1 }, __tailor_normalizeTriggerOptions({}))',
+        'tailor.workflow.startWorkflow("my-workflow", { id: 1 }, __tailor_normalizeStartOptions({}))',
       );
     });
 
-    test("injects the normalizer helper only once per file even for multiple trigger calls", () => {
+    test("injects the normalizer helper only once per file even for multiple start calls", () => {
       const source = `
 await myWorkflow.start({ id: 1 }, { invoker: "kiosk" });
 await myWorkflow.start({ id: 2 }, { invoker: "batch" });
@@ -945,7 +945,7 @@ await myWorkflow.start({ id: 2 }, { invoker: "batch" });
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(
+      const result = transformStartCalls(
         source,
         workflowNameMap,
         jobNameMap,
@@ -954,7 +954,7 @@ await myWorkflow.start({ id: 2 }, { invoker: "batch" });
         "my-auth",
       );
 
-      const matches = result.match(/const __tailor_normalizeTriggerOptions =/g);
+      const matches = result.match(/const __tailor_normalizeStartOptions =/g);
       expect(matches).toHaveLength(1);
     });
 
@@ -965,15 +965,15 @@ const result = await myWorkflow.start({ id: 1 }, { invoker: "kiosk" });
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
         'tailor.workflow.startWorkflow("my-workflow", { id: 1 }, { invoker: "kiosk" })',
       );
-      expect(result).not.toContain("__tailor_normalizeTriggerOptions");
+      expect(result).not.toContain("__tailor_normalizeStartOptions");
     });
   });
-  describe("job trigger transformation", () => {
+  describe("job start transformation", () => {
     test("transforms job.start() calls to tailor.workflow.startJobFunction()", () => {
       const source = `
 const result = await fetchCustomer.start({ customerId: "123" });
@@ -981,7 +981,7 @@ const result = await fetchCustomer.start({ customerId: "123" });
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.startJobFunction("fetch-customer"');
       expect(result).toContain('{ customerId: "123" }');
@@ -994,7 +994,7 @@ const result = await simpleJob.start();
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["simpleJob", "simple-job"]]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.startJobFunction("simple-job", undefined)');
     });
@@ -1006,7 +1006,7 @@ const result = await fetchCustomer.start({ id: "123" }, { executionPolicyKey: "p
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
         'tailor.workflow.startJobFunction("fetch-customer", { id: "123" }, { executionPolicyKey: "premium" })',
@@ -1020,7 +1020,7 @@ const result = await fetchCustomer.start({ id: "123" });
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       // Args only, no trailing options argument.
       expect(result).toContain('tailor.workflow.startJobFunction("fetch-customer", { id: "123" })');
@@ -1040,7 +1040,7 @@ const event = button.start("click");
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       // Should remain unchanged
       expect(result).toContain('someRandomObject.start({ data: "test" })');
@@ -1048,7 +1048,7 @@ const event = button.start("click");
       expect(result).not.toContain("tailor.workflow");
     });
 
-    test("only transforms trigger calls for known workflows and jobs", () => {
+    test("only transforms start calls for known workflows and jobs", () => {
       const source = `
 // Known workflow - should be transformed
 const wfResult = await orderWorkflow.start({ id: 1 }, { invoker: "admin" });
@@ -1062,7 +1062,7 @@ const unknown = await randomThing.start({ id: 3 });
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map([["fetchData", "fetch-data"]]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       // Known workflow transformed
       expect(result).toContain('tailor.workflow.startWorkflow("order-processing"');
@@ -1079,21 +1079,21 @@ const result = await myWorkflow.start({ id: 1 });
       const workflowNameMap = new Map([["myWorkflow", "my-workflow"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.startWorkflow("my-workflow", { id: 1 })');
       expect(result).not.toContain("myWorkflow.start");
     });
   });
 
-  describe("mixed workflow and job triggers", () => {
-    test("transforms both workflow and job triggers in the same source", () => {
+  describe("mixed workflow and job starts", () => {
+    test("transforms both workflow and job starts in the same source", () => {
       const source = `
 async function processOrder(orderId: string) {
-  // Trigger a job to fetch data
+  // Start a job to fetch data
   const data = await fetchCustomer.start({ id: orderId });
 
-  // Then trigger a workflow for processing
+  // Then start a workflow for processing
   const workflowRunId = await orderWorkflow.start(
     { orderId, data },
     { invoker: "system" }
@@ -1105,14 +1105,14 @@ async function processOrder(orderId: string) {
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.startJobFunction("fetch-customer"');
       expect(result).toContain('tailor.workflow.startWorkflow("order-processing"');
     });
   });
 
-  describe("direct job trigger transformation", () => {
+  describe("direct job start transformation", () => {
     test("replaces job.start() with startJobFunction() and preserves await", () => {
       const source = `
 const customer = await fetchCustomer.start({ customerId: "123" });
@@ -1121,7 +1121,7 @@ console.log(customer);
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
         'const customer = await tailor.workflow.startJobFunction("fetch-customer", { customerId: "123" })',
@@ -1139,7 +1139,7 @@ const notification = await sendNotification.start({ message: "Hello" });
         ["sendNotification", "send-notification"],
       ]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('tailor.workflow.startJobFunction("fetch-customer"');
       expect(result).toContain('tailor.workflow.startJobFunction("send-notification"');
@@ -1152,7 +1152,7 @@ const executionId = await orderWorkflow.start({ orderId: "123" }, { invoker });
       const workflowNameMap = new Map([["orderWorkflow", "order-processing"]]);
       const jobNameMap = new Map<string, string>();
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain('await tailor.workflow.startWorkflow("order-processing"');
       expect(result).not.toContain("(async () => tailor.workflow.startWorkflow");
@@ -1165,7 +1165,7 @@ const customerPromise = fetchCustomer.start({ customerId: "123" });
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
         'const customerPromise = tailor.workflow.startJobFunction("fetch-customer", { customerId: "123" })',
@@ -1186,7 +1186,7 @@ const [customer, notification] = await Promise.all([
         ["sendNotification", "send-notification"],
       ]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
         'tailor.workflow.startJobFunction("fetch-customer", { customerId: "123" })',
@@ -1206,14 +1206,14 @@ fetchCustomer.start({ customerId: "123" }).then((customer) => {
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
         'tailor.workflow.startJobFunction("fetch-customer", { customerId: "123" }).then(',
       );
     });
 
-    test("transforms only the outer call when a known trigger is nested inside another", () => {
+    test("transforms only the outer call when a known start call is nested inside another", () => {
       const source = `
 await myWorkflow.start(fetchCustomer.start({ customerId: "123" }));
 `;
@@ -1221,7 +1221,7 @@ await myWorkflow.start(fetchCustomer.start({ customerId: "123" }));
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
       using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
         'await tailor.workflow.startWorkflow("my-workflow", fetchCustomer.start({ customerId: "123" }));',
@@ -1238,7 +1238,7 @@ unknown.start(fetchCustomer.start({ customerId: "123" }));
       const workflowNameMap = new Map<string, string>();
       const jobNameMap = new Map([["fetchCustomer", "fetch-customer"]]);
 
-      const result = transformFunctionTriggers(source, workflowNameMap, jobNameMap);
+      const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
         'tailor.workflow.startJobFunction("fetch-customer", { customerId: "123" })',
