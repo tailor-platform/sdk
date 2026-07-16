@@ -8,6 +8,11 @@ import { resolve } from "./tsconfig-paths-hook.mjs";
 const notFound = (specifier: string) =>
   Object.assign(new Error(`Cannot find '${specifier}'`), { code: "ERR_MODULE_NOT_FOUND" });
 
+const dirImport = (specifier: string) =>
+  Object.assign(new Error(`Directory import '${specifier}' is not supported`), {
+    code: "ERR_UNSUPPORTED_DIR_IMPORT",
+  });
+
 function makeProject(tsconfig: object): { dir: string; parentURL: string } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tsconfig-paths-hook-test-")));
   fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify(tsconfig));
@@ -174,6 +179,22 @@ describe("resolve", () => {
     const expectedCandidate = pathToFileURL(path.join(dir, "src", "models")).href;
     const nextResolve = vi.fn().mockImplementation((specifier: string) => {
       if (specifier === expectedCandidate + "/index.ts") return resolved;
+      throw notFound(specifier);
+    });
+    const result = await resolve("@/models", { parentURL }, nextResolve);
+    expect(result).toEqual(resolved);
+  });
+
+  test("attempts the tsconfig paths fallback when the initial resolution fails with ERR_UNSUPPORTED_DIR_IMPORT", async () => {
+    const { dir, parentURL } = makeProject({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./src/*"] } },
+    });
+    dirs.push(dir);
+    const resolved = { url: "file:///resolved/models/index.ts" };
+    const expectedCandidate = pathToFileURL(path.join(dir, "src", "models")).href;
+    const nextResolve = vi.fn().mockImplementation((specifier: string) => {
+      if (specifier === expectedCandidate + "/index.ts") return resolved;
+      if (specifier === "@/models") throw dirImport(specifier);
       throw notFound(specifier);
     });
     const result = await resolve("@/models", { parentURL }, nextResolve);
