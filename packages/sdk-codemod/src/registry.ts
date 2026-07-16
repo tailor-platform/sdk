@@ -722,7 +722,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/workflow-trigger-rename",
     name: "workflow.triggerWorkflow/triggerJobFunction/resumeWorkflow → startWorkflow/startJobFunction/resumeWorkflowExecution",
     description:
-      "Rename tailor.workflow call sites from the pre-alignment triggerWorkflow/triggerJobFunction/resumeWorkflow names to the canonical startWorkflow/startJobFunction/resumeWorkflowExecution names, on both the ambient tailor.workflow global and a workflow value imported from @tailor-platform/sdk/runtime(/workflow).",
+      "Rename tailor.workflow call sites from the pre-alignment triggerWorkflow/triggerJobFunction/resumeWorkflow names to the canonical startWorkflow/startJobFunction/resumeWorkflowExecution names, on both the ambient tailor.workflow global and a workflow value imported from @tailor-platform/sdk/runtime(/workflow). For a renamed triggerWorkflow call, also renames a literal `invoker` option key to `authInvoker` — startWorkflow's options expect the platform shape directly, unlike the removed triggerWorkflow wrapper, which converted invoker to authInvoker internally.",
     since: "1.0.0",
     until: "2.0.0",
     scriptPath: "v2/workflow-trigger-rename/scripts/transform.js",
@@ -733,6 +733,13 @@ export const allCodemods: CodemodPackage[] = [
           'import { workflow } from "@tailor-platform/sdk/runtime";\n\nawait workflow.triggerWorkflow("myWorkflow", { data: "value" });',
         after:
           'import { workflow } from "@tailor-platform/sdk/runtime";\n\nawait workflow.startWorkflow("myWorkflow", { data: "value" });',
+      },
+      {
+        caption: "A literal invoker option is renamed to authInvoker:",
+        before:
+          'await workflow.triggerWorkflow("myWorkflow", { data: "value" }, { invoker: myInvoker });',
+        after:
+          'await workflow.startWorkflow("myWorkflow", { data: "value" }, { authInvoker: myInvoker });',
       },
     ],
     prompt: [
@@ -746,11 +753,19 @@ export const allCodemods: CodemodPackage[] = [
       "ambient tailor name, to avoid rewriting an unrelated same-named value — review",
       "those manually.",
       "",
+      "For a renamed triggerWorkflow call, the codemod also renames a literal invoker",
+      "option key (including shorthand { invoker }) to authInvoker, since startWorkflow",
+      "expects the platform's authInvoker shape directly while triggerWorkflow's removed",
+      "wrapper converted invoker to authInvoker internally.",
+      "",
       "Also review, and migrate by hand:",
       "- Destructured references (e.g. const { triggerWorkflow } = workflow) — the",
       "  codemod only rewrites direct member-access calls.",
       "- Imported TriggerWorkflowOptions / TriggerJobFunctionOptions types — rename",
       "  them to StartWorkflowOptions / StartJobFunctionOptions.",
+      "- An invoker option passed via a variable or spread (not a literal object) —",
+      "  the codemod only inspects literal object arguments; rename the invoker key",
+      "  to authInvoker in the options object's own definition.",
     ].join("\n"),
   },
   {
