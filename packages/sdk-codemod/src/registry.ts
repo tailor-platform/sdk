@@ -96,8 +96,8 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
 );
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
-const V2_NEXT_3 = "2.0.0-next.3";
 const V2_NEXT_4 = "2.0.0-next.4";
+const V2_NEXT_5 = "2.0.0-next.5";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -509,7 +509,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rewrite `@tailor-platform/sdk/runtime/*` namespace-star and flat value imports to self-named namespace imports, and aggregate `file.deleteFile` calls to `file.delete`. `TailorContextAPI` and `TailorWorkflowAPI` now describe SDK wrappers; direct platform globals use `PlatformContextAPI` and `PlatformWorkflowAPI`.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_3,
+    prereleaseUntil: V2_NEXT_4,
     scriptPath: "v2/runtime-subpath-namespace/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     legacyPatterns: [
@@ -592,7 +592,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rename TailorDB schema builder calls from `db.type()` to `db.table()`. TailorDB schema definitions now use table terminology in SDK projects.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_3,
+    prereleaseUntil: V2_NEXT_4,
     scriptPath: "v2/db-type-to-table/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     legacyPatterns: ["db.type"],
@@ -623,7 +623,7 @@ export const allCodemods: CodemodPackage[] = [
       "Review TailorDB relations that omit `toward.as`. Their forward GraphQL field names now derive from the relation field name with a trailing `ID`, `Id`, or `id` removed, instead of from the target table name.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_4,
+    prereleaseUntil: V2_NEXT_5,
     scriptPath: "v2/forward-relation-name/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     suspiciousPatterns: [
@@ -956,7 +956,7 @@ export const allCodemods: CodemodPackage[] = [
       "Field-level `ValidateFn` is simplified from `(args: { value, data, invoker }) => boolean` to `(args: { value }) => string | void` — the function now returns the error message directly instead of a separate `[fn, message]` tuple. The `ValidateConfig` tuple form and `Validators<F>` record syntax on `db.type().validate()` are removed. Type-level validation uses `db.type().validate((args, issues) => void)` with `{ newRecord, oldRecord, invoker }` args and an `issues(field, message)` callback for cross-field rules.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_4,
+    prereleaseUntil: V2_NEXT_5,
     suspiciousPatterns: ["ValidateConfig", "Validators<", "ValidatorsBase", ".validate("],
     examples: [
       {
@@ -1007,7 +1007,7 @@ export const allCodemods: CodemodPackage[] = [
       "Field-level `HookFn` args change from `{ value, data, invoker }` to create `{ input, invoker, now }` / update `{ input, oldValue, invoker, now }` — `value` is renamed to `input`, matching the `input` arg on type-level hooks (same pre-hook data, narrowed to one field); `data` (the full record) is removed; `oldValue` (previous field value) is added for update hooks only; `now` (operation timestamp) is shared across all hooks. Type-level hooks on `db.type().hooks()` change from per-field mapping `{ fieldName: { create, update } }` (`Hooks<F>`) to a single `{ create, update }` object (`TypeHook<F>`) — create hooks take `{ input, invoker, now }`, update hooks take `{ input, oldRecord, invoker, now }` (oldRecord is always non-null). Both return partial field overrides.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_4,
+    prereleaseUntil: V2_NEXT_5,
     suspiciousPatterns: ["Hooks<", "HookFn<", "Hook<", ".hooks("],
     examples: [
       {

@@ -48,7 +48,7 @@ describe("getApplicableCodemods", () => {
   });
 
   test("returns db.type to db.table codemod for the prerelease that removes db.type", () => {
-    const prereleaseIds = getApplicableCodemods("1.67.1", "2.0.0-next.3").map(
+    const prereleaseIds = getApplicableCodemods("1.67.1", "2.0.0-next.4").map(
       (codemod) => codemod.id,
     );
 
@@ -56,10 +56,10 @@ describe("getApplicableCodemods", () => {
   });
 
   test("reviews forward relation names at the prerelease that changes their defaults", () => {
-    const previousIds = getApplicableCodemods("1.67.1", "2.0.0-next.3").map(
+    const previousIds = getApplicableCodemods("1.67.1", "2.0.0-next.4").map(
       (codemod) => codemod.id,
     );
-    const codemod = getApplicableCodemods("2.0.0-next.3", "2.0.0-next.4").find(
+    const codemod = getApplicableCodemods("2.0.0-next.4", "2.0.0-next.5").find(
       (entry) => entry.id === "v2/forward-relation-name",
     );
 
