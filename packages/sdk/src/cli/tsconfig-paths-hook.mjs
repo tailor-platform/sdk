@@ -33,6 +33,18 @@ import { createPathsMatcher, getTsconfig } from "get-tsconfig";
 // misses.
 
 const TS_EXTENSIONS = [".ts", ".tsx", ".mts"];
+const JS_EXTENSIONS = [".js", ".jsx", ".mjs"];
+
+// A specifier ending in one of these already names a JS-style output
+// extension (the pattern TypeScript's NodeNext/bundler resolution expects
+// for relative-looking specifiers): it must map to the corresponding TS
+// source extension, not be treated as extensionless and have a TS
+// extension appended after it (which would guess e.g. `utils.js.ts`).
+const JS_TO_TS_EXT = new Map([
+  [".js", ".ts"],
+  [".jsx", ".tsx"],
+  [".mjs", ".mts"],
+]);
 
 // Cached per directory for the lifetime of this process. `generate --watch`
 // restarts its own child process on config/service-file changes (clearing
@@ -42,20 +54,38 @@ const TS_EXTENSIONS = [".ts", ".tsx", ".mts"];
 const tsconfigCache = new Map();
 const matcherCache = new Map();
 
-function getMatcher(startDir) {
+function getResolutionContext(startDir) {
   if (matcherCache.has(startDir)) return matcherCache.get(startDir);
 
   const tsconfig = getTsconfig(startDir, "tsconfig.json", tsconfigCache);
   const matcher = tsconfig ? createPathsMatcher(tsconfig) : null;
+  const result = matcher
+    ? { matcher, allowJs: tsconfig.config.compilerOptions?.allowJs ?? false }
+    : null;
 
-  matcherCache.set(startDir, matcher);
-  return matcher;
+  matcherCache.set(startDir, result);
+  return result;
 }
 
-async function tryResolveWithExtensions(base, context, nextResolve) {
+async function tryResolveWithExtensions(base, context, nextResolve, allowJs) {
+  for (const [jsExt, tsExt] of JS_TO_TS_EXT) {
+    if (base.endsWith(jsExt)) {
+      try {
+        return await nextResolve(base.slice(0, -jsExt.length) + tsExt, context);
+      } catch (e) {
+        if (e?.code !== "ERR_MODULE_NOT_FOUND") throw e;
+      }
+      return null;
+    }
+  }
+
   if (!TS_EXTENSIONS.some((ext) => base.endsWith(ext))) {
-    for (const ext of TS_EXTENSIONS) {
-      for (const suffix of ["", "/index"]) {
+    // TypeScript resolves a file at this path before falling back to a
+    // directory's index file, so file extensions are tried (across every
+    // suffix-less candidate) before any `/index` candidate.
+    const extensions = allowJs ? [...TS_EXTENSIONS, ...JS_EXTENSIONS] : TS_EXTENSIONS;
+    for (const suffix of ["", "/index"]) {
+      for (const ext of extensions) {
         try {
           return await nextResolve(base + suffix + ext, context);
         } catch (e) {
@@ -78,12 +108,24 @@ async function tryResolveWithExtensions(base, context, nextResolve) {
 // non-relative bare specifier that maps to a tsconfig `paths` alias declared
 // by a tsconfig.json above the importing file's own directory. Relative
 // imports and anything tsx/Node already resolves are left alone.
+//
+// A `#`-prefixed specifier (Node's subpath imports syntax, also usable as a
+// tsconfig `paths` alias pattern) fails with ERR_PACKAGE_IMPORT_NOT_DEFINED
+// or ERR_INVALID_MODULE_SPECIFIER rather than ERR_MODULE_NOT_FOUND, so those
+// codes are treated as recoverable for `#`-prefixed specifiers only —
+// narrow enough to avoid masking genuinely malformed specifiers elsewhere.
 export async function resolve(specifier, context, nextResolve) {
   try {
     return await nextResolve(specifier, context);
   } catch (err) {
     const code = err?.code;
-    if (code !== "ERR_MODULE_NOT_FOUND" && code !== "ERR_UNSUPPORTED_DIR_IMPORT") throw err;
+    const isSubpathImport = specifier.startsWith("#");
+    const recoverable =
+      code === "ERR_MODULE_NOT_FOUND" ||
+      code === "ERR_UNSUPPORTED_DIR_IMPORT" ||
+      (isSubpathImport &&
+        (code === "ERR_PACKAGE_IMPORT_NOT_DEFINED" || code === "ERR_INVALID_MODULE_SPECIFIER"));
+    if (!recoverable) throw err;
     if (specifier.startsWith(".") || specifier.startsWith("/")) throw err;
     if (!context.parentURL?.startsWith("file://")) throw err;
 
@@ -92,9 +134,9 @@ export async function resolve(specifier, context, nextResolve) {
     parentParsed.hash = "";
     const parentDir = dirname(fileURLToPath(parentParsed));
 
-    const matcher = getMatcher(parentDir);
-    if (!matcher) throw err;
-    const candidates = matcher(specifier);
+    const resolutionContext = getResolutionContext(parentDir);
+    if (!resolutionContext) throw err;
+    const candidates = resolutionContext.matcher(specifier);
     if (!candidates || candidates.length === 0) throw err;
 
     for (const candidatePath of candidates) {
@@ -102,6 +144,7 @@ export async function resolve(specifier, context, nextResolve) {
         pathToFileURL(candidatePath).href,
         context,
         nextResolve,
+        resolutionContext.allowJs,
       );
       if (result) return result;
     }

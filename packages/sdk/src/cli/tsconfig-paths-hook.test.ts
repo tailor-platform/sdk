@@ -13,6 +13,11 @@ const dirImport = (specifier: string) =>
     code: "ERR_UNSUPPORTED_DIR_IMPORT",
   });
 
+const packageImportNotDefined = (specifier: string) =>
+  Object.assign(new Error(`Package import specifier "${specifier}" is not defined`), {
+    code: "ERR_PACKAGE_IMPORT_NOT_DEFINED",
+  });
+
 function makeProject(tsconfig: object): { dir: string; parentURL: string } {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tsconfig-paths-hook-test-")));
   fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify(tsconfig));
@@ -199,5 +204,100 @@ describe("resolve", () => {
     });
     const result = await resolve("@/models", { parentURL }, nextResolve);
     expect(result).toEqual(resolved);
+  });
+
+  test("prefers a sibling file over a same-name directory's index, matching TypeScript's own resolution order", async () => {
+    const { dir, parentURL } = makeProject({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./src/*"] } },
+    });
+    dirs.push(dir);
+    const siblingFile = { url: "file:///resolved/foo.tsx" };
+    const directoryIndex = { url: "file:///resolved/foo/index.ts" };
+    const expectedCandidate = pathToFileURL(path.join(dir, "src", "foo")).href;
+    const nextResolve = vi.fn().mockImplementation((specifier: string) => {
+      if (specifier === expectedCandidate + ".tsx") return siblingFile;
+      if (specifier === expectedCandidate + "/index.ts") return directoryIndex;
+      throw notFound(specifier);
+    });
+    const result = await resolve("@/foo", { parentURL }, nextResolve);
+    expect(result).toEqual(siblingFile);
+  });
+
+  test("maps a .js specifier extension to the corresponding TS source extension instead of appending a TS extension", async () => {
+    const { dir, parentURL } = makeProject({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./src/*"] } },
+    });
+    dirs.push(dir);
+    const resolved = { url: "file:///resolved/utils.ts" };
+    const expectedCandidate = pathToFileURL(path.join(dir, "src", "utils")).href;
+    const nextResolve = vi.fn().mockImplementation((specifier: string) => {
+      if (specifier === expectedCandidate + ".ts") return resolved;
+      throw notFound(specifier);
+    });
+    const result = await resolve("@/utils.js", { parentURL }, nextResolve);
+    expect(result).toEqual(resolved);
+    expect(nextResolve).not.toHaveBeenCalledWith(
+      expect.stringContaining("utils.js.ts"),
+      expect.anything(),
+    );
+  });
+
+  test("probes an allowed .js source for an extensionless alias when allowJs is set", async () => {
+    const { dir, parentURL } = makeProject({
+      compilerOptions: { baseUrl: ".", allowJs: true, paths: { "@/*": ["./src/*"] } },
+    });
+    dirs.push(dir);
+    const resolved = { url: "file:///resolved/utils.js" };
+    const expectedCandidate = pathToFileURL(path.join(dir, "src", "utils")).href;
+    const nextResolve = vi.fn().mockImplementation((specifier: string) => {
+      if (specifier === expectedCandidate + ".js") return resolved;
+      throw notFound(specifier);
+    });
+    const result = await resolve("@/utils", { parentURL }, nextResolve);
+    expect(result).toEqual(resolved);
+  });
+
+  test("does not probe .js sources for an extensionless alias when allowJs is unset", async () => {
+    const { dir, parentURL } = makeProject({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./src/*"] } },
+    });
+    dirs.push(dir);
+    const nextResolve = vi.fn().mockImplementation((specifier: string) => {
+      throw notFound(specifier);
+    });
+    await expect(resolve("@/utils", { parentURL }, nextResolve)).rejects.toThrow(
+      "Cannot find '@/utils'",
+    );
+    expect(nextResolve).not.toHaveBeenCalledWith(expect.stringContaining(".js"), expect.anything());
+  });
+
+  test("attempts the tsconfig paths fallback for a subpath-imports specifier failing with ERR_PACKAGE_IMPORT_NOT_DEFINED", async () => {
+    const { dir, parentURL } = makeProject({
+      compilerOptions: { baseUrl: ".", paths: { "#/*": ["./src/*"] } },
+    });
+    dirs.push(dir);
+    const resolved = { url: "file:///resolved/utils.ts" };
+    const expectedCandidate = pathToFileURL(path.join(dir, "src", "utils")).href;
+    const nextResolve = vi.fn().mockImplementation((specifier: string) => {
+      if (specifier === expectedCandidate + ".ts") return resolved;
+      if (specifier === "#/utils") throw packageImportNotDefined(specifier);
+      throw notFound(specifier);
+    });
+    const result = await resolve("#/utils", { parentURL }, nextResolve);
+    expect(result).toEqual(resolved);
+  });
+
+  test("does not treat ERR_PACKAGE_IMPORT_NOT_DEFINED as recoverable for a non-subpath-imports specifier", async () => {
+    const { dir, parentURL } = makeProject({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./src/*"] } },
+    });
+    dirs.push(dir);
+    const nextResolve = vi.fn().mockImplementation((specifier: string) => {
+      throw packageImportNotDefined(specifier);
+    });
+    await expect(resolve("@/utils", { parentURL }, nextResolve)).rejects.toMatchObject({
+      code: "ERR_PACKAGE_IMPORT_NOT_DEFINED",
+    });
+    expect(nextResolve).toHaveBeenCalledTimes(1);
   });
 });
