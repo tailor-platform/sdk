@@ -1,7 +1,6 @@
-import { logBetaWarning } from "#/cli/shared/beta";
-import { initOperatorClient } from "#/cli/shared/client";
-import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
-import type { OperatorClient } from "#/cli/shared/client";
+import { initOperatorClient, loadAccessToken, loadWorkspaceId } from "@tailor-platform/sdk/cli";
+import { logger } from "./shared/logger";
+import type { OperatorClient } from "@tailor-platform/sdk/cli";
 
 export interface ErdDeployContext {
   client: OperatorClient;
@@ -17,7 +16,10 @@ type ErdDeployContextOptions = {
  * Initialize shared ERD command behavior.
  */
 export function initErdCommand(): void {
-  logBetaWarning("tailordb erd");
+  logger.warn(
+    "The 'tailordb erd' command is a beta feature and may introduce breaking changes in future releases.",
+  );
+  logger.newline();
 }
 
 /**

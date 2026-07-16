@@ -1,16 +1,9 @@
-import { cpSync, rmSync } from "node:fs";
+import { cpSync } from "node:fs";
 import path from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig, type TsdownPluginOption } from "tsdown";
 import { entry } from "./scripts/build-entries.mjs";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
-
-function copyErdViewerAssets(outDir: string): void {
-  const source = path.resolve("src/cli/commands/tailordb/erd/viewer-assets");
-  const target = path.resolve(outDir, "cli/erd-viewer-assets");
-  rmSync(target, { recursive: true, force: true });
-  cpSync(source, target, { recursive: true });
-}
 
 function yamlText() {
   return {
@@ -67,7 +60,6 @@ export default defineConfig([
     deps: { neverBundle: externalDeps },
     plugins: jsPlugins,
     onSuccess: (config) => {
-      copyErdViewerAssets(config.outDir);
       cpSync(path.resolve("src/cli/ts-hook.mjs"), path.join(config.outDir, "cli/ts-hook.mjs"));
       cpSync(path.resolve("src/cli/ts-hook.d.mts"), path.join(config.outDir, "cli/ts-hook.d.mts"));
     },

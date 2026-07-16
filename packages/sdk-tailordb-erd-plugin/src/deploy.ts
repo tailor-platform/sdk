@@ -1,12 +1,23 @@
+import { assertWritable, deployStaticWebsite } from "@tailor-platform/sdk/cli";
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs } from "#/cli/shared/args";
-import { defineAppCommand } from "#/cli/shared/command";
-import { logger } from "#/cli/shared/logger";
-import { assertWritable } from "#/cli/shared/readonly-guard";
-import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { prepareErdBuilds } from "./export";
+import { deploymentArgs } from "./shared/args";
+import { defineAppCommand } from "./shared/command";
+import { logger } from "./shared/logger";
 import { initErdDeployContext } from "./utils";
+
+function logSkippedFiles(skippedFiles: string[]): void {
+  if (skippedFiles.length === 0) {
+    return;
+  }
+  logger.warn(
+    "Deployment completed, but some files failed to upload. These files may have unsupported content types or other validation issues. Please review the list below:",
+  );
+  for (const file of skippedFiles) {
+    logger.log(`  - ${file}`);
+  }
+}
 
 export const erdDeployCommand = defineAppCommand({
   name: "deploy",

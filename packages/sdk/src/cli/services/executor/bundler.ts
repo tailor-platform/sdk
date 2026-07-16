@@ -1,19 +1,17 @@
-import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
-import { removeStaleEntryFiles } from "#/cli/services/stale-cleanup";
 import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
 import type { LogLevel } from "#/configure/config/types";
@@ -45,7 +43,7 @@ export interface BundleExecutorsOptions {
  * Bundle executors from the specified configuration
  *
  * This function:
- * 1. Creates entry file that extracts operation.body
+ * 1. Creates an in-memory entry module that extracts operation.body
  * 2. Bundles in a single step with tree-shaking
  * @param options - Bundle executor options
  * @returns Map of executor name to bundled code
@@ -100,15 +98,6 @@ export async function bundleExecutors(
     return bundledCode;
   }
 
-  const outputDir = path.resolve(getDistDir(), "executors");
-
-  fs.mkdirSync(outputDir, { recursive: true });
-
-  // Clean stale entry files from previous builds.
-  // Must complete before Promise.all below; parallel processing
-  // would require separate output directories.
-  await removeStaleEntryFiles(outputDir);
-
   let tsconfig: string | undefined;
   try {
     tsconfig = await resolveTSConfig();
@@ -119,15 +108,7 @@ export async function bundleExecutors(
   // Process each executor, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
   const results = await withBundleConcurrency(executors, (executor) =>
-    bundleSingleExecutor(
-      executor,
-      outputDir,
-      tsconfig,
-      startContext,
-      cache,
-      inlineSourcemap,
-      bundleLogLevel,
-    ),
+    bundleSingleExecutor(executor, tsconfig, startContext, cache, inlineSourcemap, bundleLogLevel),
   );
 
   for (const [name, code] of results) {
@@ -141,7 +122,6 @@ export async function bundleExecutors(
 
 async function bundleSingleExecutor(
   executor: ExecutorInfo,
-  outputDir: string,
   tsconfig: string | undefined,
   startContext?: StartContext,
   cache?: BundleCache,
@@ -165,8 +145,6 @@ async function bundleSingleExecutor(
     sourceFile: executor.sourceFile,
     contextHash,
     async build(cachePlugins) {
-      // Step 1: Create entry file that imports and extracts operation.body
-      const entryPath = path.join(outputDir, `${executor.name}.entry.js`);
       const absoluteSourcePath = path.resolve(executor.sourceFile);
 
       const entryContent = ml /* js */ `
@@ -179,15 +157,17 @@ async function bundleSingleExecutor(
 
         export { __executor_function as main };
       `;
-      fs.writeFileSync(entryPath, entryContent);
+      const entry = createVirtualEntry(`executor:${executor.name}`, entryContent);
 
-      // Step 2: Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
       const startPlugin = createStartTransformPlugin(startContext);
-      const plugins: rolldown.Plugin[] = startPlugin ? [startPlugin] : [];
+      const plugins: rolldown.Plugin[] = [entry.plugin];
+      if (startPlugin) {
+        plugins.push(startPlugin);
+      }
       plugins.push(platformBundleDefinePlugin, ...cachePlugins);
 
       const result = await rolldown.build({
-        input: entryPath,
+        input: entry.input,
         write: false,
         output: {
           format: "esm",

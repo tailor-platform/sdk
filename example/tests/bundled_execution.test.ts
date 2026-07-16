@@ -184,6 +184,7 @@ describe("bundled execution tests", () => {
 
   describe("workflow-jobs", () => {
     test("workflow-jobs/process-order.js calls dependent jobs correctly", async () => {
+      using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
       using wf = mockWorkflow();
       wf.setJobHandler((jobName, args) => {
         if (jobName === "fetch-customer") {
@@ -220,6 +221,11 @@ describe("bundled execution tests", () => {
           },
         },
       ]);
+      expect(logSpy).toHaveBeenCalledWith("Environment:", {
+        foo: 1,
+        bar: "hello",
+        baz: true,
+      });
     });
 
     test("workflow-jobs/process-order.js throws error when customer not found", async () => {
@@ -247,20 +253,6 @@ describe("bundled execution tests", () => {
         sent: true,
         timestamp: expect.stringMatching(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/),
       });
-    });
-
-    test("workflow-jobs entry files contain env variables from config", () => {
-      const entryFiles = [
-        "workflow-jobs/fetch-customer.entry.js",
-        "workflow-jobs/process-order.entry.js",
-        "workflow-jobs/send-notification.entry.js",
-      ];
-
-      for (const file of entryFiles) {
-        const content = fs.readFileSync(path.join(actualDir, file), "utf-8");
-        expect(content).toContain('const env = {"foo":1,"bar":"hello","baz":true}');
-        expect(content).toMatch(/\.body\(input, \{ env, invoker \}\)/);
-      }
     });
 
     test("workflow-jobs/validate-order.js starts check-inventory job", async () => {

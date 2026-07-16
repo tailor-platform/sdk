@@ -11,17 +11,12 @@ export const generateCommand = defineAppCommand({
       alias: "c",
       description: "Path to SDK config file",
     }),
-    watch: arg(z.boolean().default(false), {
-      alias: "W",
-      description: "Watch for type/resolver changes and regenerate",
-    }),
   }),
   run: async (args) => {
     const { initTelemetry } = await import("#/cli/telemetry/index");
     await initTelemetry();
     await generate({
       configPath: args.config,
-      watch: args.watch,
     });
   },
 });

@@ -14,6 +14,15 @@ import { logger } from "./logger";
 import { readPackageJson } from "./package-json";
 
 /**
+ * npm packages known to provide a plugin slug, keyed by the slug the
+ * dispatcher resolves (command path joined with `-`). Used to suggest an
+ * install command when the plugin executable is not found.
+ */
+const KNOWN_PLUGIN_PACKAGES: Record<string, string> = {
+  "tailordb-erd": "@tailor-platform/sdk-tailordb-erd-plugin",
+};
+
+/**
  * A plugin discovered on the filesystem. `tailor <name>` dispatches to the
  * external `tailor-<name>` executable.
  */
@@ -214,6 +223,8 @@ export function listPlugins(cliName: string): DiscoveredPlugin[] {
 interface PluginContextOptions {
   /** Active profile used to resolve the workspace, user, and token. */
   profile?: string | undefined;
+  /** Skip platform context (URL, client ID, workspace, user, token) injection. */
+  skipPlatformContext?: boolean;
 }
 
 /**
@@ -239,18 +250,7 @@ async function resolveActiveUser(profile?: string): Promise<string | undefined> 
  */
 async function buildPluginEnv(options: PluginContextOptions = {}): Promise<Record<string, string>> {
   const { profile } = options;
-  // Resolve the active profile's platform settings so the injected URL and
-  // OAuth client match the profile the token and workspace belong to.
-  let platformConfig: PlatformClientConfig | undefined;
-  try {
-    platformConfig = await loadPlatformClientConfig({ profile, allowMissingProfile: true });
-  } catch {
-    // Fall back to env/default platform settings when the profile is unreadable.
-  }
-  const env: Record<string, string> = {
-    TAILOR_PLATFORM_URL: getPlatformBaseUrl(platformConfig),
-    TAILOR_PLATFORM_OAUTH2_CLIENT_ID: getOAuth2ClientId(platformConfig),
-  };
+  const env: Record<string, string> = {};
 
   const binPath = process.argv[1];
   if (binPath) {
@@ -268,6 +268,24 @@ async function buildPluginEnv(options: PluginContextOptions = {}): Promise<Recor
   if (configPath) {
     env.TAILOR_CONFIG_PATH = configPath;
   }
+
+  // An explicit --env-file supplies the plugin's platform context itself.
+  // Injected values would shadow it (the plugin's env-file loader never
+  // overwrites pre-existing keys), so skip context injection entirely.
+  if (options.skipPlatformContext) {
+    return env;
+  }
+
+  // Resolve the active profile's platform settings so the injected URL and
+  // OAuth client match the profile the token and workspace belong to.
+  let platformConfig: PlatformClientConfig | undefined;
+  try {
+    platformConfig = await loadPlatformClientConfig({ profile, allowMissingProfile: true });
+  } catch {
+    // Fall back to env/default platform settings when the profile is unreadable.
+  }
+  env.TAILOR_PLATFORM_URL = getPlatformBaseUrl(platformConfig);
+  env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID = getOAuth2ClientId(platformConfig);
 
   try {
     env.TAILOR_PLATFORM_WORKSPACE_ID = await loadWorkspaceId({ profile });
@@ -346,30 +364,103 @@ function buildSpawnTarget(
 }
 
 /**
+ * Check whether args forwarded to a plugin carry an explicit env-file flag.
+ * Scanning stops at a `--` terminator. The check is presence-only:
+ * `--env-file-if-exists` counts even when the named file does not exist, so
+ * no platform context is injected in that case either.
+ * @param args - Args forwarded to the plugin
+ * @returns Whether an `--env-file`/`-e`/`--env-file-if-exists` flag is present
+ */
+export function hasEnvFileFlag(args: readonly string[]): boolean {
+  for (const token of args) {
+    if (token === "--") return false;
+    if (token === "--env-file" || token === "-e" || token === "--env-file-if-exists") {
+      return true;
+    }
+    if (
+      token.startsWith("--env-file=") ||
+      token.startsWith("-e=") ||
+      token.startsWith("--env-file-if-exists=")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Extract an explicit `--profile`/`-p` value from args forwarded to a plugin,
+ * so the injected platform context matches the profile the plugin will use.
+ * Scanning stops at a `--` terminator; the last occurrence wins.
+ * @param args - Args forwarded to the plugin
+ * @returns The explicit profile value, or undefined when not present
+ */
+export function explicitProfileFromArgs(args: readonly string[]): string | undefined {
+  let profile: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i];
+    if (token === undefined || token === "--") break;
+    if (token === "--profile" || token === "-p") {
+      const next = args[i + 1];
+      if (next !== undefined && !next.startsWith("-")) {
+        profile = next;
+        i++;
+      }
+      continue;
+    }
+    if (token.startsWith("--profile=")) {
+      profile = token.slice("--profile=".length);
+    } else if (token.startsWith("-p=")) {
+      profile = token.slice("-p=".length);
+    }
+  }
+  return profile || undefined;
+}
+
+/**
+ * Parameters for {@link dispatchPlugin}.
+ */
+interface DispatchPluginParams {
+  /** Plugin name (the part after the `<cli>-` prefix). */
+  name: string;
+  /** Args to forward to the plugin. */
+  args: readonly string[];
+  /** The host CLI name (e.g. `tailor`). */
+  cliName: string;
+  /** Parent command path preceding the unknown subcommand, if any. */
+  commandPath?: readonly string[] | undefined;
+  /** Active profile name, if any. */
+  profile?: string | undefined;
+}
+
+/**
+ * Build the plugin slug from the known command path plus the unknown name,
+ * so `tailor tailordb erd` resolves `tailor-tailordb-erd`.
+ * @param commandPath - Parent command path preceding the unknown subcommand
+ * @param name - Unknown subcommand name
+ * @returns The plugin slug
+ */
+function pluginSlug(commandPath: readonly string[] | undefined, name: string): string {
+  return [...(commandPath ?? []), name].join("-");
+}
+
+/**
  * Resolve and execute a plugin, forwarding stdio and propagating its exit code.
  * @param params - Dispatch parameters
- * @param params.name - Plugin name (without the `<cli>-` prefix)
- * @param params.args - Args to forward to the plugin
- * @param params.cliName - The host CLI name
- * @param params.profile - Active profile name, if any
  * @returns The plugin's exit code, or undefined when no matching plugin exists
  */
-export async function dispatchPlugin(params: {
-  name: string;
-  args: readonly string[];
-  cliName: string;
-  commandPath?: readonly string[] | undefined;
-  profile?: string | undefined;
-}): Promise<number | undefined> {
-  // Build the plugin slug from the known command path plus the unknown name,
-  // so `tailor tailordb erd` resolves `tailor-tailordb-erd`.
-  const slug = [...(params.commandPath ?? []), params.name].join("-");
+export async function dispatchPlugin(params: DispatchPluginParams): Promise<number | undefined> {
+  const slug = pluginSlug(params.commandPath, params.name);
   const plugin = resolvePlugin(slug, params.cliName);
   if (!plugin) {
     return undefined;
   }
 
-  const env = { ...process.env, ...(await buildPluginEnv({ profile: params.profile })) };
+  const profile = explicitProfileFromArgs(params.args) ?? params.profile;
+  const env = {
+    ...process.env,
+    ...(await buildPluginEnv({ profile, skipPlatformContext: hasEnvFileFlag(params.args) })),
+  };
   const { command, args, shell } = buildSpawnTarget(plugin.path, params.args);
 
   return await new Promise<number>((resolve) => {
@@ -386,4 +477,30 @@ export async function dispatchPlugin(params: {
       }
     });
   });
+}
+
+/**
+ * Dispatch a plugin, printing an install hint when the subcommand maps to a
+ * known plugin package that is not installed.
+ * @param params - Dispatch parameters
+ * @returns The plugin's exit code (1 after an install hint), or undefined when
+ * the subcommand matches no plugin and no known package
+ */
+export async function dispatchPluginWithInstallHint(
+  params: DispatchPluginParams,
+): Promise<number | undefined> {
+  const exitCode = await dispatchPlugin(params);
+  if (exitCode !== undefined) {
+    return exitCode;
+  }
+  const knownPackage = KNOWN_PLUGIN_PACKAGES[pluginSlug(params.commandPath, params.name)];
+  if (!knownPackage) {
+    return undefined;
+  }
+  const fullCommand = [params.cliName, ...(params.commandPath ?? []), params.name].join(" ");
+  logger.error(
+    `"${fullCommand}" is provided by the ${knownPackage} CLI plugin, which is not installed.`,
+  );
+  logger.info(`Install it with: npm install -D ${knownPackage}`);
+  return 1;
 }

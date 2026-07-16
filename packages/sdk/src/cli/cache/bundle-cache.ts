@@ -156,7 +156,12 @@ function createBundleCache(store: CacheStore): BundleCache {
       return undefined;
     }
 
-    return store.restoreBundleContent(cacheKey);
+    const content = store.restoreBundleContent(cacheKey);
+    const output = entry.outputFiles.find((file) => file.outputPath === cacheKey);
+    if (content === undefined || !output || hashContent(content) !== output.contentHash) {
+      return undefined;
+    }
+    return content;
   }
 
   function save(params: BundleCacheSaveParams): void {
