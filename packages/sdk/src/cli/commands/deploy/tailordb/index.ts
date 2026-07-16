@@ -1763,6 +1763,15 @@ function normalizeTailorDBCompareValue(
     return value;
   }
 
+  // Platform returns `optionalOnCreate: false` explicitly, while local
+  // manifests omit the flag entirely. Treat false as unset so they match.
+  if (typeof value === "boolean") {
+    if (path.at(-1) === "optionalOnCreate" && value === false) {
+      return undefined;
+    }
+    return value;
+  }
+
   if (typeof value === "number" || typeof value === "bigint" || typeof value === "string") {
     if (matchesNumericStringPath(path) && isNumericLikeValue(value)) {
       return String(value);

@@ -543,6 +543,70 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
 
+    test("treats remote optionalOnCreate=false as unchanged against a local manifest omitting it", async () => {
+      const tailordbType: TailorDBType = {
+        name: "Invoice",
+        pluralForm: "Invoices",
+        description: "Invoice type",
+        fields: {
+          code: {
+            name: "code",
+            config: {
+              type: "string",
+              required: true,
+            },
+          },
+        },
+        forwardRelationships: {},
+        backwardRelationships: {},
+        settings: {},
+        permissions: {},
+        files: {},
+      };
+
+      const tailorDBService = createMockTailorDBService("test-tailordb");
+      Object.defineProperty(tailorDBService, "types", {
+        value: { [tailordbType.name]: tailordbType },
+      });
+
+      const client = createRemoteTypeClient("test-tailordb", {
+        name: "Invoice",
+        description: "Invoice type",
+        pluralForm: "invoices",
+        fields: {
+          code: {
+            type: "string",
+            required: true,
+            allowedValues: [],
+            description: "",
+            validate: [],
+            array: false,
+            index: false,
+            unique: false,
+            foreignKey: false,
+            vector: false,
+            optionalOnCreate: false,
+            fields: {},
+          },
+        },
+      });
+
+      const application = createMockApplication([tailorDBService]);
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      };
+
+      const result = await planTailorDB(ctx);
+
+      expect(result.changeSet.type.unchanged).toEqual([{ name: "Invoice" }]);
+      expect(result.changeSet.type.updates).toHaveLength(0);
+    });
+
     test("updates matching type when forceApplyAll is enabled", async () => {
       const tailordbType: TailorDBType = {
         name: "Invoice",
