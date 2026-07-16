@@ -131,6 +131,14 @@ describe("resolvePendingBoundaries", () => {
     expect(result.source).toContain("prereleaseUntil: V2_NEXT_5,");
   });
 
+  test("tolerates a space before the colon in the usage", () => {
+    const source = registrySource("    prereleaseUntil : V2_NEXT_PENDING,");
+    const result = resolvePendingBoundaries(source, "2.0.0-next.5");
+
+    expect(result.changed).toBe(true);
+    expect(result.source).toContain("prereleaseUntil: V2_NEXT_5,");
+  });
+
   test("tolerates extra whitespace between export and const", () => {
     const source = [
       V2_NEXT_4_DECL,
