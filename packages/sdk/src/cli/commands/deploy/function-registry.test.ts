@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from "vitest";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
+import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import {
   applyFunctionRegistry,
   authHookFunctionName,
@@ -441,18 +442,10 @@ describe("applyFunctionRegistry phase separation", () => {
   });
 
   test("uploads functions concurrently in the create-update phase", async () => {
-    let inFlight = 0;
-    let maxInFlight = 0;
-    const trackConcurrency = async () => {
-      inFlight += 1;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      inFlight -= 1;
-      return {};
-    };
+    const probe = createConcurrencyProbe();
     const client = {
-      createFunctionRegistry: vi.fn().mockImplementation(trackConcurrency),
-      updateFunctionRegistry: vi.fn().mockImplementation(trackConcurrency),
+      createFunctionRegistry: vi.fn().mockImplementation(probe.run),
+      updateFunctionRegistry: vi.fn().mockImplementation(probe.run),
       deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
     } as unknown as OperatorClient;
@@ -486,7 +479,7 @@ describe("applyFunctionRegistry phase separation", () => {
 
     expect(client.createFunctionRegistry).toHaveBeenCalledTimes(3);
     expect(client.updateFunctionRegistry).toHaveBeenCalledTimes(3);
-    expect(maxInFlight).toBeGreaterThan(1);
+    expect(probe.maxInFlight()).toBeGreaterThan(1);
   });
 });
 

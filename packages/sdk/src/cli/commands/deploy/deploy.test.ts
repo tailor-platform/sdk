@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createChangeSet } from "./change-set";
@@ -167,13 +168,9 @@ describe("shouldForceApplyAll", () => {
   }
 
   test("fetches candidate metadata concurrently", async () => {
-    let inFlight = 0;
-    let maxInFlight = 0;
+    const probe = createConcurrencyProbe();
     const getMetadata = vi.fn().mockImplementation(async () => {
-      inFlight += 1;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      inFlight -= 1;
+      await probe.run();
       return { metadata: { labels: {} } };
     });
     const client = { getMetadata } as unknown as Client;
@@ -186,7 +183,7 @@ describe("shouldForceApplyAll", () => {
 
     expect(result).toBe(false);
     expect(getMetadata).toHaveBeenCalledTimes(3);
-    expect(maxInFlight).toBeGreaterThan(1);
+    expect(probe.maxInFlight()).toBeGreaterThan(1);
   });
 
   test("returns true when an owned resource has a different sdk-version", async () => {

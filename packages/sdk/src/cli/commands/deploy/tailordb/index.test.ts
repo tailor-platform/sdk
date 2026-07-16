@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
+import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { sdkNameLabelKey } from "../label";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
 import type { FieldDiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
@@ -1301,18 +1302,10 @@ describe("applyTailorDB migration label reconciliation", () => {
 
 describe("applyTailorDB type apply concurrency", () => {
   test("applies type creates and updates concurrently", async () => {
-    let inFlight = 0;
-    let maxInFlight = 0;
-    const trackConcurrency = async () => {
-      inFlight += 1;
-      maxInFlight = Math.max(maxInFlight, inFlight);
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      inFlight -= 1;
-      return {};
-    };
+    const probe = createConcurrencyProbe();
     const client = {
-      createTailorDBType: vi.fn().mockImplementation(trackConcurrency),
-      updateTailorDBType: vi.fn().mockImplementation(trackConcurrency),
+      createTailorDBType: vi.fn().mockImplementation(probe.run),
+      updateTailorDBType: vi.fn().mockImplementation(probe.run),
       createTailorDBService: vi.fn().mockResolvedValue({}),
       createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
       updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
@@ -1367,6 +1360,6 @@ describe("applyTailorDB type apply concurrency", () => {
 
     expect(client.createTailorDBType).toHaveBeenCalledTimes(3);
     expect(client.updateTailorDBType).toHaveBeenCalledTimes(3);
-    expect(maxInFlight).toBeGreaterThan(1);
+    expect(probe.maxInFlight()).toBeGreaterThan(1);
   });
 });
