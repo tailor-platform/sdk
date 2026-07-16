@@ -1063,6 +1063,15 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     notice: true,
   },
+  {
+    id: "v2/remove-legacy-bundle-cleanup",
+    name: "Legacy bundle artifact cleanup removed from deploy",
+    description:
+      "`tailor deploy` no longer deletes on-disk bundle artifacts (`.entry.js` files, workflow-job bundles, and the `hooks-validate-scripts/` directory) left in the SDK output directory (`.tailor` by default) by SDK versions that predate the current in-memory bundling approach. Current bundlers no longer write these files. No source change is required; if such stale files remain from a very old SDK version, delete the output directory manually (it is regenerated automatically).",
+    since: "1.0.0",
+    until: "2.0.0",
+    notice: true,
+  },
 ];
 
 /**
