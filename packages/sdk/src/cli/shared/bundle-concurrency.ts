@@ -1,5 +1,4 @@
 import * as os from "node:os";
-import pLimit from "p-limit";
 
 /**
  * Resolve the maximum number of bundle operations to run in parallel.
@@ -32,10 +31,37 @@ export function resolveBundleConcurrency(): number {
  * @param worker - Async worker function
  * @returns Worker results in input order
  */
-export function withBundleConcurrency<T, R>(
+export async function withBundleConcurrency<T, R>(
   items: T[],
   worker: (item: T) => Promise<R>,
 ): Promise<R[]> {
-  const limit = pLimit(resolveBundleConcurrency());
-  return Promise.all(items.map((item) => limit(() => worker(item))));
+  const resultCount = items.length;
+  const workItems = items.flatMap((item, index) => [{ index, item }]);
+  const results: R[] = [];
+  results.length = resultCount;
+  let nextWorkIndex = 0;
+  let rejection: { reason: unknown } | undefined;
+
+  const runWorker = async () => {
+    while (!rejection) {
+      const workItem = workItems[nextWorkIndex++];
+      if (workItem === undefined) {
+        return;
+      }
+
+      try {
+        results[workItem.index] = await worker(workItem.item);
+      } catch (reason) {
+        rejection ??= { reason };
+      }
+    }
+  };
+
+  const workerCount = Math.min(resolveBundleConcurrency(), workItems.length);
+  await Promise.all(Array.from({ length: workerCount }, runWorker));
+
+  if (rejection) {
+    throw rejection.reason;
+  }
+  return results;
 }
