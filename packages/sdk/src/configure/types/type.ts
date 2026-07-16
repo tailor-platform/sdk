@@ -1,9 +1,9 @@
-import { type AllowedValues, type AllowedValuesOutput, mapAllowedValues } from "./field";
 import {
   parseInternal as parseFieldInternal,
   type FieldParseArgs,
   type FieldParseInternalArgs,
-} from "./field-runtime";
+} from "#/runtime/field-parse";
+import { type AllowedValues, type AllowedValuesOutput, mapAllowedValues } from "./field";
 import type {
   DefinedFieldMetadata,
   TailorFieldType,
@@ -31,7 +31,6 @@ export type TailorAnyField = Omit<
   typeName: AnyBuilderMethod;
   validate: AnyBuilderMethod;
   parse: AnyBuilderMethod;
-  _parseInternal: AnyBuilderMethod;
 };
 
 type IsAny<T> = 0 extends 1 & T ? true : false;
@@ -111,14 +110,6 @@ export interface TailorField<
    * @returns Validation result
    */
   parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
-
-  /**
-   * Internal parse method that tracks field path for nested validation
-   * @private
-   * @param args - Parse arguments
-   * @returns Validation result
-   */
-  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
 }
 
 /**
@@ -144,7 +135,6 @@ type TailorFieldRuntime<
   typeName(typeName: string): object;
   validate(...validate: FieldValidateInput<Output>[]): object;
   parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
-  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
   clone(): TailorAnyField;
 };
 
@@ -279,8 +269,6 @@ function createTailorField<
         pathArray: [],
       });
     },
-
-    _parseInternal: parseInternal,
 
     clone() {
       // Deep clone nested object fields so the new instance shares no mutable state.

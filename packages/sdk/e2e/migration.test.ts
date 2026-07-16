@@ -451,14 +451,14 @@ describe.sequential("E2E: TailorDB Migrations", () => {
      */
     test("detects non-breaking change when adding optional field", async () => {
       // Update type to add optional field
-      updateTypeFile(`import { db } from "@tailor-platform/sdk";
+      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   role: db.string({ optional: true }),
   phone: db.string({ optional: true }),
-});
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 
 export type user = typeof user;
 `);
@@ -502,7 +502,7 @@ export type user = typeof user;
      */
     test("detects breaking change when adding required field", async () => {
       // Update type to add required field (breaking change)
-      updateTypeFile(`import { db } from "@tailor-platform/sdk";
+      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -510,7 +510,7 @@ export const user = db.table("User", {
   role: db.string({ optional: true }),
   phone: db.string({ optional: true }),
   requiredField: db.string(),
-});
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 
 export type user = typeof user;
 `);
@@ -632,14 +632,14 @@ export type user = typeof user;
      */
     test("detects field removal as non-breaking change", async () => {
       // Update User type to remove requiredField
-      updateTypeFile(`import { db } from "@tailor-platform/sdk";
+      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
   email: db.string().unique(),
   role: db.string({ optional: true }),
   phone: db.string({ optional: true }),
-});
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 
 export type user = typeof user;
 `);
@@ -684,7 +684,7 @@ export type user = typeof user;
      * the remote schema and checkpoint at the prior migration so a retry works.
      */
     test("generates the breaking migration whose script will fail", async () => {
-      updateTypeFile(`import { db } from "@tailor-platform/sdk";
+      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db.table("User", {
   name: db.string(),
@@ -692,7 +692,7 @@ export const user = db.table("User", {
   role: db.string({ optional: true }),
   phone: db.string({ optional: true }),
   loyaltyTier: db.string(),
-});
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 
 export type user = typeof user;
 `);
