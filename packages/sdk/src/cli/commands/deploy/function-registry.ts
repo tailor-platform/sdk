@@ -474,16 +474,20 @@ export async function applyFunctionRegistry(
   const { changeSet } = result;
   if (phase === "create-update") {
     // Upload new functions
-    for (const create of changeSet.creates) {
-      await uploadFunctionScript(client, workspaceId, create.entry, true);
-      await client.setMetadata(create.metaRequest);
-    }
+    await Promise.all(
+      changeSet.creates.map(async (create) => {
+        await uploadFunctionScript(client, workspaceId, create.entry, true);
+        await client.setMetadata(create.metaRequest);
+      }),
+    );
 
     // Update existing functions (server deduplicates content by hash)
-    for (const update of changeSet.updates) {
-      await uploadFunctionScript(client, workspaceId, update.entry, false);
-      await client.setMetadata(update.metaRequest);
-    }
+    await Promise.all(
+      changeSet.updates.map(async (update) => {
+        await uploadFunctionScript(client, workspaceId, update.entry, false);
+        await client.setMetadata(update.metaRequest);
+      }),
+    );
   } else {
     await Promise.all(
       changeSet.deletes.map((del) =>

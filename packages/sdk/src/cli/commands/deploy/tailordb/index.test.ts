@@ -1298,3 +1298,75 @@ describe("applyTailorDB migration label reconciliation", () => {
     await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
   });
 });
+
+describe("applyTailorDB type apply concurrency", () => {
+  test("applies type creates and updates concurrently", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const trackConcurrency = async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      inFlight -= 1;
+      return {};
+    };
+    const client = {
+      createTailorDBType: vi.fn().mockImplementation(trackConcurrency),
+      updateTailorDBType: vi.fn().mockImplementation(trackConcurrency),
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+
+    const changeOf = (name: string) => ({
+      name,
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "test-tailordb",
+        tailordbType: { name },
+      },
+    });
+    const emptyChanges = (title: string) => ({
+      creates: [],
+      updates: [],
+      deletes: [],
+      title,
+      isEmpty: () => true,
+      lines: () => [],
+    });
+    const planResult = {
+      changeSet: {
+        service: emptyChanges("TailorDB Services"),
+        type: {
+          creates: ["CreateA", "CreateB", "CreateC"].map(changeOf),
+          updates: ["UpdateA", "UpdateB", "UpdateC"].map(changeOf),
+          deletes: [],
+          title: "TailorDB Types",
+          isEmpty: () => false,
+          lines: () => [],
+        },
+        gqlPermission: emptyChanges("TailorDB GQL Permissions"),
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+      context: {
+        workspaceId: "test-workspace",
+        application: { name: "test-app", tailorDBServices: [] } as unknown as Application,
+        tailorDBInputs: [],
+        executorUsedTypes: new Set<string>(),
+        config: { path: "/nonexistent/tailor.config.ts", name: "test-app", db: {} },
+        noSchemaCheck: true,
+      },
+    } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(client.createTailorDBType).toHaveBeenCalledTimes(3);
+    expect(client.updateTailorDBType).toHaveBeenCalledTimes(3);
+    expect(maxInFlight).toBeGreaterThan(1);
+  });
+});

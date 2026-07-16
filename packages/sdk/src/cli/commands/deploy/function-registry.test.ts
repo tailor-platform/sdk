@@ -439,6 +439,55 @@ describe("applyFunctionRegistry phase separation", () => {
     expect(client.updateFunctionRegistry).not.toHaveBeenCalled();
     expect(client.setMetadata).not.toHaveBeenCalled();
   });
+
+  test("uploads functions concurrently in the create-update phase", async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const trackConcurrency = async () => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      inFlight -= 1;
+      return {};
+    };
+    const client = {
+      createFunctionRegistry: vi.fn().mockImplementation(trackConcurrency),
+      updateFunctionRegistry: vi.fn().mockImplementation(trackConcurrency),
+      deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+
+    const changeOf = (name: string) => ({
+      name,
+      entry: {
+        name,
+        scriptContent: "// script",
+        contentHash: `hash-${name}`,
+        description: `Function: ${name}`,
+      },
+      metaRequest: { trn: `trn:${name}`, labels: {} },
+    });
+    const planResult = {
+      changeSet: {
+        creates: ["create-a", "create-b", "create-c"].map(changeOf),
+        updates: ["update-a", "update-b", "update-c"].map(changeOf),
+        deletes: [],
+        unchanged: [],
+        title: "Function registry",
+        isEmpty: () => false,
+        lines: () => [],
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+    } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
+
+    await applyFunctionRegistry(client, "test-workspace", planResult, "create-update");
+
+    expect(client.createFunctionRegistry).toHaveBeenCalledTimes(3);
+    expect(client.updateFunctionRegistry).toHaveBeenCalledTimes(3);
+    expect(maxInFlight).toBeGreaterThan(1);
+  });
 });
 
 describe("collectFunctionEntries", () => {
