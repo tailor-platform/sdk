@@ -427,7 +427,7 @@ describe("withCache", () => {
 describe("computeBundlerContextHash", () => {
   const baseParams = {
     sourceFile: "/tmp/src/resolver.ts",
-    serializedStartContext: "ctx",
+    extraContext: "ctx",
   };
 
   test("returns the same hash for identical inputs", () => {
@@ -440,7 +440,7 @@ describe("computeBundlerContextHash", () => {
 
   test.each([
     ["sourceFile", {}, { sourceFile: "/tmp/src/executor.ts" }],
-    ["serializedStartContext", {}, { serializedStartContext: "other" }],
+    ["extraContext", {}, { extraContext: "other" }],
     ["prefix", { prefix: "ENV_A=1" }, { prefix: "ENV_B=2" }],
     ["bundleLogLevel", { bundleLogLevel: "DEBUG" }, { bundleLogLevel: "WARN" }],
   ])("returns different hash when %s differs", (_label, overrideA, overrideB) => {

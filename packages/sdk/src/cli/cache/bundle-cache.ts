@@ -54,7 +54,7 @@ function combineHash(fileHash: string, contextHash?: string): string {
 
 type ComputeBundlerContextHashParams = {
   sourceFile: string;
-  serializedStartContext: string;
+  extraContext: string;
   tsconfig?: string;
   inlineSourcemap?: boolean;
   bundleLogLevel?: string;
@@ -64,19 +64,19 @@ type ComputeBundlerContextHashParams = {
 /**
  * Compute a context hash for cache invalidation across bundlers.
  *
- * Combines the source file path, serialized start context, tsconfig hash,
- * sourcemap mode, bundle log level, and an optional prefix (e.g., serialized
- * env variables) into a single SHA-256 hash.
+ * Combines the source file path, a caller-supplied extra context string
+ * (e.g. serialized workflow start-call bindings, or an HTTP adapter's method
+ * list), tsconfig hash, sourcemap mode, bundle log level, and an optional
+ * prefix (e.g., serialized env variables) into a single SHA-256 hash.
  * @param params - Context hash computation parameters
  * @returns SHA-256 hex digest of the combined context
  */
 function computeBundlerContextHash(params: ComputeBundlerContextHashParams): string {
-  const { sourceFile, serializedStartContext, tsconfig, inlineSourcemap, bundleLogLevel, prefix } =
-    params;
+  const { sourceFile, extraContext, tsconfig, inlineSourcemap, bundleLogLevel, prefix } = params;
   return hashContent(
     (prefix ?? "") +
       path.resolve(sourceFile) +
-      serializedStartContext +
+      extraContext +
       (tsconfig ? hashFile(tsconfig) : "") +
       String(inlineSourcemap ?? false) +
       (bundleLogLevel ?? ""),

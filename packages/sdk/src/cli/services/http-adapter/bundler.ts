@@ -100,7 +100,7 @@ async function bundleAdapterScript(
 ): Promise<[string, "input" | "output", string]> {
   const contextHash = computeBundlerContextHash({
     sourceFile: adapter.sourceFile,
-    serializedStartContext: kind === "input" ? adapter.methods.join(",") : "",
+    extraContext: kind === "input" ? adapter.methods.join(",") : "",
     tsconfig,
     inlineSourcemap: false,
     bundleLogLevel,

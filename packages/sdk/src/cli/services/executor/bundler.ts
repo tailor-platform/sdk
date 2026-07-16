@@ -152,7 +152,7 @@ async function bundleSingleExecutor(
 
   const contextHash = computeBundlerContextHash({
     sourceFile: executor.sourceFile,
-    serializedStartContext,
+    extraContext: serializedStartContext,
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
