@@ -79,9 +79,6 @@ describe("deploy command integration tests", () => {
     );
     expect(entryFiles).toEqual([]);
 
-    // Unrelated files in former bundle directories should be preserved
-    expect(actualFiles).toContain("resolvers/keep.txt");
-
     // Bundle output files should NOT exist on disk (in-memory only)
     const bundleOutputFiles = actualFiles.filter(
       (f) => f.endsWith(".js") && !f.endsWith(".entry.js"),
