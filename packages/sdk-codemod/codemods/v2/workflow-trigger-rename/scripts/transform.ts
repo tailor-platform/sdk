@@ -61,6 +61,43 @@ function isAmbientTailorWorkflow(object: SgNode | null): boolean {
   );
 }
 
+function expressionArguments(args: SgNode): SgNode[] {
+  return args.children().filter((child) => !["(", ")", ","].includes(child.kind() as string));
+}
+
+/**
+ * `triggerWorkflow`'s removed SDK wrapper converted an `invoker` option to
+ * the platform's `authInvoker` shape before calling through; `startWorkflow`
+ * expects `authInvoker` directly. Build an edit renaming a literal `invoker`
+ * key (or shorthand) in the third argument of a `triggerWorkflow(...)` call
+ * being renamed to `startWorkflow`, so the option keeps working. Options
+ * passed via a variable/spread are left for manual review — only literal
+ * object arguments are inspected here.
+ * @param member - The `.triggerWorkflow` member-expression node being renamed
+ * @returns An edit renaming the `invoker` key, or null when not applicable
+ */
+function findInvokerOptionEdit(member: SgNode): Edit | null {
+  const call = member.parent();
+  if (call?.kind() !== "call_expression") return null;
+  const args = call.field("arguments");
+  if (!args) return null;
+
+  const optionsArg = expressionArguments(args)[2];
+  if (!optionsArg || optionsArg.kind() !== "object") return null;
+
+  for (const child of optionsArg.children()) {
+    if (child.kind() === "pair") {
+      const key = child.field("key");
+      if (key?.kind() === "property_identifier" && key.text() === "invoker") {
+        return key.replace("authInvoker");
+      }
+    } else if (child.kind() === "shorthand_property_identifier" && child.text() === "invoker") {
+      return child.replace("authInvoker: invoker");
+    }
+  }
+  return null;
+}
+
 /**
  * Rewrite `.triggerWorkflow(`, `.triggerJobFunction(`, and `.resumeWorkflow(`
  * member accesses to their canonical `start*`/`resumeWorkflowExecution` names,
@@ -94,6 +131,10 @@ export default function transform(source: string, filePath?: string): string | n
     if (!isWorkflowImportReceiver && !isAmbientReceiver) continue;
 
     edits.push(property.replace(newName));
+    if (newName === "startWorkflow") {
+      const invokerEdit = findInvokerOptionEdit(member);
+      if (invokerEdit) edits.push(invokerEdit);
+    }
   }
 
   if (edits.length === 0) return null;
