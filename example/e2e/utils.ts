@@ -46,8 +46,14 @@ function retryInterceptor(maxAttempts = 3, attemptTimeoutMs = 10_000): Intercept
       try {
         return await next({ ...req, signal: AbortSignal.any([req.signal, deadline.signal]) });
       } catch (error) {
-        if (!retryableCodes.has(ConnectError.from(error).code)) {
+        const connectError = ConnectError.from(error);
+        if (!retryableCodes.has(connectError.code)) {
           throw error;
+        }
+        if (attempt < maxAttempts) {
+          console.warn(
+            `retrying ${req.method.name} after attempt ${attempt}/${maxAttempts} failed: ${connectError.message}`,
+          );
         }
         lastError = error;
       } finally {
