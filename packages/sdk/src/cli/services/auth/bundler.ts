@@ -1,16 +1,14 @@
-import * as fs from "node:fs";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
-import { removeStaleEntryFiles } from "#/cli/services/stale-cleanup";
 import { createTriggerTransformPlugin } from "#/cli/services/workflow/trigger-transformer";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import type { LogLevel } from "#/configure/config/types";
 
@@ -42,7 +40,7 @@ export interface BundleAuthHooksOptions {
  * Bundle a single auth hook handler.
  *
  * Follows the same pattern as the executor bundler:
- * 1. Generate an entry file that re-exports the handler as `main`
+ * 1. Generate an in-memory entry module that re-exports the handler as `main`
  * 2. Bundle with rolldown + tree-shaking
  * @param options - Bundle options
  * @returns Map of function name to bundled code
@@ -64,11 +62,6 @@ export async function bundleAuthHooks(
 
   logger.newline();
   logger.log(`Bundling auth hook for ${styles.info(`"${authName}"`)}`);
-
-  const outputDir = path.resolve(getDistDir(), "auth-hooks");
-  fs.mkdirSync(outputDir, { recursive: true });
-
-  await removeStaleEntryFiles(outputDir);
 
   const absoluteConfigPath = path.resolve(configPath);
 
@@ -98,8 +91,6 @@ export async function bundleAuthHooks(
     sourceFile: absoluteConfigPath,
     contextHash,
     async build(cachePlugins) {
-      const entryPath = path.join(outputDir, `${functionName}.entry.js`);
-
       const entryContent = ml /* js */ `
         import _config from "${absoluteConfigPath}";
         const __auth_hook_function = _config.${handlerAccessPath};
@@ -108,14 +99,17 @@ export async function bundleAuthHooks(
           return await __auth_hook_function({ ...args, env });
         }
       `;
-      fs.writeFileSync(entryPath, entryContent);
+      const entry = createVirtualEntry(`auth-hook:${functionName}`, entryContent);
 
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-      const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+      const plugins: rolldown.Plugin[] = [entry.plugin];
+      if (triggerPlugin) {
+        plugins.push(triggerPlugin);
+      }
       plugins.push(platformBundleDefinePlugin, ...cachePlugins);
 
       const result = await rolldown.build({
-        input: entryPath,
+        input: entry.input,
         write: false,
         output: {
           format: "esm",

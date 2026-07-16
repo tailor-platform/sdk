@@ -1,5 +1,17 @@
 # @tailor-platform/sdk
 
+## 1.79.0
+
+### Minor Changes
+
+- [#1768](https://github.com/tailor-platform/sdk/pull/1768) [`813f86e`](https://github.com/tailor-platform/sdk/commit/813f86eb0b0df1a768db5de6a39a550d6633749a) Thanks [@k1LoW](https://github.com/k1LoW)! - Add canonical `tailor.workflow.*` names that mirror the public `tailor.v1` RPC vocabulary. The `startWorkflow`, `startJobFunction`, and `resumeWorkflowExecution` methods are now available on `tailor.workflow`, alongside `workflow.startWorkflow` / `workflow.startJobFunction` / `workflow.resumeWorkflowExecution` from `@tailor-platform/sdk/runtime`. The pre-alignment names (`triggerWorkflow`, `triggerJobFunction`, `resumeWorkflow`) continue to work as frozen aliases, but are now marked `@deprecated` so IDEs surface a hint to migrate to the canonical names.
+
+### Patch Changes
+
+- [#1769](https://github.com/tailor-platform/sdk/pull/1769) [`9837182`](https://github.com/tailor-platform/sdk/commit/983718288eab23a4c15762c179a67569dd78a287) Thanks [@dqn](https://github.com/dqn)! - Fix `tailor function test-run` crashing with `TypeError: Cannot convert undefined or null to object` when `--arg` is a non-object JSON value such as `null`. The argument is now forwarded to the server, which reports the validation error. Local input validation also runs the same logic as deployed resolvers.
+
+- [#1777](https://github.com/tailor-platform/sdk/pull/1777) [`322b69c`](https://github.com/tailor-platform/sdk/commit/322b69c843953551ccb4b32d7cbd528ae2b0e10c) Thanks [@toiroakr](https://github.com/toiroakr)! - Fail fast at `generate`/`deploy` time when a TailorDB type is missing `.permission()`, or missing `.gqlPermission()` while GraphQL operations are enabled for it (`.gqlPermission()` is not required when GraphQL exposure is fully disabled via `gqlOperations`). Previously these omissions deployed silently and only surfaced later as an opaque `internal error` on insert.
+
 ## 1.78.0
 
 ### Minor Changes
