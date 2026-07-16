@@ -64,19 +64,16 @@ interface ResolvedFiles {
 }
 
 function resolveFiles(config: FileLoadConfig, baseDir: string): ResolvedFiles {
-  // Use user-provided patterns if specified, otherwise use defaults
+  // Use user-provided patterns if specified, otherwise use defaults. Default
+  // patterns are left unanchored ("**/*.test.ts") so they match a test file
+  // regardless of which directory a `files` pattern's matches actually came
+  // from — this matters when a pattern is absolute or otherwise escapes
+  // baseDir. User-provided patterns are baseDir-relative, matching `files`.
+  const isDefaultIgnores = config.ignores === undefined;
   const ignorePatterns = config.ignores ?? DEFAULT_IGNORE_PATTERNS;
-
-  const ignoreFiles = new Set<string>();
-  for (const ignorePattern of ignorePatterns) {
-    const absoluteIgnorePattern = path.resolve(baseDir, ignorePattern);
-    try {
-      const matchedIgnoreFiles = fs.globSync(absoluteIgnorePattern);
-      matchedIgnoreFiles.forEach((file) => ignoreFiles.add(file));
-    } catch (error) {
-      logger.warn(`Failed to glob ignore pattern "${ignorePattern}": ${String(error)}`);
-    }
-  }
+  const resolvedIgnorePatterns = isDefaultIgnores
+    ? ignorePatterns
+    : ignorePatterns.map((ignorePattern) => path.resolve(baseDir, ignorePattern));
 
   const files: string[] = [];
   let matchedAnyPattern = false;
@@ -88,7 +85,10 @@ function resolveFiles(config: FileLoadConfig, baseDir: string): ResolvedFiles {
         matchedAnyPattern = true;
       }
       // Filter out ignored files
-      const filteredFiles = matchedFiles.filter((file) => !ignoreFiles.has(file));
+      const filteredFiles = matchedFiles.filter(
+        (file) =>
+          !resolvedIgnorePatterns.some((ignorePattern) => path.matchesGlob(file, ignorePattern)),
+      );
       files.push(...filteredFiles);
     } catch (error) {
       // A glob failure means we don't know whether baseDir has matching

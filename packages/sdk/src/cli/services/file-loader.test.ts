@@ -147,6 +147,20 @@ describe("loadFilesWithIgnores", () => {
     }
   });
 
+  test("applies default ignores to files matched by a pattern that escapes baseDir", () => {
+    const targetDir = makeDirWithFile("file-loader-escaping-target-", "src/correct.ts");
+    fs.writeFileSync(
+      path.join(targetDir, "src", "correct.test.ts"),
+      "export const marker = true;\n",
+    );
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "file-loader-escaping-base-"));
+    tmpDirs.push(baseDir);
+    const escapingPattern = path.join(targetDir, "src", "**", "*.ts");
+
+    const files = loadFilesWithIgnores({ files: [escapingPattern] }, baseDir);
+    expect(files).toEqual([path.join(targetDir, "src", "correct.ts")]);
+  });
+
   test("does not fall back when baseDir matches something that is entirely filtered out by ignores", () => {
     using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
     // baseDir has a match for the pattern, but it's a default-ignored test file.
