@@ -14,7 +14,6 @@ export function createOperatorClient() {
     baseUrl,
     // Every OperatorService call in e2e is a read (get*/list*), so a stalled
     // request is safe to cut short and retry instead of eating the test timeout.
-    defaultTimeoutMs: 10_000,
     interceptors: [
       retryInterceptor(),
       userAgentInterceptor(),
@@ -24,21 +23,35 @@ export function createOperatorClient() {
   return [createClient(OperatorService, transport), workspaceId] as const;
 }
 
-function retryInterceptor(maxAttempts = 3): Interceptor {
+// The per-attempt deadline lives here rather than in the transport's
+// `defaultTimeoutMs`: the transport creates its deadline signal once per RPC,
+// so after a timeout every retry would reuse an already-aborted request.
+function retryInterceptor(maxAttempts = 3, attemptTimeoutMs = 10_000): Interceptor {
   const retryableCodes = new Set([Code.DeadlineExceeded, Code.Unavailable]);
   return (next) => async (req) => {
+    if (req.stream) {
+      return await next(req);
+    }
+
     let lastError: unknown;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       if (attempt > 1) {
         await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
       }
+      const deadline = new AbortController();
+      const timer = setTimeout(
+        () => deadline.abort(new ConnectError("attempt timed out", Code.DeadlineExceeded)),
+        attemptTimeoutMs,
+      );
       try {
-        return await next(req);
+        return await next({ ...req, signal: AbortSignal.any([req.signal, deadline.signal]) });
       } catch (error) {
-        if (req.stream || !retryableCodes.has(ConnectError.from(error).code)) {
+        if (!retryableCodes.has(ConnectError.from(error).code)) {
           throw error;
         }
         lastError = error;
+      } finally {
+        clearTimeout(timer);
       }
     }
     throw lastError;
