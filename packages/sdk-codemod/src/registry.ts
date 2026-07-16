@@ -101,8 +101,10 @@ const V2_NEXT_5 = "2.0.0-next.5";
 /**
  * Sentinel `prereleaseUntil` for a codemod whose exact `2.0.0-next.N` release is not
  * known yet. `pnpm codemod:resolve-pending`, run in CI against the release PR, replaces
- * it with the resolved `V2_NEXT_N` constant once the version is bumped. Exported so it
- * stays lint-clean while no codemod currently references it.
+ * it with the resolved `V2_NEXT_N` constant once the version is bumped. Keep this
+ * `export const` declaration exactly as-is: resolve-pending-boundaries.ts matches this
+ * exact line to find where to insert that constant, and exporting also keeps it
+ * lint-clean between resolutions, when no codemod currently references it.
  */
 export const V2_NEXT_PENDING = "pending";
 
