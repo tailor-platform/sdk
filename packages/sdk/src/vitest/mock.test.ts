@@ -53,6 +53,34 @@ describe("mock", () => {
       expect(result.rows).toEqual([{ id: "1", name: "test" }]);
     });
 
+    test("setQueryResolver treats an undefined response as empty rows", async () => {
+      using db = mockTailordb();
+      db.setQueryResolver((query) => {
+        if (query.includes("SELECT")) return [{ id: "1" }];
+        return undefined;
+      });
+
+      const client = new (globalThis as any).tailordb.Client({});
+      const result = await client.queryObject("BEGIN");
+
+      expect(result.rows).toEqual([]);
+    });
+
+    test("setQueryResolver replaces a direct queryObject implementation", async () => {
+      using db = mockTailordb();
+      db.queryObject.mockImplementation(async () => ({
+        command: "",
+        rowCount: 1,
+        rows: [{ source: "direct" }],
+      }));
+      db.setQueryResolver(() => [{ source: "resolver" }]);
+
+      const client = new (globalThis as any).tailordb.Client({});
+      const result = await client.queryObject("SELECT source");
+
+      expect(result.rows).toEqual([{ source: "resolver" }]);
+    });
+
     test("enqueueResult provides order-based responses", async () => {
       using db = mockTailordb();
       db.enqueueResult(); // BEGIN (empty)
@@ -177,6 +205,23 @@ describe("mock", () => {
       const env = await captureEnv.trigger();
 
       expect(env).toEqual({ STAGE: "test", REGION: "asia" });
+    });
+
+    test("nested mockWorkflow scopes restore the outer env", async () => {
+      using outer = mockWorkflow();
+      const captureEnv = createWorkflowJob({
+        name: "capture-nested-env",
+        body: (_input: undefined, ctx) => ctx.env,
+      });
+      outer.setEnv({ STAGE: "outer" });
+
+      {
+        using inner = mockWorkflow();
+        inner.setEnv({ STAGE: "inner" });
+        expect(await captureEnv.trigger()).toEqual({ STAGE: "inner" });
+      }
+
+      expect(await captureEnv.trigger()).toEqual({ STAGE: "outer" });
     });
 
     test("reset clears env back to {}", async () => {
@@ -451,9 +496,16 @@ describe("mock", () => {
   describe("mockIdp", () => {
     test("records calls with method, args, namespace", async () => {
       using idp = mockIdp();
+      const calls = idp.calls;
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
       await client.user("u-1");
-      expect(idp.calls).toEqual([{ method: "user", args: ["u-1"], namespace: "ns" }]);
+      expect(calls).toEqual([{ method: "user", args: ["u-1"], namespace: "ns" }]);
+
+      idp.clear();
+      expect(calls).toEqual([]);
+
+      await client.user("u-2");
+      expect(calls).toEqual([{ method: "user", args: ["u-2"], namespace: "ns" }]);
     });
 
     test("enqueueResults provides ordered responses", async () => {
@@ -470,7 +522,9 @@ describe("mock", () => {
 
     test("setResolver provides content-based responses", async () => {
       using idp = mockIdp();
-      idp.setResolver((method) => {
+      const resolverArgs: unknown[][] = [];
+      idp.setResolver((method, args) => {
+        resolverArgs.push(args);
         if (method === "users")
           return {
             users: [{ id: "u-1", name: "bob", disabled: false }],
@@ -483,14 +537,16 @@ describe("mock", () => {
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
       const result = await client.users();
       expect(result.users).toHaveLength(1);
+      expect(resolverArgs).toEqual([[undefined]]);
     });
 
     test("reset clears state", async () => {
       using idp = mockIdp();
+      const calls = idp.calls;
       const client = new (globalThis as any).tailor.idp.Client({ namespace: "ns" });
       await client.user("u-1");
       idp.reset();
-      expect(idp.calls).toHaveLength(0);
+      expect(calls).toHaveLength(0);
     });
 
     test("default fallback is cloned so test mutations cannot leak across tests", async () => {
@@ -509,14 +565,29 @@ describe("mock", () => {
   describe("mockFile", () => {
     test("records calls", async () => {
       using file = mockFile();
+      const calls = file.calls;
       await (globalThis as any).tailordb.file.upload("ns", "Doc", "file", "r-1", "data");
-      expect(file.calls).toEqual([
+      expect(calls).toEqual([
         {
           method: "upload",
           namespace: "ns",
           typeName: "Doc",
           fieldName: "file",
           recordId: "r-1",
+        },
+      ]);
+
+      file.clear();
+      expect(calls).toEqual([]);
+
+      await (globalThis as any).tailordb.file.delete("ns", "Doc", "file", "r-2");
+      expect(calls).toEqual([
+        {
+          method: "delete",
+          namespace: "ns",
+          typeName: "Doc",
+          fieldName: "file",
+          recordId: "r-2",
         },
       ]);
     });
@@ -541,9 +612,10 @@ describe("mock", () => {
 
     test("reset clears state", async () => {
       using file = mockFile();
+      const calls = file.calls;
       await (globalThis as any).tailordb.file.delete("ns", "T", "f", "r");
       file.reset();
-      expect(file.calls).toHaveLength(0);
+      expect(calls).toHaveLength(0);
     });
 
     test("openDownloadStream rejects raw bytes to guide callers to structured chunks", async () => {
@@ -565,6 +637,118 @@ describe("mock", () => {
         "r",
       );
       await expect(stream.next()).rejects.toThrow(/StreamValue/);
+    });
+
+    test("openDownloadStream validates elements from an existing stream iterator", async () => {
+      using file = mockFile();
+      const invalidStream = {
+        async next() {
+          return { done: false as const, value: new Uint8Array([1]) };
+        },
+        async close() {},
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+      file.enqueueResult(invalidStream);
+
+      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
+        "ns",
+        "T",
+        "f",
+        "r",
+      );
+      await expect(stream.next()).rejects.toThrow(/StreamValue/);
+    });
+
+    test("openDownloadStream closes the wrapped iterator", async () => {
+      using file = mockFile();
+      let closed = false;
+      async function* sequence() {
+        try {
+          yield { type: "complete" as const };
+        } finally {
+          closed = true;
+        }
+      }
+      file.enqueueResult(sequence());
+
+      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
+        "ns",
+        "T",
+        "f",
+        "r",
+      );
+      await stream.next();
+      await stream.close();
+      expect(closed).toBe(true);
+    });
+
+    test("openDownloadStream acquires the iterator from an existing stream", async () => {
+      using file = mockFile();
+      let acquired = false;
+      const source = {
+        async close() {},
+        async *[Symbol.asyncIterator]() {
+          acquired = true;
+          yield { type: "complete" as const };
+        },
+      };
+      file.enqueueResult(source);
+
+      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
+        "ns",
+        "T",
+        "f",
+        "r",
+      );
+      await expect(stream.next()).resolves.toMatchObject({ value: { type: "complete" } });
+      expect(acquired).toBe(true);
+    });
+
+    test("openDownloadStream closes the iterator when iteration stops early", async () => {
+      using file = mockFile();
+      let closed = false;
+      async function* sequence() {
+        try {
+          yield { type: "complete" as const };
+        } finally {
+          closed = true;
+        }
+      }
+      file.enqueueResult(sequence());
+
+      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
+        "ns",
+        "T",
+        "f",
+        "r",
+      );
+      for await (const _value of stream) break;
+      expect(closed).toBe(true);
+    });
+
+    test("openDownloadStream closes the source when iteration stops early", async () => {
+      using file = mockFile();
+      let closed = false;
+      const source = {
+        async close() {
+          closed = true;
+        },
+        async *[Symbol.asyncIterator]() {
+          yield { type: "complete" as const };
+        },
+      };
+      file.enqueueResult(source);
+
+      const stream = await (globalThis as any).tailordb.file.openDownloadStream(
+        "ns",
+        "T",
+        "f",
+        "r",
+      );
+      for await (const _value of stream) break;
+      expect(closed).toBe(true);
     });
 
     test("openDownloadStream yields the enqueued StreamValue sequence", async () => {
@@ -611,8 +795,15 @@ describe("mock", () => {
   describe("mockIconv", () => {
     test("records calls", () => {
       using iconv = mockIconv();
+      const calls = iconv.calls;
       (globalThis as any).tailor.iconv.convert("hello", "UTF-8", "Shift_JIS");
-      expect(iconv.calls).toEqual([{ method: "convert", args: ["hello", "UTF-8", "Shift_JIS"] }]);
+      expect(calls).toEqual([{ method: "convert", args: ["hello", "UTF-8", "Shift_JIS"] }]);
+
+      iconv.clear();
+      expect(calls).toEqual([]);
+
+      (globalThis as any).tailor.iconv.decode(new Uint8Array(), "UTF-8");
+      expect(calls).toEqual([{ method: "decode", args: [new Uint8Array(), "UTF-8"] }]);
     });
 
     test("setResolver overrides responses", () => {
@@ -627,9 +818,10 @@ describe("mock", () => {
 
     test("reset clears calls and resolver", () => {
       using iconv = mockIconv();
+      const calls = iconv.calls;
       (globalThis as any).tailor.iconv.encodings();
       iconv.reset();
-      expect(iconv.calls).toHaveLength(0);
+      expect(calls).toHaveLength(0);
     });
 
     test.each([
@@ -670,6 +862,34 @@ describe("mock", () => {
       using wf = mockWorkflow();
       await (globalThis as any).tailor.workflow.triggerWorkflow("wf-1", { key: "val" }, undefined);
       expect(wf.triggerWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }, undefined]]);
+    });
+
+    test("createWorkflow().trigger(args) without options records a 2-arg call", async () => {
+      using wf = mockWorkflow();
+      const arityJob = createWorkflowJob({
+        name: "arity-workflow-main",
+        body: (_input: undefined) => ({ ok: true }),
+      });
+      const arityWorkflow = createWorkflow({ name: "arity-workflow", mainJob: arityJob });
+
+      await arityWorkflow.trigger(undefined);
+
+      expect(wf.triggerWorkflow.mock.calls).toEqual([["arity-workflow", undefined]]);
+    });
+
+    test("createWorkflow().trigger(args, undefined) records a 3-arg call", async () => {
+      using wf = mockWorkflow();
+      const arityJob = createWorkflowJob({
+        name: "arity-workflow-main-3arg",
+        body: (_input: undefined) => ({ ok: true }),
+      });
+      const arityWorkflow = createWorkflow({ name: "arity-workflow-3arg", mainJob: arityJob });
+
+      await arityWorkflow.trigger(undefined, undefined);
+
+      expect(wf.triggerWorkflow.mock.calls).toEqual([
+        ["arity-workflow-3arg", undefined, undefined],
+      ]);
     });
 
     test("setTriggerHandler with string controls triggerWorkflow response", async () => {
@@ -777,6 +997,41 @@ describe("mock", () => {
       });
       expect(callbackRan).toBe(false);
       expect(wf.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
+    });
+
+    describe("canonical aliases", () => {
+      test("startJobFunction and triggerJobFunction share the same call log", () => {
+        using wf = mockWorkflow();
+        const start = (globalThis as any).tailor.workflow.startJobFunction;
+        const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
+
+        start("job-a", { via: "canonical" });
+        trigger("job-b", { via: "legacy" });
+
+        expect(wf.triggeredJobs).toEqual([
+          { jobName: "job-a", args: { via: "canonical" } },
+          { jobName: "job-b", args: { via: "legacy" } },
+        ]);
+        expect(wf.startJobFunction).toBe(wf.triggerJobFunction);
+      });
+
+      test("startWorkflow honors setTriggerHandler", async () => {
+        using wf = mockWorkflow();
+        wf.setTriggerHandler("exec-canonical");
+        const result = await (globalThis as any).tailor.workflow.startWorkflow("wf", {});
+        expect(result).toBe("exec-canonical");
+        expect(wf.startWorkflow.mock.calls).toEqual([["wf", {}]]);
+        expect(wf.startWorkflow).toBe(wf.triggerWorkflow);
+      });
+
+      test("resumeWorkflowExecution honors setResumeHandler", async () => {
+        using wf = mockWorkflow();
+        wf.setResumeHandler("exec-canonical-resumed");
+        const result = await (globalThis as any).tailor.workflow.resumeWorkflowExecution("exec-1");
+        expect(result).toBe("exec-canonical-resumed");
+        expect(wf.resumeWorkflowExecution.mock.calls).toEqual([["exec-1"]]);
+        expect(wf.resumeWorkflowExecution).toBe(wf.resumeWorkflow);
+      });
     });
   });
 

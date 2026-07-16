@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.77.0",
+  "version": "1.78.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -233,7 +233,7 @@
     "oxlint": "1.73.0",
     "oxlint-tsgolint": "0.24.0",
     "sonda": "0.14.0",
-    "tsdown": "0.22.4",
+    "tsdown": "0.22.5",
     "typescript": "6.0.3",
     "vitest": "4.1.10",
     "zinfer": "0.2.5"
