@@ -28,6 +28,21 @@ describe("resolve", () => {
     expect(result).toEqual(resolved);
   });
 
+  test("known limitation: does not correct a specifier that a coincidentally-matching alias in a different tsconfig already resolved successfully", async () => {
+    const { dir, parentURL } = makeProject({
+      compilerOptions: { baseUrl: ".", paths: { "@/*": ["./src/*"] } },
+    });
+    dirs.push(dir);
+    // Simulates tsx's own tsconfig-paths support (scoped to a different,
+    // cwd-discovered tsconfig that happens to share the same alias pattern)
+    // succeeding against the wrong target before this hook ever gets a
+    // chance to run — it only activates on ERR_MODULE_NOT_FOUND.
+    const wrongResolution = { url: "file:///unrelated-project/src/utils.ts" };
+    const nextResolve = vi.fn().mockResolvedValue(wrongResolution);
+    const result = await resolve("@/utils", { parentURL }, nextResolve);
+    expect(result).toEqual(wrongResolution);
+  });
+
   test("rethrows ERR_MODULE_NOT_FOUND for non-relative specifiers with no matching tsconfig", async () => {
     const { dir, parentURL } = makeProject({ compilerOptions: { baseUrl: ".", paths: {} } });
     dirs.push(dir);

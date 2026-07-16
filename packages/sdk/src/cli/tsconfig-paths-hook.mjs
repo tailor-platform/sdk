@@ -23,14 +23,10 @@ import { createPathsMatcher, getTsconfig } from "get-tsconfig";
 // inconsistent Node.js module-hook composition behavior between tsx's two
 // internal registration APIs; not attempted here.
 //
-// Registered via module.register() (not module.registerHooks()): tsx picks
-// between the async register() and sync registerHooks() APIs internally
-// depending on the Node.js version, and a sync-registered hook's nextResolve
-// never reaches back into an active register()-based loader chain — it
-// would silently never fire on the Node.js versions where tsx still uses
-// register(). Chaining another register()-based loader after tsx's,
-// regardless of which API tsx itself picked, is the only combination that
-// composes correctly on every supported Node.js version.
+// Registered via module.register() (not module.registerHooks()): chaining
+// another register()-based loader after tsx's composes correctly regardless
+// of which of the two internal registration APIs tsx itself picks (it
+// varies by Node.js version).
 //
 // TypeScript transformation itself is left to tsx's already-registered load
 // hook; this only supplies the resolve fallback tsx's cwd-scoped resolver
@@ -38,6 +34,11 @@ import { createPathsMatcher, getTsconfig } from "get-tsconfig";
 
 const TS_EXTENSIONS = [".ts", ".tsx", ".mts"];
 
+// Cached per directory for the lifetime of this process. `generate --watch`
+// restarts its own child process on config/service-file changes (clearing
+// this cache along with it), but it does not currently watch tsconfig.json
+// itself, so edits to `paths` there won't be picked up until the next
+// restart — a pre-existing limitation of watch mode, not new here.
 const tsconfigCache = new Map();
 const matcherCache = new Map();
 
