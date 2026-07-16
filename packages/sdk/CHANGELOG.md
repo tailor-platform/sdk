@@ -1,5 +1,31 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.6
+
+### Major Changes
+
+- [#1776](https://github.com/tailor-platform/sdk/pull/1776) [`7338457`](https://github.com/tailor-platform/sdk/commit/733845732fabff504c32b725f6919be6167bc7a1) Thanks [@dqn](https://github.com/dqn)! - Remove the built-in `tailordb erd` commands. They are now provided by the `@tailor-platform/sdk-tailordb-erd-plugin` CLI plugin: install it with `npm install -D @tailor-platform/sdk-tailordb-erd-plugin` and keep running `tailor tailordb erd <command>` as before — the CLI dispatches to the plugin automatically and suggests the install command when the plugin is missing. The `erdSite` TailorDB setting is unchanged.
+
+- [#1789](https://github.com/tailor-platform/sdk/pull/1789) [`36ad006`](https://github.com/tailor-platform/sdk/commit/36ad006f9eb2d23b21b2028741dbce1d6ba9f91b) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove the `generate --watch` (`-W`) flag. `tailor generate` now always runs a single generation pass; re-run the command after making changes instead of relying on the watcher to regenerate automatically.
+
+- [#1733](https://github.com/tailor-platform/sdk/pull/1733) [`09f5691`](https://github.com/tailor-platform/sdk/commit/09f5691ef5a76761812f039d125d33eb3211994a) Thanks [@dqn](https://github.com/dqn)! - Require workflow executor `args` when the target workflow input is required, and accept primitive and array static JSON inputs during configuration parsing. Existing workflow executor configurations that omit required input must add `args`.
+
+### Minor Changes
+
+- [#1776](https://github.com/tailor-platform/sdk/pull/1776) [`7338457`](https://github.com/tailor-platform/sdk/commit/733845732fabff504c32b725f6919be6167bc7a1) Thanks [@dqn](https://github.com/dqn)! - Add `loadTailorDBNamespaces`, `deployStaticWebsite`, `assertWritable`, and `isPluginGeneratedType` (with their related types) to `@tailor-platform/sdk/cli`, so CLI plugins and scripts can load local TailorDB schema data and deploy static websites through the public API.
+
+- [#1768](https://github.com/tailor-platform/sdk/pull/1768) [`813f86e`](https://github.com/tailor-platform/sdk/commit/813f86eb0b0df1a768db5de6a39a550d6633749a) Thanks [@k1LoW](https://github.com/k1LoW)! - Add canonical `tailor.workflow.*` names that mirror the public `tailor.v1` RPC vocabulary. The `startWorkflow`, `startJobFunction`, and `resumeWorkflowExecution` methods are now available on `tailor.workflow`, alongside `workflow.startWorkflow` / `workflow.startJobFunction` / `workflow.resumeWorkflowExecution` from `@tailor-platform/sdk/runtime`. The pre-alignment names (`triggerWorkflow`, `triggerJobFunction`, `resumeWorkflow`) continue to work as frozen aliases, but are now marked `@deprecated` so IDEs surface a hint to migrate to the canonical names.
+
+### Patch Changes
+
+- [#1769](https://github.com/tailor-platform/sdk/pull/1769) [`9837182`](https://github.com/tailor-platform/sdk/commit/983718288eab23a4c15762c179a67569dd78a287) Thanks [@dqn](https://github.com/dqn)! - Fix `tailor function test-run` crashing with `TypeError: Cannot convert undefined or null to object` when `--arg` is a non-object JSON value such as `null`. The argument is now forwarded to the server, which reports the validation error. Local input validation also runs the same logic as deployed resolvers.
+
+- [#1780](https://github.com/tailor-platform/sdk/pull/1780) [`1316447`](https://github.com/tailor-platform/sdk/commit/13164471cc934da03dd64640b2fb2457c79b4413) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix a spurious `TS2719` type error when a `db.table()` type built with custom fields is passed across module boundaries (e.g. into another package's factory function) and its `.validate()` callback's `issues()` field parameter is compared for assignability. The `issues()` field argument type no longer uses a self-generic parameter, so structurally-equal `TailorDBType` instances derived through different generic instantiation paths are recognized as compatible.
+
+- [#1781](https://github.com/tailor-platform/sdk/pull/1781) [`000db7e`](https://github.com/tailor-platform/sdk/commit/000db7ef91b699918a8da600faa183ebcb40ba7c) Thanks [@dqn](https://github.com/dqn)! - Prevent concurrent multi-config deployments from mixing resolver, executor, workflow, Auth hook, HTTP adapter, and TailorDB hook or validator bundles
+
+- [#1777](https://github.com/tailor-platform/sdk/pull/1777) [`322b69c`](https://github.com/tailor-platform/sdk/commit/322b69c843953551ccb4b32d7cbd528ae2b0e10c) Thanks [@toiroakr](https://github.com/toiroakr)! - Fail fast at `generate`/`deploy` time when a TailorDB type is missing `.permission()`, or missing `.gqlPermission()` while GraphQL operations are enabled for it (`.gqlPermission()` is not required when GraphQL exposure is fully disabled via `gqlOperations`). Previously these omissions deployed silently and only surfaced later as an opaque `internal error` on insert.
+
 ## 2.0.0-next.5
 
 ### Major Changes
