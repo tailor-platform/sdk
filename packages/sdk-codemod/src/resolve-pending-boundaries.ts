@@ -1,10 +1,12 @@
 import { parse } from "semver";
 
-const PENDING_USAGE_PATTERN = /prereleaseUntil: V2_NEXT_PENDING,/g;
+// Tolerant of whitespace and CRLF, not just the exact oxfmt-formatted spacing this file
+// happens to use today, so a manual edit or formatter change doesn't stop this from matching.
+const PENDING_USAGE_PATTERN = /prereleaseUntil:\s*V2_NEXT_PENDING\s*,/g;
 // Includes a preceding JSDoc block (if any) so a new constant is inserted above it,
 // not between the comment and `V2_NEXT_PENDING` where it would attach to the wrong export.
 const PENDING_DECLARATION_PATTERN =
-  /(?:^\/\*\*[\s\S]*?\*\/\n)?^export const V2_NEXT_PENDING = "pending";$/m;
+  /(?:^\/\*\*[\s\S]*?\*\/\r?\n)?^export const\s+V2_NEXT_PENDING\s*=\s*"pending";$/m;
 
 export interface ResolvePendingBoundariesResult {
   /** Whether any `V2_NEXT_PENDING` usage was found and rewritten. */

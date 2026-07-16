@@ -118,4 +118,26 @@ describe("resolvePendingBoundaries", () => {
       ["/**", " * Sentinel for pending codemods.", " */", PENDING_DECL].join("\n"),
     );
   });
+
+  test("tolerates non-canonical spacing around the usage and declaration", () => {
+    const source = [
+      V2_NEXT_4_DECL,
+      'export const   V2_NEXT_PENDING="pending";',
+      "    prereleaseUntil:V2_NEXT_PENDING ,",
+    ].join("\n");
+    const result = resolvePendingBoundaries(source, "2.0.0-next.5");
+
+    expect(result.changed).toBe(true);
+    expect(result.source).toContain("prereleaseUntil: V2_NEXT_5,");
+  });
+
+  test("tolerates CRLF line endings before the declaration", () => {
+    const source = [V2_NEXT_4_DECL, PENDING_DECL, "    prereleaseUntil: V2_NEXT_PENDING,"].join(
+      "\r\n",
+    );
+    const result = resolvePendingBoundaries(source, "2.0.0-next.5");
+
+    expect(result.changed).toBe(true);
+    expect(result.source).toContain('const V2_NEXT_5 = "2.0.0-next.5";');
+  });
 });
