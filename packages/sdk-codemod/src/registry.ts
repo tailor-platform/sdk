@@ -98,6 +98,13 @@ const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_4 = "2.0.0-next.4";
 const V2_NEXT_5 = "2.0.0-next.5";
+/**
+ * Sentinel `prereleaseUntil` for a codemod whose exact `2.0.0-next.N` release is not
+ * known yet. `pnpm codemod:resolve-pending`, run in CI against the release PR, replaces
+ * it with the resolved `V2_NEXT_N` constant once the version is bumped. Exported so it
+ * stays lint-clean while no codemod currently references it.
+ */
+export const V2_NEXT_PENDING = "pending";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -1075,6 +1082,9 @@ export function resolveCodemodScript(scriptPath: string): string {
 }
 
 function reachesCodemodBoundary(toVersion: string, codemod: CodemodPackage): boolean {
+  if (codemod.prereleaseUntil === V2_NEXT_PENDING) {
+    return false;
+  }
   if (gte(toVersion, codemod.until)) {
     return true;
   }
@@ -1094,6 +1104,9 @@ function reachesCodemodBoundary(toVersion: string, codemod: CodemodPackage): boo
 }
 
 function effectiveCodemodBoundary(codemod: CodemodPackage): string {
+  if (codemod.prereleaseUntil === V2_NEXT_PENDING) {
+    return codemod.until;
+  }
   return codemod.prereleaseUntil ?? codemod.until;
 }
 
@@ -1108,7 +1121,7 @@ function assertCodemodBoundaries(codemods: CodemodPackage[]): void {
     if (boundary.prerelease.length > 0) {
       throw new Error(`Codemod ${codemod.id} until must be a stable version: ${codemod.until}`);
     }
-    if (codemod.prereleaseUntil === undefined) {
+    if (codemod.prereleaseUntil === undefined || codemod.prereleaseUntil === V2_NEXT_PENDING) {
       continue;
     }
 
