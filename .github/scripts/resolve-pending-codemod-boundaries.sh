@@ -23,6 +23,8 @@ trap 'git reset --hard --quiet "$original_ref"' EXIT
 
 PR_BRANCH="$(gh pr view "$PR_NUMBER" --json headRefName -q .headRefName)"
 gh pr checkout "$PR_NUMBER"
+# Detach so the trap's reset only moves HEAD, not the local branch gh pr checkout made.
+git checkout --quiet --detach
 
 pnpm codemod:resolve-pending
 
