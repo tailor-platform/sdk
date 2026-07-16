@@ -17,7 +17,9 @@
 set -euo pipefail
 
 original_ref="$(git rev-parse HEAD)"
-trap 'git checkout --quiet "$original_ref"' EXIT
+# --hard: codemod:resolve-pending and oxfmt below leave registry.ts modified, and a
+# plain `git checkout` refuses to switch away from a dirty tracked file.
+trap 'git reset --hard --quiet "$original_ref"' EXIT
 
 PR_BRANCH="$(gh pr view "$PR_NUMBER" --json headRefName -q .headRefName)"
 gh pr checkout "$PR_NUMBER"

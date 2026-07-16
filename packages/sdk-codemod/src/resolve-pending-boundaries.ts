@@ -37,12 +37,15 @@ export function resolvePendingBoundaries(
     throw new Error(`resolvedVersion must be a valid semver version: ${resolvedVersion}`);
   }
   if (
+    parsed.major !== 2 ||
+    parsed.minor !== 0 ||
+    parsed.patch !== 0 ||
     parsed.prerelease.length !== 2 ||
     parsed.prerelease[0] !== "next" ||
     typeof parsed.prerelease[1] !== "number"
   ) {
     throw new Error(
-      `resolvedVersion must be a "next.N" prerelease to resolve V2_NEXT_PENDING: ${resolvedVersion}`,
+      `resolvedVersion must be a "2.0.0-next.N" prerelease to resolve V2_NEXT_PENDING: ${resolvedVersion}`,
     );
   }
   const constantName = `V${parsed.major}_NEXT_${parsed.prerelease[1]}`;
