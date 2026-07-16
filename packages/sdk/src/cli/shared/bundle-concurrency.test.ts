@@ -84,9 +84,93 @@ describe("withBundleConcurrency", () => {
     expect(results).toEqual(["A", "B", "C", "D", "E"]);
   });
 
+  test("waits for sibling workers before rejecting", async () => {
+    vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "2");
+    let siblingCompleted = false;
+
+    const outcome = withBundleConcurrency(["failing", "sibling"], async (item) => {
+      if (item === "failing") {
+        throw new Error("bundle failed");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      siblingCompleted = true;
+      return item;
+    }).then(
+      () => ({ error: undefined, siblingCompleted }),
+      (error: unknown) => ({ error, siblingCompleted }),
+    );
+
+    await vi.runAllTimersAsync();
+    const result = await outcome;
+
+    expect(result.error).toEqual(new Error("bundle failed"));
+    expect(result.siblingCompleted).toBe(true);
+  });
+
+  test("preserves the first rejection while waiting for sibling workers", async () => {
+    vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "2");
+
+    const outcome = withBundleConcurrency(["later", "first"], async (item) => {
+      await new Promise((resolve) => setTimeout(resolve, item === "first" ? 10 : 20));
+      throw new Error(`${item} rejection`);
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    await vi.runAllTimersAsync();
+
+    await expect(outcome).resolves.toEqual(new Error("first rejection"));
+  });
+
+  test("does not start queued workers after a rejection", async () => {
+    vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "2");
+    const started: string[] = [];
+
+    const outcome = withBundleConcurrency(["failing", "sibling", "queued"], async (item) => {
+      started.push(item);
+      if (item === "failing") {
+        throw new Error("bundle failed");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return item;
+    }).catch(() => undefined);
+
+    await vi.runAllTimersAsync();
+    await outcome;
+
+    expect(started).toEqual(["failing", "sibling"]);
+  });
+
   test("handles empty input", async () => {
     vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "4");
     const results = await withBundleConcurrency<number, number>([], async (item) => item);
     expect(results).toEqual([]);
+  });
+
+  test("preserves sparse input slots without invoking the worker", async () => {
+    const items: string[] = [];
+    items.length = 2;
+    items[1] = "ok";
+    const worker = vi.fn(async (item: string) => item.toUpperCase());
+
+    const results = await withBundleConcurrency(items, worker);
+
+    expect(worker).toHaveBeenCalledOnce();
+    expect(results).toEqual([undefined, "OK"]);
+  });
+
+  test("does not process items added after the run starts", async () => {
+    vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "1");
+    const items = ["first"];
+    const worker = vi.fn(async (item: string) => {
+      items.push("later");
+      return item;
+    });
+
+    const results = await withBundleConcurrency(items, worker);
+
+    expect(worker).toHaveBeenCalledOnce();
+    expect(results).toEqual(["first"]);
   });
 });

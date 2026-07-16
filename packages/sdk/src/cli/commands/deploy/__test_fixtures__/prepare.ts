@@ -23,6 +23,22 @@ export async function prepareFixtures(): Promise<{
     fs.rmSync(outputDir, { recursive: true });
   }
 
+  for (const file of [
+    "resolvers/legacy.entry.js",
+    "executors/legacy.entry.js",
+    "workflow-jobs/legacy.entry.js",
+    "workflow-jobs/removed-job.js",
+    "workflow-jobs/removed-job.js.map",
+    "auth-hooks/legacy.entry.js",
+    "http-adapters/legacy.input.entry.js",
+    "hooks-validate-scripts/LegacyType/tailordb-script-0.entry.ts",
+    "resolvers/keep.txt",
+  ]) {
+    const filePath = path.join(outputDir, file);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, "legacy bundle artifact");
+  }
+
   const configPath = path.join(fixtureDir, "tailor.config.ts");
 
   process.env.TAILOR_SDK_OUTPUT_DIR = outputDir;
