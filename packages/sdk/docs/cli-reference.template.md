@@ -113,7 +113,9 @@ tailor hello world --loud
 ```
 
 This also works under a built-in command group. The command path is joined with hyphens, so a plugin
-nested under `tailordb` is named `tailor-tailordb-erd`:
+nested under `tailordb` is named `tailor-tailordb-erd`. This is how the
+`@tailor-platform/sdk-tailordb-erd-plugin`
+package provides the `tailordb erd` commands:
 
 ```bash
 # Runs `tailor-tailordb-erd` with: export
@@ -129,6 +131,9 @@ Resolution rules:
 - **Lookup order:** the project's `node_modules/.bin` (nearest first, walking up from the current
   directory), then your `PATH`. So a plugin installed as a project dev-dependency takes precedence over a
   globally installed one.
+- **Place global flags after the plugin command.** Only the arguments following the plugin name are
+  forwarded; a global flag placed before it (e.g. `tailor --json tailordb erd export`) is consumed by
+  the host CLI and does not reach the plugin. Write `tailor tailordb erd export --json` instead.
 
 Because resolution is based on `node_modules/.bin` and `PATH`, any package manager that populates
 `node_modules/.bin` works for project-local plugins — npm, pnpm (its content-addressable store is

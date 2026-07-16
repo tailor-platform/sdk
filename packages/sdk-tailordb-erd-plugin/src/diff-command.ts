@@ -2,8 +2,6 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { defineAppCommand } from "#/cli/shared/command";
-import { logger } from "#/cli/shared/logger";
 import {
   buildErdDiffViewerSchema,
   buildErdSchemaDiff,
@@ -12,6 +10,8 @@ import {
   renderErdDiffHtml,
   type ErdSchemaDiff,
 } from "./diff";
+import { defineAppCommand } from "./shared/command";
+import { logger } from "./shared/logger";
 import { initErdCommand } from "./utils";
 import type { TailorDbErdSchema } from "./types";
 

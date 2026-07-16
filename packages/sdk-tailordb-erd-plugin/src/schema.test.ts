@@ -6,9 +6,9 @@ import { buildTailorDbErdSchema, writeTailorDbErdSchemaToFile } from "./schema";
 import type {
   OperatorFieldConfig,
   ParsedField,
+  TailorDBNamespaceData,
   TailorDBType,
-} from "#/parser/service/tailordb/types";
-import type { TailorDBNamespaceData } from "#/plugin/types";
+} from "@tailor-platform/sdk/cli";
 
 function createField(
   name: string,

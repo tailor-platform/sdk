@@ -72,6 +72,14 @@ to pull requests:
 tailor setup -n my-app-stg --erd-preview
 ```
 
+The generated workflow runs `tailor tailordb erd`, which is provided by the
+`@tailor-platform/sdk-tailordb-erd-plugin` CLI plugin — install it as a
+dev-dependency in your project:
+
+```bash
+npm install -D @tailor-platform/sdk-tailordb-erd-plugin@next
+```
+
 The generated workflow builds one self-contained ERD viewer HTML file for each
 owned TailorDB namespace in `tailor.config.ts`. The viewer compares the pull
 request merge result with the base branch, can switch between the current schema

@@ -75,6 +75,9 @@ importers:
       '@connectrpc/connect-node':
         specifier: 2.1.2
         version: 2.1.2(@bufbuild/protobuf@2.12.1)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.12.1))
+      '@tailor-platform/sdk-tailordb-erd-plugin':
+        specifier: workspace:^
+        version: link:../packages/sdk-tailordb-erd-plugin
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
@@ -639,6 +642,58 @@ importers:
       '@types/semver':
         specifier: 7.7.1
         version: 7.7.1
+      eslint-plugin-zod:
+        specifier: 4.7.0
+        version: 4.7.0(eslint@10.5.0(jiti@2.7.0))(oxlint@1.73.0(oxlint-tsgolint@0.24.0))(typescript@6.0.3)(zod@4.4.3)
+      oxlint:
+        specifier: 1.73.0
+        version: 1.73.0(oxlint-tsgolint@0.24.0)
+      tsdown:
+        specifier: 0.22.5
+        version: 0.22.5(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(publint@0.3.21)(tsx@4.23.0)(typescript@6.0.3)
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: 4.1.10
+        version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.0.16(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
+
+  packages/sdk-tailordb-erd-plugin:
+    dependencies:
+      chalk:
+        specifier: 5.6.2
+        version: 5.6.2
+      chokidar:
+        specifier: 5.0.0
+        version: 5.0.0
+      mime-types:
+        specifier: 3.0.2
+        version: 3.0.2
+      open:
+        specifier: 11.0.0
+        version: 11.0.0
+      pathe:
+        specifier: 2.0.3
+        version: 2.0.3
+      pkg-types:
+        specifier: 2.3.1
+        version: 2.3.1
+      politty:
+        specifier: 0.11.2
+        version: 0.11.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@tailor-platform/sdk':
+        specifier: workspace:^
+        version: link:../sdk
+      '@types/mime-types':
+        specifier: 3.0.1
+        version: 3.0.1
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
       eslint-plugin-zod:
         specifier: 4.7.0
         version: 4.7.0(eslint@10.5.0(jiti@2.7.0))(oxlint@1.73.0(oxlint-tsgolint@0.24.0))(typescript@6.0.3)(zod@4.4.3)
