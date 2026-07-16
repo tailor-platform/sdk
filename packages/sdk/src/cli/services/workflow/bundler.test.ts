@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { buildStartContext, normalizeFilePath } from "#/cli/shared/start-context";
 import { bundleWorkflowJobs } from "./bundler";
 
@@ -12,6 +12,59 @@ describe("bundleWorkflowJobs", () => {
       usedJobNames: [],
       bundledCode: new Map(),
     });
+  });
+
+  test("passes the mapped invoker to the job body", async () => {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-invoker-test-")));
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (_input, { invoker }) => invoker,
+});
+`,
+    );
+    vi.stubGlobal("tailor", {
+      context: {
+        getInvoker: () => ({
+          id: "invoker-id",
+          type: "machine_user",
+          workspaceId: "workspace-id",
+          attributeMap: { role: "ADMIN" },
+          attributes: [{ name: "role", value: "ADMIN" }],
+        }),
+      },
+    });
+
+    try {
+      const result = await bundleWorkflowJobs(
+        [{ name: "main-job", exportName: "mainJob", sourceFile }],
+        ["main-job"],
+        {},
+        { modules: new Map() },
+        undefined,
+        true,
+      );
+      const code = result.bundledCode.get("main-job");
+      expect(code).toBeDefined();
+      const moduleUrl = `data:text/javascript;base64,${Buffer.from(code!).toString("base64")}`;
+      const module = (await import(moduleUrl)) as { main: (input: unknown) => Promise<unknown> };
+
+      await expect(module.main({})).resolves.toEqual({
+        id: "invoker-id",
+        type: "machine_user",
+        workspaceId: "workspace-id",
+        attributes: { role: "ADMIN" },
+        attributeList: [{ name: "role", value: "ADMIN" }],
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   describe("job start binding resolution", () => {

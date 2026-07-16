@@ -3,7 +3,15 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { getOAuth2ClientId, getPlatformBaseUrl } from "./client";
-import { dispatchPlugin, listPlugins, resolvePlugin } from "./plugin";
+import { logger } from "./logger";
+import {
+  dispatchPlugin,
+  dispatchPluginWithInstallHint,
+  explicitProfileFromArgs,
+  hasEnvFileFlag,
+  listPlugins,
+  resolvePlugin,
+} from "./plugin";
 
 const contextMocks = vi.hoisted(() => ({
   loadAccessToken: vi.fn(),
@@ -265,6 +273,71 @@ describe("dispatchPlugin", () => {
     expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBe("cpoc_staging");
   });
 
+  test("resolves injected context from an explicit --profile in forwarded args", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["deploy", "--profile", "staging"],
+      cliName: CLI,
+      profile: "prod",
+    });
+
+    expect(code).toBe(0);
+    expect(contextMocks.loadAccessToken).toHaveBeenCalledWith({ profile: "staging" });
+    expect(contextMocks.loadWorkspaceId).toHaveBeenCalledWith({ profile: "staging" });
+  });
+
+  test("skips platform context injection when the forwarded args carry an env-file flag", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+    // Node itself also parses --env-file after the script path
+    // (https://github.com/nodejs/node/issues/54232), so the file must exist for
+    // the capture plugin process to start.
+    fs.writeFileSync(path.join(project, ".env.staging"), "");
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["deploy", "--env-file", ".env.staging"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(0);
+    const { env } = readCapture();
+    expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_WORKSPACE_ID).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_USER).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_URL).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID).toBeUndefined();
+    expect(env.TAILOR_CONFIG_PATH).toBe("/proj/tailor.config.ts");
+  });
+
+  test("skips platform context even when the --env-file-if-exists file is missing", async () => {
+    const project = path.join(tempDir, "project");
+    writeCapturePlugin(path.join(project, "node_modules", ".bin"), `${CLI}-hello`, outFile);
+    process.chdir(project);
+    process.env.PATH = "";
+
+    const code = await dispatchPlugin({
+      name: "hello",
+      args: ["deploy", "--env-file-if-exists", ".env.missing"],
+      cliName: CLI,
+    });
+
+    // The flag check is presence-only: with the file absent, neither the
+    // injected context nor the plugin's env-file loader supplies platform vars.
+    expect(code).toBe(0);
+    const { env } = readCapture();
+    expect(env.TAILOR_PLATFORM_TOKEN).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_WORKSPACE_ID).toBeUndefined();
+    expect(env.TAILOR_PLATFORM_URL).toBeUndefined();
+  });
+
   test("omits best-effort context when it cannot be resolved but still dispatches", async () => {
     contextMocks.loadAccessToken.mockRejectedValue(new Error("not logged in"));
     contextMocks.loadWorkspaceId.mockRejectedValue(new Error("no workspace"));
@@ -323,5 +396,93 @@ describe("dispatchPlugin", () => {
     process.env.PATH = "";
 
     expect(await dispatchPlugin({ name: "missing", args: [], cliName: CLI })).toBeUndefined();
+  });
+});
+
+describe("dispatchPluginWithInstallHint", () => {
+  let tempDir: string;
+  let originalCwd: string;
+  let originalPath: string | undefined;
+
+  beforeEach(() => {
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "tailor-hint-")));
+    originalCwd = process.cwd();
+    originalPath = process.env.PATH;
+    const project = path.join(tempDir, "project");
+    fs.mkdirSync(project, { recursive: true });
+    process.chdir(project);
+    process.env.PATH = "";
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.chdir(originalCwd);
+    process.env.PATH = originalPath;
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  test("prints an install hint when a known plugin package is not installed", async () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    const code = await dispatchPluginWithInstallHint({
+      commandPath: ["tailordb"],
+      name: "erd",
+      args: ["export"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      `"${CLI} tailordb erd" is provided by the @tailor-platform/sdk-tailordb-erd-plugin CLI plugin, which is not installed.`,
+    );
+    expect(infoSpy).toHaveBeenCalledWith(
+      "Install it with: npm install -D @tailor-platform/sdk-tailordb-erd-plugin",
+    );
+  });
+
+  test("returns undefined for an unknown subcommand with no known package", async () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    const code = await dispatchPluginWithInstallHint({
+      commandPath: [],
+      name: "missing",
+      args: [],
+      cliName: CLI,
+    });
+
+    expect(code).toBeUndefined();
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(infoSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("explicitProfileFromArgs", () => {
+  test.each([
+    [["deploy", "--profile", "staging"], "staging"],
+    [["deploy", "-p", "staging"], "staging"],
+    [["deploy", "--profile=staging"], "staging"],
+    [["deploy", "-p=staging"], "staging"],
+    [["--profile", "a", "deploy", "--profile", "b"], "b"],
+    [["deploy"], undefined],
+    [["deploy", "--profile"], undefined],
+    [["deploy", "--profile", "--json"], undefined],
+    [["deploy", "--", "--profile", "staging"], undefined],
+  ])("extracts profile from %j", (args, expected) => {
+    expect(explicitProfileFromArgs(args)).toBe(expected);
+  });
+});
+
+describe("hasEnvFileFlag", () => {
+  test.each([
+    [["deploy", "--env-file", ".env"], true],
+    [["deploy", "-e", ".env"], true],
+    [["deploy", "--env-file=.env"], true],
+    [["deploy", "--env-file-if-exists", ".env"], true],
+    [["deploy"], false],
+    [["deploy", "--", "--env-file", ".env"], false],
+  ])("detects env-file flag in %j", (args, expected) => {
+    expect(hasEnvFileFlag(args)).toBe(expected);
   });
 });

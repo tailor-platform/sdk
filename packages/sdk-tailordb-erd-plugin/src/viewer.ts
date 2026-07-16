@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import type { TailorDbErdSchema } from "./types";
 
-const VIEWER_ASSETS_DIR = "erd-viewer-assets";
 const STYLES_LINK = '<link rel="stylesheet" href="./styles.css" />';
 const APP_SCRIPT = '<script src="./app.js" type="module"></script>';
 
@@ -29,12 +28,7 @@ function escapeHtml(value: string): string {
 
 function assetDirCandidates(): string[] {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
-  return [
-    path.join(currentDir, "viewer-assets"),
-    path.join(currentDir, VIEWER_ASSETS_DIR),
-    path.join(currentDir, "commands", "tailordb", "erd", VIEWER_ASSETS_DIR),
-    path.resolve(process.cwd(), "packages/sdk/src/cli/commands/tailordb/erd/viewer-assets"),
-  ];
+  return [path.join(currentDir, "viewer-assets")];
 }
 
 /**

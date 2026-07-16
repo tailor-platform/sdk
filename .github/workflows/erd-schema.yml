@@ -5,12 +5,14 @@ on:
   push:
     branches: [main, v2]
     paths:
-      - packages/sdk/src/cli/commands/tailordb/erd/**
+      - packages/sdk-tailordb-erd-plugin/**
+      - packages/sdk/src/cli/shared/tailordb-namespaces.ts
       - example/**
       - .github/workflows/erd-schema.yml
   pull_request:
     paths:
-      - packages/sdk/src/cli/commands/tailordb/erd/**
+      - packages/sdk-tailordb-erd-plugin/**
+      - packages/sdk/src/cli/shared/tailordb-namespaces.ts
       - example/**
       - .github/workflows/erd-schema.yml
 
@@ -40,7 +42,21 @@ jobs:
         with:
           persist-credentials: false
 
+      # pnpm links a package's bin only when its target file exists at install
+      # time, and neither a same-lockfile re-install nor `rebuild --pending`
+      # retries a skipped link. Stub the plugin's dist entry before install;
+      # the build below replaces it.
+      - name: Stub ERD plugin bin target
+        run: |
+          mkdir -p packages/sdk-tailordb-erd-plugin/dist
+          printf '#!/usr/bin/env node\n' > packages/sdk-tailordb-erd-plugin/dist/index.js
+
       - uses: ./.github/actions/install-deps
+
+      # install-deps only builds the SDK; `tailor tailordb erd` dispatches to
+      # this plugin's bin.
+      - name: Build ERD plugin
+        run: pnpm --filter @tailor-platform/sdk-tailordb-erd-plugin run build
 
       - uses: tailor-platform/actions/erd-schema-export@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
         with:
@@ -76,9 +92,23 @@ jobs:
         with:
           persist-credentials: false
 
+      # pnpm links a package's bin only when its target file exists at install
+      # time, and neither a same-lockfile re-install nor `rebuild --pending`
+      # retries a skipped link. Stub the plugin's dist entry before install;
+      # the build below replaces it.
+      - name: Stub ERD plugin bin target
+        run: |
+          mkdir -p packages/sdk-tailordb-erd-plugin/dist
+          printf '#!/usr/bin/env node\n' > packages/sdk-tailordb-erd-plugin/dist/index.js
+
       # install-deps builds the SDK once, so the `tailor-sdk` CLI bin resolves.
       - name: Install deps
         uses: ./.github/actions/install-deps
+
+      # install-deps only builds the SDK; `tailor tailordb erd` dispatches to
+      # this plugin's bin.
+      - name: Build ERD plugin
+        run: pnpm --filter @tailor-platform/sdk-tailordb-erd-plugin run build
 
       - uses: tailor-platform/actions/erd-schema-preview@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
         with:
@@ -93,7 +123,8 @@ jobs:
           preview-artifact-name: ${{ matrix.namespace }}.html
           always-relevant-paths: |
             example/tailor.config.ts
-            packages/sdk/src/cli/commands/tailordb/erd/
+            packages/sdk-tailordb-erd-plugin/
+            packages/sdk/src/cli/shared/tailordb-namespaces.ts
           relevant-path-prefix: example/
           github-token: ${{ github.token }}
 

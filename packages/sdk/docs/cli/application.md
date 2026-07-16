@@ -38,10 +38,9 @@ tailor generate [options]
 
 **Options**
 
-| Option              | Alias | Description                                    | Required | Default              |
-| ------------------- | ----- | ---------------------------------------------- | -------- | -------------------- |
-| `--config <CONFIG>` | `-c`  | Path to SDK config file                        | No       | `"tailor.config.ts"` |
-| `--watch`           | `-W`  | Watch for type/resolver changes and regenerate | No       | `false`              |
+| Option              | Alias | Description             | Required | Default              |
+| ------------------- | ----- | ----------------------- | -------- | -------------------- |
+| `--config <CONFIG>` | `-c`  | Path to SDK config file | No       | `"tailor.config.ts"` |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

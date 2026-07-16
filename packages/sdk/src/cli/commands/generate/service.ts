@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "pathe";
 import {
@@ -15,7 +14,6 @@ import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
-import { createDependencyWatcher, type DependencyWatcher } from "./watch";
 import type { TypeSourceInfo, TailorDBType } from "#/parser/service/tailordb/types";
 import type {
   GeneratorAuthInput,
@@ -46,8 +44,7 @@ export type GenerationManager = {
     resolver: Record<string, Record<string, Resolver>>;
     executor: Record<string, Executor>;
   };
-  generate: (watch: boolean) => Promise<void>;
-  watch: () => Promise<void>;
+  generate: () => Promise<void>;
 };
 
 /**
@@ -72,8 +69,6 @@ export function createGenerationManager(params: {
     resolver: Record<string, Record<string, Resolver>>;
     executor: Record<string, Executor>;
   } = { tailordb: {}, resolver: {}, executor: {} };
-
-  let watcher: DependencyWatcher | null = null;
 
   // Get plugins that have generation hooks
   const generationPlugins = pluginManager?.getPluginsWithGenerationHooks() ?? [];
@@ -196,11 +191,9 @@ export function createGenerationManager(params: {
    * Each hook runs at its natural pipeline phase, ensuring outputs from earlier
    * phases are available when later phases load resolvers/executors.
    * @param hookName - Name of the hook to call
-   * @param watch - Whether running in watch mode (suppresses throws)
    */
   async function runPluginHook(
     hookName: "onTailorDBReady" | "onResolverReady" | "onExecutorReady",
-    watch: boolean,
   ): Promise<void> {
     const plugins = generationPlugins.filter((p) => p[hookName] != null);
     if (plugins.length === 0) return;
@@ -211,17 +204,13 @@ export function createGenerationManager(params: {
         } catch (error) {
           logger.error(`Error processing plugin ${styles.bold(plugin.id)} (${hookName})`);
           logger.error(String(error));
-          if (!watch) {
-            throw error;
-          }
+          throw error;
         }
       }),
     );
-    if (!watch) {
-      const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
-      if (failures.length > 0) {
-        throw new AggregateError(failures.map((f) => f.reason));
-      }
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+    if (failures.length > 0) {
+      throw new AggregateError(failures.map((f) => f.reason));
     }
   }
 
@@ -278,59 +267,12 @@ export function createGenerationManager(params: {
     );
   }
 
-  async function restartWatchProcess(): Promise<void> {
-    logger.newline();
-    logger.info("Restarting watch process to clear module cache...", {
-      mode: "stream",
-    });
-    logger.newline();
-
-    // Clean up watcher first
-    if (watcher) {
-      await watcher.stop();
-    }
-
-    // Spawn a new process with the same arguments
-    const args = process.argv.slice(2);
-    const env = {
-      ...process.env,
-      __TAILOR_WATCH_GENERATION: (
-        parseInt(process.env.__TAILOR_WATCH_GENERATION || "0", 10) + 1
-      ).toString(),
-    };
-
-    const child = spawn(
-      assertDefined(process.argv[0], "argv[0] missing"),
-      [assertDefined(process.argv[1], "argv[1] missing"), ...args],
-      {
-        stdio: "inherit",
-        env,
-        detached: false,
-      },
-    );
-
-    // Forward signals to child
-    const forwardSignal = (signal: NodeJS.Signals) => {
-      child.kill(signal);
-    };
-
-    process.on("SIGINT", forwardSignal);
-    process.on("SIGTERM", forwardSignal);
-
-    // Wait for child to exit, then exit parent
-    child.on("exit", (code) => {
-      process.exit(code || 0);
-    });
-
-    // Don't exit immediately - let child handle everything
-  }
-
   return {
     application,
     baseDir,
     services,
 
-    async generate(watch: boolean): Promise<void> {
+    async generate(): Promise<void> {
       logger.newline();
       logger.log(`Generation for application: ${styles.highlight(application.config.name)}`);
 
@@ -357,9 +299,7 @@ export function createGenerationManager(params: {
             } catch (error) {
               logger.error(`Error loading types for TailorDB service ${styles.bold(namespace)}`);
               logger.error(String(error));
-              if (!watch) {
-                throw error;
-              }
+              throw error;
             }
           });
         }
@@ -370,9 +310,7 @@ export function createGenerationManager(params: {
         } catch (error) {
           logger.error("Error validating TailorDB type names");
           logger.error(String(error));
-          if (!watch) {
-            throw error;
-          }
+          throw error;
         }
       });
 
@@ -412,7 +350,7 @@ export function createGenerationManager(params: {
       const hasOnTailorDBReady = generationPlugins.some((p) => p.onTailorDBReady != null);
       if (hasOnTailorDBReady) {
         await withSpan("generate.onTailorDBReady", async () => {
-          await runPluginHook("onTailorDBReady", watch);
+          await runPluginHook("onTailorDBReady");
         });
         logger.newline();
       }
@@ -434,9 +372,7 @@ export function createGenerationManager(params: {
                 `Error loading resolvers for Resolver service ${styles.bold(namespace)}`,
               );
               logger.error(String(error));
-              if (!watch) {
-                throw error;
-              }
+              throw error;
             }
           });
         }
@@ -446,7 +382,7 @@ export function createGenerationManager(params: {
       const hasOnResolverReady = generationPlugins.some((p) => p.onResolverReady != null);
       if (hasOnResolverReady) {
         await withSpan("generate.onResolversReady", async () => {
-          await runPluginHook("onResolverReady", watch);
+          await runPluginHook("onResolverReady");
         });
         logger.newline();
       }
@@ -471,43 +407,10 @@ export function createGenerationManager(params: {
       const hasOnExecutorReady = generationPlugins.some((p) => p.onExecutorReady != null);
       if (hasOnExecutorReady) {
         await withSpan("generate.onExecutorsReady", async () => {
-          await runPluginHook("onExecutorReady", watch);
+          await runPluginHook("onExecutorReady");
         });
         logger.newline();
       }
-    },
-
-    async watch(): Promise<void> {
-      watcher = createDependencyWatcher();
-
-      // Set up restart callback
-      watcher.setRestartCallback(() => {
-        restartWatchProcess();
-      });
-
-      // Watch config file
-      await watcher.addWatchGroup("Config", [config.path]);
-
-      // Watch application services
-      const app = application;
-
-      // Watch TailorDB services
-      for (const db of app.tailorDBServices) {
-        const dbNamespace = db.namespace;
-        await watcher.addWatchGroup(`TailorDB/${dbNamespace}`, db.config.files);
-      }
-
-      // Watch Resolver services
-      for (const resolverService of app.resolverServices) {
-        const resolverNamespace = resolverService.namespace;
-        await watcher.addWatchGroup(
-          `Resolver/${resolverNamespace}`,
-          resolverService["config"].files,
-        );
-      }
-
-      // Keep the process running
-      await new Promise(() => {});
     },
   };
 }
@@ -515,7 +418,7 @@ export function createGenerationManager(params: {
 /**
  * Run code generation using the Tailor configuration.
  * @param options - Generation options
- * @returns Promise that resolves when generation (and watch, if enabled) completes
+ * @returns Promise that resolves when generation completes
  */
 export async function generate(options?: GenerateOptions) {
   return withSpan("generate", async (rootSpan) => {
@@ -523,9 +426,6 @@ export async function generate(options?: GenerateOptions) {
     const { config, plugins } = await withSpan("generate.loadConfig", async () => {
       return loadConfig(options?.configPath);
     });
-    const watch = options?.watch ?? false;
-
-    rootSpan.setAttribute("generate.watch", watch);
 
     // Generate user types from loaded config
     await withSpan("generate.generateUserTypes", async () =>
@@ -544,9 +444,6 @@ export async function generate(options?: GenerateOptions) {
     rootSpan.setAttribute("app.name", application.config.name);
 
     const manager = createGenerationManager({ application, config, pluginManager });
-    await manager.generate(watch);
-    if (watch) {
-      await manager.watch();
-    }
+    await manager.generate();
   });
 }
