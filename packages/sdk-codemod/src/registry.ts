@@ -865,7 +865,7 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_1,
-    suspiciousPatterns: [".trigger(", ".start("],
+    suspiciousPatterns: [".trigger("],
     examples: [
       {
         caption: "Tests must mock the workflow runtime instead of running bodies locally:",
