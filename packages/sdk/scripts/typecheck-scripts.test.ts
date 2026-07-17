@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -47,6 +47,26 @@ const invalidCases: Array<[string, (scripts: Scripts) => void]> = [
   ],
 ];
 
+function runCheckTypecheck(cwd: string): Promise<{ status: number | null; output: string }> {
+  const pnpm =
+    process.platform === "win32"
+      ? {
+          command: process.env.ComSpec ?? "cmd.exe",
+          args: ["/d", "/s", "/c", "pnpm run check:typecheck"],
+        }
+      : { command: "pnpm", args: ["run", "check:typecheck"] };
+  return new Promise((resolve, reject) => {
+    const child = spawn(pnpm.command, pnpm.args, { cwd });
+    let output = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => (output += chunk));
+    child.stderr.on("data", (chunk: string) => (output += chunk));
+    child.on("error", reject);
+    child.on("close", (status) => resolve({ status, output }));
+  });
+}
+
 function validateParallelTypecheckScripts(scripts: Scripts): void {
   if (scripts["check:typecheck"] !== expectedCoordinator) {
     throw new Error("typecheck coordinator mismatch");
@@ -79,41 +99,37 @@ describe("workspace typecheck scripts", () => {
     expect(() => validateParallelTypecheckScripts(scripts)).toThrow(/typecheck .* mismatch/);
   });
 
-  test.each(lanes)("reports every branch when %s fails", (failedLane) => {
-    const fixture = mkdtempSync(join(tmpdir(), "typecheck-fanout-"));
-    const scripts: Scripts = {
-      "check:typecheck": expectedCoordinator,
-    };
-    for (const [index, lane] of lanes.entries()) {
-      const outcome = lane === failedLane ? "failed" : "finished";
-      const logger = lane === failedLane ? "error" : "log";
-      const exitCode = lane === failedLane ? index + 1 : 0;
-      scripts[`check-type:${lane}`] =
-        `node -e "setTimeout(function () { console.${logger}(['sentinel-${lane}', '${outcome}'].join(' ')); process.exitCode = ${exitCode} }, ${(index + 1) * 100})"`;
-    }
-
-    try {
-      writeFileSync(
-        join(fixture, "package.json"),
-        JSON.stringify({ packageManager: packageJson.packageManager, private: true, scripts }),
-      );
-      const pnpm =
-        process.platform === "win32"
-          ? {
-              command: process.env.ComSpec ?? "cmd.exe",
-              args: ["/d", "/s", "/c", "pnpm run check:typecheck"],
-            }
-          : { command: "pnpm", args: ["run", "check:typecheck"] };
-      const result = spawnSync(pnpm.command, pnpm.args, { cwd: fixture, encoding: "utf8" });
-      const output = `${result.stdout}${result.stderr}`;
-
-      expect(result.status).not.toBe(0);
-      for (const lane of lanes) {
+  test.concurrent.for(lanes)(
+    "reports every branch when %s fails",
+    { timeout: 30_000 },
+    async (failedLane, { expect }) => {
+      const fixture = mkdtempSync(join(tmpdir(), "typecheck-fanout-"));
+      const scripts: Scripts = {
+        "check:typecheck": expectedCoordinator,
+      };
+      for (const [index, lane] of lanes.entries()) {
         const outcome = lane === failedLane ? "failed" : "finished";
-        expect(output).toContain(`sentinel-${lane} ${outcome}`);
+        const logger = lane === failedLane ? "error" : "log";
+        const exitCode = lane === failedLane ? index + 1 : 0;
+        scripts[`check-type:${lane}`] =
+          `node -e "setTimeout(function () { console.${logger}(['sentinel-${lane}', '${outcome}'].join(' ')); process.exitCode = ${exitCode} }, ${(index + 1) * 100})"`;
       }
-    } finally {
-      rmSync(fixture, { force: true, recursive: true });
-    }
-  });
+
+      try {
+        writeFileSync(
+          join(fixture, "package.json"),
+          JSON.stringify({ packageManager: packageJson.packageManager, private: true, scripts }),
+        );
+        const result = await runCheckTypecheck(fixture);
+
+        expect(result.status).not.toBe(0);
+        for (const lane of lanes) {
+          const outcome = lane === failedLane ? "failed" : "finished";
+          expect(result.output).toContain(`sentinel-${lane} ${outcome}`);
+        }
+      } finally {
+        rmSync(fixture, { force: true, recursive: true });
+      }
+    },
+  );
 });

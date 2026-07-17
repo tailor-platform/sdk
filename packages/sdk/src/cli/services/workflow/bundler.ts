@@ -1,17 +1,17 @@
 import * as fs from "node:fs";
 import { parseSync } from "oxc-parser";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
@@ -49,13 +49,14 @@ export interface BundleWorkflowJobsResult {
  * This function:
  * 1. Detects which jobs are actually used (mainJobs + their dependencies)
  * 2. Uses a transform plugin to transform trigger calls during bundling
- * 3. Creates entry file and bundles with tree-shaking
+ * 3. Creates an in-memory entry module and bundles with tree-shaking
  *
  * Returns metadata about which jobs each workflow uses.
  * @param allJobs - All available job infos
  * @param mainJobNames - Names of main jobs
  * @param env - Environment variables to inject
  * @param triggerContext - Trigger context for transformations
+ * @param baseDir - Directory the owning config's tsconfig is resolved against
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
@@ -66,6 +67,7 @@ export async function bundleWorkflowJobs(
   mainJobNames: string[],
   env: Record<string, string | number | boolean> = {},
   triggerContext: TriggerContext,
+  baseDir: string,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
@@ -83,27 +85,7 @@ export async function bundleWorkflowJobs(
     `Bundling ${styles.highlight(usedJobs.length.toString())} files for ${styles.info('"workflow-job"')}`,
   );
 
-  const outputDir = path.resolve(getDistDir(), "workflow-jobs");
-
-  // Remove stale output files (those not in the current build set)
-  fs.mkdirSync(outputDir, { recursive: true });
-  const currentJobNames = new Set(usedJobs.map((j) => j.name));
-  const existingFiles = fs.readdirSync(outputDir);
-  for (const file of existingFiles) {
-    // Remove .js and .js.map files not belonging to current jobs (covers entry files, stale outputs, and sourcemaps)
-    if (file.endsWith(".js") && !currentJobNames.has(path.basename(file, ".js"))) {
-      fs.rmSync(path.join(outputDir, file), { force: true });
-    } else if (file.endsWith(".js.map") && !currentJobNames.has(path.basename(file, ".js.map"))) {
-      fs.rmSync(path.join(outputDir, file), { force: true });
-    }
-  }
-
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   // Process each job, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
@@ -111,7 +93,6 @@ export async function bundleWorkflowJobs(
     bundleSingleJob(
       job,
       usedJobs,
-      outputDir,
       tsconfig,
       env,
       triggerContext,
@@ -266,7 +247,6 @@ async function filterUsedJobs(
 async function bundleSingleJob(
   job: JobInfo,
   allJobs: JobInfo[],
-  outputDir: string,
   tsconfig: string | undefined,
   env: Record<string, string | number | boolean>,
   triggerContext: TriggerContext,
@@ -296,8 +276,6 @@ async function bundleSingleJob(
     sourceFile: job.sourceFile,
     contextHash,
     async build(cachePlugins) {
-      // Step 1: Create entry file that imports job by named export
-      const entryPath = path.join(outputDir, `${job.name}.entry.js`);
       const absoluteSourcePath = path.resolve(job.sourceFile);
 
       const entryContent = ml /* js */ `
@@ -309,7 +287,7 @@ async function bundleSingleJob(
           return await ${job.exportName}.body(input, { env, invoker });
         }
       `;
-      fs.writeFileSync(entryPath, entryContent);
+      const entry = createVirtualEntry(`workflow-job:${job.name}`, entryContent);
 
       // Pre-compute once to avoid redundant realpathSync calls per module
       const resolvedSourceFile = safeRealpath(job.sourceFile);
@@ -370,13 +348,14 @@ async function bundleSingleJob(
       };
 
       const plugins: rolldown.Plugin[] = [
+        entry.plugin,
         transformPlugin,
         platformBundleDefinePlugin,
         ...cachePlugins,
       ];
 
       const result = await rolldown.build({
-        input: entryPath,
+        input: entry.input,
         write: false,
         output: {
           format: "esm",

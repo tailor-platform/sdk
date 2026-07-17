@@ -1,19 +1,17 @@
-import * as fs from "node:fs";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { type BundleCache, computeBundlerContextHash, withCache } from "#/cli/cache/bundle-cache";
 import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
-import { removeStaleEntryFiles } from "#/cli/services/stale-cleanup";
 import { createTriggerTransformPlugin } from "#/cli/services/workflow/trigger-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
-import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { buildResolverPermissionGuardExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
 import type { LogLevel } from "#/configure/config/types";
@@ -30,10 +28,11 @@ interface ResolverInfo {
  *
  * This function:
  * 1. Uses a transform plugin to add validation wrapper during bundling
- * 2. Creates entry file
+ * 2. Creates an in-memory entry module
  * 3. Bundles in a single step with tree-shaking
  * @param namespace - Resolver namespace name
  * @param config - Resolver file loading configuration
+ * @param baseDir - Directory the config's file patterns are resolved against
  * @param triggerContext - Trigger context for workflow/job transformations
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
@@ -43,13 +42,14 @@ interface ResolverInfo {
 export async function bundleResolvers(
   namespace: string,
   config: FileLoadConfig,
+  baseDir: string,
   triggerContext?: TriggerContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<Map<string, string>> {
   const bundledCode = new Map<string, string>();
-  const files = loadFilesWithIgnores(config);
+  const files = loadFilesWithIgnores(config, baseDir);
   if (files.length === 0) {
     logger.warn(`No resolver files found for patterns: ${config.files.join(", ")}`);
     return bundledCode;
@@ -77,21 +77,7 @@ export async function bundleResolvers(
     });
   }
 
-  const outputDir = path.resolve(getDistDir(), "resolvers");
-
-  fs.mkdirSync(outputDir, { recursive: true });
-
-  // Clean stale entry files from previous builds.
-  // Must complete before Promise.all below; parallel namespace processing
-  // would require separate output directories per namespace.
-  await removeStaleEntryFiles(outputDir);
-
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   // Process each resolver, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
@@ -99,7 +85,6 @@ export async function bundleResolvers(
     bundleSingleResolver(
       namespace,
       resolver,
-      outputDir,
       tsconfig,
       triggerContext,
       cache,
@@ -120,7 +105,6 @@ export async function bundleResolvers(
 async function bundleSingleResolver(
   namespace: string,
   resolver: ResolverInfo,
-  outputDir: string,
   tsconfig: string | undefined,
   triggerContext?: TriggerContext,
   cache?: BundleCache,
@@ -145,8 +129,6 @@ async function bundleSingleResolver(
     sourceFile: resolver.sourceFile,
     contextHash,
     async build(cachePlugins) {
-      // Step 1: Create entry file that imports from the original source
-      const entryPath = path.join(outputDir, `${resolver.name}.entry.js`);
       const absoluteSourcePath = path.resolve(resolver.sourceFile);
       const permissionGuardExpr = buildResolverPermissionGuardExpr(resolver.permission);
 
@@ -177,15 +159,17 @@ async function bundleSingleResolver(
 
         export { $tailor_resolver_body as main };
       `;
-      fs.writeFileSync(entryPath, entryContent);
+      const entry = createVirtualEntry(`resolver:${resolver.name}`, entryContent);
 
-      // Step 2: Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
-      const plugins: rolldown.Plugin[] = triggerPlugin ? [triggerPlugin] : [];
+      const plugins: rolldown.Plugin[] = [entry.plugin];
+      if (triggerPlugin) {
+        plugins.push(triggerPlugin);
+      }
       plugins.push(platformBundleDefinePlugin, ...cachePlugins);
 
       const result = await rolldown.build({
-        input: entryPath,
+        input: entry.input,
         write: false,
         output: {
           format: "esm",

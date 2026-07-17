@@ -1,17 +1,73 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { buildTriggerContext, normalizeFilePath } from "#/cli/shared/trigger-context";
 import { bundleWorkflowJobs } from "./bundler";
 
 describe("bundleWorkflowJobs", () => {
   test("does not throw when no workflow jobs are provided", async () => {
-    await expect(bundleWorkflowJobs([], [], {}, { modules: new Map() })).resolves.toEqual({
+    await expect(
+      bundleWorkflowJobs([], [], {}, { modules: new Map() }, process.cwd()),
+    ).resolves.toEqual({
       mainJobDeps: {},
       usedJobNames: [],
       bundledCode: new Map(),
     });
+  });
+
+  test("passes the mapped invoker to the job body", async () => {
+    const tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "job-invoker-test-")));
+    const sourceFile = path.join(tmpDir, "workflow.ts");
+    fs.writeFileSync(
+      sourceFile,
+      `
+import { createWorkflowJob } from "@tailor-platform/sdk";
+
+export const mainJob = createWorkflowJob({
+  name: "main-job",
+  body: async (_input, { invoker }) => invoker,
+});
+`,
+    );
+    vi.stubGlobal("tailor", {
+      context: {
+        getInvoker: () => ({
+          id: "invoker-id",
+          type: "machine_user",
+          workspaceId: "workspace-id",
+          attributeMap: { role: "ADMIN" },
+          attributes: [{ name: "role", value: "ADMIN" }],
+        }),
+      },
+    });
+
+    try {
+      const result = await bundleWorkflowJobs(
+        [{ name: "main-job", exportName: "mainJob", sourceFile }],
+        ["main-job"],
+        {},
+        { modules: new Map() },
+        tmpDir,
+        undefined,
+        true,
+      );
+      const code = result.bundledCode.get("main-job");
+      expect(code).toBeDefined();
+      const moduleUrl = `data:text/javascript;base64,${Buffer.from(code!).toString("base64")}`;
+      const module = (await import(moduleUrl)) as { main: (input: unknown) => Promise<unknown> };
+
+      await expect(module.main({})).resolves.toEqual({
+        id: "invoker-id",
+        type: "machine_user",
+        workspaceId: "workspace-id",
+        attributes: { role: "ADMIN" },
+        attributeList: [{ name: "role", value: "ADMIN" }],
+      });
+    } finally {
+      vi.unstubAllGlobals();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 
   describe("job trigger binding resolution", () => {
@@ -71,6 +127,7 @@ export default createWorkflow({ name: "workflow-b", mainJob: mainB });
         ["main-a"],
         {},
         context,
+        dir,
       );
 
       expect(result.mainJobDeps["main-a"]).toEqual(["main-a", "step-a"]);
@@ -113,6 +170,7 @@ export default createWorkflow({ name: "workflow", mainJob });
         ["main-job"],
         {},
         context,
+        dir,
       );
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job", "step-a"]);
@@ -146,6 +204,7 @@ export default createWorkflow({ name: "workflow", mainJob });
         ["main-job"],
         {},
         context,
+        dir,
       );
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job"]);
@@ -250,7 +309,7 @@ export default createWorkflow({
         authNamespace: "default",
       };
 
-      return bundleWorkflowJobs(allJobs, mainJobNames, {}, triggerContext);
+      return bundleWorkflowJobs(allJobs, mainJobNames, {}, triggerContext, tmpDir);
     };
 
     test.each([

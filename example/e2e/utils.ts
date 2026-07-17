@@ -1,4 +1,4 @@
-import { createClient, type Interceptor } from "@connectrpc/connect";
+import { Code, ConnectError, createClient, type Interceptor } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-node";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { GraphQLClient } from "graphql-request";
@@ -12,9 +12,56 @@ export function createOperatorClient() {
   const transport = createConnectTransport({
     httpVersion: "2",
     baseUrl,
-    interceptors: [userAgentInterceptor(), bearerTokenInterceptor(platformToken)],
+    // Every OperatorService call in e2e is a read (get*/list*), so a stalled
+    // request is safe to cut short and retry instead of eating the test timeout.
+    interceptors: [
+      retryInterceptor(),
+      userAgentInterceptor(),
+      bearerTokenInterceptor(platformToken),
+    ],
   });
   return [createClient(OperatorService, transport), workspaceId] as const;
+}
+
+// The per-attempt deadline lives here rather than in the transport's
+// `defaultTimeoutMs`: the transport creates its deadline signal once per RPC,
+// so after a timeout every retry would reuse an already-aborted request.
+function retryInterceptor(maxAttempts = 3, attemptTimeoutMs = 10_000): Interceptor {
+  const retryableCodes = new Set([Code.DeadlineExceeded, Code.Unavailable]);
+  return (next) => async (req) => {
+    if (req.stream) {
+      return await next(req);
+    }
+
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (attempt > 1) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+      }
+      const deadline = new AbortController();
+      const timer = setTimeout(
+        () => deadline.abort(new ConnectError("attempt timed out", Code.DeadlineExceeded)),
+        attemptTimeoutMs,
+      );
+      try {
+        return await next({ ...req, signal: AbortSignal.any([req.signal, deadline.signal]) });
+      } catch (error) {
+        const connectError = ConnectError.from(error);
+        if (!retryableCodes.has(connectError.code)) {
+          throw error;
+        }
+        if (attempt < maxAttempts) {
+          console.warn(
+            `retrying ${req.method.name} after attempt ${attempt}/${maxAttempts} failed: ${connectError.message}`,
+          );
+        }
+        lastError = error;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    throw lastError;
+  };
 }
 
 function userAgentInterceptor(): Interceptor {
