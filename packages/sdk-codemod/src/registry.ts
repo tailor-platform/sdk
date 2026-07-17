@@ -725,7 +725,9 @@ export const allCodemods: CodemodPackage[] = [
       "Rename tailor.workflow call sites from the pre-alignment triggerWorkflow/triggerJobFunction/resumeWorkflow names to the canonical startWorkflow/startJobFunction/resumeWorkflowExecution names, on both the ambient tailor.workflow global and a workflow value imported from @tailor-platform/sdk/runtime(/workflow). For a renamed triggerWorkflow call, also renames a literal `invoker` option key to `authInvoker` — startWorkflow's options expect the platform shape directly, unlike the removed triggerWorkflow wrapper, which converted invoker to authInvoker internally.",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_6,
     scriptPath: "v2/workflow-trigger-rename/scripts/transform.js",
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     legacyPatterns: ["triggerWorkflow", "triggerJobFunction", "resumeWorkflow"],
     examples: [
       {
@@ -905,6 +907,8 @@ export const allCodemods: CodemodPackage[] = [
       "Rename `Workflow.trigger()` (returned by `createWorkflow()`) and `WorkflowJob.trigger()` (returned by `createWorkflowJob()`) to `.start()`, aligning the SDK's ergonomic verb with the platform's `start*` RPC vocabulary. No codemod ships for this rename: distinguishing a workflow/job `.trigger()` call from an unrelated object's own `.trigger()` method requires resolving the receiver back to a `createWorkflow`/`createWorkflowJob` result across files, which the SDK's own CLI bundler already does for build-time rewriting. Reusing that logic in a standalone script is a nontrivial lift, and — unlike the bundler, which fails loudly when it cannot rewrite a call — a codemod false positive would silently rewrite an unrelated `.trigger()` call with no error. For the call-site volume this rename typically involves, manual review guided by the prompt below is the safer trade-off.",
     since: "1.0.0",
     until: "2.0.0",
+    prereleaseUntil: V2_NEXT_6,
+    filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     suspiciousPatterns: [".trigger("],
     examples: [
       {
