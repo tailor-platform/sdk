@@ -1,4 +1,5 @@
 import * as path from "pathe";
+import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import {
   generateIdpSeedScriptCode,
   generateIdpTruncateScriptCode,
@@ -65,6 +66,10 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
   const { config, plugins, application, namespaces } = await loadApplicationNamespaces({
     configPath: options.configPath,
   });
+
+  // Seed files and type filters identify types by bare name, so enforce the
+  // same cross-namespace uniqueness that generation and deploy enforce.
+  assertUniqueLocalTailorDBTypeNames({ tailorDBServices: application.tailorDBServices });
 
   const seedPlugin = plugins.find((plugin) => plugin.id === SeedGeneratorID);
   if (!seedPlugin) {

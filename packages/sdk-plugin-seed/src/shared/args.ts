@@ -64,6 +64,8 @@ export const commonArgs = {
     },
   }),
   verbose: arg(z.boolean().default(false), {
+    // -v matches the generated seed runner this plugin replaces.
+    alias: "v",
     description: "Enable verbose logging",
     effect: (value) => {
       logger.verbose = value;
