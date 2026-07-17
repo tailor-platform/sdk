@@ -1,11 +1,16 @@
 name: "Deploy Drift Check"
 
-# Deploys each create-sdk template to a fresh workspace and verifies that an
+# Deploys create-sdk templates to a fresh workspace and verifies that an
 # immediate dry run reports "Plan: 0 to create, 0 to update, 0 to delete" — a
 # redeploy of unchanged code must be a no-op. Guards against comparison drift
 # such as newly added proto fields being reported as updates on every deploy.
 # example/ gets the same check inside the existing Workspace Deploy Test
 # (deploy.yml), which already deploys it on every PR.
+#
+# The matrix intentionally covers config-shape diversity rather than every
+# template: example configures everything explicitly, so drift caused by the
+# platform filling defaults for OMITTED sections (e.g. IdP userAuthPolicy)
+# only reproduces on minimal configs like these.
 
 on:
   pull_request:
@@ -56,23 +61,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Minimal config: almost everything omitted
           - target: hello-world
             dir: packages/create-sdk/templates/hello-world
-          - target: tailordb
-            dir: packages/create-sdk/templates/tailordb
-          - target: resolver
-            dir: packages/create-sdk/templates/resolver
-          - target: executor
-            dir: packages/create-sdk/templates/executor
-          - target: workflow
-            dir: packages/create-sdk/templates/workflow
+          # IdP without userAuthPolicy + plugins (caught the IdP default-policy drift)
           - target: generators
             dir: packages/create-sdk/templates/generators
-          - target: inventory-management
-            dir: packages/create-sdk/templates/inventory-management
+          # Multi-config deploy
           - target: multi-application
             dir: packages/create-sdk/templates/multi-application
             config: apps/user/tailor.config.ts,apps/admin/tailor.config.ts
+          # Static website URL resolution + auth/oauth2 combination
           - target: static-web-site
             dir: packages/create-sdk/templates/static-web-site
     steps:
