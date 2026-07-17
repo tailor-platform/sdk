@@ -231,10 +231,10 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 ### tailordb erd
 
-The `tailordb erd` commands (export, diff, serve, deploy) are provided by the `@tailor-platform/sdk-tailordb-erd-plugin` CLI plugin. Install it next to the SDK and keep running `tailor tailordb erd <command>` as before:
+The `tailordb erd` commands (export, diff, serve, deploy) are provided by the `@tailor-platform/sdk-plugin-tailordb-erd` CLI plugin. Install it next to the SDK and keep running `tailor tailordb erd <command>` as before:
 
 ```bash
-npm install -D @tailor-platform/sdk-tailordb-erd-plugin@next
+npm install -D @tailor-platform/sdk-plugin-tailordb-erd@next
 tailor tailordb erd export --namespace myNamespace
 ```
 

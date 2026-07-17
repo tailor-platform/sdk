@@ -434,10 +434,10 @@ describe("dispatchPluginWithInstallHint", () => {
 
     expect(code).toBe(1);
     expect(errorSpy).toHaveBeenCalledWith(
-      `"${CLI} tailordb erd" is provided by the @tailor-platform/sdk-tailordb-erd-plugin CLI plugin, which is not installed.`,
+      `"${CLI} tailordb erd" is provided by the @tailor-platform/sdk-plugin-tailordb-erd CLI plugin, which is not installed.`,
     );
     expect(infoSpy).toHaveBeenCalledWith(
-      "Install it with: npm install -D @tailor-platform/sdk-tailordb-erd-plugin",
+      "Install it with: npm install -D @tailor-platform/sdk-plugin-tailordb-erd",
     );
   });
 

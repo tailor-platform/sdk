@@ -41,7 +41,7 @@ jobs:
             packages:
               - 'packages/sdk/**'
               - 'packages/create-sdk/**'
-              - 'packages/sdk-tailordb-erd-plugin/**'
+              - 'packages/sdk-plugin-tailordb-erd/**'
               - 'packages/tailor-proto/**'
 
       - name: Fail if no changeset

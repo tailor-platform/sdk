@@ -73,11 +73,11 @@ tailor setup -n my-app-stg --erd-preview
 ```
 
 The generated workflow runs `tailor tailordb erd`, which is provided by the
-`@tailor-platform/sdk-tailordb-erd-plugin` CLI plugin — install it as a
+`@tailor-platform/sdk-plugin-tailordb-erd` CLI plugin — install it as a
 dev-dependency in your project:
 
 ```bash
-npm install -D @tailor-platform/sdk-tailordb-erd-plugin@next
+npm install -D @tailor-platform/sdk-plugin-tailordb-erd@next
 ```
 
 The generated workflow builds one self-contained ERD viewer HTML file for each
