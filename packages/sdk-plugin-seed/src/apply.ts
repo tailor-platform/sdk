@@ -22,7 +22,7 @@ import { logger } from "./shared/logger";
 import { topologicalSort } from "./topo-sort";
 import type { OperatorClient, ScriptExecutionResult } from "@tailor-platform/sdk/cli";
 
-interface InvokerContext {
+interface SeedExecutionContext {
   operatorClient: OperatorClient;
   workspaceId: string;
   authNamespace: string;
@@ -30,7 +30,7 @@ interface InvokerContext {
 }
 
 interface SeedNamespaceParams {
-  invoker: InvokerContext;
+  execution: SeedExecutionContext;
   namespace: string;
   typesToSeed: string[];
   dependencies: Record<string, string[]>;
@@ -39,7 +39,7 @@ interface SeedNamespaceParams {
 }
 
 interface IdpScriptParams {
-  invoker: InvokerContext;
+  execution: SeedExecutionContext;
   scriptCode: string;
 }
 
@@ -96,7 +96,7 @@ function parseExecutionResult(
 }
 
 async function seedNamespace(params: SeedNamespaceParams): Promise<boolean> {
-  const { invoker, namespace, typesToSeed, dependencies, selfRefTypes, dataDir } = params;
+  const { execution, namespace, typesToSeed, dependencies, selfRefTypes, dataDir } = params;
   const sortedTypes = topologicalSort(typesToSeed, dependencies);
   const data = loadSeedData(dataDir, sortedTypes);
 
@@ -134,14 +134,14 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<boolean> {
     }
 
     const result = await executeScript({
-      client: invoker.operatorClient,
-      workspaceId: invoker.workspaceId,
+      client: execution.operatorClient,
+      workspaceId: execution.workspaceId,
       name: `seed-${namespace}.ts`,
       code: bundled.bundledCode,
       arg: { data: chunk.data, order: chunk.order, selfRefTypes },
       invoker: {
-        namespace: invoker.authNamespace,
-        machineUserName: invoker.machineUserName,
+        namespace: execution.authNamespace,
+        machineUserName: execution.machineUserName,
       },
     });
 
@@ -159,7 +159,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<boolean> {
 }
 
 async function seedIdpUser(params: IdpScriptParams & { dataDir: string }): Promise<boolean> {
-  const { invoker, scriptCode, dataDir } = params;
+  const { execution, scriptCode, dataDir } = params;
   logger.info("  Seeding _User via tailor.idp.Client...", { mode: "plain" });
 
   const rows = loadSeedData(dataDir, ["_User"])._User ?? [];
@@ -170,14 +170,14 @@ async function seedIdpUser(params: IdpScriptParams & { dataDir: string }): Promi
   logger.log(chalk.dim(`    Processing ${rows.length} _User records...`));
 
   const result = await executeScript({
-    client: invoker.operatorClient,
-    workspaceId: invoker.workspaceId,
+    client: execution.operatorClient,
+    workspaceId: execution.workspaceId,
     name: "seed-idp-user.ts",
     code: scriptCode,
     arg: { users: rows },
     invoker: {
-      namespace: invoker.authNamespace,
-      machineUserName: invoker.machineUserName,
+      namespace: execution.authNamespace,
+      machineUserName: execution.machineUserName,
     },
   });
 
@@ -194,17 +194,17 @@ async function seedIdpUser(params: IdpScriptParams & { dataDir: string }): Promi
 }
 
 async function truncateIdpUser(params: IdpScriptParams): Promise<boolean> {
-  const { invoker, scriptCode } = params;
+  const { execution, scriptCode } = params;
   logger.info("Truncating _User via tailor.idp.Client...", { mode: "plain" });
 
   const result = await executeScript({
-    client: invoker.operatorClient,
-    workspaceId: invoker.workspaceId,
+    client: execution.operatorClient,
+    workspaceId: execution.workspaceId,
     name: "truncate-idp-user.ts",
     code: scriptCode,
     invoker: {
-      namespace: invoker.authNamespace,
-      machineUserName: invoker.machineUserName,
+      namespace: execution.authNamespace,
+      machineUserName: execution.machineUserName,
     },
   });
 
@@ -286,7 +286,7 @@ export const seedApplyCommand = defineAppCommand({
       profile: args.profile,
       workspaceId: args["workspace-id"],
     });
-    const invoker: InvokerContext = {
+    const execution: SeedExecutionContext = {
       operatorClient: await initOperatorClient(await loadAccessToken({ profile: args.profile })),
       workspaceId: await loadWorkspaceId({
         workspaceId: args["workspace-id"],
@@ -343,7 +343,7 @@ export const seedApplyCommand = defineAppCommand({
         (args.types.length === 0 || (selection.entitiesToProcess ?? []).includes("_User"));
       if (shouldTruncateUser && context.idpUser) {
         const truncated = await truncateIdpUser({
-          invoker,
+          execution,
           scriptCode: context.idpUser.truncateScriptCode,
         });
         if (!truncated) {
@@ -374,7 +374,7 @@ export const seedApplyCommand = defineAppCommand({
       if (typesToSeed.length === 0) continue;
 
       const seeded = await seedNamespace({
-        invoker,
+        execution,
         namespace,
         typesToSeed,
         dependencies: nsConfig.dependencies,
@@ -392,7 +392,7 @@ export const seedApplyCommand = defineAppCommand({
       (!selection.entitiesToProcess || selection.entitiesToProcess.includes("_User"));
     if (shouldSeedUser && context.idpUser) {
       const seeded = await seedIdpUser({
-        invoker,
+        execution,
         scriptCode: context.idpUser.seedScriptCode,
         dataDir,
       });
