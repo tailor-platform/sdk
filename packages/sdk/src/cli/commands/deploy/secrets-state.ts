@@ -1,5 +1,13 @@
-import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import pLimit, { type LimitFunction } from "p-limit";
 import * as path from "pathe";
 import { z } from "zod";
@@ -113,10 +121,11 @@ export function hashValue(value: string): string {
 
 const LOCK_POLL_INTERVAL_MS = 100;
 const LOCK_ACQUIRE_TIMEOUT_MS = 5 * 60 * 1000;
-const OWNERLESS_LOCK_GRACE_MS = 10 * 1000;
-// Far above any realistic secrets apply phase, so an over-age lock can only
-// be a leftover whose recorded pid was reused by an unrelated process.
-const LOCK_MAX_AGE_MS = 15 * 60 * 1000;
+// A holder refreshes the lock directory mtime while working, so a lock whose
+// mtime is older than the lease can only belong to a crashed or stopped
+// process and is safe to steal.
+const LOCK_HEARTBEAT_INTERVAL_MS = 10 * 1000;
+const LOCK_LEASE_MS = 60 * 1000;
 
 const lockQueues = new Map<string, LimitFunction>();
 
@@ -144,17 +153,21 @@ export async function withSecretsStateLock<T>(
     lockQueues.set(lockPath, queue);
   }
   return queue(async () => {
-    await acquireFileLock(lockPath);
+    const token = await acquireFileLock(lockPath);
+    const heartbeat = setInterval(() => refreshLock(lockPath, token), LOCK_HEARTBEAT_INTERVAL_MS);
+    heartbeat.unref();
     try {
       return await fn();
     } finally {
-      rmSync(lockPath, { recursive: true, force: true });
+      clearInterval(heartbeat);
+      releaseFileLock(lockPath, token);
     }
   });
 }
 
-async function acquireFileLock(lockPath: string): Promise<void> {
+async function acquireFileLock(lockPath: string): Promise<string> {
   mkdirSync(path.dirname(lockPath), { recursive: true });
+  const token = randomUUID();
   const deadline = Date.now() + LOCK_ACQUIRE_TIMEOUT_MS;
   for (;;) {
     let created = true;
@@ -168,14 +181,17 @@ async function acquireFileLock(lockPath: string): Promise<void> {
     }
     if (created) {
       try {
-        writeFileSync(path.join(lockPath, "owner.json"), JSON.stringify({ pid: process.pid }));
+        writeFileSync(
+          path.join(lockPath, "owner.json"),
+          JSON.stringify({ pid: process.pid, token }),
+        );
       } catch (error) {
         rmSync(lockPath, { recursive: true, force: true });
         throw error;
       }
-      return;
+      return token;
     }
-    if (isLockStale(lockPath) && stealLock(lockPath)) {
+    if (isLockExpired(lockPath) && stealLock(lockPath)) {
       continue;
     }
     if (Date.now() >= deadline) {
@@ -189,38 +205,43 @@ async function acquireFileLock(lockPath: string): Promise<void> {
   }
 }
 
-function isLockStale(lockPath: string): boolean {
-  let pid: unknown;
+function isLockExpired(lockPath: string): boolean {
   try {
-    pid = (
-      JSON.parse(readFileSync(path.join(lockPath, "owner.json"), "utf-8")) as { pid?: unknown }
-    ).pid;
+    return Date.now() - statSync(lockPath).mtimeMs > LOCK_LEASE_MS;
   } catch {
-    // The holder may still be between creating the directory and writing
-    // owner.json; only treat a persistently ownerless lock as stale.
-    return lockAgeMs(lockPath) > OWNERLESS_LOCK_GRACE_MS;
-  }
-  if (lockAgeMs(lockPath) > LOCK_MAX_AGE_MS) {
-    return true;
-  }
-  if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) {
-    return true;
-  }
-  try {
-    process.kill(pid, 0);
     return false;
-  } catch (error) {
-    // EPERM means the process exists but belongs to another user.
-    return (error as NodeJS.ErrnoException).code !== "EPERM";
   }
 }
 
-function lockAgeMs(lockPath: string): number {
+function readLockToken(lockPath: string): unknown {
   try {
-    return Date.now() - statSync(lockPath).mtimeMs;
+    return (
+      JSON.parse(readFileSync(path.join(lockPath, "owner.json"), "utf-8")) as { token?: unknown }
+    ).token;
   } catch {
-    return 0;
+    return undefined;
   }
+}
+
+function refreshLock(lockPath: string, token: string): void {
+  if (readLockToken(lockPath) !== token) {
+    return;
+  }
+  const now = new Date();
+  try {
+    utimesSync(lockPath, now, now);
+  } catch {
+    // The lock disappeared or was stolen; the release path handles ownership.
+  }
+}
+
+function releaseFileLock(lockPath: string, token: string): void {
+  // Only remove a lock this process still owns, so a holder whose lease
+  // expired cannot delete the current holder's lock.
+  if (readLockToken(lockPath) !== token) {
+    return;
+  }
+  rmSync(lockPath, { recursive: true, force: true });
 }
 
 function stealLock(lockPath: string): boolean {
@@ -232,12 +253,12 @@ function stealLock(lockPath: string): boolean {
   } catch {
     return false;
   }
-  if (isLockStale(trash)) {
+  if (isLockExpired(trash)) {
     rmSync(trash, { recursive: true, force: true });
     return true;
   }
-  // A live holder re-acquired the lock between the staleness check and the
-  // rename; hand it back.
+  // A live holder re-acquired or refreshed the lock between the expiry check
+  // and the rename; hand it back.
   try {
     renameSync(trash, lockPath);
   } catch {
