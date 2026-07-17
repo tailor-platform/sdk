@@ -135,18 +135,16 @@ describe("bundleResolvers", () => {
         `};\n`,
     );
 
-    await bundleResolvers(
+    const result = await bundleResolvers(
       "permissioncheck",
       { files: ["./src/backend/permissioncheck/resolver/*.ts"] },
       tmp.dir,
     );
 
-    const entryContent = fs.readFileSync(
-      path.join(tmp.dir, ".tailor-sdk/resolvers/protected.entry.js"),
-      "utf-8",
-    );
+    const entryContent = result.get("protected");
 
-    expect(entryContent).toContain('context.user.type !== ""');
+    expect(entryContent).toBeDefined();
+    expect(entryContent).toContain("user.type!==");
     expect(entryContent).toContain("TailorErrorMessage");
     expect(entryContent).toContain("access denied");
   });
@@ -166,17 +164,15 @@ describe("bundleResolvers", () => {
         `};\n`,
     );
 
-    await bundleResolvers(
+    const result = await bundleResolvers(
       "nopermission",
       { files: ["./src/backend/nopermission/resolver/*.ts"] },
       tmp.dir,
     );
 
-    const entryContent = fs.readFileSync(
-      path.join(tmp.dir, ".tailor-sdk/resolvers/open.entry.js"),
-      "utf-8",
-    );
+    const entryContent = result.get("open");
 
+    expect(entryContent).toBeDefined();
     expect(entryContent).not.toContain("TailorErrorMessage");
   });
 
