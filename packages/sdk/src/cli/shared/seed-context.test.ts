@@ -1,3 +1,4 @@
+import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
 import { loadSeedContext } from "./seed-context";
 import type { Application } from "#/cli/services/application";
@@ -43,6 +44,19 @@ function seedPluginInstance(pluginConfig: object): Plugin {
   return { id: "@tailor-platform/seed", pluginConfig } as Plugin;
 }
 
+function fakeAuthService(config: object, userProfileAfterResolve?: object) {
+  let userProfile: object | undefined;
+  return {
+    config,
+    get userProfile() {
+      return userProfile;
+    },
+    resolveNamespaces: async () => {
+      userProfile = userProfileAfterResolve;
+    },
+  } as unknown as Application["authService"];
+}
+
 describe("loadSeedContext", () => {
   test("throws an actionable error when seedPlugin is not configured", async () => {
     mockLoadResult({ plugins: [{ id: "@tailor-platform/other" } as Plugin] });
@@ -58,11 +72,11 @@ describe("loadSeedContext", () => {
     await expect(loadSeedContext()).rejects.toThrow(/has no distPath option/);
   });
 
-  test("resolves a relative distPath against the config directory", async () => {
+  test("resolves a relative distPath against the working directory", async () => {
     mockLoadResult({ plugins: [seedPluginInstance({ distPath: "./seed" })] });
 
     const context = await loadSeedContext();
-    expect(context.distPath).toBe("/proj/seed");
+    expect(context.distPath).toBe(path.resolve("./seed"));
     expect(context.machineUserName).toBeUndefined();
     expect(context.idpUser).toBeNull();
   });
@@ -103,18 +117,20 @@ describe("loadSeedContext", () => {
     mockLoadResult({
       plugins: [seedPluginInstance({ distPath: "./seed" })],
       application: {
-        authService: {
-          config: {
+        // userProfile only becomes available after resolveNamespaces() runs,
+        // mirroring the real auth service lifecycle.
+        authService: fakeAuthService(
+          {
             name: "main-auth",
             machineUsers: {},
             idProvider: { kind: "BuiltInIdP", namespace: "main-idp" },
           },
-          userProfile: {
+          {
             type: { name: "Staff" },
             namespace: "main-db",
             usernameField: "email",
           },
-        } as unknown as Application["authService"],
+        ),
       },
     });
 
@@ -129,14 +145,11 @@ describe("loadSeedContext", () => {
     mockLoadResult({
       plugins: [seedPluginInstance({ distPath: "./seed" })],
       application: {
-        authService: {
-          config: {
-            name: "main-auth",
-            machineUsers: {},
-            idProvider: { kind: "OIDC", namespace: "ext-idp" },
-          },
-          userProfile: undefined,
-        } as unknown as Application["authService"],
+        authService: fakeAuthService({
+          name: "main-auth",
+          machineUsers: {},
+          idProvider: { kind: "OIDC", namespace: "ext-idp" },
+        }),
       },
     });
 
