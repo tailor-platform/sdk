@@ -11,6 +11,7 @@ import {
   hashValue,
   loadSecretsState,
   saveSecretsState,
+  serializeUpdateTime,
   withSecretsStateLock,
 } from "./secrets-state";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
@@ -187,7 +188,7 @@ export async function planSecretManager(context: PlanContext) {
       }
 
       // Fetch existing secrets in this vault
-      let existingSecrets: string[] = [];
+      const existingSecretTimes = new Map<string, string | undefined>();
       if (existing) {
         const secrets = await fetchAllTolerant(async (pageToken, maxPageSize) => {
           const { secrets, nextPageToken } = await client.listSecretManagerSecrets({
@@ -198,10 +199,12 @@ export async function planSecretManager(context: PlanContext) {
           });
           return [secrets, nextPageToken];
         });
-        existingSecrets = secrets.map((s) => s.name);
+        for (const secret of secrets) {
+          existingSecretTimes.set(secret.name, serializeUpdateTime(secret.updateTime));
+        }
       }
 
-      const existingSet = new Set(existingSecrets);
+      const existingSet = new Set(existingSecretTimes.keys());
 
       // Diff secrets
       for (const secret of vault.secrets) {
@@ -213,9 +216,16 @@ export async function planSecretManager(context: PlanContext) {
         }
 
         if (existingSet.has(secret.name)) {
-          const currentHash = hashValue(secret.value);
-          const storedHash = state.vaults[vaultName]?.[secret.name];
-          if (forceApplyAll || currentHash !== storedHash) {
+          const stored = state.vaults[vaultName]?.[secret.name];
+          const remoteUpdateTime = existingSecretTimes.get(secret.name);
+          // Skip only when the stored hash matches and the remote updateTime
+          // proves no other writer changed the secret since that hash was saved.
+          const unchanged =
+            stored !== undefined &&
+            stored.hash === hashValue(secret.value) &&
+            stored.updateTime !== undefined &&
+            stored.updateTime === remoteUpdateTime;
+          if (forceApplyAll || !unchanged) {
             secretChangeSet.updates.push({
               name: `${vaultName}/${secret.name}`,
               secretName: secret.name,
@@ -345,18 +355,24 @@ export async function applySecretManager(
     const secretHashUpdates = [...secretChangeSet.creates, ...secretChangeSet.updates];
     if (secretHashUpdates.length > 0) {
       await withSecretsStateLock(stateScope, async () => {
+        // Evidence must come from this deploy's own mutation responses; pairing
+        // the hash with a re-listed timestamp could adopt another writer's.
+        const appliedUpdateTimes = new Map<string, string | undefined>();
+
         // Create new secrets
         await Promise.all(
-          secretChangeSet.creates.map((create) =>
-            client.createSecretManagerSecret(secretCreateRequest(create)),
-          ),
+          secretChangeSet.creates.map(async (create) => {
+            const response = await client.createSecretManagerSecret(secretCreateRequest(create));
+            appliedUpdateTimes.set(create.name, serializeUpdateTime(response.secret?.updateTime));
+          }),
         );
 
         // Update existing secrets
         await Promise.all(
-          secretChangeSet.updates.map((update) =>
-            client.updateSecretManagerSecret(secretUpdateRequest(update)),
-          ),
+          secretChangeSet.updates.map(async (update) => {
+            const response = await client.updateSecretManagerSecret(secretUpdateRequest(update));
+            appliedUpdateTimes.set(update.name, serializeUpdateTime(response.secret?.updateTime));
+          }),
         );
 
         if (application) {
@@ -365,9 +381,13 @@ export async function applySecretManager(
             if (!Object.hasOwn(state.vaults, secret.vaultName)) {
               state.vaults[secret.vaultName] = {};
             }
+            const updateTime = appliedUpdateTimes.get(secret.name);
             assertDefined(state.vaults[secret.vaultName], "vault state entry missing")[
               secret.secretName
-            ] = hashValue(secret.value);
+            ] = {
+              hash: hashValue(secret.value),
+              ...(updateTime === undefined ? {} : { updateTime }),
+            };
           }
           saveSecretsState(stateScope, state);
         }
