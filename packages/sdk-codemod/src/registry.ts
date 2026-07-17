@@ -1212,6 +1212,7 @@ export const allCodemods: CodemodPackage[] = [
     // No scriptPath: this is a codemod-less ("manual") migration.
     filePatterns: ["**/package.json", "**/*.{sh,yml,yaml,md,mjs,ts}"],
     suspiciousPatterns: ["exec.mjs"],
+    sourceStringSuspiciousPatterns: ["exec.mjs"],
     examples: [
       {
         before: '"seed": "node ./seed/exec.mjs",\n"seed:validate": "node ./seed/exec.mjs validate"',

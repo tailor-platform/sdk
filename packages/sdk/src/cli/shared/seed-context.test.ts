@@ -35,9 +35,19 @@ function mockLoadResult(result: FakeLoadResult): void {
   loadApplicationNamespaces.mockResolvedValue({
     config: { path: "/proj/tailor.config.ts" },
     plugins: result.plugins ?? [],
-    application: result.application ?? {},
+    application: { tailorDBServices: [], ...result.application },
     namespaces: result.namespaces ?? [],
   } as LoadedApplicationNamespaces);
+}
+
+function fakeService(namespace: string, typeNames: string[]) {
+  return {
+    namespace,
+    types: Object.fromEntries(typeNames.map((name) => [name, fakeType(name, {})])),
+    typeSourceInfo: Object.fromEntries(
+      typeNames.map((name) => [name, { filePath: `${namespace}/${name}.ts`, exportName: name }]),
+    ),
+  };
 }
 
 function seedPluginInstance(pluginConfig: object): Plugin {
@@ -64,6 +74,17 @@ describe("loadSeedContext", () => {
     await expect(loadSeedContext()).rejects.toThrow(
       /seedPlugin is not configured in \/proj\/tailor\.config\.ts/,
     );
+  });
+
+  test("rejects duplicate type names across namespaces", async () => {
+    mockLoadResult({
+      plugins: [seedPluginInstance({ distPath: "./seed" })],
+      application: {
+        tailorDBServices: [fakeService("main-db", ["User"]), fakeService("sub-db", ["User"])],
+      } as unknown as Partial<Application>,
+    });
+
+    await expect(loadSeedContext()).rejects.toThrow(/User/);
   });
 
   test("throws when seedPlugin has no distPath", async () => {

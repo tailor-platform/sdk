@@ -330,6 +330,10 @@ export const seedApplyCommand = defineAppCommand({
         args.yes || (await promptConfirmation("Are you sure you want to truncate? (y/n): "));
       if (!confirmed) {
         logger.warn("Truncate cancelled.");
+        if (args.json) {
+          logger.out({ success: false, cancelled: true, processed: {} });
+        }
+        process.exitCode = 1;
         return;
       }
 
