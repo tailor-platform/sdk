@@ -56,7 +56,8 @@ export interface LoadSeedContextOptions {
 /**
  * Load the seed context from the local config. Requires `seedPlugin` to be
  * configured in the config's plugins. A relative `distPath` in the seedPlugin
- * options is resolved against the config file's directory.
+ * options is resolved against the current working directory — the same base
+ * `tailor generate` writes it to.
  * @param options - Seed context loading options.
  * @returns The seed context computed from the local config.
  */
@@ -80,6 +81,9 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
     );
   }
 
+  // userProfile is only populated once auth namespaces are resolved (the
+  // generate flow does the same after loading TailorDB namespaces).
+  await application.authService?.resolveNamespaces();
   const authInput = getAuthInput(application);
   const idpUserMeta = authInput ? processIdpUser(authInput) : undefined;
   const idpUser: SeedIdpUserContext | null = idpUserMeta
@@ -92,7 +96,7 @@ export async function loadSeedContext(options: LoadSeedContextOptions = {}): Pro
 
   return {
     config,
-    distPath: path.resolve(path.dirname(config.path), pluginOptions.distPath),
+    distPath: path.resolve(pluginOptions.distPath),
     machineUserName: pluginOptions.machineUserName,
     namespaces: buildSeedNamespaceConfigs(namespaces),
     idpUser,

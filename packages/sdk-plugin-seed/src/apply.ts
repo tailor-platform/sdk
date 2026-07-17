@@ -94,15 +94,21 @@ function parseExecutionResult(
   return { success: true, parsed, errors: [] };
 }
 
-async function seedNamespace(params: SeedNamespaceParams): Promise<boolean> {
+interface SeedResult {
+  success: boolean;
+  processed: Record<string, number>;
+}
+
+async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
   const { execution, namespace, typesToSeed, dependencies, selfRefTypes } = params;
   const sortedTypes = topologicalSort(typesToSeed, dependencies);
   const data = loadSeedData(execution.dataDir, sortedTypes);
+  const processedTotals: Record<string, number> = {};
 
   const typesWithData = sortedTypes.filter((type) => data[type] && data[type].length > 0);
   if (typesWithData.length === 0) {
     logger.log(chalk.dim(`  [${namespace}] No data to seed`));
-    return true;
+    return { success: true, processed: processedTotals };
   }
 
   logger.info(`  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch insert...`, {
@@ -118,7 +124,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<boolean> {
 
   if (chunks.length === 0) {
     logger.log(chalk.dim(`  [${namespace}] No data to seed`));
-    return true;
+    return { success: true, processed: processedTotals };
   }
   if (chunks.length > 1) {
     logger.log(chalk.dim(`    Split into ${chunks.length} chunks`));
@@ -147,6 +153,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<boolean> {
     const { success: chunkSuccess, parsed, errors } = parseExecutionResult(result, "    ");
     const processed = (parsed.processed ?? {}) as Record<string, number>;
     for (const [type, count] of Object.entries(processed)) {
+      processedTotals[type] = (processedTotals[type] ?? 0) + count;
       logger.log(chalk.green(`    ✓ ${type}: ${count} rows inserted`));
     }
     if (!chunkSuccess) {
@@ -154,7 +161,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<boolean> {
       success = false;
     }
   }
-  return success;
+  return { success, processed: processedTotals };
 }
 
 interface IdpScriptRun {
@@ -166,7 +173,9 @@ interface IdpScriptRun {
   reportSuccess: (parsed: Record<string, unknown>) => void;
 }
 
-async function runIdpScript(params: IdpScriptRun): Promise<boolean> {
+async function runIdpScript(
+  params: IdpScriptRun,
+): Promise<{ success: boolean; parsed: Record<string, unknown> }> {
   const { execution, scriptCode, scriptName, arg, indent, reportSuccess } = params;
 
   const result = await executeScript({
@@ -188,31 +197,35 @@ async function runIdpScript(params: IdpScriptRun): Promise<boolean> {
       logger.error(`${indent}${error}`, { mode: "plain" });
     }
   }
-  return success;
+  return { success, parsed };
 }
 
-async function seedIdpUser(execution: SeedExecutionContext, scriptCode: string): Promise<boolean> {
+async function seedIdpUser(
+  execution: SeedExecutionContext,
+  scriptCode: string,
+): Promise<{ success: boolean; processed: number }> {
   logger.info("  Seeding _User via tailor.idp.Client...", { mode: "plain" });
 
   const rows = loadSeedData(execution.dataDir, ["_User"])._User ?? [];
   if (rows.length === 0) {
     logger.log(chalk.dim("    No _User data to seed"));
-    return true;
+    return { success: true, processed: 0 };
   }
   logger.log(chalk.dim(`    Processing ${rows.length} _User records...`));
 
-  return await runIdpScript({
+  const { success, parsed } = await runIdpScript({
     execution,
     scriptCode,
     scriptName: "seed-idp-user.ts",
     arg: { users: rows },
     indent: "    ",
-    reportSuccess: (parsed) => {
-      if (typeof parsed.processed === "number") {
-        logger.log(chalk.green(`    ✓ _User: ${parsed.processed} rows processed`));
+    reportSuccess: (result) => {
+      if (typeof result.processed === "number") {
+        logger.log(chalk.green(`    ✓ _User: ${result.processed} rows processed`));
       }
     },
   });
+  return { success, processed: typeof parsed.processed === "number" ? parsed.processed : 0 };
 }
 
 async function truncateIdpUser(
@@ -221,17 +234,18 @@ async function truncateIdpUser(
 ): Promise<boolean> {
   logger.info("Truncating _User via tailor.idp.Client...", { mode: "plain" });
 
-  return await runIdpScript({
+  const { success } = await runIdpScript({
     execution,
     scriptCode,
     scriptName: "truncate-idp-user.ts",
     indent: "  ",
-    reportSuccess: (parsed) => {
-      if (typeof parsed.deleted === "number") {
-        logger.log(chalk.green(`  ✓ _User: ${parsed.deleted} users deleted`));
+    reportSuccess: (result) => {
+      if (typeof result.deleted === "number") {
+        logger.log(chalk.green(`  ✓ _User: ${result.deleted} users deleted`));
       }
     },
   });
+  return success;
 }
 
 export const seedApplyCommand = defineAppCommand({
@@ -371,6 +385,7 @@ export const seedApplyCommand = defineAppCommand({
     }
 
     let allSuccess = true;
+    const allProcessed: Record<string, number> = {};
 
     const namespacesToProcess = args.namespace
       ? [args.namespace]
@@ -391,7 +406,10 @@ export const seedApplyCommand = defineAppCommand({
         dependencies: nsConfig.dependencies,
         selfRefTypes: nsConfig.selfRefTypes,
       });
-      if (!seeded) {
+      for (const [type, count] of Object.entries(seeded.processed)) {
+        allProcessed[type] = (allProcessed[type] ?? 0) + count;
+      }
+      if (!seeded.success) {
         allSuccess = false;
       }
     }
@@ -402,12 +420,18 @@ export const seedApplyCommand = defineAppCommand({
       (!selection.entitiesToProcess || selection.entitiesToProcess.includes("_User"));
     if (shouldSeedUser && context.idpUser) {
       const seeded = await seedIdpUser(execution, context.idpUser.seedScriptCode);
-      if (!seeded) {
+      if (seeded.processed > 0) {
+        allProcessed._User = seeded.processed;
+      }
+      if (!seeded.success) {
         allSuccess = false;
       }
     }
 
     logger.newline();
+    if (args.json) {
+      logger.out({ success: allSuccess, processed: allProcessed });
+    }
     if (!allSuccess) {
       throw new Error("Seed data generation completed with errors");
     }

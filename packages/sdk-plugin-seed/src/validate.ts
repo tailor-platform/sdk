@@ -33,6 +33,9 @@ export const seedValidateCommand = defineAppCommand({
     if (result.output) {
       logger.log(result.output);
     }
+    if (args.json) {
+      logger.out({ valid: result.valid, path: targetPath });
+    }
     if (!result.valid) {
       throw new Error(result.error);
     }
