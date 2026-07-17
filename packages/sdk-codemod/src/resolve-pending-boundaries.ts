@@ -6,7 +6,7 @@ const PENDING_USAGE_PATTERN = /prereleaseUntil\s*:\s*V2_NEXT_PENDING\s*,/g;
 // Includes a preceding JSDoc block (if any) so a new constant is inserted above it,
 // not between the comment and `V2_NEXT_PENDING` where it would attach to the wrong export.
 const PENDING_DECLARATION_PATTERN =
-  /(?:^\/\*\*[\s\S]*?\*\/\r?\n)?^export\s+const\s+V2_NEXT_PENDING\s*=\s*"pending";$/m;
+  /(?:^[ \t]*\/\*\*[\s\S]*?\*\/\r?\n)?^[ \t]*export\s+const\s+V2_NEXT_PENDING\s*=\s*"pending";$/m;
 
 export interface ResolvePendingBoundariesResult {
   /** Whether any `V2_NEXT_PENDING` usage was found and rewritten. */
@@ -37,6 +37,18 @@ export function resolvePendingBoundaries(
   const parsed = parse(resolvedVersion);
   if (parsed === null) {
     throw new Error(`resolvedVersion must be a valid semver version: ${resolvedVersion}`);
+  }
+  if (
+    parsed.major === 2 &&
+    parsed.minor === 0 &&
+    parsed.patch === 0 &&
+    parsed.prerelease.length === 0
+  ) {
+    // The release skipped straight from a prerelease to stable 2.0.0 without ever
+    // resolving this sentinel. That's fine: reachesCodemodBoundary() in registry.ts
+    // already treats a pending codemod as reached once the target hits the stable
+    // `until` boundary, so no concrete V2_NEXT_N constant is needed for it to work.
+    return { changed: false, source };
   }
   if (
     parsed.major !== 2 ||

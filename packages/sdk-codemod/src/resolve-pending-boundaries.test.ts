@@ -63,10 +63,17 @@ describe("resolvePendingBoundaries", () => {
     );
   });
 
+  test("is a no-op when the release skips straight to stable 2.0.0", () => {
+    const source = registrySource("    prereleaseUntil: V2_NEXT_PENDING,");
+    const result = resolvePendingBoundaries(source, "2.0.0");
+
+    expect(result).toEqual({ changed: false, source });
+  });
+
   test("throws when the resolved version is not a next.N prerelease", () => {
     const source = registrySource("    prereleaseUntil: V2_NEXT_PENDING,");
 
-    expect(() => resolvePendingBoundaries(source, "2.0.0")).toThrow(
+    expect(() => resolvePendingBoundaries(source, "2.0.0-beta.1")).toThrow(
       'resolvedVersion must be a "2.0.0-next.N" prerelease',
     );
   });
@@ -143,6 +150,21 @@ describe("resolvePendingBoundaries", () => {
     const source = [
       V2_NEXT_4_DECL,
       'export    const V2_NEXT_PENDING = "pending";',
+      "    prereleaseUntil: V2_NEXT_PENDING,",
+    ].join("\n");
+    const result = resolvePendingBoundaries(source, "2.0.0-next.5");
+
+    expect(result.changed).toBe(true);
+    expect(result.source).toContain('const V2_NEXT_5 = "2.0.0-next.5";');
+  });
+
+  test("tolerates an indented declaration and its JSDoc block", () => {
+    const source = [
+      V2_NEXT_4_DECL,
+      "  /**",
+      "   * Sentinel for pending codemods.",
+      "   */",
+      '  export const V2_NEXT_PENDING = "pending";',
       "    prereleaseUntil: V2_NEXT_PENDING,",
     ].join("\n");
     const result = resolvePendingBoundaries(source, "2.0.0-next.5");
