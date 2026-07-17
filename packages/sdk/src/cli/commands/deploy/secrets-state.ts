@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import * as path from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
@@ -82,8 +82,10 @@ export function saveSecretsState(scope: SecretsStateScope, state: SecretsState):
   const filePath = getSecretsStatePath(scope);
   const dir = path.dirname(filePath);
   mkdirSync(dir, { recursive: true });
+  // Write via a temp file and rename so concurrent readers never see torn JSON.
+  const tempPath = `${filePath}.tmp-${process.pid}`;
   writeFileSync(
-    filePath,
+    tempPath,
     JSON.stringify(
       {
         version: 1,
@@ -96,6 +98,7 @@ export function saveSecretsState(scope: SecretsStateScope, state: SecretsState):
     ),
     "utf-8",
   );
+  renameSync(tempPath, filePath);
 }
 
 /**
@@ -105,4 +108,111 @@ export function saveSecretsState(scope: SecretsStateScope, state: SecretsState):
  */
 export function hashValue(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+const LOCK_POLL_INTERVAL_MS = 100;
+const LOCK_ACQUIRE_TIMEOUT_MS = 5 * 60 * 1000;
+const OWNERLESS_LOCK_GRACE_MS = 10 * 1000;
+
+const lockQueues = new Map<string, Promise<unknown>>();
+
+/**
+ * Run a remote-update/state-save sequence exclusively for one target's secrets state.
+ *
+ * Serializes concurrent deploys to the same workspace and application (across
+ * processes sharing the same output directory) so the persisted hash state
+ * always reflects the last remote write.
+ * @param scope - Workspace and application identity for the deployment
+ * @param fn - Critical section performing remote updates and the state save
+ * @returns The value returned by fn
+ */
+export async function withSecretsStateLock<T>(
+  scope: SecretsStateScope,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (!scope.applicationId) {
+    return fn();
+  }
+  const lockPath = `${getSecretsStatePath(scope)}.lock`;
+  const tail = lockQueues.get(lockPath) ?? Promise.resolve();
+  const run = tail.then(async () => {
+    await acquireFileLock(lockPath);
+    try {
+      return await fn();
+    } finally {
+      rmSync(lockPath, { recursive: true, force: true });
+    }
+  });
+  lockQueues.set(
+    lockPath,
+    run.catch(() => {}),
+  );
+  return run;
+}
+
+async function acquireFileLock(lockPath: string): Promise<void> {
+  mkdirSync(path.dirname(lockPath), { recursive: true });
+  const deadline = Date.now() + LOCK_ACQUIRE_TIMEOUT_MS;
+  for (;;) {
+    try {
+      mkdirSync(lockPath);
+      writeFileSync(path.join(lockPath, "owner.json"), JSON.stringify({ pid: process.pid }));
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
+    }
+    if (isLockStale(lockPath)) {
+      stealLock(lockPath);
+      continue;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `Timed out waiting for the secrets state lock at "${lockPath}". ` +
+          "Another deploy to the same workspace and application may still be running; " +
+          "remove the lock directory if no such deploy exists.",
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_INTERVAL_MS));
+  }
+}
+
+function isLockStale(lockPath: string): boolean {
+  let pid: unknown;
+  try {
+    pid = (
+      JSON.parse(readFileSync(path.join(lockPath, "owner.json"), "utf-8")) as { pid?: unknown }
+    ).pid;
+  } catch {
+    // The holder may still be between creating the directory and writing
+    // owner.json; only treat a persistently ownerless lock as stale.
+    try {
+      return Date.now() - statSync(lockPath).mtimeMs > OWNERLESS_LOCK_GRACE_MS;
+    } catch {
+      return false;
+    }
+  }
+  if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) {
+    return true;
+  }
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    // EPERM means the process exists but belongs to another user.
+    return (error as NodeJS.ErrnoException).code !== "EPERM";
+  }
+}
+
+function stealLock(lockPath: string): void {
+  // Rename first so concurrent stealers cannot remove a lock that another
+  // contender has just re-acquired.
+  const trash = `${lockPath}.stale-${process.pid}-${Date.now()}`;
+  try {
+    renameSync(lockPath, trash);
+  } catch {
+    return;
+  }
+  rmSync(trash, { recursive: true, force: true });
 }
