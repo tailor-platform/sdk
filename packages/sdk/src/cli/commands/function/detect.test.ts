@@ -185,13 +185,13 @@ export default {
     const multiJobSource = `
 export const job_a = {
   name: "job-a",
-  trigger: () => {},
+  start: () => {},
   body: (input) => input,
 };
 
 export const job_b = {
   name: "job-b",
-  trigger: () => {},
+  start: () => {},
   body: (input) => input,
 };
 `;
@@ -202,13 +202,13 @@ export const job_b = {
         `
 export const my_job = {
   name: "my-job",
-  trigger: () => {},
+  start: () => {},
   body: (input) => input,
 };
 
 export default {
   name: "my-workflow",
-  mainJob: { name: "my-job", trigger: () => {}, body: () => {} },
+  mainJob: { name: "my-job", start: () => {}, body: () => {} },
 };
 `,
       );
@@ -242,7 +242,7 @@ export default {
         `
 export const my_job = {
   name: "my-job",
-  trigger: () => {},
+  start: () => {},
   body: (input) => input,
 };
 `,

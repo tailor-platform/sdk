@@ -13,16 +13,16 @@ export interface CollectedJob {
   sourceFile: string;
 }
 
-function stripRuntimeTrigger(workflow: unknown): unknown {
+function stripRuntimeStart(workflow: unknown): unknown {
   if (
     !isSdkBranded(workflow, "workflow") ||
     workflow === null ||
     typeof workflow !== "object" ||
-    !("trigger" in workflow)
+    !("start" in workflow)
   ) {
     return workflow;
   }
-  const { trigger: _trigger, ...rest } = workflow as Record<string, unknown>;
+  const { start: _start, ...rest } = workflow as Record<string, unknown>;
   return rest;
 }
 
@@ -190,7 +190,7 @@ async function loadFileContent(filePath: string): Promise<{
     for (const [exportName, exportValue] of Object.entries(module)) {
       // Check if it's a workflow (default export)
       if (exportName === "default") {
-        const workflowResult = WorkflowSchema.safeParse(stripRuntimeTrigger(exportValue));
+        const workflowResult = WorkflowSchema.safeParse(stripRuntimeStart(exportValue));
         if (workflowResult.success) {
           workflow = workflowResult.data;
         } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {

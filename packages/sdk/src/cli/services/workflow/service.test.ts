@@ -5,7 +5,7 @@ import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { createWorkflowService } from "./service";
 
 describe("createWorkflowService", () => {
-  test("does not strip runtime trigger from an unbranded default export", async () => {
+  test("does not strip runtime start from an unbranded default export", async () => {
     using tmp = tempCwd("sdk-workflow-service-");
     const workflowFile = path.join(tmp.dir, "workflow.mjs");
     fs.writeFileSync(
@@ -13,14 +13,14 @@ describe("createWorkflowService", () => {
       `
 export const mainJob = {
   name: "main-job",
-  trigger: () => {},
+  start: () => {},
   body: () => {},
 };
 
 export default {
   name: "looks-like-workflow",
   mainJob,
-  trigger: () => {},
+  start: () => {},
 };
 `,
     );

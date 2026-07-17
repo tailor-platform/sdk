@@ -10,8 +10,8 @@ export const processOrder = createWorkflowJob({
     // Log env for demonstration
     console.log("Environment:", env);
 
-    // Fetch customer information using trigger
-    const customer = fetchCustomer.trigger({
+    // Fetch customer information using start
+    const customer = fetchCustomer.start({
       customerId: input.customerId,
     });
 
@@ -19,8 +19,8 @@ export const processOrder = createWorkflowJob({
       throw new Error(`Customer ${input.customerId} not found`);
     }
 
-    // Send notification to customer using trigger
-    const notification = sendNotification.trigger({
+    // Send notification to customer using start
+    const notification = sendNotification.start({
       message: `Your order ${input.orderId} is being processed`,
       recipient: customer.email,
     });

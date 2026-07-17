@@ -152,11 +152,11 @@ describe("ergonomic runtime mocks", () => {
     job.mockResolvedValue({ customerId: "c-1", source: "mock" });
     workflow.mockResolvedValue("execution-1");
 
-    await expect(lookupCustomer.trigger({ customerId: "c-1" })).resolves.toEqual({
+    await expect(lookupCustomer.start({ customerId: "c-1" })).resolves.toEqual({
       customerId: "c-1",
       source: "mock",
     });
-    await expect(customerWorkflow.trigger({ customerId: "c-1" })).resolves.toBe("execution-1");
+    await expect(customerWorkflow.start({ customerId: "c-1" })).resolves.toBe("execution-1");
     expect(job).toHaveBeenCalledWith({ customerId: "c-1" });
     expect(workflow).toHaveBeenCalledWith({ customerId: "c-1" });
   });
@@ -195,29 +195,25 @@ describe("ergonomic runtime mocks", () => {
       expect(innerWorkflow).not.toBe(outerWorkflow);
       expect(innerWaitPoint.wait).not.toBe(outerWaitPoint.wait);
       // A fresh inner scope does not inherit the outer scope's configured
-      // resolved value; the unconfigured trigger falls through to the real
+      // resolved value; the unconfigured start falls through to the real
       // dispatch, which throws without a low-level job handler.
-      expect(() => lookupCustomer.trigger({ customerId: "c-1" })).toThrow(
-        /No workflow job mock for/,
-      );
+      expect(() => lookupCustomer.start({ customerId: "c-1" })).toThrow(/No workflow job mock for/);
 
       innerJob.mockResolvedValue({ customerId: "c-1", source: "inner" });
       innerWorkflow.mockResolvedValue("inner-execution");
       innerWaitPoint.wait.mockResolvedValue({ approved: false });
 
-      await expect(lookupCustomer.trigger({ customerId: "c-1" })).resolves.toMatchObject({
+      await expect(lookupCustomer.start({ customerId: "c-1" })).resolves.toMatchObject({
         source: "inner",
       });
-      await expect(customerWorkflow.trigger({ customerId: "c-1" })).resolves.toBe(
-        "inner-execution",
-      );
+      await expect(customerWorkflow.start({ customerId: "c-1" })).resolves.toBe("inner-execution");
       await expect(approval.wait({ message: "inner" })).resolves.toEqual({ approved: false });
     }
 
-    await expect(lookupCustomer.trigger({ customerId: "c-1" })).resolves.toMatchObject({
+    await expect(lookupCustomer.start({ customerId: "c-1" })).resolves.toMatchObject({
       source: "outer",
     });
-    await expect(customerWorkflow.trigger({ customerId: "c-1" })).resolves.toBe("outer-execution");
+    await expect(customerWorkflow.start({ customerId: "c-1" })).resolves.toBe("outer-execution");
     await expect(approval.wait({ message: "outer" })).resolves.toEqual({ approved: true });
   });
 
@@ -449,7 +445,7 @@ describe("ergonomic runtime mocks", () => {
 
     wf.reset();
 
-    expect(() => lookupCustomer.trigger({ customerId: "c-1" })).toThrow(/No workflow job mock for/);
+    expect(() => lookupCustomer.start({ customerId: "c-1" })).toThrow(/No workflow job mock for/);
   });
 
   test("resets IdP and File mocks to their fallback behavior", async () => {

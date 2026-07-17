@@ -145,12 +145,12 @@ describe("mock", () => {
       vi.unstubAllEnvs();
     });
 
-    test("records triggered jobs even when no handler is configured", () => {
+    test("records started jobs even when no handler is configured", () => {
       using wf = mockWorkflow();
-      const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      expect(() => trigger("my-job", { key: "value" })).toThrow(/No workflow job mock/);
+      const start = (globalThis as any).tailor.workflow.startJobFunction;
+      expect(() => start("my-job", { key: "value" })).toThrow(/No workflow job mock/);
 
-      expect(wf.triggeredJobs).toEqual([{ jobName: "my-job", args: { key: "value" } }]);
+      expect(wf.startedJobs).toEqual([{ jobName: "my-job", args: { key: "value" } }]);
     });
 
     test("setJobHandler provides content-based responses", () => {
@@ -160,8 +160,8 @@ describe("mock", () => {
         return null;
       });
 
-      const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      const result = trigger("validate", {});
+      const start = (globalThis as any).tailor.workflow.startJobFunction;
+      const result = start("validate", {});
 
       expect(result).toEqual({ valid: true });
     });
@@ -170,9 +170,9 @@ describe("mock", () => {
       using wf = mockWorkflow();
       wf.enqueueResults({ step: 1 }, { step: 2 });
 
-      const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      expect(trigger("job1", {})).toEqual({ step: 1 });
-      expect(trigger("job2", {})).toEqual({ step: 2 });
+      const start = (globalThis as any).tailor.workflow.startJobFunction;
+      expect(start("job1", {})).toEqual({ step: 1 });
+      expect(start("job2", {})).toEqual({ step: 2 });
     });
 
     test("enqueueResult takes priority over jobHandler", () => {
@@ -180,19 +180,19 @@ describe("mock", () => {
       wf.setJobHandler(() => ({ fallback: true }));
       wf.enqueueResult({ queued: true });
 
-      const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      expect(trigger("job1", {})).toEqual({ queued: true });
-      expect(trigger("job2", {})).toEqual({ fallback: true });
+      const start = (globalThis as any).tailor.workflow.startJobFunction;
+      expect(start("job1", {})).toEqual({ queued: true });
+      expect(start("job2", {})).toEqual({ fallback: true });
     });
 
     test("reset clears all state", () => {
       using wf = mockWorkflow();
-      const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-      expect(() => trigger("job", {})).toThrow(/No workflow job mock/);
+      const start = (globalThis as any).tailor.workflow.startJobFunction;
+      expect(() => start("job", {})).toThrow(/No workflow job mock/);
 
       wf.reset();
 
-      expect(wf.triggeredJobs).toHaveLength(0);
+      expect(wf.startedJobs).toHaveLength(0);
     });
 
     test("setEnv exposes env to job bodies via runWorkflowLocally()", async () => {
@@ -274,42 +274,38 @@ describe("mock", () => {
   });
 
   describe("default workflow runtime (no mockWorkflow needed)", () => {
-    test("a job's .trigger() requires a configured workflow mock", () => {
+    test("a job's .start() requires a configured workflow mock", () => {
       const double = createWorkflowJob({
         name: "default-runtime-double",
         body: (input: { n: number }) => ({ doubled: input.n * 2 }),
       });
 
-      expect(() => double.trigger({ n: 21 })).toThrow(/No workflow job mock/);
+      expect(() => double.start({ n: 21 })).toThrow(/No workflow job mock/);
     });
 
-    test("workflow.trigger() returns an execution id without running the main job", async () => {
+    test("workflow.start() returns an execution id without running the main job", async () => {
       let bodyRan = false;
       const main = createWorkflowJob({
-        name: "default-runtime-main-trigger",
+        name: "default-runtime-main-start",
         body: () => {
           bodyRan = true;
           return { ok: true };
         },
       });
-      const workflow = createWorkflow({ name: "default-runtime-trigger-wf", mainJob: main });
+      const workflow = createWorkflow({ name: "default-runtime-start-wf", mainJob: main });
 
-      await expect(workflow.trigger(undefined)).resolves.toBe(
-        "00000000-0000-4000-8000-000000000000",
-      );
+      await expect(workflow.start(undefined)).resolves.toBe("00000000-0000-4000-8000-000000000000");
       expect(bodyRan).toBe(false);
     });
 
-    test("workflow.trigger() validates args in the default runtime", async () => {
+    test("workflow.start() validates args in the default runtime", async () => {
       const main = createWorkflowJob({
-        name: "default-runtime-trigger-args",
+        name: "default-runtime-start-args",
         body: (input: { when: string }) => ({ when: input.when }),
       });
-      const workflow = createWorkflow({ name: "default-runtime-trigger-args-wf", mainJob: main });
+      const workflow = createWorkflow({ name: "default-runtime-start-args-wf", mainJob: main });
 
-      await expect(workflow.trigger({ when: new Date() } as never)).rejects.toThrow(
-        /Date instance/,
-      );
+      await expect(workflow.start({ when: new Date() } as never)).rejects.toThrow(/Date instance/);
     });
 
     test("runWorkflowLocally() runs the whole chain", async () => {
@@ -320,8 +316,8 @@ describe("mock", () => {
       const main = createWorkflowJob({
         name: "default-runtime-main",
         body: async (input: { n: number }) => {
-          const a = inner.trigger({ n: input.n });
-          const b = inner.trigger({ n: a.n });
+          const a = inner.start({ n: input.n });
+          const b = inner.start({ n: a.n });
           return { total: b.n };
         },
       });
@@ -330,7 +326,7 @@ describe("mock", () => {
       expect(await runWorkflowLocally(workflow, { n: 0 })).toEqual({ total: 2 });
     });
 
-    test("runWorkflowLocally() clones cached trigger results on replay", async () => {
+    test("runWorkflowLocally() clones cached start results on replay", async () => {
       const mutable = createWorkflowJob({
         name: "default-runtime-mutable",
         body: () => ({ items: [] as string[] }),
@@ -342,9 +338,9 @@ describe("mock", () => {
       const main = createWorkflowJob({
         name: "default-runtime-mutation-main",
         body: () => {
-          const result = mutable.trigger();
+          const result = mutable.start();
           result.items.push("x");
-          step.trigger();
+          step.start();
           return result;
         },
       });
@@ -365,7 +361,7 @@ describe("mock", () => {
         name: "default-runtime-caught-main",
         body: () => {
           try {
-            return inner.trigger();
+            return inner.start();
           } catch {
             return { ok: false };
           }
@@ -379,7 +375,7 @@ describe("mock", () => {
       expect(await runWorkflowLocally(workflow)).toEqual({ ok: true });
     });
 
-    test("runWorkflowLocally() replays failed trigger errors into user catch blocks once", async () => {
+    test("runWorkflowLocally() replays failed start errors into user catch blocks once", async () => {
       let attempts = 0;
       const inner = createWorkflowJob({
         name: "default-runtime-failing-inner",
@@ -392,7 +388,7 @@ describe("mock", () => {
         name: "default-runtime-failing-main",
         body: () => {
           try {
-            inner.trigger();
+            inner.start();
             return { handled: false, message: "" };
           } catch (cause) {
             return { handled: true, message: (cause as Error).message };
@@ -411,7 +407,7 @@ describe("mock", () => {
       expect(attempts).toBe(1);
     });
 
-    test("runWorkflowLocally() validates nested workflow trigger args", async () => {
+    test("runWorkflowLocally() validates nested workflow start args", async () => {
       const innerMain = createWorkflowJob({
         name: "default-runtime-nested-workflow-inner",
         body: (_input: { when: string }) => ({ ok: true }),
@@ -423,7 +419,7 @@ describe("mock", () => {
       const main = createWorkflowJob({
         name: "default-runtime-nested-workflow-main",
         body: async () => {
-          await innerWorkflow.trigger({ when: new Date() } as never);
+          await innerWorkflow.start({ when: new Date() } as never);
           return { ok: true };
         },
       });
@@ -435,7 +431,7 @@ describe("mock", () => {
       await expect(runWorkflowLocally(workflow)).rejects.toThrow(/Date instance/);
     });
 
-    test("runWorkflowLocally() rejects a non-serializable trigger result", async () => {
+    test("runWorkflowLocally() rejects a non-serializable start result", async () => {
       const bad = createWorkflowJob({
         name: "default-runtime-bad",
         body: () => ({ when: new Date() }) as never,
@@ -833,19 +829,19 @@ describe("mock", () => {
   });
 
   describe("mockWorkflow extended", () => {
-    test("records triggerWorkflow calls", async () => {
+    test("records startWorkflow calls", async () => {
       using wf = mockWorkflow();
-      await (globalThis as any).tailor.workflow.triggerWorkflow("wf-1", { key: "val" });
-      expect(wf.triggerWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }]]);
+      await (globalThis as any).tailor.workflow.startWorkflow("wf-1", { key: "val" });
+      expect(wf.startWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }]]);
     });
 
     test("preserves a forwarded third options arg even when undefined", async () => {
       using wf = mockWorkflow();
-      await (globalThis as any).tailor.workflow.triggerWorkflow("wf-1", { key: "val" }, undefined);
-      expect(wf.triggerWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }, undefined]]);
+      await (globalThis as any).tailor.workflow.startWorkflow("wf-1", { key: "val" }, undefined);
+      expect(wf.startWorkflow.mock.calls).toEqual([["wf-1", { key: "val" }, undefined]]);
     });
 
-    test("createWorkflow().trigger(args) without options records a 2-arg call", async () => {
+    test("createWorkflow().start(args) without options records a 2-arg call", async () => {
       using wf = mockWorkflow();
       const arityJob = createWorkflowJob({
         name: "arity-workflow-main",
@@ -853,12 +849,12 @@ describe("mock", () => {
       });
       const arityWorkflow = createWorkflow({ name: "arity-workflow", mainJob: arityJob });
 
-      await arityWorkflow.trigger(undefined);
+      await arityWorkflow.start(undefined);
 
-      expect(wf.triggerWorkflow.mock.calls).toEqual([["arity-workflow", undefined]]);
+      expect(wf.startWorkflow.mock.calls).toEqual([["arity-workflow", undefined]]);
     });
 
-    test("createWorkflow().trigger(args, undefined) records a 3-arg call", async () => {
+    test("createWorkflow().start(args, undefined) records a 3-arg call", async () => {
       using wf = mockWorkflow();
       const arityJob = createWorkflowJob({
         name: "arity-workflow-main-3arg",
@@ -866,28 +862,26 @@ describe("mock", () => {
       });
       const arityWorkflow = createWorkflow({ name: "arity-workflow-3arg", mainJob: arityJob });
 
-      await arityWorkflow.trigger(undefined, undefined);
+      await arityWorkflow.start(undefined, undefined);
 
-      expect(wf.triggerWorkflow.mock.calls).toEqual([
-        ["arity-workflow-3arg", undefined, undefined],
-      ]);
+      expect(wf.startWorkflow.mock.calls).toEqual([["arity-workflow-3arg", undefined, undefined]]);
     });
 
-    test("setTriggerHandler with string controls triggerWorkflow response", async () => {
+    test("setStartHandler with string controls startWorkflow response", async () => {
       using wf = mockWorkflow();
-      wf.setTriggerHandler("exec-123");
-      const result = await (globalThis as any).tailor.workflow.triggerWorkflow("wf");
+      wf.setStartHandler("exec-123");
+      const result = await (globalThis as any).tailor.workflow.startWorkflow("wf");
       expect(result).toBe("exec-123");
     });
 
-    test("setTriggerHandler with function receives name/args/options", async () => {
+    test("setStartHandler with function receives name/args/options", async () => {
       using wf = mockWorkflow();
       const seen: unknown[] = [];
-      wf.setTriggerHandler((name, args, options) => {
+      wf.setStartHandler((name, args, options) => {
         seen.push({ name, args, options });
         return `exec-${name}`;
       });
-      const result = await (globalThis as any).tailor.workflow.triggerWorkflow(
+      const result = await (globalThis as any).tailor.workflow.startWorkflow(
         "wf",
         { key: "val" },
         { authInvoker: { namespace: "ns", machineUserName: "mu" } },
@@ -902,17 +896,19 @@ describe("mock", () => {
       ]);
     });
 
-    test("resumeWorkflow echoes the executionId by default", async () => {
+    test("resumeWorkflowExecution echoes the executionId by default", async () => {
       using wf = mockWorkflow();
-      const result = await (globalThis as any).tailor.workflow.resumeWorkflow("exec-42");
+      const result = await (globalThis as any).tailor.workflow.resumeWorkflowExecution("exec-42");
       expect(result).toBe("exec-42");
-      expect(wf.resumeWorkflow.mock.calls).toEqual([["exec-42"]]);
+      expect(wf.resumeWorkflowExecution.mock.calls).toEqual([["exec-42"]]);
     });
 
-    test("setResumeHandler with string controls resumeWorkflow response", async () => {
+    test("setResumeHandler with string controls resumeWorkflowExecution response", async () => {
       using wf = mockWorkflow();
       wf.setResumeHandler("exec-resumed");
-      const result = await (globalThis as any).tailor.workflow.resumeWorkflow("exec-original");
+      const result = await (globalThis as any).tailor.workflow.resumeWorkflowExecution(
+        "exec-original",
+      );
       expect(result).toBe("exec-resumed");
     });
 
@@ -923,7 +919,7 @@ describe("mock", () => {
         seen.push(executionId);
         return `resumed:${executionId}`;
       });
-      const result = await (globalThis as any).tailor.workflow.resumeWorkflow("exec-1");
+      const result = await (globalThis as any).tailor.workflow.resumeWorkflowExecution("exec-1");
       expect(result).toBe("resumed:exec-1");
       expect(seen).toEqual(["exec-1"]);
     });
@@ -979,42 +975,6 @@ describe("mock", () => {
       expect(callbackRan).toBe(false);
       expect(wf.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
     });
-
-    describe("canonical aliases", () => {
-      test("startJobFunction and triggerJobFunction share the same call log", () => {
-        using wf = mockWorkflow();
-        wf.setJobHandler(() => undefined);
-        const start = (globalThis as any).tailor.workflow.startJobFunction;
-        const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
-
-        start("job-a", { via: "canonical" });
-        trigger("job-b", { via: "legacy" });
-
-        expect(wf.triggeredJobs).toEqual([
-          { jobName: "job-a", args: { via: "canonical" } },
-          { jobName: "job-b", args: { via: "legacy" } },
-        ]);
-        expect(wf.startJobFunction).toBe(wf.triggerJobFunction);
-      });
-
-      test("startWorkflow honors setTriggerHandler", async () => {
-        using wf = mockWorkflow();
-        wf.setTriggerHandler("exec-canonical");
-        const result = await (globalThis as any).tailor.workflow.startWorkflow("wf", {});
-        expect(result).toBe("exec-canonical");
-        expect(wf.startWorkflow.mock.calls).toEqual([["wf", {}]]);
-        expect(wf.startWorkflow).toBe(wf.triggerWorkflow);
-      });
-
-      test("resumeWorkflowExecution honors setResumeHandler", async () => {
-        using wf = mockWorkflow();
-        wf.setResumeHandler("exec-canonical-resumed");
-        const result = await (globalThis as any).tailor.workflow.resumeWorkflowExecution("exec-1");
-        expect(result).toBe("exec-canonical-resumed");
-        expect(wf.resumeWorkflowExecution.mock.calls).toEqual([["exec-1"]]);
-        expect(wf.resumeWorkflowExecution).toBe(wf.resumeWorkflow);
-      });
-    });
   });
 
   describe("injectMocks / cleanupMocks (base platform globals)", () => {
@@ -1038,11 +998,11 @@ describe("mock", () => {
 
     test("a mock overlays the default workflow runner and dispose restores it", () => {
       const base = (globalThis as any).tailor.workflow;
-      expect(base.triggerJobFunction).toBeTypeOf("function");
+      expect(base.startJobFunction).toBeTypeOf("function");
       {
         using _wf = mockWorkflow();
         expect((globalThis as any).tailor.workflow).not.toBe(base);
-        expect((globalThis as any).tailor.workflow.triggerJobFunction).toBeTypeOf("function");
+        expect((globalThis as any).tailor.workflow.startJobFunction).toBeTypeOf("function");
       }
       expect((globalThis as any).tailor.workflow).toBe(base);
     });

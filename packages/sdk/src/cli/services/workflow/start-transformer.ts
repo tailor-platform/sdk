@@ -3,32 +3,45 @@ import * as path from "pathe";
 import { logger } from "#/cli/shared/logger";
 import {
   normalizeFilePath,
-  type TriggerContext,
-  type TriggerModuleBindings,
-  type TriggerTarget,
-} from "#/cli/shared/trigger-context";
+  type StartContext,
+  type StartModuleBindings,
+  type StartTarget,
+} from "#/cli/shared/start-context";
 import {
   type ASTNode,
   type Replacement,
-  type TriggerCallInfo,
+  type StartCallInfo,
   applyReplacements,
   getModuleExportName,
-  getTriggerCallInfo,
+  getStartCallInfo,
 } from "./ast-utils";
 import type { Program } from "@oxc-project/types";
 import type { Plugin } from "rolldown";
 
-export interface ResolvedTriggerCall extends TriggerCallInfo {
+export interface ResolvedStartCall extends StartCallInfo {
   kind: "job" | "workflow";
   targetName: string;
 }
 
-const NORMALIZER_IDENTIFIER = "__tailor_normalizeTriggerOptions";
+const START_CALL_RE = /\.start(?:\s|\/\*[\s\S]*?\*\/|\/\/[^\n]*\n)*\(/;
+
+/**
+ * Fast pre-check for whether `code` contains a `.start(` call, tolerating
+ * whitespace, newlines, and comments between `.start` and `(` that a plain
+ * substring check would miss.
+ * @param code - Source text to scan
+ * @returns Whether `code` contains a `.start(` call
+ */
+export function hasStartCall(code: string): boolean {
+  return START_CALL_RE.test(code);
+}
+
+const NORMALIZER_IDENTIFIER = "__tailor_normalizeStartOptions";
 
 /**
  * Build the source text of the injected normalizer helper.
  *
- * Renames an `invoker` in the trigger options to the `authInvoker` form the
+ * Renames an `invoker` in the start options to the `authInvoker` form the
  * platform RPC expects: a plain string (machine user name) becomes
  * `{ namespace, machineUserName }`, while an object form passes through
  * as-is. Any other options value is unchanged. The auth namespace is baked
@@ -226,10 +239,10 @@ function walkBindingAware(
 }
 
 function resolveRelativeImport(
-  context: TriggerContext,
+  context: StartContext,
   currentFilePath: string,
   importSource: string,
-): TriggerModuleBindings | undefined {
+): StartModuleBindings | undefined {
   if (!importSource.startsWith(".")) return undefined;
   const currentDirectory = path.dirname(currentFilePath.replace(/[?#].*$/, ""));
   const modulePath = normalizeFilePath(path.resolve(currentDirectory, importSource));
@@ -238,10 +251,10 @@ function resolveRelativeImport(
 
 function collectLocalTargets(
   program: Program,
-  context: TriggerContext,
+  context: StartContext,
   currentFilePath: string,
-): Map<string, TriggerTarget> {
-  const targets = new Map<string, TriggerTarget>();
+): Map<string, StartTarget> {
+  const targets = new Map<string, StartTarget>();
   const currentModule = context.modules.get(normalizeFilePath(currentFilePath));
   if (currentModule) {
     for (const [localName, target] of currentModule.localBindings) {
@@ -274,73 +287,73 @@ function collectLocalTargets(
   return targets;
 }
 
-function detectTriggerCallsWithTargets(
+function detectStartCallsWithTargets(
   program: Program,
   sourceText: string,
-  targets: Map<string, TriggerTarget>,
-): ResolvedTriggerCall[] {
-  const calls: ResolvedTriggerCall[] = [];
+  targets: Map<string, StartTarget>,
+): ResolvedStartCall[] {
+  const calls: ResolvedStartCall[] = [];
   const targetNames = new Set(targets.keys());
 
   walkBindingAware(program, targetNames, (node, shadowedNames) => {
-    const triggerCall = getTriggerCallInfo(node, sourceText);
-    if (!triggerCall || shadowedNames.has(triggerCall.identifierName)) return;
-    const target = targets.get(triggerCall.identifierName);
+    const startCall = getStartCallInfo(node, sourceText);
+    if (!startCall || shadowedNames.has(startCall.identifierName)) return;
+    const target = targets.get(startCall.identifierName);
     if (target) {
-      calls.push({ ...triggerCall, kind: target.kind, targetName: target.name });
+      calls.push({ ...startCall, kind: target.kind, targetName: target.name });
     }
   });
 
   return calls;
 }
 
-export function detectResolvedTriggerCalls(
+export function detectResolvedStartCalls(
   program: Program,
   sourceText: string,
-  context: TriggerContext,
+  context: StartContext,
   currentFilePath: string,
-): ResolvedTriggerCall[] {
-  return detectTriggerCallsWithTargets(
+): ResolvedStartCall[] {
+  return detectStartCallsWithTargets(
     program,
     sourceText,
     collectLocalTargets(program, context, currentFilePath),
   );
 }
 
-export function transformFunctionTriggers(
+export function transformStartCalls(
   source: string,
-  triggerContext: TriggerContext,
+  startContext: StartContext,
   currentFilePath: string,
 ): string {
   const { program } = parseSync("input.ts", source);
-  const localTargets = collectLocalTargets(program, triggerContext, currentFilePath);
-  const { authNamespace } = triggerContext;
-  const allTriggerCalls = detectTriggerCallsWithTargets(program, source, localTargets);
-  const nestedTriggerCalls: Array<{ call: ResolvedTriggerCall; parent: ResolvedTriggerCall }> = [];
-  const triggerCalls = allTriggerCalls.filter((call) => {
-    const parent = allTriggerCalls.find(
+  const localTargets = collectLocalTargets(program, startContext, currentFilePath);
+  const { authNamespace } = startContext;
+  const allStartCalls = detectStartCallsWithTargets(program, source, localTargets);
+  const nestedStartCalls: Array<{ call: ResolvedStartCall; parent: ResolvedStartCall }> = [];
+  const startCalls = allStartCalls.filter((call) => {
+    const parent = allStartCalls.find(
       (other) =>
         other !== call &&
         other.callRange.start <= call.callRange.start &&
         call.callRange.end <= other.callRange.end,
     );
     if (!parent) return true;
-    nestedTriggerCalls.push({ call, parent });
+    nestedStartCalls.push({ call, parent });
     return false;
   });
 
-  for (const { call, parent } of nestedTriggerCalls) {
+  for (const { call, parent } of nestedStartCalls) {
     logger.warn(
-      `Nested trigger call "${call.identifierName}.trigger(...)" inside "${parent.identifierName}.trigger(...)" cannot be converted. Move it to a separate statement and pass the result instead.`,
+      `Nested start call "${call.identifierName}.start(...)" inside "${parent.identifierName}.start(...)" cannot be converted. Move it to a separate statement and pass the result instead.`,
     );
   }
 
   const replacements: Replacement[] = [];
-  // Whether any workflow trigger invoker was wrapped with the runtime
+  // Whether any workflow start invoker was wrapped with the runtime
   // normalizer. Used to decide whether to inject the helper at the top.
   let needsNormalizerHelper = false;
 
-  for (const call of triggerCalls) {
+  for (const call of startCalls) {
     let transformedCall: string;
     if (call.kind === "workflow") {
       let optionsPart = "";
@@ -352,10 +365,10 @@ export function transformFunctionTriggers(
           optionsPart = `, ${call.optionsText}`;
         }
       }
-      transformedCall = `tailor.workflow.triggerWorkflow(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
+      transformedCall = `tailor.workflow.startWorkflow(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
     } else {
       const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
-      transformedCall = `tailor.workflow.triggerJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
+      transformedCall = `tailor.workflow.startJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
     }
     replacements.push({
       start: call.callRange.start,
@@ -370,18 +383,18 @@ export function transformFunctionTriggers(
     : transformed;
 }
 
-export function createTriggerTransformPlugin(
-  triggerContext: TriggerContext | undefined,
+export function createStartTransformPlugin(
+  startContext: StartContext | undefined,
 ): Plugin | undefined {
-  if (!triggerContext) return undefined;
+  if (!startContext) return undefined;
 
   return {
-    name: "trigger-transform",
+    name: "start-transform",
     transform: {
       filter: { id: { include: [/\.(ts|mts|cts|js|mjs|cjs)$/] } },
       handler(code, id) {
-        if (!code.includes(".trigger(")) return null;
-        return { code: transformFunctionTriggers(code, triggerContext, id) };
+        if (!hasStartCall(code)) return null;
+        return { code: transformStartCalls(code, startContext, id) };
       },
     },
   };

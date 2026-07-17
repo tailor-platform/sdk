@@ -10,12 +10,12 @@ import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
-import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
-import { detectResolvedTriggerCalls, transformFunctionTriggers } from "./trigger-transformer";
+import { detectResolvedStartCalls, hasStartCall, transformStartCalls } from "./start-transformer";
 import type { LogLevel } from "#/configure/config/types";
 
 function safeRealpath(p: string): string {
@@ -48,14 +48,14 @@ export interface BundleWorkflowJobsResult {
  *
  * This function:
  * 1. Detects which jobs are actually used (mainJobs + their dependencies)
- * 2. Uses a transform plugin to transform trigger calls during bundling
+ * 2. Uses a transform plugin to transform start calls during bundling
  * 3. Creates an in-memory entry module and bundles with tree-shaking
  *
  * Returns metadata about which jobs each workflow uses.
  * @param allJobs - All available job infos
  * @param mainJobNames - Names of main jobs
  * @param env - Environment variables to inject
- * @param triggerContext - Trigger context for transformations
+ * @param startContext - Start context for transformations
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
@@ -65,7 +65,7 @@ export async function bundleWorkflowJobs(
   allJobs: JobInfo[],
   mainJobNames: string[],
   env: Record<string, string | number | boolean> = {},
-  triggerContext: TriggerContext,
+  startContext: StartContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
@@ -76,7 +76,7 @@ export async function bundleWorkflowJobs(
   }
 
   // Filter to only used jobs and get per-mainJob dependencies
-  const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames, triggerContext);
+  const { usedJobs, mainJobDeps } = await filterUsedJobs(allJobs, mainJobNames, startContext);
 
   logger.newline();
   logger.log(
@@ -98,7 +98,7 @@ export async function bundleWorkflowJobs(
       usedJobs,
       tsconfig,
       env,
-      triggerContext,
+      startContext,
       cache,
       inlineSourcemap,
       bundleLogLevel,
@@ -128,18 +128,18 @@ interface FilterUsedJobsResult {
  * Filter jobs to only include those that are actually used.
  * A job is "used" if:
  * - It's a mainJob of a workflow
- * - It's called via .trigger() from another used job (transitively)
+ * - It's called via .start() from another used job (transitively)
  *
  * Also returns a map of mainJob -> all jobs it depends on (for metadata).
  * @param allJobs - All available job infos
  * @param mainJobNames - Names of main jobs
- * @param triggerContext - Module binding metadata for resolving trigger targets
+ * @param startContext - Module binding metadata for resolving start targets
  * @returns Used jobs and main job dependency map
  */
 async function filterUsedJobs(
   allJobs: JobInfo[],
   mainJobNames: string[],
-  triggerContext: TriggerContext,
+  startContext: StartContext,
 ): Promise<FilterUsedJobsResult> {
   if (allJobs.length === 0 || mainJobNames.length === 0) {
     return { usedJobs: [], mainJobDeps: {} };
@@ -153,8 +153,8 @@ async function filterUsedJobs(
     jobsBySourceFile.set(job.sourceFile, existing);
   }
 
-  // Detect trigger calls and build dependency graph
-  // Maps job name -> set of job names it triggers
+  // Detect start calls and build dependency graph
+  // Maps job name -> set of job names it starts
   const dependencies = new Map<string, Set<string>>();
 
   // Process all source files in parallel
@@ -166,14 +166,9 @@ async function filterUsedJobs(
 
         // Find all jobs in this file to get body ranges
         const detectedJobs = findAllJobs(program, source);
-        const triggerCalls = detectResolvedTriggerCalls(
-          program,
-          source,
-          triggerContext,
-          sourceFile,
-        );
+        const startCalls = detectResolvedStartCalls(program, source, startContext, sourceFile);
 
-        // For each job in this file, find which triggers are inside its body
+        // For each job in this file, find which start calls are inside its body
         const jobDependencies: Array<{ jobName: string; deps: Set<string> }> = [];
 
         for (const job of jobs) {
@@ -182,8 +177,8 @@ async function filterUsedJobs(
 
           const jobDeps = new Set<string>();
 
-          for (const call of triggerCalls) {
-            // Check if this trigger call is inside the job's body
+          for (const call of startCalls) {
+            // Check if this start call is inside the job's body
             if (
               call.kind === "job" &&
               call.callRange.start >= detectedJob.bodyValueRange.start &&
@@ -252,12 +247,12 @@ async function bundleSingleJob(
   allJobs: JobInfo[],
   tsconfig: string | undefined,
   env: Record<string, string | number | boolean>,
-  triggerContext: TriggerContext,
+  startContext: StartContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<[string, string]> {
-  const serializedTriggerContext = serializeTriggerContext(triggerContext);
+  const serializedStartContext = serializeStartContext(startContext);
 
   // Include sorted env variables as a prefix so that env changes invalidate the cache
   const sortedEnvPrefix = JSON.stringify(
@@ -265,7 +260,7 @@ async function bundleSingleJob(
   );
   const contextHash = computeBundlerContextHash({
     sourceFile: job.sourceFile,
-    serializedTriggerContext,
+    extraContext: serializedStartContext,
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -295,7 +290,7 @@ async function bundleSingleJob(
       // Pre-compute once to avoid redundant realpathSync calls per module
       const resolvedSourceFile = safeRealpath(job.sourceFile);
 
-      // Step 2: Bundle with a transform plugin that transforms trigger calls
+      // Step 2: Bundle with a transform plugin that transforms start calls
       // Collect export names for enhanced AST removal (catches jobs missed by AST detection)
       const otherJobExportNames = allJobs
         .filter(
@@ -305,7 +300,7 @@ async function bundleSingleJob(
         )
         .map((j) => j.exportName);
 
-      // Create transform plugin to transform trigger calls and remove other job declarations
+      // Create transform plugin to transform start calls and remove other job declarations
       const transformPlugin: rolldown.Plugin = {
         name: "workflow-transform",
         transform: {
@@ -315,11 +310,11 @@ async function bundleSingleJob(
             },
           },
           handler(code, id) {
-            // Only transform source files that contain workflow jobs or trigger calls
+            // Only transform source files that contain workflow jobs or start calls
             if (
               !code.includes("createWorkflowJob") &&
               !code.includes("createWorkflow") &&
-              !code.includes(".trigger(")
+              !hasStartCall(code)
             ) {
               return null;
             }
@@ -339,9 +334,9 @@ async function bundleSingleJob(
               );
             }
 
-            // Apply workflow.trigger / job.trigger transformation.
-            if (transformed.includes(".trigger(")) {
-              transformed = transformFunctionTriggers(transformed, triggerContext, id);
+            // Apply workflow.start / job.start transformation.
+            if (hasStartCall(transformed)) {
+              transformed = transformStartCalls(transformed, startContext, id);
             }
 
             if (transformed === code) return null;

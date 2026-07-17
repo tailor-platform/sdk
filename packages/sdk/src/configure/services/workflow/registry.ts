@@ -15,13 +15,7 @@ const JOB_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:job-regi
 
 type PlatformWorkflow = {
   startWorkflow: (name: string, args?: unknown, options?: StartWorkflowOptions) => Promise<string>;
-  triggerWorkflow: (
-    name: string,
-    args?: unknown,
-    options?: StartWorkflowOptions,
-  ) => Promise<string>;
   startJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
-  triggerJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
 };
 
 type GlobalWithRegistry = typeof globalThis & {
@@ -42,9 +36,9 @@ function jobs(): Map<string, RegisteredJobBody> {
 /**
  * Register a job body keyed by job name. Called as a side effect by
  * `createWorkflowJob` so `runWorkflowLocally()` can execute dependent job
- * bodies when `globalThis.tailor.workflow.triggerJobFunction(name, args)` is invoked.
+ * bodies when `globalThis.tailor.workflow.startJobFunction(name, args)` is invoked.
  *
- * In production builds the bundler rewrites `.trigger()` calls so this registry
+ * In production builds the bundler rewrites `.start()` calls so this registry
  * is never read; the gated write is dropped as dead code.
  * @param name - Job name
  * @param body - Job body function
@@ -80,14 +74,14 @@ function requirePlatformWorkflow(): PlatformWorkflow {
 
 // A valid placeholder UUID, so callers that validate the execution id behave the
 // same locally as against the platform.
-export const TRIGGER_DEFAULT = "00000000-0000-4000-8000-000000000000";
+export const START_DEFAULT = "00000000-0000-4000-8000-000000000000";
 
-// `.trigger()` routes through the installed `tailor.workflow` shim. Local body
+// `.start()` routes through the installed `tailor.workflow` shim. Local body
 // execution is intentionally available only through `runWorkflowLocally()`.
 // Preserve arity: the shim sees a 2-argument call when the caller supplied no
 // options, and a 3-argument call otherwise, mirroring the bundler rewrite so
 // mocks observe the same shape in local execution and in bundled workflows.
-export function dispatchTriggerJob(
+export function dispatchStartJob(
   name: string,
   args?: unknown,
   options?: StartJobFunctionOptions,
@@ -95,16 +89,16 @@ export function dispatchTriggerJob(
   const workflow = requirePlatformWorkflow();
   // oxlint-disable-next-line prefer-rest-params
   return arguments.length >= 3
-    ? workflow.triggerJobFunction(name, args, options)
-    : workflow.triggerJobFunction(name, args);
+    ? workflow.startJobFunction(name, args, options)
+    : workflow.startJobFunction(name, args);
 }
 
-// Accepts `unknown` because the SDK-side `.trigger()` accepts a wider options
+// Accepts `unknown` because the SDK-side `.start()` accepts a wider options
 // shape than the platform surface (e.g. `authInvoker` may be a machine-user
 // name string that the bundler normalizes at build time). Local execution
 // forwards the value verbatim; only the bundled path enforces the platform
 // contract.
-export function dispatchTriggerWorkflow(
+export function dispatchStartWorkflow(
   name: string,
   args?: unknown,
   options?: { invoker?: unknown },
@@ -112,9 +106,9 @@ export function dispatchTriggerWorkflow(
   const workflow = requirePlatformWorkflow();
   // oxlint-disable-next-line prefer-rest-params
   if (arguments.length < 3) {
-    return workflow.triggerWorkflow(name, args);
+    return workflow.startWorkflow(name, args);
   }
-  return workflow.triggerWorkflow(
+  return workflow.startWorkflow(
     name,
     args,
     options?.invoker === undefined

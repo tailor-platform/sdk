@@ -3,14 +3,14 @@ import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
-import { createTriggerTransformPlugin } from "#/cli/services/workflow/trigger-transformer";
+import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
-import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
@@ -27,8 +27,8 @@ interface ExecutorInfo {
 export interface BundleExecutorsOptions {
   /** Executor file loading configuration */
   config: FileLoadConfig;
-  /** Trigger context for workflow/job transformations */
-  triggerContext?: TriggerContext;
+  /** Start context for workflow/job transformations */
+  startContext?: StartContext;
   /** Additional files to bundle (e.g., plugin-generated executors) */
   additionalFiles?: string[];
   /** Optional bundle cache for skipping unchanged builds */
@@ -54,7 +54,7 @@ export async function bundleExecutors(
   const bundledCode = new Map<string, string>();
   const {
     config,
-    triggerContext,
+    startContext,
     additionalFiles = [],
     cache,
     inlineSourcemap,
@@ -108,14 +108,7 @@ export async function bundleExecutors(
   // Process each executor, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
   const results = await withBundleConcurrency(executors, (executor) =>
-    bundleSingleExecutor(
-      executor,
-      tsconfig,
-      triggerContext,
-      cache,
-      inlineSourcemap,
-      bundleLogLevel,
-    ),
+    bundleSingleExecutor(executor, tsconfig, startContext, cache, inlineSourcemap, bundleLogLevel),
   );
 
   for (const [name, code] of results) {
@@ -130,16 +123,16 @@ export async function bundleExecutors(
 async function bundleSingleExecutor(
   executor: ExecutorInfo,
   tsconfig: string | undefined,
-  triggerContext?: TriggerContext,
+  startContext?: StartContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
 ): Promise<[string, string]> {
-  const serializedTriggerContext = serializeTriggerContext(triggerContext);
+  const serializedStartContext = serializeStartContext(startContext);
 
   const contextHash = computeBundlerContextHash({
     sourceFile: executor.sourceFile,
-    serializedTriggerContext,
+    extraContext: serializedStartContext,
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -166,10 +159,10 @@ async function bundleSingleExecutor(
       `;
       const entry = createVirtualEntry(`executor:${executor.name}`, entryContent);
 
-      const triggerPlugin = createTriggerTransformPlugin(triggerContext);
+      const startPlugin = createStartTransformPlugin(startContext);
       const plugins: rolldown.Plugin[] = [entry.plugin];
-      if (triggerPlugin) {
-        plugins.push(triggerPlugin);
+      if (startPlugin) {
+        plugins.push(startPlugin);
       }
       plugins.push(platformBundleDefinePlugin, ...cachePlugins);
 

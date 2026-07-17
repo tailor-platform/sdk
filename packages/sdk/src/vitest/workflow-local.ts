@@ -1,5 +1,5 @@
 /* oxlint-disable typescript/no-explicit-any */
-import { TRIGGER_DEFAULT, getRegisteredJob } from "../configure/services/workflow/registry";
+import { START_DEFAULT, getRegisteredJob } from "../configure/services/workflow/registry";
 import {
   buildJobContext,
   clearWorkflowTestEnv,
@@ -25,7 +25,7 @@ type GlobalWithTailor = {
   };
 };
 
-type TriggerRecord = {
+type StartRecord = {
   jobName: string;
   args: unknown;
 } & (
@@ -40,12 +40,12 @@ type TriggerRecord = {
 );
 
 interface LocalExecution {
-  records: TriggerRecord[];
+  records: StartRecord[];
   cursor: number;
-  pending?: PendingTrigger;
+  pending?: PendingStart;
 }
 
-class PendingTrigger {
+class PendingStart {
   constructor(
     readonly jobName: string,
     readonly args: unknown,
@@ -58,9 +58,9 @@ export interface RunWorkflowLocallyOptions {
 }
 
 /**
- * Run a workflow's main job and dependent job triggers locally with real job bodies.
+ * Run a workflow's main job and dependent job starts locally with real job bodies.
  *
- * Use this for local full-chain workflow tests. Regular `.trigger()` calls
+ * Use this for local full-chain workflow tests. Regular `.start()` calls
  * delegate to the platform workflow runtime and should be mocked with
  * `mockWorkflow()` when you are not intentionally running the local chain.
  * @param workflow - Workflow definition to run
@@ -110,7 +110,7 @@ export async function runWorkflowLocally<W extends AnyWorkflow>(
 
   root.tailor = {
     ...previousTailor,
-    workflow: createLocalWorkflowRuntime(previousTailor?.workflow, runner.triggerJobFunction),
+    workflow: createLocalWorkflowRuntime(previousTailor?.workflow, runner.startJobFunction),
   };
 
   try {
@@ -134,14 +134,14 @@ export async function runWorkflowLocally<W extends AnyWorkflow>(
 
 function createLocalJobRunner(): {
   runJob: (name: string, args?: unknown) => Promise<unknown>;
-  triggerJobFunction: (name: string, args?: unknown) => unknown;
+  startJobFunction: (name: string, args?: unknown) => unknown;
 } {
   let activeExecution: LocalExecution | undefined;
 
-  const triggerJobFunction = (jobName: string, args?: unknown): unknown => {
+  const startJobFunction = (jobName: string, args?: unknown): unknown => {
     if (!activeExecution) {
       throw new Error(
-        `Cannot trigger workflow job "${jobName}" outside runWorkflowLocally() job execution.`,
+        `Cannot start workflow job "${jobName}" outside runWorkflowLocally() job execution.`,
       );
     }
     if (activeExecution.pending) {
@@ -154,14 +154,14 @@ function createLocalJobRunner(): {
 
     const cached = activeExecution.records[index];
     if (cached) {
-      assertSameTrigger(cached, jobName, serializedArgs);
+      assertSameStart(cached, jobName, serializedArgs);
       if (cached.status === "rejected") {
         throw cached.error;
       }
       return platformSerialize(cached.result);
     }
 
-    const pending = new PendingTrigger(jobName, serializedArgs);
+    const pending = new PendingStart(jobName, serializedArgs);
     activeExecution.pending = pending;
     throw pending;
   };
@@ -172,7 +172,7 @@ function createLocalJobRunner(): {
       return null;
     }
 
-    const records: TriggerRecord[] = [];
+    const records: StartRecord[] = [];
 
     for (;;) {
       const execution: LocalExecution = { records, cursor: 0 };
@@ -182,19 +182,19 @@ function createLocalJobRunner(): {
       try {
         const out = await body(platformSerialize(args), buildJobContext());
         if (execution.pending) {
-          await settlePendingTrigger(records, execution.pending, runJob);
+          await settlePendingStart(records, execution.pending, runJob);
           continue;
         }
         if (execution.cursor !== records.length) {
           throw new Error(
-            `Workflow job trigger sequence changed while replaying "${name}". Expected ${records.length} trigger(s), but replay reached ${execution.cursor}.`,
+            `Workflow job start sequence changed while replaying "${name}". Expected ${records.length} start(s), but replay reached ${execution.cursor}.`,
           );
         }
         return platformSerialize(out);
       } catch (cause) {
-        const pending = cause instanceof PendingTrigger ? cause : execution.pending;
+        const pending = cause instanceof PendingStart ? cause : execution.pending;
         if (pending) {
-          await settlePendingTrigger(records, pending, runJob);
+          await settlePendingStart(records, pending, runJob);
           continue;
         }
         throw cause;
@@ -204,12 +204,12 @@ function createLocalJobRunner(): {
     }
   };
 
-  return { runJob, triggerJobFunction };
+  return { runJob, startJobFunction };
 }
 
-async function settlePendingTrigger(
-  records: TriggerRecord[],
-  pending: PendingTrigger,
+async function settlePendingStart(
+  records: StartRecord[],
+  pending: PendingStart,
   runJob: (name: string, args?: unknown) => Promise<unknown>,
 ): Promise<void> {
   try {
@@ -229,26 +229,26 @@ async function settlePendingTrigger(
   }
 }
 
-function assertSameTrigger(record: TriggerRecord, jobName: string, args: unknown): void {
+function assertSameStart(record: StartRecord, jobName: string, args: unknown): void {
   if (record.jobName === jobName && JSON.stringify(record.args) === JSON.stringify(args)) {
     return;
   }
 
   throw new Error(
-    `Workflow job trigger sequence changed while replaying. Expected ${record.jobName}(${JSON.stringify(record.args)}), but got ${jobName}(${JSON.stringify(args)}).`,
+    `Workflow job start sequence changed while replaying. Expected ${record.jobName}(${JSON.stringify(record.args)}), but got ${jobName}(${JSON.stringify(args)}).`,
   );
 }
 
 function createLocalWorkflowRuntime(
   previous: PlatformWorkflowAPI | undefined,
-  triggerJobFunction: (name: string, args?: unknown) => unknown,
+  startJobFunction: (name: string, args?: unknown) => unknown,
 ): PlatformWorkflowAPI {
   const startWorkflow: PlatformWorkflowAPI["startWorkflow"] = async (name, args, options) => {
     if (previous) {
       return await previous.startWorkflow(name, args, options);
     }
     platformSerialize(args);
-    return TRIGGER_DEFAULT;
+    return START_DEFAULT;
   };
   const resumeWorkflowExecution: PlatformWorkflowAPI["resumeWorkflowExecution"] = async (
     executionId,
@@ -260,22 +260,9 @@ function createLocalWorkflowRuntime(
   };
 
   return {
-    triggerJobFunction,
-    startJobFunction: triggerJobFunction,
+    startJobFunction,
     startWorkflow,
-    triggerWorkflow: async (name, args, options) => {
-      if (previous) {
-        return await previous.triggerWorkflow(name, args, options);
-      }
-      return await startWorkflow(name, args);
-    },
     resumeWorkflowExecution,
-    resumeWorkflow: async (executionId) => {
-      if (previous) {
-        return await previous.resumeWorkflow(executionId);
-      }
-      return await resumeWorkflowExecution(executionId);
-    },
     wait: (key, payload) => {
       if (previous) {
         return previous.wait(key, payload);

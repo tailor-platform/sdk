@@ -285,7 +285,7 @@ export type WebhookOperation<Args> = Omit<
  * Extract mainJob's Input type from Workflow.
  * Workflow<Job> -> Job is WorkflowJob<Name, Input, Output> -> Input
  */
-type WorkflowInput<W extends Workflow> = Parameters<W["trigger"]>[0];
+type WorkflowInput<W extends Workflow> = Parameters<W["start"]>[0];
 
 type WorkflowArgs<Args, W extends Workflow> = WorkflowInput<W> | ((args: Args) => WorkflowInput<W>);
 

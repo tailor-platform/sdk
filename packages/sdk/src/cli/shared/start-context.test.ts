@@ -2,30 +2,30 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { transformFunctionTriggers } from "#/cli/services/workflow/trigger-transformer";
+import { transformStartCalls } from "#/cli/services/workflow/start-transformer";
 import {
-  buildTriggerContext,
+  buildStartContext,
   normalizeFilePath,
-  serializeTriggerContext,
-  type TriggerContext,
-  type TriggerModuleBindings,
-} from "./trigger-context";
+  serializeStartContext,
+  type StartContext,
+  type StartModuleBindings,
+} from "./start-context";
 
-describe("serializeTriggerContext", () => {
-  function emptyContext(): TriggerContext {
+describe("serializeStartContext", () => {
+  function emptyContext(): StartContext {
     return { modules: new Map() };
   }
 
-  function bindings(localBindings: TriggerModuleBindings["localBindings"]) {
+  function bindings(localBindings: StartModuleBindings["localBindings"]) {
     return { localBindings, exports: new Map(localBindings) };
   }
 
   test("returns empty string for undefined", () => {
-    expect(serializeTriggerContext(undefined)).toBe("");
+    expect(serializeStartContext(undefined)).toBe("");
   });
 
   test("returns deterministic output for empty maps", () => {
-    expect(serializeTriggerContext(emptyContext())).toBe("[]");
+    expect(serializeStartContext(emptyContext())).toBe("[]");
   });
 
   test("returns same output regardless of map insertion order", () => {
@@ -49,7 +49,7 @@ describe("serializeTriggerContext", () => {
       bindings(new Map([["workflow", { kind: "workflow", name: "WorkflowB" }]])),
     );
 
-    expect(serializeTriggerContext(first)).toBe(serializeTriggerContext(second));
+    expect(serializeStartContext(first)).toBe(serializeStartContext(second));
   });
 
   test("returns different output when map content differs", () => {
@@ -61,7 +61,7 @@ describe("serializeTriggerContext", () => {
       bindings(new Map([["job", { kind: "job", name: "ProcessPayment" }]])),
     );
 
-    expect(serializeTriggerContext(first)).not.toBe(serializeTriggerContext(second));
+    expect(serializeStartContext(first)).not.toBe(serializeStartContext(second));
   });
 
   test("distinguishes entries in different maps", () => {
@@ -73,11 +73,11 @@ describe("serializeTriggerContext", () => {
     const second = emptyContext();
     second.modules.set("/module", bindings(new Map([["target", { kind: "job", name: "Name" }]])));
 
-    expect(serializeTriggerContext(first)).not.toBe(serializeTriggerContext(second));
+    expect(serializeStartContext(first)).not.toBe(serializeStartContext(second));
   });
 });
 
-describe("buildTriggerContext", () => {
+describe("buildStartContext", () => {
   const tempDirs: string[] = [];
 
   afterEach(() => {
@@ -87,7 +87,7 @@ describe("buildTriggerContext", () => {
   });
 
   async function createDuplicateExportContext() {
-    const tempDir = mkdtempSync(path.join(tmpdir(), "trigger-context-"));
+    const tempDir = mkdtempSync(path.join(tmpdir(), "start-context-"));
     tempDirs.push(tempDir);
     const firstPath = path.join(tempDir, "first.ts");
     const secondPath = path.join(tempDir, "second.ts");
@@ -101,34 +101,34 @@ export const step = createWorkflowJob({ name: "step-b", body: async () => "b" })
 `;
     writeFileSync(firstPath, firstSource);
     writeFileSync(secondPath, secondSource);
-    const context = await buildTriggerContext({ files: [firstPath, secondPath] });
+    const context = await buildStartContext({ files: [firstPath, secondPath] });
     return { context, firstPath, firstSource, tempDir };
   }
 
-  function transform(source: string, currentFilePath: string, context: TriggerContext) {
-    return transformFunctionTriggers(source, context, currentFilePath);
+  function transform(source: string, currentFilePath: string, context: StartContext) {
+    return transformStartCalls(source, context, currentFilePath);
   }
 
   test("resolves duplicate local export names from the current module", async () => {
     const { context, firstPath, firstSource } = await createDuplicateExportContext();
 
-    const result = transform(`${firstSource}\nawait step.trigger();\n`, firstPath, context);
+    const result = transform(`${firstSource}\nawait step.start();\n`, firstPath, context);
 
-    expect(result).toContain('tailor.workflow.triggerJobFunction("step-a", undefined)');
-    expect(result).not.toContain('tailor.workflow.triggerJobFunction("step-b"');
+    expect(result).toContain('tailor.workflow.startJobFunction("step-a", undefined)');
+    expect(result).not.toContain('tailor.workflow.startJobFunction("step-b"');
   });
 
   test("resolves aliased named imports", async () => {
     const { context, tempDir } = await createDuplicateExportContext();
     const source = `
 import { step as importedStep } from "./first";
-await importedStep.trigger();
+await importedStep.start();
 `;
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
-    expect(result).toContain('tailor.workflow.triggerJobFunction("step-a", undefined)');
-    expect(result).not.toContain("importedStep.trigger()");
+    expect(result).toContain('tailor.workflow.startJobFunction("step-a", undefined)');
+    expect(result).not.toContain("importedStep.start()");
   });
 
   test("resolves relative default workflow imports", async () => {
@@ -142,16 +142,16 @@ const mainJob = createWorkflowJob({ name: "main-job", body: async () => "done" }
 export default createWorkflow({ name: "workflow-a", mainJob });
 `,
     );
-    const context = await buildTriggerContext({ files: [workflowPath] });
+    const context = await buildStartContext({ files: [workflowPath] });
     const source = `
 import workflow from "./workflow";
-await workflow.trigger();
+await workflow.start();
 `;
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
     expect(result).toContain('import workflow from "./workflow"');
-    expect(result).toContain('tailor.workflow.triggerWorkflow("workflow-a", undefined)');
+    expect(result).toContain('tailor.workflow.startWorkflow("workflow-a", undefined)');
   });
 
   test("preserves a namespace import paired with a transformed default import", async () => {
@@ -165,64 +165,64 @@ const mainJob = createWorkflowJob({ name: "main-job", body: async () => "done" }
 export default createWorkflow({ name: "workflow-a", mainJob });
 `,
     );
-    const context = await buildTriggerContext({ files: [workflowPath] });
+    const context = await buildStartContext({ files: [workflowPath] });
     const source = `
 import workflow, * as helpers from "./workflow";
 console.log(helpers);
-await workflow.trigger();
+await workflow.start();
 `;
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
     expect(result).toContain('import workflow, * as helpers from "./workflow"');
     expect(result).toContain("console.log(helpers)");
-    expect(result).toContain('tailor.workflow.triggerWorkflow("workflow-a", undefined)');
+    expect(result).toContain('tailor.workflow.startWorkflow("workflow-a", undefined)');
   });
 
   test("does not transform an imported job shadowed by a parameter", async () => {
     const { context, tempDir } = await createDuplicateExportContext();
     const source = `
 import { step } from "./first";
-await step.trigger({ source: "outer" });
-async function run(step: { trigger(): Promise<string> }) {
-  return step.trigger();
+await step.start({ source: "outer" });
+async function run(step: { start(): Promise<string> }) {
+  return step.start();
 }
 `;
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
-    expect(result).toContain('triggerJobFunction("step-a", { source: "outer" })');
-    expect(result).toContain("return step.trigger()");
+    expect(result).toContain('startJobFunction("step-a", { source: "outer" })');
+    expect(result).toContain("return step.start()");
   });
 
   test("does not transform an imported job shadowed by a local variable", async () => {
     const { context, tempDir } = await createDuplicateExportContext();
     const source = `
 import { step } from "./first";
-await step.trigger({ source: "outer" });
+await step.start({ source: "outer" });
 async function run() {
-  const step = { trigger: async () => "local" };
-  return step.trigger();
+  const step = { start: async () => "local" };
+  return step.start();
 }
 `;
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
-    expect(result).toContain('triggerJobFunction("step-a", { source: "outer" })');
-    expect(result).toContain("return step.trigger()");
+    expect(result).toContain('startJobFunction("step-a", { source: "outer" })');
+    expect(result).toContain("return step.start()");
   });
 
-  test("does not transform a local object with a trigger method", async () => {
+  test("does not transform a local object with a start method", async () => {
     const { context, tempDir } = await createDuplicateExportContext();
     const source = `
-const step = { trigger: async () => "local" };
-await step.trigger();
+const step = { start: async () => "local" };
+await step.start();
 `;
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
-    expect(result).toContain("await step.trigger()");
-    expect(result).not.toContain("tailor.workflow.triggerJobFunction");
+    expect(result).toContain("await step.start()");
+    expect(result).not.toContain("tailor.workflow.startJobFunction");
   });
 
   test("escapes job and workflow names in generated calls", async () => {
@@ -231,8 +231,8 @@ await step.trigger();
     const jobName = 'step"\\quoted';
     currentModule?.localBindings.set("step", { kind: "job", name: jobName });
 
-    const result = transform(`${firstSource}\nawait step.trigger();\n`, firstPath, context);
+    const result = transform(`${firstSource}\nawait step.start();\n`, firstPath, context);
 
-    expect(result).toContain(`triggerJobFunction(${JSON.stringify(jobName)}, undefined)`);
+    expect(result).toContain(`startJobFunction(${JSON.stringify(jobName)}, undefined)`);
   });
 });
