@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.3.0-next.6
+
+### Patch Changes
+
+- [#1789](https://github.com/tailor-platform/sdk/pull/1789) [`e4db171`](https://github.com/tailor-platform/sdk/commit/e4db171e2a0138ea1a0ba1a972bf895fd0616a28) Thanks [@toiroakr](https://github.com/toiroakr)! - Flag `tailor generate --watch` / `-W` invocations and programmatic `generate({ watch })` usage for manual review as part of the v2 migration (the flag and its dependency watcher are removed in `@tailor-platform/sdk` v2).
+
 ## 0.3.0-next.5
 
 ### Patch Changes
