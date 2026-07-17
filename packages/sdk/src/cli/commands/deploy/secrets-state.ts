@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import pLimit, { type LimitFunction } from "p-limit";
 import * as path from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
@@ -114,7 +115,7 @@ const LOCK_POLL_INTERVAL_MS = 100;
 const LOCK_ACQUIRE_TIMEOUT_MS = 5 * 60 * 1000;
 const OWNERLESS_LOCK_GRACE_MS = 10 * 1000;
 
-const lockQueues = new Map<string, Promise<unknown>>();
+const lockQueues = new Map<string, LimitFunction>();
 
 /**
  * Run a remote-update/state-save sequence exclusively for one target's secrets state.
@@ -134,8 +135,12 @@ export async function withSecretsStateLock<T>(
     return fn();
   }
   const lockPath = `${getSecretsStatePath(scope)}.lock`;
-  const tail = lockQueues.get(lockPath) ?? Promise.resolve();
-  const run = tail.then(async () => {
+  let queue = lockQueues.get(lockPath);
+  if (!queue) {
+    queue = pLimit(1);
+    lockQueues.set(lockPath, queue);
+  }
+  return queue(async () => {
     await acquireFileLock(lockPath);
     try {
       return await fn();
@@ -143,25 +148,29 @@ export async function withSecretsStateLock<T>(
       rmSync(lockPath, { recursive: true, force: true });
     }
   });
-  lockQueues.set(
-    lockPath,
-    run.catch(() => {}),
-  );
-  return run;
 }
 
 async function acquireFileLock(lockPath: string): Promise<void> {
   mkdirSync(path.dirname(lockPath), { recursive: true });
   const deadline = Date.now() + LOCK_ACQUIRE_TIMEOUT_MS;
   for (;;) {
+    let created = true;
     try {
       mkdirSync(lockPath);
-      writeFileSync(path.join(lockPath, "owner.json"), JSON.stringify({ pid: process.pid }));
-      return;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
         throw error;
       }
+      created = false;
+    }
+    if (created) {
+      try {
+        writeFileSync(path.join(lockPath, "owner.json"), JSON.stringify({ pid: process.pid }));
+      } catch (error) {
+        rmSync(lockPath, { recursive: true, force: true });
+        throw error;
+      }
+      return;
     }
     if (isLockStale(lockPath)) {
       stealLock(lockPath);
@@ -214,5 +223,15 @@ function stealLock(lockPath: string): void {
   } catch {
     return;
   }
-  rmSync(trash, { recursive: true, force: true });
+  if (isLockStale(trash)) {
+    rmSync(trash, { recursive: true, force: true });
+    return;
+  }
+  // A live holder re-acquired the lock between the staleness check and the
+  // rename; hand it back.
+  try {
+    renameSync(trash, lockPath);
+  } catch {
+    rmSync(trash, { recursive: true, force: true });
+  }
 }
