@@ -601,4 +601,15 @@ describe("start without tailor.workflow", () => {
 
     await expect(workflow.start({ n: 0 })).rejects.toThrow(/tailor\.workflow is not available/);
   });
+
+  test("workflow start takes no arguments when the main job's input is undefined", async () => {
+    const main = createWorkflowJob({
+      name: "fallback-main-no-input",
+      body: () => ({ ok: true }),
+    });
+    const workflow = createWorkflow({ name: "fallback-wf-no-input", mainJob: main });
+
+    // Must type-check with zero arguments, matching WorkflowJob.start.
+    await expect(workflow.start()).rejects.toThrow(/tailor\.workflow is not available/);
+  });
 });

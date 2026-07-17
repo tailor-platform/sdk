@@ -21,10 +21,12 @@ export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<a
   mainJob: Job;
   retryPolicy?: RetryPolicy;
   concurrencyPolicy?: ConcurrencyPolicy;
-  start: (
-    args: Parameters<Job["start"]>[0],
-    options?: { invoker: MachineUserName },
-  ) => Promise<string>;
+  start: [Parameters<Job["start"]>[0]] extends [undefined]
+    ? (args?: undefined, options?: { invoker: MachineUserName }) => Promise<string>
+    : (
+        args: Parameters<Job["start"]>[0],
+        options?: { invoker: MachineUserName },
+      ) => Promise<string>;
 }
 
 interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
