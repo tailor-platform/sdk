@@ -4,7 +4,6 @@ import * as path from "pathe";
 import { hashFile } from "#/cli/cache/hasher";
 import { createCacheManager } from "#/cli/cache/manager";
 import { loadApplication, type Application } from "#/cli/services/application";
-import { removeLegacyBundleFiles } from "#/cli/services/stale-cleanup";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
 import { getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
@@ -950,7 +949,6 @@ export async function buildDeploymentTargets(
     buildTarget = buildDeploymentTarget,
     ...targetParams
   } = params;
-  await removeLegacyBundleFiles(path.resolve(getDistDir()));
 
   return Promise.all(
     configPaths.map((configPath, index) =>
