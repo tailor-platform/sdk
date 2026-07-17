@@ -54,7 +54,9 @@ for (const template of templates) {
   }
 
   writeFileSync(packageJsonPath, JSON.stringify(content, null, 2) + "\n");
-  console.log(`Updated ${template}/package.json to use ${updated.join(", ")}`);
+  if (updated.length > 0) {
+    console.log(`Updated ${template}/package.json to use ${updated.join(", ")}`);
+  }
 }
 
 // Copy .gitignore to __dot__gitignore
