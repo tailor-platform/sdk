@@ -65,24 +65,43 @@ function expressionArguments(args: SgNode): SgNode[] {
   return args.children().filter((child) => !["(", ")", ","].includes(child.kind() as string));
 }
 
+function thirdArgument(member: SgNode): SgNode | null {
+  const call = member.parent();
+  if (call?.kind() !== "call_expression") return null;
+  const args = call.field("arguments");
+  if (!args) return null;
+  return expressionArguments(args)[2] ?? null;
+}
+
+/**
+ * A `triggerWorkflow(name, args, options)` call whose third argument is not a
+ * literal object (e.g. a variable), or is an object literal that spreads one
+ * (`{ ...rest }`), cannot be safely renamed: we cannot tell whether it carries
+ * an `invoker` key that also needs renaming to `authInvoker`, and renaming
+ * just the method name would erase the `triggerWorkflow` token that flags the
+ * call for manual review, while the option silently stops working at
+ * runtime. Such calls are left entirely unrenamed.
+ * @param member - The `.triggerWorkflow` member-expression node being considered
+ * @returns Whether the call must be skipped
+ */
+function hasUnsafeThirdArgument(member: SgNode): boolean {
+  const optionsArg = thirdArgument(member);
+  if (optionsArg === null) return false;
+  if (optionsArg.kind() !== "object") return true;
+  return optionsArg.children().some((child) => child.kind() === "spread_element");
+}
+
 /**
  * `triggerWorkflow`'s removed SDK wrapper converted an `invoker` option to
  * the platform's `authInvoker` shape before calling through; `startWorkflow`
  * expects `authInvoker` directly. Build an edit renaming a literal `invoker`
  * key (or shorthand) in the third argument of a `triggerWorkflow(...)` call
- * being renamed to `startWorkflow`, so the option keeps working. Options
- * passed via a variable/spread are left for manual review — only literal
- * object arguments are inspected here.
+ * being renamed to `startWorkflow`, so the option keeps working.
  * @param member - The `.triggerWorkflow` member-expression node being renamed
  * @returns An edit renaming the `invoker` key, or null when not applicable
  */
 function findInvokerOptionEdit(member: SgNode): Edit | null {
-  const call = member.parent();
-  if (call?.kind() !== "call_expression") return null;
-  const args = call.field("arguments");
-  if (!args) return null;
-
-  const optionsArg = expressionArguments(args)[2];
+  const optionsArg = thirdArgument(member);
   if (!optionsArg || optionsArg.kind() !== "object") return null;
 
   for (const child of optionsArg.children()) {
@@ -130,10 +149,13 @@ export default function transform(source: string, filePath?: string): string | n
     const isAmbientReceiver = tailorIsAmbient && isAmbientTailorWorkflow(object);
     if (!isWorkflowImportReceiver && !isAmbientReceiver) continue;
 
-    edits.push(property.replace(newName));
     if (newName === "startWorkflow") {
+      if (hasUnsafeThirdArgument(member)) continue;
+      edits.push(property.replace(newName));
       const invokerEdit = findInvokerOptionEdit(member);
       if (invokerEdit) edits.push(invokerEdit);
+    } else {
+      edits.push(property.replace(newName));
     }
   }
 
