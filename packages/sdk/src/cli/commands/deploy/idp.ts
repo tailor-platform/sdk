@@ -284,8 +284,11 @@ function normalizeComparableUserAuthPolicy(
     passwordRequireLowercase: policy?.passwordRequireLowercase ?? false,
     passwordRequireNonAlphanumeric: policy?.passwordRequireNonAlphanumeric ?? false,
     passwordRequireNumeric: policy?.passwordRequireNumeric ?? false,
-    passwordMinLength: policy?.passwordMinLength ?? 0,
-    passwordMaxLength: policy?.passwordMaxLength ?? 0,
+    // The platform fills an omitted policy with password_min_length 6 and
+    // password_max_length 4096 and echoes those back; align the comparison
+    // fallbacks so an omitted local policy matches the stored defaults.
+    passwordMinLength: policy?.passwordMinLength || 6,
+    passwordMaxLength: policy?.passwordMaxLength || 4096,
     allowedEmailDomains: (policy?.allowedEmailDomains ?? []).toSorted(),
     allowGoogleOauth: policy?.allowGoogleOauth ?? false,
     disablePasswordAuth: policy?.disablePasswordAuth ?? false,

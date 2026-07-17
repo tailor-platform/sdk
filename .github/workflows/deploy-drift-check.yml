@@ -1,9 +1,11 @@
 name: "Deploy Drift Check"
 
-# Deploys each app to a fresh workspace and verifies that an immediate
-# dry run reports "Plan: 0 to create, 0 to update, 0 to delete" — a redeploy
-# of unchanged code must be a no-op. Guards against comparison drift such as
-# newly added proto fields being reported as updates on every deploy.
+# Deploys each create-sdk template to a fresh workspace and verifies that an
+# immediate dry run reports "Plan: 0 to create, 0 to update, 0 to delete" — a
+# redeploy of unchanged code must be a no-op. Guards against comparison drift
+# such as newly added proto fields being reported as updates on every deploy.
+# example/ gets the same check inside the existing Workspace Deploy Test
+# (deploy.yml), which already deploys it on every PR.
 
 on:
   pull_request:
@@ -37,7 +39,6 @@ jobs:
               - .github/workflows/deploy-drift-check.yml
               - .github/actions/**
               - packages/**
-              - example/**
               - package.json
               - tsconfig.json
               - pnpm-workspace.yaml
@@ -55,8 +56,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target: example
-            dir: example
           - target: hello-world
             dir: packages/create-sdk/templates/hello-world
           - target: tailordb

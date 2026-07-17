@@ -53,6 +53,7 @@ type MockIdpServiceOpts = {
   clients?: string[];
   publishUserEvents?: boolean | undefined;
   gqlOperations?: Record<string, boolean | undefined>;
+  omitUserAuthPolicy?: boolean;
 };
 
 function createMockApplication(opts?: {
@@ -96,6 +97,9 @@ function createMockApplication(opts?: {
         }
       } else {
         result.publishUserEvents = true;
+      }
+      if (service.omitUserAuthPolicy) {
+        delete result.userAuthPolicy;
       }
       return result;
     }),
@@ -216,6 +220,45 @@ describe("planIdP", () => {
 
     expect(result.changeSet.service.updates).toHaveLength(1);
     expect(result.changeSet.service.unchanged).toHaveLength(0);
+  });
+
+  test("marks idp service unchanged when userAuthPolicy is omitted and remote returns server defaults", async () => {
+    // The platform fills an omitted userAuthPolicy with its own defaults
+    // (password_min_length 6 / password_max_length 4096, everything else zero)
+    // and echoes them back; that must not read as drift.
+    const client = createMockClient({
+      services: [
+        createMatchingRemoteService({
+          userAuthPolicy: {
+            useNonEmailIdentifier: false,
+            allowSelfPasswordReset: false,
+            passwordRequireUppercase: false,
+            passwordRequireLowercase: false,
+            passwordRequireNonAlphanumeric: false,
+            passwordRequireNumeric: false,
+            passwordMinLength: 6,
+            passwordMaxLength: 4096,
+            allowedEmailDomains: [],
+            allowGoogleOauth: false,
+            disablePasswordAuth: false,
+            allowMicrosoftOauth: false,
+            enableMfa: false,
+            requireMfa: false,
+            allowedReturnOrigins: [],
+            mfaIssuer: "",
+          },
+        }),
+      ],
+      clients: defaultIdpClientSecret,
+    });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: createMockApplication({ idpServices: [{ omitUserAuthPolicy: true }] }),
+    });
+
+    expect(result.changeSet.service.updates).toHaveLength(0);
+    expect(result.changeSet.service.unchanged).toHaveLength(1);
   });
 
   test("marks idp service updated when config matches but ownership metadata is missing", async () => {
