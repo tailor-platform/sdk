@@ -226,15 +226,15 @@ const MachineUserSchema = z.object({
   // downstream (deploy, drift diff) only ever sees concrete values.
   attributes: z
     .record(z.string(), ValueOperandSchema.nullish())
-    .optional()
-    .transform((attributes): Record<string, ValueOperand> | undefined => {
-      if (!attributes) return undefined;
-      return Object.fromEntries(
-        Object.entries(attributes).filter(
-          (entry): entry is [string, ValueOperand] => entry[1] != null,
+    .transform(
+      (attributes): Record<string, ValueOperand> =>
+        Object.fromEntries(
+          Object.entries(attributes).filter(
+            (entry): entry is [string, ValueOperand] => entry[1] != null,
+          ),
         ),
-      );
-    }),
+    )
+    .optional(),
   attributeList: z.array(z.uuid()).optional(),
 });
 

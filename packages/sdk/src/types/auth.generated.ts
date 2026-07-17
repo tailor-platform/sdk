@@ -619,7 +619,7 @@ export type AuthConfig =
       machineUsers?:
         | {
             [x: string]: {
-              attributes:
+              attributes?:
                 | {
                     [x: string]: string | boolean | string[] | boolean[];
                   }
@@ -827,7 +827,7 @@ export type AuthConfig =
       machineUsers?:
         | {
             [x: string]: {
-              attributes:
+              attributes?:
                 | {
                     [x: string]: string | boolean | string[] | boolean[];
                   }
