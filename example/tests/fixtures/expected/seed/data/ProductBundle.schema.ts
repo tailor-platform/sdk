@@ -1,14 +1,14 @@
 import { t } from "@tailor-platform/sdk";
 import { defineSchema } from "@tailor-platform/sdk/seed";
 import { createTailorDBHook, createStandardSchema } from "@tailor-platform/sdk/test";
-import { supplier } from "../../../../../tailordb/supplier";
+import { productBundle } from "../../../../../tailordb/productBundle";
 
 const schemaType = t.object({
-  ...supplier.pickFields(["id"], { optional: true }),
-  ...supplier.omitFields(["id"]),
+  ...productBundle.pickFields(["id"], { optional: true }),
+  ...productBundle.omitFields(["id"]),
 });
 
-const hook = createTailorDBHook(supplier);
+const hook = createTailorDBHook(productBundle);
 
 export const schema = defineSchema(
   createStandardSchema(schemaType, hook),
