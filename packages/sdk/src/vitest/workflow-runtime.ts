@@ -1,21 +1,14 @@
 // Default `tailor.workflow` runner installed by the `tailor-runtime` environment.
 // Must stay free of `vitest` (`vi`): it loads via `./globals` in the environment
 // realm where `vi` is unavailable, hence relative imports only (no `@/` alias).
-import { TRIGGER_DEFAULT } from "../configure/services/workflow/registry";
+import { START_DEFAULT } from "../configure/services/workflow/registry";
 import { platformSerialize } from "../utils/test/platform-serialize";
 import type { StartJobFunctionOptions, StartWorkflowOptions } from "../runtime/workflow";
 
 export interface DefaultWorkflowRuntime {
   startJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
-  triggerJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
   startWorkflow: (name: string, args?: unknown, options?: StartWorkflowOptions) => Promise<string>;
-  triggerWorkflow: (
-    name: string,
-    args?: unknown,
-    options?: StartWorkflowOptions,
-  ) => Promise<string>;
   resumeWorkflowExecution: (executionId: string) => Promise<string>;
-  resumeWorkflow: (executionId: string) => Promise<string>;
   wait: (key: string, payload?: unknown) => unknown;
   resolve: (
     executionId: string,
@@ -32,18 +25,15 @@ export function createDefaultWorkflowRuntime(): DefaultWorkflowRuntime {
   };
   const startWorkflow: DefaultWorkflowRuntime["startWorkflow"] = async (_name, args) => {
     platformSerialize(args);
-    return TRIGGER_DEFAULT;
+    return START_DEFAULT;
   };
   const resumeWorkflowExecution: DefaultWorkflowRuntime["resumeWorkflowExecution"] = async (
     executionId,
   ) => executionId;
   return {
     startJobFunction,
-    triggerJobFunction: startJobFunction,
     startWorkflow,
-    triggerWorkflow: startWorkflow,
     resumeWorkflowExecution,
-    resumeWorkflow: resumeWorkflowExecution,
     wait: (key: string): unknown => {
       throw new Error(
         `No wait handler for "${key}". Acquire mockWorkflow() and call setWaitHandler(...).`,

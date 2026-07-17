@@ -2,16 +2,16 @@ import { createResolver, t } from "@tailor-platform/sdk";
 import orderProcessingWorkflow from "../workflows/order-processing";
 
 export default createResolver({
-  name: "triggerOrderProcessing",
-  description: "Trigger the order processing workflow",
+  name: "startOrderProcessing",
+  description: "Start the order processing workflow",
   operation: "mutation",
   input: {
     orderId: t.string().description("Order ID to process"),
     customerId: t.uuid().description("Customer ID for the order"),
   },
   body: async ({ input }) => {
-    // Trigger the workflow with invoker (machine user name is type-narrowed via tailor.d.ts)
-    const workflowRunId = await orderProcessingWorkflow.trigger(
+    // Start the workflow with invoker (machine user name is type-narrowed via tailor.d.ts)
+    const workflowRunId = await orderProcessingWorkflow.start(
       {
         orderId: input.orderId,
         customerId: input.customerId,
@@ -21,7 +21,7 @@ export default createResolver({
 
     return {
       workflowRunId,
-      message: `Workflow triggered for order ${input.orderId}`,
+      message: `Workflow started for order ${input.orderId}`,
     };
   },
   output: t.object({

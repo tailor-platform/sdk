@@ -13,7 +13,7 @@ Unit-test entrypoints exposed by the SDK:
 
 - `resolver.body({ input, caller, invoker, env })` — invoke a resolver
 - `workflowJob.body(input, { env, invoker })` — invoke a workflow job body directly
-- `workflowJob.trigger(input)` — chain a workflow job through the workflow runtime
+- `workflowJob.start(input)` — chain a workflow job through the workflow runtime
 - `runWorkflowLocally(workflow, args)` — run a workflow chain locally with real job bodies
 - `executor.operation.body({ ...args, invoker })` — invoke a function-kind executor
 
@@ -146,13 +146,13 @@ Pass `{ onUnhandled: "error" }` to make an unmatched query fail instead of retur
 
 ### Workflow Mock
 
-Workflow job `.trigger()` calls use the platform workflow runtime. Acquire `mockWorkflow()` when you want to provide trigger responses with `setJobHandler` / `enqueueResult` or assert on `triggeredJobs`. If no response is configured, the mock throws so missing job mocks fail loudly. Use `job(definition)` or `workflow(definition)` to get a stable, fully typed Vitest mock for one definition:
+Workflow job `.start()` calls use the platform workflow runtime. Acquire `mockWorkflow()` when you want to provide start responses with `setJobHandler` / `enqueueResult` or assert on `startedJobs`. If no response is configured, the mock throws so missing job mocks fail loudly. Use `job(definition)` or `workflow(definition)` to get a stable, fully typed Vitest mock for one definition:
 
 ```typescript
 import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { processPayment, validateOrder } from "./jobs";
 
-test("workflow triggers jobs", async () => {
+test("workflow starts jobs", async () => {
   using wf = mockWorkflow();
   const validate = wf.job(validateOrder);
   const payment = wf.job(processPayment);
@@ -166,7 +166,7 @@ test("workflow triggers jobs", async () => {
 });
 ```
 
-Unconfigured definition mocks continue to run their real implementations. The lower-level `triggerJobFunction`, `triggerWorkflow`, `resumeWorkflow`, `wait`, and `resolve` mocks and the existing `setJobHandler`, `enqueueResult`, `enqueueResults`, and call-record helpers remain available.
+Unconfigured definition mocks continue to run their real implementations. The lower-level `startJobFunction`, `startWorkflow`, `resumeWorkflowExecution`, `wait`, and `resolve` mocks and the existing `setJobHandler`, `enqueueResult`, `enqueueResults`, and call-record helpers remain available.
 
 Use `waitPoint(definition)` for typed wait-point control:
 
@@ -374,7 +374,7 @@ export default defineConfig({
 
 ## Unit Tests
 
-Unit tests call `.body()` (or `.trigger()`) directly on a resolver, workflow job, or executor and stub any platform-provided globals they touch.
+Unit tests call `.body()` (or `.start()`) directly on a resolver, workflow job, or executor and stub any platform-provided globals they touch.
 
 ### Testing Resolvers
 
@@ -669,7 +669,7 @@ To exercise the full chain (executor → helper → TailorDB), drop the spy and 
 
 ### Testing Workflow Jobs
 
-Workflow jobs expose the same `.body()` entrypoint as resolvers, plus `.trigger()` for calling them from another job or a test.
+Workflow jobs expose the same `.body()` entrypoint as resolvers, plus `.start()` for calling them from another job or a test.
 
 #### Simple job
 
@@ -696,7 +696,7 @@ describe("validateOrder", () => {
 });
 ```
 
-#### Jobs that trigger other jobs
+#### Jobs that start other jobs
 
 Use `mockWorkflow().job(definition)` to replace dependent jobs with deterministic results:
 
@@ -781,7 +781,7 @@ The lower-level `setWaitHandler` and `waitCalls` APIs remain available when one 
 
 #### Running a full workflow locally
 
-To exercise the full chain with real job bodies, call `runWorkflowLocally(workflow, args)`. Dependent jobs run their real `.body()` functions, and trigger args/results cross the same JSON boundary as the platform, so a non-serializable payload fails the test exactly as it would in production:
+To exercise the full chain with real job bodies, call `runWorkflowLocally(workflow, args)`. Dependent jobs run their real `.body()` functions, and start args/results cross the same JSON boundary as the platform, so a non-serializable payload fails the test exactly as it would in production:
 
 ```typescript
 import { runWorkflowLocally } from "@tailor-platform/sdk/vitest";
@@ -803,7 +803,7 @@ Pass `{ env }` as the third argument when job bodies need configuration values d
 
 If you already acquired `mockWorkflow()`, you can also call `wf.setEnv(...)` to reuse the same env across local workflow runs.
 
-Like the platform runtime, the local runner re-runs the orchestrator body once per `.trigger()` call (N triggers means N+1 passes), so any side effects outside the trigger results fire on every pass. Keep the body deterministic and move repeatable side effects into the triggered jobs.
+Like the platform runtime, the local runner re-runs the orchestrator body once per `.start()` call (N starts means N+1 passes), so any side effects outside the start results fire on every pass. Keep the body deterministic and move repeatable side effects into the started jobs.
 
 This helper is still a local runner. Use E2E tests when you need to verify deployed workflow scheduling, suspension, or replay behavior.
 

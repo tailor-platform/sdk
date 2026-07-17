@@ -433,14 +433,14 @@ describe("dataplane", () => {
     });
   });
 
-  describe("triggerOrderProcessing", () => {
-    test("triggers workflow and returns workflowRunId", async () => {
+  describe("startOrderProcessing", () => {
+    test("starts workflow and returns workflowRunId", async () => {
       const orderId = randomUUID();
       const customerId = randomUUID();
 
       const mutation = gql`
         mutation {
-          triggerOrderProcessing(
+          startOrderProcessing(
             orderId: "${orderId}"
             customerId: "${customerId}"
           ) {
@@ -452,15 +452,15 @@ describe("dataplane", () => {
       const result = await graphQLClient.rawRequest(mutation);
       expect(result.errors).toBeUndefined();
       expect(result.data).toEqual({
-        triggerOrderProcessing: {
+        startOrderProcessing: {
           workflowRunId: expect.any(String),
-          message: `Workflow triggered for order ${orderId}`,
+          message: `Workflow started for order ${orderId}`,
         },
       });
 
       // Verify workflowRunId is a valid UUID
-      const workflowRunId = (result.data as { triggerOrderProcessing: { workflowRunId: string } })
-        .triggerOrderProcessing.workflowRunId;
+      const workflowRunId = (result.data as { startOrderProcessing: { workflowRunId: string } })
+        .startOrderProcessing.workflowRunId;
       expect(workflowRunId).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
       );
@@ -475,33 +475,33 @@ describe("dataplane", () => {
         pipelineResolverView: PipelineResolverView.FULL,
       });
 
-      const triggerResolver = pipelineResolvers.find((e) => e.name === "triggerOrderProcessing");
-      expect(triggerResolver).toBeDefined();
-      expect(triggerResolver).toMatchObject({
-        name: "triggerOrderProcessing",
-        description: "Trigger the order processing workflow",
+      const startResolver = pipelineResolvers.find((e) => e.name === "startOrderProcessing");
+      expect(startResolver).toBeDefined();
+      expect(startResolver).toMatchObject({
+        name: "startOrderProcessing",
+        description: "Start the order processing workflow",
         operationType: "mutation",
       });
 
       // Verify inputs
-      const inputNames = triggerResolver?.inputs?.map((i) => i.name) ?? [];
+      const inputNames = startResolver?.inputs?.map((i) => i.name) ?? [];
       expect(inputNames).toContain("orderId");
       expect(inputNames).toContain("customerId");
 
       // Verify orderId input
-      const orderIdInput = triggerResolver?.inputs?.find((i) => i.name === "orderId");
+      const orderIdInput = startResolver?.inputs?.find((i) => i.name === "orderId");
       expect(orderIdInput?.description).toBe("Order ID to process");
       expect(orderIdInput?.type?.kind).toBe("ScalarType");
       expect(orderIdInput?.type?.name).toBe("String");
 
       // Verify customerId input
-      const customerIdInput = triggerResolver?.inputs?.find((i) => i.name === "customerId");
+      const customerIdInput = startResolver?.inputs?.find((i) => i.name === "customerId");
       expect(customerIdInput?.description).toBe("Customer ID for the order");
       expect(customerIdInput?.type?.kind).toBe("ScalarType");
       expect(customerIdInput?.type?.name).toBe("ID");
 
       // Verify response
-      const responseFields = triggerResolver?.response?.type?.fields ?? [];
+      const responseFields = startResolver?.response?.type?.fields ?? [];
       const workflowRunIdField = responseFields.find((f) => f.name === "workflowRunId");
       expect(workflowRunIdField).toBeDefined();
       const messageField = responseFields.find((f) => f.name === "message");

@@ -48,7 +48,7 @@ describe("bundled execution tests", () => {
       "resolvers/add.js": 5459 + sizeBuffer,
       "resolvers/showUserInfo.js": 5999 + sizeBuffer,
       "resolvers/stepChain.js": 182391 + sizeBuffer,
-      "resolvers/triggerOrderProcessing.js": 5692 + sizeBuffer,
+      "resolvers/startOrderProcessing.js": 5692 + sizeBuffer,
       // workflow-jobs: Kysely jobs (~158KB), date-fns jobs (~20KB), simple jobs (<2KB)
       "workflow-jobs/check-inventory.js": 19967 + sizeBuffer,
       "workflow-jobs/fetch-customer.js": 157770 + sizeBuffer,
@@ -211,7 +211,7 @@ describe("bundled execution tests", () => {
         processedAt: "2025-01-01 12:00:00",
       });
 
-      expect(wf.triggeredJobs).toEqual([
+      expect(wf.startedJobs).toEqual([
         { jobName: "fetch-customer", args: { customerId: "customer-456" } },
         {
           jobName: "send-notification",
@@ -255,7 +255,7 @@ describe("bundled execution tests", () => {
       });
     });
 
-    test("workflow-jobs/validate-order.js triggers check-inventory job", async () => {
+    test("workflow-jobs/validate-order.js starts check-inventory job", async () => {
       using wf = mockWorkflow();
       wf.setJobHandler((jobName) => {
         if (jobName === "check-inventory") {
@@ -272,7 +272,7 @@ describe("bundled execution tests", () => {
         paymentResult: null,
       });
 
-      expect(wf.triggeredJobs).toEqual([
+      expect(wf.startedJobs).toEqual([
         { jobName: "check-inventory", args: undefined },
         { jobName: "process-payment", args: undefined },
       ]);

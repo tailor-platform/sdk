@@ -42,7 +42,7 @@ describe("planWorkflow", () => {
   function createMockJob(name: string): WorkflowJob {
     return {
       name,
-      trigger: () => {},
+      start: () => {},
       body: () => {},
     };
   }
@@ -761,7 +761,7 @@ describe("formatWorkflowChangeEntries", () => {
             workspaceId: "ws",
             workflow: {
               name: "order-processing",
-              mainJob: { name: "process-order", body: () => {}, trigger: () => {} },
+              mainJob: { name: "process-order", body: () => {}, start: () => {} },
             },
             usedJobNames: ["process-order"],
             metaRequest: { trn: "t", labels: {} },
