@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import picomatch from "picomatch";
 import { describe, expect, test } from "vitest";
-import { allCodemods, getApplicableCodemods } from "./registry";
+import { V2_NEXT_PENDING, allCodemods, getApplicableCodemods } from "./registry";
 
 describe("getApplicableCodemods", () => {
   test("returns codemods when upgrading across their version boundary", () => {
@@ -48,7 +48,7 @@ describe("getApplicableCodemods", () => {
   });
 
   test("returns db.type to db.table codemod for the prerelease that removes db.type", () => {
-    const prereleaseIds = getApplicableCodemods("1.67.1", "2.0.0-next.3").map(
+    const prereleaseIds = getApplicableCodemods("1.67.1", "2.0.0-next.4").map(
       (codemod) => codemod.id,
     );
 
@@ -56,10 +56,10 @@ describe("getApplicableCodemods", () => {
   });
 
   test("reviews forward relation names at the prerelease that changes their defaults", () => {
-    const previousIds = getApplicableCodemods("1.67.1", "2.0.0-next.3").map(
+    const previousIds = getApplicableCodemods("1.67.1", "2.0.0-next.4").map(
       (codemod) => codemod.id,
     );
-    const codemod = getApplicableCodemods("2.0.0-next.3", "2.0.0-next.4").find(
+    const codemod = getApplicableCodemods("2.0.0-next.4", "2.0.0-next.5").find(
       (entry) => entry.id === "v2/forward-relation-name",
     );
 
@@ -123,6 +123,35 @@ describe("getApplicableCodemods", () => {
 
   test("returns empty when the source prerelease already reached the codemod boundary", () => {
     expect(getApplicableCodemods("2.0.0-next.2", "2.0.0-next.2")).toEqual([]);
+  });
+
+  describe("a codemod pinned to V2_NEXT_PENDING", () => {
+    const pending = {
+      id: "v2/pending-boundary-test",
+      name: "Pending boundary test",
+      description: "Pending boundary test",
+      since: "1.0.0",
+      until: "2.0.0",
+      prereleaseUntil: V2_NEXT_PENDING,
+    };
+
+    test("never applies while upgrading between prereleases", () => {
+      allCodemods.push(pending);
+      try {
+        expect(getApplicableCodemods("2.0.0-next.4", "2.0.0-next.5")).not.toContain(pending);
+      } finally {
+        allCodemods.pop();
+      }
+    });
+
+    test("still applies once the target reaches the stable boundary, as a fallback", () => {
+      allCodemods.push(pending);
+      try {
+        expect(getApplicableCodemods("2.0.0-next.4", "2.0.0")).toContain(pending);
+      } finally {
+        allCodemods.pop();
+      }
+    });
   });
 
   test("runs stable-only codemods when upgrading from a prerelease to stable", () => {
