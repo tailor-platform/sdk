@@ -478,25 +478,20 @@ export async function applyFunctionRegistry(
     // each upload + metadata pair here with the same apply-concurrency budget.
     const limitFunction = createApplyLimiter();
 
-    // Upload new functions
-    await Promise.all(
-      changeSet.creates.map((create) =>
+    await Promise.all([
+      ...changeSet.creates.map((create) =>
         limitFunction(async () => {
           await uploadFunctionScript(client, workspaceId, create.entry, true);
           await client.setMetadata(create.metaRequest);
         }),
       ),
-    );
-
-    // Update existing functions (server deduplicates content by hash)
-    await Promise.all(
-      changeSet.updates.map((update) =>
+      ...changeSet.updates.map((update) =>
         limitFunction(async () => {
           await uploadFunctionScript(client, workspaceId, update.entry, false);
           await client.setMetadata(update.metaRequest);
         }),
       ),
-    );
+    ]);
   } else {
     await Promise.all(
       changeSet.deletes.map((del) =>

@@ -482,6 +482,68 @@ describe("applyFunctionRegistry phase separation", () => {
     expect(probe.maxInFlight()).toBeGreaterThan(1);
   });
 
+  test("starts updates while the tail of the creates wave is still running", async () => {
+    vi.stubEnv("TAILOR_APPLY_CONCURRENCY", "2");
+    let releaseFirstCreate!: () => void;
+    let releaseSecondCreate!: () => void;
+    const createFunctionRegistry = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (releaseFirstCreate = resolve)))
+      .mockImplementationOnce(
+        () => new Promise<void>((resolve) => (releaseSecondCreate = resolve)),
+      );
+    const updateFunctionRegistry = vi.fn().mockResolvedValue({});
+    const client = {
+      createFunctionRegistry,
+      updateFunctionRegistry,
+      deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+    const changeOf = (name: string) => ({
+      name,
+      entry: {
+        name,
+        scriptContent: "// script",
+        contentHash: `hash-${name}`,
+        description: `Function: ${name}`,
+      },
+      metaRequest: { trn: `trn:${name}`, labels: {} },
+    });
+    const planResult = {
+      changeSet: {
+        creates: ["create-a", "create-b"].map(changeOf),
+        updates: ["update-a"].map(changeOf),
+        deletes: [],
+        unchanged: [],
+        title: "Function registry",
+        isEmpty: () => false,
+        lines: () => [],
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+    } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
+
+    const applyPromise = applyFunctionRegistry(
+      client,
+      "test-workspace",
+      planResult,
+      "create-update",
+    );
+
+    await vi.waitFor(() => expect(createFunctionRegistry).toHaveBeenCalledTimes(2));
+    releaseFirstCreate();
+    try {
+      await vi.waitFor(() => expect(updateFunctionRegistry).toHaveBeenCalledTimes(1), {
+        timeout: 100,
+      });
+    } finally {
+      releaseSecondCreate();
+      await applyPromise;
+      vi.unstubAllEnvs();
+    }
+  });
+
   test("caps concurrent upload and metadata RPCs at TAILOR_APPLY_CONCURRENCY", async () => {
     vi.stubEnv("TAILOR_APPLY_CONCURRENCY", "2");
     try {
