@@ -122,7 +122,7 @@ describe("concurrent deploys to the same target", () => {
       "create-update",
       application,
     );
-    void applyB.finally(() => bSettled.resolve());
+    void applyB.catch(() => {}).finally(() => bSettled.resolve());
 
     await Promise.all([applyA, applyB]);
 
@@ -169,7 +169,7 @@ describe("concurrent deploys to the same target", () => {
       connectionPlanResult([connectionReplace("shared-conn", "secret-from-b")]),
       "create-update",
     );
-    void applyB.finally(() => bSettled.resolve());
+    void applyB.catch(() => {}).finally(() => bSettled.resolve());
 
     await Promise.all([applyA, applyB]);
 
