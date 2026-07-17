@@ -261,6 +261,18 @@ describe("withSecretsStateLock", () => {
     await expect(pending).resolves.toBe("done");
   });
 
+  test("release leaves a lock taken over by another process", async () => {
+    const lockPath = lockPathFor(scopeA);
+    await withSecretsStateLock(scopeA, async () => {
+      writeFileSync(
+        path.join(lockPath, "owner.json"),
+        JSON.stringify({ pid: 12345, token: "other" }),
+      );
+    });
+
+    expect(existsSync(lockPath)).toBe(true);
+  });
+
   test("steals a lock whose lease has expired", async () => {
     const lockPath = lockPathFor(scopeA);
     mkdirSync(lockPath, { recursive: true });
