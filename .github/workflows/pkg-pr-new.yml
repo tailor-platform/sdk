@@ -51,12 +51,15 @@ jobs:
           SHORT_SHA="${SHA:0:7}"
           SDK_URL="https://pkg.pr.new/@tailor-platform/sdk@${SHORT_SHA}"
           CREATE_SDK_URL="https://pkg.pr.new/@tailor-platform/create-sdk@${SHORT_SHA}"
+          SEED_PLUGIN_URL="https://pkg.pr.new/@tailor-platform/sdk-plugin-seed@${SHORT_SHA}"
           {
             echo "sdk_url=$SDK_URL"
             echo "create_sdk_url=$CREATE_SDK_URL"
+            echo "seed_plugin_url=$SEED_PLUGIN_URL"
           } >> "$GITHUB_OUTPUT"
           echo "SDK preview: $SDK_URL"
           echo "create-sdk preview: $CREATE_SDK_URL"
+          echo "seed plugin preview: $SEED_PLUGIN_URL"
 
       # `prepare-templates.js` rewrites template manifests but leaves the
       # lockfile untouched; pnpm 11's default `verifyDepsBeforeRun: install`
@@ -65,12 +68,13 @@ jobs:
       - name: Build create-sdk with pkg.pr.new SDK
         env:
           TAILOR_TEMPLATE_SDK_VERSION: ${{ steps.urls.outputs.sdk_url }}
+          TAILOR_TEMPLATE_SEED_PLUGIN_VERSION: ${{ steps.urls.outputs.seed_plugin_url }}
         run: |
           node packages/create-sdk/scripts/prepare-templates.js
           pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build
 
       - name: Publish to pkg.pr.new
-        run: pnpm --config.verify-deps-before-run=false exec pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/create-sdk" "packages/sdk-plugin-tailordb-erd" # zizmor: ignore[use-trusted-publishing]
+        run: pnpm --config.verify-deps-before-run=false exec pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/create-sdk" "packages/sdk-plugin-seed" "packages/sdk-plugin-tailordb-erd" # zizmor: ignore[use-trusted-publishing]
 
   init-smoke:
     needs: [publish]

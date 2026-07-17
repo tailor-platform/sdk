@@ -7,6 +7,7 @@ import {
 } from "#/cli/services/application";
 import { createExecutorService } from "#/cli/services/executor/service";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
+import { getAuthInput } from "#/cli/shared/auth-input";
 import { loadConfig, type LoadedConfig } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { logger, styles } from "#/cli/shared/logger";
@@ -16,7 +17,6 @@ import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
 import type { TypeSourceInfo, TailorDBType } from "#/parser/service/tailordb/types";
 import type {
-  GeneratorAuthInput,
   GeneratorResult,
   TailorDBNamespaceData,
   ResolverNamespaceData,
@@ -73,27 +73,6 @@ export function createGenerationManager(params: {
   // Get plugins that have generation hooks
   const generationPlugins = pluginManager?.getPluginsWithGenerationHooks() ?? [];
 
-  function getAuthInput(): GeneratorAuthInput | undefined {
-    const authService = application.authService;
-    if (!authService) return undefined;
-
-    const authConfig = authService.config;
-    const userProfile = authService.userProfile;
-    return {
-      name: authConfig.name,
-      userProfile: userProfile
-        ? {
-            typeName: userProfile.type.name,
-            namespace: userProfile.namespace,
-            usernameField: userProfile.usernameField,
-          }
-        : undefined,
-      machineUsers: authConfig.machineUsers,
-      oauth2Clients: authConfig.oauth2Clients,
-      idProvider: authConfig.idProvider,
-    };
-  }
-
   // =========================================================================
   // Plugin phase-complete hook runner
   // =========================================================================
@@ -136,7 +115,7 @@ export function createGenerationManager(params: {
     if (!hook) return;
 
     const pluginBaseDir = path.join(baseDir, plugin.id);
-    const auth = getAuthInput();
+    const auth = getAuthInput(application);
     const tailordb = buildTailorDBData();
 
     let result: GeneratorResult;

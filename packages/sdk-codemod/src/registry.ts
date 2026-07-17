@@ -1202,6 +1202,39 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/seed-exec-to-cli-plugin",
+    name: "Generated seed exec.mjs → tailor seed CLI plugin",
+    description:
+      "`seedPlugin` no longer generates the `exec.mjs` seed runner. Seeding and validation move to the `tailor seed` commands provided by the `@tailor-platform/sdk-plugin-seed` CLI plugin: install it as a devDependency, replace `node <distPath>/exec.mjs` invocations with `tailor seed apply` and `node <distPath>/exec.mjs validate` with `tailor seed validate`, and delete the stale generated `<distPath>/exec.mjs` file. Seed data and schema generation (`data/*.jsonl`, `data/*.schema.ts`) is unchanged, and the `tailor seed apply` options mirror the old script (`--machine-user`, `--namespace`, `--skip-idp`, `--truncate`, `--yes`, type-name arguments).",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_PENDING,
+    // No scriptPath: this is a codemod-less ("manual") migration.
+    filePatterns: ["**/package.json", "**/*.{sh,yml,yaml,md,mjs,ts}"],
+    suspiciousPatterns: ["exec.mjs"],
+    examples: [
+      {
+        before: '"seed": "node ./seed/exec.mjs",\n"seed:validate": "node ./seed/exec.mjs validate"',
+        after: '"seed": "tailor seed apply",\n"seed:validate": "tailor seed validate"',
+        lang: "jsonc",
+      },
+    ],
+    prompt: [
+      "seedPlugin no longer generates the exec.mjs seed runner in v2. The tailor seed",
+      "CLI plugin (@tailor-platform/sdk-plugin-seed) replaces it:",
+      "",
+      "- Install @tailor-platform/sdk-plugin-seed as a devDependency next to",
+      "  @tailor-platform/sdk.",
+      "- Replace `node <distPath>/exec.mjs [options] [types...]` invocations with",
+      "  `tailor seed apply [options] [types...]` (same options: --machine-user/-m,",
+      "  --namespace/-n, --skip-idp, --truncate, --yes, and type-name arguments).",
+      "- Replace `node <distPath>/exec.mjs validate [path]` with",
+      "  `tailor seed validate [path]`.",
+      "- Delete the stale generated `<distPath>/exec.mjs` file; keep the data/",
+      "  directory (JSONL data and generated schemas) as-is.",
+    ].join("\n"),
+  },
+  {
     id: "v2/node-minimum-22-15-0",
     name: "Node.js minimum version raised to 22.15.0",
     description:

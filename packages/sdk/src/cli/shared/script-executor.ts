@@ -7,8 +7,15 @@
 
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
 import type { OperatorClient } from "#/cli/shared/client";
-import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import type { MessageInitShape } from "@bufbuild/protobuf";
+import type { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import type { Jsonifiable } from "type-fest";
+
+/**
+ * Auth invoker for script execution: a plain init object or a constructed
+ * AuthInvoker message.
+ */
+export type ScriptInvoker = MessageInitShape<typeof AuthInvokerSchema>;
 
 /**
  * Default polling interval for script execution status in milliseconds (1 second)
@@ -30,7 +37,7 @@ export interface ScriptExecutionOptions<T extends Jsonifiable = Jsonifiable> {
   /** Optional JSON-serializable argument to pass to the script */
   arg?: T;
   /** Auth invoker for script execution */
-  invoker: AuthInvoker;
+  invoker: ScriptInvoker;
   /** Polling interval in milliseconds (default: 1000ms) */
   pollInterval?: number;
 }

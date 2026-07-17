@@ -19,7 +19,32 @@ if (sdkVersionOrUrl) {
   console.log(`Using SDK version from package.json: ${version}`);
 }
 
-// Update version in each template's package.json
+// Get seed plugin version or URL the same way (falls back to its package.json)
+const seedPluginVersionOrUrl = process.env.TAILOR_TEMPLATE_SEED_PLUGIN_VERSION;
+
+let seedPluginVersion;
+if (seedPluginVersionOrUrl) {
+  seedPluginVersion = seedPluginVersionOrUrl;
+  console.log(`Using seed plugin version from environment: ${seedPluginVersion}`);
+} else {
+  const seedPluginPackageJsonPath = resolve(
+    import.meta.dirname,
+    "..",
+    "..",
+    "sdk-plugin-seed",
+    "package.json",
+  );
+  const seedPluginPackageJson = JSON.parse(readFileSync(seedPluginPackageJsonPath, "utf-8"));
+  seedPluginVersion = seedPluginPackageJson.version;
+  console.log(`Using seed plugin version from package.json: ${seedPluginVersion}`);
+}
+
+const packageVersions = {
+  "@tailor-platform/sdk": version,
+  "@tailor-platform/sdk-plugin-seed": seedPluginVersion,
+};
+
+// Update versions in each template's package.json
 const templatesDir = resolve(import.meta.dirname, "..", "templates");
 const templates = readdirSync(templatesDir, { withFileTypes: true })
   .filter((dirent) => dirent.isDirectory())
@@ -29,11 +54,13 @@ for (const template of templates) {
   if (!existsSync(packageJsonPath)) continue;
 
   const content = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
-  if (content.dependencies?.["@tailor-platform/sdk"]) {
-    content.dependencies["@tailor-platform/sdk"] = version;
-  }
-  if (content.devDependencies?.["@tailor-platform/sdk"]) {
-    content.devDependencies["@tailor-platform/sdk"] = version;
+  for (const [packageName, packageVersion] of Object.entries(packageVersions)) {
+    if (content.dependencies?.[packageName]) {
+      content.dependencies[packageName] = packageVersion;
+    }
+    if (content.devDependencies?.[packageName]) {
+      content.devDependencies[packageName] = packageVersion;
+    }
   }
 
   writeFileSync(packageJsonPath, JSON.stringify(content, null, 2) + "\n");

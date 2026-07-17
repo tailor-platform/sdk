@@ -1,8 +1,8 @@
-import { defineApplication } from "#/cli/services/application";
+import { defineApplication, type Application } from "#/cli/services/application";
 import { PluginManager } from "#/plugin/manager";
 import { loadConfig, type LoadedConfig } from "./config-loader";
 import { generateUserTypes } from "./type-generator";
-import type { TailorDBNamespaceData } from "#/plugin/types";
+import type { Plugin, TailorDBNamespaceData } from "#/plugin/types";
 
 /**
  * Namespace selection for {@link loadTailorDBNamespaces}: explicit namespace
@@ -32,15 +32,25 @@ export interface LoadedTailorDBNamespaces {
 }
 
 /**
- * Load local TailorDB namespaces exactly as SDK generation/deploy sees them:
- * the config is loaded, user types are generated, and each selected
- * namespace's types are loaded with namespace plugins applied.
- * @param options - Namespace loading options.
- * @returns The loaded config and TailorDB namespace data.
+ * Result of {@link loadApplicationNamespaces}: the loaded namespaces plus the
+ * config plugins and application they were loaded through.
  */
-export async function loadTailorDBNamespaces(
+export interface LoadedApplicationNamespaces extends LoadedTailorDBNamespaces {
+  /** Plugins declared in the loaded config. */
+  plugins: Plugin[];
+  /** Application defined from the loaded config. */
+  application: Application;
+}
+
+/**
+ * Load local TailorDB namespaces along with the config plugins and the
+ * defined application. Internal superset of {@link loadTailorDBNamespaces}.
+ * @param options - Namespace loading options.
+ * @returns The loaded config, plugins, application, and TailorDB namespace data.
+ */
+export async function loadApplicationNamespaces(
   options: LoadTailorDBNamespacesOptions = {},
-): Promise<LoadedTailorDBNamespaces> {
+): Promise<LoadedApplicationNamespaces> {
   const { config, plugins } = await loadConfig(options.configPath);
 
   await generateUserTypes({ config, configPath: config.path });
@@ -80,5 +90,19 @@ export async function loadTailorDBNamespaces(
     });
   }
 
+  return { config, plugins, application, namespaces };
+}
+
+/**
+ * Load local TailorDB namespaces exactly as SDK generation/deploy sees them:
+ * the config is loaded, user types are generated, and each selected
+ * namespace's types are loaded with namespace plugins applied.
+ * @param options - Namespace loading options.
+ * @returns The loaded config and TailorDB namespace data.
+ */
+export async function loadTailorDBNamespaces(
+  options: LoadTailorDBNamespacesOptions = {},
+): Promise<LoadedTailorDBNamespaces> {
+  const { config, namespaces } = await loadApplicationNamespaces(options);
   return { config, namespaces };
 }
