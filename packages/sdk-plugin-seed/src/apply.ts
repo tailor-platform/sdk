@@ -20,13 +20,14 @@ import { deploymentArgs } from "./shared/args";
 import { defineAppCommand } from "./shared/command";
 import { logger } from "./shared/logger";
 import { topologicalSort } from "./topo-sort";
-import type { OperatorClient, ScriptExecutionResult } from "@tailor-platform/sdk/cli";
+import type { OperatorClient, ScriptExecutionResult, SeedData } from "@tailor-platform/sdk/cli";
 
 interface SeedExecutionContext {
   operatorClient: OperatorClient;
   workspaceId: string;
   authNamespace: string;
   machineUserName: string;
+  dataDir: string;
 }
 
 interface SeedNamespaceParams {
@@ -35,15 +36,13 @@ interface SeedNamespaceParams {
   typesToSeed: string[];
   dependencies: Record<string, string[]>;
   selfRefTypes: string[];
-  dataDir: string;
-}
-
-interface IdpScriptParams {
-  execution: SeedExecutionContext;
-  scriptCode: string;
 }
 
 function promptConfirmation(question: string): Promise<boolean> {
+  if (!process.stdin.isTTY) {
+    logger.warn("Interactive confirmation is not available; pass --yes to proceed.");
+    return Promise.resolve(false);
+  }
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
     rl.question(chalk.yellow(question), (answer) => {
@@ -83,7 +82,7 @@ function parseExecutionResult(
     return { success: false, parsed: {}, errors: [`Failed to parse result: ${message}`] };
   }
 
-  if (parsed.success === false) {
+  if (!parsed.success) {
     const errors = Array.isArray(parsed.errors) ? (parsed.errors as string[]) : [];
     return {
       success: false,
@@ -96,9 +95,9 @@ function parseExecutionResult(
 }
 
 async function seedNamespace(params: SeedNamespaceParams): Promise<boolean> {
-  const { execution, namespace, typesToSeed, dependencies, selfRefTypes, dataDir } = params;
+  const { execution, namespace, typesToSeed, dependencies, selfRefTypes } = params;
   const sortedTypes = topologicalSort(typesToSeed, dependencies);
-  const data = loadSeedData(dataDir, sortedTypes);
+  const data = loadSeedData(execution.dataDir, sortedTypes);
 
   const typesWithData = sortedTypes.filter((type) => data[type] && data[type].length > 0);
   if (typesWithData.length === 0) {
@@ -158,66 +157,81 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<boolean> {
   return success;
 }
 
-async function seedIdpUser(params: IdpScriptParams & { dataDir: string }): Promise<boolean> {
-  const { execution, scriptCode, dataDir } = params;
+interface IdpScriptRun {
+  execution: SeedExecutionContext;
+  scriptCode: string;
+  scriptName: string;
+  arg?: { users: SeedData[string] };
+  indent: string;
+  reportSuccess: (parsed: Record<string, unknown>) => void;
+}
+
+async function runIdpScript(params: IdpScriptRun): Promise<boolean> {
+  const { execution, scriptCode, scriptName, arg, indent, reportSuccess } = params;
+
+  const result = await executeScript({
+    client: execution.operatorClient,
+    workspaceId: execution.workspaceId,
+    name: scriptName,
+    code: scriptCode,
+    ...(arg ? { arg } : {}),
+    invoker: {
+      namespace: execution.authNamespace,
+      machineUserName: execution.machineUserName,
+    },
+  });
+
+  const { success, parsed, errors } = parseExecutionResult(result, indent);
+  reportSuccess(parsed);
+  if (!success) {
+    for (const error of errors) {
+      logger.error(`${indent}${error}`, { mode: "plain" });
+    }
+  }
+  return success;
+}
+
+async function seedIdpUser(execution: SeedExecutionContext, scriptCode: string): Promise<boolean> {
   logger.info("  Seeding _User via tailor.idp.Client...", { mode: "plain" });
 
-  const rows = loadSeedData(dataDir, ["_User"])._User ?? [];
+  const rows = loadSeedData(execution.dataDir, ["_User"])._User ?? [];
   if (rows.length === 0) {
     logger.log(chalk.dim("    No _User data to seed"));
     return true;
   }
   logger.log(chalk.dim(`    Processing ${rows.length} _User records...`));
 
-  const result = await executeScript({
-    client: execution.operatorClient,
-    workspaceId: execution.workspaceId,
-    name: "seed-idp-user.ts",
-    code: scriptCode,
+  return await runIdpScript({
+    execution,
+    scriptCode,
+    scriptName: "seed-idp-user.ts",
     arg: { users: rows },
-    invoker: {
-      namespace: execution.authNamespace,
-      machineUserName: execution.machineUserName,
+    indent: "    ",
+    reportSuccess: (parsed) => {
+      if (typeof parsed.processed === "number") {
+        logger.log(chalk.green(`    ✓ _User: ${parsed.processed} rows processed`));
+      }
     },
   });
-
-  const { success, parsed, errors } = parseExecutionResult(result, "    ");
-  if (typeof parsed.processed === "number") {
-    logger.log(chalk.green(`    ✓ _User: ${parsed.processed} rows processed`));
-  }
-  if (!success) {
-    for (const error of errors) {
-      logger.error(`    ${error}`, { mode: "plain" });
-    }
-  }
-  return success;
 }
 
-async function truncateIdpUser(params: IdpScriptParams): Promise<boolean> {
-  const { execution, scriptCode } = params;
+async function truncateIdpUser(
+  execution: SeedExecutionContext,
+  scriptCode: string,
+): Promise<boolean> {
   logger.info("Truncating _User via tailor.idp.Client...", { mode: "plain" });
 
-  const result = await executeScript({
-    client: execution.operatorClient,
-    workspaceId: execution.workspaceId,
-    name: "truncate-idp-user.ts",
-    code: scriptCode,
-    invoker: {
-      namespace: execution.authNamespace,
-      machineUserName: execution.machineUserName,
+  return await runIdpScript({
+    execution,
+    scriptCode,
+    scriptName: "truncate-idp-user.ts",
+    indent: "  ",
+    reportSuccess: (parsed) => {
+      if (typeof parsed.deleted === "number") {
+        logger.log(chalk.green(`  ✓ _User: ${parsed.deleted} users deleted`));
+      }
     },
   });
-
-  const { success, parsed, errors } = parseExecutionResult(result, "  ");
-  if (typeof parsed.deleted === "number") {
-    logger.log(chalk.green(`  ✓ _User: ${parsed.deleted} users deleted`));
-  }
-  if (!success) {
-    for (const error of errors) {
-      logger.error(`  ${error}`, { mode: "plain" });
-    }
-  }
-  return success;
 }
 
 export const seedApplyCommand = defineAppCommand({
@@ -294,8 +308,8 @@ export const seedApplyCommand = defineAppCommand({
       }),
       authNamespace: appInfo.auth,
       machineUserName,
+      dataDir: path.join(context.distPath, "data"),
     };
-    const dataDir = path.join(context.distPath, "data");
 
     if (args.truncate) {
       const confirmed =
@@ -342,10 +356,7 @@ export const seedApplyCommand = defineAppCommand({
         !args.namespace &&
         (args.types.length === 0 || (selection.entitiesToProcess ?? []).includes("_User"));
       if (shouldTruncateUser && context.idpUser) {
-        const truncated = await truncateIdpUser({
-          execution,
-          scriptCode: context.idpUser.truncateScriptCode,
-        });
+        const truncated = await truncateIdpUser(execution, context.idpUser.truncateScriptCode);
         if (!truncated) {
           throw new Error("IdP user truncation failed.");
         }
@@ -379,7 +390,6 @@ export const seedApplyCommand = defineAppCommand({
         typesToSeed,
         dependencies: nsConfig.dependencies,
         selfRefTypes: nsConfig.selfRefTypes,
-        dataDir,
       });
       if (!seeded) {
         allSuccess = false;
@@ -391,11 +401,7 @@ export const seedApplyCommand = defineAppCommand({
       !args["skip-idp"] &&
       (!selection.entitiesToProcess || selection.entitiesToProcess.includes("_User"));
     if (shouldSeedUser && context.idpUser) {
-      const seeded = await seedIdpUser({
-        execution,
-        scriptCode: context.idpUser.seedScriptCode,
-        dataDir,
-      });
+      const seeded = await seedIdpUser(execution, context.idpUser.seedScriptCode);
       if (!seeded) {
         allSuccess = false;
       }

@@ -24,7 +24,16 @@ export function loadSeedData(dataDir: string, typeNames: string[]): SeedData {
       throw error;
     }
     data[typeName] = content
-      ? content.split("\n").map((line) => JSON.parse(line) as SeedData[string][number])
+      ? content.split("\n").map((line, index) => {
+          try {
+            return JSON.parse(line) as SeedData[string][number];
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            throw new Error(`Invalid JSON in ${jsonlPath} at line ${index + 1}: ${message}`, {
+              cause: error,
+            });
+          }
+        })
       : [];
   }
   return data;
