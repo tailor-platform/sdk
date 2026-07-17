@@ -7,10 +7,17 @@ name: "Deploy Drift Check"
 # example/ gets the same check inside the existing Workspace Deploy Test
 # (deploy.yml), which already deploys it on every PR.
 #
-# The matrix intentionally covers config-shape diversity rather than every
-# template: example configures everything explicitly, so drift caused by the
-# platform filling defaults for OMITTED sections (e.g. IdP userAuthPolicy)
+# The target list intentionally covers config-shape diversity rather than
+# every template: example configures everything explicitly, so drift caused by
+# the platform filling defaults for OMITTED sections (e.g. IdP userAuthPolicy)
 # only reproduces on minimal configs like these.
+#
+# Targets run as a serial loop in a single job, not a matrix: it keeps the
+# platform load at one ephemeral workspace at a time and pays the
+# checkout/install/build setup only once. The job is nowhere near the PR
+# critical path (Workspace Deploy Test and the e2e suites take far longer),
+# so the extra wall-clock over a parallel matrix costs nothing. A failing
+# target does not stop the loop — every target reports before the job fails.
 
 on:
   pull_request:
@@ -53,27 +60,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    name: Drift check (${{ matrix.target }})
+    name: Drift check (templates)
     permissions:
       contents: read
     timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Minimal config: almost everything omitted
-          - target: hello-world
-            dir: packages/create-sdk/templates/hello-world
-          # IdP without userAuthPolicy + plugins (caught the IdP default-policy drift)
-          - target: generators
-            dir: packages/create-sdk/templates/generators
-          # Multi-config deploy
-          - target: multi-application
-            dir: packages/create-sdk/templates/multi-application
-            config: apps/user/tailor.config.ts,apps/admin/tailor.config.ts
-          # Static website URL resolution + auth/oauth2 combination
-          - target: static-web-site
-            dir: packages/create-sdk/templates/static-web-site
     steps:
       - name: checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -89,52 +79,69 @@ jobs:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
 
-      - name: Create workspace
-        id: workspace
-        working-directory: ${{ matrix.dir }}
+      - name: Deploy each template and verify a dry run reports no changes
         env:
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
-          WORKSPACE_NAME: e2e-ws-${{ github.run_id }}-drift-${{ matrix.target }}
-        run: |
-          workspace_id=$(pnpm exec tailor-sdk workspace create -n "$WORKSPACE_NAME" -r us-west --json | tail -1 | jq -r '.id')
-          if [[ -z "$workspace_id" || "$workspace_id" == "null" ]]; then
-            echo "Failed to create workspace"
-            exit 1
-          fi
-          echo "id=$workspace_id" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy
-        working-directory: ${{ matrix.dir }}
-        env:
           # Fresh checkout deploys a throwaway app; per-run id injection is intended here.
           TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION: "true"
-          WORKSPACE_ID: ${{ steps.workspace.outputs.id }}
-          CONFIG: ${{ matrix.config || 'tailor.config.ts' }}
-        run: pnpm exec tailor-sdk deploy -c "$CONFIG" -w "$WORKSPACE_ID" --yes
-
-      - name: Dry run must report no changes
-        working-directory: ${{ matrix.dir }}
-        env:
-          WORKSPACE_ID: ${{ steps.workspace.outputs.id }}
-          CONFIG: ${{ matrix.config || 'tailor.config.ts' }}
+          RUN_ID: ${{ github.run_id }}
         run: |
-          summary=$(pnpm exec tailor-sdk deploy -c "$CONFIG" -w "$WORKSPACE_ID" --dry-run --yes --json | tail -1 | jq -c '.summary')
-          echo "Plan summary: $summary"
-          if ! echo "$summary" | jq -e '.create == 0 and .update == 0 and .delete == 0 and .replace == 0' > /dev/null; then
-            echo "::error::Dry run after deploy reported drift: $summary"
-            echo "Re-running without --json for a readable diff:"
-            pnpm exec tailor-sdk deploy -c "$CONFIG" -w "$WORKSPACE_ID" --dry-run --yes
+          failed=()
+
+          check_target() {
+            local target="$1" dir="$2" config="$3"
+            local workspace_id summary
+
+            workspace_id=$(cd "$dir" && pnpm exec tailor-sdk workspace create -n "e2e-ws-${RUN_ID}-drift-${target}" -r us-west --json | tail -1 | jq -r '.id') || workspace_id=""
+            if [[ -z "$workspace_id" || "$workspace_id" == "null" ]]; then
+              echo "::error::${target}: failed to create workspace"
+              return 1
+            fi
+
+            local result=0
+            if ! (cd "$dir" && pnpm exec tailor-sdk deploy -c "$config" -w "$workspace_id" --yes); then
+              echo "::error::${target}: deploy failed"
+              result=1
+            else
+              summary=$(cd "$dir" && pnpm exec tailor-sdk deploy -c "$config" -w "$workspace_id" --dry-run --yes --json | tail -1 | jq -c '.summary') || summary=""
+              echo "${target} plan summary: $summary"
+              if ! echo "$summary" | jq -e '.create == 0 and .update == 0 and .delete == 0 and .replace == 0' > /dev/null; then
+                echo "::error::${target}: dry run after deploy reported drift: $summary"
+                echo "Re-running without --json for a readable diff:"
+                (cd "$dir" && pnpm exec tailor-sdk deploy -c "$config" -w "$workspace_id" --dry-run --yes) || true
+                result=1
+              fi
+            fi
+
+            pnpm exec tailor-sdk workspace delete -w "$workspace_id" -y \
+              || echo "::warning::${target}: workspace delete failed (the cleanup step sweeps it)"
+            return "$result"
+          }
+
+          while IFS='|' read -r target dir config; do
+            echo "::group::${target}"
+            check_target "$target" "$dir" "$config" || failed+=("$target")
+            echo "::endgroup::"
+          done <<'TARGETS'
+          hello-world|packages/create-sdk/templates/hello-world|tailor.config.ts
+          generators|packages/create-sdk/templates/generators|tailor.config.ts
+          multi-application|packages/create-sdk/templates/multi-application|apps/user/tailor.config.ts,apps/admin/tailor.config.ts
+          static-web-site|packages/create-sdk/templates/static-web-site|tailor.config.ts
+          TARGETS
+
+          if (( ${#failed[@]} > 0 )); then
+            echo "::error::Deploy drift check failed for: ${failed[*]}"
             exit 1
           fi
+          echo "All templates redeploy as a no-op"
 
-      - name: Cleanup workspace
+      - name: Cleanup workspaces
         if: always()
         working-directory: packages/sdk
         env:
           RUN_ID: ${{ github.run_id }}
-          TARGET: ${{ matrix.target }}
-        run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --run-id="${RUN_ID}-drift-${TARGET}"
+        run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --run-id="${RUN_ID}-drift"
 
   drift-check-result:
     name: Deploy drift check result
