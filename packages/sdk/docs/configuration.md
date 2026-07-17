@@ -108,7 +108,7 @@ When using external resources:
 - The resource must be deployed and available before referencing it
 - You can combine external resources with locally-defined resources
 - TailorDB type names must remain unique across local and external TailorDB namespaces; `deploy` checks external TailorDB type names before applying changes
-- Destructive operations like `tailordb truncate` (and `seedPlugin`'s `seed:reset`) automatically exclude external resources to prevent accidental data loss in shared resources
+- Destructive operations like `tailordb truncate` (and `tailor seed apply --truncate`) automatically exclude external resources to prevent accidental data loss in shared resources
 
 ### Built-in IdP
 
