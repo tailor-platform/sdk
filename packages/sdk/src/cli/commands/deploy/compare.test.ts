@@ -30,6 +30,8 @@ describe("compare policy", () => {
     };
     // Deserialized messages materialize implicit proto3 fields (e.g. bools
     // added to the proto later) with zero values that the init shape omits.
+    // optionalOnCreate is deliberately named as the canary: it is a field the
+    // SDK never sets, so it proves materialization happens.
     const materialized = create(TailorDBTypeSchema, init);
     expect(materialized.schema?.fields.code?.optionalOnCreate).toBe(false);
 

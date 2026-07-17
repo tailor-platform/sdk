@@ -285,8 +285,9 @@ function normalizeComparableUserAuthPolicy(
     passwordRequireNonAlphanumeric: policy?.passwordRequireNonAlphanumeric ?? false,
     passwordRequireNumeric: policy?.passwordRequireNumeric ?? false,
     // The platform fills an omitted policy with password_min_length 6 and
-    // password_max_length 4096 and echoes those back; align the comparison
-    // fallbacks so an omitted local policy matches the stored defaults.
+    // password_max_length 4096 and echoes those back; it also coerces an
+    // explicit 0 to the same defaults, which is why these use || (not ??) —
+    // every falsy local value must compare equal to the stored defaults.
     passwordMinLength: policy?.passwordMinLength || 6,
     passwordMaxLength: policy?.passwordMaxLength || 4096,
     allowedEmailDomains: (policy?.allowedEmailDomains ?? []).toSorted(),

@@ -587,6 +587,8 @@ export async function applyTailorDB(
       // Step 1.5: The migration loop below only touches the namespaces of the
       // pending migrations; changes planned for every other namespace must go
       // through the normal flow or they would be silently dropped.
+      // Creates/updates run before the loop so migration scripts see the
+      // complete world; deletes are irreversible and stay last (Step 5).
       const migratingNamespaces = new Set(pendingMigrations.map((m) => m.namespace));
       const isOutsideMigrations = (namespaceName: string | undefined) =>
         namespaceName !== undefined && !migratingNamespaces.has(namespaceName);
@@ -1768,11 +1770,8 @@ const tailordbCompareKnownDefaults = {
   ]),
 } as const;
 
-function normalizeComparableTailorDBType(type: unknown) {
-  const canonical = toComparableProtoJson(
-    TailorDBTypeSchema,
-    type as MessageInitShape<typeof TailorDBTypeSchema>,
-  );
+function normalizeComparableTailorDBType(type: MessageInitShape<typeof TailorDBTypeSchema>) {
+  const canonical = toComparableProtoJson(TailorDBTypeSchema, type);
   const normalized = normalizeProtoConfig(canonical) as {
     name?: string;
     schema?: {
