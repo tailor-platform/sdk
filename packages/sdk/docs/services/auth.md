@@ -107,7 +107,7 @@ userProfile: {
 
 **usernameField**: The field in the TailorDB type used as the username. This field must have a unique constraint (`.unique()`) since it is used to uniquely identify users.
 
-**attributes**: Specifies which fields from the TailorDB type are used as user attributes. Set to `true` to enable a field. Enabled attributes must be assigned values in all machine user definitions. Only fields with ValueOperand types (string, boolean, string[], boolean[]) can be used as attributes. The `id` field and datetime/date/time types are excluded.
+**attributes**: Specifies which fields from the TailorDB type are used as user attributes. Set to `true` to enable a field. Machine user definitions must assign values to attributes derived from required fields; attributes derived from optional fields may be omitted (see [Machine Users](#machine-users)). Only fields with ValueOperand types (string, boolean, string[], boolean[]) can be used as attributes. The `id` field and datetime/date/time types are excluded.
 
 ## Attribute List
 
@@ -200,7 +200,7 @@ machineUsers: {
 },
 ```
 
-**attributes**: Values for attributes enabled in `userProfile.attributes` (or all fields defined in `machineUserAttributes` when `userProfile` is omitted). All enabled fields must be set here. These values are accessible via `user.attributes`:
+**attributes**: Values for attributes enabled in `userProfile.attributes` (or fields defined in `machineUserAttributes` when `userProfile` is omitted). Attribute keys mirror the field's optionality: attributes derived from required fields must be set, while attributes derived from optional fields may be omitted. Setting an attribute to `null` or `undefined` is equivalent to omitting it — the attribute is deployed as unset. These values are accessible via `user.attributes`:
 
 ```typescript
 // In a resolver
