@@ -75,9 +75,9 @@ importers:
       '@connectrpc/connect-node':
         specifier: 2.1.2
         version: 2.1.2(@bufbuild/protobuf@2.12.1)(@connectrpc/connect@2.1.2(@bufbuild/protobuf@2.12.1))
-      '@tailor-platform/sdk-tailordb-erd-plugin':
+      '@tailor-platform/sdk-plugin-tailordb-erd':
         specifier: workspace:^
-        version: link:../packages/sdk-tailordb-erd-plugin
+        version: link:../packages/sdk-plugin-tailordb-erd
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
@@ -649,7 +649,7 @@ importers:
         specifier: 4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.0.16(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)(yaml@2.9.0))
 
-  packages/sdk-tailordb-erd-plugin:
+  packages/sdk-plugin-tailordb-erd:
     dependencies:
       chalk:
         specifier: 5.6.2

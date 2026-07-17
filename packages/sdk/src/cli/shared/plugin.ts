@@ -19,7 +19,7 @@ import { readPackageJson } from "./package-json";
  * install command when the plugin executable is not found.
  */
 const KNOWN_PLUGIN_PACKAGES: Record<string, string> = {
-  "tailordb-erd": "@tailor-platform/sdk-tailordb-erd-plugin",
+  "tailordb-erd": "@tailor-platform/sdk-plugin-tailordb-erd",
 };
 
 /**
