@@ -107,6 +107,81 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
   });
 });
 
+// Fixture with an optional user field to cover optionality mirroring
+const mixedUserType = db.type("MixedUser", {
+  email: db.string().unique(),
+  role: db.string(),
+  nickname: db.string({ optional: true }),
+});
+
+type MixedAuthInput = AuthServiceInput<
+  typeof mixedUserType,
+  { role: true; nickname: true },
+  [],
+  "worker"
+>;
+type MixedMachineUser = NonNullable<MixedAuthInput["machineUsers"]>["worker"];
+
+describe("machine user attributes mirror user field optionality", () => {
+  test("allows omitting or nullifying keys for optional fields", () => {
+    expectTypeOf<{ attributes: { role: string } }>().toExtend<MixedMachineUser>();
+    expectTypeOf<{
+      attributes: { role: string; nickname: string | null };
+    }>().toExtend<MixedMachineUser>();
+  });
+
+  test("keeps keys for required fields mandatory", () => {
+    expectTypeOf<{ attributes: { nickname: string } }>().not.toExtend<MixedMachineUser>();
+    expectTypeOf<Record<never, never>>().not.toExtend<MixedMachineUser>();
+  });
+
+  test("makes attributes itself optional when no required keys remain", () => {
+    type AllOptionalInput = AuthServiceInput<
+      typeof mixedUserType,
+      { nickname: true },
+      [],
+      "worker"
+    >;
+    type AllOptionalMachineUser = NonNullable<AllOptionalInput["machineUsers"]>["worker"];
+
+    expectTypeOf<Record<never, never>>().toExtend<AllOptionalMachineUser>();
+  });
+
+  test("still rejects attributes not declared in userProfile", () => {
+    expectTypeOf<NonNullable<MixedMachineUser["attributes"]> & { email: string }>().toBeNever();
+  });
+});
+
+describe("AuthConfigSchema machine user attribute normalization", () => {
+  test("drops null/undefined attribute values on parse", () => {
+    const config = {
+      name: "my-auth",
+      userProfile: {
+        type: userType,
+        usernameField: "email",
+        attributes: { role: true, isActive: true, tags: true },
+      },
+      machineUsers: {
+        admin: { attributes: { role: "ADMIN", isActive: null, tags: undefined } },
+      },
+    };
+
+    const result = AuthConfigSchema.parse(config);
+    expect(result.machineUsers?.admin?.attributes).toEqual({ role: "ADMIN" });
+  });
+
+  test("accepts machine users without attributes", () => {
+    const config = {
+      name: "my-auth",
+      userProfile: { type: userType, usernameField: "email" },
+      machineUsers: { admin: {} },
+    };
+
+    const result = AuthConfigSchema.parse(config);
+    expect(result.machineUsers?.admin?.attributes).toBeUndefined();
+  });
+});
+
 describe("OAuth2ClientSchema validation", () => {
   test("accepts valid OAuth2 client configuration", () => {
     const validClient = {

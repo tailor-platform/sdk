@@ -20,7 +20,7 @@ import type {
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
 } from "#/types/auth.generated";
-import type { output } from "#/types/helpers";
+import type { NullableToOptional, output } from "#/types/helpers";
 import type { IsAny, JsonObject, JsonValue } from "type-fest";
 
 // Derived from generated types (zinfer inlines these literal unions)
@@ -168,18 +168,49 @@ type TailorFieldOutputValue<Field> =
     ? Output
     : never;
 
-type MachineUserAttributeValues<Fields extends MachineUserAttributeFields> = {
+// Attribute keys mirror the field's optionality (same convention as
+// InferFieldsOutput): keys whose output type includes null are omittable.
+type MachineUserAttributeValues<Fields extends MachineUserAttributeFields> = NullableToOptional<{
   [K in keyof Fields]: TailorFieldOutputValue<Fields[K]> extends ValueOperand | null | undefined
     ? TailorFieldOutputValue<Fields[K]>
     : never;
-};
+}>;
+
+type OptionalIfNoRequiredKeys<Attributes> =
+  Record<never, never> extends Attributes
+    ? { attributes?: Attributes }
+    : { attributes: Attributes };
 
 type MachineUserFromAttributes<Fields extends MachineUserAttributeFields> =
   (keyof Fields extends never
     ? { attributes?: never }
-    : { attributes: DisallowExtraKeys<MachineUserAttributeValues<Fields>, keyof Fields> }) & {
+    : OptionalIfNoRequiredKeys<
+        DisallowExtraKeys<MachineUserAttributeValues<Fields>, keyof Fields>
+      >) & {
     attributeList?: string[];
   };
+
+type MachineUserProfileAttributes<
+  User extends TailorDBInstance,
+  AttributeMap extends UserAttributeMap<User>,
+> = NullableToOptional<{
+  [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
+    ? output<User>[K]
+    : never;
+}> & {
+  [K in Exclude<keyof output<User>, AttributeMapSelectedKeys<User, AttributeMap>>]?: never;
+};
+
+type MachineUserFromUserProfile<
+  User extends TailorDBInstance,
+  AttributeMap extends UserAttributeMap<User>,
+  AttributeList extends UserAttributeListKey<User>[],
+> = (AttributeMapSelectedKeys<User, AttributeMap> extends never
+  ? { attributes?: never }
+  : OptionalIfNoRequiredKeys<MachineUserProfileAttributes<User, AttributeMap>>) &
+  ([] extends AttributeList
+    ? { attributeList?: never }
+    : { attributeList: AttributeListToTuple<User, AttributeList> });
 
 type MachineUser<
   User extends TailorDBInstance,
@@ -190,50 +221,18 @@ type MachineUser<
   IsAny<MachineUserAttributes> extends true
     ? IsAny<User> extends true
       ? {
-          attributes: Record<string, AuthAttributeValue>;
+          attributes?: Record<string, AuthAttributeValue>;
           attributeList?: string[];
         }
-      : (AttributeMapSelectedKeys<User, AttributeMap> extends never
-          ? { attributes?: never }
-          : {
-              attributes: {
-                [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
-                  ? output<User>[K]
-                  : never;
-              } & {
-                [K in Exclude<
-                  keyof output<User>,
-                  AttributeMapSelectedKeys<User, AttributeMap>
-                >]?: never;
-              };
-            }) &
-          ([] extends AttributeList
-            ? { attributeList?: never }
-            : { attributeList: AttributeListToTuple<User, AttributeList> })
+      : MachineUserFromUserProfile<User, AttributeMap, AttributeList>
     : [MachineUserAttributes] extends [MachineUserAttributeFields]
       ? MachineUserFromAttributes<MachineUserAttributes>
       : IsAny<User> extends true
         ? {
-            attributes: Record<string, AuthAttributeValue>;
+            attributes?: Record<string, AuthAttributeValue>;
             attributeList?: string[];
           }
-        : (AttributeMapSelectedKeys<User, AttributeMap> extends never
-            ? { attributes?: never }
-            : {
-                attributes: {
-                  [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
-                    ? output<User>[K]
-                    : never;
-                } & {
-                  [K in Exclude<
-                    keyof output<User>,
-                    AttributeMapSelectedKeys<User, AttributeMap>
-                  >]?: never;
-                };
-              }) &
-            ([] extends AttributeList
-              ? { attributeList?: never }
-              : { attributeList: AttributeListToTuple<User, AttributeList> });
+        : MachineUserFromUserProfile<User, AttributeMap, AttributeList>;
 
 /** Upstream OAuth provider that federated a login through the Built-in IdP. */
 export type FederatedIdentityProvider = "google" | "microsoft";

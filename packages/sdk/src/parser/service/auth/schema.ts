@@ -222,7 +222,19 @@ const ValueOperandSchema: z.ZodType<ValueOperand> = z.union([
 ]);
 
 const MachineUserSchema = z.object({
-  attributes: z.record(z.string(), ValueOperandSchema).optional(),
+  // null/undefined values mean "attribute not set" and are dropped so
+  // downstream (deploy, drift diff) only ever sees concrete values.
+  attributes: z
+    .record(z.string(), ValueOperandSchema.nullish())
+    .optional()
+    .transform((attributes): Record<string, ValueOperand> | undefined => {
+      if (!attributes) return undefined;
+      return Object.fromEntries(
+        Object.entries(attributes).filter(
+          (entry): entry is [string, ValueOperand] => entry[1] != null,
+        ),
+      );
+    }),
   attributeList: z.array(z.uuid()).optional(),
 });
 

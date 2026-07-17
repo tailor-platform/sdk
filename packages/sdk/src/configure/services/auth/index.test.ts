@@ -154,6 +154,68 @@ describe("defineAuth", () => {
     });
   });
 
+  test("mirrors user field optionality in userProfile-derived machine user attributes", () => {
+    const mirrorUserType = db.type("MirrorUser", {
+      email: db.string().unique(),
+      role: db.string(),
+      nickname: db.string({ optional: true }),
+    });
+
+    const authConfig = defineAuth("mirror-optional", {
+      userProfile: {
+        type: mirrorUserType,
+        usernameField: "email",
+        attributes: { role: true, nickname: true },
+      },
+      machineUsers: {
+        omitted: { attributes: { role: "ADMIN" } },
+        nullified: { attributes: { role: "ADMIN", nickname: null } },
+      },
+    });
+
+    expect(authConfig.machineUsers?.omitted.attributes.role).toBe("ADMIN");
+    expect(authConfig.machineUsers?.nullified.attributes.nickname).toBeNull();
+
+    // role derives from a required field and must be set
+    // (structural check — overload resolution differs in tsgo)
+    expectTypeOf<{ attributes: { nickname: string } }>().not.toExtend<
+      NonNullable<typeof authConfig.machineUsers>["omitted"]
+    >();
+  });
+
+  test("mirrors machineUserAttributes field optionality", () => {
+    const authConfig = defineAuth("machine-only-optional", {
+      machineUserAttributes: {
+        role: t.string(),
+        note: t.string({ optional: true }),
+      },
+      machineUsers: {
+        worker: { attributes: { role: "WORKER" } },
+      },
+    });
+
+    expect(authConfig.machineUsers?.worker.attributes.role).toBe("WORKER");
+
+    // role is a required field and must be set
+    // (structural check — overload resolution differs in tsgo)
+    expectTypeOf<{ attributes: { note: string } }>().not.toExtend<
+      NonNullable<typeof authConfig.machineUsers>["worker"]
+    >();
+  });
+
+  test("allows omitting attributes entirely when all machineUserAttributes fields are optional", () => {
+    const authConfig = defineAuth("machine-only-all-optional", {
+      machineUserAttributes: {
+        note: t.string({ optional: true }),
+      },
+      machineUsers: {
+        worker: {},
+      },
+    });
+
+    expect(authConfig.machineUsers?.worker.attributes).toBeUndefined();
+  });
+
   describe("name literal type inference", () => {
     test("infers name as literal type", () => {
       const authConfig = defineAuth("my-auth-service", {
