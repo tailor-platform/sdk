@@ -96,9 +96,19 @@ const RENAME_BIN_QUOTED_LEGACY_COMMAND_PATTERN = new RegExp(
 );
 const V2_NEXT_1 = "2.0.0-next.1";
 const V2_NEXT_2 = "2.0.0-next.2";
-const V2_NEXT_3 = "2.0.0-next.3";
 const V2_NEXT_4 = "2.0.0-next.4";
+const V2_NEXT_5 = "2.0.0-next.5";
 const V2_NEXT_6 = "2.0.0-next.6";
+/**
+ * Sentinel `prereleaseUntil` for a codemod whose exact `2.0.0-next.N` release is not
+ * known yet. `pnpm codemod:resolve-pending`, run in CI against the release PR, replaces
+ * it with the resolved `V2_NEXT_N` constant once the version is bumped. Keep this as an
+ * `export const V2_NEXT_PENDING = "pending";` declaration: resolve-pending-boundaries.ts
+ * matches it (tolerating whitespace changes and an optional preceding JSDoc block like
+ * this one) to find where to insert that constant, and it's exported so registry.test.ts
+ * can reference the sentinel directly.
+ */
+export const V2_NEXT_PENDING = "pending";
 
 /** All registered codemods, in registration order. */
 export const allCodemods: CodemodPackage[] = [
@@ -510,7 +520,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rewrite `@tailor-platform/sdk/runtime/*` namespace-star and flat value imports to self-named namespace imports, and aggregate `file.deleteFile` calls to `file.delete`. `TailorContextAPI` and `TailorWorkflowAPI` now describe SDK wrappers; direct platform globals use `PlatformContextAPI` and `PlatformWorkflowAPI`.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_3,
+    prereleaseUntil: V2_NEXT_4,
     scriptPath: "v2/runtime-subpath-namespace/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     legacyPatterns: [
@@ -593,7 +603,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rename TailorDB schema builder calls from `db.type()` to `db.table()`. TailorDB schema definitions now use table terminology in SDK projects.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_3,
+    prereleaseUntil: V2_NEXT_4,
     scriptPath: "v2/db-type-to-table/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     legacyPatterns: ["db.type"],
@@ -624,7 +634,7 @@ export const allCodemods: CodemodPackage[] = [
       "Review TailorDB relations that omit `toward.as`. Their forward GraphQL field names now derive from the relation field name with a trailing `ID`, `Id`, or `id` removed, instead of from the target table name.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_4,
+    prereleaseUntil: V2_NEXT_5,
     scriptPath: "v2/forward-relation-name/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     suspiciousPatterns: [
@@ -1051,7 +1061,7 @@ export const allCodemods: CodemodPackage[] = [
       "Field-level `ValidateFn` is simplified from `(args: { value, data, invoker }) => boolean` to `(args: { value }) => string | void` — the function now returns the error message directly instead of a separate `[fn, message]` tuple. The `ValidateConfig` tuple form and `Validators<F>` record syntax on `db.type().validate()` are removed. Type-level validation uses `db.type().validate((args, issues) => void)` with `{ newRecord, oldRecord, invoker }` args and an `issues(field, message)` callback for cross-field rules.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_4,
+    prereleaseUntil: V2_NEXT_5,
     suspiciousPatterns: ["ValidateConfig", "Validators<", "ValidatorsBase", ".validate("],
     examples: [
       {
@@ -1102,7 +1112,7 @@ export const allCodemods: CodemodPackage[] = [
       "Field-level `HookFn` args change from `{ value, data, invoker }` to create `{ input, invoker, now }` / update `{ input, oldValue, invoker, now }` — `value` is renamed to `input`, matching the `input` arg on type-level hooks (same pre-hook data, narrowed to one field); `data` (the full record) is removed; `oldValue` (previous field value) is added for update hooks only; `now` (operation timestamp) is shared across all hooks. Type-level hooks on `db.type().hooks()` change from per-field mapping `{ fieldName: { create, update } }` (`Hooks<F>`) to a single `{ create, update }` object (`TypeHook<F>`) — create hooks take `{ input, invoker, now }`, update hooks take `{ input, oldRecord, invoker, now }` (oldRecord is always non-null). Both return partial field overrides.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_4,
+    prereleaseUntil: V2_NEXT_5,
     suspiciousPatterns: ["Hooks<", "HookFn<", "Hook<", ".hooks("],
     examples: [
       {
@@ -1224,7 +1234,11 @@ function reachesCodemodBoundary(toVersion: string, codemod: CodemodPackage): boo
   if (gte(toVersion, codemod.until)) {
     return true;
   }
-  if (codemod.prereleaseUntil === undefined || !gte(toVersion, codemod.prereleaseUntil)) {
+  if (
+    codemod.prereleaseUntil === undefined ||
+    codemod.prereleaseUntil === V2_NEXT_PENDING ||
+    !gte(toVersion, codemod.prereleaseUntil)
+  ) {
     return false;
   }
 
@@ -1240,6 +1254,9 @@ function reachesCodemodBoundary(toVersion: string, codemod: CodemodPackage): boo
 }
 
 function effectiveCodemodBoundary(codemod: CodemodPackage): string {
+  if (codemod.prereleaseUntil === V2_NEXT_PENDING) {
+    return codemod.until;
+  }
   return codemod.prereleaseUntil ?? codemod.until;
 }
 
@@ -1254,7 +1271,7 @@ function assertCodemodBoundaries(codemods: CodemodPackage[]): void {
     if (boundary.prerelease.length > 0) {
       throw new Error(`Codemod ${codemod.id} until must be a stable version: ${codemod.until}`);
     }
-    if (codemod.prereleaseUntil === undefined) {
+    if (codemod.prereleaseUntil === undefined || codemod.prereleaseUntil === V2_NEXT_PENDING) {
       continue;
     }
 

@@ -17,6 +17,7 @@
     "agent:rules:check": "node scripts/sync-agent-rules.mjs --check",
     "codemod:docs:update": "tsx packages/sdk-codemod/scripts/sync-codemod-docs.ts --write",
     "codemod:docs:check": "tsx packages/sdk-codemod/scripts/sync-codemod-docs.ts --check",
+    "codemod:resolve-pending": "tsx packages/sdk-codemod/scripts/resolve-pending-boundaries.ts",
     "check": "pnpm run generate && pnpm run format && pnpm run \"/^check:/\"",
     "check:agent-rules": "pnpm run agent:rules:check",
     "check:codemod-docs": "pnpm run codemod:docs:check",
