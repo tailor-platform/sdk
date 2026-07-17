@@ -124,7 +124,7 @@ describe("repository ERD schema workflow", () => {
     const content = fs.readFileSync(ERD_SCHEMA_WORKFLOW, "utf-8");
 
     expect(content).toContain("example/tailor.config.ts");
-    expect(content).toContain("packages/sdk-tailordb-erd-plugin/");
+    expect(content).toContain("packages/sdk-plugin-tailordb-erd/");
     expect(content).toContain("relevant-path-prefix: example/");
   });
 

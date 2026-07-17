@@ -6,7 +6,7 @@ export const tailordbCommand = defineCommand({
   name: "tailordb",
   description: "Manage TailorDB tables and data.",
   notes:
-    "The `tailordb erd` commands are provided by the @tailor-platform/sdk-tailordb-erd-plugin CLI plugin.",
+    "The `tailordb erd` commands are provided by the @tailor-platform/sdk-plugin-tailordb-erd CLI plugin.",
   subCommands: {
     truncate: truncateCommand,
     migration: migrationCommand,
