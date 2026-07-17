@@ -1,0 +1,30 @@
+#!/bin/bash
+
+set -u
+
+if [[ ${1:-} == "run" && ${2:-} == "test:e2e" ]]; then
+  if [[ -n ${E2E_TEST_MARKER:-} ]]; then
+    printf '%s\n' "${TAILOR_PLATFORM_E2E_RUN_ID:-}" >"$E2E_TEST_MARKER"
+  fi
+  if [[ -n ${E2E_TEST_DELAY:-} ]]; then
+    /bin/sleep "$E2E_TEST_DELAY" &
+    child_pid=$!
+    if [[ -n ${E2E_TEST_CHILD_PID_MARKER:-} ]]; then
+      printf '%s\n' "$child_pid" >"$E2E_TEST_CHILD_PID_MARKER"
+    fi
+    wait "$child_pid"
+    child_status=$?
+    if [[ -n ${E2E_TEST_COMPLETION_MARKER:-} ]]; then
+      /usr/bin/touch "$E2E_TEST_COMPLETION_MARKER"
+    fi
+    exit "$child_status"
+  fi
+  exit "${E2E_TEST_STATUS:-0}"
+fi
+
+if [[ ${1:-} == "exec" && ${2:-} == "tailor-sdk" ]]; then
+  shift 2
+  exec "$E2E_FAKE_NODE" "$E2E_FAKE_CLI" "$@"
+fi
+
+exit 64
