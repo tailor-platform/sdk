@@ -24,7 +24,7 @@ export interface Namespace {
       postalCode: string;
       address: string | null;
       city: string | null;
-      fullAddress: Generated<string>;
+      fullAddress: string;
       state: string;
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
@@ -56,6 +56,19 @@ export interface Namespace {
         version: number;
       }>;
       archived: boolean | null;
+      createdAt: Generated<Timestamp>;
+      updatedAt: Generated<Timestamp>;
+    }
+
+    ProductBundle: {
+      id: Generated<string>;
+      name: string;
+      label: string | null;
+      items: {
+        productName: string;
+        qty: number;
+        unitPrice: number;
+      }[];
       createdAt: Generated<Timestamp>;
       updatedAt: Generated<Timestamp>;
     }
