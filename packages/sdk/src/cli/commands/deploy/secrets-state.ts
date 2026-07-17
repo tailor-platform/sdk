@@ -114,6 +114,9 @@ export function hashValue(value: string): string {
 const LOCK_POLL_INTERVAL_MS = 100;
 const LOCK_ACQUIRE_TIMEOUT_MS = 5 * 60 * 1000;
 const OWNERLESS_LOCK_GRACE_MS = 10 * 1000;
+// Far above any realistic secrets apply phase, so an over-age lock can only
+// be a leftover whose recorded pid was reused by an unrelated process.
+const LOCK_MAX_AGE_MS = 15 * 60 * 1000;
 
 const lockQueues = new Map<string, LimitFunction>();
 
@@ -172,8 +175,7 @@ async function acquireFileLock(lockPath: string): Promise<void> {
       }
       return;
     }
-    if (isLockStale(lockPath)) {
-      stealLock(lockPath);
+    if (isLockStale(lockPath) && stealLock(lockPath)) {
       continue;
     }
     if (Date.now() >= deadline) {
@@ -196,11 +198,10 @@ function isLockStale(lockPath: string): boolean {
   } catch {
     // The holder may still be between creating the directory and writing
     // owner.json; only treat a persistently ownerless lock as stale.
-    try {
-      return Date.now() - statSync(lockPath).mtimeMs > OWNERLESS_LOCK_GRACE_MS;
-    } catch {
-      return false;
-    }
+    return lockAgeMs(lockPath) > OWNERLESS_LOCK_GRACE_MS;
+  }
+  if (lockAgeMs(lockPath) > LOCK_MAX_AGE_MS) {
+    return true;
   }
   if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) {
     return true;
@@ -214,18 +215,26 @@ function isLockStale(lockPath: string): boolean {
   }
 }
 
-function stealLock(lockPath: string): void {
+function lockAgeMs(lockPath: string): number {
+  try {
+    return Date.now() - statSync(lockPath).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
+function stealLock(lockPath: string): boolean {
   // Rename first so concurrent stealers cannot remove a lock that another
   // contender has just re-acquired.
   const trash = `${lockPath}.stale-${process.pid}-${Date.now()}`;
   try {
     renameSync(lockPath, trash);
   } catch {
-    return;
+    return false;
   }
   if (isLockStale(trash)) {
     rmSync(trash, { recursive: true, force: true });
-    return;
+    return true;
   }
   // A live holder re-acquired the lock between the staleness check and the
   // rename; hand it back.
@@ -234,4 +243,5 @@ function stealLock(lockPath: string): void {
   } catch {
     rmSync(trash, { recursive: true, force: true });
   }
+  return false;
 }

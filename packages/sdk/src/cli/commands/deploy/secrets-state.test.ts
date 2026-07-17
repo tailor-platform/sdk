@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -267,6 +267,16 @@ describe("withSecretsStateLock", () => {
 
     await expect(withSecretsStateLock(scopeA, async () => "stolen")).resolves.toBe("stolen");
     expect(existsSync(lockPath)).toBe(false);
+  });
+
+  test("steals a lock older than the maximum hold age even if its owner is alive", async () => {
+    const lockPath = lockPathFor(scopeA);
+    mkdirSync(lockPath, { recursive: true });
+    writeFileSync(path.join(lockPath, "owner.json"), JSON.stringify({ pid: process.pid }));
+    const overAge = new Date(Date.now() - 16 * 60 * 1000);
+    utimesSync(lockPath, overAge, overAge);
+
+    await expect(withSecretsStateLock(scopeA, async () => "stolen")).resolves.toBe("stolen");
   });
 
   test("steals a lock whose owner record is corrupt", async () => {
