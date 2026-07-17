@@ -52,6 +52,12 @@ describe("loadSeedContext", () => {
     );
   });
 
+  test("throws when seedPlugin has no distPath", async () => {
+    mockLoadResult({ plugins: [seedPluginInstance({})] });
+
+    await expect(loadSeedContext()).rejects.toThrow(/has no distPath option/);
+  });
+
   test("resolves a relative distPath against the config directory", async () => {
     mockLoadResult({ plugins: [seedPluginInstance({ distPath: "./seed" })] });
 

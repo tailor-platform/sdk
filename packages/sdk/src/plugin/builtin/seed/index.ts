@@ -7,7 +7,6 @@ import {
   generateLinesDbSchemaFileWithPluginAPI,
   type PluginSchemaParams,
 } from "./lines-db-processor";
-import { processSeedTypeInfo } from "./seed-type-processor";
 import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
 
 /** Unique identifier for the seed generator plugin. */
@@ -82,7 +81,6 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
             ns.sourceInfo.get(typeName),
             `source info missing for type: ${typeName}`,
           );
-          const typeInfo = processSeedTypeInfo(type, ns.namespace);
           const linesDb = processLinesDb(type, source);
 
           // Add reverse FK from userProfile type to _User (opt-out via disableIdpUserSync.userToIdp: true)
@@ -102,7 +100,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
 
           // Generate empty JSONL data file
           files.push({
-            path: path.join(ctx.pluginConfig.distPath, typeInfo.dataFile),
+            path: path.join(ctx.pluginConfig.distPath, "data", `${linesDb.typeName}.jsonl`),
             content: "",
             skipIfExists: true,
           });

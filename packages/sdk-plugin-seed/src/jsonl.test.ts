@@ -32,8 +32,8 @@ describe("loadSeedData", () => {
     expect(loadSeedData(dir, ["Empty", "Missing"])).toEqual({ Empty: [], Missing: [] });
   });
 
-  test("throws on malformed JSON lines", () => {
-    const dir = makeDataDir({ "Bad.jsonl": "not-json\n" });
-    expect(() => loadSeedData(dir, ["Bad"])).toThrow(SyntaxError);
+  test("names the file and line for malformed JSON lines", () => {
+    const dir = makeDataDir({ "Bad.jsonl": '{"ok":true}\nnot-json\n' });
+    expect(() => loadSeedData(dir, ["Bad"])).toThrow(/Bad\.jsonl at line 2/);
   });
 });
