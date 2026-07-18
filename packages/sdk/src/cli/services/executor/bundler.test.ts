@@ -16,6 +16,7 @@ describe("bundleExecutors", () => {
         config: {
           files: ["./src/backend/provisioning/executor/*.ts"],
         },
+        baseDir: tmp.dir,
       }),
     ).resolves.toEqual(new Map());
   });

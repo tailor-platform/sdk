@@ -86,16 +86,18 @@ function createModuleBindings(program: ReturnType<typeof parseSync>["program"], 
  * Build start-call context from configured workflow source files.
  * @param workflowConfig - Workflow file loading configuration
  * @param authNamespace - Auth service namespace (optional, used for string-literal invoker expansion)
+ * @param baseDir - Directory the workflow config's file patterns are resolved against (defaults to process.cwd())
  * @returns Module-local workflow and job binding metadata
  */
 export async function buildStartContext(
   workflowConfig: FileLoadConfig | undefined,
   authNamespace?: string,
+  baseDir = process.cwd(),
 ): Promise<StartContext> {
   const modules = new Map<string, StartModuleBindings>();
   if (!workflowConfig) return { modules, authNamespace };
 
-  for (const file of loadFilesWithIgnores(workflowConfig)) {
+  for (const file of loadFilesWithIgnores(workflowConfig, baseDir)) {
     try {
       const source = await fs.promises.readFile(file, "utf-8");
       const { program } = parseSync("input.ts", source);

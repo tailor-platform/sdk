@@ -47,7 +47,10 @@ export const shared = (value: string) => value.toUpperCase();
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [adapterFile, helperFile] } });
+    const service = createHttpAdapterService({
+      config: { files: [adapterFile, helperFile] },
+      baseDir: process.cwd(),
+    });
     await service.loadAdapters();
 
     expect(service.adapters).toHaveLength(1);
@@ -68,7 +71,7 @@ export default createHttpAdapter({
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [file] } });
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
     await service.loadAdapters();
 
     expect(service.adapters).toHaveLength(1);
@@ -89,7 +92,7 @@ export default createHttpAdapter({
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [file] } });
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
     await service.loadAdapters();
 
     expect(service.adapters).toHaveLength(1);
@@ -109,7 +112,7 @@ export default createHttpAdapter({
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [file] } });
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
     await expect(service.loadAdapters()).rejects.toThrow(/async `input\.get` function/);
   });
 
@@ -126,7 +129,7 @@ export const adapter = createHttpAdapter({
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [file] } });
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
     await expect(service.loadAdapters()).rejects.toThrow(/must be the default export/);
   });
 
@@ -142,7 +145,7 @@ export default {
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [file] } });
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
     await service.loadAdapters();
 
     // Not produced by createHttpAdapter -> treated as a non-adapter file.

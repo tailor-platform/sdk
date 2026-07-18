@@ -25,7 +25,10 @@ export default {
 `,
     );
 
-    const service = createWorkflowService({ config: { files: ["workflow.mjs"] } });
+    const service = createWorkflowService({
+      config: { files: ["workflow.mjs"] },
+      baseDir: tmp.dir,
+    });
 
     await service.loadWorkflows();
 
