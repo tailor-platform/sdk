@@ -41,6 +41,8 @@ jobs:
             packages:
               - 'packages/sdk/**'
               - 'packages/create-sdk/**'
+              - 'packages/eslint-plugin-sdk/**'
+              - 'packages/sdk-codemod/**'
               - 'packages/sdk-plugin-tailordb-erd/**'
               - 'packages/tailor-proto/**'
 

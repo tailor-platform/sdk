@@ -5,18 +5,36 @@ import { resolve } from "node:path";
 
 // Get SDK version or URL from environment variable or package.json
 const sdkVersionOrUrl = process.env.TAILOR_TEMPLATE_SDK_VERSION;
+const eslintPluginVersionOrUrl = process.env.TAILOR_TEMPLATE_ESLINT_PLUGIN_VERSION;
 
-let version;
+let sdkVersion;
 if (sdkVersionOrUrl) {
   // If TAILOR_TEMPLATE_SDK_VERSION is set, use it (can be version string or pkg-pr-new URL)
-  version = sdkVersionOrUrl;
-  console.log(`Using SDK version from environment: ${version}`);
+  sdkVersion = sdkVersionOrUrl;
+  console.log(`Using SDK version from environment: ${sdkVersion}`);
 } else {
   // Otherwise, read version from tailor-sdk's package.json
   const tailorSdkPackageJsonPath = resolve(import.meta.dirname, "..", "..", "sdk", "package.json");
   const tailorSdkPackageJson = JSON.parse(readFileSync(tailorSdkPackageJsonPath, "utf-8"));
-  version = tailorSdkPackageJson.version;
-  console.log(`Using SDK version from package.json: ${version}`);
+  sdkVersion = tailorSdkPackageJson.version;
+  console.log(`Using SDK version from package.json: ${sdkVersion}`);
+}
+
+let eslintPluginVersion;
+if (eslintPluginVersionOrUrl) {
+  eslintPluginVersion = eslintPluginVersionOrUrl;
+  console.log(`Using ESLint plugin version from environment: ${eslintPluginVersion}`);
+} else {
+  const eslintPluginPackageJsonPath = resolve(
+    import.meta.dirname,
+    "..",
+    "..",
+    "eslint-plugin-sdk",
+    "package.json",
+  );
+  const eslintPluginPackageJson = JSON.parse(readFileSync(eslintPluginPackageJsonPath, "utf-8"));
+  eslintPluginVersion = eslintPluginPackageJson.version;
+  console.log(`Using ESLint plugin version from package.json: ${eslintPluginVersion}`);
 }
 
 // Update version in each template's package.json
@@ -30,14 +48,17 @@ for (const template of templates) {
 
   const content = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
   if (content.dependencies?.["@tailor-platform/sdk"]) {
-    content.dependencies["@tailor-platform/sdk"] = version;
+    content.dependencies["@tailor-platform/sdk"] = sdkVersion;
   }
   if (content.devDependencies?.["@tailor-platform/sdk"]) {
-    content.devDependencies["@tailor-platform/sdk"] = version;
+    content.devDependencies["@tailor-platform/sdk"] = sdkVersion;
+  }
+  if (content.devDependencies?.["@tailor-platform/eslint-plugin-sdk"]) {
+    content.devDependencies["@tailor-platform/eslint-plugin-sdk"] = eslintPluginVersion;
   }
 
   writeFileSync(packageJsonPath, JSON.stringify(content, null, 2) + "\n");
-  console.log(`Updated ${template}/package.json to use SDK: ${version}`);
+  console.log(`Updated package dependencies in ${template}/package.json`);
 }
 
 // Copy .gitignore to __dot__gitignore

@@ -27,7 +27,7 @@ describe("bundleHttpAdapters", () => {
   }
 
   test("returns empty result when no adapters are provided", async () => {
-    const result = await bundleHttpAdapters([]);
+    const result = await bundleHttpAdapters([], process.cwd());
     expect(result.bundledInputs.size).toBe(0);
     expect(result.bundledOutputs.size).toBe(0);
   });
@@ -58,9 +58,10 @@ export default createHttpAdapter({
 `,
     });
 
-    const result = await bundleHttpAdapters([
-      { name: "get-user", sourceFile, methods: ["get"], hasOutput: true },
-    ]);
+    const result = await bundleHttpAdapters(
+      [{ name: "get-user", sourceFile, methods: ["get"], hasOutput: true }],
+      process.cwd(),
+    );
 
     const inputCode = result.bundledInputs.get("get-user");
     const outputCode = result.bundledOutputs.get("get-user");
@@ -102,9 +103,10 @@ export default createHttpAdapter({
 `,
     });
 
-    const result = await bundleHttpAdapters([
-      { name: "multi", sourceFile, methods: ["get", "post", "delete"], hasOutput: false },
-    ]);
+    const result = await bundleHttpAdapters(
+      [{ name: "multi", sourceFile, methods: ["get", "post", "delete"], hasOutput: false }],
+      process.cwd(),
+    );
 
     const inputCode = result.bundledInputs.get("multi");
     expect(inputCode).toBeDefined();
@@ -140,9 +142,10 @@ export default createHttpAdapter({
 `,
     );
 
-    const result = await bundleHttpAdapters([
-      { name: "nullish", sourceFile, methods: ["get", "post"], hasOutput: false },
-    ]);
+    const result = await bundleHttpAdapters(
+      [{ name: "nullish", sourceFile, methods: ["get", "post"], hasOutput: false }],
+      process.cwd(),
+    );
 
     const inputCode = result.bundledInputs.get("nullish");
     expect(inputCode).toBeDefined();
@@ -185,6 +188,7 @@ export default createHttpAdapter({
 
     const result = await bundleHttpAdapters(
       [{ name: "logs", sourceFile, methods: ["get"], hasOutput: true }],
+      process.cwd(),
       undefined,
       "WARN",
     );
@@ -222,7 +226,10 @@ export default createHttpAdapter({
     });
 
     await expect(
-      bundleHttpAdapters([{ name: "bad", sourceFile, methods: ["get"], hasOutput: false }]),
+      bundleHttpAdapters(
+        [{ name: "bad", sourceFile, methods: ["get"], hasOutput: false }],
+        process.cwd(),
+      ),
     ).rejects.toThrow(/Node module/);
   });
 
@@ -247,9 +254,10 @@ export default createHttpAdapter({
     });
 
     await expect(
-      bundleHttpAdapters([
-        { name: "async-helper", sourceFile, methods: ["get"], hasOutput: false },
-      ]),
+      bundleHttpAdapters(
+        [{ name: "async-helper", sourceFile, methods: ["get"], hasOutput: false }],
+        process.cwd(),
+      ),
     ).rejects.toThrow(/async\/await, which is unavailable/);
   });
 });
