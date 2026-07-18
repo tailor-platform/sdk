@@ -25,9 +25,12 @@ trap 'git reset --hard --quiet "$original_ref"' EXIT
 # edits (package.json bumps, CHANGELOG.md, consumed .changeset/*.md deletions)
 # straight to this worktree and pushes them to the release PR branch through the
 # API, but never commits them locally — leaving this checkout dirty. Without
-# this, `gh pr checkout` below fails with "local changes would be overwritten"
-# on every run that actually creates or updates a release PR.
+# these, `gh pr checkout` below fails with "local changes would be overwritten"
+# on every run that actually creates or updates a release PR. `clean` covers
+# untracked files those edits create (a first-release package's CHANGELOG.md),
+# which the release PR branch tracks and `reset --hard` leaves behind.
 git reset --hard --quiet
+git clean -fdq
 
 PR_BRANCH="$(gh pr view "$PR_NUMBER" --json headRefName -q .headRefName)"
 gh pr checkout "$PR_NUMBER"
