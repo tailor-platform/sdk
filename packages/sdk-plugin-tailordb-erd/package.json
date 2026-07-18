@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk-plugin-tailordb-erd",
-  "version": "0.1.0-next.0",
+  "version": "0.1.0-next.1",
   "description": "Tailor CLI plugin providing the `tailor tailordb erd` commands (TailorDB ERD viewer)",
   "license": "MIT",
   "repository": {
