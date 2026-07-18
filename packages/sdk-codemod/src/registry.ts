@@ -917,7 +917,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rename `Workflow.trigger()` (returned by `createWorkflow()`) and `WorkflowJob.trigger()` (returned by `createWorkflowJob()`) to `.start()`, aligning the SDK's ergonomic verb with the platform's `start*` RPC vocabulary. No codemod ships for this rename: distinguishing a workflow/job `.trigger()` call from an unrelated object's own `.trigger()` method requires resolving the receiver back to a `createWorkflow`/`createWorkflowJob` result across files, which the SDK's own CLI bundler already does for build-time rewriting. Reusing that logic in a standalone script is a nontrivial lift, and — unlike the bundler, which fails loudly when it cannot rewrite a call — a codemod false positive would silently rewrite an unrelated `.trigger()` call with no error. For the call-site volume this rename typically involves, manual review guided by the prompt below is the safer trade-off.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_6,
+    prereleaseUntil: V2_NEXT_PENDING,
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     suspiciousPatterns: [".trigger("],
     examples: [
