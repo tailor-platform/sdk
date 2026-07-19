@@ -20,6 +20,7 @@
     "fix-mockfile-open-download-stream",
     "fix-multi-config-cwd",
     "fix-next5-codemod-boundaries",
+    "fix-optional-attributes-permission-keys",
     "fix-rename-bin-source-files",
     "fix-ts-hook-dotted-basename",
     "fix-ts-hook-paths-without-baseurl",
