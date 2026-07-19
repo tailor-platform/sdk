@@ -1,7 +1,7 @@
 import { loadTailorDBNamespaces } from "@tailor-platform/sdk/cli";
 import { z } from "zod";
-import { TailorDBErdPluginID } from "./plugin";
 import { logger } from "./shared/logger";
+import { TailorDBErdPluginID } from "./index";
 import type { LoadedConfig, Plugin, TailorDBNamespaceData } from "@tailor-platform/sdk/cli";
 
 export interface LoadLocalErdSchemaOptions {

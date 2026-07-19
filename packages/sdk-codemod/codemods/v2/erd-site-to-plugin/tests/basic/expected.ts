@@ -1,6 +1,6 @@
 import { defineConfig, definePlugins, defineStaticWebSite } from "@tailor-platform/sdk";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
-import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd/plugin";
+import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";
 
 const erdSite = defineStaticWebSite("my-erd-site", {
   description: "ERD site for TailorDB",

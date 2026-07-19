@@ -33,8 +33,8 @@ runs:
       shell: bash
 
     # Build SDK so that the bin entry points to a real dist file. The ERD
-    # plugin is built too: example/tailor.config.ts imports its /plugin
-    # subpath, which resolves to dist.
+    # plugin is built too: example/tailor.config.ts imports it, which
+    # resolves to dist.
     - name: Build SDK packages
       run: pnpm --filter @tailor-platform/sdk --filter @tailor-platform/sdk-plugin-tailordb-erd run build
       shell: bash

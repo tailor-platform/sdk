@@ -35,7 +35,7 @@ tailor tailordb erd deploy --namespace my-db
 
 ```ts
 import { definePlugins } from "@tailor-platform/sdk";
-import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd/plugin";
+import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";
 
 export const plugins = definePlugins(
   // TailorDB namespace name → static website name

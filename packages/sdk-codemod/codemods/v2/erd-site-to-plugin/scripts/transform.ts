@@ -2,7 +2,7 @@ import { Lang, parse } from "@ast-grep/napi";
 import type { Edit, SgNode } from "@ast-grep/napi";
 
 const PLUGIN_IMPORT =
-  'import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd/plugin";';
+  'import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";';
 const DEFINE_PLUGINS_IMPORT = 'import { definePlugins } from "@tailor-platform/sdk";';
 const SDK_VALUE_IMPORT_REGEX =
   /(^|\n)import\s*\{[^}\n]*\}\s*from\s*["']@tailor-platform\/sdk["'];?/;

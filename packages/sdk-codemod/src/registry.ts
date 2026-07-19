@@ -1164,7 +1164,7 @@ export const allCodemods: CodemodPackage[] = [
     id: "v2/erd-site-to-plugin",
     name: "`db.<namespace>.erdSite` → `tailordbErdPlugin({ sites })`",
     description:
-      "Move the TailorDB `erdSite` setting from `db.<namespace>` in tailor.config.ts into `tailordbErdPlugin({ sites })` from `@tailor-platform/sdk-plugin-tailordb-erd/plugin`, registered via definePlugins(). The core config schema no longer accepts `erdSite`; the `tailor tailordb erd` commands read the target static website from the plugin configuration and validate each site name against `staticWebsites`.",
+      "Move the TailorDB `erdSite` setting from `db.<namespace>` in tailor.config.ts into `tailordbErdPlugin({ sites })` from `@tailor-platform/sdk-plugin-tailordb-erd`, registered via definePlugins(). The core config schema no longer accepts `erdSite`; the `tailor tailordb erd` commands read the target static website from the plugin configuration and validate each site name against `staticWebsites`.",
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_PENDING,
@@ -1186,7 +1186,7 @@ export const allCodemods: CodemodPackage[] = [
           "});",
         ].join("\n"),
         after: [
-          'import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd/plugin";',
+          'import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";',
           "",
           "export default defineConfig({",
           "  db: {",
@@ -1207,7 +1207,7 @@ export const allCodemods: CodemodPackage[] = [
       "schema; the ERD deploy target is configured on the ERD CLI plugin instead. The",
       "codemod rewrites literal `db.<namespace>.erdSite` entries inside defineConfig()",
       "into a `tailordbErdPlugin({ sites: { <namespace>: <value> } })` argument of",
-      "definePlugins(), importing it from @tailor-platform/sdk-plugin-tailordb-erd/plugin.",
+      "definePlugins(), importing it from @tailor-platform/sdk-plugin-tailordb-erd.",
       "",
       "For any remaining `erdSite` config keys the codemod did not rewrite — a db config",
       "built dynamically or passed via a variable, spread properties, or a file that",

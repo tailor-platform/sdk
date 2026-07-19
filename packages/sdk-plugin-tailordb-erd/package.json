@@ -9,7 +9,7 @@
     "directory": "packages/sdk-plugin-tailordb-erd"
   },
   "bin": {
-    "tailor-tailordb-erd": "./dist/index.js"
+    "tailor-tailordb-erd": "./dist/cli.js"
   },
   "files": [
     "CHANGELOG.md",
@@ -18,10 +18,10 @@
   ],
   "type": "module",
   "exports": {
-    "./plugin": {
-      "types": "./dist/plugin.d.ts",
-      "import": "./dist/plugin.js",
-      "default": "./dist/plugin.js"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
