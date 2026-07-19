@@ -65,7 +65,7 @@ function resolveExplicitTarget(options: ResolveTargetsOptions): ErdTarget {
   if (options.requireErdSite && !erdSite) {
     throw new Error(
       `No ERD site configured for namespace "${namespaceData.namespace}". ` +
-        `Add sites: { "${namespaceData.namespace}": "<static-website-name>" } to tailordbErdPlugin() in tailor.config.ts.`,
+        `Add sites: { "${namespaceData.namespace}": "<static-website-name>" } to the tailordbErdPlugin() entry in definePlugins() in tailor.config.ts.`,
     );
   }
 
