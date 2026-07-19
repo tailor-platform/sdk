@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.8
+
+### Patch Changes
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`61ac76c`](https://github.com/tailor-platform/sdk/commit/61ac76cff992ef30e6115ba96c7d3a676010204f) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix IdP and TailorDB permission condition types breaking when `Attributes` fields are optional. Since machine user attribute keys started mirroring the source field's optionality, the `user` operand key helpers leaked `undefined` into their key unions — failing typecheck against the generated permission types even for `_loggedIn`-only conditions — and rejected attribute keys derived from optional fields. Optional attribute fields are now valid operand keys and `undefined` no longer appears in the unions.
+
 ## 2.0.0-next.7
 
 ### Major Changes
