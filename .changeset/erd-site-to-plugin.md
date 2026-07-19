@@ -7,7 +7,7 @@
 Move the TailorDB `erdSite` setting out of the core config schema into the ERD plugin's own configuration. `db.<namespace>.erdSite` is no longer accepted in `tailor.config.ts`; configure the ERD deploy target on the plugin instead:
 
 ```ts
-import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd/plugin";
+import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";
 
 export const plugins = definePlugins(
   // TailorDB namespace name → static website name

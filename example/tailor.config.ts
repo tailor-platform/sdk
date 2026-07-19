@@ -6,7 +6,7 @@ import {
   definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
-import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd/plugin";
+import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";
 import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
 import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";

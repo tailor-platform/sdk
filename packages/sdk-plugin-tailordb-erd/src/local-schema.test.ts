@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { resolveErdSites, resolveLocalErdSchemaNamespaces } from "./local-schema";
-import { tailordbErdPlugin } from "./plugin";
+import { tailordbErdPlugin } from "./index";
 import type { LoadedConfig, Plugin } from "@tailor-platform/sdk/cli";
 
 const config = {

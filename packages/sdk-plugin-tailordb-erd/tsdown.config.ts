@@ -3,7 +3,7 @@ import path from "node:path";
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/plugin.ts"],
+  entry: ["src/cli.ts", "src/index.ts"],
   dts: true,
   format: ["esm"],
   target: "node22",

@@ -1,5 +1,5 @@
 import { defineConfig, definePlugins } from "@tailor-platform/sdk";
-import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd/plugin";
+import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";
 
 export default defineConfig({
   name: "my-app",
