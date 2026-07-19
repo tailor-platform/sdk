@@ -17,6 +17,13 @@
     "README.md"
   ],
   "type": "module",
+  "exports": {
+    "./plugin": {
+      "types": "./dist/plugin.d.ts",
+      "import": "./dist/plugin.js",
+      "default": "./dist/plugin.js"
+    }
+  },
   "scripts": {
     "build": "tsdown",
     "lint": "oxlint .",

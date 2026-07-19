@@ -3,7 +3,7 @@
 Tailor CLI plugin that provides the `tailor tailordb erd` commands: export, diff, serve, and deploy a TailorDB ERD viewer built from your local TailorDB schema.
 
 > [!NOTE]
-> This package is a **CLI plugin**: it ships an external `tailor-tailordb-erd` executable that the Tailor CLI dispatches to when you run `tailor tailordb erd`. It is not a config plugin — do not pass it to `definePlugins()` in `tailor.config.ts`.
+> This package is primarily a **CLI plugin**: it ships an external `tailor-tailordb-erd` executable that the Tailor CLI dispatches to when you run `tailor tailordb erd`. It also ships a small config plugin, `tailordbErdPlugin`, used only to configure deploy targets via `definePlugins()` in `tailor.config.ts`.
 
 ## Installation
 
@@ -27,19 +27,22 @@ tailor tailordb erd serve --namespace my-db --open
 # Render an HTML diff between two exported ERD viewers
 tailor tailordb erd diff --base-html base.html --head-html head.html -o diff.html
 
-# Deploy the ERD viewer to the static website configured as `erdSite`
+# Deploy the ERD viewer to the static website configured in `tailordbErdPlugin({ sites })`
 tailor tailordb erd deploy --namespace my-db
 ```
 
-`deploy` publishes to the static website referenced by `erdSite` in your `tailor.config.ts`:
+`deploy` publishes to the static website configured for each namespace via `tailordbErdPlugin({ sites })` in your `tailor.config.ts`:
 
 ```ts
-db: {
-  "my-db": {
-    files: ["tailordb/*.ts"],
-    erdSite: "my-erd-site",
-  },
-},
+import { definePlugins } from "@tailor-platform/sdk";
+import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd/plugin";
+
+export const plugins = definePlugins(
+  // TailorDB namespace name → static website name
+  tailordbErdPlugin({ sites: { "my-db": "my-erd-site" } }),
+);
 ```
+
+Each site name must match a static website defined in `staticWebsites` in the same config.
 
 Run `tailor tailordb erd <command> --help` for the full option reference.

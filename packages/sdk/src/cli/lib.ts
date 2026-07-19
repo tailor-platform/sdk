@@ -22,7 +22,12 @@ export {
 } from "./commands/staticwebsite/deploy";
 export { assertWritable } from "./shared/readonly-guard";
 export { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
-export type { GeneratorResult, PluginAttachment, TailorDBNamespaceData } from "#/plugin/types";
+export type {
+  GeneratorResult,
+  Plugin,
+  PluginAttachment,
+  TailorDBNamespaceData,
+} from "#/plugin/types";
 export type {
   TailorDBType,
   TypeSourceInfoEntry,

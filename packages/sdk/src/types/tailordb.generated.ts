@@ -1110,8 +1110,6 @@ export type TailorDBServiceConfigInput = {
   files: string[];
   /** Glob patterns to exclude from type discovery */
   ignores?: string[] | undefined;
-  /** URL for the ERD (Entity Relationship Diagram) site */
-  erdSite?: string | undefined;
   /** Migration configuration */
   migration?:
     | {
@@ -1136,8 +1134,6 @@ export type TailorDBServiceConfig = {
   files: string[];
   /** Glob patterns to exclude from type discovery */
   ignores?: string[] | undefined;
-  /** URL for the ERD (Entity Relationship Diagram) site */
-  erdSite?: string | undefined;
   /** Migration configuration */
   migration?:
     | {

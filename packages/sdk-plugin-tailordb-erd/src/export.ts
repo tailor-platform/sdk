@@ -45,12 +45,8 @@ export interface ErdBuildResult {
   distDir: string;
 }
 
-function getErdSite(context: LocalErdSchemaContext, namespace: string): string | undefined {
-  const dbConfig = context.config.db?.[namespace];
-  if (!dbConfig || "external" in dbConfig) {
-    return undefined;
-  }
-  return dbConfig.erdSite;
+export interface DeployableErdBuildResult extends ErdBuildResult {
+  erdSite: string;
 }
 
 function resolveExplicitTarget(options: ResolveTargetsOptions): ErdTarget {
@@ -65,11 +61,11 @@ function resolveExplicitTarget(options: ResolveTargetsOptions): ErdTarget {
     );
   }
 
-  const erdSite = getErdSite(options.context, namespaceData.namespace);
+  const erdSite = options.context.sites[namespaceData.namespace];
   if (options.requireErdSite && !erdSite) {
     throw new Error(
-      `No erdSite configured for namespace "${namespaceData.namespace}". ` +
-        `Add erdSite: "<static-website-name>" to db.${namespaceData.namespace} in tailor.config.ts.`,
+      `No ERD site configured for namespace "${namespaceData.namespace}". ` +
+        `Add sites: { "${namespaceData.namespace}": "<static-website-name>" } to tailordbErdPlugin() in tailor.config.ts.`,
     );
   }
 
@@ -78,27 +74,22 @@ function resolveExplicitTarget(options: ResolveTargetsOptions): ErdTarget {
 
 function resolveAllTargets(options: ResolveTargetsOptions): ErdTarget[] {
   const namespaces = options.context.namespaces.filter(
-    (namespaceData) =>
-      !options.requireErdSite || getErdSite(options.context, namespaceData.namespace),
+    (namespaceData) => !options.requireErdSite || options.context.sites[namespaceData.namespace],
   );
   if (namespaces.length === 0) {
     throw new Error(
       options.requireErdSite
-        ? "No namespaces with erdSite configured found. " +
-            'Add erdSite: "<static-website-name>" to db.<namespace> in tailor.config.ts.'
+        ? "No namespaces with an ERD site configured found. " +
+            'Add tailordbErdPlugin({ sites: { "<namespace>": "<static-website-name>" } }) to definePlugins() in tailor.config.ts.'
         : "No TailorDB namespaces found in config. Please define db services in tailor.config.ts.",
     );
   }
 
   logger.info(
-    `Found ${namespaces.length} namespace(s)${options.requireErdSite ? " with erdSite configured" : ""}.`,
+    `Found ${namespaces.length} namespace(s)${options.requireErdSite ? " with an ERD site configured" : ""}.`,
   );
   return namespaces.map((namespaceData) =>
-    toTarget(
-      options.outputDir,
-      namespaceData,
-      getErdSite(options.context, namespaceData.namespace),
-    ),
+    toTarget(options.outputDir, namespaceData, options.context.sites[namespaceData.namespace]),
   );
 }
 
@@ -138,9 +129,15 @@ function prepareErdBuild(target: ErdTarget): ErdBuildResult {
 
 /**
  * Prepare TailorDB ERD static viewer builds for one or more namespaces.
+ * With `requireErdSite: true`, target resolution throws for namespaces without
+ * an ERD site, so every result carries one.
  * @param options - Build options.
  * @returns Build results by namespace.
  */
+export async function prepareErdBuilds(
+  options: ErdBuildsOptions & { requireErdSite: true },
+): Promise<DeployableErdBuildResult[]>;
+export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBuildResult[]>;
 export async function prepareErdBuilds(options: ErdBuildsOptions): Promise<ErdBuildResult[]> {
   const context = await loadLocalErdSchema({
     configPath: options.configPath,
