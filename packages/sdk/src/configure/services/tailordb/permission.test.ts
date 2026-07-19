@@ -1,5 +1,5 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
-import { describe, test } from "vitest";
+import { describe, expectTypeOf, test } from "vitest";
 import type { PermissionCondition } from "./permission";
 
 describe("tailordb permission types", () => {
@@ -107,5 +107,41 @@ describe("tailordb permission types", () => {
         User
       >;
     });
+  });
+});
+
+describe("tailordb permission types with optional user attribute fields", () => {
+  type OptionalUser = {
+    role?: string;
+    permissions?: string[];
+    isAdmin?: boolean;
+    flags?: boolean[];
+  };
+
+  test("user operand accepts keys derived from optional fields", () => {
+    const _str = [{ user: "role" }, "=", "ADMIN"] satisfies PermissionCondition<
+      "record",
+      OptionalUser
+    >;
+    const _bool = [{ user: "isAdmin" }, "=", true] satisfies PermissionCondition<
+      "record",
+      OptionalUser
+    >;
+    const _strArr = ["a", "in", { user: "permissions" }] satisfies PermissionCondition<
+      "record",
+      OptionalUser
+    >;
+    const _boolArr = [true, "in", { user: "flags" }] satisfies PermissionCondition<
+      "record",
+      OptionalUser
+    >;
+  });
+
+  test("does not leak undefined into user operand keys", () => {
+    type UserOperandKeys = Extract<
+      PermissionCondition<"record", OptionalUser>[0],
+      { user: unknown }
+    >["user"];
+    expectTypeOf<undefined>().not.toExtend<UserOperandKeys>();
   });
 });

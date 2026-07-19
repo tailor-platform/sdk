@@ -47,6 +47,36 @@ describe("IdPPermissionCondition type checks", () => {
   });
 });
 
+describe("IdPPermissionCondition with optional attribute fields", () => {
+  type OptionalAttrs = {
+    role?: string;
+    permissions?: string[];
+    active?: boolean;
+    flags?: boolean[];
+  };
+
+  test("accepts user operands referencing optional attribute fields", () => {
+    const _str: IdPPermissionCondition<OptionalAttrs, false> = [{ user: "role" }, "=", "ADMIN"];
+    const _bool: IdPPermissionCondition<OptionalAttrs, false> = [{ user: "active" }, "=", true];
+    const _strArr: IdPPermissionCondition<OptionalAttrs, false> = [
+      "a",
+      "in",
+      { user: "permissions" },
+    ];
+    expectTypeOf(_str).toExtend<IdPPermissionCondition<OptionalAttrs, false>>();
+    expectTypeOf(_bool).toExtend<IdPPermissionCondition<OptionalAttrs, false>>();
+    expectTypeOf(_strArr).toExtend<IdPPermissionCondition<OptionalAttrs, false>>();
+  });
+
+  test("does not leak undefined into user operand keys", () => {
+    type UserOperandKeys = Extract<
+      IdPPermissionCondition<OptionalAttrs, false>[0],
+      { user: unknown }
+    >["user"];
+    expectTypeOf<undefined>().not.toExtend<UserOperandKeys>();
+  });
+});
+
 describe("IdPPermission type checks", () => {
   test("accepts valid full permission", () => {
     const _perm: IdPPermission = {

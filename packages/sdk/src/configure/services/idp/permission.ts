@@ -4,20 +4,22 @@ import type { InferredAttributes } from "#/runtime/types";
 type EqualityOperator = "=" | "!=";
 type ContainsOperator = "in" | "not in";
 
+// `-?` keeps the indexed access from folding optional fields' `never` into
+// `undefined`; `Exclude` lets an optional field's value type still match.
 type StringFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends string ? K : never;
+  [K in keyof User]-?: Exclude<User[K], undefined> extends string ? K : never;
 }[keyof User];
 
 type StringArrayFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends string[] ? K : never;
+  [K in keyof User]-?: Exclude<User[K], undefined> extends string[] ? K : never;
 }[keyof User];
 
 type BooleanFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends boolean ? K : never;
+  [K in keyof User]-?: Exclude<User[K], undefined> extends boolean ? K : never;
 }[keyof User];
 
 type BooleanArrayFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends boolean[] ? K : never;
+  [K in keyof User]-?: Exclude<User[K], undefined> extends boolean[] ? K : never;
 }[keyof User];
 
 type UserStringOperand<User extends object = InferredAttributes> = {
