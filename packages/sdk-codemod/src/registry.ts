@@ -1162,7 +1162,7 @@ export const allCodemods: CodemodPackage[] = [
   },
   {
     id: "v2/erd-site-to-plugin",
-    name: "db.<namespace>.erdSite → tailordbErdPlugin({ sites })",
+    name: "`db.<namespace>.erdSite` → `tailordbErdPlugin({ sites })`",
     description:
       "Move the TailorDB `erdSite` setting from `db.<namespace>` in tailor.config.ts into `tailordbErdPlugin({ sites })` from `@tailor-platform/sdk-plugin-tailordb-erd/plugin`, registered via definePlugins(). The core config schema no longer accepts `erdSite`; the `tailor tailordb erd` commands read the target static website from the plugin configuration and validate each site name against `staticWebsites`.",
     since: "1.0.0",
