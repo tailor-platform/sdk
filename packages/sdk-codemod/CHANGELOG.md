@@ -1,5 +1,40 @@
 # @tailor-platform/sdk-codemod
 
+## 0.3.0-next.7
+
+### Patch Changes
+
+- [#1787](https://github.com/tailor-platform/sdk/pull/1787) [`898d0b0`](https://github.com/tailor-platform/sdk/commit/898d0b0f809d15ea883a32a78a247eda4ca7caa7) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `tailor upgrade` reporting zero codemods across several v2 prerelease boundaries. `v2/db-type-to-table` and `v2/runtime-subpath-namespace` now trigger at `2.0.0-next.4` (where they actually shipped) instead of `2.0.0-next.3`, and `v2/forward-relation-name`, `v2/tailordb-validate-simplify`, and `v2/tailordb-hook-redesign` now trigger at `2.0.0-next.5` instead of `2.0.0-next.4`.
+
+- [#1787](https://github.com/tailor-platform/sdk/pull/1787) [`6653afd`](https://github.com/tailor-platform/sdk/commit/6653afd5a0be52f8c9a1dc6fa50e445f0f678dc0) Thanks [@toiroakr](https://github.com/toiroakr)! - Add a `V2_NEXT_PENDING` placeholder `prereleaseUntil` for codemods whose exact `2.0.0-next.N` release boundary isn't known yet at implementation time, plus a `pnpm codemod:resolve-pending` step (wired into the release workflow) that resolves it to the real version constant once the release PR bumps `@tailor-platform/sdk`'s version. Prevents codemod boundaries from drifting out of sync with the version they actually ship in, which previously required a manual follow-up fix after each release.
+
+- [#1782](https://github.com/tailor-platform/sdk/pull/1782) [`c971797`](https://github.com/tailor-platform/sdk/commit/c971797c9bfa035a43771c46f2b1c3bd93f989a9) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename `Workflow.trigger()` (returned by `createWorkflow()`) and `WorkflowJob.trigger()` (returned by `createWorkflowJob()`) to `.start()`, aligning the SDK's ergonomic verb with the platform's `start*` RPC vocabulary:
+  
+  ```diff
+   const inventory = checkInventory.trigger({ orderId: input.orderId });
+  +const inventory = checkInventory.start({ orderId: input.orderId });
+  
+  -const workflowRunId = await orderProcessingWorkflow.trigger(args, { invoker: "manager" });
+  +const workflowRunId = await orderProcessingWorkflow.start(args, { invoker: "manager" });
+  ```
+  
+  `mockWorkflow()`'s `wf.job(definition)` / `wf.workflow(definition)` now return a mock of the `.start` method, and `wf.setTriggerHandler` / `wf.triggeredJobs` are renamed to `wf.setStartHandler` / `wf.startedJobs`. No codemod ships for the `.trigger()` → `.start()` call-site rename itself — see the `v2/workflow-start-rename` migration guide entry for manual migration steps.
+
+- [#1782](https://github.com/tailor-platform/sdk/pull/1782) [`c971797`](https://github.com/tailor-platform/sdk/commit/c971797c9bfa035a43771c46f2b1c3bd93f989a9) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove the pre-alignment `tailor.workflow` names `triggerWorkflow`, `triggerJobFunction`, and `resumeWorkflow` (and their `TriggerWorkflowOptions` / `TriggerJobFunctionOptions` option types) from `@tailor-platform/sdk/runtime`, the ambient `@tailor-platform/sdk/runtime/globals` types, and the `mockWorkflow()` test facade. Use the canonical names instead:
+  
+  ```diff
+   import { workflow } from "@tailor-platform/sdk/runtime";
+  
+  -await workflow.triggerWorkflow("myWorkflow", { data: "value" });
+  +await workflow.startWorkflow("myWorkflow", { data: "value" });
+  -workflow.triggerJobFunction("myJob", { data: "value" });
+  +workflow.startJobFunction("myJob", { data: "value" });
+  -await workflow.resumeWorkflow("execution-id");
+  +await workflow.resumeWorkflowExecution("execution-id");
+  ```
+  
+  Run the `v2/workflow-trigger-rename` codemod to migrate call sites automatically.
+
 ## 0.3.0-next.6
 
 ### Patch Changes

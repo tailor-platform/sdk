@@ -1,5 +1,16 @@
 # @tailor-platform/sdk-tailordb-erd-plugin
 
+## 0.1.0-next.1
+
+### Minor Changes
+
+- [#1801](https://github.com/tailor-platform/sdk/pull/1801) [`ee382c7`](https://github.com/tailor-platform/sdk/commit/ee382c7d5f5c0a14acf47c1dee6f12d8cecad92d) Thanks [@toiroakr](https://github.com/toiroakr)! - Renamed the package from `@tailor-platform/sdk-tailordb-erd-plugin` to `@tailor-platform/sdk-plugin-tailordb-erd`, following the `eslint-plugin-*`-style naming convention used for CLI plugin packages. Update your dependency to the new name; the `tailor-tailordb-erd` executable and the `tailor tailordb erd` commands are unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`f1cbda5`](https://github.com/tailor-platform/sdk/commit/f1cbda56df96670f18dccf2b7f2473430584f377), [`c870196`](https://github.com/tailor-platform/sdk/commit/c8701961f90d7bdcc887c793c806d4f26cc9b197), [`d07a82a`](https://github.com/tailor-platform/sdk/commit/d07a82aa4ded74c3d84e157b4bed5c37ef0ec239), [`da7d0c4`](https://github.com/tailor-platform/sdk/commit/da7d0c49322deebc9343dee88652152620a7cef9), [`cb97bd4`](https://github.com/tailor-platform/sdk/commit/cb97bd45314c5897818233dc8bc3b84b83bea8a3), [`ee382c7`](https://github.com/tailor-platform/sdk/commit/ee382c7d5f5c0a14acf47c1dee6f12d8cecad92d), [`c971797`](https://github.com/tailor-platform/sdk/commit/c971797c9bfa035a43771c46f2b1c3bd93f989a9), [`c971797`](https://github.com/tailor-platform/sdk/commit/c971797c9bfa035a43771c46f2b1c3bd93f989a9)]:
+  - @tailor-platform/sdk@2.0.0-next.7
+
 ## 0.1.0-next.0
 
 ### Minor Changes
