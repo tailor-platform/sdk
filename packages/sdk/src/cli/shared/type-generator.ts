@@ -4,8 +4,13 @@ import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import type { AppConfig } from "#/configure/config/types";
 
+export interface AttributeTypeInfo {
+  type: string;
+  optional?: boolean;
+}
+
 export interface AttributesConfig {
-  [key: string]: string;
+  [key: string]: AttributeTypeInfo;
 }
 
 export type AttributeListConfig = readonly string[];
@@ -25,6 +30,7 @@ type AttributeFieldLike = {
   metadata?: {
     array?: boolean;
     allowedValues?: Array<{ value: string }>;
+    required?: boolean;
   };
 };
 
@@ -59,10 +65,11 @@ export function generateTypeDefinition(
   aiGatewayNames?: readonly string[],
 ): string {
   // Generate Attributes interface
-  // attributes values are type string representations (e.g., "string", "boolean", "string[]")
+  // attributes values carry a type string representation (e.g., "string", "boolean", "string[]")
+  // and whether the underlying field is optional, so the key mirrors that optionality.
   const attributeFields = attributes
     ? Object.entries(attributes)
-        .map(([key, value]) => `    ${key}: ${value};`)
+        .map(([key, { type, optional }]) => `    ${key}${optional ? "?" : ""}: ${type};`)
         .join("\n")
     : "";
 
@@ -204,13 +211,13 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
   const connectionNames =
     connectionsObj && typeof connectionsObj === "object" ? Object.keys(connectionsObj) : undefined;
 
-  const inferAttributeType = (field?: AttributeFieldLike): string => {
+  const inferAttributeType = (field?: AttributeFieldLike): AttributeTypeInfo => {
     const type = field?.type;
     const metadata = field?.metadata;
 
     // Default to string if no metadata
     if (!metadata) {
-      return "string";
+      return { type: "string" };
     }
 
     let typeStr = "string";
@@ -227,7 +234,7 @@ function collectAttributesFromConfig(config: AppConfig): ExtractedAttributes {
       typeStr = typeStr.includes(" | ") ? `(${typeStr})[]` : `${typeStr}[]`;
     }
 
-    return typeStr;
+    return { type: typeStr, optional: metadata.required === false };
   };
 
   // Check if auth has userProfile with attributes/attributeList

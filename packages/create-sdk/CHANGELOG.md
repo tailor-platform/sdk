@@ -1,5 +1,27 @@
 # @tailor-platform/create-sdk
 
+## 2.0.0-next.8
+
+## 2.0.0-next.7
+
+### Major Changes
+
+- [#1782](https://github.com/tailor-platform/sdk/pull/1782) [`c971797`](https://github.com/tailor-platform/sdk/commit/c971797c9bfa035a43771c46f2b1c3bd93f989a9) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename `Workflow.trigger()` (returned by `createWorkflow()`) and `WorkflowJob.trigger()` (returned by `createWorkflowJob()`) to `.start()`, aligning the SDK's ergonomic verb with the platform's `start*` RPC vocabulary:
+  
+  ```diff
+   const inventory = checkInventory.trigger({ orderId: input.orderId });
+  +const inventory = checkInventory.start({ orderId: input.orderId });
+  
+  -const workflowRunId = await orderProcessingWorkflow.trigger(args, { invoker: "manager" });
+  +const workflowRunId = await orderProcessingWorkflow.start(args, { invoker: "manager" });
+  ```
+  
+  `mockWorkflow()`'s `wf.job(definition)` / `wf.workflow(definition)` now return a mock of the `.start` method, and `wf.setTriggerHandler` / `wf.triggeredJobs` are renamed to `wf.setStartHandler` / `wf.startedJobs`. No codemod ships for the `.trigger()` → `.start()` call-site rename itself — see the `v2/workflow-start-rename` migration guide entry for manual migration steps.
+
+### Minor Changes
+
+- [#1737](https://github.com/tailor-platform/sdk/pull/1737) [`e349b9e`](https://github.com/tailor-platform/sdk/commit/e349b9e3d9c61f324f21dea92dd08055493a2c6d) Thanks [@dqn](https://github.com/dqn)! - Add lint rules that flag the external /api prefix in HTTP adapter path patterns and permission settings that grant access unconditionally, and enable them in newly scaffolded projects.
+
 ## 2.0.0-next.6
 
 ## 2.0.0-next.5

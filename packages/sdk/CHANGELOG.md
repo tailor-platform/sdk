@@ -1,5 +1,58 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.8
+
+### Patch Changes
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`61ac76c`](https://github.com/tailor-platform/sdk/commit/61ac76cff992ef30e6115ba96c7d3a676010204f) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix IdP and TailorDB permission condition types breaking when `Attributes` fields are optional. Since machine user attribute keys started mirroring the source field's optionality, the `user` operand key helpers leaked `undefined` into their key unions — failing typecheck against the generated permission types even for `_loggedIn`-only conditions — and rejected attribute keys derived from optional fields. Optional attribute fields are now valid operand keys and `undefined` no longer appears in the unions.
+
+## 2.0.0-next.7
+
+### Major Changes
+
+- [#1782](https://github.com/tailor-platform/sdk/pull/1782) [`c971797`](https://github.com/tailor-platform/sdk/commit/c971797c9bfa035a43771c46f2b1c3bd93f989a9) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename `Workflow.trigger()` (returned by `createWorkflow()`) and `WorkflowJob.trigger()` (returned by `createWorkflowJob()`) to `.start()`, aligning the SDK's ergonomic verb with the platform's `start*` RPC vocabulary:
+  
+  ```diff
+   const inventory = checkInventory.trigger({ orderId: input.orderId });
+  +const inventory = checkInventory.start({ orderId: input.orderId });
+  
+  -const workflowRunId = await orderProcessingWorkflow.trigger(args, { invoker: "manager" });
+  +const workflowRunId = await orderProcessingWorkflow.start(args, { invoker: "manager" });
+  ```
+  
+  `mockWorkflow()`'s `wf.job(definition)` / `wf.workflow(definition)` now return a mock of the `.start` method, and `wf.setTriggerHandler` / `wf.triggeredJobs` are renamed to `wf.setStartHandler` / `wf.startedJobs`. No codemod ships for the `.trigger()` → `.start()` call-site rename itself — see the `v2/workflow-start-rename` migration guide entry for manual migration steps.
+
+- [#1782](https://github.com/tailor-platform/sdk/pull/1782) [`c971797`](https://github.com/tailor-platform/sdk/commit/c971797c9bfa035a43771c46f2b1c3bd93f989a9) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove the pre-alignment `tailor.workflow` names `triggerWorkflow`, `triggerJobFunction`, and `resumeWorkflow` (and their `TriggerWorkflowOptions` / `TriggerJobFunctionOptions` option types) from `@tailor-platform/sdk/runtime`, the ambient `@tailor-platform/sdk/runtime/globals` types, and the `mockWorkflow()` test facade. Use the canonical names instead:
+  
+  ```diff
+   import { workflow } from "@tailor-platform/sdk/runtime";
+  
+  -await workflow.triggerWorkflow("myWorkflow", { data: "value" });
+  +await workflow.startWorkflow("myWorkflow", { data: "value" });
+  -workflow.triggerJobFunction("myJob", { data: "value" });
+  +workflow.startJobFunction("myJob", { data: "value" });
+  -await workflow.resumeWorkflow("execution-id");
+  +await workflow.resumeWorkflowExecution("execution-id");
+  ```
+  
+  Run the `v2/workflow-trigger-rename` codemod to migrate call sites automatically.
+
+### Minor Changes
+
+- [#1800](https://github.com/tailor-platform/sdk/pull/1800) [`d07a82a`](https://github.com/tailor-platform/sdk/commit/d07a82aa4ded74c3d84e157b4bed5c37ef0ec239) Thanks [@toiroakr](https://github.com/toiroakr)! - Machine user attribute keys now mirror the field's optionality: attributes derived from optional user fields (or optional `machineUserAttributes` fields) can be omitted, and `null`/`undefined` values are treated as "attribute not set" instead of being rejected at deploy time. Attributes derived from required fields remain mandatory, and undeclared attribute keys are still rejected. The generated `AttributeMap` type used to read `user.attributes` in resolvers, executors, and workflows now mirrors this same optionality, so an attribute derived from an optional field is typed as possibly absent instead of always present.
+
+### Patch Changes
+
+- [#1741](https://github.com/tailor-platform/sdk/pull/1741) [`f1cbda5`](https://github.com/tailor-platform/sdk/commit/f1cbda56df96670f18dccf2b7f2473430584f377) Thanks [@toiroakr](https://github.com/toiroakr)! - Resolve each config's `files` glob patterns and bundler `tsconfig` relative to that config file's own directory instead of the invocation `cwd`, so `--config a/tailor.config.ts,b/tailor.config.ts` no longer lets one app's file glob or path aliases bleed into another. If a `files` pattern matches nothing under the new directory, it falls back to resolving against `cwd` as before, so existing configs whose patterns were written against the invocation directory keep working.
+
+- [#1767](https://github.com/tailor-platform/sdk/pull/1767) [`c870196`](https://github.com/tailor-platform/sdk/commit/c8701961f90d7bdcc887c793c806d4f26cc9b197) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix tsconfig `paths` alias resolution for dynamically loaded resolver, executor, workflow, HTTP adapter, and TailorDB type files. Previously, an import like `import { foo } from "@/utils"` in one of these files would fail to resolve when the file lived outside the directory tsx was registered from (e.g. in multi-app setups). Each file's `paths` aliases are now resolved as a fallback from its own tsconfig, based on the importing file's own directory.
+
+- [#1788](https://github.com/tailor-platform/sdk/pull/1788) [`da7d0c4`](https://github.com/tailor-platform/sdk/commit/da7d0c49322deebc9343dee88652152620a7cef9) Thanks [@toiroakr](https://github.com/toiroakr)! - `tailor deploy` no longer automatically deletes on-disk bundle artifacts left by SDK versions predating the in-memory bundling approach; delete those specific stale files manually if any remain from a very old SDK version (do not delete the whole output directory, which also holds deploy state such as secrets and Auth Connection records)
+
+- [#1785](https://github.com/tailor-platform/sdk/pull/1785) [`cb97bd4`](https://github.com/tailor-platform/sdk/commit/cb97bd45314c5897818233dc8bc3b84b83bea8a3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.23.1
+
+- [#1801](https://github.com/tailor-platform/sdk/pull/1801) [`ee382c7`](https://github.com/tailor-platform/sdk/commit/ee382c7d5f5c0a14acf47c1dee6f12d8cecad92d) Thanks [@toiroakr](https://github.com/toiroakr)! - Update the `tailordb erd` plugin install hint to reference the renamed `@tailor-platform/sdk-plugin-tailordb-erd` package.
+
 ## 2.0.0-next.6
 
 ### Major Changes

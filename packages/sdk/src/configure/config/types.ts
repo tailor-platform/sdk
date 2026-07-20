@@ -14,11 +14,14 @@ import type { LogLevelEnum } from "#/types/app-config.generated";
 export type LogLevel = LogLevelEnum;
 export type LogLevelInput = LogLevel | (string & {});
 
+/** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
 export type ExecutorServiceInput = ExecutorServiceConfig;
 
+/** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
 export type HttpAdapterServiceInput = { files: string[]; ignores?: string[] };
 
+/** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
 export type ResolverServiceConfig = { files: string[]; ignores?: string[] };
 export type ResolverExternalConfig = { external: true };
 export type ResolverServiceInput = {
@@ -26,6 +29,7 @@ export type ResolverServiceInput = {
 };
 
 export type WorkflowServiceConfig = {
+  /** Resolved relative to this config's own directory, not the invocation directory. */
   files: string[];
   job_files?: string[];
   ignores?: string[];
@@ -45,7 +49,7 @@ export type WorkflowServiceInput = WorkflowServiceConfig;
  * - `idp`: Array of IdP configs, e.g. `[myIdp]`
  * - `staticWebsites`: Array of static website configs, e.g. `[website]`
  * - `aiGateways`: Array of AI Gateway configs, e.g. `[gateway]`
- * - `db`, `resolver`, `executor`, `workflow`: Service configs with file globs
+ * - `db`, `resolver`, `executor`, `workflow`, `httpAdapter`: Service configs with file globs (resolved relative to this config file's own directory, not the invocation directory)
  */
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,

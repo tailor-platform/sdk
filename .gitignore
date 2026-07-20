@@ -47,7 +47,8 @@ tailor.d.ts
 !.claude/skills/llm-challenge
 !.claude/skills/docs-check
 !.claude/skills/tailor
-!.claude/skills/e2e-setup
+!.claude/skills/e2e-test
+/.agents/skills/e2e-setup/ids.local.env
 AGENTS.local.md
 CLAUDE.local.md
 

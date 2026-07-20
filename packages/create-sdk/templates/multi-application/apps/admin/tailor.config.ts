@@ -5,6 +5,6 @@ export default defineConfig({
   name: "admin",
   db: {
     [sharedDb]: { external: true },
-    "admin-db": { files: [`./apps/admin/db/**/*.ts`] },
+    "admin-db": { files: [`./db/**/*.ts`] },
   },
 });

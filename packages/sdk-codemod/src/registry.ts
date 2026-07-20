@@ -99,6 +99,7 @@ const V2_NEXT_2 = "2.0.0-next.2";
 const V2_NEXT_4 = "2.0.0-next.4";
 const V2_NEXT_5 = "2.0.0-next.5";
 const V2_NEXT_6 = "2.0.0-next.6";
+const V2_NEXT_7 = "2.0.0-next.7";
 /**
  * Sentinel `prereleaseUntil` for a codemod whose exact `2.0.0-next.N` release is not
  * known yet. `pnpm codemod:resolve-pending`, run in CI against the release PR, replaces
@@ -917,7 +918,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rename `Workflow.trigger()` (returned by `createWorkflow()`) and `WorkflowJob.trigger()` (returned by `createWorkflowJob()`) to `.start()`, aligning the SDK's ergonomic verb with the platform's `start*` RPC vocabulary. No codemod ships for this rename: distinguishing a workflow/job `.trigger()` call from an unrelated object's own `.trigger()` method requires resolving the receiver back to a `createWorkflow`/`createWorkflowJob` result across files, which the SDK's own CLI bundler already does for build-time rewriting. Reusing that logic in a standalone script is a nontrivial lift, and — unlike the bundler, which fails loudly when it cannot rewrite a call — a codemod false positive would silently rewrite an unrelated `.trigger()` call with no error. For the call-site volume this rename typically involves, manual review guided by the prompt below is the safer trade-off.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_6,
+    prereleaseUntil: V2_NEXT_7,
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     suspiciousPatterns: [".trigger("],
     examples: [

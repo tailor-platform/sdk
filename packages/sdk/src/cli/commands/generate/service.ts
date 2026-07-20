@@ -306,7 +306,7 @@ export function createGenerationManager(params: {
           const executorService =
             app.executorService ??
             (pluginExecutorFiles.length > 0
-              ? createExecutorService({ config: { files: [] } })
+              ? createExecutorService({ config: { files: [] }, baseDir: path.dirname(config.path) })
               : undefined);
           return { pluginExecutorFiles, executorService };
         },

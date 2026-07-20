@@ -1,8 +1,11 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "pathe";
+import { resolveTSConfig } from "pkg-types";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { bundleResolvers } from "./bundler";
+import type * as pkgTypes from "pkg-types";
 import type * as rolldown from "rolldown";
 
 let buildTracker: { active: number; maxActive: number } | undefined;
@@ -16,6 +19,7 @@ let concurrentBuildBarrier:
   | undefined;
 
 type RolldownModule = typeof rolldown;
+type PkgTypesModule = typeof pkgTypes;
 
 vi.mock("rolldown", async (importOriginal) => {
   const original = await importOriginal<RolldownModule>();
@@ -93,6 +97,11 @@ vi.mock("rolldown", async (importOriginal) => {
   };
 });
 
+vi.mock("pkg-types", async (importOriginal) => {
+  const original = await importOriginal<PkgTypesModule>();
+  return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
+});
+
 describe("bundleResolvers", () => {
   test("does not throw when no resolver files match", async () => {
     using tmp = tempCwd("sdk-bundler-");
@@ -101,10 +110,42 @@ describe("bundleResolvers", () => {
     });
 
     await expect(
-      bundleResolvers("provisioning", {
-        files: ["./src/backend/provisioning/resolver/*.ts"],
-      }),
+      bundleResolvers(
+        "provisioning",
+        {
+          files: ["./src/backend/provisioning/resolver/*.ts"],
+        },
+        tmp.dir,
+      ),
     ).resolves.toEqual(new Map());
+  });
+
+  test("resolves tsconfig relative to baseDir, not process.cwd()", async () => {
+    using _tmp = tempCwd("sdk-bundler-tsconfig-");
+    const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-bundler-tsconfig-other-"));
+    try {
+      const resolverDir = path.join(otherDir, "src/backend/tsconfig-test/resolver");
+      fs.mkdirSync(resolverDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(resolverDir, "resolver.ts"),
+        `export default {\n` +
+          `  operation: "query",\n` +
+          `  name: "tsconfig_resolver",\n` +
+          `  body: async () => 1,\n` +
+          `  output: { type: "integer", metadata: {}, fields: {} },\n` +
+          `};\n`,
+      );
+
+      await bundleResolvers(
+        "tsconfig-test",
+        { files: ["./src/backend/tsconfig-test/resolver/*.ts"] },
+        otherDir,
+      );
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(otherDir);
+    } finally {
+      fs.rmSync(otherDir, { recursive: true, force: true });
+    }
   });
 
   test("produces deterministic bundles with inline sourcemaps", async () => {
@@ -122,7 +163,14 @@ describe("bundleResolvers", () => {
     );
 
     const build = () =>
-      bundleResolvers("deterministic", { files: ["./resolver/*.ts"] }, undefined, undefined, true);
+      bundleResolvers(
+        "deterministic",
+        { files: ["./resolver/*.ts"] },
+        tmp.dir,
+        undefined,
+        undefined,
+        true,
+      );
 
     const first = await build();
     const second = await build();
@@ -180,13 +228,9 @@ describe("bundleResolvers", () => {
         resolveSecondBuildStarted,
       };
 
-      const firstBuild = bundleResolvers("first", {
-        files: ["./first/resolver/*.ts"],
-      });
+      const firstBuild = bundleResolvers("first", { files: ["./first/resolver/*.ts"] }, tmp.dir);
       await firstBuildStarted;
-      const secondBuild = bundleResolvers("second", {
-        files: ["./second/resolver/*.ts"],
-      });
+      const secondBuild = bundleResolvers("second", { files: ["./second/resolver/*.ts"] }, tmp.dir);
 
       const [firstBundles, secondBundles] = await Promise.all([firstBuild, secondBuild]);
       const firstCode = firstBundles.get("shared");
@@ -222,9 +266,13 @@ describe("bundleResolvers", () => {
       vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "2");
       buildTracker = { active: 0, maxActive: 0 };
 
-      await bundleResolvers("concurrency", {
-        files: ["./src/backend/concurrency/resolver/*.ts"],
-      });
+      await bundleResolvers(
+        "concurrency",
+        {
+          files: ["./src/backend/concurrency/resolver/*.ts"],
+        },
+        tmp.dir,
+      );
 
       expect(buildTracker.maxActive).toBeGreaterThan(0);
       expect(buildTracker.maxActive).toBeLessThanOrEqual(2);

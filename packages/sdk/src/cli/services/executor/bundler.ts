@@ -1,5 +1,4 @@
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
@@ -9,6 +8,7 @@ import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
@@ -37,6 +37,8 @@ export interface BundleExecutorsOptions {
   inlineSourcemap?: boolean;
   /** Controls which console calls are kept in bundled code */
   bundleLogLevel?: LogLevel;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
 }
 
 /**
@@ -59,8 +61,9 @@ export async function bundleExecutors(
     cache,
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
+    baseDir,
   } = options;
-  const configFiles = loadFilesWithIgnores(config);
+  const configFiles = loadFilesWithIgnores(config, baseDir);
   const files = [...configFiles, ...additionalFiles];
   if (files.length === 0) {
     logger.warn(`No executor files found for patterns: ${config.files.join(", ")}`);
@@ -98,12 +101,7 @@ export async function bundleExecutors(
     return bundledCode;
   }
 
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   // Process each executor, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).

@@ -22,8 +22,13 @@ describe("generateTypeDefinition", () => {
     },
     {
       name: "generates Attributes interface",
-      args: [{ role: '"MANAGER" | "STAFF"', isActive: "boolean" }, undefined],
+      args: [{ role: { type: '"MANAGER" | "STAFF"' }, isActive: { type: "boolean" } }, undefined],
       expected: ["interface Attributes", 'role: "MANAGER" | "STAFF"', "isActive: boolean"],
+    },
+    {
+      name: "generates optional key for an optional-field-derived attribute",
+      args: [{ nickname: { type: "string", optional: true } }, undefined],
+      expected: ["nickname?: string;"],
     },
     {
       name: "generates empty Attributes when no attributes",
@@ -73,7 +78,7 @@ describe("generateTypeDefinition", () => {
 
   test("should generate interface AttributeList for declaration merging", () => {
     const attributes: AttributesConfig = {
-      role: '"MANAGER" | "STAFF"',
+      role: { type: '"MANAGER" | "STAFF"' },
     };
     const attributeList: AttributeListConfig = [];
 
@@ -86,8 +91,8 @@ describe("generateTypeDefinition", () => {
 
   test("should generate Attributes interface", () => {
     const attributes: AttributesConfig = {
-      role: '"MANAGER" | "STAFF"',
-      isActive: "boolean",
+      role: { type: '"MANAGER" | "STAFF"' },
+      isActive: { type: "boolean" },
     };
 
     const result = generateTypeDefinition(attributes, undefined);
@@ -239,6 +244,7 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
           roles: t.enum(["ADMIN", "WORKER"], { array: true }),
           isActive: t.bool(),
           tags: t.string({ array: true }),
+          nickname: t.string({ optional: true }),
         },
         machineUsers: {
           admin: {
@@ -260,6 +266,10 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
     expect(content).toContain('roles: ("ADMIN" | "WORKER")[];');
     expect(content).toContain("isActive: boolean;");
     expect(content).toContain("tags: string[];");
+    // A field derived from an optional source field renders as an optional key,
+    // matching the machine user's own ability to omit it.
+    expect(content).toContain("nickname?: string;");
+    expect(content).not.toContain("nickname: string;");
   });
 
   test("extracts machine user names into MachineUserNameRegistry", () => {
