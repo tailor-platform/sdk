@@ -10,9 +10,11 @@ describe("pkg.pr.new workflow", () => {
   test("uses repository-qualified preview URLs for the combined publish", () => {
     for (const packageName of ["sdk", "create-sdk", "sdk-plugin-seed"]) {
       expect(workflow).toContain(
-        `https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/${packageName}@\${SHORT_SHA}`,
+        `https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/${packageName}@\${SHA}`,
       );
     }
+
+    expect(workflow).not.toContain("SHORT_SHA");
 
     const publishCommand = workflow.split("\n").find((line) => line.includes("pkg-pr-new publish"));
     expect(publishCommand).toBeDefined();
