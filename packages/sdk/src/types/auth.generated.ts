@@ -19,7 +19,9 @@ export type OIDC = {
   clientID: string;
   /** OAuth2 client secret */
   clientSecret: {
+    /** Vault name containing the secret */
     vaultName: string;
+    /** Key of the secret in the vault */
     secretKey: string;
   };
   /** OIDC provider URL */
@@ -155,7 +157,9 @@ export type SCIMAuthorization = {
   /** Bearer token secret (required for bearer type) */
   bearerSecret?:
     | {
+        /** Vault name containing the secret */
         vaultName: string;
+        /** Key of the secret in the vault */
         secretKey: string;
       }
     | undefined;
@@ -225,17 +229,25 @@ export type SCIMResource = {
   tailorDBType: string;
   /** Core SCIM schema definition */
   coreSchema: {
-    /** SCIM resource name */
+    /** SCIM schema name */
     name: string;
+    /** Schema attributes */
     attributes: {
+      /** Attribute data type */
       type: "string" | "number" | "boolean" | "datetime" | "complex";
-      /** SCIM resource name */
+      /** Attribute name */
       name: string;
+      /** Attribute description */
       description?: string | undefined;
+      /** Attribute mutability */
       mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
+      /** Whether the attribute is required */
       required?: boolean | undefined;
+      /** Whether the attribute can have multiple values */
       multiValued?: boolean | undefined;
+      /** Uniqueness constraint */
       uniqueness?: "none" | "server" | "global" | undefined;
+      /** List of canonical values */
       canonicalValues?: string[] | null | undefined;
       subAttributes?: any[] | null | undefined;
     }[];
@@ -267,9 +279,12 @@ export type TenantProviderInput = TenantProvider;
 
 export type AuthConfigInput =
   | {
+      /** Auth service name */
       name: string;
+      /** Auth hooks */
       hooks?:
         | {
+            /** Before login auth hook */
             beforeLogin?:
               | {
                   handler: Function;
@@ -278,6 +293,7 @@ export type AuthConfigInput =
               | undefined;
           }
         | undefined;
+      /** Machine user definitions */
       machineUsers?:
         | {
             [x: string]: {
@@ -290,6 +306,7 @@ export type AuthConfigInput =
             };
           }
         | undefined;
+      /** OAuth2 client definitions */
       oauth2Clients?:
         | {
             [x: string]: {
@@ -308,86 +325,138 @@ export type AuthConfigInput =
             };
           }
         | undefined;
+      /** Identity provider configuration */
       idProvider?:
         | {
+            /** Identity provider name */
             name: string;
             kind: "SAML";
+            /** Enable signing of SAML requests */
             enableSignRequest?: boolean | undefined;
+            /** URL to fetch SAML metadata (mutually exclusive with rawMetadata) */
             metadataURL?: string | undefined;
+            /** Raw SAML metadata XML (mutually exclusive with metadataURL) */
             rawMetadata?: string | undefined;
+            /** URL to redirect to when SAML ACS receives a response with an empty RelayState. */
             defaultRedirectURL?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "OIDC";
+            /** OAuth2 client ID */
             clientID: string;
+            /** OAuth2 client secret */
             clientSecret: {
+              /** Vault name containing the secret */
               vaultName: string;
+              /** Key of the secret in the vault */
               secretKey: string;
             };
+            /** OIDC provider URL */
             providerURL: string;
+            /** OIDC issuer URL (defaults to providerURL) */
             issuerURL?: string | undefined;
+            /** JWT claim to use as username */
             usernameClaim?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "IDToken";
+            /** OIDC provider URL */
             providerURL: string;
+            /** OAuth2 client ID */
             clientID: string;
+            /** OIDC issuer URL (defaults to providerURL) */
             issuerURL?: string | undefined;
+            /** JWT claim to use as username */
             usernameClaim?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "BuiltInIdP";
+            /** IdP namespace */
             namespace: string;
+            /** OAuth2 client name in the IdP */
             clientName: string;
           }
         | undefined;
+      /** SCIM provisioning configuration */
       scim?:
         | {
+            /** Machine user name for SCIM operations */
             machineUserName: string;
+            /** SCIM authorization configuration */
             authorization: {
+              /** SCIM authorization type */
               type: "oauth2" | "bearer";
+              /** Bearer token secret (required for bearer type) */
               bearerSecret?:
                 | {
+                    /** Vault name containing the secret */
                     vaultName: string;
+                    /** Key of the secret in the vault */
                     secretKey: string;
                   }
                 | undefined;
             };
+            /** SCIM resource definitions */
             resources: {
+              /** SCIM resource name */
               name: string;
+              /** TailorDB namespace for the resource */
               tailorDBNamespace: string;
+              /** TailorDB type name for the resource */
               tailorDBType: string;
+              /** Core SCIM schema definition */
               coreSchema: {
+                /** SCIM schema name */
                 name: string;
+                /** Schema attributes */
                 attributes: {
+                  /** Attribute data type */
                   type: "string" | "number" | "boolean" | "datetime" | "complex";
+                  /** Attribute name */
                   name: string;
+                  /** Attribute description */
                   description?: string | undefined;
+                  /** Attribute mutability */
                   mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
+                  /** Whether the attribute is required */
                   required?: boolean | undefined;
+                  /** Whether the attribute can have multiple values */
                   multiValued?: boolean | undefined;
+                  /** Uniqueness constraint */
                   uniqueness?: "none" | "server" | "global" | undefined;
+                  /** List of canonical values */
                   canonicalValues?: string[] | null | undefined;
                   subAttributes?: any[] | null | undefined;
                 }[];
               };
+              /** Attribute mapping configuration */
               attributeMapping: {
+                /** TailorDB field name to map to */
                 tailorDBField: string;
+                /** SCIM attribute path */
                 scimPath: string;
               }[];
             }[];
           }
         | undefined;
+      /** Multi-tenant provider configuration */
       tenantProvider?:
         | {
+            /** TailorDB namespace for the tenant type */
             namespace: string;
+            /** TailorDB type name for tenants */
             type: string;
+            /** Field used as the tenant signature */
             signatureField: string;
           }
         | undefined;
+      /** Auth connection definitions for external OAuth2 providers */
       connections?:
         | {
             [x: string]: {
@@ -401,7 +470,9 @@ export type AuthConfigInput =
             };
           }
         | undefined;
+      /** Enable publishing session events */
       publishSessionEvents?: boolean | undefined;
+      /** User profile configuration */
       userProfile?:
         | {
             type: {
@@ -418,6 +489,7 @@ export type AuthConfigInput =
               _output: any;
             };
             usernameField: string;
+            /** TailorDB namespace where the user type is defined */
             namespace?: string | undefined;
             attributes?:
               | {
@@ -427,10 +499,13 @@ export type AuthConfigInput =
             attributeList?: string[] | undefined;
           }
         | undefined;
+      /** Machine user attribute fields */
       machineUserAttributes?: undefined;
     }
   | {
+      /** Auth service name */
       name: string;
+      /** Machine user attribute fields */
       machineUserAttributes: {
         [x: string]: {
           type:
@@ -466,8 +541,10 @@ export type AuthConfigInput =
           fields: any;
         };
       };
+      /** Auth hooks */
       hooks?:
         | {
+            /** Before login auth hook */
             beforeLogin?:
               | {
                   handler: Function;
@@ -476,6 +553,7 @@ export type AuthConfigInput =
               | undefined;
           }
         | undefined;
+      /** Machine user definitions */
       machineUsers?:
         | {
             [x: string]: {
@@ -488,6 +566,7 @@ export type AuthConfigInput =
             };
           }
         | undefined;
+      /** OAuth2 client definitions */
       oauth2Clients?:
         | {
             [x: string]: {
@@ -506,86 +585,138 @@ export type AuthConfigInput =
             };
           }
         | undefined;
+      /** Identity provider configuration */
       idProvider?:
         | {
+            /** Identity provider name */
             name: string;
             kind: "SAML";
+            /** Enable signing of SAML requests */
             enableSignRequest?: boolean | undefined;
+            /** URL to fetch SAML metadata (mutually exclusive with rawMetadata) */
             metadataURL?: string | undefined;
+            /** Raw SAML metadata XML (mutually exclusive with metadataURL) */
             rawMetadata?: string | undefined;
+            /** URL to redirect to when SAML ACS receives a response with an empty RelayState. */
             defaultRedirectURL?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "OIDC";
+            /** OAuth2 client ID */
             clientID: string;
+            /** OAuth2 client secret */
             clientSecret: {
+              /** Vault name containing the secret */
               vaultName: string;
+              /** Key of the secret in the vault */
               secretKey: string;
             };
+            /** OIDC provider URL */
             providerURL: string;
+            /** OIDC issuer URL (defaults to providerURL) */
             issuerURL?: string | undefined;
+            /** JWT claim to use as username */
             usernameClaim?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "IDToken";
+            /** OIDC provider URL */
             providerURL: string;
+            /** OAuth2 client ID */
             clientID: string;
+            /** OIDC issuer URL (defaults to providerURL) */
             issuerURL?: string | undefined;
+            /** JWT claim to use as username */
             usernameClaim?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "BuiltInIdP";
+            /** IdP namespace */
             namespace: string;
+            /** OAuth2 client name in the IdP */
             clientName: string;
           }
         | undefined;
+      /** SCIM provisioning configuration */
       scim?:
         | {
+            /** Machine user name for SCIM operations */
             machineUserName: string;
+            /** SCIM authorization configuration */
             authorization: {
+              /** SCIM authorization type */
               type: "oauth2" | "bearer";
+              /** Bearer token secret (required for bearer type) */
               bearerSecret?:
                 | {
+                    /** Vault name containing the secret */
                     vaultName: string;
+                    /** Key of the secret in the vault */
                     secretKey: string;
                   }
                 | undefined;
             };
+            /** SCIM resource definitions */
             resources: {
+              /** SCIM resource name */
               name: string;
+              /** TailorDB namespace for the resource */
               tailorDBNamespace: string;
+              /** TailorDB type name for the resource */
               tailorDBType: string;
+              /** Core SCIM schema definition */
               coreSchema: {
+                /** SCIM schema name */
                 name: string;
+                /** Schema attributes */
                 attributes: {
+                  /** Attribute data type */
                   type: "string" | "number" | "boolean" | "datetime" | "complex";
+                  /** Attribute name */
                   name: string;
+                  /** Attribute description */
                   description?: string | undefined;
+                  /** Attribute mutability */
                   mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
+                  /** Whether the attribute is required */
                   required?: boolean | undefined;
+                  /** Whether the attribute can have multiple values */
                   multiValued?: boolean | undefined;
+                  /** Uniqueness constraint */
                   uniqueness?: "none" | "server" | "global" | undefined;
+                  /** List of canonical values */
                   canonicalValues?: string[] | null | undefined;
                   subAttributes?: any[] | null | undefined;
                 }[];
               };
+              /** Attribute mapping configuration */
               attributeMapping: {
+                /** TailorDB field name to map to */
                 tailorDBField: string;
+                /** SCIM attribute path */
                 scimPath: string;
               }[];
             }[];
           }
         | undefined;
+      /** Multi-tenant provider configuration */
       tenantProvider?:
         | {
+            /** TailorDB namespace for the tenant type */
             namespace: string;
+            /** TailorDB type name for tenants */
             type: string;
+            /** Field used as the tenant signature */
             signatureField: string;
           }
         | undefined;
+      /** Auth connection definitions for external OAuth2 providers */
       connections?:
         | {
             [x: string]: {
@@ -599,15 +730,20 @@ export type AuthConfigInput =
             };
           }
         | undefined;
+      /** Enable publishing session events */
       publishSessionEvents?: boolean | undefined;
+      /** User profile configuration */
       userProfile?: undefined;
     };
 
 export type AuthConfig =
   | {
+      /** Auth service name */
       name: string;
+      /** Auth hooks */
       hooks?:
         | {
+            /** Before login auth hook */
             beforeLogin?:
               | {
                   handler: Function;
@@ -616,6 +752,7 @@ export type AuthConfig =
               | undefined;
           }
         | undefined;
+      /** Machine user definitions */
       machineUsers?:
         | {
             [x: string]: {
@@ -628,6 +765,7 @@ export type AuthConfig =
             };
           }
         | undefined;
+      /** OAuth2 client definitions */
       oauth2Clients?:
         | {
             [x: string]: {
@@ -656,86 +794,138 @@ export type AuthConfig =
             };
           }
         | undefined;
+      /** Identity provider configuration */
       idProvider?:
         | {
+            /** Identity provider name */
             name: string;
             kind: "SAML";
+            /** Enable signing of SAML requests */
             enableSignRequest: boolean;
+            /** URL to fetch SAML metadata (mutually exclusive with rawMetadata) */
             metadataURL?: string | undefined;
+            /** Raw SAML metadata XML (mutually exclusive with metadataURL) */
             rawMetadata?: string | undefined;
+            /** URL to redirect to when SAML ACS receives a response with an empty RelayState. */
             defaultRedirectURL?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "OIDC";
+            /** OAuth2 client ID */
             clientID: string;
+            /** OAuth2 client secret */
             clientSecret: {
+              /** Vault name containing the secret */
               vaultName: string;
+              /** Key of the secret in the vault */
               secretKey: string;
             };
+            /** OIDC provider URL */
             providerURL: string;
+            /** OIDC issuer URL (defaults to providerURL) */
             issuerURL?: string | undefined;
+            /** JWT claim to use as username */
             usernameClaim?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "IDToken";
+            /** OIDC provider URL */
             providerURL: string;
+            /** OAuth2 client ID */
             clientID: string;
+            /** OIDC issuer URL (defaults to providerURL) */
             issuerURL?: string | undefined;
+            /** JWT claim to use as username */
             usernameClaim?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "BuiltInIdP";
+            /** IdP namespace */
             namespace: string;
+            /** OAuth2 client name in the IdP */
             clientName: string;
           }
         | undefined;
+      /** SCIM provisioning configuration */
       scim?:
         | {
+            /** Machine user name for SCIM operations */
             machineUserName: string;
+            /** SCIM authorization configuration */
             authorization: {
+              /** SCIM authorization type */
               type: "oauth2" | "bearer";
+              /** Bearer token secret (required for bearer type) */
               bearerSecret?:
                 | {
+                    /** Vault name containing the secret */
                     vaultName: string;
+                    /** Key of the secret in the vault */
                     secretKey: string;
                   }
                 | undefined;
             };
+            /** SCIM resource definitions */
             resources: {
+              /** SCIM resource name */
               name: string;
+              /** TailorDB namespace for the resource */
               tailorDBNamespace: string;
+              /** TailorDB type name for the resource */
               tailorDBType: string;
+              /** Core SCIM schema definition */
               coreSchema: {
+                /** SCIM schema name */
                 name: string;
+                /** Schema attributes */
                 attributes: {
+                  /** Attribute data type */
                   type: "string" | "number" | "boolean" | "datetime" | "complex";
+                  /** Attribute name */
                   name: string;
+                  /** Attribute description */
                   description?: string | undefined;
+                  /** Attribute mutability */
                   mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
+                  /** Whether the attribute is required */
                   required?: boolean | undefined;
+                  /** Whether the attribute can have multiple values */
                   multiValued?: boolean | undefined;
+                  /** Uniqueness constraint */
                   uniqueness?: "none" | "server" | "global" | undefined;
+                  /** List of canonical values */
                   canonicalValues?: string[] | null | undefined;
                   subAttributes?: any[] | null | undefined;
                 }[];
               };
+              /** Attribute mapping configuration */
               attributeMapping: {
+                /** TailorDB field name to map to */
                 tailorDBField: string;
+                /** SCIM attribute path */
                 scimPath: string;
               }[];
             }[];
           }
         | undefined;
+      /** Multi-tenant provider configuration */
       tenantProvider?:
         | {
+            /** TailorDB namespace for the tenant type */
             namespace: string;
+            /** TailorDB type name for tenants */
             type: string;
+            /** Field used as the tenant signature */
             signatureField: string;
           }
         | undefined;
+      /** Auth connection definitions for external OAuth2 providers */
       connections?:
         | {
             [x: string]: {
@@ -749,7 +939,9 @@ export type AuthConfig =
             };
           }
         | undefined;
+      /** Enable publishing session events */
       publishSessionEvents?: boolean | undefined;
+      /** User profile configuration */
       userProfile?:
         | {
             type: {
@@ -766,6 +958,7 @@ export type AuthConfig =
               _output: any;
             };
             usernameField: string;
+            /** TailorDB namespace where the user type is defined */
             namespace?: string | undefined;
             attributes?:
               | {
@@ -775,10 +968,13 @@ export type AuthConfig =
             attributeList?: string[] | undefined;
           }
         | undefined;
+      /** Machine user attribute fields */
       machineUserAttributes?: undefined;
     }
   | {
+      /** Auth service name */
       name: string;
+      /** Machine user attribute fields */
       machineUserAttributes: {
         [x: string]: {
           type:
@@ -814,8 +1010,10 @@ export type AuthConfig =
           fields: any;
         };
       };
+      /** Auth hooks */
       hooks?:
         | {
+            /** Before login auth hook */
             beforeLogin?:
               | {
                   handler: Function;
@@ -824,6 +1022,7 @@ export type AuthConfig =
               | undefined;
           }
         | undefined;
+      /** Machine user definitions */
       machineUsers?:
         | {
             [x: string]: {
@@ -836,6 +1035,7 @@ export type AuthConfig =
             };
           }
         | undefined;
+      /** OAuth2 client definitions */
       oauth2Clients?:
         | {
             [x: string]: {
@@ -864,86 +1064,138 @@ export type AuthConfig =
             };
           }
         | undefined;
+      /** Identity provider configuration */
       idProvider?:
         | {
+            /** Identity provider name */
             name: string;
             kind: "SAML";
+            /** Enable signing of SAML requests */
             enableSignRequest: boolean;
+            /** URL to fetch SAML metadata (mutually exclusive with rawMetadata) */
             metadataURL?: string | undefined;
+            /** Raw SAML metadata XML (mutually exclusive with metadataURL) */
             rawMetadata?: string | undefined;
+            /** URL to redirect to when SAML ACS receives a response with an empty RelayState. */
             defaultRedirectURL?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "OIDC";
+            /** OAuth2 client ID */
             clientID: string;
+            /** OAuth2 client secret */
             clientSecret: {
+              /** Vault name containing the secret */
               vaultName: string;
+              /** Key of the secret in the vault */
               secretKey: string;
             };
+            /** OIDC provider URL */
             providerURL: string;
+            /** OIDC issuer URL (defaults to providerURL) */
             issuerURL?: string | undefined;
+            /** JWT claim to use as username */
             usernameClaim?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "IDToken";
+            /** OIDC provider URL */
             providerURL: string;
+            /** OAuth2 client ID */
             clientID: string;
+            /** OIDC issuer URL (defaults to providerURL) */
             issuerURL?: string | undefined;
+            /** JWT claim to use as username */
             usernameClaim?: string | undefined;
           }
         | {
+            /** Identity provider name */
             name: string;
             kind: "BuiltInIdP";
+            /** IdP namespace */
             namespace: string;
+            /** OAuth2 client name in the IdP */
             clientName: string;
           }
         | undefined;
+      /** SCIM provisioning configuration */
       scim?:
         | {
+            /** Machine user name for SCIM operations */
             machineUserName: string;
+            /** SCIM authorization configuration */
             authorization: {
+              /** SCIM authorization type */
               type: "oauth2" | "bearer";
+              /** Bearer token secret (required for bearer type) */
               bearerSecret?:
                 | {
+                    /** Vault name containing the secret */
                     vaultName: string;
+                    /** Key of the secret in the vault */
                     secretKey: string;
                   }
                 | undefined;
             };
+            /** SCIM resource definitions */
             resources: {
+              /** SCIM resource name */
               name: string;
+              /** TailorDB namespace for the resource */
               tailorDBNamespace: string;
+              /** TailorDB type name for the resource */
               tailorDBType: string;
+              /** Core SCIM schema definition */
               coreSchema: {
+                /** SCIM schema name */
                 name: string;
+                /** Schema attributes */
                 attributes: {
+                  /** Attribute data type */
                   type: "string" | "number" | "boolean" | "datetime" | "complex";
+                  /** Attribute name */
                   name: string;
+                  /** Attribute description */
                   description?: string | undefined;
+                  /** Attribute mutability */
                   mutability?: "readOnly" | "readWrite" | "writeOnly" | undefined;
+                  /** Whether the attribute is required */
                   required?: boolean | undefined;
+                  /** Whether the attribute can have multiple values */
                   multiValued?: boolean | undefined;
+                  /** Uniqueness constraint */
                   uniqueness?: "none" | "server" | "global" | undefined;
+                  /** List of canonical values */
                   canonicalValues?: string[] | null | undefined;
                   subAttributes?: any[] | null | undefined;
                 }[];
               };
+              /** Attribute mapping configuration */
               attributeMapping: {
+                /** TailorDB field name to map to */
                 tailorDBField: string;
+                /** SCIM attribute path */
                 scimPath: string;
               }[];
             }[];
           }
         | undefined;
+      /** Multi-tenant provider configuration */
       tenantProvider?:
         | {
+            /** TailorDB namespace for the tenant type */
             namespace: string;
+            /** TailorDB type name for tenants */
             type: string;
+            /** Field used as the tenant signature */
             signatureField: string;
           }
         | undefined;
+      /** Auth connection definitions for external OAuth2 providers */
       connections?:
         | {
             [x: string]: {
@@ -957,6 +1209,8 @@ export type AuthConfig =
             };
           }
         | undefined;
+      /** Enable publishing session events */
       publishSessionEvents?: boolean | undefined;
+      /** User profile configuration */
       userProfile?: undefined;
     };

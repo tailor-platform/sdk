@@ -37,6 +37,7 @@ export type Resolver = {
   body: Function;
   /** Output field definition */
   output: {
+    /** Field data type */
     type:
       | "string"
       | "boolean"
@@ -49,24 +50,33 @@ export type Resolver = {
       | "datetime"
       | "time"
       | "nested";
+    /** Field metadata configuration */
     metadata: {
+      /** Whether the field is required */
       required?: boolean | undefined;
+      /** Whether the field is an array */
       array?: boolean | undefined;
-      /** Resolver description */
+      /** Field description */
       description?: string | undefined;
+      /** Allowed values for enum fields */
       allowedValues?:
         | {
+            /** The allowed value */
             value: string;
-            /** Resolver description */
+            /** Description of the allowed value */
             description?: string | undefined;
           }[]
         | undefined;
+      /** Lifecycle hooks */
       hooks?:
         | {
+            /** Hook function called on creation */
             create?: Function | undefined;
+            /** Hook function called on update */
             update?: Function | undefined;
           }
         | undefined;
+      /** Type name for nested or enum fields */
       typeName?: string | undefined;
     };
     fields: {
@@ -87,7 +97,9 @@ export type Resolver = {
   authInvoker?:
     | string
     | {
+        /** Auth namespace */
         namespace: string;
+        /** Machine user name for authentication */
         machineUserName: string;
       }
     | undefined;
@@ -130,7 +142,7 @@ export type Resolver = {
               ),
             ])[];
         permit: boolean;
-        /** Resolver description */
+        /** Reason recorded for this policy, used in the access-denied error message */
         description?: string | undefined;
       }[]
     | undefined;
