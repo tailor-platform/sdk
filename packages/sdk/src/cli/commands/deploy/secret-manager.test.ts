@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { hashValue } from "./secrets-state";
 import type { PlanContext } from "#/cli/commands/deploy/types";
@@ -155,7 +155,7 @@ describe("applySecretManager phase separation", () => {
     } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({
       vaults: {
@@ -164,6 +164,7 @@ describe("applySecretManager phase separation", () => {
         },
       },
     });
+    await runTest();
   });
 
   test("create-update phase creates vaults and secrets, does not delete", async () => {
@@ -248,9 +249,10 @@ describe("applySecretManager phase separation", () => {
 });
 
 describe("planSecretManager hash-based diff", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
   });
 
   test("skips update when hash matches stored state", async () => {
@@ -377,9 +379,10 @@ describe("planSecretManager hash-based diff", () => {
 });
 
 describe("planSecretManager vault metadata and deletion", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
   });
 
   test("plans vault deletion for managed vaults removed from config", async () => {
@@ -543,9 +546,10 @@ describe("planSecretManager vault metadata and deletion", () => {
 });
 
 describe("applySecretManager metadata update", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
   });
 
   test("sets metadata on existing vault during create-update phase", async () => {
@@ -618,9 +622,10 @@ describe("applySecretManager metadata update", () => {
 });
 
 describe("applySecretManager state persistence", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
   });
 
   test("saves hashes for secret values created or updated during apply", async () => {
@@ -775,9 +780,10 @@ describe("applySecretManager state persistence", () => {
 });
 
 describe("planSecretManager ignoreNullishValues", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
   });
 
   test.each([
@@ -844,7 +850,7 @@ describe("planSecretManager ignoreNullishValues", () => {
 });
 
 describe("applySecretManager ignoreNullishValues state persistence", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({
       vaults: {
@@ -853,6 +859,7 @@ describe("applySecretManager ignoreNullishValues state persistence", () => {
         },
       },
     });
+    await runTest();
   });
 
   test("nullish secret does not overwrite stored hash", async () => {

@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test, beforeEach, afterAll } from "vitest";
+import { describe, expect, test, aroundEach, aroundAll } from "vitest";
 import { bundleMigrationScript } from "./bundler";
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
@@ -10,17 +10,8 @@ const DB_TS_WITH_CONTEXT = `${DB_TS}export type MigrationContext = { env: Record
 describe("migration-bundler", () => {
   let testDir: string;
 
-  beforeEach(() => {
-    testDir = path.join(
-      TEST_BUNDLER_BASE,
-      `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    );
-    fs.mkdirSync(testDir, { recursive: true });
-    // Set TAILOR_SDK_OUTPUT_DIR to testDir so bundled output goes into test directory
-    process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
-  });
-
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     // Clean up environment variable
     delete process.env.TAILOR_SDK_OUTPUT_DIR;
     try {
@@ -28,6 +19,17 @@ describe("migration-bundler", () => {
     } catch {
       // Ignore cleanup errors
     }
+  });
+
+  aroundEach(async (runTest) => {
+    testDir = path.join(
+      TEST_BUNDLER_BASE,
+      `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    fs.mkdirSync(testDir, { recursive: true });
+    // Set TAILOR_SDK_OUTPUT_DIR to testDir so bundled output goes into test directory
+    process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    await runTest();
   });
 
   function writeMigration(

@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test, beforeEach, afterAll } from "vitest";
+import { describe, expect, test, aroundEach, aroundAll } from "vitest";
 import { writeDbTypesFile } from "./db-types-generator";
 import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "./diff-calculator";
 import {
@@ -55,20 +55,22 @@ function createMockSnapshot(
 describe("db-types-generator", () => {
   let testDir: string;
 
-  beforeEach(() => {
-    testDir = path.join(
-      TEST_MIGRATIONS_BASE,
-      `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    );
-    fs.mkdirSync(testDir, { recursive: true });
-  });
-
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     try {
       fs.rmSync(TEST_MIGRATIONS_BASE, { recursive: true, force: true });
     } catch {
       // Ignore cleanup errors
     }
+  });
+
+  aroundEach(async (runTest) => {
+    testDir = path.join(
+      TEST_MIGRATIONS_BASE,
+      `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    fs.mkdirSync(testDir, { recursive: true });
+    await runTest();
   });
 
   async function generateContent(

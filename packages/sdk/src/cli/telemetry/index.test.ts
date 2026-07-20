@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, test, expect, aroundEach, vi } from "vitest";
 
 async function registerTestProvider() {
   const { NodeTracerProvider } = await import("@opentelemetry/sdk-trace-node");
@@ -14,15 +14,12 @@ async function registerTestProvider() {
 }
 
 describe("telemetry", () => {
-  const originalEnv = process.env;
-
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
+    const originalEnv = process.env;
     process.env = { ...originalEnv };
     delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
     vi.resetModules();
-  });
-
-  afterEach(async () => {
+    await runTest();
     process.env = originalEnv;
     const { trace } = await import("@opentelemetry/api");
     trace.disable();

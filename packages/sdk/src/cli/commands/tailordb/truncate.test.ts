@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { truncate, type TruncateOptions } from "./truncate";
 
 // Mock dependencies
@@ -58,14 +58,12 @@ async function getMockClient() {
 }
 
 describe("truncate command", () => {
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     // Re-setup default mock behavior after clearAllMocks
     const { prompt } = await import("#/cli/shared/prompt");
     vi.mocked(prompt.confirm).mockResolvedValue(true);
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.restoreAllMocks();
   });
 

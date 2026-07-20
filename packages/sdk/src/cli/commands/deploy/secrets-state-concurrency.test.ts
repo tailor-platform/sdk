@@ -1,5 +1,5 @@
 import { existsSync, rmSync } from "node:fs";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { applyAuthConnections, type planAuthConnections } from "./auth-connection";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { hashValue, loadSecretsState } from "./secrets-state";
@@ -81,8 +81,11 @@ function connectionPlanResult(replaces: Array<ReturnType<typeof connectionReplac
 }
 
 describe("concurrent deploys to the same target", () => {
-  beforeEach(removeStateDir);
-  afterEach(removeStateDir);
+  aroundEach(async (runTest) => {
+    removeStateDir();
+    await runTest();
+    removeStateDir();
+  });
 
   test("secret hash state matches the last remote write", async () => {
     const remote = new Map<string, string>();

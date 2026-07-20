@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { loadWorkspaceContext, saveWorkspaceContext } from "./workspace-context";
 
 const temporaryDirectories: string[] = [];
@@ -12,7 +12,8 @@ async function temporaryDirectory(): Promise<string> {
   return directory;
 }
 
-afterEach(async () => {
+aroundEach(async (runTest) => {
+  await runTest();
   const { rm } = await import("node:fs/promises");
   await Promise.all(
     temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true })),

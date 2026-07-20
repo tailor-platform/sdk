@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { bundleResolvers } from "./bundler";
 import type * as pkgTypes from "pkg-types";
@@ -181,7 +181,8 @@ describe("bundleResolvers", () => {
   });
 
   describe("concurrency", () => {
-    afterEach(() => {
+    aroundEach(async (runTest) => {
+      await runTest();
       vi.unstubAllEnvs();
       buildTracker = undefined;
       concurrentBuildBarrier = undefined;

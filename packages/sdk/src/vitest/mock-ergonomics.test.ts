@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
+import { aroundEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createWorkflowJob } from "../configure/services/workflow/job";
 import { defineWaitPoint } from "../configure/services/workflow/wait-point";
 import { createWorkflow } from "../configure/services/workflow/workflow";
@@ -34,11 +34,9 @@ const approval = defineWaitPoint<{ message: string }, { approved: boolean }>(
 );
 
 describe("ergonomic runtime mocks", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     injectMocks(globalThis);
-  });
-
-  afterEach(() => {
+    await runTest();
     cleanupMocks(globalThis);
   });
 

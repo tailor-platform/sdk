@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { initOAuth2Client } from "#/cli/shared/client";
 import {
   loadAccessToken,
@@ -40,16 +40,14 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 const validUUID = "12345678-1234-4abc-8def-123456789012";
 const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
 
-beforeAll(() => {
+aroundAll(async (runSuite) => {
   fs.mkdirSync(xdgTempDir, { recursive: true });
-});
-
-afterAll(() => {
+  await runSuite();
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
 describe("logout --profile", () => {
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     resetKeyringState();
     writePlatformConfig({
@@ -88,9 +86,9 @@ describe("logout --profile", () => {
     );
     config.current_user = "u@example.com";
     writePlatformConfig(config);
-  });
 
-  afterEach(() => {
+    await runTest();
+
     vi.unstubAllEnvs();
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     if (fs.existsSync(configPath)) fs.rmSync(configPath);

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { sendCrashReport } from "./sender";
 import type { CrashReport } from "./report";
 
@@ -33,12 +33,10 @@ describe("sendCrashReport", () => {
   const originalFetch = globalThis.fetch;
   const originalEndpoint = process.env.TAILOR_CRASH_REPORT_ENDPOINT;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.restoreAllMocks();
     delete process.env.TAILOR_CRASH_REPORT_ENDPOINT;
-  });
-
-  afterEach(() => {
+    await runTest();
     globalThis.fetch = originalFetch;
     if (originalEndpoint !== undefined) {
       process.env.TAILOR_CRASH_REPORT_ENDPOINT = originalEndpoint;

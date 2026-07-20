@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { ensureConfigId } from "./config-id-injector";
 
 const THROW_CASES = [
@@ -62,11 +62,9 @@ export default defineConfig(config);
 describe("ensureConfigId", () => {
   let tempDir: string;
 
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "config-id-injector-"));
-  });
-
-  afterEach(async () => {
+    await runTest();
     await fs.promises.rm(tempDir, { recursive: true, force: true });
   });
 

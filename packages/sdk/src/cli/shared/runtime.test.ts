@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { isBun, isDeno, isNativeTypeScriptRuntime } from "./runtime";
 
 describe("runtime detection", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.unstubAllGlobals();
   });
 

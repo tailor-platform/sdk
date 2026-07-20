@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import {
@@ -113,8 +113,9 @@ describe("planFunctionRegistry", () => {
     } as unknown as OperatorClient;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   describe("pagination", () => {
@@ -405,8 +406,9 @@ describe("applyFunctionRegistry phase separation", () => {
     } as unknown as Awaited<ReturnType<typeof planFunctionRegistry>>;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("create-update phase uploads functions and sets metadata", async () => {

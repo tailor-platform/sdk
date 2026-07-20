@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } from "../configure/services/workflow/job";
 import { createWorkflow } from "../configure/services/workflow/workflow";
 import {
@@ -16,11 +16,9 @@ import {
 } from "./mock";
 
 describe("mock", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     injectMocks(globalThis);
-  });
-
-  afterEach(() => {
+    await runTest();
     cleanupMocks(globalThis);
   });
 
@@ -140,7 +138,8 @@ describe("mock", () => {
   });
 
   describe("mockWorkflow", () => {
-    afterEach(() => {
+    aroundEach(async (runTest) => {
+      await runTest();
       vi.unstubAllEnvs();
     });
 
@@ -1048,7 +1047,7 @@ describe("mock", () => {
     });
 
     test("injectMocks sets the runtime-active flag and the base surface", () => {
-      // beforeEach already called injectMocks, so the flag and base must be set.
+      // aroundEach already called injectMocks, so the flag and base must be set.
       expect(RUNTIME_FLAG_KEY in globalThis).toBe(true);
       expect((globalThis as any).tailor.context.getInvoker).toBeTypeOf("function");
       expect((globalThis as any).TailorErrors).toBeTypeOf("function");

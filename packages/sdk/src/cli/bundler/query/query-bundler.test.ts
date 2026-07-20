@@ -1,21 +1,23 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test } from "vitest";
 import { bundleQueryScript } from "./query-bundler";
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
 
 describe("query-bundler", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     const testDir = path.join(
       TEST_BUNDLER_BASE,
       `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     );
     fs.mkdirSync(testDir, { recursive: true });
     process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    await runTest();
   });
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     delete process.env.TAILOR_SDK_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BUNDLER_BASE, { recursive: true, force: true });

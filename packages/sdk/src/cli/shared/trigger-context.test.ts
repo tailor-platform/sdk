@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { transformFunctionTriggers } from "#/cli/services/workflow/trigger-transformer";
 import {
   buildTriggerContext,
@@ -80,7 +80,8 @@ describe("serializeTriggerContext", () => {
 describe("buildTriggerContext", () => {
   const tempDirs: string[] = [];
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     for (const tempDir of tempDirs.splice(0)) {
       rmSync(tempDir, { recursive: true, force: true });
     }

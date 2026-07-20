@@ -1,16 +1,14 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/aigateway` typed wrappers.
  */
-import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
+import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as aigateway from "#/runtime/aigateway";
 import { cleanupMocks, injectMocks, mockAigateway } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/aigateway", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     injectMocks(globalThis);
-  });
-
-  afterEach(() => {
+    await runTest();
     cleanupMocks(globalThis);
   });
 

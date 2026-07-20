@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { aroundAll, describe, expect, test } from "vitest";
 import {
   renderBranchWorkflow,
   renderCoordinateWorkflow,
@@ -43,13 +43,11 @@ function runActionlint(workflowPath: string): LintResult {
 
 let tmpDir: string;
 
-beforeAll(() => {
+aroundAll(async (runSuite) => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "workflow-lint-"));
   fs.mkdirSync(path.join(tmpDir, ".github", "workflows"), { recursive: true });
-});
-
-afterAll(() => {
-  if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true });
+  await runSuite();
+  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 const COMMON = {
@@ -335,7 +333,7 @@ runs:
 describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinateWorkflow", () => {
   let cTmpDir: string;
 
-  beforeAll(() => {
+  aroundAll(async (runSuite) => {
     cTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "coord-lint-"));
     fs.mkdirSync(path.join(cTmpDir, ".github", "workflows"), { recursive: true });
     fs.mkdirSync(path.join(cTmpDir, ".github", "actions", "tailor-setup"), { recursive: true });
@@ -351,10 +349,8 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderCoordinate
       path.join(cTmpDir, ".github", "actions", "tailor-api", "action.yml"),
       COMPOSITE_ACTION_STUB,
     );
-  });
-
-  afterAll(() => {
-    if (cTmpDir) fs.rmSync(cTmpDir, { recursive: true, force: true });
+    await runSuite();
+    fs.rmSync(cTmpDir, { recursive: true, force: true });
   });
 
   function lintCoordinate(name: string, content: string): LintResult {

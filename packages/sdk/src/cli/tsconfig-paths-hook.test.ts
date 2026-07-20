@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { resolve } from "./tsconfig-paths-hook.mjs";
 
 const notFound = (specifier: string) =>
@@ -27,7 +27,8 @@ function makeProject(tsconfig: object): { dir: string; parentURL: string } {
 describe("resolve", () => {
   const dirs: string[] = [];
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
   });
 

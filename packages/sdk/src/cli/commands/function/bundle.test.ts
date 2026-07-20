@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
 
@@ -19,13 +19,15 @@ const defaultWorkspaceId = "11111111-2222-3333-4444-555555555555";
 describe("bundleForTestRun", () => {
   let testDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     testDir = path.join(TEST_BASE, `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     fs.mkdirSync(testDir, { recursive: true });
     process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    await runTest();
   });
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     delete process.env.TAILOR_SDK_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BASE, { recursive: true, force: true });

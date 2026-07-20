@@ -1,5 +1,5 @@
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import {
   fetchLatestToken,
@@ -22,7 +22,7 @@ vi.mock("#/cli/shared/context", async (importOriginal) => ({
 }));
 
 describe("user pat list", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     vi.mocked(loadPlatformClientConfig).mockResolvedValue({
       platformUrl: "https://api.dev.tailor.tech",
@@ -34,9 +34,7 @@ describe("user pat list", () => {
         nextPageToken: "",
       }),
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 

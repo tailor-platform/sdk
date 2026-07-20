@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 
 const nodeModuleMock = vi.hoisted(() => ({
   register: vi.fn(),
@@ -11,7 +11,8 @@ vi.mock("tsx/esm/api", () => ({ register: tsxRegisterMock }));
 import { registerTypeScriptRuntime } from "./register-typescript-runtime";
 
 describe("registerTypeScriptRuntime", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     nodeModuleMock.register = vi.fn();

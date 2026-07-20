@@ -1,7 +1,7 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/file` typed wrappers.
  */
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import * as file from "#/runtime/file";
 import { cleanupMocks, mockFile, injectMocks } from "#/vitest/mock";
 
@@ -15,11 +15,9 @@ const expectedCall = (method: string) => ({
 });
 
 describe("@tailor-platform/sdk/runtime/file", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     injectMocks(globalThis);
-  });
-
-  afterEach(() => {
+    await runTest();
     cleanupMocks(globalThis);
   });
 

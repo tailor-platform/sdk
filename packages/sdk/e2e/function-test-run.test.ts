@@ -26,7 +26,7 @@ import {
   AuthInvokerSchema,
   type AuthInvoker,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import { describe, test, expect, beforeAll } from "vitest";
+import { describe, test, expect, aroundAll } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
 import { detectFunctionType } from "../src/cli/commands/function/detect";
 import { resolveResolverArg } from "../src/cli/commands/function/test-run";
@@ -120,7 +120,7 @@ async function runTestRun(
 }
 
 describe.sequential("E2E: function test-run", () => {
-  beforeAll(async () => {
+  aroundAll(async (runSuite) => {
     // Create workspace (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken();
     client = await initOperatorClient(accessToken);
@@ -178,6 +178,8 @@ describe.sequential("E2E: function test-run", () => {
       namespace: AUTH_NAMESPACE,
       machineUserName: MACHINE_USER_NAME,
     });
+
+    await runSuite();
   }, 120000);
 
   describe("resolver", () => {

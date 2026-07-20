@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { mockTailordb, mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { format as formatDate } from "date-fns";
-import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { aroundAll, describe, expect, test, vi } from "vitest";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
@@ -28,12 +28,10 @@ describe("bundled execution tests", () => {
   const fixedSystemTime = new Date("2025-10-06T12:34:56.000Z");
   const formatExpectation = formatDate(fixedSystemTime, "yyyy-MM-dd HH:mm:ss");
 
-  beforeAll(() => {
+  aroundAll(async (runSuite) => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
-  });
-
-  afterAll(() => {
+    await runSuite();
     vi.useRealTimers();
   });
 
