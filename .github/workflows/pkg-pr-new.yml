@@ -40,7 +40,7 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # pkg.pr.new URLs are deterministic from the abbreviated (7-char) head SHA,
+      # Non-compact pkg.pr.new URLs are deterministic from the full head SHA,
       # so they can be computed BEFORE publishing. An unpublished package makes
       # a combined publish use repository-qualified URLs for every package.
       # Computing all URLs up front lets one publish call include every package;
@@ -50,11 +50,10 @@ jobs:
         env:
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          SHORT_SHA="${SHA:0:7}"
-          SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/sdk@${SHORT_SHA}"
-          CREATE_SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/create-sdk@${SHORT_SHA}"
-          SEED_PLUGIN_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/sdk-plugin-seed@${SHORT_SHA}"
-          ESLINT_PLUGIN_SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/eslint-plugin-sdk@${SHORT_SHA}"
+          SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/sdk@${SHA}"
+          CREATE_SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/create-sdk@${SHA}"
+          SEED_PLUGIN_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/sdk-plugin-seed@${SHA}"
+          ESLINT_PLUGIN_SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/eslint-plugin-sdk@${SHA}"
           {
             echo "sdk_url=$SDK_URL"
             echo "create_sdk_url=$CREATE_SDK_URL"
