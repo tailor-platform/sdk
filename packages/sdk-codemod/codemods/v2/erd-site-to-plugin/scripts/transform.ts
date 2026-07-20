@@ -60,7 +60,8 @@ function definePluginsLocalName(tree: SgNode): string | null {
 
 /**
  * Build an edit that removes a property pair from an object literal, cleaning
- * up the separating comma and the removed line's indentation.
+ * up the separating comma, an inline line comment that documented the removed
+ * property, and the removed line's indentation.
  * @param objectNode - Object literal containing the pair.
  * @param pairNode - Property pair to remove.
  * @returns Edit replacing the object literal with the pair removed.
@@ -75,7 +76,7 @@ function removePairEdit(objectNode: SgNode, pairNode: SgNode): Edit {
 
   let removeFrom = start;
   let removeTo = end;
-  const trailing = after.match(/^[ \t]*,[ \t]*\n?/);
+  const trailing = after.match(/^[ \t]*,[ \t]*(?:\/\/[^\n]*)?\n?/);
   if (trailing) {
     removeTo = end + trailing[0].length;
     const indent = before.match(/\n[ \t]*$/);
