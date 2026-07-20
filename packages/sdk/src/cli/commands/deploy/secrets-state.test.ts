@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -6,6 +6,7 @@ import {
   hashValue,
   loadSecretsState,
   saveSecretsState,
+  withSecretsStateLock,
 } from "./secrets-state";
 import type { SecretsStateScope } from "./secrets-state";
 
@@ -192,5 +193,104 @@ describe("secrets-state", () => {
     const hash1 = hashValue("value-a");
     const hash2 = hashValue("value-b");
     expect(hash1).not.toBe(hash2);
+  });
+});
+
+describe("withSecretsStateLock", () => {
+  beforeEach(removeStateFiles);
+  afterEach(removeStateFiles);
+
+  function lockPathFor(scope: SecretsStateScope): string {
+    return `${getSecretsStatePath(scope)}.lock`;
+  }
+
+  test("returns the critical section result and releases the lock", async () => {
+    const result = await withSecretsStateLock(scopeA, async () => 42);
+    expect(result).toBe(42);
+    expect(existsSync(lockPathFor(scopeA))).toBe(false);
+  });
+
+  test("serializes concurrent critical sections for the same scope", async () => {
+    const events: string[] = [];
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => (releaseFirst = resolve));
+
+    const first = withSecretsStateLock(scopeA, async () => {
+      events.push("first-start");
+      await firstGate;
+      events.push("first-end");
+    });
+    const second = withSecretsStateLock(scopeA, async () => {
+      events.push("second-start");
+    });
+
+    await vi.waitFor(() => expect(events).toContain("first-start"));
+    expect(events).toEqual(["first-start"]);
+
+    releaseFirst();
+    await Promise.all([first, second]);
+    expect(events).toEqual(["first-start", "first-end", "second-start"]);
+  });
+
+  test("releases the lock when the critical section throws", async () => {
+    await expect(
+      withSecretsStateLock(scopeA, async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+
+    expect(existsSync(lockPathFor(scopeA))).toBe(false);
+    await expect(withSecretsStateLock(scopeA, async () => "recovered")).resolves.toBe("recovered");
+  });
+
+  test("waits while another process holds a fresh lock", async () => {
+    const lockPath = lockPathFor(scopeA);
+    mkdirSync(lockPath, { recursive: true });
+    writeFileSync(
+      path.join(lockPath, "owner.json"),
+      JSON.stringify({ pid: 12345, token: "other" }),
+    );
+
+    const fn = vi.fn().mockResolvedValue("done");
+    const pending = withSecretsStateLock(scopeA, fn);
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(fn).not.toHaveBeenCalled();
+
+    rmSync(lockPath, { recursive: true });
+    await expect(pending).resolves.toBe("done");
+  });
+
+  test("release leaves a lock taken over by another process", async () => {
+    const lockPath = lockPathFor(scopeA);
+    await withSecretsStateLock(scopeA, async () => {
+      writeFileSync(
+        path.join(lockPath, "owner.json"),
+        JSON.stringify({ pid: 12345, token: "other" }),
+      );
+    });
+
+    expect(existsSync(lockPath)).toBe(true);
+  });
+
+  test("steals a lock whose lease has expired", async () => {
+    const lockPath = lockPathFor(scopeA);
+    mkdirSync(lockPath, { recursive: true });
+    writeFileSync(
+      path.join(lockPath, "owner.json"),
+      JSON.stringify({ pid: 12345, token: "other" }),
+    );
+    const expired = new Date(Date.now() - 2 * 60 * 1000);
+    utimesSync(lockPath, expired, expired);
+
+    await expect(withSecretsStateLock(scopeA, async () => "stolen")).resolves.toBe("stolen");
+    expect(existsSync(lockPath)).toBe(false);
+  });
+
+  test("runs without locking when the scope has no stable application id", async () => {
+    const scopeWithoutId = { ...scopeA, applicationId: undefined };
+    const result = await withSecretsStateLock(scopeWithoutId, async () => "no-lock");
+    expect(result).toBe("no-lock");
+    expect(existsSync(path.dirname(getSecretsStatePath(scopeA)))).toBe(false);
   });
 });

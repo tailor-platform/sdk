@@ -27,6 +27,7 @@ vi.mock("./secrets-state", async (importOriginal) => {
     ...actual,
     loadSecretsState: (...args: unknown[]) => mockLoadSecretsState(...args),
     saveSecretsState: (...args: unknown[]) => mockSaveSecretsState(...args),
+    withSecretsStateLock: (_scope: unknown, fn: () => Promise<unknown>) => fn(),
     // Deterministic hash so tests can pin the "unchanged" secret state.
     hashValue: () => "fixed-hash",
   };

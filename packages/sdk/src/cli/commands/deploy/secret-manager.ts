@@ -7,7 +7,12 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
-import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
+import {
+  hashValue,
+  loadSecretsState,
+  saveSecretsState,
+  withSecretsStateLock,
+} from "./secrets-state";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
@@ -337,57 +342,61 @@ export async function applySecretManager(
       );
     }
 
-    // Create new secrets
-    await Promise.all(
-      secretChangeSet.creates.map((create) =>
-        client.createSecretManagerSecret(secretCreateRequest(create)),
-      ),
-    );
-
-    // Update existing secrets
-    await Promise.all(
-      secretChangeSet.updates.map((update) =>
-        client.updateSecretManagerSecret(secretUpdateRequest(update)),
-      ),
-    );
-
     const secretHashUpdates = [...secretChangeSet.creates, ...secretChangeSet.updates];
-    if (application && secretHashUpdates.length > 0) {
-      const state = loadSecretsState(stateScope);
-      for (const secret of secretHashUpdates) {
-        if (!Object.hasOwn(state.vaults, secret.vaultName)) {
-          state.vaults[secret.vaultName] = {};
+    if (secretHashUpdates.length > 0) {
+      await withSecretsStateLock(stateScope, async () => {
+        // Create new secrets
+        await Promise.all(
+          secretChangeSet.creates.map((create) =>
+            client.createSecretManagerSecret(secretCreateRequest(create)),
+          ),
+        );
+
+        // Update existing secrets
+        await Promise.all(
+          secretChangeSet.updates.map((update) =>
+            client.updateSecretManagerSecret(secretUpdateRequest(update)),
+          ),
+        );
+
+        if (application) {
+          const state = loadSecretsState(stateScope);
+          for (const secret of secretHashUpdates) {
+            if (!Object.hasOwn(state.vaults, secret.vaultName)) {
+              state.vaults[secret.vaultName] = {};
+            }
+            assertDefined(state.vaults[secret.vaultName], "vault state entry missing")[
+              secret.secretName
+            ] = hashValue(secret.value);
+          }
+          saveSecretsState(stateScope, state);
         }
-        assertDefined(state.vaults[secret.vaultName], "vault state entry missing")[
-          secret.secretName
-        ] = hashValue(secret.value);
-      }
-      saveSecretsState(stateScope, state);
+      });
     }
-  } else {
-    // Delete orphan secrets
-    await Promise.all(
-      secretChangeSet.deletes.map((del) =>
-        client.deleteSecretManagerSecret({
-          workspaceId: del.workspaceId,
-          secretmanagerVaultName: del.vaultName,
-          secretmanagerSecretName: del.secretName,
-        }),
-      ),
-    );
+  } else if (secretChangeSet.deletes.length > 0 || vaultChangeSet.deletes.length > 0) {
+    await withSecretsStateLock(stateScope, async () => {
+      // Delete orphan secrets
+      await Promise.all(
+        secretChangeSet.deletes.map((del) =>
+          client.deleteSecretManagerSecret({
+            workspaceId: del.workspaceId,
+            secretmanagerVaultName: del.vaultName,
+            secretmanagerSecretName: del.secretName,
+          }),
+        ),
+      );
 
-    // Delete orphan vaults
-    await Promise.all(
-      vaultChangeSet.deletes.map((del) =>
-        client.deleteSecretManagerVault({
-          workspaceId: del.workspaceId,
-          secretmanagerVaultName: del.name,
-        }),
-      ),
-    );
+      // Delete orphan vaults
+      await Promise.all(
+        vaultChangeSet.deletes.map((del) =>
+          client.deleteSecretManagerVault({
+            workspaceId: del.workspaceId,
+            secretmanagerVaultName: del.name,
+          }),
+        ),
+      );
 
-    // Remove deleted secrets and vaults from hash state
-    if (secretChangeSet.deletes.length > 0 || vaultChangeSet.deletes.length > 0) {
+      // Remove deleted secrets and vaults from hash state
       const state = loadSecretsState(stateScope);
       for (const del of secretChangeSet.deletes) {
         if (Object.hasOwn(state.vaults, del.vaultName)) {
@@ -406,6 +415,6 @@ export async function applySecretManager(
         delete state.vaults[del.name];
       }
       saveSecretsState(stateScope, state);
-    }
+    });
   }
 }
