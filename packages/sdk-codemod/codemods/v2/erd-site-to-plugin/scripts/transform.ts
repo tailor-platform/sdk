@@ -6,6 +6,14 @@ const PLUGIN_IMPORT =
 const DEFINE_PLUGINS_IMPORT = 'import { definePlugins } from "@tailor-platform/sdk";';
 const SDK_VALUE_IMPORT_REGEX =
   /(^|\n)import\s*\{[^}\n]*\}\s*from\s*["']@tailor-platform\/sdk["'];?/;
+const FUNCTION_KINDS = new Set([
+  "arrow_function",
+  "function_declaration",
+  "function_expression",
+  "generator_function",
+  "generator_function_declaration",
+  "method_definition",
+]);
 
 function unquote(text: string): string {
   return text.replace(/^["']|["']$/g, "");
@@ -15,6 +23,39 @@ function propertyName(pair: SgNode): string | null {
   const key = pair.field("key");
   if (!key || key.kind() === "computed_property_name") return null;
   return unquote(key.text());
+}
+
+// A defineConfig() call inside a function may reference parameters or locals
+// from its erdSite value; hoisting that expression to a module-level
+// definePlugins() export would leave the binding out of scope.
+function insideFunction(node: SgNode): boolean {
+  for (let current = node.parent(); current; current = current.parent()) {
+    if (FUNCTION_KINDS.has(current.kind() as string)) return true;
+  }
+  return false;
+}
+
+/**
+ * Resolve the local binding name of `definePlugins` imported from
+ * `@tailor-platform/sdk`, honoring `import { definePlugins as alias }`.
+ * @param tree - Parsed source tree root.
+ * @returns Local binding name, or null when it is not imported.
+ */
+function definePluginsLocalName(tree: SgNode): string | null {
+  const importStatements = tree.findAll({
+    rule: {
+      kind: "import_statement",
+      has: { kind: "string", regex: "^[\"']@tailor-platform/sdk[\"']$" },
+    },
+  });
+  for (const statement of importStatements) {
+    for (const specifier of statement.findAll({ rule: { kind: "import_specifier" } })) {
+      const name = specifier.field("name");
+      if (name?.text() !== "definePlugins") continue;
+      return (specifier.field("alias") ?? name).text();
+    }
+  }
+  return null;
 }
 
 /**
@@ -53,22 +94,39 @@ function removePairEdit(objectNode: SgNode, pairNode: SgNode): Edit {
 }
 
 /**
- * Append an argument to a definePlugins(...) call, preserving the call's
- * single-line or multi-line formatting.
- * @param callText - Source text of the call expression.
+ * Build an edit that appends an argument to a call expression, preserving the
+ * call's single-line or multi-line formatting. Insertion points are derived
+ * from argument-list AST nodes so a trailing line comment after the last
+ * argument cannot swallow the separating comma.
+ * @param callNode - Call expression to extend.
  * @param arg - Argument expression to append.
- * @returns Rewritten call expression text.
+ * @returns Edit replacing the call expression with the argument appended.
  */
-function appendArg(callText: string, arg: string): string {
-  const multiline = callText.match(/(,?)\n([ \t]*)\)$/);
-  if (multiline) {
-    const closeIndent = multiline[2] ?? "";
-    const head = callText.slice(0, callText.length - multiline[0].length);
-    const hasArgs = !/\(\s*$/.test(head);
-    return `${head}${hasArgs ? "," : ""}\n${closeIndent}  ${arg},\n${closeIndent})`;
+function appendArgEdit(callNode: SgNode, arg: string): Edit {
+  const callText = callNode.text();
+  const base = callNode.range().start.index;
+  const argumentsNode = callNode.field("arguments")!;
+  const children = argumentsNode.children();
+  const args = children.filter((child) => child.isNamed() && child.kind() !== "comment");
+  const closeParen = children.at(-1)!;
+  const closeOffset = closeParen.range().start.index - base;
+  const multiline = callText.includes("\n");
+  const closeIndent = callText.slice(0, closeOffset).match(/\n([ \t]*)$/)?.[1] ?? "";
+  const argIndent = `${closeIndent}  `;
+
+  if (args.length === 0) {
+    const head = callText.slice(0, closeOffset).replace(/[ \t]*$/, "");
+    const rewritten = multiline ? `${head}${argIndent}${arg},\n${closeIndent})` : `${head}${arg})`;
+    return callNode.replace(rewritten);
   }
-  const emptyCall = /\(\s*\)$/.test(callText);
-  return `${callText.slice(0, -1)}${emptyCall ? "" : ", "}${arg})`;
+
+  const lastArg = args.at(-1)!;
+  const followers = children.slice(children.indexOf(lastArg) + 1);
+  const trailingComma = followers.find((child) => !child.isNamed() && child.text() === ",");
+  const insertAt = (trailingComma ?? lastArg).range().end.index - base;
+  const separator = trailingComma ? "" : ",";
+  const insertion = multiline ? `${separator}\n${argIndent}${arg},` : `${separator} ${arg}`;
+  return callNode.replace(callText.slice(0, insertAt) + insertion + callText.slice(insertAt));
 }
 
 /**
@@ -102,9 +160,12 @@ function insertImports(source: string, importLines: string[]): string {
  * Move `db.<namespace>.erdSite` entries in defineConfig() into a
  * `tailordbErdPlugin({ sites })` argument of definePlugins():
  *
- * 1. Remove each `erdSite` property from `db.<namespace>` objects
+ * 1. Remove each `erdSite` property from `db.<namespace>` objects of
+ *    top-level defineConfig() calls (factory-wrapped configs are left for
+ *    manual review, since their erdSite values may reference local bindings)
  * 2. Append `tailordbErdPlugin({ sites: { <namespace>: <value> } })` to the
- *    existing definePlugins() call, or add a `plugins` export when none exists
+ *    existing definePlugins() call (honoring an import alias), or add a
+ *    `plugins` export when none exists
  * 3. Add the plugin import (and a definePlugins import when newly needed)
  * @param source - Source code to transform
  * @returns Transformed source or null if no changes needed
@@ -123,6 +184,7 @@ export default function transform(source: string): string | null {
   const siteEntries: string[] = [];
 
   for (const call of tree.findAll({ rule: { pattern: "defineConfig($CONFIG)" } })) {
+    if (insideFunction(call)) continue;
     const config = call.getMatch("CONFIG");
     if (!config || config.kind() !== "object") continue;
 
@@ -154,15 +216,18 @@ export default function transform(source: string): string | null {
   }
 
   const pluginExpr = `tailordbErdPlugin({ sites: { ${siteEntries.join(", ")} } })`;
-  const pluginsCall = tree.find({ rule: { pattern: "definePlugins($$$ARGS)" } });
+  const localDefinePlugins = definePluginsLocalName(tree);
+  const pluginsCall = tree.find({
+    rule: { pattern: `${localDefinePlugins ?? "definePlugins"}($$$ARGS)` },
+  });
   if (pluginsCall) {
-    edits.push(pluginsCall.replace(appendArg(pluginsCall.text(), pluginExpr)));
+    edits.push(appendArgEdit(pluginsCall, pluginExpr));
   }
 
   let result = tree.commitEdits(edits);
 
   const importLines = [PLUGIN_IMPORT];
-  if (!pluginsCall && !/import\s*\{[^}]*\bdefinePlugins\b/.test(result)) {
+  if (!pluginsCall && !localDefinePlugins) {
     const merged = addDefinePluginsSpecifier(result);
     if (merged !== null) {
       result = merged;
@@ -175,7 +240,7 @@ export default function transform(source: string): string | null {
   if (!pluginsCall) {
     result =
       result.replace(/\s*$/, "\n\n") +
-      `export const plugins = definePlugins(\n  ${pluginExpr},\n);\n`;
+      `export const plugins = ${localDefinePlugins ?? "definePlugins"}(\n  ${pluginExpr},\n);\n`;
   }
 
   return result;
