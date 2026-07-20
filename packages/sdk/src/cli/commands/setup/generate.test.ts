@@ -38,6 +38,10 @@ const tagBase: RenderTagParams = {
   packageManager: "pnpm",
 };
 
+type GeneratedWorkflow = {
+  jobs: Record<string, { steps: Array<Record<string, unknown>> }>;
+};
+
 describe("detectPackageManager", () => {
   const testDir = path.join(
     "/tmp",
@@ -502,6 +506,48 @@ describe("renderTagWorkflow", () => {
       'tags: ["release-*"]',
     );
   });
+});
+
+describe("seed validation step", () => {
+  test.each([
+    ["pnpm", "pnpm exec tailor seed validate"],
+    ["npm", "npx tailor seed validate"],
+    ["yarn", "yarn tailor seed validate"],
+    ["bun", "bunx tailor seed validate"],
+  ] as const)(
+    "uses the installed CLI for %s in branch and tag workflows",
+    (packageManager, run) => {
+      const workflows = [
+        renderBranchWorkflow({
+          ...branchBase,
+          packageManager,
+          seedValidate: true,
+          workingDirectory: "apps/api",
+        }).content,
+        renderTagWorkflow({
+          ...tagBase,
+          packageManager,
+          seedValidate: true,
+          workingDirectory: "apps/api",
+        }).content,
+      ];
+
+      for (const content of workflows) {
+        const workflow = parseYAML(content) as GeneratedWorkflow;
+        const seedValidateStep = workflow.jobs["tailor-plan"]?.steps.find(
+          (step) => step.id === "tailor-seed-validate",
+        );
+
+        expect(seedValidateStep).toEqual({
+          id: "tailor-seed-validate",
+          run,
+          "working-directory": "apps/api",
+        });
+        expect(content).not.toContain("tailor-platform/actions/seed-validate@");
+        expect(content).not.toContain(".tailor-sdk/exec.mjs");
+      }
+    },
+  );
 });
 
 describe("detectDefaultBranch", () => {

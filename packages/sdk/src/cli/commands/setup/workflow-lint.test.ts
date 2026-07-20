@@ -244,13 +244,14 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderBranchWork
     expect(ok, `actionlint errors:\n${output}`).toBe(true);
   });
 
-  // workingDirectory + environment
-  test("branch / npm / with workingDirectory + environment", () => {
+  // seed validation + workingDirectory + environment
+  test("branch / npm / with seed validation + workingDirectory + environment", () => {
     const { content } = renderBranchWorkflow({
       ...COMMON,
       branch: "develop",
       packageManager: "npm",
       erdPreview: null,
+      seedValidate: true,
       workingDirectory: "apps/api",
       environment: "staging",
     });
@@ -272,12 +273,13 @@ describe.skipIf(!actionlintAvailable)("actionlint validation of renderTagWorkflo
       params: { tagPattern: "v*", packageManager: pm, branch: "main" },
     })),
     {
-      name: "tag / pnpm / with guard + workingDirectory + environment",
+      name: "tag / pnpm / with guard + seed validation + workingDirectory + environment",
       fileName: "tag-pnpm-guard-dir-env",
       params: {
         tagPattern: "release-*",
         packageManager: "pnpm" as const,
         branch: "main",
+        seedValidate: true,
         workingDirectory: "apps/backend",
         environment: "production",
       },

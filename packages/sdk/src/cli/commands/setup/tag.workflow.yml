@@ -59,10 +59,8 @@ jobs:
           # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_START__
       - id: tailor-seed-validate
-        uses: tailor-platform/actions/seed-validate@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
-        with:
-          package-manager: __PACKAGE_MANAGER__
-          # __WORKING_DIRECTORY__
+        run: __TAILOR_CLI__ seed validate
+        # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_END__
       - id: tailor-drift-check
         uses: tailor-platform/actions/drift-check@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
