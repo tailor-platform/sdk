@@ -330,7 +330,16 @@ export function collectVisibleResolverNamespaces(
   });
 }
 
-async function shouldForceApplyAll(
+/**
+ * Detect whether any resource owned by this application was last applied by a
+ * different SDK version, in which case every resource is re-applied.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param application - Application being deployed
+ * @param functionEntries - Function registry entries of the application
+ * @returns True when an owned resource carries a different sdk-version label
+ */
+export async function shouldForceApplyAll(
   client: OperatorClient,
   workspaceId: string,
   application: Readonly<Application>,
@@ -379,19 +388,28 @@ async function shouldForceApplyAll(
     candidateTrns.add(resourceTrn(workspaceId, "function_registry", entry.name));
   });
 
-  for (const trn of candidateTrns) {
-    const metadata = await getOrNull(async () => {
-      const { metadata } = await client.getMetadata({ trn });
-      return metadata;
-    });
-    if (metadata?.labels[sdkNameLabelKey] !== application.name) {
-      continue;
-    }
-    if (!hasMatchingSdkVersion(metadata.labels, desiredLabels)) {
-      return true;
-    }
-  }
+  const results = await Promise.allSettled(
+    [...candidateTrns].map((trn) =>
+      getOrNull(async () => {
+        const { metadata } = await client.getMetadata({ trn });
+        return metadata;
+      }),
+    ),
+  );
 
+  const hasMismatch = results.some(
+    (result) =>
+      result.status === "fulfilled" &&
+      result.value?.labels[sdkNameLabelKey] === application.name &&
+      !hasMatchingSdkVersion(result.value.labels, desiredLabels),
+  );
+  if (hasMismatch) {
+    return true;
+  }
+  const failure = results.find((result) => result.status === "rejected");
+  if (failure) {
+    throw failure.reason;
+  }
   return false;
 }
 

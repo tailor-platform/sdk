@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
+import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createChangeSet } from "./change-set";
@@ -18,6 +19,7 @@ import {
   planDeploymentTargets,
   printDeploymentPlans,
   printPlanResults,
+  shouldForceApplyAll,
   summarizePlanResults,
 } from "./deploy";
 import type { PlannedDeployment } from "./apply-phases";
@@ -143,6 +145,88 @@ function plannedDeployment(name: string, results: PlanResults): PlannedDeploymen
     ...results,
   } as unknown as PlannedDeployment;
 }
+
+describe("shouldForceApplyAll", () => {
+  type Client = Parameters<typeof shouldForceApplyAll>[0];
+  type App = Parameters<typeof shouldForceApplyAll>[2];
+
+  function minimalApplication(): App {
+    return {
+      name: "test-app",
+      id: "test-app-id",
+      subgraphs: [],
+      staticWebsiteServices: [],
+      aiGatewayServices: [],
+      resolverServices: [],
+      idpServices: [],
+      authService: undefined,
+      executorService: undefined,
+      workflowService: undefined,
+      tailorDBServices: [],
+      secrets: [],
+    } as unknown as App;
+  }
+
+  test("fetches candidate metadata concurrently", async () => {
+    const probe = createConcurrencyProbe();
+    const getMetadata = vi.fn().mockImplementation(async () => {
+      await probe.run();
+      return { metadata: { labels: {} } };
+    });
+    const client = { getMetadata } as unknown as Client;
+
+    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
+      { name: "fn-a" },
+      { name: "fn-b" },
+      { name: "fn-c" },
+    ]);
+
+    expect(result).toBe(false);
+    expect(getMetadata).toHaveBeenCalledTimes(3);
+    expect(probe.maxInFlight()).toBeGreaterThan(1);
+  });
+
+  test("returns true when an owned resource has a different sdk-version", async () => {
+    const getMetadata = vi.fn().mockResolvedValue({
+      metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
+    });
+    const client = { getMetadata } as unknown as Client;
+
+    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
+      { name: "fn-a" },
+    ]);
+
+    expect(result).toBe(true);
+  });
+
+  test("prefers a detected sdk-version mismatch over an unrelated fetch failure", async () => {
+    const getMetadata = vi.fn().mockImplementation(({ trn }: { trn: string }) => {
+      if (trn.endsWith(":fn-a")) {
+        return Promise.resolve({
+          metadata: { labels: { "sdk-name": "test-app", "sdk-version": "v0-0-0-other" } },
+        });
+      }
+      return Promise.reject(new Error("unavailable"));
+    });
+    const client = { getMetadata } as unknown as Client;
+
+    const result = await shouldForceApplyAll(client, "test-workspace", minimalApplication(), [
+      { name: "fn-a" },
+      { name: "fn-b" },
+    ]);
+
+    expect(result).toBe(true);
+  });
+
+  test("propagates a fetch failure when no mismatch was detected", async () => {
+    const getMetadata = vi.fn().mockRejectedValue(new Error("unavailable"));
+    const client = { getMetadata } as unknown as Client;
+
+    await expect(
+      shouldForceApplyAll(client, "test-workspace", minimalApplication(), [{ name: "fn-a" }]),
+    ).rejects.toThrow("unavailable");
+  });
+});
 
 describe("summarizePlanResults", () => {
   test("counts display entries and service actions", () => {

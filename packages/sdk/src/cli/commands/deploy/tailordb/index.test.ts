@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
 import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
+import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { sdkNameLabelKey } from "../label";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
 import type { FieldDiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
@@ -1296,5 +1297,69 @@ describe("applyTailorDB migration label reconciliation", () => {
     planResult.context.executorUsedTypes = new Set();
 
     await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+  });
+});
+
+describe("applyTailorDB type apply concurrency", () => {
+  test("applies type creates and updates sequentially", async () => {
+    const probe = createConcurrencyProbe();
+    const client = {
+      createTailorDBType: vi.fn().mockImplementation(probe.run),
+      updateTailorDBType: vi.fn().mockImplementation(probe.run),
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+
+    const changeOf = (name: string) => ({
+      name,
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "test-tailordb",
+        tailordbType: { name },
+      },
+    });
+    const emptyChanges = (title: string) => ({
+      creates: [],
+      updates: [],
+      deletes: [],
+      title,
+      isEmpty: () => true,
+      lines: () => [],
+    });
+    const planResult = {
+      changeSet: {
+        service: emptyChanges("TailorDB Services"),
+        type: {
+          creates: ["CreateA", "CreateB", "CreateC"].map(changeOf),
+          updates: ["UpdateA", "UpdateB", "UpdateC"].map(changeOf),
+          deletes: [],
+          title: "TailorDB Types",
+          isEmpty: () => false,
+          lines: () => [],
+        },
+        gqlPermission: emptyChanges("TailorDB GQL Permissions"),
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+      context: {
+        workspaceId: "test-workspace",
+        application: { name: "test-app", tailorDBServices: [] } as unknown as Application,
+        tailorDBInputs: [],
+        executorUsedTypes: new Set<string>(),
+        config: { path: "/nonexistent/tailor.config.ts", name: "test-app", db: {} },
+        noSchemaCheck: true,
+      },
+    } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(client.createTailorDBType).toHaveBeenCalledTimes(3);
+    expect(client.updateTailorDBType).toHaveBeenCalledTimes(3);
+    expect(probe.maxInFlight()).toBe(1);
   });
 });
