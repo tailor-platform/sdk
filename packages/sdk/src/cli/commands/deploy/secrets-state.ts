@@ -98,7 +98,7 @@ export function saveSecretsState(scope: SecretsStateScope, state: SecretsState):
   const dir = path.dirname(filePath);
   mkdirSync(dir, { recursive: true });
   // Write via a temp file and rename so concurrent readers never see torn JSON.
-  const tempPath = `${filePath}.tmp-${process.pid}`;
+  const tempPath = `${filePath}.tmp-${randomUUID()}`;
   writeFileSync(
     tempPath,
     JSON.stringify(
@@ -211,9 +211,9 @@ async function acquireFileLock(lockPath: string): Promise<string> {
     }
     if (Date.now() >= deadline) {
       throw new Error(
-        `Timed out waiting for the secrets state lock at "${lockPath}". ` +
-          "Another deploy to the same workspace and application may still be running; " +
-          "remove the lock directory if no such deploy exists.",
+        "Timed out waiting for another deploy to the same workspace and application to finish. " +
+          "Wait for it to complete and retry; an interrupted deploy recovers automatically " +
+          "within a minute.",
       );
     }
     await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_INTERVAL_MS));
