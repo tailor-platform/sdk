@@ -12,14 +12,20 @@ import pLimit, { type LimitFunction } from "p-limit";
 import * as path from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+
+const SecretsStateEntrySchema = z.object({
+  hash: z.string(),
+  updateTime: z.string().optional(),
+});
 
 const SecretsStateSchema = z.object({
-  vaults: z.record(z.string(), z.record(z.string(), z.string())),
+  vaults: z.record(z.string(), z.record(z.string(), SecretsStateEntrySchema)),
   connections: z.record(z.string(), z.string()).optional(),
 });
 
 const PersistedSecretsStateSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   workspaceId: z.string(),
   applicationKey: z.string(),
   state: SecretsStateSchema,
@@ -97,7 +103,7 @@ export function saveSecretsState(scope: SecretsStateScope, state: SecretsState):
     tempPath,
     JSON.stringify(
       {
-        version: 1,
+        version: 2,
         workspaceId: scope.workspaceId,
         applicationKey: applicationStateKey(scope),
         state,
@@ -117,6 +123,15 @@ export function saveSecretsState(scope: SecretsStateScope, state: SecretsState):
  */
 export function hashValue(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * Serialize a platform timestamp into the string stored as update evidence.
+ * @param updateTime - Timestamp from a Secret Manager list or mutation response
+ * @returns Serialized timestamp, or undefined when the platform sent none
+ */
+export function serializeUpdateTime(updateTime: Timestamp | undefined): string | undefined {
+  return updateTime === undefined ? undefined : `${updateTime.seconds}.${updateTime.nanos}`;
 }
 
 const LOCK_POLL_INTERVAL_MS = 100;
