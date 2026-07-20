@@ -10,6 +10,6 @@ export default defineConfig({
 });
 
 export const plugins = definePlugins(
-  kyselyTypePlugin({ distPath: "./generated/db.ts" }),
-  tailordbErdPlugin({ sites: { tailordb: "my-erd-site" } }), // kysely types
+  kyselyTypePlugin({ distPath: "./generated/db.ts" }), // kysely types
+  tailordbErdPlugin({ sites: { tailordb: "my-erd-site" } }),
 );

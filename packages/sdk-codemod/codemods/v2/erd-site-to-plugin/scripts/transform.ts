@@ -124,10 +124,31 @@ function appendArgEdit(callNode: SgNode, arg: string): Edit {
   const lastArg = args.at(-1)!;
   const followers = children.slice(children.indexOf(lastArg) + 1);
   const trailingComma = followers.find((child) => !child.isNamed() && child.text() === ",");
-  const insertAt = (trailingComma ?? lastArg).range().end.index - base;
-  const separator = trailingComma ? "" : ",";
-  const insertion = multiline ? `${separator}\n${argIndent}${arg},` : `${separator} ${arg}`;
-  return callNode.replace(callText.slice(0, insertAt) + insertion + callText.slice(insertAt));
+  const anchor = trailingComma ?? lastArg;
+
+  if (!multiline) {
+    const insertAt = anchor.range().end.index - base;
+    const insertion = `${trailingComma ? "" : ","} ${arg}`;
+    return callNode.replace(callText.slice(0, insertAt) + insertion + callText.slice(insertAt));
+  }
+
+  // Insert the new argument after a comment on the last argument's line, so
+  // the comment stays attached to the argument it documents; the separating
+  // comma still goes right after the last argument.
+  const sameLineComment = followers.findLast(
+    (child) =>
+      child.kind() === "comment" &&
+      child.range().start.index >= anchor.range().end.index &&
+      child.range().start.line === anchor.range().end.line,
+  );
+  const argInsertAt = (sameLineComment ?? anchor).range().end.index - base;
+  let rewritten =
+    callText.slice(0, argInsertAt) + `\n${argIndent}${arg},` + callText.slice(argInsertAt);
+  if (!trailingComma) {
+    const commaAt = lastArg.range().end.index - base;
+    rewritten = rewritten.slice(0, commaAt) + "," + rewritten.slice(commaAt);
+  }
+  return callNode.replace(rewritten);
 }
 
 /**
