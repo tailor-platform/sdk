@@ -49,6 +49,8 @@ export type WorkflowService = {
 export interface CreateWorkflowServiceParams {
   /** The workflow service configuration */
   config: WorkflowServiceConfig;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
 }
 
 /**
@@ -57,7 +59,7 @@ export interface CreateWorkflowServiceParams {
  * @returns A new WorkflowService instance
  */
 export function createWorkflowService(params: CreateWorkflowServiceParams): WorkflowService {
-  const { config } = params;
+  const { config, baseDir } = params;
   let workflows: Record<string, Workflow> = {};
   let workflowSources: Array<{ workflow: Workflow; sourceFile: string }> = [];
   let jobs: CollectedJob[] = [];
@@ -82,7 +84,7 @@ export function createWorkflowService(params: CreateWorkflowServiceParams): Work
       if (loaded) {
         return;
       }
-      const result = await loadAndCollectJobs(config);
+      const result = await loadAndCollectJobs(config, baseDir);
       workflows = result.workflows;
       workflowSources = result.workflowSources;
       jobs = result.jobs;
@@ -109,9 +111,13 @@ export function createWorkflowService(params: CreateWorkflowServiceParams): Work
  * Load workflow files and collect all jobs in a single pass.
  * Dependencies are detected at bundle time via AST analysis.
  * @param config - Workflow service configuration
+ * @param baseDir - Directory the config's file patterns are resolved against
  * @returns Loaded workflows and collected jobs
  */
-async function loadAndCollectJobs(config: WorkflowServiceConfig): Promise<WorkflowLoadResult> {
+async function loadAndCollectJobs(
+  config: WorkflowServiceConfig,
+  baseDir: string,
+): Promise<WorkflowLoadResult> {
   const workflows: Record<string, Workflow> = {};
   const workflowSources: Array<{ workflow: Workflow; sourceFile: string }> = [];
   const collectedJobs: CollectedJob[] = [];
@@ -125,7 +131,7 @@ async function loadAndCollectJobs(config: WorkflowServiceConfig): Promise<Workfl
     };
   }
 
-  const workflowFiles = loadFilesWithIgnores(config);
+  const workflowFiles = loadFilesWithIgnores(config, baseDir);
   const fileCount = workflowFiles.length;
 
   // Maps for collecting data

@@ -98,6 +98,7 @@ type DefineTailorDBResult = {
 
 function defineTailorDB(
   config: TailorDBServiceInput | undefined,
+  baseDir: string,
   pluginManager?: PluginManager,
 ): DefineTailorDBResult {
   const tailorDBServices: TailorDBService[] = [];
@@ -118,6 +119,7 @@ function defineTailorDB(
         namespace,
         config: parsedConfig,
         pluginManager,
+        baseDir,
       });
       tailorDBServices.push(tailorDB);
     }
@@ -132,7 +134,10 @@ type DefineResolverResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
-function defineResolver(config: ResolverServiceInput | undefined): DefineResolverResult {
+function defineResolver(
+  config: ResolverServiceInput | undefined,
+  baseDir: string,
+): DefineResolverResult {
   const resolverServices: ResolverService[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
@@ -142,7 +147,7 @@ function defineResolver(config: ResolverServiceInput | undefined): DefineResolve
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
     if (!("external" in serviceConfig)) {
-      const resolverService = createResolverService(namespace, serviceConfig);
+      const resolverService = createResolverService(namespace, serviceConfig, baseDir);
       resolverServices.push(resolverService);
     }
     subgraphs.push({ Type: "pipeline", Name: namespace });
@@ -219,28 +224,33 @@ function defineAuth(
 
 function defineExecutor(
   config: ExecutorServiceInput | undefined,
+  baseDir: string,
   hasPluginExecutors: boolean,
 ): ExecutorService | undefined {
   if (!config && !hasPluginExecutors) {
     return undefined;
   }
-  return createExecutorService({ config: config ?? { files: [] } });
+  return createExecutorService({ config: config ?? { files: [] }, baseDir });
 }
 
-function defineWorkflow(config: WorkflowServiceConfig | undefined): WorkflowService | undefined {
+function defineWorkflow(
+  config: WorkflowServiceConfig | undefined,
+  baseDir: string,
+): WorkflowService | undefined {
   if (!config) {
     return undefined;
   }
-  return createWorkflowService({ config });
+  return createWorkflowService({ config, baseDir });
 }
 
 function defineHttpAdapterService(
   config: HttpAdapterServiceInput | undefined,
+  baseDir: string,
 ): HttpAdapterService | undefined {
   if (!config) {
     return undefined;
   }
-  return createHttpAdapterService({ config });
+  return createHttpAdapterService({ config, baseDir });
 }
 
 function stripStaticWebsiteUrlHelper(config: StaticWebsiteInput): StaticWebsiteInput {
@@ -328,9 +338,13 @@ type DefineServicesResult = {
   ignoreNullishValues: boolean;
 };
 
-function defineServices(config: AppConfig, pluginManager?: PluginManager): DefineServicesResult {
-  const tailordbResult = defineTailorDB(config.db, pluginManager);
-  const resolverResult = defineResolver(config.resolver);
+function defineServices(
+  config: AppConfig,
+  baseDir: string,
+  pluginManager?: PluginManager,
+): DefineServicesResult {
+  const tailordbResult = defineTailorDB(config.db, baseDir, pluginManager);
+  const resolverResult = defineResolver(config.resolver, baseDir);
   const idpResult = defineIdp(config.idp);
   const authResult = defineAuth(
     config.auth,
@@ -418,11 +432,12 @@ export interface DefineApplicationParams {
  */
 export function defineApplication(params: DefineApplicationParams): Application {
   const { config, pluginManager } = params;
-  const services = defineServices(config, pluginManager);
+  const baseDir = path.dirname(config.path);
+  const services = defineServices(config, baseDir, pluginManager);
   // Plugin executors are not known at define-time; generate/apply flows handle them after type loading.
-  const executorService = defineExecutor(config.executor, false);
-  const workflowService = defineWorkflow(config.workflow);
-  const httpAdapterService = defineHttpAdapterService(config.httpAdapter);
+  const executorService = defineExecutor(config.executor, baseDir, false);
+  const workflowService = defineWorkflow(config.workflow, baseDir);
+  const httpAdapterService = defineHttpAdapterService(config.httpAdapter, baseDir);
 
   return buildApplication({
     config,
@@ -482,6 +497,7 @@ export async function loadApplication(
   params: DefineApplicationParams,
 ): Promise<LoadApplicationResult> {
   const { config, pluginManager, bundleCache } = params;
+  const baseDir = path.dirname(config.path);
 
   // 1. Define services (synchronous)
   const {
@@ -493,7 +509,7 @@ export async function loadApplication(
     aiGatewayServices,
     secrets,
     ignoreNullishValues,
-  } = defineServices(config, pluginManager);
+  } = defineServices(config, baseDir, pluginManager);
 
   // 2. Load TailorDB types and process namespace plugins
   for (const tailordb of tailordbResult.tailorDBServices) {
@@ -512,16 +528,16 @@ export async function loadApplication(
   );
 
   // 4. Determine final executorService (const, no reassignment)
-  const executorService = defineExecutor(config.executor, pluginExecutorFiles.length > 0);
+  const executorService = defineExecutor(config.executor, baseDir, pluginExecutorFiles.length > 0);
 
   // 5. Load and collect workflows
-  const workflowService = defineWorkflow(config.workflow);
+  const workflowService = defineWorkflow(config.workflow, baseDir);
   if (workflowService) {
     await workflowService.loadWorkflows();
   }
 
   // 6. Load and collect HTTP adapters
-  const httpAdapterService = defineHttpAdapterService(config.httpAdapter);
+  const httpAdapterService = defineHttpAdapterService(config.httpAdapter, baseDir);
   if (httpAdapterService) {
     await httpAdapterService.loadAdapters();
   }
@@ -530,6 +546,7 @@ export async function loadApplication(
   const startContext = await buildStartContext(
     config.workflow,
     getApplicationAuthNamespace({ authService: authResult.authService, config }),
+    baseDir,
   );
 
   // 8. Resolve bundle settings
@@ -549,6 +566,7 @@ export async function loadApplication(
     const resolverBundles = await bundleResolvers(
       pipeline.namespace,
       pipeline.config,
+      baseDir,
       startContext,
       bundleCache,
       inlineSourcemap,
@@ -568,6 +586,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      baseDir,
     });
   }
 
@@ -580,6 +599,7 @@ export async function loadApplication(
       mainJobNames,
       config.env ?? {},
       startContext,
+      baseDir,
       bundleCache,
       inlineSourcemap,
       bundleLogLevel,
@@ -597,6 +617,7 @@ export async function loadApplication(
         methods: a.methods,
         hasOutput: a.hasOutput,
       })),
+      baseDir,
       bundleCache,
       bundleLogLevel,
     );
@@ -614,6 +635,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      baseDir,
     });
   }
 

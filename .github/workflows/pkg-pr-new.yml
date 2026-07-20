@@ -28,6 +28,7 @@ jobs:
     outputs:
       sdk_url: ${{ steps.urls.outputs.sdk_url }}
       create_sdk_url: ${{ steps.urls.outputs.create_sdk_url }}
+      eslint_plugin_sdk_url: ${{ steps.urls.outputs.eslint_plugin_sdk_url }}
 
     steps:
       - name: Checkout code
@@ -38,11 +39,12 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # pkg.pr.new --compact URLs are deterministic from the abbreviated (7-char)
-      # head SHA, so they can be computed BEFORE publishing. This lets us embed
-      # the SDK preview URL into create-sdk's templates without publishing the
-      # SDK first — both packages go out in a single `pkg-pr-new publish` call,
-      # whereas separate publishes would each rewrite the PR comment (last wins).
+      # pkg.pr.new URLs are deterministic from the abbreviated (7-char) head SHA,
+      # so they can be computed BEFORE publishing. SDK and create-sdk can use
+      # compact URLs because they already exist on npm. The new ESLint plugin
+      # needs a repository-qualified URL until its first npm release.
+      # Computing all URLs up front lets one publish call include every package;
+      # separate publishes would each rewrite the PR comment (last wins).
       - name: Compute preview URLs
         id: urls
         env:
@@ -52,29 +54,33 @@ jobs:
           SDK_URL="https://pkg.pr.new/@tailor-platform/sdk@${SHORT_SHA}"
           CREATE_SDK_URL="https://pkg.pr.new/@tailor-platform/create-sdk@${SHORT_SHA}"
           SEED_PLUGIN_URL="https://pkg.pr.new/@tailor-platform/sdk-plugin-seed@${SHORT_SHA}"
+          ESLINT_PLUGIN_SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/eslint-plugin-sdk@${SHORT_SHA}"
           {
             echo "sdk_url=$SDK_URL"
             echo "create_sdk_url=$CREATE_SDK_URL"
             echo "seed_plugin_url=$SEED_PLUGIN_URL"
+            echo "eslint_plugin_sdk_url=$ESLINT_PLUGIN_SDK_URL"
           } >> "$GITHUB_OUTPUT"
           echo "SDK preview: $SDK_URL"
           echo "create-sdk preview: $CREATE_SDK_URL"
           echo "seed plugin preview: $SEED_PLUGIN_URL"
+          echo "ESLint plugin preview: $ESLINT_PLUGIN_SDK_URL"
 
       # `prepare-templates.js` rewrites template manifests but leaves the
       # lockfile untouched; pnpm 11's default `verifyDepsBeforeRun: install`
       # would then auto-install the pkg.pr.new tarball (not published yet) before
       # the build and hang the job. The build itself only needs create-sdk's own deps.
-      - name: Build create-sdk with pkg.pr.new SDK
+      - name: Build create-sdk with pkg.pr.new dependencies
         env:
           TAILOR_TEMPLATE_SDK_VERSION: ${{ steps.urls.outputs.sdk_url }}
           TAILOR_TEMPLATE_SEED_PLUGIN_VERSION: ${{ steps.urls.outputs.seed_plugin_url }}
+          TAILOR_TEMPLATE_ESLINT_PLUGIN_VERSION: ${{ steps.urls.outputs.eslint_plugin_sdk_url }}
         run: |
           node packages/create-sdk/scripts/prepare-templates.js
           pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build
 
       - name: Publish to pkg.pr.new
-        run: pnpm --config.verify-deps-before-run=false exec pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/create-sdk" "packages/sdk-plugin-seed" "packages/sdk-plugin-tailordb-erd" # zizmor: ignore[use-trusted-publishing]
+        run: pnpm --config.verify-deps-before-run=false exec pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/eslint-plugin-sdk" "packages/create-sdk" "packages/sdk-plugin-seed" "packages/sdk-plugin-tailordb-erd" # zizmor: ignore[use-trusted-publishing]
 
   init-smoke:
     needs: [publish]
@@ -157,12 +163,20 @@ jobs:
       - name: Verify SDK dependency uses pkg.pr.new URL
         env:
           EXPECTED_SDK_URL: ${{ needs.publish.outputs.sdk_url }}
+          EXPECTED_ESLINT_PLUGIN_SDK_URL: ${{ needs.publish.outputs.eslint_plugin_sdk_url }}
         run: |
           SDK_VERSION=$(jq -r '.devDependencies["@tailor-platform/sdk"]' /tmp/test-init-app/package.json)
+          ESLINT_PLUGIN_SDK_VERSION=$(jq -r '.devDependencies["@tailor-platform/eslint-plugin-sdk"]' /tmp/test-init-app/package.json)
           echo "SDK version in generated project: $SDK_VERSION"
           echo "Expected SDK URL: $EXPECTED_SDK_URL"
           if [[ "$SDK_VERSION" != "$EXPECTED_SDK_URL" ]]; then
             echo "Error: SDK dependency should be '$EXPECTED_SDK_URL' but got '$SDK_VERSION'"
+            exit 1
+          fi
+          echo "ESLint plugin version in generated project: $ESLINT_PLUGIN_SDK_VERSION"
+          echo "Expected ESLint plugin URL: $EXPECTED_ESLINT_PLUGIN_SDK_URL"
+          if [[ "$ESLINT_PLUGIN_SDK_VERSION" != "$EXPECTED_ESLINT_PLUGIN_SDK_URL" ]]; then
+            echo "Error: ESLint plugin dependency should be '$EXPECTED_ESLINT_PLUGIN_SDK_URL' but got '$ESLINT_PLUGIN_SDK_VERSION'"
             exit 1
           fi
 
@@ -188,7 +202,12 @@ jobs:
           PM: ${{ matrix.pm }}
         run: |
           test -d /tmp/test-init-app/node_modules/@tailor-platform/sdk
+          test -d /tmp/test-init-app/node_modules/@tailor-platform/eslint-plugin-sdk
           echo "SDK dependency successfully installed with $PM"
+
+      - name: Verify generated project lint
+        working-directory: /tmp/test-init-app
+        run: ./node_modules/.bin/oxlint --type-aware .
 
       - name: Verify SDK import (Node)
         if: matrix.runtime == 'node'

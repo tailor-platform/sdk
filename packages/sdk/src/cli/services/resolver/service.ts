@@ -18,11 +18,13 @@ export type ResolverService = {
  * Creates a new ResolverService instance.
  * @param namespace - The namespace for this resolver service
  * @param config - The resolver service configuration
+ * @param baseDir - Directory the config's file patterns are resolved against
  * @returns A new ResolverService instance
  */
 export function createResolverService(
   namespace: string,
   config: ResolverServiceConfig,
+  baseDir: string,
 ): ResolverService {
   const resolvers: Record<string, Resolver> = {};
 
@@ -64,7 +66,7 @@ export function createResolverService(
         return;
       }
 
-      const resolverFiles = loadFilesWithIgnores(config);
+      const resolverFiles = loadFilesWithIgnores(config, baseDir);
 
       logger.log(
         `Found ${styles.highlight(resolverFiles.length.toString())} resolver files for service ${styles.highlight(`"${namespace}"`)}`,

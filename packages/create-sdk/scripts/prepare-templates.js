@@ -24,6 +24,11 @@ const packageVersions = {
     packageDir: "sdk",
     label: "SDK",
   }),
+  "@tailor-platform/eslint-plugin-sdk": resolveVersion({
+    envVar: "TAILOR_TEMPLATE_ESLINT_PLUGIN_VERSION",
+    packageDir: "eslint-plugin-sdk",
+    label: "ESLint plugin",
+  }),
   "@tailor-platform/sdk-plugin-seed": resolveVersion({
     envVar: "TAILOR_TEMPLATE_SEED_PLUGIN_VERSION",
     packageDir: "sdk-plugin-seed",

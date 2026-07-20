@@ -21,6 +21,5 @@ export default createExecutor({
         })
         .execute();
     },
-    invoker: "manager",
   },
 });
