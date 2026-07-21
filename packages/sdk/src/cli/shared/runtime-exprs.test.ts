@@ -164,6 +164,17 @@ describe("buildResolverPermissionGuardExpr", () => {
     );
   });
 
+  test("!= does not let a caller with no such attribute at all through", () => {
+    // A missing attribute must not satisfy `!=` -- otherwise an
+    // attribute-less caller would unintentionally match a policy meant to
+    // exclude only a specific value.
+    const permission = [
+      { conditions: [[{ user: "role" }, "!=", "BANNED"]], permit: true },
+    ] as const;
+    expect(() => runGuard(permission, { attributes: null })).toThrow(TailorErrorMessage);
+    expect(() => runGuard(permission, { attributes: {} })).toThrow(TailorErrorMessage);
+  });
+
   test("supports the id operand", () => {
     const permission = [
       {

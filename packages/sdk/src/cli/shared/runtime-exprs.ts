@@ -132,10 +132,36 @@ function resolverPermissionOperandExpr(operand: ResolverPermissionOperand): stri
   return JSON.stringify(operand);
 }
 
+// `_loggedIn` always evaluates to a defined boolean, and `id` is always a
+// defined string (a nil UUID for unauthenticated callers), but an arbitrary
+// attribute lookup (`context.user.attributes?.[key]`) can be `undefined` --
+// either because the whole attribute map is null or the key isn't set.
+function isArbitraryAttributeOperand(operand: ResolverPermissionOperand): boolean {
+  return typeof operand === "object" && operand.user !== "_loggedIn" && operand.user !== "id";
+}
+
 function resolverPermissionConditionExpr(condition: ResolverPermissionCondition): string {
   const [left, operator, right] = condition;
+  const leftExpr = resolverPermissionOperandExpr(left);
+  const rightExpr = resolverPermissionOperandExpr(right);
+
+  if (operator === "!=") {
+    // A missing attribute must not satisfy `!=` -- otherwise an
+    // attribute-less caller would unintentionally match a policy meant to
+    // exclude only a specific value (`{ user: "role" } != "BANNED"` should
+    // not let a caller with no `role` attribute at all through).
+    const userOperandExpr = isArbitraryAttributeOperand(left)
+      ? leftExpr
+      : isArbitraryAttributeOperand(right)
+        ? rightExpr
+        : undefined;
+    if (userOperandExpr) {
+      return `(${userOperandExpr} !== undefined && ${leftExpr} !== ${rightExpr})`;
+    }
+  }
+
   const jsOperator = operator === "=" ? "===" : "!==";
-  return `(${resolverPermissionOperandExpr(left)} ${jsOperator} ${resolverPermissionOperandExpr(right)})`;
+  return `(${leftExpr} ${jsOperator} ${rightExpr})`;
 }
 
 function resolverPermissionPolicyExpr(policy: ResolverPermissionPolicy): string {
