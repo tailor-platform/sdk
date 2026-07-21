@@ -414,15 +414,17 @@ Stub the global `tailordb.Client` and queue raw query results in order. Best for
 
 > If you are running with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta), acquire `using db = mockTailordb()` to install and drive the mock `tailordb.Client` instead of `vi.stubGlobal()`.
 
+> The example below uses `aroundAll` / `aroundEach`, which require Vitest ≥ 4.1.
+
 ```typescript
 import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
-import { afterAll, afterEach, beforeAll, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import resolver from "../src/resolver/incrementUserAge";
 
 describe("incrementUserAge resolver", () => {
   const mockQueryObject = vi.fn();
 
-  beforeAll(() => {
+  aroundAll(async (runSuite) => {
     vi.stubGlobal("tailordb", {
       Client: vi.fn(
         class {
@@ -432,9 +434,13 @@ describe("incrementUserAge resolver", () => {
         },
       ),
     });
+    await runSuite();
+    vi.unstubAllGlobals();
   });
-  afterAll(() => vi.unstubAllGlobals());
-  afterEach(() => mockQueryObject.mockReset());
+  aroundEach(async (runTest) => {
+    await runTest();
+    mockQueryObject.mockReset();
+  });
 
   test("increments age inside a transaction", async () => {
     // BEGIN → SELECT → UPDATE → COMMIT
