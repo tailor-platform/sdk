@@ -310,7 +310,13 @@ export const seedApplyCommand = defineAppCommand({
     }
 
     const dataDir = path.join(context.distPath, "data");
-    assertSeedDataDirectory(dataDir);
+    const availableEntities = [
+      ...Object.values(namespaceEntities).flat(),
+      ...(hasIdpUser ? ["_User"] : []),
+    ];
+    if ((selection.entitiesToProcess ?? availableEntities).length > 0) {
+      assertSeedDataDirectory(dataDir);
+    }
 
     const appInfo = await show({
       configPath: args.config,
