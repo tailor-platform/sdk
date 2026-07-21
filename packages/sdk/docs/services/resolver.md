@@ -375,7 +375,7 @@ export default createResolver({
 
 - `{ user: "_loggedIn" }` — whether the caller is authenticated
 - `{ user: "id" }` — the caller's user ID
-- `{ user: "someAttribute" }` — any attribute enabled in `auth.userProfile.attributes` (or `auth.machineUserAttributes` for machine users)
+- `{ user: "someAttribute" }` — any string or boolean attribute enabled in `auth.userProfile.attributes` (or `auth.machineUserAttributes` for machine users); array attributes aren't supported, since conditions only compare against a single string/boolean value
 
 Multiple conditions within the same policy's `conditions` array are combined with AND. `permit` is required. A `permit: false` policy always denies matching callers. With no `permit: true` policy, `permission` is a pure blocklist (everyone else is allowed); with at least one `permit: true` policy, it becomes an allow-list (denied by default, granted only by a matching `permit: true` policy). This lets you express different eligibility paths, e.g. allowing machine-user callers unconditionally while gating regular users behind a role check:
 
