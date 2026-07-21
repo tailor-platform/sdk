@@ -1,5 +1,5 @@
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -18,7 +18,7 @@ vi.mock("#/cli/shared/context", () => ({
 }));
 
 describe("executor list --json", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
@@ -26,6 +26,7 @@ describe("executor list --json", () => {
       {} as Awaited<ReturnType<typeof initOperatorClient>>,
     );
     vi.mocked(fetchPaged).mockResolvedValue([]);
+    await runTest();
   });
 
   test.each([

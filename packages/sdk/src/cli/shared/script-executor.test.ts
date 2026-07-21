@@ -1,5 +1,5 @@
 import { FunctionExecution_Status } from "@tailor-platform/tailor-proto/function_resource_pb";
-import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { waitForExecution, executeScript, DEFAULT_POLL_INTERVAL } from "./script-executor";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { AuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
@@ -28,11 +28,9 @@ function execution(
 }
 
 describe("waitForExecution", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.useFakeTimers();
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.useRealTimers();
   });
 
@@ -133,11 +131,9 @@ describe("waitForExecution", () => {
 });
 
 describe("executeScript", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.useFakeTimers();
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.useRealTimers();
   });
 

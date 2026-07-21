@@ -1,18 +1,15 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/workflow` typed wrappers.
  */
-import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
+import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as workflow from "#/runtime/workflow";
-import { cleanupMocks, injectMocks, mockWorkflow } from "#/vitest/mock";
+import { injectMocks, mockWorkflow } from "#/vitest/mock";
 import type { ExecutionPolicyKey } from "#/runtime/workflow";
 
 describe("@tailor-platform/sdk/runtime/workflow", () => {
-  beforeEach(() => {
-    injectMocks(globalThis);
-  });
-
-  afterEach(() => {
-    cleanupMocks(globalThis);
+  aroundEach(async (runTest) => {
+    using _mocks = injectMocks(globalThis);
+    await runTest();
   });
 
   test("triggerWorkflow forwards args and returns Promise<string>", async () => {

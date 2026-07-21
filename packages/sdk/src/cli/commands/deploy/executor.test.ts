@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
@@ -190,8 +190,9 @@ describe("planExecutor", () => {
     };
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   describe("rename scenarios", () => {

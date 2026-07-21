@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 
 const nodeModuleMock = vi.hoisted(() => ({
   register: vi.fn(),
@@ -9,7 +9,8 @@ vi.mock("node:module", () => nodeModuleMock);
 import { registerTsconfigPathsHook } from "./register-tsconfig-paths-hook";
 
 describe("registerTsconfigPathsHook", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     nodeModuleMock.register = vi.fn();

@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
-import { afterEach, beforeEach, describe, test, expect, vi } from "vitest";
+import { aroundEach, describe, test, expect, vi } from "vitest";
 import { reportCrash } from "#/cli/crashreport/index";
 import {
   concurrencyLimitInterceptor,
@@ -37,7 +37,8 @@ vi.mock("#/cli/crashreport/index", () => ({
 }));
 
 describe("createTransport", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.clearAllMocks();
   });
 
@@ -54,7 +55,8 @@ describe("createTransport", () => {
 });
 
 describe("initOperatorClient", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     rememberPlatformConfigForToken("token-a");
     vi.clearAllMocks();
   });
@@ -76,7 +78,8 @@ describe("initOperatorClient", () => {
 });
 
 describe("getConsoleBaseUrl", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 
@@ -98,7 +101,8 @@ describe("getConsoleBaseUrl", () => {
 });
 
 describe("platform environment variables", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 
@@ -265,11 +269,10 @@ describe("fetchPaged", () => {
 describe("retryInterceptor", () => {
   // Stub timers so the real backoff (500ms base) does not slow the suite or make
   // it flaky under load; runAllTimersAsync below drives the awaited setTimeout.
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.useFakeTimers();
     vi.mocked(reportCrash).mockClear();
-  });
-  afterEach(() => {
+    await runTest();
     vi.useRealTimers();
   });
 
@@ -497,7 +500,8 @@ describe("retryInterceptor", () => {
 
 describe("concurrencyLimitInterceptor", () => {
   const original = process.env.TAILOR_APPLY_CONCURRENCY;
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     if (original === undefined) {
       delete process.env.TAILOR_APPLY_CONCURRENCY;
     } else {
@@ -733,11 +737,9 @@ describe("resolveStaticWebsiteUrls", () => {
 describe("fetchMachineUserToken", () => {
   const fetchMock = vi.fn();
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.stubGlobal("fetch", fetchMock);
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllGlobals();
   });
 

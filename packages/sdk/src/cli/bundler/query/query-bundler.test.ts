@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
-import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { bundleQueryScript } from "./query-bundler";
 import type * as pkgTypes from "pkg-types";
 
@@ -15,16 +15,18 @@ vi.mock("pkg-types", async (importOriginal) => {
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
 
 describe("query-bundler", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     const testDir = path.join(
       TEST_BUNDLER_BASE,
       `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     );
     fs.mkdirSync(testDir, { recursive: true });
     process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    await runTest();
   });
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     delete process.env.TAILOR_SDK_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BUNDLER_BASE, { recursive: true, force: true });

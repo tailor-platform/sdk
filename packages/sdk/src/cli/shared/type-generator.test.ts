@@ -1,5 +1,5 @@
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
 import {
@@ -144,13 +144,10 @@ describe("generateTypeDefinition", () => {
 });
 
 describe("resolveTypeDefinitionPath", () => {
-  const originalEnv = process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
-
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
+    const originalEnv = process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
     delete process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
-  });
-
-  afterEach(() => {
+    await runTest();
     if (originalEnv !== undefined) {
       process.env.TAILOR_PLATFORM_SDK_DTS_PATH = originalEnv;
     } else {

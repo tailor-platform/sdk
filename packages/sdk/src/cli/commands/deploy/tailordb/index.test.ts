@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { sdkNameLabelKey } from "../label";
@@ -180,8 +180,9 @@ describe("planTailorDB (service level)", () => {
     } as unknown as OperatorClient;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   describe("rename scenarios (service level)", () => {
@@ -816,8 +817,9 @@ describe("applyTailorDB phase separation", () => {
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test.each([
@@ -930,7 +932,7 @@ describe("applyTailorDB migration label reconciliation", () => {
   let tmpDir: string;
   let configPath: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "applyTailorDB-migration-"));
     configPath = path.join(tmpDir, "tailor.config.ts");
     // Working tree latest migration = 0 (only baseline schema.json under 0000/)
@@ -945,9 +947,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: {},
       }),
     );
-  });
-
-  afterEach(() => {
+    await runTest();
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch {

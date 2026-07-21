@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { findTarget, hashContent, LOCK_VERSION, readLock, writeLock, type LockFile } from "./lock";
 
 function makeLock(): LockFile {
@@ -41,11 +41,9 @@ describe("readLock / writeLock", () => {
     `lock-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     fs.mkdirSync(testDir, { recursive: true });
-  });
-
-  afterEach(() => {
+    await runTest();
     fs.rmSync(testDir, { recursive: true, force: true });
   });
 

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   getSecretsStatePath,
   hashValue,
@@ -38,8 +38,11 @@ function removeStateFiles(): void {
 }
 
 describe("secrets-state", () => {
-  beforeEach(removeStateFiles);
-  afterEach(removeStateFiles);
+  aroundEach(async (runTest) => {
+    removeStateFiles();
+    await runTest();
+    removeStateFiles();
+  });
 
   test("loadSecretsState returns empty state when file does not exist", () => {
     const state = loadSecretsState(scopeA);
@@ -217,8 +220,11 @@ describe("secrets-state", () => {
 });
 
 describe("withSecretsStateLock", () => {
-  beforeEach(removeStateFiles);
-  afterEach(removeStateFiles);
+  aroundEach(async (runTest) => {
+    removeStateFiles();
+    await runTest();
+    removeStateFiles();
+  });
 
   function lockPathFor(scope: SecretsStateScope): string {
     return `${getSecretsStatePath(scope)}.lock`;

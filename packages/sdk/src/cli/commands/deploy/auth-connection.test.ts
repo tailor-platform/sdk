@@ -1,5 +1,5 @@
 import { AuthConnection_Status } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
 import type { AuthService } from "#/cli/services/auth/service";
 import type { OperatorClient } from "#/cli/shared/client";
@@ -130,9 +130,10 @@ function authsWith(names: string[]): ReadonlyArray<Readonly<AuthService>> {
   return [{ name: "auth-a", connections } as unknown as AuthService];
 }
 
-beforeEach(() => {
+aroundEach(async (runTest) => {
   mockLoadSecretsState.mockReset();
   mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
+  await runTest();
 });
 
 describe("planAuthConnections", () => {
@@ -322,10 +323,11 @@ describe("planAuthConnections", () => {
 });
 
 describe("applyAuthConnections", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     mockSaveSecretsState.mockReset();
     mockLoggerWarn.mockReset();
     mockLoggerInfo.mockReset();
+    await runTest();
   });
 
   test("notifies user to authorize a newly created connection", async () => {

@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import {
   db,
@@ -14,7 +14,8 @@ import type { Plugin } from "#/plugin/types";
 describe("createTailorDBService.loadTypes", () => {
   let tmpDir: string | undefined;
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     if (tmpDir) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
       tmpDir = undefined;

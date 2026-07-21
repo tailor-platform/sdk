@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -739,12 +739,10 @@ describe("printPlanResults", () => {
   let outSpy: ReturnType<typeof vi.spyOn>;
   let logSpy: ReturnType<typeof vi.spyOn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     outSpy = vi.spyOn(logger, "out").mockImplementation(() => {});
     logSpy = vi.spyOn(logger, "log").mockImplementation(() => {});
-  });
-
-  afterEach(() => {
+    await runTest();
     outSpy.mockRestore();
     logSpy.mockRestore();
   });

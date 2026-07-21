@@ -1,15 +1,12 @@
-import { describe, test, expect, beforeEach, afterEach } from "vitest";
+import { describe, test, expect, aroundEach } from "vitest";
 import { parseTelemetryConfig } from "./config";
 
 describe("parseTelemetryConfig", () => {
-  const originalEnv = process.env;
-
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
+    const originalEnv = process.env;
     process.env = { ...originalEnv };
     delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-  });
-
-  afterEach(() => {
+    await runTest();
     process.env = originalEnv;
   });
 

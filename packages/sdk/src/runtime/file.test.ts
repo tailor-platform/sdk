@@ -1,9 +1,9 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/file` typed wrappers.
  */
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import * as file from "#/runtime/file";
-import { cleanupMocks, mockFile, injectMocks } from "#/vitest/mock";
+import { mockFile, injectMocks } from "#/vitest/mock";
 
 const args = ["ns", "Doc", "blob", "rec-1"] as const;
 const expectedCall = (method: string) => ({
@@ -15,12 +15,9 @@ const expectedCall = (method: string) => ({
 });
 
 describe("@tailor-platform/sdk/runtime/file", () => {
-  beforeEach(() => {
-    injectMocks(globalThis);
-  });
-
-  afterEach(() => {
-    cleanupMocks(globalThis);
+  aroundEach(async (runTest) => {
+    using _mocks = injectMocks(globalThis);
+    await runTest();
   });
 
   test("upload forwards args and records the call", async () => {
