@@ -9,7 +9,7 @@ type PkgTypesModule = typeof pkgTypes;
 
 vi.mock("pkg-types", async (importOriginal) => {
   const original = await importOriginal<PkgTypesModule>();
-  return { ...original, resolveTSConfig: vi.fn(original.resolveTSConfig) };
+  return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
 });
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
