@@ -60,4 +60,31 @@ describe("ResolverPermissionSchema", () => {
       ResolverPermissionSchema.parse([{ conditions: [["a", "=", "b"]], permit: true }]),
     ).toThrow("must reference a `user` operand");
   });
+
+  test("rejects `_loggedIn` compared to a string", () => {
+    expect(() =>
+      ResolverPermissionSchema.parse([
+        { conditions: [[{ user: "_loggedIn" }, "=", "true"]], permit: true },
+      ]),
+    ).toThrow('"_loggedIn" must compare to a boolean');
+  });
+
+  test("rejects `id` compared to a boolean", () => {
+    expect(() =>
+      ResolverPermissionSchema.parse([{ conditions: [[{ user: "id" }, "=", true]], permit: true }]),
+    ).toThrow('"id" must compare to a string');
+  });
+
+  test("accepts an arbitrary attribute compared to either a string or a boolean", () => {
+    expect(() =>
+      ResolverPermissionSchema.parse([
+        { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
+      ]),
+    ).not.toThrow();
+    expect(() =>
+      ResolverPermissionSchema.parse([
+        { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
+      ]),
+    ).not.toThrow();
+  });
 });

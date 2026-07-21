@@ -18,6 +18,27 @@ const ResolverPermissionOperatorSchema = z.union([z.literal("="), z.literal("!="
 const isUserOperand = (operand: z.infer<typeof ResolverPermissionOperandSchema>) =>
   typeof operand === "object";
 
+// Fixed `user` keys have a known value type; arbitrary user attributes don't
+// (their declared type lives in the configure-layer generic, not here), so
+// only these two are checked against the operand they're compared to.
+const KNOWN_USER_OPERAND_TYPES: Record<string, "string" | "boolean"> = {
+  _loggedIn: "boolean",
+  id: "string",
+};
+
+const isOperandTypeMismatch = (
+  userOperand: z.infer<typeof ResolverPermissionOperandSchema>,
+  otherOperand: z.infer<typeof ResolverPermissionOperandSchema>,
+) => {
+  if (typeof userOperand !== "object") {
+    return false;
+  }
+  const expected = KNOWN_USER_OPERAND_TYPES[userOperand.user];
+  return (
+    expected !== undefined && typeof otherOperand !== "object" && typeof otherOperand !== expected
+  );
+};
+
 const ResolverPermissionConditionSchema = z
   .tuple([
     ResolverPermissionOperandSchema,
@@ -27,6 +48,10 @@ const ResolverPermissionConditionSchema = z
   .refine(
     ([left, , right]) => isUserOperand(left) || isUserOperand(right),
     "Resolver permission condition must reference a `user` operand on at least one side",
+  )
+  .refine(
+    ([left, , right]) => !isOperandTypeMismatch(left, right) && !isOperandTypeMismatch(right, left),
+    '`{ user: "_loggedIn" }` must compare to a boolean and `{ user: "id" }` must compare to a string',
   )
   .readonly();
 
