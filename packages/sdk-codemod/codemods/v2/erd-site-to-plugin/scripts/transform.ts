@@ -89,6 +89,10 @@ function removePairEdit(objectNode: SgNode, pairNode: SgNode): Edit {
     if (leading) {
       removeFrom = start - leading[0].length;
     }
+    const inlineComment = after.match(/^[ \t]*\/\/[^\n]*/);
+    if (inlineComment) {
+      removeTo = end + inlineComment[0].length;
+    }
   }
 
   return objectNode.replace(objText.slice(0, removeFrom) + objText.slice(removeTo));
