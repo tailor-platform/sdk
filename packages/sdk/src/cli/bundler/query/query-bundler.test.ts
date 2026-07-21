@@ -26,7 +26,7 @@ describe("query-bundler", () => {
 
   describe("bundleQueryScript", () => {
     test("bundles SQL query script with expected runtime pieces", async () => {
-      const bundledCode = await bundleQueryScript("sql");
+      const bundledCode = await bundleQueryScript("sql", __dirname);
 
       expect(bundledCode).toContain("export");
       expect(bundledCode).toContain("main");
@@ -38,7 +38,7 @@ describe("query-bundler", () => {
     });
 
     test("bundles GraphQL query script with fetch and error handling", async () => {
-      const bundledCode = await bundleQueryScript("gql");
+      const bundledCode = await bundleQueryScript("gql", __dirname);
 
       expect(bundledCode).toContain("export");
       expect(bundledCode).toContain("main");
@@ -49,8 +49,8 @@ describe("query-bundler", () => {
     });
 
     test("keeps SQL and GraphQL runtime concerns separated", async () => {
-      const sqlBundle = await bundleQueryScript("sql");
-      const gqlBundle = await bundleQueryScript("gql");
+      const sqlBundle = await bundleQueryScript("sql", __dirname);
+      const gqlBundle = await bundleQueryScript("gql", __dirname);
 
       expect(sqlBundle).toContain("tailordb.Client");
       expect(sqlBundle).toContain("TailordbDialect");
@@ -65,8 +65,8 @@ describe("query-bundler", () => {
     test("writes entry files to query output directory (bundle output is in-memory only)", async () => {
       const outputDir = path.join(process.env.TAILOR_SDK_OUTPUT_DIR!, "query");
 
-      await bundleQueryScript("sql");
-      await bundleQueryScript("gql");
+      await bundleQueryScript("sql", __dirname);
+      await bundleQueryScript("gql", __dirname);
 
       // Entry files are still written to disk (rolldown input)
       expect(fs.existsSync(path.join(outputDir, "query_sql.entry.ts"))).toBe(true);
