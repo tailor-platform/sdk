@@ -3,7 +3,7 @@
  */
 import { aroundEach, describe, expect, test } from "vitest";
 import * as file from "#/runtime/file";
-import { cleanupMocks, mockFile, injectMocks } from "#/vitest/mock";
+import { mockFile, injectMocks } from "#/vitest/mock";
 
 const args = ["ns", "Doc", "blob", "rec-1"] as const;
 const expectedCall = (method: string) => ({
@@ -16,9 +16,8 @@ const expectedCall = (method: string) => ({
 
 describe("@tailor-platform/sdk/runtime/file", () => {
   aroundEach(async (runTest) => {
-    injectMocks(globalThis);
+    using _mocks = injectMocks(globalThis);
     await runTest();
-    cleanupMocks(globalThis);
   });
 
   test("upload forwards args and records the call", async () => {

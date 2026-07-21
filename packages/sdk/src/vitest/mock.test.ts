@@ -17,9 +17,8 @@ import {
 
 describe("mock", () => {
   aroundEach(async (runTest) => {
-    injectMocks(globalThis);
+    using _mocks = injectMocks(globalThis);
     await runTest();
-    cleanupMocks(globalThis);
   });
 
   describe("mockTailordb", () => {

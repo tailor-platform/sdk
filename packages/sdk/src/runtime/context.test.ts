@@ -3,13 +3,12 @@
  */
 import { aroundEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import * as context from "#/runtime/context";
-import { cleanupMocks, injectMocks } from "#/vitest/mock";
+import { injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/context", () => {
   aroundEach(async (runTest) => {
-    injectMocks(globalThis);
+    using _mocks = injectMocks(globalThis);
     await runTest();
-    cleanupMocks(globalThis);
   });
 
   test("getInvoker returns null for anonymous invocations", () => {

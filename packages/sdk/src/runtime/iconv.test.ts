@@ -7,13 +7,12 @@
  */
 import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as iconv from "#/runtime/iconv";
-import { cleanupMocks, mockIconv, injectMocks } from "#/vitest/mock";
+import { mockIconv, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/iconv", () => {
   aroundEach(async (runTest) => {
-    injectMocks(globalThis);
+    using _mocks = injectMocks(globalThis);
     await runTest();
-    cleanupMocks(globalThis);
   });
 
   test("convert forwards args and returns string for UTF-8 target", () => {

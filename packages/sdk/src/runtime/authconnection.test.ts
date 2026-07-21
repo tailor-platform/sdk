@@ -3,13 +3,12 @@
  */
 import { aroundEach, describe, expect, test } from "vitest";
 import * as authconnection from "#/runtime/authconnection";
-import { mockAuthconnection, cleanupMocks, injectMocks } from "#/vitest/mock";
+import { mockAuthconnection, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/authconnection", () => {
   aroundEach(async (runTest) => {
-    injectMocks(globalThis);
+    using _mocks = injectMocks(globalThis);
     await runTest();
-    cleanupMocks(globalThis);
   });
 
   test("getConnectionToken forwards to global and records call", async () => {

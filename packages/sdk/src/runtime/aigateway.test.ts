@@ -3,13 +3,12 @@
  */
 import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as aigateway from "#/runtime/aigateway";
-import { cleanupMocks, injectMocks, mockAigateway } from "#/vitest/mock";
+import { injectMocks, mockAigateway } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/aigateway", () => {
   aroundEach(async (runTest) => {
-    injectMocks(globalThis);
+    using _mocks = injectMocks(globalThis);
     await runTest();
-    cleanupMocks(globalThis);
   });
 
   test("get forwards to global and returns Promise<{ url: string }>", async () => {

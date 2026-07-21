@@ -4,7 +4,6 @@ import { createWorkflowJob } from "../configure/services/workflow/job";
 import { defineWaitPoint } from "../configure/services/workflow/wait-point";
 import { createWorkflow } from "../configure/services/workflow/workflow";
 import {
-  cleanupMocks,
   injectMocks,
   mockAigateway,
   mockAuthconnection,
@@ -35,9 +34,8 @@ const approval = defineWaitPoint<{ message: string }, { approved: boolean }>(
 
 describe("ergonomic runtime mocks", () => {
   aroundEach(async (runTest) => {
-    injectMocks(globalThis);
+    using _mocks = injectMocks(globalThis);
     await runTest();
-    cleanupMocks(globalThis);
   });
 
   test("matches TailorDB queries without coupling responses to global call order", async () => {

@@ -3,13 +3,12 @@
  */
 import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
 import * as secretmanager from "#/runtime/secretmanager";
-import { cleanupMocks, injectMocks, mockSecretmanager } from "#/vitest/mock";
+import { injectMocks, mockSecretmanager } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/secretmanager", () => {
   aroundEach(async (runTest) => {
-    injectMocks(globalThis);
+    using _mocks = injectMocks(globalThis);
     await runTest();
-    cleanupMocks(globalThis);
   });
 
   test("getSecret forwards to global and returns Promise<string | undefined>", async () => {

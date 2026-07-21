@@ -6,13 +6,12 @@
  */
 import { aroundEach, describe, expect, test } from "vitest";
 import * as idp from "#/runtime/idp";
-import { cleanupMocks, mockIdp, injectMocks } from "#/vitest/mock";
+import { mockIdp, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/idp", () => {
   aroundEach(async (runTest) => {
-    injectMocks(globalThis);
+    using _mocks = injectMocks(globalThis);
     await runTest();
-    cleanupMocks(globalThis);
   });
 
   test("Client.user forwards args and namespace", async () => {
