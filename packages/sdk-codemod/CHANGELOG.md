@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.3.8
+
+### Patch Changes
+
+- [#1818](https://github.com/tailor-platform/sdk/pull/1818) [`56608cc`](https://github.com/tailor-platform/sdk/commit/56608ccc445c1aeb683ddfd72965446b1062cfbd) Thanks [@toiroakr](https://github.com/toiroakr)! - Adopt Vitest 4.1 `aroundEach`/`aroundAll` hooks across the test suites, and update the TailorDB client mock example in the testing docs to the same style
+
 ## 0.3.7
 
 ### Patch Changes

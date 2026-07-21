@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.80.1
+
+### Patch Changes
+
+- [#1831](https://github.com/tailor-platform/sdk/pull/1831) [`e24b3da`](https://github.com/tailor-platform/sdk/commit/e24b3da17656317a3729626d1cb34d90b8116356) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `IdPConfig`'s `permission` type so `defineIdp` calls with valid permission definitions using project-specific attribute keys are no longer rejected by `tsc`
+
+- [#1828](https://github.com/tailor-platform/sdk/pull/1828) [`46f2d49`](https://github.com/tailor-platform/sdk/commit/46f2d496407ec8c248ed60a3f519ef526e0896e4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1818](https://github.com/tailor-platform/sdk/pull/1818) [`56608cc`](https://github.com/tailor-platform/sdk/commit/56608ccc445c1aeb683ddfd72965446b1062cfbd) Thanks [@toiroakr](https://github.com/toiroakr)! - Adopt Vitest 4.1 `aroundEach`/`aroundAll` hooks across the test suites, and update the TailorDB client mock example in the testing docs to the same style
+
 ## 1.80.0
 
 ### Minor Changes
