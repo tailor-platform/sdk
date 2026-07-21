@@ -25,7 +25,7 @@ export interface MigrationBundleResult {
  * 1. Imports the migration script's main function
  * 2. Defines getDB() function inline
  * 3. Wraps migration in a transaction using getDB()
- * 4. Exports as main() for TestExecScript
+ * 4. Exports as main() for server-side execution
  * @param {string} sourceFile - Path to the migration script file
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number
