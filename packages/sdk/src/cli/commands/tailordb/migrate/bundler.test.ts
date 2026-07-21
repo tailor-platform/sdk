@@ -1,7 +1,16 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test, aroundEach, aroundAll } from "vitest";
+import { resolveTSConfig } from "pkg-types";
+import { describe, expect, test, aroundEach, aroundAll, vi } from "vitest";
 import { bundleMigrationScript } from "./bundler";
+import type * as pkgTypes from "pkg-types";
+
+type PkgTypesModule = typeof pkgTypes;
+
+vi.mock("pkg-types", async (importOriginal) => {
+  const original = await importOriginal<PkgTypesModule>();
+  return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
+});
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
 const DB_TS = `export type Transaction = any;\n`;
@@ -56,6 +65,19 @@ describe("migration-bundler", () => {
       expect(result.namespace).toBe("test-namespace");
       expect(result.migrationNumber).toBe(5);
       expect(typeof result.bundledCode).toBe("string");
+    });
+
+    test("resolves tsconfig from baseDir, defaulting to the migration script's directory", async () => {
+      vi.mocked(resolveTSConfig).mockClear();
+      const scriptPath = writeMigration("  // Migration logic");
+      await bundleMigrationScript(scriptPath, "test-namespace", 6);
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(path.dirname(scriptPath));
+
+      vi.mocked(resolveTSConfig).mockClear();
+      await bundleMigrationScript(scriptPath, "test-namespace", 7, {}, __dirname);
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(__dirname);
     });
 
     test("bundles migration script with getDB function", async () => {

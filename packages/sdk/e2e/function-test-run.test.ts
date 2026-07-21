@@ -102,6 +102,7 @@ async function runTestRun(
   const { bundledCode, scriptName } = await bundleForTestRun({
     detected,
     sourceFile: filePath,
+    baseDir: exampleDir,
     env,
     machineUser,
     workspaceId,
@@ -301,6 +302,7 @@ describe.sequential("E2E: function test-run", () => {
       const { bundledCode } = await bundleForTestRun({
         detected,
         sourceFile,
+        baseDir: exampleDir,
         env,
         machineUser,
         workspaceId,
@@ -339,6 +341,7 @@ describe.sequential("E2E: function test-run", () => {
       const { bundledCode, scriptName } = await bundleForTestRun({
         detected,
         sourceFile: filePath,
+        baseDir: fixtureDir,
         env: {},
         machineUser,
         workspaceId,

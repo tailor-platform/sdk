@@ -439,6 +439,7 @@ describe("migration", () => {
         machineUsers: ["test-machine-user"],
         dbConfig: {},
         env: {},
+        configDir: "/project",
       };
     }
 

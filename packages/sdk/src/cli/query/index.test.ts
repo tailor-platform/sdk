@@ -112,6 +112,7 @@ describe("query", () => {
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         name: "sample-app",
+        path: "/project/tailor.config.ts",
       },
     } as never);
     vi.mocked(extractAllNamespaces).mockReturnValue(["tailordb"]);
@@ -159,7 +160,7 @@ describe("query", () => {
       query: 'select * from "User";',
     });
 
-    expect(bundleQueryScript).toHaveBeenCalledWith("sql");
+    expect(bundleQueryScript).toHaveBeenCalledWith("sql", "/project");
     expect(resolveTypeNamespaces).not.toHaveBeenCalled();
     expect(executeScript).toHaveBeenCalledWith(
       expect.objectContaining({
