@@ -1,7 +1,16 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { resolveTSConfig } from "pkg-types";
+import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { bundleQueryScript } from "./query-bundler";
+import type * as pkgTypes from "pkg-types";
+
+type PkgTypesModule = typeof pkgTypes;
+
+vi.mock("pkg-types", async (importOriginal) => {
+  const original = await importOriginal<PkgTypesModule>();
+  return { ...original, resolveTSConfig: vi.fn(original.resolveTSConfig) };
+});
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
 
@@ -25,6 +34,12 @@ describe("query-bundler", () => {
   });
 
   describe("bundleQueryScript", () => {
+    test("resolves tsconfig from the provided baseDir", async () => {
+      await bundleQueryScript("sql", __dirname);
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(__dirname);
+    });
+
     test("bundles SQL query script with expected runtime pieces", async () => {
       const bundledCode = await bundleQueryScript("sql", __dirname);
 
