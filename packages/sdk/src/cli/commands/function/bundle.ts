@@ -8,7 +8,6 @@
 
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import {
   createLogLevelTreeshakeOptions,
@@ -18,6 +17,7 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
@@ -82,12 +82,7 @@ export async function bundleForTestRun(
   const entryContent = generateEntry(detected, sourceFile, env, machineUser, workspaceId);
   fs.writeFileSync(entryPath, entryContent);
 
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(path.dirname(path.resolve(sourceFile)));
 
   const buildResult = await rolldown.build({
     plugins: [platformBundleDefinePlugin],
