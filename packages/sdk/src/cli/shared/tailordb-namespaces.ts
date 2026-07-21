@@ -29,7 +29,7 @@ export interface LoadTailorDBNamespacesOptions {
 export interface LoadedTailorDBNamespaces {
   /** The loaded Tailor config. */
   config: LoadedConfig;
-  /** Plugins registered via definePlugins() exports in the config module. */
+  /** Plugins collected from the config module's plugin-array exports (typically `definePlugins()`). */
   plugins: Plugin[];
   /** Loaded TailorDB namespace data, in config order. */
   namespaces: TailorDBNamespaceData[];

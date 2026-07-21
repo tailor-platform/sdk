@@ -22,11 +22,18 @@ const ErdPluginConfigSchema = z.object({
   sites: z.record(z.string(), z.string()),
 });
 
+export interface ErdSiteIssue {
+  /** Namespace key of the offending `sites` entry. */
+  namespace: string;
+  /** Human-readable description of the mismatch. */
+  message: string;
+}
+
 export interface ResolvedErdSites {
   /** TailorDB namespace name → static website name. */
   sites: Record<string, string>;
   /** Cross-reference issues: unknown namespaces or undefined static websites. */
-  issues: string[];
+  issues: ErdSiteIssue[];
 }
 
 /**
@@ -57,7 +64,7 @@ export function resolveErdSites(
     );
   }
 
-  const issues: string[] = [];
+  const issues: ErdSiteIssue[] = [];
   const websiteNames = new Set((config.staticWebsites ?? []).map((website) => website.name));
   for (const [namespace, site] of Object.entries(parsed.data.sites)) {
     const dbConfig = config.db?.[namespace];
@@ -66,16 +73,20 @@ export function resolveErdSites(
         .filter(([, candidate]) => !("external" in candidate))
         .map(([name]) => name)
         .join(", ");
-      issues.push(
-        `tailordbErdPlugin sites: TailorDB namespace "${namespace}" not found in config.db.` +
+      issues.push({
+        namespace,
+        message:
+          `tailordbErdPlugin sites: TailorDB namespace "${namespace}" not found in config.db.` +
           (available ? ` Available owned namespaces: ${available}` : ""),
-      );
+      });
     } else if (!websiteNames.has(site)) {
       const available = [...websiteNames].join(", ");
-      issues.push(
-        `tailordbErdPlugin sites: static website "${site}" (namespace "${namespace}") not found in staticWebsites.` +
+      issues.push({
+        namespace,
+        message:
+          `tailordbErdPlugin sites: static website "${site}" (namespace "${namespace}") not found in staticWebsites.` +
           (available ? ` Available static websites: ${available}` : ""),
-      );
+      });
     }
   }
 
@@ -121,15 +132,19 @@ export async function loadLocalErdSchema(
     configPath: options.configPath,
     namespaces: (loadedConfig, plugins) => {
       const resolved = resolveErdSites(loadedConfig, plugins);
-      if (resolved.issues.length > 0) {
-        // Only commands that deploy to the sites need a fatal error; the
-        // others still surface the misconfiguration as warnings.
-        if (options.requireErdSite) {
-          throw new Error(resolved.issues.join("\n"));
-        }
-        for (const issue of resolved.issues) {
-          logger.warn(issue);
-        }
+      // Only commands that deploy to the sites need a fatal error, and only
+      // for the namespaces the command actually targets; everything else
+      // still surfaces the misconfiguration as warnings.
+      const fatal = resolved.issues.filter(
+        (issue) =>
+          options.requireErdSite &&
+          (!options.namespaces || options.namespaces.includes(issue.namespace)),
+      );
+      if (fatal.length > 0) {
+        throw new Error(fatal.map((issue) => issue.message).join("\n"));
+      }
+      for (const issue of resolved.issues) {
+        logger.warn(issue.message);
       }
       sites = resolved.sites;
       return resolveLocalErdSchemaNamespaces(sites, {
