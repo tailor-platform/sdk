@@ -2,14 +2,16 @@ import { defineApplication } from "#/cli/services/application";
 import { PluginManager } from "#/plugin/manager";
 import { loadConfig, type LoadedConfig } from "./config-loader";
 import { generateUserTypes } from "./type-generator";
-import type { TailorDBNamespaceData } from "#/plugin/types";
+import type { Plugin, TailorDBNamespaceData } from "#/plugin/types";
 
 /**
  * Namespace selection for {@link loadTailorDBNamespaces}: explicit namespace
- * names, or a selector deriving them from the loaded config. Returning
- * `undefined` (or omitting the option) loads all owned namespaces.
+ * names, or a selector deriving them from the loaded config and its plugins.
+ * Returning `undefined` (or omitting the option) loads all owned namespaces.
  */
-export type TailorDBNamespaceSelector = string[] | ((config: LoadedConfig) => string[] | undefined);
+export type TailorDBNamespaceSelector =
+  | string[]
+  | ((config: LoadedConfig, plugins: Plugin[]) => string[] | undefined);
 
 /**
  * Options for {@link loadTailorDBNamespaces}.
@@ -27,6 +29,8 @@ export interface LoadTailorDBNamespacesOptions {
 export interface LoadedTailorDBNamespaces {
   /** The loaded Tailor config. */
   config: LoadedConfig;
+  /** Plugins collected from the config module's plugin-array exports (typically `definePlugins()`). */
+  plugins: Plugin[];
   /** Loaded TailorDB namespace data, in config order. */
   namespaces: TailorDBNamespaceData[];
 }
@@ -51,7 +55,9 @@ export async function loadTailorDBNamespaces(
     pluginManager,
   });
   const namespaceNames =
-    typeof options.namespaces === "function" ? options.namespaces(config) : options.namespaces;
+    typeof options.namespaces === "function"
+      ? options.namespaces(config, plugins)
+      : options.namespaces;
   const namespaceFilter = namespaceNames ? new Set(namespaceNames) : undefined;
   const services = namespaceFilter
     ? application.tailorDBServices.filter((db) => namespaceFilter.has(db.namespace))
@@ -80,5 +86,5 @@ export async function loadTailorDBNamespaces(
     });
   }
 
-  return { config, namespaces };
+  return { config, plugins, namespaces };
 }

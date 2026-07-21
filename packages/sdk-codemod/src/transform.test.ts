@@ -79,6 +79,10 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/principal-unify")).resolves.toBeUndefined();
   });
 
+  test("v2/erd-site-to-plugin transforms correctly", async () => {
+    await expect(runFixtureCases("v2/erd-site-to-plugin")).resolves.toBeUndefined();
+  });
+
   test("v2/auth-attributes-rename transforms correctly", async () => {
     await expect(runFixtureCases("v2/auth-attributes-rename")).resolves.toBeUndefined();
   });

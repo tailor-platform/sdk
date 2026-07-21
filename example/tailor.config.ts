@@ -6,6 +6,7 @@ import {
   definePlugins,
   defineStaticWebSite,
 } from "@tailor-platform/sdk";
+import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";
 import { enumConstantsPlugin } from "@tailor-platform/sdk/plugin/enum-constants";
 import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
@@ -125,7 +126,6 @@ export default defineConfig({
   db: {
     tailordb: {
       files: ["./tailordb/*.ts"],
-      erdSite: erdSite.name,
       migration: {
         directory: "./migrations",
       },
@@ -159,4 +159,5 @@ export const plugins = definePlugins(
   enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
   fileUtilsPlugin({ distPath: "./generated/files.ts" }),
   seedPlugin({ distPath: "./seed", machineUserName: "manager-machine-user" }),
+  tailordbErdPlugin({ sites: { tailordb: erdSite.name } }),
 );

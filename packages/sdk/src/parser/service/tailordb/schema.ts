@@ -290,7 +290,6 @@ const TailorDBMigrationConfigSchema = z.strictObject({
 export const TailorDBServiceConfigSchema = z.strictObject({
   files: z.array(z.string()).describe("Glob patterns for TailorDB type definition files"),
   ignores: z.array(z.string()).optional().describe("Glob patterns to exclude from type discovery"),
-  erdSite: z.string().optional().describe("URL for the ERD (Entity Relationship Diagram) site"),
   migration: TailorDBMigrationConfigSchema.optional().describe("Migration configuration"),
   gqlOperations: GqlOperationsSchema.optional().describe(
     "Default GraphQL operations for all types in this service",
