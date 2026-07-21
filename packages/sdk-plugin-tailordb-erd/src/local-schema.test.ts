@@ -54,19 +54,24 @@ describe("resolveErdSites", () => {
     const plugins = [tailordbErdPlugin({ sites: { missing: "main-erd" } })] as Plugin[];
     const { issues } = resolveErdSites(config, plugins);
     expect(issues).toHaveLength(1);
-    expect(issues[0]).toMatch(
+    expect(issues[0]!.namespace).toBe("missing");
+    expect(issues[0]!.message).toMatch(
       /namespace "missing" not found in config\.db.*Available owned namespaces: main, admin/,
     );
   });
 
   test("reports an issue when a namespace is external", () => {
     const plugins = [tailordbErdPlugin({ sites: { external: "main-erd" } })] as Plugin[];
-    expect(resolveErdSites(config, plugins).issues[0]).toMatch(/namespace "external" not found/);
+    expect(resolveErdSites(config, plugins).issues[0]!.message).toMatch(
+      /namespace "external" not found/,
+    );
   });
 
   test("reports an issue when a site is not a defined static website", () => {
     const plugins = [tailordbErdPlugin({ sites: { main: "typo-erd" } })] as Plugin[];
-    expect(resolveErdSites(config, plugins).issues[0]).toMatch(
+    const issue = resolveErdSites(config, plugins).issues[0]!;
+    expect(issue.namespace).toBe("main");
+    expect(issue.message).toMatch(
       /static website "typo-erd" \(namespace "main"\) not found in staticWebsites.*Available static websites: main-erd, admin-erd/,
     );
   });
@@ -74,7 +79,9 @@ describe("resolveErdSites", () => {
   test("reports an issue when no static websites are defined at all", () => {
     const bareConfig = { ...config, staticWebsites: undefined } as unknown as LoadedConfig;
     const plugins = [tailordbErdPlugin({ sites: { main: "main-erd" } })] as Plugin[];
-    expect(resolveErdSites(bareConfig, plugins).issues[0]).toMatch(/static website "main-erd"/);
+    expect(resolveErdSites(bareConfig, plugins).issues[0]!.message).toMatch(
+      /static website "main-erd"/,
+    );
   });
 
   test("collects issues across entries while keeping valid ones in sites", () => {
@@ -83,7 +90,7 @@ describe("resolveErdSites", () => {
     ] as Plugin[];
     const { sites, issues } = resolveErdSites(config, plugins);
     expect(sites).toEqual({ main: "main-erd", missing: "x", admin: "typo" });
-    expect(issues).toHaveLength(2);
+    expect(issues.map((issue) => issue.namespace)).toEqual(["missing", "admin"]);
   });
 });
 
