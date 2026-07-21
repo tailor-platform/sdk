@@ -1,9 +1,18 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { resolveTSConfig } from "pkg-types";
+import { afterAll, beforeEach, describe, expect, test, vi } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
+import type * as pkgTypes from "pkg-types";
+
+type PkgTypesModule = typeof pkgTypes;
+
+vi.mock("pkg-types", async (importOriginal) => {
+  const original = await importOriginal<PkgTypesModule>();
+  return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
+});
 
 const TEST_BASE = path.join(__dirname, "__test_bundler__");
 
@@ -45,6 +54,7 @@ describe("bundleForTestRun", () => {
     return bundleForTestRun({
       detected,
       sourceFile,
+      baseDir: testDir,
       machineUser: defaultMachineUser,
       workspaceId: defaultWorkspaceId,
       ...options,
@@ -59,6 +69,22 @@ describe("bundleForTestRun", () => {
   }
 
   describe("plain function", () => {
+    test("resolves tsconfig from the provided baseDir", async () => {
+      vi.mocked(resolveTSConfig).mockClear();
+      const detected: DetectedFunction = { type: "plain", name: "tsconfig-base" };
+      await bundle(
+        "tsconfig-base.ts",
+        `
+export default function(input: any) {
+  return { hello: input.name };
+}
+`,
+        detected,
+      );
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(testDir);
+    });
+
     test("bundles a default-exported function as main", async () => {
       const detected: DetectedFunction = { type: "plain", name: "fn" };
       const result = await bundle(

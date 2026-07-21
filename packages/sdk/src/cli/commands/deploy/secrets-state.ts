@@ -1,16 +1,31 @@
-import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import pLimit, { type LimitFunction } from "p-limit";
 import * as path from "pathe";
 import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+
+const SecretsStateEntrySchema = z.object({
+  hash: z.string(),
+  updateTime: z.string().optional(),
+});
 
 const SecretsStateSchema = z.object({
-  vaults: z.record(z.string(), z.record(z.string(), z.string())),
+  vaults: z.record(z.string(), z.record(z.string(), SecretsStateEntrySchema)),
   connections: z.record(z.string(), z.string()).optional(),
 });
 
 const PersistedSecretsStateSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   workspaceId: z.string(),
   applicationKey: z.string(),
   state: SecretsStateSchema,
@@ -82,11 +97,13 @@ export function saveSecretsState(scope: SecretsStateScope, state: SecretsState):
   const filePath = getSecretsStatePath(scope);
   const dir = path.dirname(filePath);
   mkdirSync(dir, { recursive: true });
+  // Write via a temp file and rename so concurrent readers never see torn JSON.
+  const tempPath = `${filePath}.tmp-${randomUUID()}`;
   writeFileSync(
-    filePath,
+    tempPath,
     JSON.stringify(
       {
-        version: 1,
+        version: 2,
         workspaceId: scope.workspaceId,
         applicationKey: applicationStateKey(scope),
         state,
@@ -96,6 +113,7 @@ export function saveSecretsState(scope: SecretsStateScope, state: SecretsState):
     ),
     "utf-8",
   );
+  renameSync(tempPath, filePath);
 }
 
 /**
@@ -105,4 +123,161 @@ export function saveSecretsState(scope: SecretsStateScope, state: SecretsState):
  */
 export function hashValue(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * Serialize a platform timestamp into the string stored as update evidence.
+ * @param updateTime - Timestamp from a Secret Manager list or mutation response
+ * @returns Serialized timestamp, or undefined when the platform sent none
+ */
+export function serializeUpdateTime(updateTime: Timestamp | undefined): string | undefined {
+  return updateTime === undefined ? undefined : `${updateTime.seconds}.${updateTime.nanos}`;
+}
+
+const LOCK_POLL_INTERVAL_MS = 100;
+const LOCK_ACQUIRE_TIMEOUT_MS = 5 * 60 * 1000;
+// A holder refreshes the lock directory mtime while working, so a lock whose
+// mtime is older than the lease can only belong to a crashed or stopped
+// process and is safe to steal.
+const LOCK_HEARTBEAT_INTERVAL_MS = 10 * 1000;
+const LOCK_LEASE_MS = 60 * 1000;
+
+const lockQueues = new Map<string, LimitFunction>();
+
+/**
+ * Run a remote-update/state-save sequence exclusively for one target's secrets state.
+ *
+ * Serializes concurrent deploys to the same workspace and application (across
+ * processes sharing the same output directory) so the persisted hash state
+ * always reflects the last remote write.
+ * @param scope - Workspace and application identity for the deployment
+ * @param fn - Critical section performing remote updates and the state save
+ * @returns The value returned by fn
+ */
+export async function withSecretsStateLock<T>(
+  scope: SecretsStateScope,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (!scope.applicationId) {
+    return fn();
+  }
+  const lockPath = `${getSecretsStatePath(scope)}.lock`;
+  let queue = lockQueues.get(lockPath);
+  if (!queue) {
+    queue = pLimit(1);
+    lockQueues.set(lockPath, queue);
+  }
+  return queue(async () => {
+    const token = await acquireFileLock(lockPath);
+    const heartbeat = setInterval(() => refreshLock(lockPath, token), LOCK_HEARTBEAT_INTERVAL_MS);
+    heartbeat.unref();
+    try {
+      return await fn();
+    } finally {
+      clearInterval(heartbeat);
+      releaseFileLock(lockPath, token);
+    }
+  });
+}
+
+async function acquireFileLock(lockPath: string): Promise<string> {
+  mkdirSync(path.dirname(lockPath), { recursive: true });
+  const token = randomUUID();
+  const deadline = Date.now() + LOCK_ACQUIRE_TIMEOUT_MS;
+  for (;;) {
+    let created = true;
+    try {
+      mkdirSync(lockPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
+      created = false;
+    }
+    if (created) {
+      try {
+        writeFileSync(
+          path.join(lockPath, "owner.json"),
+          JSON.stringify({ pid: process.pid, token }),
+        );
+      } catch (error) {
+        rmSync(lockPath, { recursive: true, force: true });
+        throw error;
+      }
+      return token;
+    }
+    if (isLockExpired(lockPath) && stealLock(lockPath)) {
+      continue;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        "Timed out waiting for another deploy to the same workspace and application to finish. " +
+          "Wait for it to complete and retry; an interrupted deploy recovers automatically " +
+          "within a minute.",
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_INTERVAL_MS));
+  }
+}
+
+function isLockExpired(lockPath: string): boolean {
+  try {
+    return Date.now() - statSync(lockPath).mtimeMs > LOCK_LEASE_MS;
+  } catch {
+    return false;
+  }
+}
+
+function readLockToken(lockPath: string): unknown {
+  try {
+    return (
+      JSON.parse(readFileSync(path.join(lockPath, "owner.json"), "utf-8")) as { token?: unknown }
+    ).token;
+  } catch {
+    return undefined;
+  }
+}
+
+function refreshLock(lockPath: string, token: string): void {
+  if (readLockToken(lockPath) !== token) {
+    return;
+  }
+  const now = new Date();
+  try {
+    utimesSync(lockPath, now, now);
+  } catch {
+    // The lock disappeared or was stolen; the release path handles ownership.
+  }
+}
+
+function releaseFileLock(lockPath: string, token: string): void {
+  // Only remove a lock this process still owns, so a holder whose lease
+  // expired cannot delete the current holder's lock.
+  if (readLockToken(lockPath) !== token) {
+    return;
+  }
+  rmSync(lockPath, { recursive: true, force: true });
+}
+
+function stealLock(lockPath: string): boolean {
+  // Rename first so concurrent stealers cannot remove a lock that another
+  // contender has just re-acquired.
+  const trash = `${lockPath}.stale-${process.pid}-${Date.now()}`;
+  try {
+    renameSync(lockPath, trash);
+  } catch {
+    return false;
+  }
+  if (isLockExpired(trash)) {
+    rmSync(trash, { recursive: true, force: true });
+    return true;
+  }
+  // A live holder re-acquired or refreshed the lock between the expiry check
+  // and the rename; hand it back.
+  try {
+    renameSync(trash, lockPath);
+  } catch {
+    rmSync(trash, { recursive: true, force: true });
+  }
+  return false;
 }

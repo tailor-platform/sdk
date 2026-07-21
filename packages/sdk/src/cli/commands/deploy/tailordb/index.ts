@@ -539,6 +539,7 @@ function buildMigrationContextForScripts(
       : undefined,
     dbConfig: dbConfigMap,
     env: migrationContext.config.env ?? {},
+    configDir: path.dirname(migrationContext.config.path),
   };
 }
 

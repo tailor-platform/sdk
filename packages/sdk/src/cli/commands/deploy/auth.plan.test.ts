@@ -291,6 +291,38 @@ describe("planAuth", () => {
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
   });
 
+  test("marks machine user without attributes unchanged when remote attribute map is empty", async () => {
+    const application = {
+      name: appName,
+      staticWebsiteServices: [],
+      authService: {
+        resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+        connections: {},
+        config: {
+          name: "auth-a",
+          publishSessionEvents: true,
+          machineUsers: {
+            // parse output for a machine user whose attributes were all
+            // omitted or normalized away (null/undefined values)
+            "bare-machine-user": { attributes: undefined },
+          },
+        },
+        userProfile: undefined,
+      },
+    } as unknown as Application;
+
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      machineUsers: [{ name: "bare-machine-user", attributes: [], attributeMap: {} }],
+    });
+
+    const result = await planAuth(createContext(client, application));
+
+    expect(result.changeSet.machineUser.unchanged).toHaveLength(1);
+    expect(result.changeSet.machineUser.updates).toHaveLength(0);
+    expect(result.changeSet.machineUser.creates).toHaveLength(0);
+  });
+
   test("marks auth hook unchanged when remote definition matches", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],

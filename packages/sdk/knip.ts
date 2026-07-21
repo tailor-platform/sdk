@@ -10,6 +10,7 @@ export default {
     "e2e/fixtures/**",
     "src/cli/commands/deploy/__test_fixtures__/**",
     "src/cli/commands/tailordb/erd/viewer-assets/**",
+    "src/cli/tsconfig-paths-hook.d.mts",
     "src/types/*.ts",
     "src/vitest/integration/vitest.config.ts",
     "zinfer.config.ts",

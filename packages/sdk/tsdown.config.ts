@@ -16,6 +16,17 @@ function copyErdViewerAssets(outDir: string): void {
   cpSync(source, target, { recursive: true });
 }
 
+function copyTsconfigPathsHook(outDir: string): void {
+  cpSync(
+    path.resolve("src/cli/tsconfig-paths-hook.mjs"),
+    path.join(outDir, "cli/tsconfig-paths-hook.mjs"),
+  );
+  cpSync(
+    path.resolve("src/cli/tsconfig-paths-hook.d.mts"),
+    path.join(outDir, "cli/tsconfig-paths-hook.d.mts"),
+  );
+}
+
 function stripBannerExceptConfigureEntry(outDir: string): void {
   const root = path.resolve(outDir);
   const keep = path.join(root, "configure", "index.d.mts");
@@ -89,6 +100,7 @@ export default defineConfig([
     plugins: jsPlugins,
     onSuccess: (config) => {
       copyErdViewerAssets(config.outDir);
+      copyTsconfigPathsHook(config.outDir);
     },
   },
   {

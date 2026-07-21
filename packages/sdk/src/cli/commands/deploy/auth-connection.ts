@@ -9,7 +9,12 @@ import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
 import { buildMetaRequest, resourceTrn, sdkNameLabelKey, type WithLabel } from "./label";
 import { trackDesiredResourceOwnership, trackRemainingResourceOwner } from "./owned-resource";
-import { hashValue, loadSecretsState, saveSecretsState } from "./secrets-state";
+import {
+  hashValue,
+  loadSecretsState,
+  saveSecretsState,
+  withSecretsStateLock,
+} from "./secrets-state";
 import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
@@ -255,28 +260,55 @@ export async function applyAuthConnections(
   const { changeSet, stateScope } = result;
 
   if (phase === "create-update") {
-    await Promise.all(
-      changeSet.creates.map(async (create) => {
-        await client.createAuthConnection(create.request);
-        await client.setMetadata(create.metaRequest);
-        logger.info(
-          `Connection "${create.name}" was created. Authorize it with:\n` +
-            `  tailor-sdk authconnection authorize --name ${create.name}\n` +
-            `Or via the Console: tailor-sdk authconnection open`,
+    if (changeSet.creates.length > 0 || changeSet.replaces.length > 0) {
+      await withSecretsStateLock(stateScope, async () => {
+        await Promise.all(
+          changeSet.creates.map(async (create) => {
+            await client.createAuthConnection(create.request);
+            await client.setMetadata(create.metaRequest);
+            logger.info(
+              `Connection "${create.name}" was created. Authorize it with:\n` +
+                `  tailor-sdk authconnection authorize --name ${create.name}\n` +
+                `Or via the Console: tailor-sdk authconnection open`,
+            );
+          }),
         );
-      }),
-    );
 
-    for (const replace of changeSet.replaces) {
-      const resp = await client.updateAuthConnection(replace.updateRequest);
-      if (resp.connection?.status === AuthConnection_Status.UNAUTHORIZED) {
-        logger.warn(
-          `Connection "${replace.name}" requires re-authorization. Authorize with:\n` +
-            `  tailor-sdk authconnection authorize --name ${replace.name}\n` +
-            `Or via the Console: tailor-sdk authconnection open`,
+        for (const replace of changeSet.replaces) {
+          const resp = await client.updateAuthConnection(replace.updateRequest);
+          if (resp.connection?.status === AuthConnection_Status.UNAUTHORIZED) {
+            logger.warn(
+              `Connection "${replace.name}" requires re-authorization. Authorize with:\n` +
+                `  tailor-sdk authconnection authorize --name ${replace.name}\n` +
+                `Or via the Console: tailor-sdk authconnection open`,
+            );
+          }
+          await client.setMetadata(replace.metaRequest);
+        }
+
+        const secretReplaces = changeSet.replaces.filter((replace) =>
+          replace.updateRequest.updateMask?.paths?.includes("oauth2.client_secret"),
         );
-      }
-      await client.setMetadata(replace.metaRequest);
+        if (changeSet.creates.length > 0 || secretReplaces.length > 0) {
+          const state = loadSecretsState(stateScope);
+          if (!state.connections) {
+            state.connections = {};
+          }
+          for (const create of changeSet.creates) {
+            const conn = create.request.connection;
+            if (conn?.config?.case === "oauth2") {
+              state.connections[create.name] = hashValue(conn.config.value.clientSecret ?? "");
+            }
+          }
+          for (const replace of secretReplaces) {
+            const conn = replace.updateRequest.connection;
+            if (conn?.config?.case === "oauth2") {
+              state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
+            }
+          }
+          saveSecretsState(stateScope, state);
+        }
+      });
     }
 
     // Metadata-only updates: backfill the SDK ownership label on connections
@@ -286,37 +318,14 @@ export async function applyAuthConnections(
         await client.setMetadata(update.metaRequest);
       }),
     );
+  } else if (changeSet.deletes.length > 0) {
+    await withSecretsStateLock(stateScope, async () => {
+      await Promise.all(
+        changeSet.deletes.map(async (del) => {
+          await client.deleteAuthConnection(del.request);
+        }),
+      );
 
-    const secretReplaces = changeSet.replaces.filter((replace) =>
-      replace.updateRequest.updateMask?.paths?.includes("oauth2.client_secret"),
-    );
-    if (changeSet.creates.length > 0 || secretReplaces.length > 0) {
-      const state = loadSecretsState(stateScope);
-      if (!state.connections) {
-        state.connections = {};
-      }
-      for (const create of changeSet.creates) {
-        const conn = create.request.connection;
-        if (conn?.config?.case === "oauth2") {
-          state.connections[create.name] = hashValue(conn.config.value.clientSecret ?? "");
-        }
-      }
-      for (const replace of secretReplaces) {
-        const conn = replace.updateRequest.connection;
-        if (conn?.config?.case === "oauth2") {
-          state.connections[replace.name] = hashValue(conn.config.value.clientSecret ?? "");
-        }
-      }
-      saveSecretsState(stateScope, state);
-    }
-  } else {
-    await Promise.all(
-      changeSet.deletes.map(async (del) => {
-        await client.deleteAuthConnection(del.request);
-      }),
-    );
-
-    if (changeSet.deletes.length > 0) {
       const state = loadSecretsState(stateScope);
       if (state.connections) {
         for (const del of changeSet.deletes) {
@@ -324,6 +333,6 @@ export async function applyAuthConnections(
         }
         saveSecretsState(stateScope, state);
       }
-    }
+    });
   }
 }
