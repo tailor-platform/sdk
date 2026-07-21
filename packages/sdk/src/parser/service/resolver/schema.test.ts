@@ -61,6 +61,14 @@ describe("ResolverPermissionSchema", () => {
     ).toThrow("must reference a `user` operand");
   });
 
+  test("rejects a condition comparing two `user` operands to each other", () => {
+    expect(() =>
+      ResolverPermissionSchema.parse([
+        { conditions: [[{ user: "role" }, "=", { user: "rol" }]], permit: true },
+      ]),
+    ).toThrow("must reference a `user` operand");
+  });
+
   test("rejects `_loggedIn` compared to a string", () => {
     expect(() =>
       ResolverPermissionSchema.parse([

@@ -51,8 +51,9 @@ const ResolverPermissionConditionSchema = z
     ResolverPermissionOperandSchema,
   ])
   .refine(
-    ([left, , right]) => isUserOperand(left) || isUserOperand(right),
-    "Resolver permission condition must reference a `user` operand on at least one side",
+    ([left, , right]) => isUserOperand(left) !== isUserOperand(right),
+    "Resolver permission condition must reference a `user` operand on exactly one side " +
+      "(comparing two `user` operands to each other can match on `undefined === undefined`)",
   )
   .superRefine(([left, , right], ctx) => {
     for (const mismatch of [operandTypeMismatch(left, right), operandTypeMismatch(right, left)]) {
