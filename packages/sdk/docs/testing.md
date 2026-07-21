@@ -23,7 +23,7 @@ Platform API mocks under `@tailor-platform/sdk/vitest` (for use with the [`tailo
 
 - `mockTailordb` — TailorDB query stubs and call recording
 - `mockWorkflow` — `tailor.workflow` job / wait / resolve mocks
-- `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway` — corresponding platform API mocks
+- `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway`, `mockLogger` — corresponding platform API mocks
 
 For tighter alignment with the production runtime — Node.js module blocking, Web-only globals, and platform API mocks — pair the resolver helpers with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below.
 
@@ -60,7 +60,7 @@ export default defineConfig({
 
 ### Acquiring mocks with `using`
 
-Each mock controller (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway`) is a **factory function**. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — its state is reset automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
+Each mock controller (`mockTailordb`, `mockWorkflow`, `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway`, `mockLogger`) is a **factory function**. Acquire it inside a test with a [`using` declaration](https://github.com/tc39/proposal-explicit-resource-management) — its state is reset automatically when the test scope exits, so you no longer need `beforeEach(() => mock.reset())`:
 
 ```typescript
 import { mockTailordb } from "@tailor-platform/sdk/vitest";
@@ -327,6 +327,27 @@ test("resolves an AI Gateway URL", async () => {
 ```
 
 Calling `get` for a name that has not been registered throws. `setUrls` remains available when replacing the complete URL fixture.
+
+### Logger Mock
+
+Each method is a `vi.fn`, so assert on it directly. `calls` returns the emitted `debug`/`info`/`warn`/`error` entries in order.
+
+```typescript
+import { mockLogger } from "@tailor-platform/sdk/vitest";
+
+test("logs the processed order", () => {
+  using logger = mockLogger();
+
+  tailor.logger.info("order processed", { orderId: "o-1" });
+
+  expect(logger.info).toHaveBeenCalledWith("order processed", { orderId: "o-1" });
+  expect(logger.calls).toEqual([
+    { severity: "info", message: "order processed", attributes: { orderId: "o-1" } },
+  ]);
+});
+```
+
+Without an explicit `mockLogger()`, `tailor.logger.*` calls are no-ops in the `tailor-runtime` environment (they neither throw nor record).
 
 ### Loading Secrets from Config
 
