@@ -2,6 +2,7 @@
 //
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
+import type { IdPPermission } from "#/configure/services/idp/permission";
 import type { BuiltinIdP } from "#/types/auth.generated";
 import type { IdPInput } from "#/types/idp.generated";
 
@@ -15,6 +16,8 @@ export type DefinedIdp<Name extends string, Config, ClientNames extends string> 
 
 export type IdPExternalConfig = { name: string; external: true };
 
-export type IdPOwnConfig = Omit<DefinedIdp<string, IdPInput, string>, "provider">;
+type IdPOwnConfigInput = Omit<IdPInput, "permission"> & { permission?: IdPPermission };
+
+export type IdPOwnConfig = Omit<DefinedIdp<string, IdPOwnConfigInput, string>, "provider">;
 
 export type IdPConfig = IdPOwnConfig | IdPExternalConfig;
