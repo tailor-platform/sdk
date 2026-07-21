@@ -100,6 +100,7 @@ const V2_NEXT_4 = "2.0.0-next.4";
 const V2_NEXT_5 = "2.0.0-next.5";
 const V2_NEXT_6 = "2.0.0-next.6";
 const V2_NEXT_7 = "2.0.0-next.7";
+const V2_NEXT_9 = "2.0.0-next.9";
 /**
  * Sentinel `prereleaseUntil` for a codemod whose exact `2.0.0-next.N` release is not
  * known yet. `pnpm codemod:resolve-pending`, run in CI against the release PR, replaces
@@ -1167,7 +1168,7 @@ export const allCodemods: CodemodPackage[] = [
       "Move the TailorDB `erdSite` setting from `db.<namespace>` in tailor.config.ts into `tailordbErdPlugin({ sites })` from `@tailor-platform/sdk-plugin-tailordb-erd`, registered via definePlugins(). The core config schema no longer accepts `erdSite`; the `tailor tailordb erd` commands read the target static website from the plugin configuration and validate each site name against `staticWebsites`. Install `@tailor-platform/sdk-plugin-tailordb-erd` as a dev dependency: the migrated config imports it, so config loading fails with a module-not-found error until it is installed.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_PENDING,
+    prereleaseUntil: V2_NEXT_9,
     scriptPath: "v2/erd-site-to-plugin/scripts/transform.js",
     legacyPatterns: ["erdSite:"],
     // Quoted keys ("erdSite": ...) survive only as string fragments after
@@ -1281,7 +1282,7 @@ export const allCodemods: CodemodPackage[] = [
       "`seedPlugin` no longer generates the `exec.mjs` seed runner. Seeding and validation move to the `tailor seed` commands provided by the `@tailor-platform/sdk-plugin-seed` CLI plugin: install it as a devDependency, replace `node <distPath>/exec.mjs` invocations with `tailor seed apply` and `node <distPath>/exec.mjs validate` with `tailor seed validate`, and delete the stale generated `<distPath>/exec.mjs` file. Seed data and schema generation (`data/*.jsonl`, `data/*.schema.ts`) is unchanged, and the `tailor seed apply` options mirror the old script (`--machine-user`, `--namespace`, `--skip-idp`, `--truncate`, `--yes`, type-name arguments).",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_PENDING,
+    prereleaseUntil: V2_NEXT_9,
     // No scriptPath: this is a codemod-less ("manual") migration.
     filePatterns: ["**/package.json", "**/*.{sh,yml,yaml,md,mjs,ts}"],
     suspiciousPatterns: ["exec.mjs"],
