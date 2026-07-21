@@ -54,6 +54,7 @@ describe("bundleForTestRun", () => {
     return bundleForTestRun({
       detected,
       sourceFile,
+      baseDir: testDir,
       machineUser: defaultMachineUser,
       workspaceId: defaultWorkspaceId,
       ...options,
@@ -68,7 +69,7 @@ describe("bundleForTestRun", () => {
   }
 
   describe("plain function", () => {
-    test("resolves tsconfig from the source file's directory", async () => {
+    test("resolves tsconfig from the provided baseDir", async () => {
       vi.mocked(resolveTSConfig).mockClear();
       const detected: DetectedFunction = { type: "plain", name: "tsconfig-base" };
       await bundle(

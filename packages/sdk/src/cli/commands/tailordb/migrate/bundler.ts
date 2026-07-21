@@ -30,6 +30,7 @@ export interface MigrationBundleResult {
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number
  * @param {Record<string, string | number | boolean>} env - Environment variables to inject into the migration context
+ * @param {string} [baseDir] - Directory to resolve the bundler's tsconfig against; defaults to the migration script's directory
  * @returns {Promise<MigrationBundleResult>} Bundled migration result
  */
 export async function bundleMigrationScript(
@@ -37,6 +38,7 @@ export async function bundleMigrationScript(
   namespace: string,
   migrationNumber: number,
   env: Record<string, string | number | boolean> = {},
+  baseDir?: string,
 ): Promise<MigrationBundleResult> {
   // Output directory in .tailor-sdk (relative to project root)
   const outputDir = path.resolve(getDistDir(), "migrations");
@@ -71,7 +73,7 @@ export async function bundleMigrationScript(
   `;
   fs.writeFileSync(entryPath, entryContent);
 
-  const tsconfig = await resolveTSConfigWithFallback(path.dirname(absoluteSourcePath));
+  const tsconfig = await resolveTSConfigWithFallback(baseDir ?? path.dirname(absoluteSourcePath));
 
   // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
   const result = await rolldown.build({

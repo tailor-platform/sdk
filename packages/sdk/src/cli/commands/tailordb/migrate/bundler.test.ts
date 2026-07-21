@@ -65,12 +65,17 @@ describe("migration-bundler", () => {
       expect(typeof result.bundledCode).toBe("string");
     });
 
-    test("resolves tsconfig from the migration script's directory", async () => {
+    test("resolves tsconfig from baseDir, defaulting to the migration script's directory", async () => {
       vi.mocked(resolveTSConfig).mockClear();
       const scriptPath = writeMigration("  // Migration logic");
       await bundleMigrationScript(scriptPath, "test-namespace", 6);
 
       expect(resolveTSConfig).toHaveBeenCalledWith(path.dirname(scriptPath));
+
+      vi.mocked(resolveTSConfig).mockClear();
+      await bundleMigrationScript(scriptPath, "test-namespace", 7, {}, __dirname);
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(__dirname);
     });
 
     test("bundles migration script with getDB function", async () => {

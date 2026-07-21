@@ -41,6 +41,8 @@ interface BundleForTestRunOptions {
   detected: DetectedFunction;
   /** Absolute path to the source file */
   sourceFile: string;
+  /** Directory to resolve the bundler's tsconfig against (the owning config's directory) */
+  baseDir: string;
   /** Environment variables (injected into workflow job bundles) */
   env?: Record<string, string | number | boolean>;
   /** Inline sourcemap config value from defineConfig */
@@ -68,7 +70,7 @@ interface BundleForTestRunResult {
 export async function bundleForTestRun(
   options: BundleForTestRunOptions,
 ): Promise<BundleForTestRunResult> {
-  const { detected, sourceFile, env = {}, machineUser, workspaceId } = options;
+  const { detected, sourceFile, baseDir, env = {}, machineUser, workspaceId } = options;
   const inlineSourcemap = resolveInlineSourcemap(options.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(options.logLevel);
 
@@ -82,7 +84,7 @@ export async function bundleForTestRun(
   const entryContent = generateEntry(detected, sourceFile, env, machineUser, workspaceId);
   fs.writeFileSync(entryPath, entryContent);
 
-  const tsconfig = await resolveTSConfigWithFallback(path.dirname(path.resolve(sourceFile)));
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   const buildResult = await rolldown.build({
     plugins: [platformBundleDefinePlugin],
