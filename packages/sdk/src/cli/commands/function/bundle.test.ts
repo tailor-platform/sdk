@@ -191,6 +191,47 @@ export default {
       expect(result.bundledCode).toContain("machine_user");
       expect(result.bundledCode).toContain(defaultWorkspaceId);
     });
+
+    test("injects the permission guard when the resolver has one", async () => {
+      const detected: DetectedFunction = {
+        type: "resolver",
+        name: "protected",
+        permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+      };
+      const result = await bundle(
+        "resolver-permission.ts",
+        `
+export default {
+  operation: "query",
+  name: "protected",
+  body: () => 1,
+  output: { type: "integer", metadata: {} },
+};
+`,
+        detected,
+      );
+
+      expect(result.bundledCode).toContain("TailorErrorMessage");
+      expect(result.bundledCode).toContain("access denied");
+    });
+
+    test("does not inject a guard when permission is omitted", async () => {
+      const detected: DetectedFunction = { type: "resolver", name: "open" };
+      const result = await bundle(
+        "resolver-open.ts",
+        `
+export default {
+  operation: "query",
+  name: "open",
+  body: () => 1,
+  output: { type: "integer", metadata: {} },
+};
+`,
+        detected,
+      );
+
+      expect(result.bundledCode).not.toContain("TailorErrorMessage");
+    });
   });
 
   describe("executor", () => {

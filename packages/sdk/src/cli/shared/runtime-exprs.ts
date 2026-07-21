@@ -202,3 +202,38 @@ export function buildResolverPermissionGuardExpr(
     }
   }`;
 }
+
+/**
+ * Build the permission guard and input-validation statements shared by every
+ * resolver entry wrapper (production bundling and `function test-run`).
+ *
+ * Kept as a single generator so a resolver-wrapping behavior (like the
+ * permission guard) can't be added to one entry-point template and forgotten
+ * in the other. References `context.user`, `context.input`, and
+ * `_internalResolver` — the caller's wrapper must bind a `context` object
+ * with `user`/`input` properties before inlining this expression.
+ * @param permission - The resolver's `permission` config
+ * @returns A JS statement block to inline before calling `_internalResolver.body(...)`
+ */
+export function buildResolverPermissionAndInputCheckExpr(
+  permission: Resolver["permission"],
+): string {
+  const permissionGuardExpr = buildResolverPermissionGuardExpr(permission);
+  return `
+    ${permissionGuardExpr ?? ""}
+    if (_internalResolver.input) {
+      const result = t.object(_internalResolver.input).parse({
+        value: context.input,
+        data: context.input,
+        user: context.user,
+      });
+
+      if (result.issues) {
+        throw new TailorErrors(result.issues.map(issue => ({
+          message: issue.message,
+          path: issue.path ?? [],
+        })));
+      }
+    }
+  `;
+}
