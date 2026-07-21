@@ -26,17 +26,22 @@ const KNOWN_USER_OPERAND_TYPES: Record<string, "string" | "boolean"> = {
   id: "string",
 };
 
-const isOperandTypeMismatch = (
+const operandTypeMismatch = (
   userOperand: z.infer<typeof ResolverPermissionOperandSchema>,
   otherOperand: z.infer<typeof ResolverPermissionOperandSchema>,
 ) => {
   if (typeof userOperand !== "object") {
-    return false;
+    return undefined;
   }
   const expected = KNOWN_USER_OPERAND_TYPES[userOperand.user];
-  return (
-    expected !== undefined && typeof otherOperand !== "object" && typeof otherOperand !== expected
-  );
+  if (
+    expected === undefined ||
+    typeof otherOperand === "object" ||
+    typeof otherOperand === expected
+  ) {
+    return undefined;
+  }
+  return { key: userOperand.user, expected };
 };
 
 const ResolverPermissionConditionSchema = z
@@ -49,10 +54,16 @@ const ResolverPermissionConditionSchema = z
     ([left, , right]) => isUserOperand(left) || isUserOperand(right),
     "Resolver permission condition must reference a `user` operand on at least one side",
   )
-  .refine(
-    ([left, , right]) => !isOperandTypeMismatch(left, right) && !isOperandTypeMismatch(right, left),
-    '`{ user: "_loggedIn" }` must compare to a boolean and `{ user: "id" }` must compare to a string',
-  )
+  .superRefine(([left, , right], ctx) => {
+    for (const mismatch of [operandTypeMismatch(left, right), operandTypeMismatch(right, left)]) {
+      if (mismatch) {
+        ctx.addIssue({
+          code: "custom",
+          message: `\`${mismatch.key}\` must compare to a ${mismatch.expected}`,
+        });
+      }
+    }
+  })
   .readonly();
 
 const ResolverPermissionPolicySchema = z.object({

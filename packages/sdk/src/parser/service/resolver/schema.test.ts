@@ -66,13 +66,13 @@ describe("ResolverPermissionSchema", () => {
       ResolverPermissionSchema.parse([
         { conditions: [[{ user: "_loggedIn" }, "=", "true"]], permit: true },
       ]),
-    ).toThrow('"_loggedIn" must compare to a boolean');
+    ).toThrow("`_loggedIn` must compare to a boolean");
   });
 
   test("rejects `id` compared to a boolean", () => {
     expect(() =>
       ResolverPermissionSchema.parse([{ conditions: [[{ user: "id" }, "=", true]], permit: true }]),
-    ).toThrow('"id" must compare to a string');
+    ).toThrow("`id` must compare to a string");
   });
 
   test("accepts an arbitrary attribute compared to either a string or a boolean", () => {
