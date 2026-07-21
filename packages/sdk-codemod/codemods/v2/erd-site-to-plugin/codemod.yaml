@@ -1,0 +1,7 @@
+name: "@tailor-platform/erd-site-to-plugin"
+version: "1.0.0"
+description: "Move db.<namespace>.erdSite in tailor.config.ts into tailordbErdPlugin({ sites }) from the ERD CLI plugin"
+engine: jssg
+language: typescript
+since: "1.0.0"
+until: "2.0.0"
