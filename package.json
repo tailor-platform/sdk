@@ -46,7 +46,7 @@
     "@changesets/cli": "3.0.0-next.9",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.3",
-    "knip": "6.26.0",
+    "knip": "6.27.0",
     "lefthook": "2.1.10",
     "madge": "8.0.0",
     "oxfmt": "0.58.0",
