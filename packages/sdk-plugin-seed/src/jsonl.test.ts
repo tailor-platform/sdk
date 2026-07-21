@@ -32,6 +32,13 @@ describe("loadSeedData", () => {
     expect(loadSeedData(dir, ["Empty", "Missing"])).toEqual({ Empty: [], Missing: [] });
   });
 
+  test("rejects a missing data directory", () => {
+    const dir = makeDataDir({});
+    rmSync(dir, { recursive: true });
+
+    expect(() => loadSeedData(dir, ["User"])).toThrow(`Seed data directory not found: ${dir}`);
+  });
+
   test("names the file and line for malformed JSON lines", () => {
     const dir = makeDataDir({ "Bad.jsonl": '{"ok":true}\nnot-json\n' });
     expect(() => loadSeedData(dir, ["Bad"])).toThrow(/Bad\.jsonl at line 2/);

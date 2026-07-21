@@ -15,7 +15,7 @@ import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
 import { selectEntities } from "./entities";
-import { loadSeedData } from "./jsonl";
+import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import { deploymentArgs } from "./shared/args";
 import { defineAppCommand } from "./shared/command";
 import { logger } from "./shared/logger";
@@ -309,6 +309,9 @@ export const seedApplyCommand = defineAppCommand({
       logger.info(`Filtering by types: ${(selection.entitiesToProcess ?? []).join(", ")}`);
     }
 
+    const dataDir = path.join(context.distPath, "data");
+    assertSeedDataDirectory(dataDir);
+
     const appInfo = await show({
       configPath: args.config,
       profile: args.profile,
@@ -322,7 +325,7 @@ export const seedApplyCommand = defineAppCommand({
       }),
       authNamespace: appInfo.auth,
       machineUserName,
-      dataDir: path.join(context.distPath, "data"),
+      dataDir,
     };
 
     if (args.truncate) {

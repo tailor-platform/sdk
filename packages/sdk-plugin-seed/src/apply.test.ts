@@ -16,7 +16,10 @@ const sdk = vi.hoisted(() => ({
   truncate: vi.fn(),
 }));
 
-const loadSeedData = vi.hoisted(() => vi.fn());
+const jsonl = vi.hoisted(() => ({
+  assertSeedDataDirectory: vi.fn(),
+  loadSeedData: vi.fn(),
+}));
 
 const logger = vi.hoisted(() => ({
   debug: vi.fn(),
@@ -30,7 +33,7 @@ const logger = vi.hoisted(() => ({
 }));
 
 vi.mock("@tailor-platform/sdk/cli", () => sdk);
-vi.mock("./jsonl", () => ({ loadSeedData }));
+vi.mock("./jsonl", () => jsonl);
 vi.mock("./shared/logger", () => ({ logger }));
 
 beforeEach(() => {
@@ -67,22 +70,42 @@ beforeEach(() => {
       success: true,
     }),
   );
-  loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+  jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
     Object.fromEntries(
       typeNames.map((typeName) => [typeName, typeName === "_User" ? [{ name: "Ada" }] : []]),
     ),
   );
 });
 
-async function runApply(args: string[]): Promise<void> {
-  const result = await runCommand(seedApplyCommand, ["--machine-user", "manager", ...args], {
+function runApplyCommand(args: string[]) {
+  return runCommand(seedApplyCommand, ["--machine-user", "manager", ...args], {
     // Strip unknown global arguments like the plugin entrypoint.
     globalArgs: z.object(commonArgs),
   });
+}
+
+async function runApply(args: string[]): Promise<void> {
+  const result = await runApplyCommand(args);
   expect(result.exitCode).toBe(0);
 }
 
 describe("seedApplyCommand", () => {
+  test("rejects a missing generated data directory before remote operations", async () => {
+    jsonl.assertSeedDataDirectory.mockImplementationOnce(() => {
+      throw new Error("Seed data directory not found: /seed/data");
+    });
+
+    const result = await runApplyCommand(["--truncate", "--yes"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(jsonl.assertSeedDataDirectory).toHaveBeenCalledWith("/seed/data");
+    expect(sdk.show).not.toHaveBeenCalled();
+    expect(sdk.loadAccessToken).not.toHaveBeenCalled();
+    expect(sdk.loadWorkspaceId).not.toHaveBeenCalled();
+    expect(sdk.truncate).not.toHaveBeenCalled();
+    expect(sdk.executeScript).not.toHaveBeenCalled();
+  });
+
   test("truncates all TailorDB data and the IdP user before seeding by default", async () => {
     await runApply(["--truncate", "--yes"]);
 

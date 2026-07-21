@@ -1,6 +1,25 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import * as path from "pathe";
 import type { SeedData } from "@tailor-platform/sdk/cli";
+
+export function assertSeedDataDirectory(dataDir: string): void {
+  let stats: ReturnType<typeof statSync>;
+  try {
+    stats = statSync(dataDir);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      throw new Error(
+        `Seed data directory not found: ${dataDir}. Run \`tailor generate\` before applying seed data.`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+
+  if (!stats.isDirectory()) {
+    throw new Error(`Seed data path is not a directory: ${dataDir}`);
+  }
+}
 
 /**
  * Load seed rows from `<dataDir>/<typeName>.jsonl` for each type. Missing
@@ -10,6 +29,8 @@ import type { SeedData } from "@tailor-platform/sdk/cli";
  * @returns Seed rows per type
  */
 export function loadSeedData(dataDir: string, typeNames: string[]): SeedData {
+  assertSeedDataDirectory(dataDir);
+
   const data: SeedData = {};
   for (const typeName of typeNames) {
     const jsonlPath = path.join(dataDir, `${typeName}.jsonl`);
