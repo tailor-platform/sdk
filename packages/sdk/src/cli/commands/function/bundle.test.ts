@@ -69,6 +69,7 @@ describe("bundleForTestRun", () => {
 
   describe("plain function", () => {
     test("resolves tsconfig from the source file's directory", async () => {
+      vi.mocked(resolveTSConfig).mockClear();
       const detected: DetectedFunction = { type: "plain", name: "tsconfig-base" };
       await bundle(
         "tsconfig-base.ts",

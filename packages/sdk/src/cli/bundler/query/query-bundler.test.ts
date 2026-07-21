@@ -35,6 +35,7 @@ describe("query-bundler", () => {
 
   describe("bundleQueryScript", () => {
     test("resolves tsconfig from the provided baseDir", async () => {
+      vi.mocked(resolveTSConfig).mockClear();
       await bundleQueryScript("sql", __dirname);
 
       expect(resolveTSConfig).toHaveBeenCalledWith(__dirname);

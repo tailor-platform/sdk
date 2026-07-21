@@ -66,6 +66,7 @@ describe("migration-bundler", () => {
     });
 
     test("resolves tsconfig from the migration script's directory", async () => {
+      vi.mocked(resolveTSConfig).mockClear();
       const scriptPath = writeMigration("  // Migration logic");
       await bundleMigrationScript(scriptPath, "test-namespace", 6);
 
