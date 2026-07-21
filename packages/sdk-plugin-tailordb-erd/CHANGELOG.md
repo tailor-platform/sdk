@@ -1,5 +1,28 @@
 # @tailor-platform/sdk-tailordb-erd-plugin
 
+## 0.1.0-next.2
+
+### Minor Changes
+
+- [#1811](https://github.com/tailor-platform/sdk/pull/1811) [`b2fc104`](https://github.com/tailor-platform/sdk/commit/b2fc104d9cdfc52e98c97bc18d80a9e2e9d5f4c2) Thanks [@toiroakr](https://github.com/toiroakr)! - Move the TailorDB `erdSite` setting out of the core config schema into the ERD plugin's own configuration. `db.<namespace>.erdSite` is no longer accepted in `tailor.config.ts`; configure the ERD deploy target on the plugin instead:
+  
+  ```ts
+  import { definePlugins } from "@tailor-platform/sdk";
+  import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";
+  
+  export const plugins = definePlugins(
+    // TailorDB namespace name → static website name
+    tailordbErdPlugin({ sites: { tailordb: "my-erd-site" } }),
+  );
+  ```
+  
+  The `tailor tailordb erd` commands resolve deploy targets from `tailordbErdPlugin({ sites })` and now validate each namespace against `config.db` and each site name against `staticWebsites`, so typos surface when the config is loaded instead of at deploy time. The `v2/erd-site-to-plugin` codemod migrates existing configs automatically. For programmatic users, `loadTailorDBNamespaces()` additionally returns the config module's registered `plugins`, and namespace selector callbacks receive them as a second argument.
+
+### Patch Changes
+
+- Updated dependencies [[`b2fc104`](https://github.com/tailor-platform/sdk/commit/b2fc104d9cdfc52e98c97bc18d80a9e2e9d5f4c2), [`817454f`](https://github.com/tailor-platform/sdk/commit/817454fff35e4093bce5fdcb9e1fcda8bbd1d7ef)]:
+  - @tailor-platform/sdk@2.0.0-next.9
+
 ## 0.1.0-next.1
 
 ### Minor Changes
