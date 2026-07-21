@@ -36,4 +36,11 @@ describe("loadSeedData", () => {
     const dir = makeDataDir({ "Bad.jsonl": '{"ok":true}\nnot-json\n' });
     expect(() => loadSeedData(dir, ["Bad"])).toThrow(/Bad\.jsonl at line 2/);
   });
+
+  test.each(["null", "[]", '"text"', "42"])("rejects non-object JSON rows: %s", (row) => {
+    const dir = makeDataDir({ "Bad.jsonl": `${row}\n` });
+    expect(() => loadSeedData(dir, ["Bad"])).toThrow(
+      /Invalid seed row in .*Bad\.jsonl at line 1: expected a JSON object/,
+    );
+  });
 });
