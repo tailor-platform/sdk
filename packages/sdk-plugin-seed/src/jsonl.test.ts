@@ -39,6 +39,13 @@ describe("loadSeedData", () => {
     expect(() => loadSeedData(dir, ["User"])).toThrow(`Seed data directory not found: ${dir}`);
   });
 
+  test("rejects a data directory below a file path with an actionable error", () => {
+    const root = makeDataDir({ dist: "not a directory" });
+    const dir = path.join(root, "dist", "data");
+
+    expect(() => loadSeedData(dir, ["User"])).toThrow(`Seed data directory not found: ${dir}`);
+  });
+
   test("names the file and line for malformed JSON lines", () => {
     const dir = makeDataDir({ "Bad.jsonl": '{"ok":true}\nnot-json\n' });
     expect(() => loadSeedData(dir, ["Bad"])).toThrow(/Bad\.jsonl at line 2/);

@@ -7,7 +7,8 @@ export function assertSeedDataDirectory(dataDir: string): void {
   try {
     stats = statSync(dataDir);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") {
       throw new Error(
         `Seed data directory not found: ${dataDir}. Run \`tailor generate\` before applying seed data.`,
         { cause: error },

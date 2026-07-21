@@ -106,6 +106,20 @@ describe("seedApplyCommand", () => {
     expect(sdk.executeScript).not.toHaveBeenCalled();
   });
 
+  test("allows a generated project with no seed targets and no data directory", async () => {
+    sdk.loadSeedContext.mockResolvedValueOnce({
+      distPath: "/seed",
+      idpUser: null,
+      machineUserName: undefined,
+      namespaces: [],
+    });
+
+    await runApply([]);
+
+    expect(jsonl.assertSeedDataDirectory).not.toHaveBeenCalled();
+    expect(jsonl.loadSeedData).not.toHaveBeenCalled();
+  });
+
   test("truncates all TailorDB data and the IdP user before seeding by default", async () => {
     await runApply(["--truncate", "--yes"]);
 
