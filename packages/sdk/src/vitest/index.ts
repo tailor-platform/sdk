@@ -60,8 +60,6 @@ export function tailorRuntime(options?: { config?: string }): Plugin[] {
 }
 
 export {
-  injectMocks,
-  cleanupMocks,
   mockTailordb,
   mockWorkflow,
   mockSecretmanager,
