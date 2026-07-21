@@ -15,7 +15,26 @@ describe("selectEntities", () => {
       skipIdp: false,
     });
     expect(selection.entitiesToProcess).toBeNull();
+    expect(selection.hasEntitiesToProcess).toBe(true);
     expect(selection.warnings).toEqual([]);
+  });
+
+  test("reports when the resolved selection has no seed targets", () => {
+    const empty = selectEntities({
+      namespaceEntities: {},
+      hasIdpUser: false,
+      types: [],
+      skipIdp: false,
+    });
+    expect(empty.hasEntitiesToProcess).toBe(false);
+
+    const skippedIdp = selectEntities({
+      namespaceEntities: {},
+      hasIdpUser: true,
+      types: [],
+      skipIdp: true,
+    });
+    expect(skippedIdp.hasEntitiesToProcess).toBe(false);
   });
 
   test("rejects combining --namespace with type names", () => {

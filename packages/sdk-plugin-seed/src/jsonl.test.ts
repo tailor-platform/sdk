@@ -39,6 +39,10 @@ describe("loadSeedData", () => {
     expect(() => loadSeedData(dir, ["User"])).toThrow(`Seed data directory not found: ${dir}`);
   });
 
+  test("loads no requested types without requiring a data directory", () => {
+    expect(loadSeedData("/missing", [])).toEqual({});
+  });
+
   test("rejects a data directory below a file path with an actionable error", () => {
     const root = makeDataDir({ dist: "not a directory" });
     const dir = path.join(root, "dist", "data");

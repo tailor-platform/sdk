@@ -30,7 +30,9 @@ export function assertSeedDataDirectory(dataDir: string): void {
  * @returns Seed rows per type
  */
 export function loadSeedData(dataDir: string, typeNames: string[]): SeedData {
-  assertSeedDataDirectory(dataDir);
+  if (typeNames.length > 0) {
+    assertSeedDataDirectory(dataDir);
+  }
 
   const data: SeedData = {};
   for (const typeName of typeNames) {
