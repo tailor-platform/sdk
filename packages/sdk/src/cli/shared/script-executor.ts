@@ -11,10 +11,7 @@ import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import type { Jsonifiable } from "type-fest";
 
-/**
- * Auth invoker for script execution: a plain init object or a constructed
- * AuthInvoker message.
- */
+/** Authentication context for script execution, provided as a plain object. */
 export type ScriptInvoker = MessageInitShape<typeof AuthInvokerSchema>;
 
 /**
