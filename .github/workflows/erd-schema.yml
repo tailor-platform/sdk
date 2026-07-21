@@ -49,12 +49,12 @@ jobs:
       - name: Stub ERD plugin bin target
         run: |
           mkdir -p packages/sdk-plugin-tailordb-erd/dist
-          printf '#!/usr/bin/env node\n' > packages/sdk-plugin-tailordb-erd/dist/index.js
+          printf '#!/usr/bin/env node\n' > packages/sdk-plugin-tailordb-erd/dist/cli.js
 
       - uses: ./.github/actions/install-deps
 
-      # install-deps only builds the SDK; `tailor tailordb erd` dispatches to
-      # this plugin's bin.
+      # install-deps also builds this plugin; kept as a safety net since `tailor
+      # tailordb erd` dispatches to this plugin's bin.
       - name: Build ERD plugin
         run: pnpm --filter @tailor-platform/sdk-plugin-tailordb-erd run build
 
@@ -99,14 +99,14 @@ jobs:
       - name: Stub ERD plugin bin target
         run: |
           mkdir -p packages/sdk-plugin-tailordb-erd/dist
-          printf '#!/usr/bin/env node\n' > packages/sdk-plugin-tailordb-erd/dist/index.js
+          printf '#!/usr/bin/env node\n' > packages/sdk-plugin-tailordb-erd/dist/cli.js
 
       # install-deps builds the SDK once, so the `tailor-sdk` CLI bin resolves.
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # install-deps only builds the SDK; `tailor tailordb erd` dispatches to
-      # this plugin's bin.
+      # install-deps also builds this plugin; kept as a safety net since `tailor
+      # tailordb erd` dispatches to this plugin's bin.
       - name: Build ERD plugin
         run: pnpm --filter @tailor-platform/sdk-plugin-tailordb-erd run build
 

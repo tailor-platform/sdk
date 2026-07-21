@@ -6,10 +6,12 @@ import type { Plugin, TailorDBNamespaceData } from "#/plugin/types";
 
 /**
  * Namespace selection for {@link loadTailorDBNamespaces}: explicit namespace
- * names, or a selector deriving them from the loaded config. Returning
- * `undefined` (or omitting the option) loads all owned namespaces.
+ * names, or a selector deriving them from the loaded config and its plugins.
+ * Returning `undefined` (or omitting the option) loads all owned namespaces.
  */
-export type TailorDBNamespaceSelector = string[] | ((config: LoadedConfig) => string[] | undefined);
+export type TailorDBNamespaceSelector =
+  | string[]
+  | ((config: LoadedConfig, plugins: Plugin[]) => string[] | undefined);
 
 /**
  * Options for {@link loadTailorDBNamespaces}.
@@ -27,6 +29,8 @@ export interface LoadTailorDBNamespacesOptions {
 export interface LoadedTailorDBNamespaces {
   /** The loaded Tailor config. */
   config: LoadedConfig;
+  /** Plugins collected from the config module's plugin-array exports (typically `definePlugins()`). */
+  plugins: Plugin[];
   /** Loaded TailorDB namespace data, in config order. */
   namespaces: TailorDBNamespaceData[];
 }
@@ -36,8 +40,6 @@ export interface LoadedTailorDBNamespaces {
  * config plugins and application they were loaded through.
  */
 export interface LoadedApplicationNamespaces extends LoadedTailorDBNamespaces {
-  /** Plugins declared in the loaded config. */
-  plugins: Plugin[];
   /** Application defined from the loaded config. */
   application: Application;
 }
@@ -61,7 +63,9 @@ export async function loadApplicationNamespaces(
     pluginManager,
   });
   const namespaceNames =
-    typeof options.namespaces === "function" ? options.namespaces(config) : options.namespaces;
+    typeof options.namespaces === "function"
+      ? options.namespaces(config, plugins)
+      : options.namespaces;
   const namespaceFilter = namespaceNames ? new Set(namespaceNames) : undefined;
   const services = namespaceFilter
     ? application.tailorDBServices.filter((db) => namespaceFilter.has(db.namespace))
@@ -103,6 +107,6 @@ export async function loadApplicationNamespaces(
 export async function loadTailorDBNamespaces(
   options: LoadTailorDBNamespacesOptions = {},
 ): Promise<LoadedTailorDBNamespaces> {
-  const { config, namespaces } = await loadApplicationNamespaces(options);
-  return { config, namespaces };
+  const { config, plugins, namespaces } = await loadApplicationNamespaces(options);
+  return { config, plugins, namespaces };
 }

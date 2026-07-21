@@ -27,7 +27,7 @@ export const erdDeployCommand = defineAppCommand({
     namespace: arg(z.string().optional(), {
       alias: "n",
       description:
-        "TailorDB namespace name (optional - deploys all namespaces with erdSite if omitted)",
+        "TailorDB namespace name (optional - deploys all namespaces with an ERD site configured if omitted)",
     }),
   }),
   run: async (args) => {
@@ -41,13 +41,6 @@ export const erdDeployCommand = defineAppCommand({
 
     const deployResults = await Promise.all(
       buildResults.map(async (result) => {
-        if (!result.erdSite) {
-          throw new Error(
-            `No erdSite configured for namespace "${result.namespace}". ` +
-              `Add erdSite: "<static-website-name>" to db.${result.namespace} in tailor.config.ts.`,
-          );
-        }
-
         if (!args.json) {
           logger.info(
             `Deploying ERD for namespace "${result.namespace}" to site "${result.erdSite}"...`,

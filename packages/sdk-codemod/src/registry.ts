@@ -1161,6 +1161,78 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/erd-site-to-plugin",
+    name: "`db.<namespace>.erdSite` → `tailordbErdPlugin({ sites })`",
+    description:
+      "Move the TailorDB `erdSite` setting from `db.<namespace>` in tailor.config.ts into `tailordbErdPlugin({ sites })` from `@tailor-platform/sdk-plugin-tailordb-erd`, registered via definePlugins(). The core config schema no longer accepts `erdSite`; the `tailor tailordb erd` commands read the target static website from the plugin configuration and validate each site name against `staticWebsites`. Install `@tailor-platform/sdk-plugin-tailordb-erd` as a dev dependency: the migrated config imports it, so config loading fails with a module-not-found error until it is installed.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_PENDING,
+    scriptPath: "v2/erd-site-to-plugin/scripts/transform.js",
+    legacyPatterns: ["erdSite:"],
+    // Quoted keys ("erdSite": ...) survive only as string fragments after
+    // masking, so they need the sourceString variants to be detected at all.
+    sourceStringLegacyPatterns: ["erdSite"],
+    // erdSite matching uses property-key shapes only, so an unrelated
+    // `erdSite` variable (e.g. a defineStaticWebSite binding) is not
+    // re-flagged after a clean transform. tailordbErdPlugin flags every
+    // migrated config so the LLM verifies the new package is installed.
+    suspiciousPatterns: ["erdSite:", /\berdSite\s*[,}]/, "tailordbErdPlugin"],
+    sourceStringSuspiciousPatterns: ["erdSite"],
+    examples: [
+      {
+        before: [
+          "export default defineConfig({",
+          "  db: {",
+          "    tailordb: {",
+          '      files: ["./tailordb/*.ts"],',
+          '      erdSite: "my-erd-site",',
+          "    },",
+          "  },",
+          "});",
+        ].join("\n"),
+        after: [
+          'import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";',
+          "",
+          "export default defineConfig({",
+          "  db: {",
+          "    tailordb: {",
+          '      files: ["./tailordb/*.ts"],',
+          "    },",
+          "  },",
+          "});",
+          "",
+          "export const plugins = definePlugins(",
+          '  tailordbErdPlugin({ sites: { tailordb: "my-erd-site" } }),',
+          ");",
+        ].join("\n"),
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2 the TailorDB `erdSite` setting is removed from the core config",
+      "schema; the ERD deploy target is configured on the ERD CLI plugin instead. The",
+      "codemod rewrites literal `db.<namespace>.erdSite` entries inside top-level",
+      "defineConfig() calls into a `tailordbErdPlugin({ sites: { <namespace>: <value> } })`",
+      "argument of definePlugins(), importing it from @tailor-platform/sdk-plugin-tailordb-erd.",
+      "",
+      "First, for every config that now registers tailordbErdPlugin, make sure",
+      "@tailor-platform/sdk-plugin-tailordb-erd is installed as a dev dependency — the",
+      "migrated config imports it, so config loading fails with ERR_MODULE_NOT_FOUND",
+      "until it is installed.",
+      "",
+      "For any remaining `erdSite` config keys the codemod did not rewrite — a db config",
+      "built dynamically or passed via a variable, quoted or computed keys, spread",
+      "properties, a defineConfig() call inside a factory function, or a file that",
+      "already registers tailordbErdPlugin — move the namespace → static-website-name",
+      "mapping into tailordbErdPlugin({ sites }) and delete the `erdSite` key. For",
+      "factory-built configs, keep any referenced parameters or locals in scope when",
+      "moving the value to the module-level definePlugins() export. Each site name",
+      "must match a static website defined in staticWebsites. Leave unrelated",
+      "identifiers that merely contain the name (e.g. a defineStaticWebSite variable",
+      "named erdSite) unchanged.",
+    ].join("\n"),
+  },
+  {
     id: "v2/generate-watch-flag",
     name: "generate --watch flag removed",
     description:
