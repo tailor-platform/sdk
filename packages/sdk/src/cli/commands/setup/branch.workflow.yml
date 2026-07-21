@@ -39,7 +39,7 @@ jobs:
       cancel-in-progress: true
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
         uses: tailor-platform/actions/setup@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
         with:
@@ -96,11 +96,11 @@ jobs:
       base-app-dir: ${{ steps.tailor-erd-preview-matrix.outputs['base-app-dir'] }}
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - id: tailor-checkout-base
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name }}
           ref: ${{ github.event.pull_request.base.sha }}
@@ -196,7 +196,7 @@ jobs:
         namespace: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs.namespaces) }}
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - id: tailor-setup
@@ -204,7 +204,7 @@ jobs:
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-checkout-base
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name }}
           ref: ${{ github.event.pull_request.base.sha }}
@@ -592,7 +592,7 @@ jobs:
       cancel-in-progress: false
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
         uses: tailor-platform/actions/setup@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
         with:
