@@ -3,4 +3,4 @@
 "@tailor-platform/sdk-codemod": patch
 ---
 
-Migrate test suites from beforeEach/afterEach/beforeAll/afterAll to Vitest 4.1 aroundEach/aroundAll hooks
+Adopt Vitest 4.1 `aroundEach`/`aroundAll` hooks across the test suites, and update the TailorDB client mock example in the testing docs to the same style
