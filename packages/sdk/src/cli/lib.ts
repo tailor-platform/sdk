@@ -226,7 +226,19 @@ export {
 export { MIGRATION_LABEL_KEY } from "./commands/tailordb/migrate/types";
 
 // Seed exports
-export { chunkSeedData, type SeedChunk, type ChunkSeedDataOptions } from "./shared/seed-chunker";
+export {
+  loadSeedContext,
+  type LoadSeedContextOptions,
+  type SeedContext,
+  type SeedIdpUserContext,
+  type SeedNamespaceConfig,
+} from "./shared/seed-context";
+export {
+  chunkSeedData,
+  type SeedChunk,
+  type ChunkSeedDataOptions,
+  type SeedData,
+} from "./shared/seed-chunker";
 export { bundleSeedScript, type SeedBundleResult } from "./commands/generate/seed/bundler";
 export {
   bundleMigrationScript,
@@ -237,6 +249,7 @@ export {
   waitForExecution,
   type ScriptExecutionOptions,
   type ScriptExecutionResult,
+  type ScriptInvoker,
   type ExecutionWaitResult,
 } from "./shared/script-executor";
 export { initOperatorClient, type OperatorClient } from "./shared/client";
