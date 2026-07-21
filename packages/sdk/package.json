@@ -199,7 +199,7 @@
     "globals": "17.7.0",
     "graphql": "17.0.2",
     "inflection": "3.0.2",
-    "kysely": "0.29.3",
+    "kysely": "0.29.4",
     "madge": "8.0.0",
     "mime-types": "3.0.2",
     "open": "11.0.0",
