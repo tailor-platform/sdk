@@ -441,6 +441,26 @@ describe("dispatchPluginWithInstallHint", () => {
     );
   });
 
+  test("prints an install hint for the top-level seed plugin", async () => {
+    const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});
+
+    const code = await dispatchPluginWithInstallHint({
+      commandPath: [],
+      name: "seed",
+      args: ["apply"],
+      cliName: CLI,
+    });
+
+    expect(code).toBe(1);
+    expect(errorSpy).toHaveBeenCalledWith(
+      `"${CLI} seed" is provided by the @tailor-platform/sdk-plugin-seed CLI plugin, which is not installed.`,
+    );
+    expect(infoSpy).toHaveBeenCalledWith(
+      "Install it with: npm install -D @tailor-platform/sdk-plugin-seed",
+    );
+  });
+
   test("returns undefined for an unknown subcommand with no known package", async () => {
     const errorSpy = vi.spyOn(logger, "error").mockImplementation(() => {});
     const infoSpy = vi.spyOn(logger, "info").mockImplementation(() => {});

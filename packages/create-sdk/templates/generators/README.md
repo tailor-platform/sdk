@@ -7,7 +7,7 @@ Demonstrates all built-in generator plugins for the Tailor Platform SDK.
 - **kyselyTypePlugin** - Generates Kysely type definitions for type-safe database queries
 - **enumConstantsPlugin** - Generates enum constant objects from `db.enum()` fields
 - **fileUtilsPlugin** - Generates file upload/download utility functions
-- **seedPlugin** - Generates seed data templates and execution script
+- **seedPlugin** - Generates seed data templates and schemas (run them with the `tailor seed` commands from `@tailor-platform/sdk-plugin-seed`)
 
 ## Generated Files
 

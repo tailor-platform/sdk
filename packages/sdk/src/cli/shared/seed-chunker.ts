@@ -6,11 +6,12 @@
  */
 
 import { assertDefined } from "#/utils/assert";
+import type { JsonObject } from "type-fest";
 
 /**
  * Seed data keyed by type name, with an array of records per type.
  */
-export type SeedData = Record<string, Record<string, unknown>[]>;
+export type SeedData = Record<string, JsonObject[]>;
 
 /**
  * A single chunk of seed data with metadata for ordered execution.
@@ -114,7 +115,7 @@ export function chunkSeedData(options: ChunkSeedDataOptions): SeedChunk[] {
       currentOrder = [];
     }
 
-    let recordBatch: Record<string, unknown>[] = [];
+    let recordBatch: JsonObject[] = [];
     for (const record of typeRecords) {
       if (byteSize(JSON.stringify({ data: { [type]: [record] }, order: [type] })) > argBudget) {
         const singleRecordSize = byteSize(JSON.stringify(record));

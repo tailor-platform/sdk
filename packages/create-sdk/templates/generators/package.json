@@ -6,6 +6,8 @@
   "scripts": {
     "generate": "tailor generate",
     "deploy": "tailor deploy",
+    "seed": "tailor seed apply",
+    "seed:validate": "tailor seed validate",
     "test": "vitest --project unit",
     "test:unit": "vitest --project unit",
     "format": "oxfmt --write .",
@@ -17,6 +19,7 @@
   "devDependencies": {
     "@tailor-platform/eslint-plugin-sdk": "workspace:^",
     "@tailor-platform/sdk": "workspace:^",
+    "@tailor-platform/sdk-plugin-seed": "workspace:^",
     "@types/node": "24.13.3",
     "oxfmt": "0.58.0",
     "oxlint": "1.73.0",
