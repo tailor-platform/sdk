@@ -471,8 +471,8 @@ importers:
         specifier: 1.43.0
         version: 1.43.0
       '@oxc-project/types':
-        specifier: 0.139.0
-        version: 0.139.0
+        specifier: 0.140.0
+        version: 0.140.0
       '@standard-schema/spec':
         specifier: 1.1.0
         version: 1.1.0
@@ -1727,6 +1727,9 @@ packages:
 
   '@oxc-project/types@0.139.0':
     resolution: {integrity: sha512-r9gHphtCs+1M7J0pw6Sn/hh/Wpa/iQrOOkrNAlVLF/gHq+/CJmHIWKKUUhdWjcD6CIa8idarspCsASiXCXvFUw==}
+
+  '@oxc-project/types@0.140.0':
+    resolution: {integrity: sha512-h5LUOzGArYemnW1NMz/DuuQhBi96J6JL2Bk8zE4kvqxB5Sg3jxmCiH4uyOWHDkiKSt5vWlG4FIwCR/DbstcNRQ==}
 
   '@oxc-resolver/binding-android-arm-eabi@11.21.3':
     resolution: {integrity: sha512-eNU11A2WNizh04v3uyaJCootrHIaS0B9aHYXvAvVnPNk4xYSjMUjHnhQ6dewPN2MRYDskV85d1N0Aw0WNWhcyg==}
@@ -5006,6 +5009,8 @@ snapshots:
   '@oxc-project/types@0.137.0': {}
 
   '@oxc-project/types@0.139.0': {}
+
+  '@oxc-project/types@0.140.0': {}
 
   '@oxc-resolver/binding-android-arm-eabi@11.21.3':
     optional: true
