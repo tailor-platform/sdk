@@ -39,6 +39,8 @@ export default defineConfig([
       "v2/tailordb-namespace/scripts/transform":
         "codemods/v2/tailordb-namespace/scripts/transform.ts",
       "v2/db-type-to-table/scripts/transform": "codemods/v2/db-type-to-table/scripts/transform.ts",
+      "v2/erd-site-to-plugin/scripts/transform":
+        "codemods/v2/erd-site-to-plugin/scripts/transform.ts",
       "v2/forward-relation-name/scripts/transform":
         "codemods/v2/forward-relation-name/scripts/transform.ts",
       "v2/runtime-globals-opt-in/scripts/transform":
