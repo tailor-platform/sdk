@@ -130,10 +130,10 @@ describe("concurrent deploys to the same target", () => {
     await Promise.all([applyA, applyB]);
 
     const state = loadSecretsState(stateScope);
-    expect(state.vaults["my-vault"]?.["shared-secret"]).toBe(
+    expect(state.vaults["my-vault"]?.["shared-secret"]?.hash).toBe(
       hashValue(remote.get("shared-secret")!),
     );
-    expect(state.vaults["my-vault"]?.["trailing-secret"]).toBe(hashValue("trailing-value"));
+    expect(state.vaults["my-vault"]?.["trailing-secret"]?.hash).toBe(hashValue("trailing-value"));
   });
 
   test("auth connection hash state matches the last remote write", async () => {

@@ -53,8 +53,8 @@ describe("secrets-state", () => {
     const state = {
       vaults: {
         "my-vault": {
-          "secret-a": "abc123",
-          "secret-b": "def456",
+          "secret-a": { hash: "abc123", updateTime: "100.5" },
+          "secret-b": { hash: "def456" },
         },
       },
     };
@@ -65,7 +65,7 @@ describe("secrets-state", () => {
 
   test("state from another workspace is a cache miss", () => {
     saveSecretsState(scopeA, {
-      vaults: { "shared-vault": { "shared-secret": "matching-hash" } },
+      vaults: { "shared-vault": { "shared-secret": { hash: "matching-hash" } } },
       connections: { "shared-connection": "matching-hash" },
     });
 
@@ -79,7 +79,7 @@ describe("secrets-state", () => {
 
   test("state from another application is a cache miss", () => {
     saveSecretsState(scopeA, {
-      vaults: { "shared-vault": { "shared-secret": "matching-hash" } },
+      vaults: { "shared-vault": { "shared-secret": { hash: "matching-hash" } } },
       connections: { "shared-connection": "matching-hash" },
     });
 
@@ -93,7 +93,7 @@ describe("secrets-state", () => {
 
   test("a renamed application keeps state when its stable id matches", () => {
     saveSecretsState(scopeA, {
-      vaults: { "shared-vault": { "shared-secret": "matching-hash" } },
+      vaults: { "shared-vault": { "shared-secret": { hash: "matching-hash" } } },
     });
 
     const loaded = loadSecretsState({
@@ -101,7 +101,7 @@ describe("secrets-state", () => {
       applicationName: "renamed-application",
     });
 
-    expect(loaded.vaults["shared-vault"]?.["shared-secret"]).toBe("matching-hash");
+    expect(loaded.vaults["shared-vault"]?.["shared-secret"]?.hash).toBe("matching-hash");
   });
 
   test("state without a stable application id is always a cache miss", () => {
@@ -111,7 +111,7 @@ describe("secrets-state", () => {
     };
 
     saveSecretsState(scopeWithoutId, {
-      vaults: { "shared-vault": { "shared-secret": "matching-hash" } },
+      vaults: { "shared-vault": { "shared-secret": { hash: "matching-hash" } } },
     });
 
     expect(loadSecretsState(scopeWithoutId)).toEqual({ vaults: {} });
@@ -119,11 +119,11 @@ describe("secrets-state", () => {
   });
 
   test("saving one scope preserves another scope", () => {
-    saveSecretsState(scopeA, { vaults: { "vault-a": { secret: "hash-a" } } });
-    saveSecretsState(scopeB, { vaults: { "vault-b": { secret: "hash-b" } } });
+    saveSecretsState(scopeA, { vaults: { "vault-a": { secret: { hash: "hash-a" } } } });
+    saveSecretsState(scopeB, { vaults: { "vault-b": { secret: { hash: "hash-b" } } } });
 
-    expect(loadSecretsState(scopeA).vaults["vault-a"]?.secret).toBe("hash-a");
-    expect(loadSecretsState(scopeB).vaults["vault-b"]?.secret).toBe("hash-b");
+    expect(loadSecretsState(scopeA).vaults["vault-a"]?.secret?.hash).toBe("hash-a");
+    expect(loadSecretsState(scopeB).vaults["vault-b"]?.secret?.hash).toBe("hash-b");
   });
 
   test("stores different scopes in different files", () => {
@@ -131,12 +131,12 @@ describe("secrets-state", () => {
   });
 
   test("a malformed scope file does not invalidate another scope", () => {
-    saveSecretsState(scopeB, { vaults: { "vault-b": { secret: "hash-b" } } });
+    saveSecretsState(scopeB, { vaults: { "vault-b": { secret: { hash: "hash-b" } } } });
     const statePath = getSecretsStatePath(scopeA);
     mkdirSync(path.dirname(statePath), { recursive: true });
     writeFileSync(statePath, "{broken json,,", "utf-8");
 
-    expect(loadSecretsState(scopeB).vaults["vault-b"]?.secret).toBe("hash-b");
+    expect(loadSecretsState(scopeB).vaults["vault-b"]?.secret?.hash).toBe("hash-b");
   });
 
   test("legacy unscoped state is a cache miss", () => {
@@ -154,13 +154,33 @@ describe("secrets-state", () => {
     expect(loadSecretsState(scopeA)).toEqual({ vaults: {} });
   });
 
+  test("version 1 hash-only state is a cache miss", () => {
+    const statePath = getSecretsStatePath(scopeA);
+    mkdirSync(path.dirname(statePath), { recursive: true });
+    writeFileSync(
+      statePath,
+      JSON.stringify({
+        version: 1,
+        workspaceId: scopeA.workspaceId,
+        applicationKey: `id:${scopeA.applicationId}`,
+        state: {
+          vaults: { "shared-vault": { "shared-secret": "matching-hash" } },
+          connections: { "shared-connection": "matching-hash" },
+        },
+      }),
+      "utf-8",
+    );
+
+    expect(loadSecretsState(scopeA)).toEqual({ vaults: {} });
+  });
+
   test("state with an unknown version is a cache miss", () => {
     const statePath = getSecretsStatePath(scopeA);
     mkdirSync(path.dirname(statePath), { recursive: true });
     writeFileSync(
       statePath,
       JSON.stringify({
-        version: 2,
+        version: 3,
         workspaces: {
           "workspace-a": {
             applications: {
