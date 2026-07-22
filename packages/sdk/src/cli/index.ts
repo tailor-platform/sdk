@@ -56,39 +56,15 @@ const packageName = packageJson.name ?? "@tailor-platform/sdk";
 const packageJsonPath = await resolvePackageJSON(import.meta.url);
 const bundledSkillsDir = resolve(dirname(packageJsonPath), "agent-skills");
 
-function alignSkillCommand(command: AnyCommand): AnyCommand {
-  const subCommands = command.subCommands ?? {};
-  const add = {
-    ...(subCommands.add as AnyCommand),
-    description: "Install Tailor SDK agent skills.",
-  };
-  const list = {
-    ...(subCommands.list as AnyCommand),
-    description: "List Tailor SDK agent skills.",
-  };
-  const remove = {
-    ...(subCommands.remove as AnyCommand),
-    description: "Remove installed Tailor SDK agent skills.",
-  };
-  const sync = {
-    ...(subCommands.sync as AnyCommand),
-    description: "Remove and reinstall Tailor SDK agent skills.",
-  };
+function defaultSkillsRunToAdd(command: AnyCommand): AnyCommand {
+  const add = (command.subCommands ?? {}).add as AnyCommand;
   return {
     ...command,
-    description: "Manage Tailor SDK agent skills.",
     async run() {
       const result = await runCommand(add, []);
       if (!result.success) {
         throw result.error;
       }
-    },
-    subCommands: {
-      ...subCommands,
-      add,
-      list,
-      remove,
-      sync,
     },
   };
 }
@@ -140,6 +116,13 @@ Run \`${cliName} plugin list\` to see which plugins are installed and where they
     globalArgs: z.object(commonArgs),
     commandMap: { add: ["add"], remove: ["remove"] },
     unknownKeys: "strict",
+    descriptions: {
+      skills: "Manage Tailor SDK agent skills.",
+      add: "Install Tailor SDK agent skills.",
+      list: "List Tailor SDK agent skills.",
+      remove: "Remove installed Tailor SDK agent skills.",
+      sync: "Remove and reinstall Tailor SDK agent skills.",
+    },
   },
 );
 
@@ -147,7 +130,7 @@ export const mainCommand = withCompletionCommand({
   ...commandWithSkills,
   subCommands: {
     ...commandWithSkills.subCommands,
-    skills: alignSkillCommand(commandWithSkills.subCommands.skills),
+    skills: defaultSkillsRunToAdd(commandWithSkills.subCommands.skills),
   },
 });
 
