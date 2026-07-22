@@ -74,7 +74,7 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Login as machine user
-        run: pnpm tailor-sdk login --machineuser
+        run: pnpm tailor login --machine-user
         env:
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
           TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
@@ -93,28 +93,28 @@ jobs:
             local target="$1" dir="$2" config="$3"
             local workspace_id summary
 
-            workspace_id=$(cd "$dir" && pnpm exec tailor-sdk workspace create -n "e2e-ws-${RUN_ID}-drift-${target}" -r us-west --json | tail -1 | jq -r '.id') || workspace_id=""
+            workspace_id=$(cd "$dir" && pnpm exec tailor workspace create -n "e2e-ws-${RUN_ID}-drift-${target}" -r us-west --json | tail -1 | jq -r '.id') || workspace_id=""
             if [[ -z "$workspace_id" || "$workspace_id" == "null" ]]; then
               echo "::error::${target}: failed to create workspace"
               return 1
             fi
 
             local result=0
-            if ! (cd "$dir" && pnpm exec tailor-sdk deploy -c "$config" -w "$workspace_id" --yes); then
+            if ! (cd "$dir" && pnpm exec tailor deploy -c "$config" -w "$workspace_id" --yes); then
               echo "::error::${target}: deploy failed"
               result=1
             else
-              summary=$(cd "$dir" && pnpm exec tailor-sdk deploy -c "$config" -w "$workspace_id" --dry-run --yes --json | tail -1 | jq -c '.summary') || summary=""
+              summary=$(cd "$dir" && pnpm exec tailor deploy -c "$config" -w "$workspace_id" --dry-run --yes --json | tail -1 | jq -c '.summary') || summary=""
               echo "${target} plan summary: $summary"
               if ! echo "$summary" | jq -e '.create == 0 and .update == 0 and .delete == 0 and .replace == 0' > /dev/null; then
                 echo "::error::${target}: dry run after deploy reported drift: $summary"
                 echo "Re-running without --json for a readable diff:"
-                (cd "$dir" && pnpm exec tailor-sdk deploy -c "$config" -w "$workspace_id" --dry-run --yes) || true
+                (cd "$dir" && pnpm exec tailor deploy -c "$config" -w "$workspace_id" --dry-run --yes) || true
                 result=1
               fi
             fi
 
-            pnpm exec tailor-sdk workspace delete -w "$workspace_id" -y \
+            pnpm exec tailor workspace delete -w "$workspace_id" -y \
               || echo "::warning::${target}: workspace delete failed (the cleanup step sweeps it)"
             return "$result"
           }

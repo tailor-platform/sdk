@@ -129,12 +129,12 @@ jobs:
         working-directory: example
         shell: bash
         run: |
-          summary=$(pnpm --silent tailor-sdk deploy -c tailor.config.ts --dry-run --yes --json | tail -1 | jq -c '.summary')
+          summary=$(pnpm --silent tailor deploy -c tailor.config.ts --dry-run --yes --json | tail -1 | jq -c '.summary')
           echo "Plan summary: $summary"
           if ! echo "$summary" | jq -e '.create == 0 and .update == 0 and .delete == 0 and .replace == 0' > /dev/null; then
             echo "::error::Dry run after deploy reported drift: $summary"
             echo "Re-running without --json for a readable diff:"
-            pnpm tailor-sdk deploy -c tailor.config.ts --dry-run --yes
+            pnpm tailor deploy -c tailor.config.ts --dry-run --yes
             exit 1
           fi
 
