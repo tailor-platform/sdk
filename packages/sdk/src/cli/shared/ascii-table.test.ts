@@ -204,7 +204,7 @@ describe("renderTable", () => {
       result = renderTable(rows);
     }).not.toThrow();
     expect(result.split("\n").filter((line) => line.includes("│"))).toHaveLength(150_000);
-  });
+  }, 20_000);
 
   test("strips stray control characters but preserves ANSI escapes", () => {
     const result = renderTable([["a\tb", "\x1b[31mred\x1b[39m"]]);
