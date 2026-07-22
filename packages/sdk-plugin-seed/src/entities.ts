@@ -14,6 +14,8 @@ export interface SelectEntitiesOptions {
 export interface EntitySelection {
   /** Types to process, or null when everything is processed. */
   entitiesToProcess: string[] | null;
+  /** Whether the resolved selection contains at least one entity. */
+  hasEntitiesToProcess: boolean;
   /** Non-fatal notes about the selection (e.g. redundant flags). */
   warnings: string[];
 }
@@ -27,6 +29,7 @@ export interface EntitySelection {
 export function selectEntities(options: SelectEntitiesOptions): EntitySelection {
   const { namespaceEntities, hasIdpUser, namespace, types, skipIdp } = options;
   const entities = Object.values(namespaceEntities).flat();
+  const allEntities = hasIdpUser ? [...entities, "_User"] : entities;
   const warnings: string[] = [];
 
   if (namespace && types.length > 0) {
@@ -53,12 +56,11 @@ export function selectEntities(options: SelectEntitiesOptions): EntitySelection 
   }
 
   if (types.length > 0) {
-    const allTypes = hasIdpUser ? [...entities, "_User"] : entities;
-    const notFoundTypes = types.filter((type) => !allTypes.includes(type));
+    const notFoundTypes = types.filter((type) => !allEntities.includes(type));
     if (notFoundTypes.length > 0) {
       throw new Error(
         `The following types were not found: ${notFoundTypes.join(", ")}. ` +
-          `Available types: ${allTypes.join(", ")}`,
+          `Available types: ${allEntities.join(", ")}`,
       );
     }
     entitiesToProcess = types;
@@ -68,5 +70,9 @@ export function selectEntities(options: SelectEntitiesOptions): EntitySelection 
     entitiesToProcess = (entitiesToProcess ?? entities).filter((entity) => entity !== "_User");
   }
 
-  return { entitiesToProcess, warnings };
+  return {
+    entitiesToProcess,
+    hasEntitiesToProcess: (entitiesToProcess ?? allEntities).length > 0,
+    warnings,
+  };
 }
