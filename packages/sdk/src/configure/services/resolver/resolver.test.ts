@@ -5,6 +5,7 @@ import { createResolver } from "./resolver";
 import type { TailorPrincipal } from "#/runtime/types";
 import type { output } from "#/types/helpers";
 import type { ResolverInput } from "#/types/resolver.generated";
+import type { ResolverPermission } from "./permission";
 
 describe("createResolver", () => {
   describe("type inference", () => {
@@ -468,6 +469,41 @@ describe("createResolver", () => {
       expect(resolver.invoker).toBe("batch-user");
     });
 
+    test("creates resolver with loggedIn permission condition", () => {
+      const outputType = t.object({ result: t.string() });
+
+      const resolver = createResolver({
+        name: "withPermissionLoggedIn",
+        operation: "query",
+        output: outputType,
+        body: () => ({ result: "ok" }),
+        permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+      });
+
+      expect(resolver.permission).toEqual([
+        { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+      ]);
+    });
+
+    test("creates resolver with permission: allowAnonymous", () => {
+      const outputType = t.object({ result: t.string() });
+
+      const resolver = createResolver({
+        name: "withPermissionAllowAnonymous",
+        operation: "query",
+        output: outputType,
+        body: () => ({ result: "ok" }),
+        permission: "allowAnonymous",
+      });
+
+      expect(resolver.permission).toBe("allowAnonymous");
+    });
+
+    test("ResolverPermission type accepts a standalone allowAnonymous constant", () => {
+      const permission: ResolverPermission = "allowAnonymous";
+      expect(permission).toBe("allowAnonymous");
+    });
+
     test("creates minimal resolver without optional fields", () => {
       const outputType = t.object({ result: t.string() });
 
@@ -483,6 +519,7 @@ describe("createResolver", () => {
       expect(resolver.output).toBe(outputType);
       expect(resolver.description).toBeUndefined();
       expect(resolver.input).toBeUndefined();
+      expect(resolver.permission).toBeUndefined();
     });
 
     test("accepts Record<string, TailorField> as output and converts to t.object()", () => {

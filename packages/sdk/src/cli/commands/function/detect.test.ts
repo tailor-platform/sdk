@@ -49,6 +49,26 @@ export default {
       expect(result.name).toBe("my-resolver");
     });
 
+    test("carries the resolver's `permission` config through for test-run to enforce", async () => {
+      const filePath = writeFile(
+        "resolver-permission.mjs",
+        `
+export default {
+  operation: "query",
+  name: "protected",
+  permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  body: (ctx) => ctx.input,
+  output: { type: "string", metadata: {}, fields: {} },
+};
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.permission).toEqual([
+        { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+      ]);
+    });
+
     test("rejects a branded resolver with unknown helper keys", async () => {
       const filePath = path.join(testDir, "resolver-with-helper.mjs");
       fs.writeFileSync(

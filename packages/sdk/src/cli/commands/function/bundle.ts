@@ -18,7 +18,7 @@ import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
-import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { buildResolverPermissionAndInputCheckExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import type { LogLevelInput } from "#/configure/config/types";
@@ -148,36 +148,23 @@ function generateEntry(
       `;
 
     case "resolver": {
-      // Mirrors the production resolver bundler (services/resolver/bundler.ts).
+      // Mirrors the production resolver bundler (services/resolver/bundler.ts):
+      // both call buildResolverPermissionAndInputCheckExpr so the permission
+      // guard and input validation can't drift between the two entry points.
       // In production, the operationHook injects caller/env into context.
       // For test-run, we embed machine user info since there's no operationHook.
       const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
+      const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr(detected.permission);
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";
 
-        const _env = ${JSON.stringify(env)};
-        const _caller = ${principalExpr};
-
-        const $tailor_resolver_body = async (context) => {
-          const _invoker = ${INVOKER_EXPR} ?? _caller;
-          if (_internalResolver.input) {
-            const result = t.object(_internalResolver.input).parse({
-              value: context,
-              data: context,
-              invoker: _invoker,
-            });
-
-            if (result.issues) {
-              throw new TailorErrors(result.issues.map(issue => ({
-                message: issue.message,
-                path: issue.path ?? [],
-              })));
-            }
-          }
-
-          const enrichedContext = { input: context, env: _env, caller: _caller, invoker: _invoker };
-          return _internalResolver.body(enrichedContext);
+        const $tailor_resolver_body = async (rawInput) => {
+          const _caller = ${principalExpr};
+          const invoker = (${INVOKER_EXPR}) ?? _caller;
+          const context = { input: rawInput, env: ${JSON.stringify(env)}, caller: _caller, invoker };
+          ${guardAndInputCheckExpr}
+          return _internalResolver.body(context);
         };
 
         export { $tailor_resolver_body as main };
