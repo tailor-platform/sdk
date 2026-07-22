@@ -45,7 +45,7 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/setup@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
@@ -100,7 +100,7 @@ jobs:
       - id: tailor-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/setup@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
