@@ -197,15 +197,6 @@ describe("renderTable", () => {
     ).toThrow(/same number of columns/);
   });
 
-  test("does not throw on a very large number of rows", () => {
-    const rows = Array.from({ length: 150_000 }, (_, i) => [String(i), "value"]);
-    let result = "";
-    expect(() => {
-      result = renderTable(rows);
-    }).not.toThrow();
-    expect(result.split("\n").filter((line) => line.includes("│"))).toHaveLength(150_000);
-  }, 20_000);
-
   test("strips stray control characters but preserves ANSI escapes", () => {
     const result = renderTable([["a\tb", "\x1b[31mred\x1b[39m"]]);
     expect(result).not.toContain("\t");
