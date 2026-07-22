@@ -1197,6 +1197,13 @@ describe("applyTailorDB migration label reconciliation", () => {
     return { client, setMetadata };
   }
 
+  function addSentinelTypeCreate(planResult: Awaited<ReturnType<typeof planTailorDB>>): void {
+    planResult.changeSet.type.creates.push({
+      name: "Sentinel",
+      request: { namespaceName: "test-tailordb" },
+    } as never);
+  }
+
   test("forces migration label to working_tree_max when label is ahead of working tree (--no-schema-check)", async () => {
     // Remote label is m0002 but the working tree only has migration 0000.
     // Without reconciliation, the next deploy would reconstruct a snapshot at
@@ -1235,6 +1242,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       );
     }
     const planResult = makePlanResult(true);
+    addSentinelTypeCreate(planResult);
     fs.rmSync(path.join(tmpDir, "0001", "diff.json"));
     const { client } = createMigrationClient({ "sdk-migration": "m0002" });
 
@@ -1325,6 +1333,92 @@ describe("applyTailorDB migration label reconciliation", () => {
     planResult.context.executorUsedTypes = new Set(["User"]);
     return planResult;
   }
+
+  function unchangedRemoteSettings(): unknown {
+    return {
+      pluralForm: "users",
+      aggregation: false,
+      bulkUpsert: false,
+      publishRecordEvents: false,
+      disableGqlOperations: {
+        create: false,
+        update: false,
+        delete: false,
+        read: false,
+      },
+    };
+  }
+
+  test("revalidates local migration history immediately before apply", async () => {
+    const userType = userSnapshotType();
+    const userWithEmail: TailorDBSnapshotType = {
+      ...userType,
+      fields: {
+        ...userType.fields,
+        email: { type: "string", required: false },
+      },
+    };
+    writeUserSchemaSnapshot(userType);
+    const migrationDir = path.join(tmpDir, "0001");
+    fs.mkdirSync(migrationDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(migrationDir, "diff.json"),
+      JSON.stringify(
+        createMockMigrationDiff({
+          namespace: "test-tailordb",
+          changes: [
+            {
+              kind: "field_added",
+              typeName: "User",
+              fieldName: "email",
+              after: { type: "string", required: false },
+            },
+          ],
+        }),
+        null,
+        2,
+      ),
+    );
+
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [] },
+        types: { User: userWithEmail },
+      },
+    ];
+    planResult.context.executorUsedTypes = new Set();
+    addSentinelTypeCreate(planResult);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    await runValidation(client, planResult);
+
+    fs.rmSync(tmpDir, { recursive: true });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "Schema migration check failed",
+    );
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+  });
+
+  test("revalidates remote schema immediately before apply", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    addSentinelTypeCreate(planResult);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    await runValidation(client, planResult);
+
+    vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+      tailordbTypes: [],
+      nextPageToken: "",
+    } as never);
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "Remote schema verification failed",
+    );
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+  });
 
   test("sets the migration label to 0000 on the first apply (no prior label, schema check enabled)", async () => {
     // Fresh project: `migration generate` created 0000/schema.json, the remote

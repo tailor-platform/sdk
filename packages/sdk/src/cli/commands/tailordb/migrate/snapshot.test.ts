@@ -1616,6 +1616,25 @@ describe("snapshot", () => {
 
       expect(() => loadDiff(filePath)).toThrow(filePath);
     });
+
+    test("rejects a whitespace-only migration script skip reason", () => {
+      const filePath = path.join(testDir, "blank_skip_reason_diff.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: "t",
+          changes: [],
+          hasBreakingChanges: true,
+          breakingChanges: [],
+          requiresMigrationScript: true,
+          scriptSkipped: { reason: "   ", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+        }),
+      );
+
+      expect(() => loadDiff(filePath)).toThrow(/reason/i);
+    });
   });
 
   describe("writeSnapshot", () => {

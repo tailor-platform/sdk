@@ -489,4 +489,4 @@ For genuinely different schemas across environments, prefer separate workspaces 
 
 **Cause:** `diff.requiresMigrationScript` is true but `migrate.ts` is missing from the migration directory.
 
-**Resolution:** Either re-run `migration generate` (it skips already-generated diffs but will fill in a missing script), or restore the file from version control.
+**Resolution:** Restore the file from version control, or create it with `tailor-sdk tailordb migration script <N> --namespace <namespace>`. If the migration intentionally needs no data transformation, record that decision with `tailor-sdk tailordb migration script <N> --namespace <namespace> --no-script --reason "<why no data migration is needed>"` instead.

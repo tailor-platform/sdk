@@ -54,6 +54,10 @@ export interface MarkScriptSkippedOptions {
 export function markMigrationScriptSkipped(options: MarkScriptSkippedOptions): ScriptSkippedInfo {
   const { migrationsDir, migrationNumber, reason } = options;
   const label = formatMigrationNumber(migrationNumber);
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) {
+    throw new Error("Migration script skip reason must not be empty.");
+  }
 
   const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
   if (!fs.existsSync(diffPath)) {
@@ -80,7 +84,7 @@ export function markMigrationScriptSkipped(options: MarkScriptSkippedOptions): S
   }
 
   const scriptSkipped: ScriptSkippedInfo = {
-    reason,
+    reason: normalizedReason,
     acknowledgedAt: new Date().toISOString(),
   };
 
@@ -122,13 +126,14 @@ async function script(options: ScriptOptions): Promise<void> {
   );
 
   if (options.noScript) {
-    if (!options.reason) {
+    const reason = options.reason?.trim();
+    if (!reason) {
       throw new Error("--reason is required with --no-script.");
     }
     const scriptSkipped = markMigrationScriptSkipped({
       migrationsDir,
       migrationNumber,
-      reason: options.reason,
+      reason,
     });
     logger.success(
       `Recorded that migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)} intentionally has no migration script`,
@@ -137,7 +142,7 @@ async function script(options: ScriptOptions): Promise<void> {
     logger.info(`  Diff file: ${getMigrationFilePath(migrationsDir, migrationNumber, "diff")}`);
     return;
   }
-  if (options.reason) {
+  if (options.reason !== undefined) {
     throw new Error("--reason can only be used together with --no-script.");
   }
 

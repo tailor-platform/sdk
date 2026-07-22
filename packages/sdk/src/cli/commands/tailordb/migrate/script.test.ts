@@ -65,6 +65,18 @@ describe("markMigrationScriptSkipped", () => {
     expect(new Date(diff.scriptSkipped!.acknowledgedAt).getTime()).not.toBeNaN();
   });
 
+  test("rejects a whitespace-only skip reason", () => {
+    writeDiffFile(
+      testDir,
+      1,
+      createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+    );
+
+    expect(() =>
+      markMigrationScriptSkipped({ migrationsDir: testDir, migrationNumber: 1, reason: "   " }),
+    ).toThrow(/reason/i);
+  });
+
   test("preserves existing diff contents", () => {
     const original = createMockMigrationDiff({
       hasBreakingChanges: true,

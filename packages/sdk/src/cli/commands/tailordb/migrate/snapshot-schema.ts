@@ -484,7 +484,7 @@ export const warningChangeInfoSchema: z.ZodType<WarningChangeInfo> = z.looseObje
 });
 
 export const scriptSkippedInfoSchema: z.ZodType<ScriptSkippedInfo> = z.looseObject({
-  reason: z.string(),
+  reason: z.string().trim().min(1),
   acknowledgedAt: z.string(),
 });
 

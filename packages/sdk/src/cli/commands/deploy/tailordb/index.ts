@@ -558,20 +558,21 @@ export async function applyTailorDB(
   const { changeSet, context: migrationContext } = result;
 
   if (phase === "create-update") {
-    // Migrations were validated at plan time (planTailorDB), so a missing
-    // migration script fails before any resource is applied. Re-read the
-    // remote checkpoints here: a concurrent deploy may have advanced them
-    // after planning (e.g. while this one waited at the confirmation prompt),
-    // and executing a stale pending set would re-run applied scripts.
-    const { namespacesWithMigrations } = migrationContext;
-    for (const { namespace, migrationsDir } of namespacesWithMigrations) {
-      assertValidMigrationFiles(migrationsDir, namespace);
+    // Plan-time validation makes dry runs fail fast. Repeat the full validation
+    // at the apply boundary because migration files, remote checkpoints, or the
+    // remote schema may have changed while waiting for confirmation.
+    const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
+    for (const tailordb of migrationContext.tailorDBInputs) {
+      typesByNamespace.set(tailordb.namespace, tailordb.types);
     }
-    const pendingMigrations = await detectPendingMigrations(
+
+    const { pendingMigrations, namespacesWithMigrations } = await validateAndDetectMigrations(
       client,
       migrationContext.workspaceId,
-      namespacesWithMigrations,
-      migrationContext.config.path,
+      typesByNamespace,
+      migrationContext.config,
+      migrationContext.noSchemaCheck,
+      migrationContext.tailorDBInputs,
     );
 
     if (pendingMigrations.length > 0) {
