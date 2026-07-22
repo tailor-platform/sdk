@@ -1,6 +1,6 @@
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
@@ -33,7 +33,7 @@ describe("startWorkflow runtime overload", () => {
   let getWorkflowExecutionMock: ReturnType<typeof vi.fn>;
   let testStartWorkflowMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
 
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
@@ -73,6 +73,7 @@ describe("startWorkflow runtime overload", () => {
         id: `id:${workflowName}`,
       } as never;
     });
+    await runTest();
   });
 
   test("prefers legacy shape when name exists even if workflow key is present", async () => {

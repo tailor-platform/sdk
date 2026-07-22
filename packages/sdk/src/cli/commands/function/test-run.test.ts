@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadMachineUserName } from "#/cli/shared/context";
@@ -30,12 +30,11 @@ vi.mock("#/cli/shared/script-executor", () => ({
 }));
 
 describe("function test-run --json", () => {
-  let tmpDir: string;
   let scriptPath: string;
   let getAuthMachineUserMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-test-run-json-test-"));
+  aroundEach(async (runTest) => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-test-run-json-test-"));
     scriptPath = path.join(tmpDir, "fn.js");
     fs.writeFileSync(scriptPath, "export default async function main() { return { ok: true }; }");
 
@@ -63,9 +62,7 @@ describe("function test-run --json", () => {
       logs: "",
       result: '{"ok":true}',
     });
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });

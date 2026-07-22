@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   decideAction,
   normalizeActionContent,
@@ -47,8 +47,11 @@ describe("detectPackageManager", () => {
     "/tmp",
     `detect-pm-${Date.now()}-${Math.random().toString(36).slice(2)}`,
   );
-  beforeEach(() => fs.mkdirSync(testDir, { recursive: true }));
-  afterEach(() => fs.rmSync(testDir, { recursive: true, force: true }));
+  aroundEach(async (runTest) => {
+    fs.mkdirSync(testDir, { recursive: true });
+    await runTest();
+    fs.rmSync(testDir, { recursive: true, force: true });
+  });
 
   test.each([
     ["pnpm-lock.yaml", "pnpm"],
@@ -670,15 +673,15 @@ describe("setupTarget (integration)", () => {
     ...overrides,
   });
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     fs.mkdirSync(testDir, { recursive: true });
     fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
     writeConfig(
       `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "cfg-app" });\n`,
     );
+    await runTest();
+    fs.rmSync(testDir, { recursive: true, force: true });
   });
-
-  afterEach(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
   test("generates a workflow + lock and derives the name from config", async () => {
     await setupTarget(baseOptions({ workspaceName: undefined }));
@@ -999,15 +1002,15 @@ describe("setupCoordinate", () => {
     ...overrides,
   });
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     fs.mkdirSync(testDir, { recursive: true });
     fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
     writeConfig(
       `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "api" });\n`,
     );
+    await runTest();
+    fs.rmSync(testDir, { recursive: true, force: true });
   });
-
-  afterEach(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
   test("happy path: generates coordinator workflow and tailor-setup action", async () => {
     await setupTarget(actionOpts("api"));

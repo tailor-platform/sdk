@@ -1,12 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { createExecutorService } from "./service";
 
 describe("createExecutorService.loadExecutors", () => {
   let tmpDir: string | undefined;
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     if (tmpDir) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
       tmpDir = undefined;

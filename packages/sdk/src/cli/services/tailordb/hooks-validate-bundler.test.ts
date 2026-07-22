@@ -1,7 +1,7 @@
 import { existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "pathe";
-import { describe, expect, test, beforeAll, afterAll, afterEach, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { getPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import {
   findUndefinedReferences,
@@ -44,7 +44,8 @@ vi.mock("rolldown", async (importOriginal) => {
   };
 });
 
-afterEach(() => {
+aroundEach(async (runTest) => {
+  await runTest();
   expectVirtualEntry = false;
 });
 
@@ -157,11 +158,9 @@ describe("collectSourceBindings", () => {
   let tempDir: string;
   let fileCounter = 0;
 
-  beforeAll(() => {
+  aroundAll(async (runSuite) => {
     tempDir = mkdtempSync(join(tmpdir(), "test-bindings-"));
-  });
-
-  afterAll(() => {
+    await runSuite();
     rmSync(tempDir, { recursive: true, force: true });
   });
 

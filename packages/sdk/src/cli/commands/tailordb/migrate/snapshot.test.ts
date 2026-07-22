@@ -7,7 +7,7 @@ import {
   type TailorDBType as ProtoTailorDBType,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
-import { describe, expect, expectTypeOf, test, beforeEach, afterAll, vi } from "vitest";
+import { describe, expect, expectTypeOf, test, aroundEach, aroundAll, vi } from "vitest";
 import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
 import {
   createSnapshotFromLocalTypes,
@@ -94,20 +94,22 @@ describe("snapshot", () => {
   const namespace = "tailordb";
   let testDir: string;
 
-  beforeEach(() => {
-    testDir = path.join(
-      TEST_MIGRATIONS_BASE,
-      `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    );
-    fs.mkdirSync(testDir, { recursive: true });
-  });
-
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     try {
       fs.rmSync(TEST_MIGRATIONS_BASE, { recursive: true, force: true });
     } catch {
       // Ignore cleanup errors
     }
+  });
+
+  aroundEach(async (runTest) => {
+    testDir = path.join(
+      TEST_MIGRATIONS_BASE,
+      `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    fs.mkdirSync(testDir, { recursive: true });
+    await runTest();
   });
 
   // ==========================================================================

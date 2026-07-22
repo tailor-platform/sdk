@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   resolveDeployWorkspace: vi.fn(),
@@ -11,8 +11,9 @@ vi.mock("./workspace", () => ({
 import { deploy, deployFromCLI } from "./deploy";
 
 describe("deploy workspace resolution", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("validates the config before resolving or creating a workspace", async () => {

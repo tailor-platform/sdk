@@ -6,10 +6,10 @@
 
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import ml from "#/utils/multiline";
 
 export interface MigrationBundleResult {
@@ -25,11 +25,12 @@ export interface MigrationBundleResult {
  * 1. Imports the migration script's main function
  * 2. Defines getDB() function inline
  * 3. Wraps migration in a transaction using getDB()
- * 4. Exports as main() for TestExecScript
+ * 4. Exports as main() for server-side execution
  * @param {string} sourceFile - Path to the migration script file
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number
  * @param {Record<string, string | number | boolean>} env - Environment variables to inject into the migration context
+ * @param {string} [baseDir] - Directory to resolve the bundler's tsconfig against; defaults to the migration script's directory
  * @returns {Promise<MigrationBundleResult>} Bundled migration result
  */
 export async function bundleMigrationScript(
@@ -37,6 +38,7 @@ export async function bundleMigrationScript(
   namespace: string,
   migrationNumber: number,
   env: Record<string, string | number | boolean> = {},
+  baseDir?: string,
 ): Promise<MigrationBundleResult> {
   // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "migrations");
@@ -71,12 +73,7 @@ export async function bundleMigrationScript(
   `;
   fs.writeFileSync(entryPath, entryContent);
 
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir ?? path.dirname(absoluteSourcePath));
 
   // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
   const result = await rolldown.build({

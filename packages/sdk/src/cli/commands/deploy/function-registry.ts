@@ -1,4 +1,5 @@
 import * as crypto from "node:crypto";
+import { createApplyLimiter } from "#/cli/shared/apply-concurrency";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
@@ -473,17 +474,24 @@ export async function applyFunctionRegistry(
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
-    // Upload new functions
-    for (const create of changeSet.creates) {
-      await uploadFunctionScript(client, workspaceId, create.entry, true);
-      await client.setMetadata(create.metaRequest);
-    }
+    // Streaming uploads bypass the client's unary concurrency cap, so bound
+    // each upload + metadata pair here with the same apply-concurrency budget.
+    const limitFunction = createApplyLimiter();
 
-    // Update existing functions (server deduplicates content by hash)
-    for (const update of changeSet.updates) {
-      await uploadFunctionScript(client, workspaceId, update.entry, false);
-      await client.setMetadata(update.metaRequest);
-    }
+    await Promise.all([
+      ...changeSet.creates.map((create) =>
+        limitFunction(async () => {
+          await uploadFunctionScript(client, workspaceId, create.entry, true);
+          await client.setMetadata(create.metaRequest);
+        }),
+      ),
+      ...changeSet.updates.map((update) =>
+        limitFunction(async () => {
+          await uploadFunctionScript(client, workspaceId, update.entry, false);
+          await client.setMetadata(update.metaRequest);
+        }),
+      ),
+    ]);
   } else {
     await Promise.all(
       changeSet.deletes.map((del) =>
