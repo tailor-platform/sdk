@@ -33,13 +33,13 @@ function isStrippableControlCharacter(char: string): boolean {
 }
 
 function stripControlCharacters(value: string): string {
-  let result = "";
+  const chars: string[] = [];
   for (const char of value) {
     if (!isStrippableControlCharacter(char)) {
-      result += char;
+      chars.push(char);
     }
   }
-  return result;
+  return chars.join("");
 }
 
 function sanitizeCell(cell: unknown): string {
@@ -82,7 +82,7 @@ function validateConsistentColumnCount(rows: string[][]): void {
 }
 
 /**
- * Renders a 2D array of values as an ASCII table with single-line box-drawing borders.
+ * Renders a 2D array of values as a table using single-line Unicode box-drawing borders.
  * Column widths account for East Asian wide characters (measured per grapheme cluster,
  * so combining marks and ZWJ emoji sequences aren't overcounted) and strip ANSI codes
  * before measuring. Use this instead of importing a table-rendering package directly.
