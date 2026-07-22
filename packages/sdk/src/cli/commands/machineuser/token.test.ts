@@ -1,5 +1,5 @@
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { fetchMachineUserToken, initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
@@ -23,7 +23,7 @@ vi.mock("#/cli/shared/config-loader", () => ({
 describe("getMachineUserToken", () => {
   let getAuthMachineUserMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
 
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
@@ -48,9 +48,9 @@ describe("getMachineUserToken", () => {
       access_token: "machine-token",
       expires_in: 3600,
     });
-  });
 
-  afterEach(() => {
+    await runTest();
+
     vi.unstubAllEnvs();
   });
 

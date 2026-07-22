@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import {
   getReplHistoryPath,
   query,
@@ -77,7 +77,7 @@ function sqlRowKeys(result: unknown): string[] {
 }
 
 describe("query", () => {
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
 
     Object.defineProperty(process.stdin, "isTTY", {
@@ -112,6 +112,7 @@ describe("query", () => {
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
         name: "sample-app",
+        path: "/project/tailor.config.ts",
       },
     } as never);
     vi.mocked(extractAllNamespaces).mockReturnValue(["tailordb"]);
@@ -142,6 +143,8 @@ describe("query", () => {
         clientSecret: "client-secret",
       },
     });
+
+    await runTest();
   });
 
   test("executes SQL query with bundled script and inferred namespace", async () => {
@@ -157,7 +160,7 @@ describe("query", () => {
       query: 'select * from "User";',
     });
 
-    expect(bundleQueryScript).toHaveBeenCalledWith("sql");
+    expect(bundleQueryScript).toHaveBeenCalledWith("sql", "/project");
     expect(resolveTypeNamespaces).not.toHaveBeenCalled();
     expect(executeScript).toHaveBeenCalledWith(
       expect.objectContaining({

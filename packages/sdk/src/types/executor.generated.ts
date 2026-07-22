@@ -102,7 +102,9 @@ export type FunctionOperation = {
   invoker?:
     | string
     | {
+        /** Auth namespace */
         namespace: string;
+        /** Machine user name for authentication */
         machineUserName: string;
       }
     | undefined;
@@ -120,7 +122,9 @@ export type GqlOperationInput = {
   invoker?:
     | string
     | {
+        /** Auth namespace */
         namespace: string;
+        /** Machine user name for authentication */
         machineUserName: string;
       }
     | undefined;
@@ -137,7 +141,9 @@ export type GqlOperation = {
   invoker?:
     | string
     | {
+        /** Auth namespace */
         namespace: string;
+        /** Machine user name for authentication */
         machineUserName: string;
       }
     | undefined;
@@ -195,25 +201,33 @@ export type WorkflowOperationInput =
         name: string;
       };
       kind: "workflow";
+      /** Name of the workflow to execute */
       workflowName?: string | undefined;
       args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
       invoker?:
         | string
         | {
+            /** Auth namespace */
             namespace: string;
+            /** Machine user name for authentication */
             machineUserName: string;
           }
         | undefined;
     }
   | {
+      /** Name of the workflow to execute */
       workflowName: string;
       kind: "workflow";
       workflow?: undefined;
       args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
       invoker?:
         | string
         | {
+            /** Auth namespace */
             namespace: string;
+            /** Machine user name for authentication */
             machineUserName: string;
           }
         | undefined;
@@ -221,26 +235,34 @@ export type WorkflowOperationInput =
 
 export type WorkflowOperation =
   | {
+      /** Name of the workflow to execute */
       workflowName: string;
       kind: "workflow";
       args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
       invoker?:
         | string
         | {
+            /** Auth namespace */
             namespace: string;
+            /** Machine user name for authentication */
             machineUserName: string;
           }
         | undefined;
     }
   | {
+      /** Name of the workflow to execute */
       workflowName: string;
       kind: "workflow";
       workflow?: undefined;
       args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
       invoker?:
         | string
         | {
+            /** Auth namespace */
             namespace: string;
+            /** Machine user name for authentication */
             machineUserName: string;
           }
         | undefined;

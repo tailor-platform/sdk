@@ -152,6 +152,7 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       ({ bundledCode, scriptName } = await bundleForTestRun({
         detected,
         sourceFile: filePath,
+        baseDir: path.dirname(config.path),
         env: config.env ?? {},
         inlineSourcemap: config.inlineSourcemap,
         logLevel: config.logLevel,

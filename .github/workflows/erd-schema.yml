@@ -1,5 +1,4 @@
 name: ERD Schema
-# pinact:skip-file
 
 on:
   push:
@@ -38,7 +37,7 @@ jobs:
         namespace: [tailordb, analyticsdb]
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -58,7 +57,7 @@ jobs:
       - name: Build ERD plugin
         run: pnpm --filter @tailor-platform/sdk-plugin-tailordb-erd run build
 
-      - uses: tailor-platform/actions/erd-schema-export@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
+      - uses: tailor-platform/actions/erd-schema-export@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           namespace: ${{ matrix.namespace }}
           package-manager: pnpm
@@ -88,7 +87,7 @@ jobs:
 
     steps:
       - name: Checkout PR merge
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -101,7 +100,7 @@ jobs:
           mkdir -p packages/sdk-plugin-tailordb-erd/dist
           printf '#!/usr/bin/env node\n' > packages/sdk-plugin-tailordb-erd/dist/cli.js
 
-      # install-deps builds the SDK once, so the `tailor-sdk` CLI bin resolves.
+      # install-deps builds the SDK once, so the `tailor` CLI bin resolves.
       - name: Install deps
         uses: ./.github/actions/install-deps
 
@@ -110,7 +109,7 @@ jobs:
       - name: Build ERD plugin
         run: pnpm --filter @tailor-platform/sdk-plugin-tailordb-erd run build
 
-      - uses: tailor-platform/actions/erd-schema-preview@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
+      - uses: tailor-platform/actions/erd-schema-preview@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           namespace: ${{ matrix.namespace }}
           package-manager: pnpm
@@ -146,11 +145,11 @@ jobs:
       cancel-in-progress: true
 
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - uses: tailor-platform/actions/erd-schema-comment@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
+      - uses: tailor-platform/actions/erd-schema-comment@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           base-ref: ${{ github.event.pull_request.base.ref }}
           github-token: ${{ github.token }}

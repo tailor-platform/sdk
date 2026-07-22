@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -25,16 +25,14 @@ vi.mock("@napi-rs/keyring", () => ({
   },
 }));
 
-beforeAll(() => {
+aroundAll(async (runSuite) => {
   fs.mkdirSync(xdgTempDir, { recursive: true });
-});
-
-afterAll(() => {
+  await runSuite();
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
 describe("profile list", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     resetKeyringState();
     writePlatformConfig({
@@ -44,9 +42,9 @@ describe("profile list", () => {
       profiles: {},
       current_user: null,
     });
-  });
 
-  afterEach(() => {
+    await runTest();
+
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });

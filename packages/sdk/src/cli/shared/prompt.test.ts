@@ -1,9 +1,10 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 
 describe("prompt", () => {
   describe("CI environment", () => {
-    beforeEach(() => {
+    aroundEach(async (runTest) => {
       vi.resetModules();
+      await runTest();
     });
 
     test("confirm throws CIPromptError when isCI is true", async () => {
@@ -29,9 +30,10 @@ describe("prompt", () => {
   });
 
   describe("interactive detection", () => {
-    beforeEach(() => {
+    aroundEach(async (runTest) => {
       vi.resetModules();
       vi.doMock("std-env", () => ({ isCI: false }));
+      await runTest();
     });
 
     test("requires both input and output TTYs", async () => {

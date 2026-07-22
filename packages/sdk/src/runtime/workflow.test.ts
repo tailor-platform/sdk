@@ -1,17 +1,14 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/workflow` typed wrappers.
  */
-import { afterEach, beforeEach, describe, expect, expectTypeOf, test } from "vitest";
+import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
 import { workflow, type ExecutionPolicyKey, type PlatformWorkflowAPI } from "#/runtime/workflow";
-import { cleanupMocks, injectMocks, mockWorkflow } from "#/vitest/mock";
+import { injectMocks, mockWorkflow } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/workflow", () => {
-  beforeEach(() => {
-    injectMocks(globalThis);
-  });
-
-  afterEach(() => {
-    cleanupMocks(globalThis);
+  aroundEach(async (runTest) => {
+    using _mocks = injectMocks(globalThis);
+    await runTest();
   });
 
   test("exposes the platform workflow API", () => {

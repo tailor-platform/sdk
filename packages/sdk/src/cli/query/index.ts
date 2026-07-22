@@ -386,7 +386,7 @@ async function prepareQueryExecutor(
 ): Promise<(query: string) => Promise<QueryDispatchResult>> {
   const { client, workspaceId, config, application, machineUserResource, engine, namespaces } =
     await loadOptions(options);
-  const bundledCode = await bundleQueryScript(engine);
+  const bundledCode = await bundleQueryScript(engine, path.dirname(config.path));
   const invoker = create(AuthInvokerSchema, {
     namespace: application.authNamespace,
     machineUserName: machineUserResource.name,

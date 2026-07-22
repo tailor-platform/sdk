@@ -1,6 +1,6 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { getFunctionRegistry } from "./get";
@@ -17,7 +17,7 @@ vi.mock("#/cli/shared/client", () => ({
 describe("getFunctionRegistry", () => {
   let getFunctionRegistryMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
@@ -25,6 +25,7 @@ describe("getFunctionRegistry", () => {
     vi.mocked(initOperatorClient).mockResolvedValue({
       getFunctionRegistry: getFunctionRegistryMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    await runTest();
   });
 
   test("returns transformed FunctionRegistryInfo on success", async () => {

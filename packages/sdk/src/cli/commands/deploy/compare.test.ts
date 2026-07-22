@@ -1,5 +1,12 @@
+import { create } from "@bufbuild/protobuf";
+import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import { describe, expect, test } from "vitest";
-import { areNormalizedEqual, normalizeProtoConfig, stableStringify } from "./compare";
+import {
+  areNormalizedEqual,
+  normalizeProtoConfig,
+  stableStringify,
+  toComparableProtoJson,
+} from "./compare";
 
 describe("compare policy", () => {
   // Generic compare preserves type distinctions.
@@ -14,5 +21,25 @@ describe("compare policy", () => {
   test("normalizeProtoConfig keeps bigint-backed values as strings after round-trip", () => {
     expect(normalizeProtoConfig({ seconds: 1n })).toEqual({ seconds: "1" });
     expect(normalizeProtoConfig({ seconds: 1 })).toEqual({ seconds: 1 });
+  });
+
+  test("toComparableProtoJson equates an init shape with its materialized message", () => {
+    const init = {
+      name: "Invoice",
+      schema: { fields: { code: { type: "string", required: true } } },
+    };
+    // Deserialized messages materialize implicit proto3 fields (e.g. bools
+    // added to the proto later) with zero values that the init shape omits.
+    // optionalOnCreate is deliberately named as the canary: it is a field the
+    // SDK never sets, so it proves materialization happens.
+    const materialized = create(TailorDBTypeSchema, init);
+    expect(materialized.schema?.fields.code?.optionalOnCreate).toBe(false);
+
+    expect(
+      areNormalizedEqual(
+        toComparableProtoJson(TailorDBTypeSchema, init),
+        toComparableProtoJson(TailorDBTypeSchema, materialized),
+      ),
+    ).toBe(true);
   });
 });

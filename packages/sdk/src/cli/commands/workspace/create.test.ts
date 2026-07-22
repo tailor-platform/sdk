@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
@@ -65,25 +65,21 @@ function stubClient() {
   } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 }
 
-beforeAll(() => {
+aroundAll(async (runSuite) => {
   fs.mkdirSync(xdgTempDir, { recursive: true });
-});
-
-afterAll(() => {
+  await runSuite();
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
 describe("workspace create --permission", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", "mock-token");
     seedConfig();
     stubClient();
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     if (fs.existsSync(configPath)) fs.rmSync(configPath);

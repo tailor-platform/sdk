@@ -27,22 +27,22 @@ jobs:
       cancel-in-progress: true
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/setup@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/install@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/generate-check@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
       - id: tailor-preview-deploy
-        uses: tailor-platform/actions/preview-deploy@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/preview-deploy@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
           region: "__REGION__"
@@ -55,7 +55,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - id: tailor-preview-comment
         if: always()
-        uses: tailor-platform/actions/preview-comment@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/preview-comment@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           workspace-id: ${{ steps.tailor-preview-deploy.outputs.workspace-id }}
           workspace-name: ${{ steps.tailor-preview-deploy.outputs.workspace-name }}
@@ -73,17 +73,17 @@ jobs:
       pull-requests: write
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/setup@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/install@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-preview-cleanup
-        uses: tailor-platform/actions/preview-cleanup@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/preview-cleanup@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           workspace-name-prefix: __WORKSPACE_NAME__
           package-manager: __PACKAGE_MANAGER__

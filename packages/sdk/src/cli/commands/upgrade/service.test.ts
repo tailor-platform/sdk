@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import type { RunOutput } from "./types";
 import type { SpawnSyncReturns } from "node:child_process";
 
@@ -65,11 +65,9 @@ async function setupUpgrade(version: string | null) {
 }
 
 describe("upgrade service", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.restoreAllMocks();
   });
 

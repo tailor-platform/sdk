@@ -39,17 +39,17 @@ jobs:
       cancel-in-progress: true
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/setup@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/install@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/generate-check@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
@@ -59,12 +59,12 @@ jobs:
         # __WORKING_DIRECTORY__
       # __SEED_VALIDATE_END__
       - id: tailor-drift-check
-        uses: tailor-platform/actions/drift-check@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/drift-check@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
       # __MIGRATION_DRIFT_CHECK_START__
       - id: tailor-migration-drift-check
-        uses: tailor-platform/actions/migration-drift-check@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/migration-drift-check@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
@@ -72,7 +72,7 @@ jobs:
       - id: tailor-plan
         # Fork PRs cannot read secrets; the checks above still run for them.
         if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-        uses: tailor-platform/actions/plan@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/plan@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -94,11 +94,11 @@ jobs:
       base-app-dir: ${{ steps.tailor-erd-preview-matrix.outputs['base-app-dir'] }}
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - id: tailor-checkout-base
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name }}
           ref: ${{ github.event.pull_request.base.sha }}
@@ -194,15 +194,15 @@ jobs:
         namespace: ${{ fromJSON(needs.tailor-erd-preview-matrix.outputs.namespaces) }}
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/setup@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-checkout-base
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ${{ github.event.pull_request.base.repo.full_name }}
           ref: ${{ github.event.pull_request.base.sha }}
@@ -308,7 +308,7 @@ jobs:
               ;;
           esac
       - id: tailor-restore-head-setup
-        uses: tailor-platform/actions/setup@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/setup@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-build-erd-preview
@@ -590,17 +590,17 @@ jobs:
       cancel-in-progress: false
     steps:
       - id: tailor-checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - id: tailor-setup
-        uses: tailor-platform/actions/setup@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/setup@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-install
-        uses: tailor-platform/actions/install@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/install@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-apply
-        uses: tailor-platform/actions/deploy@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/deploy@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
@@ -630,7 +630,7 @@ jobs:
           fi
       - id: tailor-notify
         if: always() && steps.slack-prereq.outputs.ready == 'true'
-        uses: tailor-platform/actions/notify@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/notify@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           provider: slack
           status: ${{ job.status }}

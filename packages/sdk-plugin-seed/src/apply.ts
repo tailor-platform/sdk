@@ -280,14 +280,6 @@ export const seedApplyCommand = defineAppCommand({
   run: async (args) => {
     const context = await loadSeedContext({ configPath: args.config });
 
-    const machineUserName = args["machine-user"] ?? context.machineUserName;
-    if (!machineUserName) {
-      throw new Error(
-        "Machine user name is required. " +
-          "Specify --machine-user <name> or configure machineUserName in seedPlugin options.",
-      );
-    }
-
     const namespaceEntities = Object.fromEntries(
       context.namespaces.map((ns) => [ns.namespace, ns.types]),
     );
@@ -309,10 +301,24 @@ export const seedApplyCommand = defineAppCommand({
       logger.info(`Filtering by types: ${(selection.entitiesToProcess ?? []).join(", ")}`);
     }
 
-    const dataDir = path.join(context.distPath, "data");
-    if (selection.hasEntitiesToProcess) {
-      assertSeedDataDirectory(dataDir);
+    if (!selection.hasEntitiesToProcess) {
+      if (args.json) {
+        logger.out({ success: true, processed: {} });
+      }
+      logger.success("No seed targets found.");
+      return;
     }
+
+    const machineUserName = args["machine-user"] ?? context.machineUserName;
+    if (!machineUserName) {
+      throw new Error(
+        "Machine user name is required. " +
+          "Specify --machine-user <name> or configure machineUserName in seedPlugin options.",
+      );
+    }
+
+    const dataDir = path.join(context.distPath, "data");
+    assertSeedDataDirectory(dataDir);
 
     const appInfo = await show({
       configPath: args.config,
