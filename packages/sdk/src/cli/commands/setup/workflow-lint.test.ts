@@ -285,21 +285,31 @@ describe("tailor-platform/actions CLI invocation contract", () => {
       seedValidate: true,
     });
 
-    vi.resetModules();
+    const previousOutputDirEnv = process.env.TAILOR_SDK_OUTPUT_DIR;
     delete process.env.TAILOR_SDK_OUTPUT_DIR;
-    const { getDistDir } = await import("../../shared/dist-dir");
-    const actualOutputDir = getDistDir();
+    vi.resetModules();
+    try {
+      const { getDistDir } = await import("../../shared/dist-dir");
+      const actualOutputDir = getDistDir();
 
-    for (const major of actionVersions(branch, "seed-validate")) {
-      const expectedOutputDir = OUTPUT_DIR_BY_MAJOR[major];
-      expect(
-        expectedOutputDir,
-        `unknown seed-validate@v${major}; add its output-dir contract to OUTPUT_DIR_BY_MAJOR`,
-      ).toBeDefined();
-      expect(
-        actualOutputDir,
-        `seed-validate@v${major} reads from \`${expectedOutputDir}\`, but this package writes to \`${actualOutputDir}\``,
-      ).toBe(expectedOutputDir);
+      for (const major of actionVersions(branch, "seed-validate")) {
+        const expectedOutputDir = OUTPUT_DIR_BY_MAJOR[major];
+        expect(
+          expectedOutputDir,
+          `unknown seed-validate@v${major}; add its output-dir contract to OUTPUT_DIR_BY_MAJOR`,
+        ).toBeDefined();
+        expect(
+          actualOutputDir,
+          `seed-validate@v${major} reads from \`${expectedOutputDir}\`, but this package writes to \`${actualOutputDir}\``,
+        ).toBe(expectedOutputDir);
+      }
+    } finally {
+      if (previousOutputDirEnv === undefined) {
+        delete process.env.TAILOR_SDK_OUTPUT_DIR;
+      } else {
+        process.env.TAILOR_SDK_OUTPUT_DIR = previousOutputDirEnv;
+      }
+      vi.resetModules();
     }
   });
 });
