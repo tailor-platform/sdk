@@ -10,7 +10,12 @@
 
 import * as fs from "node:fs/promises";
 import { writeDbTypesFile } from "./db-types-generator";
-import { getMigrationDirPath, getMigrationFilePath, type SchemaSnapshot } from "./snapshot";
+import {
+  getMigrationDirPath,
+  getMigrationFilePath,
+  type SchemaSnapshot,
+  type SnapshotFieldConfig,
+} from "./snapshot";
 import type { MigrationDiff, DiffChange } from "./diff-calculator";
 
 /**
@@ -149,10 +154,7 @@ export function generateMigrationScript(diff: MigrationDiff): string {
   const updates: string[] = [];
 
   for (const change of diff.changes) {
-    const script = generateChangeScript(change);
-    if (script) {
-      updates.push(script);
-    }
+    updates.push(...generateChangeScripts(change));
 
     const decimalScaleScript = generateDecimalScaleChangeScript(change);
     if (decimalScaleScript) {
@@ -187,45 +189,48 @@ ${updates.join("\n\n")}
 }
 
 /**
- * Generate script for a single change
+ * Generate scripts for a single change
  * @param {DiffChange} change - Diff change to generate script for
- * @returns {string | null} Script content or null if no script needed
+ * @returns {string[]} Script contents, or an empty array if no script is needed
  */
-function generateChangeScript(change: DiffChange): string | null {
+function generateChangeScripts(change: DiffChange): string[] {
   if (change.kind === "field_added") {
     const field = change.after;
     if (field.required) {
-      return `  // Populate ${change.fieldName} for existing ${change.typeName} records
+      return [
+        `  // Populate ${change.fieldName} for existing ${change.typeName} records
   await trx
     .updateTable("${change.typeName}")
     .set({
       ${change.fieldName}: null, // TODO: Set appropriate default value
     })
-    .execute();`;
+    .execute();`,
+      ];
     }
-    return null;
+    return [];
   }
 
   if (change.kind !== "field_modified") {
     // No data migration needed for type_added, type_removed, or field_removed
-    return null;
+    return [];
   }
 
   const { before, after } = change;
+  const scripts: string[] = [];
 
   // Note: Type change is rejected as unsupported in generate.ts
   // No script generation needed here
 
   // Optional to required
   if (!before.required && after.required) {
-    return `  // Set ${change.fieldName} for ${change.typeName} records where it is null
+    scripts.push(`  // Set ${change.fieldName} for ${change.typeName} records where it is null
   await trx
     .updateTable("${change.typeName}")
     .set({
       ${change.fieldName}: null, // TODO: Set appropriate default value
     })
     .where("${change.fieldName}", "is", null)
-    .execute();`;
+    .execute();`);
   }
 
   // Note: Array to single value change is rejected in generate.ts
@@ -233,7 +238,7 @@ function generateChangeScript(change: DiffChange): string | null {
 
   // Unique constraint added
   if (!(before.unique ?? false) && (after.unique ?? false)) {
-    return `  // Ensure ${change.fieldName} values are unique before adding constraint
+    scripts.push(`  // Ensure ${change.fieldName} values are unique before adding constraint
   const duplicates = await trx
     .selectFrom("${change.typeName}")
     .select(["${change.fieldName}"])
@@ -254,7 +259,7 @@ function generateChangeScript(change: DiffChange): string | null {
         .where("id", "=", records[i].id)
         .execute();
     }
-  }`;
+  }`);
   }
 
   // Enum values removed
@@ -264,12 +269,12 @@ function generateChangeScript(change: DiffChange): string | null {
     const removedValues = beforeValues.filter((v) => !afterValues.includes(v));
     if (removedValues.length > 0) {
       const defaultValue = afterValues[0] ?? "NEW_VALUE";
-      return `  // Migrate records with removed enum values: ${removedValues.join(", ")}
+      scripts.push(`  // Migrate records with removed enum values: ${removedValues.join(", ")}
   await trx
     .updateTable("${change.typeName}")
     .set({ ${change.fieldName}: "${defaultValue}" }) // TODO: Set appropriate value
     .where("${change.fieldName}", "in", [${removedValues.map((v) => `"${v}"`).join(", ")}])
-    .execute();`;
+    .execute();`);
     }
   }
 
@@ -279,7 +284,7 @@ function generateChangeScript(change: DiffChange): string | null {
     after.foreignKeyType &&
     before.foreignKeyType !== after.foreignKeyType
   ) {
-    return `  // Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}
+    scripts.push(`  // Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}
   // Find records that don't have a valid reference in the new target table
   const orphanedRecords = await trx
     .selectFrom("${change.typeName}")
@@ -292,35 +297,70 @@ function generateChangeScript(change: DiffChange): string | null {
     await trx
       .updateTable("${change.typeName}")
       .set({ ${change.fieldName}: null }) // TODO: Set appropriate new reference
-      .where("id", "=", record.id)
-      .execute();
-  }`;
+        .where("id", "=", record.id)
+        .execute();
+  }`);
   }
 
-  return null;
+  return scripts;
+}
+
+function hasDecimalScaleChange(before: SnapshotFieldConfig, after: SnapshotFieldConfig): boolean {
+  if (before.type === "decimal" && after.type === "decimal" && before.scale !== after.scale) {
+    return true;
+  }
+
+  for (const [fieldName, beforeNestedField] of Object.entries(before.fields ?? {})) {
+    const afterNestedField = after.fields?.[fieldName];
+    if (afterNestedField && hasDecimalScaleChange(beforeNestedField, afterNestedField)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function generateDecimalScaleChangeScript(change: DiffChange): string | null {
   if (change.kind !== "field_modified") return null;
 
   const { before, after } = change;
-  if (before.type !== "decimal" || after.type !== "decimal" || before.scale === after.scale) {
-    return null;
-  }
+  if (!hasDecimalScaleChange(before, after)) return null;
 
-  return `  // Re-save existing ${change.typeName} rows so ${change.fieldName} is stored under the new scale.
+  const valueExpression =
+    !before.required && after.required ? `row.${change.fieldName}!` : `row.${change.fieldName}`;
+  const scaleDescription =
+    before.type === "decimal" && after.type === "decimal"
+      ? `${change.fieldName} is stored under the new scale`
+      : `decimal values in ${change.fieldName} are stored under their new scales`;
+
+  return `  // Re-save existing ${change.typeName} rows so ${scaleDescription}.
   // This is a workaround for a platform-side gap where rows written under the
   // previous scale could fail on later updates until re-saved; it is not a data
   // transformation. Keep it unless your platform is confirmed to handle stored
   // values across scale changes.
   {
-    const rows = await trx.selectFrom("${change.typeName}").select(["id", "${change.fieldName}"]).execute();
-    for (const row of rows) {
-      await trx
-        .updateTable("${change.typeName}")
-        .set({ ${change.fieldName}: row.${change.fieldName} })
-        .where("id", "=", row.id)
-        .execute();
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
+        .selectFrom("${change.typeName}")
+        .select(["id", "${change.fieldName}"])
+        .where("${change.fieldName}", "is not", null)
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        await trx
+          .updateTable("${change.typeName}")
+          .set({ ${change.fieldName}: ${valueExpression} })
+          .where("id", "=", row.id)
+          .execute();
+      }
+      lastId = rows[rows.length - 1]!.id;
     }
   }`;
 }

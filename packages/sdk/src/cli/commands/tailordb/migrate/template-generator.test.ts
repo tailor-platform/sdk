@@ -298,8 +298,58 @@ describe("template-generator", () => {
 
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
       expect(scriptContent).toContain('.selectFrom("Item")');
+      expect(scriptContent).toContain('.where("price", "is not", null)');
+      expect(scriptContent).toContain('.orderBy("id", "asc")');
+      expect(scriptContent).toContain(".limit(100)");
+      expect(scriptContent).toContain('.where("id", ">", lastId)');
       expect(scriptContent).toContain(".set({ price: row.price })");
       expect(scriptContent).toContain("platform-side");
+      expect(scriptContent).not.toContain("No data migration needed");
+    });
+
+    test("should touch the enclosing field for a nested decimal scale change", async () => {
+      const nestedPrice = (scale: number) => ({
+        type: "nested" as const,
+        required: true,
+        fields: {
+          price: { type: "decimal" as const, required: true, scale },
+        },
+      });
+      const snapshotWithScale2 = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            metadata: nestedPrice(2),
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "Item",
+            fieldName: "metadata",
+            before: nestedPrice(2),
+            after: nestedPrice(4),
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "Item",
+            fieldName: "metadata",
+            reason: "Decimal scale changed from 2 to 4 in nested field metadata.price",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale2);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent).toContain('.select(["id", "metadata"])');
+      expect(scriptContent).toContain(".set({ metadata: row.metadata })");
       expect(scriptContent).not.toContain("No data migration needed");
     });
 
@@ -339,7 +389,7 @@ describe("template-generator", () => {
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
 
       expect(scriptContent).toContain('.where("price", "is", null)');
-      expect(scriptContent).toContain(".set({ price: row.price })");
+      expect(scriptContent).toContain(".set({ price: row.price! })");
     });
 
     test("should preserve unique migration when decimal scale also changes", async () => {
@@ -375,6 +425,48 @@ describe("template-generator", () => {
 
       expect(scriptContent).toContain("const duplicates");
       expect(scriptContent).toContain(".set({ price: row.price })");
+    });
+
+    test("should preserve required, unique, and scale migrations on the same decimal field", async () => {
+      const snapshotWithScale2 = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: false, unique: false, scale: 2 },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "Item",
+            fieldName: "price",
+            before: { type: "decimal", required: false, unique: false, scale: 2 },
+            after: { type: "decimal", required: true, unique: true, scale: 4 },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "Item",
+            fieldName: "price",
+            reason: "Field changed from optional to required",
+          },
+          { typeName: "Item", fieldName: "price", reason: "Unique constraint added to field" },
+          { typeName: "Item", fieldName: "price", reason: "Decimal scale changed from 2 to 4" },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale2);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent).toContain('.where("price", "is", null)');
+      expect(scriptContent).toContain("const duplicates");
+      expect(scriptContent).toContain(".set({ price: row.price! })");
     });
 
     test("should generate migration script for enum values removal", async () => {

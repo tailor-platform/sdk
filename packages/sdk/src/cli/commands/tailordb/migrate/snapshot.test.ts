@@ -630,6 +630,34 @@ describe("snapshot", () => {
         expect(diff.hasBreakingChanges).toBe(true);
         expect(diff.breakingChanges[0]!.reason).toContain("Decimal scale changed");
       });
+
+      test("classifies a nested decimal scale change as breaking", () => {
+        const snapshotWithNestedPrice = (scale: number): SchemaSnapshot => ({
+          ...createEmptySnapshot(),
+          types: {
+            Item: {
+              name: "Item",
+              pluralForm: "Items",
+              fields: {
+                id: { type: "uuid", required: true },
+                metadata: {
+                  type: "nested",
+                  required: true,
+                  fields: {
+                    price: { type: "decimal", required: true, scale },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+        const diff = compareSnapshots(snapshotWithNestedPrice(2), snapshotWithNestedPrice(4));
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("metadata.price");
+        expect(diff.requiresMigrationScript).toBe(true);
+      });
     });
 
     test("detects enum values removal (breaking change)", () => {

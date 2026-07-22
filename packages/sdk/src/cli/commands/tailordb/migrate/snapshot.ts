@@ -958,6 +958,36 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
 }
 
 /**
+ * Find a decimal scale change within a field, including nested fields.
+ * @param oldField - Previous field configuration
+ * @param newField - Current field configuration
+ * @param path - Nested path accumulated below the top-level field
+ * @returns The first changed decimal path and scales, or null when none changed
+ */
+function findDecimalScaleChange(
+  oldField: SnapshotFieldConfig,
+  newField: SnapshotFieldConfig,
+  path: string[] = [],
+): { path: string[]; oldScale: number | undefined; newScale: number | undefined } | null {
+  if (
+    oldField.type === "decimal" &&
+    newField.type === "decimal" &&
+    oldField.scale !== newField.scale
+  ) {
+    return { path, oldScale: oldField.scale, newScale: newField.scale };
+  }
+
+  for (const [fieldName, oldNestedField] of Object.entries(oldField.fields ?? {})) {
+    const newNestedField = newField.fields?.[fieldName];
+    if (!newNestedField) continue;
+    const change = findDecimalScaleChange(oldNestedField, newNestedField, [...path, fieldName]);
+    if (change) return change;
+  }
+
+  return null;
+}
+
+/**
  * Determine if a field change is a breaking change
  * @param {string} typeName - Name of the type containing the field
  * @param {string} fieldName - Name of the field being changed
@@ -1038,17 +1068,17 @@ function isBreakingFieldChange(
 
   // Decimal scale changed - breaking (rows stored under the old scale must be
   // re-saved so their stored precision matches the new schema)
-  if (
-    oldField &&
-    newField &&
-    oldField.type === "decimal" &&
-    newField.type === "decimal" &&
-    oldField.scale !== newField.scale
-  ) {
+  const decimalScaleChange =
+    oldField && newField ? findDecimalScaleChange(oldField, newField) : null;
+  if (decimalScaleChange) {
+    const nestedPath =
+      decimalScaleChange.path.length > 0
+        ? ` in nested field ${fieldName}.${decimalScaleChange.path.join(".")}`
+        : "";
     return {
       typeName,
       fieldName,
-      reason: `Decimal scale changed from ${oldField.scale} to ${newField.scale}`,
+      reason: `Decimal scale changed from ${decimalScaleChange.oldScale} to ${decimalScaleChange.newScale}${nestedPath}`,
     };
   }
 
