@@ -24,7 +24,7 @@ import {
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
 } from "#/cli/commands/tailordb/migrate/types";
-import { type OperatorClient } from "#/cli/shared/client";
+import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { logger, styles } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
 import { spinner } from "#/cli/shared/spinner";
@@ -92,8 +92,11 @@ async function getCurrentMigrationNumber(
     }
     const num = parseMigrationLabelNumber(label);
     return num ?? 0;
-  } catch {
-    return 0;
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return 0;
+    }
+    throw error;
   }
 }
 

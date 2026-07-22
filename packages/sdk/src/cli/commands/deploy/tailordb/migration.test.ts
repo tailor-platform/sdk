@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { describe, expect, test, vi, aroundAll, aroundEach } from "vitest";
 import {
@@ -252,6 +253,39 @@ describe("migration", () => {
 
       const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
       expect(result).toHaveLength(0);
+    });
+
+    test("treats a missing remote namespace as migration 0", async () => {
+      const client = {
+        getMetadata: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+      } as unknown as OperatorClient;
+      writeDiffFile(testDir, 1, createMockMigrationDiff());
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
+
+      expect(result.map((migration) => migration.number)).toEqual([1]);
+    });
+
+    test.each([
+      ["unavailable", new ConnectError("unavailable", Code.Unavailable)],
+      ["permission denied", new ConnectError("permission denied", Code.PermissionDenied)],
+    ])("propagates %s errors while reading the migration checkpoint", async (_name, error) => {
+      const client = {
+        getMetadata: vi.fn().mockRejectedValue(error),
+      } as unknown as OperatorClient;
+      writeDiffFile(testDir, 1, createMockMigrationDiff());
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      await expect(
+        detectPendingMigrations(client, workspaceId, namespacesWithMigrations),
+      ).rejects.toBe(error);
     });
 
     test("detects single pending migration", async () => {

@@ -564,6 +564,9 @@ export async function applyTailorDB(
     // after planning (e.g. while this one waited at the confirmation prompt),
     // and executing a stale pending set would re-run applied scripts.
     const { namespacesWithMigrations } = migrationContext;
+    for (const { namespace, migrationsDir } of namespacesWithMigrations) {
+      assertValidMigrationFiles(migrationsDir, namespace);
+    }
     const pendingMigrations = await detectPendingMigrations(
       client,
       migrationContext.workspaceId,

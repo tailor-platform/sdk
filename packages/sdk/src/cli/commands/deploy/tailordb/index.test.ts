@@ -5,6 +5,12 @@ import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resou
 import * as path from "pathe";
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
+import {
+  formatMigrationNumber,
+  type SnapshotFieldConfig,
+  type TailorDBSnapshotType,
+} from "#/cli/commands/tailordb/migrate/snapshot";
+import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { sdkNameLabelKey } from "../label";
 import {
@@ -14,10 +20,6 @@ import {
   validateAndDetectMigrations,
 } from ".";
 import type { FieldDiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
-import type {
-  SnapshotFieldConfig,
-  TailorDBSnapshotType,
-} from "#/cli/commands/tailordb/migrate/snapshot";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -1221,6 +1223,26 @@ describe("applyTailorDB migration label reconciliation", () => {
         labels: expect.objectContaining({ "sdk-migration": "m0000" }),
       }),
     );
+  });
+
+  test("revalidates migration file integrity immediately before apply", async () => {
+    for (const migrationNumber of [1, 2]) {
+      const migrationDir = path.join(tmpDir, formatMigrationNumber(migrationNumber));
+      fs.mkdirSync(migrationDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(migrationDir, "diff.json"),
+        JSON.stringify(createMockMigrationDiff({ namespace: "test-tailordb" }), null, 2),
+      );
+    }
+    const planResult = makePlanResult(true);
+    fs.rmSync(path.join(tmpDir, "0001", "diff.json"));
+    const { client } = createMigrationClient({ "sdk-migration": "m0002" });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /Migration 0001 is missing \(gap in sequence\)/,
+    );
+    expect(client.createTailorDBService).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
   });
 
   function userSnapshotType(): TailorDBSnapshotType {
