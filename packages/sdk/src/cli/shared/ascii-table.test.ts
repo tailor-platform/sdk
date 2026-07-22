@@ -4,11 +4,13 @@ import { renderTable } from "./ascii-table";
 
 // eslint-disable-next-line no-control-regex
 const ANSI_ESCAPE_PATTERN = /\x1b\[[0-9;]*m/g;
+const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 function visualWidth(line: string): number {
   let width = 0;
-  for (const char of line.replace(ANSI_ESCAPE_PATTERN, "")) {
-    width += eastAsianWidth(char.codePointAt(0) ?? 0);
+  for (const { segment } of graphemeSegmenter.segment(line.replace(ANSI_ESCAPE_PATTERN, ""))) {
+    const codePoint = segment.codePointAt(0);
+    width += codePoint === undefined ? 0 : eastAsianWidth(codePoint);
   }
   return width;
 }
@@ -182,8 +184,50 @@ describe("renderTable", () => {
     expect(result).toContain("\x1b[33m有効\x1b[39m");
   });
 
-  test("does not throw on an empty data array", () => {
-    expect(() => renderTable([])).not.toThrow();
+  test("returns an empty string for an empty data array", () => {
+    expect(renderTable([])).toBe("");
+  });
+
+  test("throws when rows have an inconsistent number of columns", () => {
+    expect(() =>
+      renderTable([
+        ["a", "b", "c"],
+        ["d", "e"],
+      ]),
+    ).toThrow(/same number of columns/);
+  });
+
+  test("does not throw on a very large number of rows", () => {
+    const rows = Array.from({ length: 150_000 }, (_, i) => [String(i), "value"]);
+    let result = "";
+    expect(() => {
+      result = renderTable(rows);
+    }).not.toThrow();
+    expect(result.split("\n").filter((line) => line.includes("│"))).toHaveLength(150_000);
+  });
+
+  test("strips stray control characters but preserves ANSI escapes", () => {
+    const result = renderTable([["a\tb", "\x1b[31mred\x1b[39m"]]);
+    expect(result).not.toContain("\t");
+    expect(result).toContain("\x1b[31mred\x1b[39m");
+    const lines = result.split("\n").filter((line) => line.includes("│"));
+    const widths = new Set(lines.map(visualWidth));
+    expect(widths.size).toBe(1);
+  });
+
+  test("measures ZWJ emoji sequences and combining marks as a single grapheme cluster", () => {
+    // man + ZWJ + woman + ZWJ + girl
+    const family = String.fromCodePoint(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467);
+    // "e" + combining acute accent (decomposed, not the precomposed "e-acute")
+    const combining = `e${String.fromCodePoint(0x0301)}`;
+    const result = renderTable([
+      ["family", family],
+      ["combining", combining],
+      ["longer-label-row", "x"],
+    ]);
+    const lines = result.split("\n").filter((line) => line.includes("│"));
+    const widths = new Set(lines.map(visualWidth));
+    expect(widths.size).toBe(1);
   });
 
   test("handles a single-column table", () => {
