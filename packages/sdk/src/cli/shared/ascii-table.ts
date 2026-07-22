@@ -23,6 +23,7 @@ function maxOf(values: number[], fallback = 0): number {
 }
 
 const ESCAPE_CODE_POINT = 0x1b;
+const TAB_WIDTH = 8;
 
 function isStrippableControlCharacter(char: string): boolean {
   const codePoint = char.codePointAt(0) ?? 0;
@@ -32,10 +33,12 @@ function isStrippableControlCharacter(char: string): boolean {
   return codePoint <= 0x1f || codePoint === 0x7f;
 }
 
-function stripControlCharacters(value: string): string {
+function normalizeControlCharacters(value: string): string {
   const chars: string[] = [];
   for (const char of value) {
-    if (!isStrippableControlCharacter(char)) {
+    if (char === "\t") {
+      chars.push(" ".repeat(TAB_WIDTH));
+    } else if (!isStrippableControlCharacter(char)) {
       chars.push(char);
     }
   }
@@ -43,7 +46,7 @@ function stripControlCharacters(value: string): string {
 }
 
 function sanitizeCell(cell: unknown): string {
-  return stripControlCharacters(String(cell ?? "").replace(CARRIAGE_RETURN_PATTERN, "\n"));
+  return normalizeControlCharacters(String(cell ?? "").replace(CARRIAGE_RETURN_PATTERN, "\n"));
 }
 
 function displayWidth(value: string): number {
@@ -87,8 +90,8 @@ function validateConsistentColumnCount(rows: string[][]): void {
  * so combining marks and ZWJ emoji sequences aren't overcounted) and strip ANSI codes
  * before measuring. Use this instead of importing a table-rendering package directly.
  * @param data - Table rows; every row must have the same number of columns. Each cell is
- * stringified, may contain embedded newlines, has `\r`/`\r\n` normalized to `\n`, and has
- * other control characters stripped.
+ * stringified, may contain embedded newlines, has `\r`/`\r\n` normalized to `\n`, has tabs
+ * expanded to spaces, and has other control characters stripped.
  * @param config - Rendering options
  * @returns The rendered table terminated with a trailing newline, or `""` for empty input
  */

@@ -224,10 +224,21 @@ describe("renderTable", () => {
     ).toThrow(/same number of columns/);
   });
 
-  test("strips stray control characters but preserves ANSI escapes", () => {
+  test("expands tabs to 8 spaces", () => {
     const red = (text: string): string => `\x1b[31m${text}\x1b[39m`;
     const result = renderTable([["a\tb", red("red")]]);
-    expect(result).toBe(expectedTable("┌────┬─────┐", `│ ab │ ${red("red")} │`, "└────┴─────┘"));
+    expect(result).toBe(
+      expectedTable(
+        "┌────────────┬─────┐",
+        `│ a        b │ ${red("red")} │`,
+        "└────────────┴─────┘",
+      ),
+    );
+  });
+
+  test("strips other stray control characters but preserves ANSI escapes", () => {
+    const result = renderTable([["a\bb", "x"]]);
+    expect(result).toBe(expectedTable("┌────┬───┐", "│ ab │ x │", "└────┴───┘"));
   });
 
   test("measures ZWJ emoji sequences and combining marks as a single grapheme cluster", () => {
