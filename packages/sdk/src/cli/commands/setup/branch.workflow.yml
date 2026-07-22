@@ -74,7 +74,7 @@ jobs:
       - id: tailor-plan
         # Fork PRs cannot read secrets; the checks above still run for them.
         if: github.event_name != 'pull_request' || !github.event.pull_request.head.repo.fork
-        uses: tailor-platform/actions/plan@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/plan@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2
         with:
           workspace-id: ${{ vars.TAILOR_PLATFORM_WORKSPACE_ID }}
           package-manager: __PACKAGE_MANAGER__
