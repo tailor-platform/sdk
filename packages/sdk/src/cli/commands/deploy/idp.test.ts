@@ -1,16 +1,14 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { Code, ConnectError } from "@connectrpc/connect";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyIdP, type planIdP } from "./idp";
-import type { OperatorClient } from "@/cli/shared/client";
+import type { OperatorClient } from "#/cli/shared/client";
 
 describe("applyIdP phase separation", () => {
-  // Helper to create mock client with spies for delete operations
   function createMockClientWithSpies() {
     return {
-      // Delete methods
       deleteIdPClient: vi.fn().mockResolvedValue({}),
       deleteIdPService: vi.fn().mockResolvedValue({}),
       deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
-      // Create/update methods for completeness
       createIdPService: vi.fn().mockResolvedValue({}),
       createIdPClient: vi.fn().mockResolvedValue({}),
       updateIdPClient: vi.fn().mockResolvedValue({}),
@@ -20,7 +18,6 @@ describe("applyIdP phase separation", () => {
     } as unknown as OperatorClient;
   }
 
-  // Helper to create a mock plan result with deletes
   function createMockPlanResult() {
     return {
       changeSet: {
@@ -38,7 +35,7 @@ describe("applyIdP phase separation", () => {
           ],
           title: "IdP Services",
           isEmpty: () => false,
-          print: () => {},
+          lines: () => [],
         },
         client: {
           creates: [],
@@ -55,6 +52,75 @@ describe("applyIdP phase separation", () => {
           ],
           title: "IdP Clients",
           isEmpty: () => false,
+          lines: () => [],
+        },
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+    } as unknown as Awaited<ReturnType<typeof planIdP>>;
+  }
+
+  aroundEach(async (runTest) => {
+    vi.clearAllMocks();
+    await runTest();
+  });
+
+  test.each([
+    [
+      "delete-resources phase deletes clients and vaults, but NOT services",
+      "delete-resources",
+      1,
+      1,
+      0,
+    ],
+    ["delete-services phase deletes ONLY services", "delete-services", 0, 0, 1],
+    ["create-update phase does not delete anything", "create-update", 0, 0, 0],
+  ] as const)("%s", async (_, phase, clientCalls, vaultCalls, serviceCalls) => {
+    const client = createMockClientWithSpies();
+    const planResult = createMockPlanResult();
+
+    await applyIdP(client, planResult, phase);
+
+    expect(client.deleteIdPClient).toHaveBeenCalledTimes(clientCalls);
+    expect(client.deleteSecretManagerVault).toHaveBeenCalledTimes(vaultCalls);
+    expect(client.deleteIdPService).toHaveBeenCalledTimes(serviceCalls);
+  });
+});
+
+describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
+  function createPlanResult(opts: {
+    op: "create" | "update";
+    origins: string[];
+  }): Awaited<ReturnType<typeof planIdP>> {
+    const entry = {
+      name: "test-idp",
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "test-idp",
+        userAuthPolicy: {
+          enableMfa: true,
+          allowedReturnOrigins: [...opts.origins],
+        },
+      },
+      metaRequest: { trn: "", labels: {} },
+    };
+    return {
+      changeSet: {
+        service: {
+          creates: opts.op === "create" ? [entry] : [],
+          updates: opts.op === "update" ? [entry] : [],
+          deletes: [],
+          title: "IdP Services",
+          isEmpty: () => false,
+          print: () => {},
+        },
+        client: {
+          creates: [],
+          updates: [],
+          deletes: [],
+          title: "IdP Clients",
+          isEmpty: () => true,
           print: () => {},
         },
       },
@@ -64,47 +130,103 @@ describe("applyIdP phase separation", () => {
     } as unknown as Awaited<ReturnType<typeof planIdP>>;
   }
 
-  beforeEach(() => {
+  const defaultGetStaticWebsite = () =>
+    vi.fn().mockResolvedValue({ staticwebsite: { url: "https://my-site.example.com" } });
+
+  function createClient(getStaticWebsite = defaultGetStaticWebsite()) {
+    return {
+      createIdPService: vi.fn().mockResolvedValue({}),
+      updateIdPService: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+      getStaticWebsite,
+    } as unknown as OperatorClient;
+  }
+
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
-  test("delete-resources phase deletes clients and vaults, but NOT services", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
+  test("resolves :url placeholder before createIdPService", async () => {
+    const client = createClient();
+    await applyIdP(
+      client,
+      createPlanResult({ op: "create", origins: ["my-site:url", "https://other.example.com"] }),
+      "create-update",
+    );
 
-    await applyIdP(client, planResult, "delete-resources");
-
-    // Clients should be deleted
-    expect(client.deleteIdPClient).toHaveBeenCalledTimes(1);
-    // Secret vaults should be deleted
-    expect(client.deleteSecretManagerVault).toHaveBeenCalledTimes(1);
-    // Services should NOT be deleted
-    expect(client.deleteIdPService).not.toHaveBeenCalled();
+    expect(client.getStaticWebsite).toHaveBeenCalledWith({
+      workspaceId: "test-workspace",
+      name: "my-site",
+    });
+    expect(client.createIdPService).toHaveBeenCalledTimes(1);
+    const req = (client.createIdPService as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+      userAuthPolicy: { allowedReturnOrigins: string[] };
+    };
+    expect(req.userAuthPolicy.allowedReturnOrigins).toEqual([
+      "https://my-site.example.com",
+      "https://other.example.com",
+    ]);
   });
 
-  test("delete-services phase deletes ONLY services", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
+  test("resolves :url placeholder before updateIdPService", async () => {
+    const client = createClient();
+    await applyIdP(
+      client,
+      createPlanResult({ op: "update", origins: ["my-site:url"] }),
+      "create-update",
+    );
 
-    await applyIdP(client, planResult, "delete-services");
-
-    // Clients should NOT be deleted
-    expect(client.deleteIdPClient).not.toHaveBeenCalled();
-    // Secret vaults should NOT be deleted
-    expect(client.deleteSecretManagerVault).not.toHaveBeenCalled();
-    // Services should be deleted
-    expect(client.deleteIdPService).toHaveBeenCalledTimes(1);
+    expect(client.updateIdPService).toHaveBeenCalledTimes(1);
+    const req = (client.updateIdPService as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+      userAuthPolicy: { allowedReturnOrigins: string[] };
+    };
+    expect(req.userAuthPolicy.allowedReturnOrigins).toEqual(["https://my-site.example.com"]);
   });
 
-  test("create-update phase does not delete anything", async () => {
-    const client = createMockClientWithSpies();
-    const planResult = createMockPlanResult();
+  test("skips static-website lookup when allowedReturnOrigins has no placeholder", async () => {
+    const client = createClient();
+    await applyIdP(
+      client,
+      createPlanResult({ op: "create", origins: ["https://app.example.com"] }),
+      "create-update",
+    );
 
-    await applyIdP(client, planResult, "create-update");
+    expect(client.getStaticWebsite).not.toHaveBeenCalled();
+    const req = (client.createIdPService as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+      userAuthPolicy: { allowedReturnOrigins: string[] };
+    };
+    expect(req.userAuthPolicy.allowedReturnOrigins).toEqual(["https://app.example.com"]);
+  });
 
-    // No deletes should happen in create-update phase
-    expect(client.deleteIdPClient).not.toHaveBeenCalled();
-    expect(client.deleteSecretManagerVault).not.toHaveBeenCalled();
-    expect(client.deleteIdPService).not.toHaveBeenCalled();
+  test("fails fast when a placeholder cannot be resolved (NotFound)", async () => {
+    const client = createClient(
+      vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+    );
+
+    await expect(
+      applyIdP(
+        client,
+        createPlanResult({ op: "create", origins: ["missing-site:url"] }),
+        "create-update",
+      ),
+    ).rejects.toThrow(/1 of 1 entries could not be resolved/);
+    expect(client.createIdPService).not.toHaveBeenCalled();
+  });
+
+  test("fails fast when a placeholder resolves to a website without URL", async () => {
+    const client = createClient(vi.fn().mockResolvedValue({ staticwebsite: { url: "" } }));
+
+    await expect(
+      applyIdP(
+        client,
+        createPlanResult({
+          op: "update",
+          origins: ["unassigned-site:url", "https://other.example.com"],
+        }),
+        "create-update",
+      ),
+    ).rejects.toThrow(/1 of 2 entries could not be resolved/);
+    expect(client.updateIdPService).not.toHaveBeenCalled();
   });
 });

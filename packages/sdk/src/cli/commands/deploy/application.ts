@@ -1,27 +1,32 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type Application as ProtoApplication,
   Subgraph_ServiceType,
   type SubgraphSchema,
-} from "@tailor-proto/tailor/v1/application_resource_pb";
-import { fetchAll, resolveStaticWebsiteUrls, type OperatorClient } from "@/cli/shared/client";
-import { symbols } from "@/cli/shared/logger";
-import { HTTP_METHODS } from "@/parser/service/http-adapter";
-import { assertDefined } from "@/utils/assert";
+} from "@tailor-platform/tailor-proto/application_resource_pb";
+import {
+  fetchAllTolerant,
+  getOrNull,
+  resolveStaticWebsiteUrls,
+  type OperatorClient,
+} from "#/cli/shared/client";
+import { symbols } from "#/cli/shared/logger";
+import { HTTP_METHODS } from "#/parser/service/http-adapter/index";
+import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { Application } from "@/cli/services/application";
-import type { HttpAdapterBundleResult } from "@/cli/services/http-adapter/bundler";
+import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
+import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
+import type { Application } from "#/cli/services/application";
+import type { HttpAdapterBundleResult } from "#/cli/services/http-adapter/bundler";
 import type {
   DeleteApplicationRequestSchema,
   CreateApplicationRequestSchema,
   UpdateApplicationRequestSchema,
-} from "@tailor-proto/tailor/v1/application_pb";
-import type { HttpAdapterSchema } from "@tailor-proto/tailor/v1/http_adapter_resource_pb";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+} from "@tailor-platform/tailor-proto/application_pb";
+import type { HttpAdapterSchema } from "@tailor-platform/tailor-proto/http_adapter_resource_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply application changes for the given phase.
@@ -245,20 +250,13 @@ export async function planApplication(
     UpdateApplication
   >("Applications");
 
-  const existingApplications = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
-      const { applications, nextPageToken } = await client.listApplications({
-        workspaceId,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [applications, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+  const existingApplications = await fetchAllTolerant(async (pageToken, maxPageSize) => {
+    const { applications, nextPageToken } = await client.listApplications({
+      workspaceId,
+      pageToken,
+      pageSize: maxPageSize,
+    });
+    return [applications, nextPageToken];
   });
 
   if (forRemoval) {
@@ -304,10 +302,12 @@ export async function planApplication(
       authIdpConfigName = idProvider.name;
     }
   } else if (application.config.auth) {
-    // Retrieve idpConfig from remote when auth references an external namespace
+    // Prefer peer plans for same-run multi-config deploys; otherwise read remote state.
     authNamespace = application.config.auth.name;
-    const idpConfigs = await fetchAll(async (pageToken, maxPageSize) => {
-      try {
+    if (context.externalAuthIdpConfigNames?.has(authNamespace)) {
+      authIdpConfigName = context.externalAuthIdpConfigNames.get(authNamespace);
+    } else {
+      const idpConfigs = await fetchAllTolerant(async (pageToken, maxPageSize) => {
         const { idpConfigs, nextPageToken } = await client.listAuthIDPConfigs({
           workspaceId,
           namespaceName: assertDefined(
@@ -318,17 +318,12 @@ export async function planApplication(
           pageSize: maxPageSize,
         });
         return [idpConfigs, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
+      });
+      if (idpConfigs.length > 0) {
+        const [firstConfig] = idpConfigs;
+        if (firstConfig) {
+          authIdpConfigName = firstConfig.name;
         }
-        throw error;
-      }
-    });
-    if (idpConfigs.length > 0) {
-      const [firstConfig] = idpConfigs;
-      if (firstConfig) {
-        authIdpConfigName = firstConfig.name;
       }
     }
   }
@@ -337,9 +332,7 @@ export async function planApplication(
     appName: application.name,
     appId: application.id,
   });
-  const expectedLocalWebsites = new Set(
-    application.staticWebsiteServices.map((website) => website.name),
-  );
+  const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,
     workspaceId,
@@ -430,17 +423,13 @@ async function fetchAppLabels(
   workspaceId: string,
   appName: string,
 ): Promise<Record<string, string> | undefined> {
-  try {
+  const response = await getOrNull(async () => {
     const { metadata } = await client.getMetadata({
       trn: resourceTrn(workspaceId, "application", appName),
     });
-    return metadata?.labels;
-  } catch (error) {
-    if (error instanceof ConnectError && error.code === Code.NotFound) {
-      return undefined;
-    }
-    throw error;
-  }
+    return metadata;
+  });
+  return response?.labels;
 }
 
 /**

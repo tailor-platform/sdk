@@ -2,7 +2,8 @@ import { z } from "zod";
 
 /**
  * Normalize IdPGqlOperationsConfig (alias or object) to IdPGqlOperations object.
- * "query" alias expands to read-only mode: { create: false, update: false, delete: false, read: true, sendPasswordResetEmail: false }
+ * "query" alias expands to read-only mode: every mutation is disabled while
+ * queries (`read`, `requestMfaSettingsUrl`) stay enabled.
  * @param config - The config to normalize
  * @returns The normalized IdPGqlOperations object
  */
@@ -15,6 +16,8 @@ function normalizeIdPGqlOperations(
         delete?: boolean;
         read?: boolean;
         sendPasswordResetEmail?: boolean;
+        requestMfaSettingsUrl?: boolean;
+        unenrollMfa?: boolean;
       },
 ) {
   if (config === "query") {
@@ -24,6 +27,8 @@ function normalizeIdPGqlOperations(
       delete: false,
       read: true,
       sendPasswordResetEmail: false,
+      requestMfaSettingsUrl: true,
+      unenrollMfa: false,
     };
   }
   return config;
@@ -45,6 +50,11 @@ export const IdPGqlOperationsSchema = z
         .boolean()
         .optional()
         .describe("Enable _sendPasswordResetEmail mutation (default: true)"),
+      requestMfaSettingsUrl: z
+        .boolean()
+        .optional()
+        .describe("Enable _requestMfaSettingsUrl query (default: true)"),
+      unenrollMfa: z.boolean().optional().describe("Enable _unenrollMfa mutation (default: true)"),
     }),
   ])
   .describe(
@@ -53,6 +63,15 @@ export const IdPGqlOperationsSchema = z
   .transform((val) => normalizeIdPGqlOperations(val));
 
 export const IdPLangSchema = z.enum(["en", "ja"]).describe("IdP UI language");
+
+// Origins are either a literal http(s) origin (scheme + host + optional port,
+// no path/query/fragment) or a static-website `<name>:url` placeholder that
+// the CLI resolves to a real origin at apply time. The placeholder branch
+// uses the same slug rule as the platform's static-website name validator so
+// typos like `https://app.example.com:url` are rejected instead of being
+// silently interpreted as a website name at apply time.
+const allowedReturnOriginPattern =
+  /^(https?:\/\/[a-zA-Z0-9.-]+(:[0-9]+)?|[a-z0-9][a-z0-9-]{1,61}[a-z0-9]:url)$/;
 
 export const IdPUserAuthPolicySchema = z
   .object({
@@ -103,6 +122,34 @@ export const IdPUserAuthPolicySchema = z
     allowGoogleOauth: z.boolean().optional().describe("Enable Google OAuth login"),
     allowMicrosoftOauth: z.boolean().optional().describe("Enable Microsoft OAuth login"),
     disablePasswordAuth: z.boolean().optional().describe("Disable password-based authentication"),
+    enableMfa: z
+      .boolean()
+      .optional()
+      .describe("Make TOTP MFA available for users in this namespace"),
+    requireMfa: z
+      .boolean()
+      .optional()
+      .describe(
+        "Require TOTP MFA enrollment and challenge for password-authenticated users (requires enableMfa)",
+      ),
+    allowedReturnOrigins: z
+      .array(
+        z
+          .string()
+          .regex(
+            allowedReturnOriginPattern,
+            'must be an http(s) origin like "https://app.example.com" (scheme + host + optional port, no path/query/fragment) or a static-website placeholder like "<name>:url"',
+          ),
+      )
+      .optional()
+      .describe(
+        "Application origins (scheme + host + optional port) allowed as MFA self-service return targets",
+      ),
+    mfaIssuer: z
+      .string()
+      .max(64, "mfaIssuer must be 64 characters or less")
+      .optional()
+      .describe("Label shown next to the user account in authenticator apps"),
   })
   .refine(
     (data) =>
@@ -172,7 +219,20 @@ export const IdPUserAuthPolicySchema = z
   .refine((data) => !data.disablePasswordAuth || !data.allowSelfPasswordReset, {
     message: "disablePasswordAuth cannot be used with allowSelfPasswordReset",
     path: ["disablePasswordAuth"],
-  });
+  })
+  .refine((data) => !data.requireMfa || data.enableMfa === true, {
+    message: "requireMfa requires enableMfa to be enabled",
+    path: ["requireMfa"],
+  })
+  .refine(
+    (data) =>
+      !data.enableMfa || (data.allowedReturnOrigins && data.allowedReturnOrigins.length > 0),
+    {
+      message:
+        "enableMfa requires allowedReturnOrigins to list at least one origin so MFA self-service has a valid return target",
+      path: ["enableMfa"],
+    },
+  );
 
 const emailFieldSchema = z
   .string()
@@ -247,7 +307,8 @@ export const IdPPermissionSchema = z
     read: z.array(IdPActionPermissionSchema).readonly(),
     update: z.array(IdPActionPermissionSchema).readonly(),
     delete: z.array(IdPActionPermissionSchema).readonly(),
-    sendPasswordResetEmail: z.array(IdPActionPermissionSchema).readonly(),
+    sendPasswordResetEmail: z.array(IdPActionPermissionSchema).readonly().optional(),
+    unenrollMfa: z.array(IdPActionPermissionSchema).readonly().optional(),
   })
   .describe("Per-operation permission policies for IdP users");
 
@@ -278,4 +339,27 @@ export const IdPSchema = z
       "Per-operation permission policies for IdP users",
     ),
   })
+  .refine(
+    (data) =>
+      !data.userAuthPolicy?.enableMfa ||
+      data.gqlOperations?.unenrollMfa === false ||
+      (data.permission !== undefined && data.permission.unenrollMfa !== undefined),
+    {
+      message:
+        "permission.unenrollMfa must be set explicitly when userAuthPolicy.enableMfa is true (set [{ conditions: [...], permit: true }] to allow, or [] to deny all). permission itself must also be defined. The requirement is only relaxed when gqlOperations.unenrollMfa is false.",
+      path: ["permission", "unenrollMfa"],
+    },
+  )
+  .refine(
+    (data) =>
+      !data.permission ||
+      data.userAuthPolicy?.disablePasswordAuth === true ||
+      data.gqlOperations?.sendPasswordResetEmail === false ||
+      data.permission.sendPasswordResetEmail !== undefined,
+    {
+      message:
+        "permission.sendPasswordResetEmail must be set explicitly when password authentication is enabled (set [{ conditions: [...], permit: true }] to allow, or [] to deny; only optional when userAuthPolicy.disablePasswordAuth is true or gqlOperations.sendPasswordResetEmail is false)",
+      path: ["permission", "sendPasswordResetEmail"],
+    },
+  )
   .brand("IdPConfig");

@@ -1,5 +1,6 @@
 {
   "name": "example",
+  "version": "0.0.0",
   "private": true,
   "description": "Example for Tailor Platform SDK usage",
   "license": "MIT",
@@ -21,8 +22,9 @@
     "analyze:bundle": "tsx tests/scripts/analyze_minified_size.ts",
     "lint": "oxlint --type-aware .",
     "lint:fix": "oxlint --type-aware . --fix",
-    "typecheck": "pnpm generate && tsc --noEmit",
-    "typecheck:go": "tsgo"
+    "typecheck": "pnpm generate && pnpm run typecheck:generated",
+    "typecheck:generated": "tsc --noEmit",
+    "typecheck:go": "tsgo --tsBuildInfoFile ./.tsgo.tsbuildinfo"
   },
   "dependencies": {
     "@tailor-platform/sdk": "workspace:^",
@@ -30,19 +32,21 @@
     "date-fns": "4.4.0"
   },
   "devDependencies": {
+    "@bufbuild/protobuf": "2.12.1",
     "@connectrpc/connect": "2.1.2",
     "@connectrpc/connect-node": "2.1.2",
-    "@types/node": "24.13.2",
-    "@typescript/native-preview": "7.0.0-dev.20260614.1",
-    "graphql": "16.14.2",
+    "@types/node": "24.13.3",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "graphql": "17.0.2",
     "graphql-request": "7.4.0",
     "multiline-ts": "4.0.1",
-    "oxfmt": "0.54.0",
-    "oxlint": "1.69.0",
-    "oxlint-tsgolint": "0.23.0",
-    "tsx": "4.22.4",
+    "oxfmt": "0.58.0",
+    "oxlint": "1.73.0",
+    "oxlint-tsgolint": "0.25.0",
+    "tsdown": "0.22.9",
+    "tsx": "4.23.1",
     "typescript": "6.0.3",
-    "vitest": "4.1.8"
+    "vitest": "4.1.10"
   },
   "engines": {
     "node": ">= 22.14.0"

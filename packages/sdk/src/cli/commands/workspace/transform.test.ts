@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { afterEach, describe, expect, test, vi } from "vitest";
-import { logger } from "@/cli/shared/logger";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import {
   workspaceDetailsWithFolderName,
   workspaceDisplayName,
@@ -8,8 +8,8 @@ import {
   workspaceInfoWithFolderName,
   workspaceNameTransformer,
 } from "./transform";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { Workspace } from "@tailor-proto/tailor/v1/workspace_resource_pb";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
 function workspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
@@ -33,7 +33,8 @@ function client(folderName = "dev"): OperatorClient {
 }
 
 describe("workspace transform", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     vi.useRealTimers();
@@ -45,6 +46,8 @@ describe("workspace transform", () => {
     expect(info).toMatchObject({
       name: "sample-space",
       folderName: "dev",
+      organizationId: "organization-1",
+      folderId: "folder-1",
     });
     expect(workspaceDisplayName(info)).toBe("dev/sample-space");
   });

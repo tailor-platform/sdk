@@ -1,4 +1,4 @@
-import type { AuthInvoker } from "@/types/auth.generated";
+import type { AuthInvoker } from "#/types/auth.generated";
 
 /**
  * Normalize an authInvoker value to the object form required by the proto payload.

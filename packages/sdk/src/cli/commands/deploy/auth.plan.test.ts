@@ -4,17 +4,17 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import {
   AuthOAuth2Client_ClientType,
   AuthOAuth2Client_GrantType,
-} from "@tailor-proto/tailor/v1/auth_resource_pb";
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
-import { defineApplication } from "@/cli/services/application";
-import { logger } from "@/cli/shared/logger";
-import { defineConfig } from "@/configure/config";
-import { defineAuth } from "@/configure/services/auth";
-import { t } from "@/configure/types/type";
+import { defineApplication } from "#/cli/services/application";
+import { logger } from "#/cli/shared/logger";
+import { defineConfig } from "#/configure/config/index";
+import { defineAuth } from "#/configure/services/auth/index";
+import { t } from "#/configure/types/type";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
+import type { Application } from "#/cli/services/application";
+import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
-import type { Application } from "@/cli/services/application";
-import type { OperatorClient } from "@/cli/shared/client";
 
 vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>;
@@ -30,23 +30,41 @@ vi.mock("./label", async (importOriginal) => {
   };
 });
 
-vi.mock("./change-set", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
-  const createChangeSet = original.createChangeSet as (title: string) => {
-    print: () => void;
-  };
-  return {
-    ...original,
-    createChangeSet: (title: string) => ({
-      ...createChangeSet(title),
-      print: () => {},
-    }),
-  };
-});
+vi.mock("./change-set", async (importOriginal) => importOriginal());
 
 const workspaceId = "test-workspace";
 const appName = "test-app";
 const sdkVersion = "v1-0-0";
+
+function remoteOAuth2Client(overrides: {
+  description?: string;
+  redirectUris: string[];
+  accessTokenLifetime: { seconds: bigint };
+  refreshTokenLifetime: { seconds: bigint };
+}) {
+  return {
+    name: "sample",
+    description: overrides.description ?? "Sample client",
+    grantTypes: [
+      AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
+      AuthOAuth2Client_GrantType.REFRESH_TOKEN,
+    ],
+    redirectUris: overrides.redirectUris,
+    clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
+    accessTokenLifetime: overrides.accessTokenLifetime,
+    refreshTokenLifetime: overrides.refreshTokenLifetime,
+    requireDpop: false,
+  };
+}
+
+const managerMachineUserRemote = {
+  name: "manager-machine-user",
+  attributes: ["role", "department"],
+  attributeMap: {
+    department: fromJson(ValueSchema, "sales"),
+    role: fromJson(ValueSchema, "manager"),
+  },
+};
 
 function createMockApplication(): Application {
   return {
@@ -236,31 +254,14 @@ function createMockClient(opts?: {
   } as unknown as OperatorClient;
 }
 
-function createContext(client: OperatorClient): PlanContext {
+function createContext(
+  client: OperatorClient,
+  application: Application = createMockApplication(),
+): PlanContext {
   return {
     client,
     workspaceId,
-    application: createMockApplication(),
-    forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
-  };
-}
-
-function createBuiltInIdPContext(client: OperatorClient): PlanContext {
-  return {
-    client,
-    workspaceId,
-    application: createMockApplicationWithBuiltInIdP(),
-    forRemoval: false,
-    config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
-  };
-}
-
-function createCustomOAuth2LifetimeContext(client: OperatorClient): PlanContext {
-  return {
-    client,
-    workspaceId,
-    application: createMockApplicationWithCustomOAuth2Lifetimes(),
+    application,
     forRemoval: false,
     config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
   };
@@ -270,30 +271,13 @@ describe("planAuth", () => {
   test("marks auth service, machine user, and oauth2 client unchanged when remote matches", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
-      machineUsers: [
-        {
-          name: "manager-machine-user",
-          attributes: ["role", "department"],
-          attributeMap: {
-            department: fromJson(ValueSchema, "sales"),
-            role: fromJson(ValueSchema, "manager"),
-          },
-        },
-      ],
+      machineUsers: [managerMachineUserRemote],
       oauth2Clients: [
-        {
-          name: "sample",
-          description: "Sample client",
-          grantTypes: [
-            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
-            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
-          ],
+        remoteOAuth2Client({
           redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
-          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
           accessTokenLifetime: { seconds: 86400n },
           refreshTokenLifetime: { seconds: 604800n },
-          requireDpop: false,
-        },
+        }),
       ],
     });
 
@@ -305,6 +289,38 @@ describe("planAuth", () => {
     expect(result.changeSet.service.updates).toHaveLength(0);
     expect(result.changeSet.machineUser.updates).toHaveLength(0);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
+  });
+
+  test("marks machine user without attributes unchanged when remote attribute map is empty", async () => {
+    const application = {
+      name: appName,
+      staticWebsiteServices: [],
+      authService: {
+        resolveNamespaces: vi.fn().mockResolvedValue(undefined),
+        connections: {},
+        config: {
+          name: "auth-a",
+          publishSessionEvents: true,
+          machineUsers: {
+            // parse output for a machine user whose attributes were all
+            // omitted or normalized away (null/undefined values)
+            "bare-machine-user": { attributes: undefined },
+          },
+        },
+        userProfile: undefined,
+      },
+    } as unknown as Application;
+
+    const client = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      machineUsers: [{ name: "bare-machine-user", attributes: [], attributeMap: {} }],
+    });
+
+    const result = await planAuth(createContext(client, application));
+
+    expect(result.changeSet.machineUser.unchanged).toHaveLength(1);
+    expect(result.changeSet.machineUser.updates).toHaveLength(0);
+    expect(result.changeSet.machineUser.creates).toHaveLength(0);
   });
 
   test("marks auth hook unchanged when remote definition matches", async () => {
@@ -367,30 +383,13 @@ describe("planAuth", () => {
   test("marks auth child resources updated when forceApplyAll is enabled", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
-      machineUsers: [
-        {
-          name: "manager-machine-user",
-          attributes: ["role", "department"],
-          attributeMap: {
-            department: fromJson(ValueSchema, "sales"),
-            role: fromJson(ValueSchema, "manager"),
-          },
-        },
-      ],
+      machineUsers: [managerMachineUserRemote],
       oauth2Clients: [
-        {
-          name: "sample",
-          description: "Sample client",
-          grantTypes: [
-            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
-            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
-          ],
+        remoteOAuth2Client({
           redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
-          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
           accessTokenLifetime: { seconds: 86400n },
           refreshTokenLifetime: { seconds: 604800n },
-          requireDpop: false,
-        },
+        }),
       ],
     });
 
@@ -411,23 +410,17 @@ describe("planAuth", () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
       oauth2Clients: [
-        {
-          name: "sample",
-          description: "Sample client",
-          grantTypes: [
-            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
-            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
-          ],
+        remoteOAuth2Client({
           redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
-          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
           accessTokenLifetime: { seconds: 3600n },
           refreshTokenLifetime: { seconds: 7200n },
-          requireDpop: false,
-        },
+        }),
       ],
     });
 
-    const result = await planAuth(createCustomOAuth2LifetimeContext(client));
+    const result = await planAuth(
+      createContext(client, createMockApplicationWithCustomOAuth2Lifetimes()),
+    );
 
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.oauth2Client.unchanged[0]?.name).toBe("sample");
@@ -463,19 +456,11 @@ describe("planAuth", () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
       oauth2Clients: [
-        {
-          name: "sample",
-          description: "Sample client",
-          grantTypes: [
-            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
-            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
-          ],
+        remoteOAuth2Client({
           redirectUris: ["https://a.example.com/callback", "https://b.example.com/callback"],
-          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
           accessTokenLifetime: { seconds: 3600n },
           refreshTokenLifetime: { seconds: 7200n },
-          requireDpop: false,
-        },
+        }),
       ],
     });
 
@@ -516,27 +501,17 @@ describe("planAuth", () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
       oauth2Clients: [
-        {
-          name: "sample",
+        remoteOAuth2Client({
           // Platform returns the proto default empty string when no description was set
           description: "",
-          grantTypes: [
-            AuthOAuth2Client_GrantType.AUTHORIZATION_CODE,
-            AuthOAuth2Client_GrantType.REFRESH_TOKEN,
-          ],
           redirectUris: ["https://a.example.com/callback"],
-          clientType: AuthOAuth2Client_ClientType.CONFIDENTIAL,
           accessTokenLifetime: { seconds: 86400n },
           refreshTokenLifetime: { seconds: 604800n },
-          requireDpop: false,
-        },
+        }),
       ],
     });
 
-    const result = await planAuth({
-      ...createContext(client),
-      application: app,
-    });
+    const result = await planAuth(createContext(client, app));
 
     expect(result.changeSet.oauth2Client.unchanged).toHaveLength(1);
     expect(result.changeSet.oauth2Client.updates).toHaveLength(0);
@@ -582,7 +557,7 @@ describe("planAuth", () => {
       authServices: [{ name: "auth-a", publishSessionEvents: false, label: appName }],
     });
 
-    const result = await planAuth(createBuiltInIdPContext(client));
+    const result = await planAuth(createContext(client, createMockApplicationWithBuiltInIdP()));
 
     expect(result.changeSet.idpConfig.creates).toHaveLength(1);
     expect(result.changeSet.idpConfig.creates[0]?.name).toBe("default");
@@ -596,7 +571,7 @@ describe("planAuth", () => {
       authIdPConfigs: [{ name: "default" }],
     });
 
-    const result = await planAuth(createBuiltInIdPContext(client));
+    const result = await planAuth(createContext(client, createMockApplicationWithBuiltInIdP()));
 
     expect(result.changeSet.idpConfig.creates).toHaveLength(0);
     expect(result.changeSet.idpConfig.updates).toHaveLength(1);
@@ -636,15 +611,10 @@ describe("planAuth", () => {
         ...baseClient,
         getStaticWebsite: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
       } as unknown as OperatorClient;
-      const context: PlanContext = {
-        client,
-        workspaceId,
-        application: createApplicationWithStaticWebsiteRedirectURI(),
-        forRemoval: false,
-        config: { path: "/test/tailor.config.ts" } as PlanContext["config"],
-      };
 
-      const result = await planAuth(context);
+      const result = await planAuth(
+        createContext(client, createApplicationWithStaticWebsiteRedirectURI()),
+      );
 
       expect(result.changeSet.oauth2Client.creates).toHaveLength(1);
       expect(warnSpy).not.toHaveBeenCalled();
@@ -653,72 +623,60 @@ describe("planAuth", () => {
 });
 
 describe("formatAuthHookChangeEntries", () => {
-  test("groups auth hook updates with related function registry updates", () => {
-    const entries = formatAuthHookChangeEntries(
-      {
-        creates: [],
-        updates: [
-          {
-            name: "my-auth/before-login",
-          },
-        ],
-        deletes: [],
-        replaces: [],
-      },
-      {
+  const authHookChanges = {
+    creates: [],
+    updates: [{ name: "my-auth/before-login" }],
+    deletes: [],
+    replaces: [],
+  };
+
+  test.each([
+    {
+      name: "groups auth hook updates with related function registry updates",
+      functionChanges: {
         creates: [],
         updates: [{ name: "auth-hook--my-auth--before-login" }],
         deletes: [],
         replaces: [],
       },
-    );
-
-    expect(entries).toEqual([
-      {
-        action: "update",
-        symbol: "~",
-        name: "before-login",
-        labels: ["authHook", "function"],
-        namespace: "my-auth",
-      },
-    ]);
-  });
-
-  test("keeps cross-action function registry changes separate from auth hook updates", () => {
-    const entries = formatAuthHookChangeEntries(
-      {
-        creates: [],
-        updates: [
-          {
-            name: "my-auth/before-login",
-          },
-        ],
-        deletes: [],
-        replaces: [],
-      },
-      {
+      expected: [
+        {
+          action: "update",
+          symbol: "~",
+          name: "before-login",
+          labels: ["authHook", "function"],
+          namespace: "my-auth",
+        },
+      ],
+    },
+    {
+      name: "keeps cross-action function registry changes separate from auth hook updates",
+      functionChanges: {
         creates: [{ name: "auth-hook--my-auth--before-login" }],
         updates: [],
         deletes: [],
         replaces: [],
       },
-    );
+      expected: [
+        {
+          action: "update",
+          symbol: "~",
+          name: "before-login",
+          labels: ["authHook"],
+          namespace: "my-auth",
+        },
+        {
+          action: "create",
+          symbol: "+",
+          name: "before-login",
+          labels: ["function"],
+          namespace: "my-auth",
+        },
+      ],
+    },
+  ])("$name", ({ functionChanges, expected }) => {
+    const entries = formatAuthHookChangeEntries(authHookChanges, functionChanges);
 
-    expect(entries).toEqual([
-      {
-        action: "update",
-        symbol: "~",
-        name: "before-login",
-        labels: ["authHook"],
-        namespace: "my-auth",
-      },
-      {
-        action: "create",
-        symbol: "+",
-        name: "before-login",
-        labels: ["function"],
-        namespace: "my-auth",
-      },
-    ]);
+    expect(entries).toEqual(expected);
   });
 });

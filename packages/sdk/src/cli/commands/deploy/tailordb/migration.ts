@@ -6,26 +6,29 @@
 
 import * as fs from "node:fs";
 import { create } from "@bufbuild/protobuf";
-import { AuthInvokerSchema, type AuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
-import { bundleMigrationScript } from "@/cli/commands/tailordb/migrate/bundler";
-import { type NamespaceWithMigrations } from "@/cli/commands/tailordb/migrate/config";
+import {
+  AuthInvokerSchema,
+  type AuthInvoker,
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { bundleMigrationScript } from "#/cli/commands/tailordb/migrate/bundler";
+import { type NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import {
   loadDiff,
   getMigrationFiles,
   getMigrationFilePath,
   formatMigrationNumber,
-} from "@/cli/commands/tailordb/migrate/snapshot";
+} from "#/cli/commands/tailordb/migrate/snapshot";
 import {
   type PendingMigration,
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
-} from "@/cli/commands/tailordb/migrate/types";
-import { type OperatorClient } from "@/cli/shared/client";
-import { logger, styles } from "@/cli/shared/logger";
-import { executeScript } from "@/cli/shared/script-executor";
-import { spinner } from "@/cli/shared/spinner";
+} from "#/cli/commands/tailordb/migrate/types";
+import { type OperatorClient } from "#/cli/shared/client";
+import { logger, styles } from "#/cli/shared/logger";
+import { executeScript } from "#/cli/shared/script-executor";
+import { spinner } from "#/cli/shared/spinner";
 import { resourceTrn } from "../label";
-import type { TailorDBServiceConfig } from "@/types/tailordb.generated";
+import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 
 // ============================================================================
 // Types
@@ -36,6 +39,7 @@ export interface MigrationExecutionOptions {
   workspaceId: string;
   authInvoker: AuthInvoker;
   env: Record<string, string | number | boolean>;
+  configDir: string;
 }
 
 /**
@@ -48,6 +52,7 @@ export interface MigrationContext {
   machineUsers: string[] | undefined;
   dbConfig: Record<string, TailorDBServiceConfig | undefined>;
   env: Record<string, string | number | boolean>;
+  configDir: string;
 }
 
 interface ExecutionResult {
@@ -174,7 +179,7 @@ async function executeSingleMigration(
   options: MigrationExecutionOptions,
   migration: PendingMigration,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, authInvoker, env } = options;
+  const { client, workspaceId, authInvoker, env, configDir } = options;
 
   const migrationName = `migration-${migration.namespace}-${formatMigrationNumber(migration.number)}.js`;
 
@@ -184,6 +189,7 @@ async function executeSingleMigration(
     migration.namespace,
     migration.number,
     env,
+    configDir,
   );
 
   // Execute the script using the shared script executor
@@ -282,6 +288,7 @@ export async function executeMigrations(
       workspaceId: context.workspaceId,
       authInvoker,
       env: context.env,
+      configDir: context.configDir,
     };
 
     logger.info(`Using machine user: ${styles.bold(machineUserName)} for namespace '${namespace}'`);

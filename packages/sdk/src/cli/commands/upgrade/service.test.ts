@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import type { RunOutput } from "./types";
+import type { SpawnSyncReturns } from "node:child_process";
 
-vi.mock("@/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", () => ({
   logger: {
     info: vi.fn(),
     success: vi.fn(),
@@ -42,41 +43,47 @@ function makeOutput(overrides: Partial<RunOutput> = {}): RunOutput {
   };
 }
 
-describe("upgrade service", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+function makeSpawnSyncResult(
+  overrides: Partial<SpawnSyncReturns<string>> = {},
+): SpawnSyncReturns<string> {
+  return {
+    stdout: JSON.stringify(makeOutput()),
+    stderr: "",
+    status: 0,
+    signal: null,
+    pid: 0,
+    output: [],
+    error: undefined,
+    ...overrides,
+  };
+}
 
-  afterEach(() => {
+async function setupUpgrade(version: string | null) {
+  const { detectInstalledVersion } = await import("./version-detector");
+  vi.mocked(detectInstalledVersion).mockResolvedValue(version);
+  return (await import("./service")).upgrade;
+}
+
+describe("upgrade service", () => {
+  aroundEach(async (runTest) => {
+    vi.clearAllMocks();
+    await runTest();
     vi.restoreAllMocks();
   });
 
   test("should throw CLIError when SDK version is not detected", async () => {
-    const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue(null);
+    const upgrade = await setupUpgrade(null);
 
-    const { upgrade } = await import("./service");
     await expect(upgrade({ from: "1.33.0", dryRun: false, path: "/test" })).rejects.toThrow(
       "Could not detect installed @tailor-platform/sdk version",
     );
   });
 
   test("should invoke sdk-codemod with correct arguments", async () => {
-    const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
-
+    const upgrade = await setupUpgrade("2.0.0");
     const { spawnSync } = await import("node:child_process");
-    vi.mocked(spawnSync).mockReturnValue({
-      stdout: JSON.stringify(makeOutput()),
-      stderr: "",
-      status: 0,
-      signal: null,
-      pid: 0,
-      output: [],
-      error: undefined,
-    });
+    vi.mocked(spawnSync).mockReturnValue(makeSpawnSyncResult());
 
-    const { upgrade } = await import("./service");
     await upgrade({ from: "1.33.0", dryRun: false, path: "/test" });
 
     const expectedNpx = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -96,21 +103,10 @@ describe("upgrade service", () => {
   });
 
   test("should pass --dry-run to sdk-codemod", async () => {
-    const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
-
+    const upgrade = await setupUpgrade("2.0.0");
     const { spawnSync } = await import("node:child_process");
-    vi.mocked(spawnSync).mockReturnValue({
-      stdout: JSON.stringify(makeOutput()),
-      stderr: "",
-      status: 0,
-      signal: null,
-      pid: 0,
-      output: [],
-      error: undefined,
-    });
+    vi.mocked(spawnSync).mockReturnValue(makeSpawnSyncResult());
 
-    const { upgrade } = await import("./service");
     await upgrade({ from: "1.33.0", dryRun: true, path: "/test" });
 
     const expectedNpx = process.platform === "win32" ? "npx.cmd" : "npx";
@@ -122,124 +118,76 @@ describe("upgrade service", () => {
   });
 
   test("should display summary from sdk-codemod output", async () => {
-    const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
-
+    const upgrade = await setupUpgrade("2.0.0");
     const { spawnSync } = await import("node:child_process");
-    vi.mocked(spawnSync).mockReturnValue({
-      stdout: JSON.stringify(
-        makeOutput({
-          codemodsApplied: 1,
-          filesModified: ["/test/config.ts"],
-        }),
-      ),
-      stderr: "",
-      status: 0,
-      signal: null,
-      pid: 0,
-      output: [],
-      error: undefined,
-    });
+    vi.mocked(spawnSync).mockReturnValue(
+      makeSpawnSyncResult({
+        stdout: JSON.stringify(
+          makeOutput({ codemodsApplied: 1, filesModified: ["/test/config.ts"] }),
+        ),
+      }),
+    );
 
-    const { upgrade } = await import("./service");
     await upgrade({ from: "1.33.0", dryRun: false, path: "/test" });
 
-    const { logger } = await import("@/cli/shared/logger");
+    const { logger } = await import("#/cli/shared/logger");
     const infoCalls = vi.mocked(logger.info).mock.calls.map((c) => c[0]);
     expect(infoCalls.some((c) => c.includes("1 applied"))).toBe(true);
   });
 
   test("should throw CLIError when sdk-codemod returns errors", async () => {
-    const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
-
+    const upgrade = await setupUpgrade("2.0.0");
     const { spawnSync } = await import("node:child_process");
-    vi.mocked(spawnSync).mockReturnValue({
-      stdout: JSON.stringify(
-        makeOutput({
-          errors: [{ codemodId: "test/fail", message: "transform failed" }],
-        }),
-      ),
-      stderr: "",
-      status: 1,
-      signal: null,
-      pid: 0,
-      output: [],
-      error: undefined,
-    });
+    vi.mocked(spawnSync).mockReturnValue(
+      makeSpawnSyncResult({
+        stdout: JSON.stringify(
+          makeOutput({ errors: [{ codemodId: "test/fail", message: "transform failed" }] }),
+        ),
+        status: 1,
+      }),
+    );
 
-    const { upgrade } = await import("./service");
     await expect(upgrade({ from: "1.33.0", dryRun: false, path: "/test" })).rejects.toThrow(
       "Upgrade completed with 1 error(s)",
     );
   });
 
   test("should throw CLIError when spawning fails", async () => {
-    const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
-
+    const upgrade = await setupUpgrade("2.0.0");
     const { spawnSync } = await import("node:child_process");
-    vi.mocked(spawnSync).mockReturnValue({
-      stdout: "",
-      stderr: "",
-      status: null,
-      signal: null,
-      pid: 0,
-      output: [],
-      error: new Error("ENOENT"),
-    });
+    vi.mocked(spawnSync).mockReturnValue(
+      makeSpawnSyncResult({ stdout: "", status: null, error: new Error("ENOENT") }),
+    );
 
-    const { upgrade } = await import("./service");
     await expect(upgrade({ from: "1.33.0", dryRun: false, path: "/test" })).rejects.toThrow(
       "Failed to run @tailor-platform/sdk-codemod",
     );
   });
 
   test("should forward captured stderr to process.stderr in the success path", async () => {
-    const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
-
+    const upgrade = await setupUpgrade("2.0.0");
     const { spawnSync } = await import("node:child_process");
     const stderrPayload = "Running: define-generators-to-plugins\n  1 file(s) modified\n";
-    vi.mocked(spawnSync).mockReturnValue({
-      stdout: JSON.stringify(
-        makeOutput({
-          codemodsApplied: 1,
-          filesModified: ["/test/config.ts"],
-        }),
-      ),
-      stderr: stderrPayload,
-      status: 0,
-      signal: null,
-      pid: 0,
-      output: [],
-      error: undefined,
-    });
-
+    vi.mocked(spawnSync).mockReturnValue(
+      makeSpawnSyncResult({
+        stdout: JSON.stringify(
+          makeOutput({ codemodsApplied: 1, filesModified: ["/test/config.ts"] }),
+        ),
+        stderr: stderrPayload,
+      }),
+    );
     using stderrWrite = vi.spyOn(process.stderr, "write").mockReturnValue(true);
 
-    const { upgrade } = await import("./service");
     await upgrade({ from: "1.33.0", dryRun: true, path: "/test" });
 
     expect(stderrWrite).toHaveBeenCalledWith(stderrPayload);
   });
 
   test("should throw CLIError when stdout is not valid JSON", async () => {
-    const { detectInstalledVersion } = await import("./version-detector");
-    vi.mocked(detectInstalledVersion).mockResolvedValue("2.0.0");
-
+    const upgrade = await setupUpgrade("2.0.0");
     const { spawnSync } = await import("node:child_process");
-    vi.mocked(spawnSync).mockReturnValue({
-      stdout: "not json",
-      stderr: "",
-      status: 0,
-      signal: null,
-      pid: 0,
-      output: [],
-      error: undefined,
-    });
+    vi.mocked(spawnSync).mockReturnValue(makeSpawnSyncResult({ stdout: "not json" }));
 
-    const { upgrade } = await import("./service");
     await expect(upgrade({ from: "1.33.0", dryRun: false, path: "/test" })).rejects.toThrow(
       "Failed to parse output",
     );

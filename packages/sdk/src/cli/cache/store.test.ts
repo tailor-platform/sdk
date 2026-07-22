@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { createCacheStore } from "./store";
 import type { CacheEntry, CacheManifest } from "./types";
 
@@ -9,12 +9,10 @@ describe("createCacheStore", () => {
   let tmpDir: string;
   let cacheDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cache-store-test-"));
     cacheDir = path.join(tmpDir, "cache");
-  });
-
-  afterEach(() => {
+    await runTest();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -146,6 +144,18 @@ describe("createCacheStore", () => {
       const store2 = createCacheStore({ cacheDir });
       expect(store2.loadManifest()).toEqual(manifest);
       expect(store2.getEntry("myKey")).toEqual(entry);
+    });
+  });
+
+  describe("storeBundleContent / restoreBundleContent", () => {
+    test("keeps bundle content separate when cache keys share an underscore form", () => {
+      const store = createCacheStore({ cacheDir });
+
+      store.storeBundleContent("resolver:foo_bar:baz", "first bundle");
+      store.storeBundleContent("resolver:foo:bar_baz", "second bundle");
+
+      expect(store.restoreBundleContent("resolver:foo_bar:baz")).toBe("first bundle");
+      expect(store.restoreBundleContent("resolver:foo:bar_baz")).toBe("second bundle");
     });
   });
 

@@ -25,14 +25,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 0
 
       - name: Detect changes
         id: filter
-        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d # v4.0.1
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
         with:
           filters: |
             changeset:
@@ -41,6 +41,8 @@ jobs:
             packages:
               - 'packages/sdk/**'
               - 'packages/create-sdk/**'
+              - 'packages/eslint-plugin-sdk/**'
+              - 'packages/sdk-codemod/**'
               - 'packages/tailor-proto/**'
 
       - name: Fail if no changeset
@@ -61,3 +63,15 @@ jobs:
       - name: Validate changeset packages
         if: steps.filter.outputs.changeset == 'true'
         run: pnpm changeset status --since origin/main
+
+      # `changeset status` only validates the plan; it doesn't run the JSON
+      # edits that `changeset version` performs during the Release workflow.
+      # Actually running `version` here catches crashes (e.g. a package.json
+      # missing a "version" key) before they surface post-merge on main.
+      - name: Dry-run changeset version
+        if: steps.filter.outputs.changeset == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pnpm changeset version
+          git checkout -- .

@@ -2,11 +2,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { captureStdout } from "@/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { statusCommand } from "./status";
 
 const state = vi.hoisted(() => ({
@@ -14,16 +14,16 @@ const state = vi.hoisted(() => ({
   getMetadata: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/config-loader", () => ({
+vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
   loadWorkspaceId: vi.fn().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
 }));
 
-vi.mock("@/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
@@ -48,10 +48,8 @@ function writeDiff(number: number, description: string): void {
 }
 
 describe("tailordb migration status --json", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-status-json-test-"));
+  aroundEach(async (runTest) => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-status-json-test-"));
     state.migrationsDir = path.join(tmpDir, "migrations");
     fs.mkdirSync(path.join(state.migrationsDir, "0000"), { recursive: true });
     fs.writeFileSync(path.join(state.migrationsDir, "0000", "schema.json"), "{}");
@@ -81,9 +79,9 @@ describe("tailordb migration status --json", () => {
     vi.mocked(initOperatorClient).mockResolvedValue({
       getMetadata: state.getMetadata,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-  });
 
-  afterEach(() => {
+    await runTest();
+
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });

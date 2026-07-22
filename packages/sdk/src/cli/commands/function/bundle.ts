@@ -8,21 +8,21 @@
 
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import {
   createLogLevelTreeshakeOptions,
   resolveBundleLogLevel,
-} from "@/cli/shared/bundle-log-level";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { composeFunctionTreeshakeOptions } from "@/cli/shared/function-treeshake";
-import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
-import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
-import { INVOKER_EXPR } from "@/cli/shared/runtime-exprs";
-import { assertDefined } from "@/utils/assert";
-import ml from "@/utils/multiline";
+} from "#/cli/shared/bundle-log-level";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
+import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
+import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { assertDefined } from "#/utils/assert";
+import ml from "#/utils/multiline";
+import type { LogLevelInput } from "#/configure/config/types";
 import type { DetectedFunction } from "./detect";
-import type { LogLevelInput } from "@/configure/config/types";
 
 /** Machine user info resolved from config and API for bundle-time user context. */
 export interface ResolvedMachineUser {
@@ -41,6 +41,8 @@ interface BundleForTestRunOptions {
   detected: DetectedFunction;
   /** Absolute path to the source file */
   sourceFile: string;
+  /** Directory to resolve the bundler's tsconfig against (the owning config's directory) */
+  baseDir: string;
   /** Environment variables (injected into workflow job bundles) */
   env?: Record<string, string | number | boolean>;
   /** Inline sourcemap config value from defineConfig */
@@ -68,7 +70,7 @@ interface BundleForTestRunResult {
 export async function bundleForTestRun(
   options: BundleForTestRunOptions,
 ): Promise<BundleForTestRunResult> {
-  const { detected, sourceFile, env = {}, machineUser, workspaceId } = options;
+  const { detected, sourceFile, baseDir, env = {}, machineUser, workspaceId } = options;
   const inlineSourcemap = resolveInlineSourcemap(options.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(options.logLevel);
 
@@ -82,12 +84,7 @@ export async function bundleForTestRun(
   const entryContent = generateEntry(detected, sourceFile, env, machineUser, workspaceId);
   fs.writeFileSync(entryPath, entryContent);
 
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   const buildResult = await rolldown.build({
     plugins: [platformBundleDefinePlugin],

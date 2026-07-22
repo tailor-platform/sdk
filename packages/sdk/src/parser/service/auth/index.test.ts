@@ -1,8 +1,8 @@
 import { describe, expectTypeOf, expect, test } from "vitest";
-import { db } from "@/configure/services/tailordb/schema";
-import { t } from "@/configure/types/type";
+import { db } from "#/configure/services/tailordb/schema";
+import { t } from "#/configure/types/type";
 import { AuthConfigSchema, OAuth2ClientSchema } from "./schema";
-import type { AuthServiceInput } from "@/configure/services/auth/types";
+import type { AuthServiceInput } from "#/configure/services/auth/types";
 import type { OptionalKeysOf } from "type-fest";
 import type { z } from "zod";
 
@@ -107,6 +107,81 @@ describe("AuthServiceInput and AuthConfigSchema type alignment", () => {
   });
 });
 
+// Fixture with an optional user field to cover optionality mirroring
+const mixedUserType = db.type("MixedUser", {
+  email: db.string().unique(),
+  role: db.string(),
+  nickname: db.string({ optional: true }),
+});
+
+type MixedAuthInput = AuthServiceInput<
+  typeof mixedUserType,
+  { role: true; nickname: true },
+  [],
+  "worker"
+>;
+type MixedMachineUser = NonNullable<MixedAuthInput["machineUsers"]>["worker"];
+
+describe("machine user attributes mirror user field optionality", () => {
+  test("allows omitting or nullifying keys for optional fields", () => {
+    expectTypeOf<{ attributes: { role: string } }>().toExtend<MixedMachineUser>();
+    expectTypeOf<{
+      attributes: { role: string; nickname: string | null };
+    }>().toExtend<MixedMachineUser>();
+  });
+
+  test("keeps keys for required fields mandatory", () => {
+    expectTypeOf<{ attributes: { nickname: string } }>().not.toExtend<MixedMachineUser>();
+    expectTypeOf<Record<never, never>>().not.toExtend<MixedMachineUser>();
+  });
+
+  test("makes attributes itself optional when no required keys remain", () => {
+    type AllOptionalInput = AuthServiceInput<
+      typeof mixedUserType,
+      { nickname: true },
+      [],
+      "worker"
+    >;
+    type AllOptionalMachineUser = NonNullable<AllOptionalInput["machineUsers"]>["worker"];
+
+    expectTypeOf<Record<never, never>>().toExtend<AllOptionalMachineUser>();
+  });
+
+  test("still rejects attributes not declared in userProfile", () => {
+    expectTypeOf<NonNullable<MixedMachineUser["attributes"]> & { email: string }>().toBeNever();
+  });
+});
+
+describe("AuthConfigSchema machine user attribute normalization", () => {
+  test("drops null/undefined attribute values on parse", () => {
+    const config = {
+      name: "my-auth",
+      userProfile: {
+        type: userType,
+        usernameField: "email",
+        attributes: { role: true, isActive: true, tags: true },
+      },
+      machineUsers: {
+        admin: { attributes: { role: "ADMIN", isActive: null, tags: undefined } },
+      },
+    };
+
+    const result = AuthConfigSchema.parse(config);
+    expect(result.machineUsers?.admin?.attributes).toEqual({ role: "ADMIN" });
+  });
+
+  test("accepts machine users without attributes", () => {
+    const config = {
+      name: "my-auth",
+      userProfile: { type: userType, usernameField: "email" },
+      machineUsers: { admin: {} },
+    };
+
+    const result = AuthConfigSchema.parse(config);
+    expect(result.machineUsers?.admin?.attributes).toBeUndefined();
+  });
+});
+
 describe("OAuth2ClientSchema validation", () => {
   test("accepts valid OAuth2 client configuration", () => {
     const validClient = {
@@ -119,102 +194,43 @@ describe("OAuth2ClientSchema validation", () => {
     expect(() => OAuth2ClientSchema.parse(validClient)).not.toThrow();
   });
 
-  test("accepts valid token lifetime values and transforms to Duration", () => {
-    const clientWithLifetimes = {
-      redirectURIs: ["https://example.com/callback"],
-      accessTokenLifetimeSeconds: 3600,
-      refreshTokenLifetimeSeconds: 86400,
-    };
+  test.each([
+    ["valid", 3600, 86400],
+    ["minimum", 60, 60],
+    ["maximum", 86400, 604800],
+  ])(
+    "accepts %s token lifetime values and transforms to Duration",
+    (_label, accessTokenLifetimeSeconds, refreshTokenLifetimeSeconds) => {
+      const client = {
+        redirectURIs: ["https://example.com/callback"],
+        accessTokenLifetimeSeconds,
+        refreshTokenLifetimeSeconds,
+      };
 
-    const result = OAuth2ClientSchema.parse(clientWithLifetimes);
-    expect(result.accessTokenLifetimeSeconds).toEqual({
-      seconds: BigInt(3600),
-      nanos: 0,
-    });
-    expect(result.refreshTokenLifetimeSeconds).toEqual({
-      seconds: BigInt(86400),
-      nanos: 0,
-    });
-  });
+      const result = OAuth2ClientSchema.parse(client);
+      expect(result.accessTokenLifetimeSeconds).toEqual({
+        seconds: BigInt(accessTokenLifetimeSeconds),
+        nanos: 0,
+      });
+      expect(result.refreshTokenLifetimeSeconds).toEqual({
+        seconds: BigInt(refreshTokenLifetimeSeconds),
+        nanos: 0,
+      });
+    },
+  );
 
-  test("accepts minimum token lifetime values and transforms to Duration", () => {
-    const clientWithMinLifetimes = {
-      redirectURIs: ["https://example.com/callback"],
-      accessTokenLifetimeSeconds: 60,
-      refreshTokenLifetimeSeconds: 60,
-    };
-
-    const result = OAuth2ClientSchema.parse(clientWithMinLifetimes);
-    expect(result.accessTokenLifetimeSeconds).toEqual({
-      seconds: BigInt(60),
-      nanos: 0,
-    });
-    expect(result.refreshTokenLifetimeSeconds).toEqual({
-      seconds: BigInt(60),
-      nanos: 0,
-    });
-  });
-
-  test("accepts maximum token lifetime values and transforms to Duration", () => {
-    const clientWithMaxLifetimes = {
-      redirectURIs: ["https://example.com/callback"],
-      accessTokenLifetimeSeconds: 86400, // 1 day
-      refreshTokenLifetimeSeconds: 604800, // 7 days
-    };
-
-    const result = OAuth2ClientSchema.parse(clientWithMaxLifetimes);
-    expect(result.accessTokenLifetimeSeconds).toEqual({
-      seconds: BigInt(86400),
-      nanos: 0,
-    });
-    expect(result.refreshTokenLifetimeSeconds).toEqual({
-      seconds: BigInt(604800),
-      nanos: 0,
-    });
-  });
-
-  test("rejects access token lifetime below minimum", () => {
+  test.each([
+    ["access", "accessTokenLifetimeSeconds", 59, /Minimum access token lifetime is 60 seconds/],
+    ["access", "accessTokenLifetimeSeconds", 86401, /Maximum access token lifetime is 1 day/],
+    ["refresh", "refreshTokenLifetimeSeconds", 59, /Minimum refresh token lifetime is 60 seconds/],
+    ["refresh", "refreshTokenLifetimeSeconds", 604801, /Maximum refresh token lifetime is 7 days/],
+  ] as const)("rejects %s token lifetime out of bounds (%s = %d)", (_kind, field, value, error) => {
     const invalidClient = {
       redirectURIs: ["https://example.com/callback"],
-      accessTokenLifetimeSeconds: 59,
+      [field]: value,
     };
 
-    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(
-      /Minimum access token lifetime is 60 seconds/,
-    );
-  });
-
-  test("rejects access token lifetime above maximum", () => {
-    const invalidClient = {
-      redirectURIs: ["https://example.com/callback"],
-      accessTokenLifetimeSeconds: 86401,
-    };
-
-    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(
-      /Maximum access token lifetime is 1 day/,
-    );
-  });
-
-  test("rejects refresh token lifetime below minimum", () => {
-    const invalidClient = {
-      redirectURIs: ["https://example.com/callback"],
-      refreshTokenLifetimeSeconds: 59,
-    };
-
-    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(
-      /Minimum refresh token lifetime is 60 seconds/,
-    );
-  });
-
-  test("rejects refresh token lifetime above maximum", () => {
-    const invalidClient = {
-      redirectURIs: ["https://example.com/callback"],
-      refreshTokenLifetimeSeconds: 604801,
-    };
-
-    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(
-      /Maximum refresh token lifetime is 7 days/,
-    );
+    expect(() => OAuth2ClientSchema.parse(invalidClient)).toThrow(error);
   });
 
   test("rejects non-integer token lifetime values", () => {
@@ -237,33 +253,18 @@ describe("OAuth2ClientSchema validation", () => {
     expect(result.refreshTokenLifetimeSeconds).toBeUndefined();
   });
 
-  test("accepts requireDpop set to true", () => {
-    const clientWithDpop = {
+  test.each([
+    ["true", true, true],
+    ["false", false, false],
+    ["unset", undefined, undefined],
+  ] as const)("accepts requireDpop set to %s", (_label, input, expected) => {
+    const client = {
       redirectURIs: ["https://example.com/callback"],
-      requireDpop: true,
+      ...(input === undefined ? {} : { requireDpop: input }),
     };
 
-    const result = OAuth2ClientSchema.parse(clientWithDpop);
-    expect(result.requireDpop).toBe(true);
-  });
-
-  test("accepts requireDpop set to false", () => {
-    const clientWithDpop = {
-      redirectURIs: ["https://example.com/callback"],
-      requireDpop: false,
-    };
-
-    const result = OAuth2ClientSchema.parse(clientWithDpop);
-    expect(result.requireDpop).toBe(false);
-  });
-
-  test("accepts client without requireDpop field", () => {
-    const clientWithoutDpop = {
-      redirectURIs: ["https://example.com/callback"],
-    };
-
-    const result = OAuth2ClientSchema.parse(clientWithoutDpop);
-    expect(result.requireDpop).toBeUndefined();
+    const result = OAuth2ClientSchema.parse(client);
+    expect(result.requireDpop).toBe(expected);
   });
 
   test("rejects requireDpop=true for browser client type", () => {
@@ -278,71 +279,36 @@ describe("OAuth2ClientSchema validation", () => {
     );
   });
 
-  test("accepts requireDpop=false for browser client type", () => {
-    const browserClientWithoutDpop = {
+  test.each([
+    [false, "browser"],
+    [true, "confidential"],
+    [true, "public"],
+  ] as const)("accepts requireDpop=%s for %s client type", (requireDpop, clientType) => {
+    const client = {
       redirectURIs: ["https://example.com/callback"],
-      clientType: "browser",
-      requireDpop: false,
+      clientType,
+      requireDpop,
     };
 
-    const result = OAuth2ClientSchema.parse(browserClientWithoutDpop);
-    expect(result.clientType).toBe("browser");
-    expect(result.requireDpop).toBe(false);
-  });
-
-  test("accepts requireDpop=true for confidential client type", () => {
-    const confidentialClientWithDpop = {
-      redirectURIs: ["https://example.com/callback"],
-      clientType: "confidential",
-      requireDpop: true,
-    };
-
-    const result = OAuth2ClientSchema.parse(confidentialClientWithDpop);
-    expect(result.clientType).toBe("confidential");
-    expect(result.requireDpop).toBe(true);
-  });
-
-  test("accepts requireDpop=true for public client type", () => {
-    const publicClientWithDpop = {
-      redirectURIs: ["https://example.com/callback"],
-      clientType: "public",
-      requireDpop: true,
-    };
-
-    const result = OAuth2ClientSchema.parse(publicClientWithDpop);
-    expect(result.clientType).toBe("public");
-    expect(result.requireDpop).toBe(true);
+    const result = OAuth2ClientSchema.parse(client);
+    expect(result.clientType).toBe(clientType);
+    expect(result.requireDpop).toBe(requireDpop);
   });
 });
 
 describe("AuthConfigSchema publishSessionEvents validation", () => {
-  test("accepts publishSessionEvents set to true", () => {
+  test.each([
+    ["true", true, true],
+    ["false", false, false],
+    ["unset", undefined, undefined],
+  ] as const)("accepts publishSessionEvents set to %s", (_label, input, expected) => {
     const config = {
       name: "my-auth",
-      publishSessionEvents: true,
+      ...(input === undefined ? {} : { publishSessionEvents: input }),
     };
 
     const result = AuthConfigSchema.parse(config);
-    expect(result.publishSessionEvents).toBe(true);
-  });
-
-  test("accepts publishSessionEvents set to false", () => {
-    const config = {
-      name: "my-auth",
-      publishSessionEvents: false,
-    };
-
-    const result = AuthConfigSchema.parse(config);
-    expect(result.publishSessionEvents).toBe(false);
-  });
-
-  test("accepts config without publishSessionEvents field", () => {
-    const config = {
-      name: "my-auth",
-    };
-
-    const result = AuthConfigSchema.parse(config);
-    expect(result.publishSessionEvents).toBeUndefined();
+    expect(result.publishSessionEvents).toBe(expected);
   });
 });
 

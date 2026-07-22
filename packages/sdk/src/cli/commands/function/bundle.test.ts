@@ -1,9 +1,18 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { resolveTSConfig } from "pkg-types";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
+import type * as pkgTypes from "pkg-types";
+
+type PkgTypesModule = typeof pkgTypes;
+
+vi.mock("pkg-types", async (importOriginal) => {
+  const original = await importOriginal<PkgTypesModule>();
+  return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
+});
 
 const TEST_BASE = path.join(__dirname, "__test_bundler__");
 
@@ -19,13 +28,15 @@ const defaultWorkspaceId = "11111111-2222-3333-4444-555555555555";
 describe("bundleForTestRun", () => {
   let testDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     testDir = path.join(TEST_BASE, `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     fs.mkdirSync(testDir, { recursive: true });
     process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    await runTest();
   });
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     delete process.env.TAILOR_SDK_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BASE, { recursive: true, force: true });
@@ -34,70 +45,88 @@ describe("bundleForTestRun", () => {
     }
   });
 
+  function bundle(
+    fileName: string,
+    source: string,
+    detected: DetectedFunction,
+    options?: Partial<Omit<Parameters<typeof bundleForTestRun>[0], "detected" | "sourceFile">>,
+  ) {
+    const sourceFile = path.join(testDir, fileName);
+    fs.writeFileSync(sourceFile, source);
+    return bundleForTestRun({
+      detected,
+      sourceFile,
+      baseDir: testDir,
+      machineUser: defaultMachineUser,
+      workspaceId: defaultWorkspaceId,
+      ...options,
+    });
+  }
+
+  async function expectMainExport(fileName: string, bundledCode: string) {
+    const tempFile = path.join(testDir, fileName);
+    fs.writeFileSync(tempFile, bundledCode);
+    const mod = await import(pathToFileURL(tempFile).href);
+    expect(typeof mod.main).toBe("function");
+  }
+
   describe("plain function", () => {
-    test("bundles a default-exported function as main", async () => {
-      const sourceFile = path.join(testDir, "fn.ts");
-      fs.writeFileSync(
-        sourceFile,
+    test("resolves tsconfig from the provided baseDir", async () => {
+      vi.mocked(resolveTSConfig).mockClear();
+      const detected: DetectedFunction = { type: "plain", name: "tsconfig-base" };
+      await bundle(
+        "tsconfig-base.ts",
         `
 export default function(input: any) {
   return { hello: input.name };
 }
 `,
+        detected,
       );
 
+      expect(resolveTSConfig).toHaveBeenCalledWith(testDir);
+    });
+
+    test("bundles a default-exported function as main", async () => {
       const detected: DetectedFunction = { type: "plain", name: "fn" };
-      const result = await bundleForTestRun({
+      const result = await bundle(
+        "fn.ts",
+        `
+export default function(input: any) {
+  return { hello: input.name };
+}
+`,
         detected,
-        sourceFile,
-        machineUser: defaultMachineUser,
-        workspaceId: defaultWorkspaceId,
-      });
+      );
 
       expect(result.scriptName).toBe("test-run--fn.js");
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("export");
-
-      // Verify bundled code can be imported and main is a function
-      const tempFile = path.join(testDir, "verify-plain.mjs");
-      fs.writeFileSync(tempFile, result.bundledCode);
-      const mod = await import(pathToFileURL(tempFile).href);
-      expect(typeof mod.main).toBe("function");
+      await expectMainExport("verify-plain.mjs", result.bundledCode);
     });
 
     test("bundles a named-exported main function", async () => {
-      const sourceFile = path.join(testDir, "named-main.ts");
-      fs.writeFileSync(
-        sourceFile,
+      const detected: DetectedFunction = { type: "plain", name: "named-main", namedMain: true };
+      const result = await bundle(
+        "named-main.ts",
         `
 export function main(input: any) {
   return { hello: input.name };
 }
 `,
-      );
-
-      const detected: DetectedFunction = { type: "plain", name: "named-main", namedMain: true };
-      const result = await bundleForTestRun({
         detected,
-        sourceFile,
-        machineUser: defaultMachineUser,
-        workspaceId: defaultWorkspaceId,
-      });
+      );
 
       expect(result.scriptName).toBe("test-run--named-main.js");
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("export");
-
-      const tempFile = path.join(testDir, "verify-named-main.mjs");
-      fs.writeFileSync(tempFile, result.bundledCode);
-      const mod = await import(pathToFileURL(tempFile).href);
-      expect(typeof mod.main).toBe("function");
+      await expectMainExport("verify-named-main.mjs", result.bundledCode);
     });
 
     test("drops console calls below the configured logLevel", async () => {
-      const sourceFile = path.join(testDir, "logs.ts");
-      fs.writeFileSync(
-        sourceFile,
+      const detected: DetectedFunction = { type: "plain", name: "logs", namedMain: true };
+      const result = await bundle(
+        "logs.ts",
         `
 export function main() {
   console.debug("debug");
@@ -108,17 +137,9 @@ export function main() {
   return true;
 }
 `,
-      );
-
-      const detected: DetectedFunction = { type: "plain", name: "logs", namedMain: true };
-      const result = await bundleForTestRun({
         detected,
-        sourceFile,
-        inlineSourcemap: false,
-        logLevel: "WARN",
-        machineUser: defaultMachineUser,
-        workspaceId: defaultWorkspaceId,
-      });
+        { inlineSourcemap: false, logLevel: "WARN" },
+      );
 
       expect(result.bundledCode).not.toContain("console.debug");
       expect(result.bundledCode).not.toContain("console.log");
@@ -130,9 +151,9 @@ export function main() {
 
   describe("resolver", () => {
     test("bundles a resolver with validation wrapper", async () => {
-      const sourceFile = path.join(testDir, "resolver.ts");
-      fs.writeFileSync(
-        sourceFile,
+      const detected: DetectedFunction = { type: "resolver", name: "add" };
+      const result = await bundle(
+        "resolver.ts",
         `
 export default {
   operation: "query",
@@ -141,15 +162,8 @@ export default {
   output: { type: "integer", metadata: {} },
 };
 `,
-      );
-
-      const detected: DetectedFunction = { type: "resolver", name: "add" };
-      const result = await bundleForTestRun({
         detected,
-        sourceFile,
-        machineUser: defaultMachineUser,
-        workspaceId: defaultWorkspaceId,
-      });
+      );
 
       expect(result.scriptName).toBe("test-run--add.js");
       // Check bundled code structure (can't import because it references @tailor-platform/sdk)
@@ -160,9 +174,9 @@ export default {
     });
 
     test("embeds machine user as user context", async () => {
-      const sourceFile = path.join(testDir, "resolver-user.ts");
-      fs.writeFileSync(
-        sourceFile,
+      const detected: DetectedFunction = { type: "resolver", name: "userInfo" };
+      const result = await bundle(
+        "resolver-user.ts",
         `
 export default {
   operation: "query",
@@ -171,15 +185,8 @@ export default {
   output: { type: "string", metadata: {} },
 };
 `,
-      );
-
-      const detected: DetectedFunction = { type: "resolver", name: "userInfo" };
-      const result = await bundleForTestRun({
         detected,
-        sourceFile,
-        machineUser: defaultMachineUser,
-        workspaceId: defaultWorkspaceId,
-      });
+      );
 
       expect(result.bundledCode).toContain("machine_user");
       expect(result.bundledCode).toContain("ADMIN");
@@ -188,9 +195,15 @@ export default {
     });
 
     test("embeds machine user with null attributes (external auth)", async () => {
-      const sourceFile = path.join(testDir, "resolver-ext.ts");
-      fs.writeFileSync(
-        sourceFile,
+      const detected: DetectedFunction = { type: "resolver", name: "ext" };
+      const machineUser: ResolvedMachineUser = {
+        name: "external-user",
+        id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        attributes: null,
+        attributeList: [],
+      };
+      const result = await bundle(
+        "resolver-ext.ts",
         `
 export default {
   operation: "query",
@@ -199,21 +212,9 @@ export default {
   output: { type: "string", metadata: {} },
 };
 `,
-      );
-
-      const detected: DetectedFunction = { type: "resolver", name: "ext" };
-      const machineUser: ResolvedMachineUser = {
-        name: "external-user",
-        id: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-        attributes: null,
-        attributeList: [],
-      };
-      const result = await bundleForTestRun({
         detected,
-        sourceFile,
-        machineUser,
-        workspaceId: defaultWorkspaceId,
-      });
+        { machineUser },
+      );
 
       expect(result.bundledCode).toContain("machine_user");
       expect(result.bundledCode).toContain(defaultWorkspaceId);
@@ -222,9 +223,9 @@ export default {
 
   describe("executor", () => {
     test("bundles an executor extracting operation.body", async () => {
-      const sourceFile = path.join(testDir, "executor.ts");
-      fs.writeFileSync(
-        sourceFile,
+      const detected: DetectedFunction = { type: "executor", name: "test-executor" };
+      const result = await bundle(
+        "executor.ts",
         `
 export default {
   name: "test-executor",
@@ -235,30 +236,19 @@ export default {
   },
 };
 `,
-      );
-
-      const detected: DetectedFunction = { type: "executor", name: "test-executor" };
-      const result = await bundleForTestRun({
         detected,
-        sourceFile,
-        machineUser: defaultMachineUser,
-        workspaceId: defaultWorkspaceId,
-      });
+      );
 
       expect(result.scriptName).toBe("test-run--test-executor.js");
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("export");
-
-      const tempFile = path.join(testDir, "verify-executor.mjs");
-      fs.writeFileSync(tempFile, result.bundledCode);
-      const mod = await import(pathToFileURL(tempFile).href);
-      expect(typeof mod.main).toBe("function");
+      await expectMainExport("verify-executor.mjs", result.bundledCode);
     });
 
     test("embeds machine user as actor context", async () => {
-      const sourceFile = path.join(testDir, "executor-actor.ts");
-      fs.writeFileSync(
-        sourceFile,
+      const detected: DetectedFunction = { type: "executor", name: "test-actor" };
+      const result = await bundle(
+        "executor-actor.ts",
         `
 export default {
   name: "test-actor",
@@ -269,15 +259,8 @@ export default {
   },
 };
 `,
-      );
-
-      const detected: DetectedFunction = { type: "executor", name: "test-actor" };
-      const result = await bundleForTestRun({
         detected,
-        sourceFile,
-        machineUser: defaultMachineUser,
-        workspaceId: defaultWorkspaceId,
-      });
+      );
 
       expect(result.bundledCode).toContain("USER_TYPE_MACHINE_USER");
       expect(result.bundledCode).toContain("ADMIN");
@@ -288,9 +271,13 @@ export default {
 
   describe("workflow job", () => {
     test("bundles a workflow job with env injection", async () => {
-      const sourceFile = path.join(testDir, "workflow.ts");
-      fs.writeFileSync(
-        sourceFile,
+      const detected: DetectedFunction = {
+        type: "workflow-job",
+        name: "my-job",
+        exportName: "my_job",
+      };
+      const result = await bundle(
+        "workflow.ts",
         `
 export const my_job = {
   name: "my-job",
@@ -303,30 +290,14 @@ export default {
   mainJob: my_job,
 };
 `,
-      );
-
-      const detected: DetectedFunction = {
-        type: "workflow-job",
-        name: "my-job",
-        exportName: "my_job",
-      };
-      const env = { APP_URL: "https://example.com", DEBUG: true };
-      const result = await bundleForTestRun({
         detected,
-        sourceFile,
-        env,
-        machineUser: defaultMachineUser,
-        workspaceId: defaultWorkspaceId,
-      });
+        { env: { APP_URL: "https://example.com", DEBUG: true } },
+      );
 
       expect(result.scriptName).toBe("test-run--my-job.js");
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("https://example.com");
-
-      const tempFile = path.join(testDir, "verify-workflow.mjs");
-      fs.writeFileSync(tempFile, result.bundledCode);
-      const mod = await import(pathToFileURL(tempFile).href);
-      expect(typeof mod.main).toBe("function");
+      await expectMainExport("verify-workflow.mjs", result.bundledCode);
     });
   });
 });

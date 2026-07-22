@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
-import { ResolverSchema } from "@/parser/service/resolver";
-import type { Resolver } from "@/types/resolver.generated";
+import { ResolverSchema } from "#/parser/service/resolver/index";
+import type { Resolver } from "#/types/resolver.generated";
 
 /**
  * Load and validate a resolver definition from a file.

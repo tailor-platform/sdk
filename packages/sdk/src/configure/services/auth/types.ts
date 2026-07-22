@@ -1,16 +1,16 @@
-import type { TailorDBInstance } from "@/configure/services/tailordb/types";
+import type { TailorDBInstance } from "#/configure/services/tailordb/types";
 import type {
   DefinedFieldMetadata,
   FieldMetadata,
   TailorFieldType,
   TailorField,
-} from "@/configure/types/field.types";
-import type { TailorEnv } from "@/runtime/types";
+} from "#/configure/types/field.types";
+import type { TailorEnv } from "#/runtime/types";
 // Auth configuration input types and user-field type machinery.
 //
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
-import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
+import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
 import type {
   AuthInvoker,
   IdProvider as IdProviderConfig,
@@ -19,8 +19,8 @@ import type {
   SCIMAttribute,
   SCIMConfig,
   TenantProvider as TenantProviderConfig,
-} from "@/types/auth.generated";
-import type { output } from "@/types/helpers";
+} from "#/types/auth.generated";
+import type { NullableToOptional, output } from "#/types/helpers";
 import type { IsAny, JsonObject, JsonValue } from "type-fest";
 
 // Derived from generated types (zinfer inlines these literal unions)
@@ -34,9 +34,6 @@ export type AuthInvokerWithName<M extends string> = Omit<AuthInvoker, "machineUs
 /** Result of retrieving a connection token at runtime. */
 export type AuthConnectionTokenResult = {
   access_token: string;
-  refresh_token?: string;
-  token_type?: string;
-  expiry?: string;
 };
 
 // Helper types for literal permission and auth attribute operands.
@@ -171,18 +168,49 @@ type TailorFieldOutputValue<Field> =
     ? Output
     : never;
 
-type MachineUserAttributeValues<Fields extends MachineUserAttributeFields> = {
+// Attribute keys mirror the field's optionality (same convention as
+// InferFieldsOutput): keys whose output type includes null are omittable.
+type MachineUserAttributeValues<Fields extends MachineUserAttributeFields> = NullableToOptional<{
   [K in keyof Fields]: TailorFieldOutputValue<Fields[K]> extends ValueOperand | null | undefined
     ? TailorFieldOutputValue<Fields[K]>
     : never;
-};
+}>;
+
+type OptionalIfNoRequiredKeys<Attributes> =
+  Record<never, never> extends Attributes
+    ? { attributes?: Attributes }
+    : { attributes: Attributes };
 
 type MachineUserFromAttributes<Fields extends MachineUserAttributeFields> =
   (keyof Fields extends never
     ? { attributes?: never }
-    : { attributes: DisallowExtraKeys<MachineUserAttributeValues<Fields>, keyof Fields> }) & {
+    : OptionalIfNoRequiredKeys<
+        DisallowExtraKeys<MachineUserAttributeValues<Fields>, keyof Fields>
+      >) & {
     attributeList?: string[];
   };
+
+type MachineUserProfileAttributes<
+  User extends TailorDBInstance,
+  AttributeMap extends UserAttributeMap<User>,
+> = NullableToOptional<{
+  [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
+    ? output<User>[K]
+    : never;
+}> & {
+  [K in Exclude<keyof output<User>, AttributeMapSelectedKeys<User, AttributeMap>>]?: never;
+};
+
+type MachineUserFromUserProfile<
+  User extends TailorDBInstance,
+  AttributeMap extends UserAttributeMap<User>,
+  AttributeList extends UserAttributeListKey<User>[],
+> = (AttributeMapSelectedKeys<User, AttributeMap> extends never
+  ? { attributes?: never }
+  : OptionalIfNoRequiredKeys<MachineUserProfileAttributes<User, AttributeMap>>) &
+  ([] extends AttributeList
+    ? { attributeList?: never }
+    : { attributeList: AttributeListToTuple<User, AttributeList> });
 
 type MachineUser<
   User extends TailorDBInstance,
@@ -193,50 +221,18 @@ type MachineUser<
   IsAny<MachineUserAttributes> extends true
     ? IsAny<User> extends true
       ? {
-          attributes: Record<string, AuthAttributeValue>;
+          attributes?: Record<string, AuthAttributeValue>;
           attributeList?: string[];
         }
-      : (AttributeMapSelectedKeys<User, AttributeMap> extends never
-          ? { attributes?: never }
-          : {
-              attributes: {
-                [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
-                  ? output<User>[K]
-                  : never;
-              } & {
-                [K in Exclude<
-                  keyof output<User>,
-                  AttributeMapSelectedKeys<User, AttributeMap>
-                >]?: never;
-              };
-            }) &
-          ([] extends AttributeList
-            ? { attributeList?: never }
-            : { attributeList: AttributeListToTuple<User, AttributeList> })
+      : MachineUserFromUserProfile<User, AttributeMap, AttributeList>
     : [MachineUserAttributes] extends [MachineUserAttributeFields]
       ? MachineUserFromAttributes<MachineUserAttributes>
       : IsAny<User> extends true
         ? {
-            attributes: Record<string, AuthAttributeValue>;
+            attributes?: Record<string, AuthAttributeValue>;
             attributeList?: string[];
           }
-        : (AttributeMapSelectedKeys<User, AttributeMap> extends never
-            ? { attributes?: never }
-            : {
-                attributes: {
-                  [K in AttributeMapSelectedKeys<User, AttributeMap>]: K extends keyof output<User>
-                    ? output<User>[K]
-                    : never;
-                } & {
-                  [K in Exclude<
-                    keyof output<User>,
-                    AttributeMapSelectedKeys<User, AttributeMap>
-                  >]?: never;
-                };
-              }) &
-            ([] extends AttributeList
-              ? { attributeList?: never }
-              : { attributeList: AttributeListToTuple<User, AttributeList> });
+        : MachineUserFromUserProfile<User, AttributeMap, AttributeList>;
 
 /** Upstream OAuth provider that federated a login through the Built-in IdP. */
 export type FederatedIdentityProvider = "google" | "microsoft";
@@ -335,6 +331,11 @@ export type DefinedAuth<Name extends string, Config, MachineUserNames extends st
    * Using this function pulls config-layer (Node-only) dependencies into runtime bundles.
    */
   invoker<M extends MachineUserNames>(machineUser: M): AuthInvokerWithName<M>;
+  /**
+   * @deprecated Use `authconnection.getConnectionToken(...)` from `@tailor-platform/sdk/runtime` instead.
+   * Importing `auth` from `tailor.config.ts` into runtime files pulls config-layer (Node-only)
+   * dependencies into the bundle.
+   */
   getConnectionToken<C extends ConnectionNames<Config>>(
     connectionName: C,
   ): Promise<AuthConnectionTokenResult>;

@@ -11,8 +11,8 @@
 
 import { TraceMap, generatedPositionFor, originalPositionFor } from "@jridgewell/trace-mapping";
 import * as path from "pathe";
-import { styles } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { styles } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 
 /** A single frame parsed from a V8 stack trace */
 export interface StackFrame {

@@ -1,14 +1,20 @@
 import { describe, test, expect } from "vitest";
-import { buildCrashReport } from "./report";
+import { buildCrashReport, type ErrorType } from "./report";
+
+function makeReport(
+  error: unknown,
+  overrides: { sdkVersion?: string; errorType?: ErrorType } = {},
+) {
+  return buildCrashReport({
+    error,
+    sdkVersion: overrides.sdkVersion ?? "1.0.0",
+    errorType: overrides.errorType ?? "handledError",
+  });
+}
 
 describe("buildCrashReport", () => {
   test("builds a report from an Error", () => {
-    const error = new Error("Something failed");
-    const report = buildCrashReport({
-      error,
-      sdkVersion: "1.0.0",
-      errorType: "handledError",
-    });
+    const report = makeReport(new Error("Something failed"));
 
     expect(report.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     expect(report.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T/);
@@ -23,8 +29,7 @@ describe("buildCrashReport", () => {
   });
 
   test("builds a report from a non-Error value", () => {
-    const report = buildCrashReport({
-      error: "string error",
+    const report = makeReport("string error", {
       sdkVersion: "2.0.0",
       errorType: "uncaughtException",
     });
@@ -39,11 +44,7 @@ describe("buildCrashReport", () => {
     const error = new Error(
       "User user@example.com with id 550e8400-e29b-41d4-a716-446655440000 failed",
     );
-    const report = buildCrashReport({
-      error,
-      sdkVersion: "1.0.0",
-      errorType: "handledError",
-    });
+    const report = makeReport(error);
 
     expect(report.errorMessage).not.toContain("user@example.com");
     expect(report.errorMessage).not.toContain("550e8400");
@@ -53,34 +54,20 @@ describe("buildCrashReport", () => {
 
   test("sanitizes the stack trace", () => {
     const error = new Error("boom");
-    // Override stack for predictable testing
     error.stack = "Error: boom\n    at Object.<anonymous> (/usr/local/lib/node/some-lib.js:10:5)";
-    const report = buildCrashReport({
-      error,
-      sdkVersion: "1.0.0",
-      errorType: "handledError",
-    });
+    const report = makeReport(error);
 
     expect(report.stackTrace).not.toContain("/usr/local/");
   });
 
   test("sanitizes argv", () => {
-    const report = buildCrashReport({
-      error: new Error("test"),
-      sdkVersion: "1.0.0",
-      errorType: "handledError",
-    });
+    const report = makeReport(new Error("test"));
 
-    // argv should be an array
     expect(Array.isArray(report.argv)).toBe(true);
   });
 
   test("includes OS release info", () => {
-    const report = buildCrashReport({
-      error: new Error("test"),
-      sdkVersion: "1.0.0",
-      errorType: "handledError",
-    });
+    const report = makeReport(new Error("test"));
 
     expect(report.osRelease).toBeTruthy();
   });

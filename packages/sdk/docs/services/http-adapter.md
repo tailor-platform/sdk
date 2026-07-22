@@ -7,7 +7,7 @@ HTTP adapters expose REST-style HTTP endpoints on your application by translatin
 Each HTTP adapter is a single file that declares:
 
 - A `pathPattern` (which methods it handles is derived from the `input` keys)
-- An `input` object keyed by lowercase HTTP method (`get`, `post`, `put`, `patch`, `delete`) — each value is a function that converts an incoming HTTP request into a GraphQL request (`query`, `variables`, `operationName`)
+- An `input` object keyed by lowercase HTTP method (`get`, `post`, `put`, `patch`, `delete`) — each value is a function that converts an incoming HTTP request into a GraphQL request (`query`, `variables`, `operationName`). `query` can be a GraphQL string or a generated `TypedDocumentNode`.
 - An optional `output` function — **shared across all methods** — that converts the GraphQL response into an HTTP response (`statusCode`, `headers`, `body`)
 
 Adapters are deployed together with your application. When a request arrives under the `/api/` prefix and matches an adapter, the handler for the request method runs server-side.
@@ -73,6 +73,21 @@ export default createHttpAdapter({
 A request to `GET /api/users/abc-123` invokes the `get` handler, runs the resulting GraphQL query against your application's GraphQL endpoint (with the caller's auth context preserved), then invokes `output(resp)` to produce the HTTP response. A `POST /api/users/...` would instead invoke the `post` handler with the same shared `output`.
 
 If `output` is omitted, the raw GraphQL response is returned as JSON.
+
+### Typed GraphQL Documents
+
+`input` handlers can return generated `TypedDocumentNode` values instead of query strings. The SDK uses the document's variables type for `variables`, and passes the document's result type to `output` as `resp.data`.
+
+```typescript
+import { GetUserDocument } from "../generated/graphql";
+
+get: (req) => ({
+  query: GetUserDocument,
+  variables: { id: req.path.split("/")[2] ?? "" },
+});
+```
+
+When multiple methods return different typed documents, `resp.data` is the union of those result types because `output` is shared across the adapter. If a method returns a plain string query, its result type is `unknown`. When extracting an input handler and annotating it separately, pass the document type to `HttpAdapterInputFn` so required variables stay typed.
 
 ### Optional fields
 

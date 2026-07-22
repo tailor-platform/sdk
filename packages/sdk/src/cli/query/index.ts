@@ -5,16 +5,16 @@ import {
   AuthInvokerSchema,
   type AuthInvoker,
   type MachineUser,
-} from "@tailor-proto/tailor/v1/auth_resource_pb";
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { createPrompt } from "@toiroakr/read-multiline";
 import * as path from "pathe";
 import { parse as parseSql } from "pgsql-ast-parser";
 import { arg } from "politty";
 import { xdgConfig } from "xdg-basedir";
 import { z } from "zod";
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#/utils/assert";
 import { bundleQueryScript } from "../bundler/query/query-bundler";
-import { deploymentArgs } from "../shared/args";
+import { deploymentArgs, resolveMachineUserInputSource } from "../shared/args";
 import { fetchMachineUserToken, initOperatorClient } from "../shared/client";
 import { defineAppCommand } from "../shared/command";
 import { extractAllNamespaces } from "../shared/config";
@@ -36,7 +36,7 @@ import {
 } from "./sql-type-extractor";
 import { loadTypeFieldOrder } from "./type-field-order";
 import { queryEngines, type QueryEngine } from "./types";
-import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
+import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
 export type { QueryEngine } from "./types";
 
@@ -47,6 +47,7 @@ const queryBaseOptionsSchema = z.object({
   configPath: z.string().optional(),
   engine: queryEngineSchema,
   machineUser: z.string().optional(),
+  machineUserSource: z.enum(["option", "env"]).optional(),
 });
 const queryOptionsSchema = queryBaseOptionsSchema.extend({
   query: z.string(),
@@ -146,6 +147,7 @@ async function loadOptions(options: QueryBaseOptions) {
 
   const machineUser = await loadMachineUserName({
     machineUser: result.data.machineUser,
+    machineUserSource: result.data.machineUserSource,
     profile: result.data.profile,
   });
   if (!machineUser) {
@@ -383,7 +385,7 @@ async function prepareQueryExecutor(
 ): Promise<(query: string) => Promise<QueryDispatchResult>> {
   const { client, workspaceId, config, application, machineUserResource, engine, namespaces } =
     await loadOptions(options);
-  const bundledCode = await bundleQueryScript(engine);
+  const bundledCode = await bundleQueryScript(engine, path.dirname(config.path));
   const invoker = create(AuthInvokerSchema, {
     namespace: application.authNamespace,
     machineUserName: machineUserResource.name,
@@ -814,6 +816,7 @@ export const queryCommand = defineAppCommand({
       configPath: args.config,
       engine: args.engine,
       machineUser: args["machine-user"],
+      machineUserSource: resolveMachineUserInputSource(args["machine-user"]),
     };
 
     if (mode.mode === "abort") {

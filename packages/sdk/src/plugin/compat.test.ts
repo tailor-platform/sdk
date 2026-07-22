@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { beforeAll, describe, expect, test } from "vitest";
-import { generate } from "@/cli/commands/generate/service";
+import { aroundAll, describe, expect, test } from "vitest";
+import { generate } from "#/cli/commands/generate/service";
 
 describe("defineGenerators and definePlugins produce identical output", () => {
   const fixtureDir = path.resolve(__dirname, "../cli/commands/deploy/__test_fixtures__");
@@ -27,7 +27,7 @@ describe("defineGenerators and definePlugins produce identical output", () => {
     return files.toSorted();
   };
 
-  beforeAll(async () => {
+  aroundAll(async (runSuite) => {
     process.env.TAILOR_PLATFORM_WORKSPACE_ID ??= randomUUID();
 
     for (const dir of [generatorsDir, pluginsDir]) {
@@ -40,6 +40,8 @@ describe("defineGenerators and definePlugins produce identical output", () => {
     await generate({
       configPath: path.join(fixtureDir, "tailor.config.plugins-compat.ts"),
     });
+
+    await runSuite();
   }, 120000);
 
   test("plugin output includes all generated files from defineGenerators", () => {

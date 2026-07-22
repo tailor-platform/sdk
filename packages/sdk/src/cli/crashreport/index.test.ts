@@ -1,39 +1,44 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("std-env", () => ({
   isCI: false,
 }));
 
+async function importReportCrash(config: {
+  localEnabled: boolean;
+  remoteEnabled: boolean;
+  localDir: string;
+}) {
+  vi.doMock("./config", () => ({
+    parseCrashReportConfig: () => config,
+  }));
+  return (await import("./index")).reportCrash;
+}
+
 describe("reportCrash", () => {
   const originalEnv = process.env;
   let tmpDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     process.env = { ...originalEnv };
     delete process.env.TAILOR_CRASH_REPORTS_LOCAL;
     delete process.env.TAILOR_CRASH_REPORTS_REMOTE;
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "crash-report-index-test-"));
     vi.resetModules();
-  });
-
-  afterEach(() => {
+    await runTest();
     process.env = originalEnv;
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
   test("writes a crash log file for unexpected errors", async () => {
-    vi.doMock("./config", () => ({
-      parseCrashReportConfig: () => ({
-        localEnabled: true,
-        remoteEnabled: false,
-        localDir: tmpDir,
-      }),
-    }));
-
-    const { reportCrash } = await import("./index");
+    const reportCrash = await importReportCrash({
+      localEnabled: true,
+      remoteEnabled: false,
+      localDir: tmpDir,
+    });
     await reportCrash(new Error("unexpected boom"), "handledError");
 
     const files = fs.readdirSync(tmpDir).filter((f) => f.endsWith(".crash.log"));
@@ -44,15 +49,11 @@ describe("reportCrash", () => {
   });
 
   test("does not write when disabled", async () => {
-    vi.doMock("./config", () => ({
-      parseCrashReportConfig: () => ({
-        localEnabled: false,
-        remoteEnabled: false,
-        localDir: tmpDir,
-      }),
-    }));
-
-    const { reportCrash } = await import("./index");
+    const reportCrash = await importReportCrash({
+      localEnabled: false,
+      remoteEnabled: false,
+      localDir: tmpDir,
+    });
     await reportCrash(new Error("should not write"), "handledError");
 
     const files = fs.readdirSync(tmpDir);
@@ -66,15 +67,11 @@ describe("reportCrash", () => {
     });
     globalThis.fetch = mockFetch;
 
-    vi.doMock("./config", () => ({
-      parseCrashReportConfig: () => ({
-        localEnabled: true,
-        remoteEnabled: true,
-        localDir: tmpDir,
-      }),
-    }));
-
-    const { reportCrash } = await import("./index");
+    const reportCrash = await importReportCrash({
+      localEnabled: true,
+      remoteEnabled: true,
+      localDir: tmpDir,
+    });
     await reportCrash(new Error("send me"), "handledError");
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -95,16 +92,11 @@ describe("reportCrash", () => {
   });
 
   test("never throws even if writing fails", async () => {
-    vi.doMock("./config", () => ({
-      parseCrashReportConfig: () => ({
-        localEnabled: true,
-        remoteEnabled: false,
-        localDir: "/nonexistent/\0/invalid-path",
-      }),
-    }));
-
-    const { reportCrash } = await import("./index");
-    // Should not throw
+    const reportCrash = await importReportCrash({
+      localEnabled: true,
+      remoteEnabled: false,
+      localDir: "/nonexistent/\0/invalid-path",
+    });
     await expect(reportCrash(new Error("test"), "handledError")).resolves.toBeUndefined();
   });
 });

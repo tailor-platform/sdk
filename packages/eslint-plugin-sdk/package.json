@@ -1,0 +1,55 @@
+{
+  "name": "@tailor-platform/eslint-plugin-sdk",
+  "version": "0.1.0",
+  "description": "Lint rules for Tailor Platform SDK applications",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tailor-platform/sdk.git",
+    "directory": "packages/eslint-plugin-sdk"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "lib",
+    "rules",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    }
+  },
+  "scripts": {
+    "lint": "oxlint .",
+    "lint:fix": "oxlint . --fix",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "publint": "publint --strict"
+  },
+  "dependencies": {
+    "@types/eslint": "9.6.1"
+  },
+  "devDependencies": {
+    "eslint": "10.7.0",
+    "oxlint": "1.73.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  },
+  "peerDependencies": {
+    "eslint": ">=9.0.0"
+  },
+  "peerDependenciesMeta": {
+    "eslint": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  }
+}

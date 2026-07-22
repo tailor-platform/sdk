@@ -1,10 +1,10 @@
 /* oxlint-disable typescript/no-explicit-any */
-import { brandValue } from "@/utils/brand";
+import { brandValue } from "#/utils/brand";
 import { dispatchTriggerWorkflow, registerWorkflow } from "./registry";
+import type { MachineUserName } from "#/configure/types/machine-user";
+import type { ConcurrencyPolicy, RetryPolicy } from "#/types/workflow.generated";
 import type { AuthInvoker } from "../auth";
 import type { WorkflowJob } from "./job";
-import type { MachineUserName } from "@/configure/types/machine-user";
-import type { ConcurrencyPolicy, RetryPolicy } from "@/types/workflow.generated";
 
 export type { ConcurrencyPolicy, RetryPolicy };
 
@@ -77,7 +77,20 @@ export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
               "workflow.trigger() is rewritten at build time and unavailable in the bundle",
             );
           }
-        : async (args, options) => await dispatchTriggerWorkflow(config.name, args, options),
+        : // Preserve arity: use `arguments.length` (regular function, not arrow) so
+          // `.trigger(args, undefined)` is treated as "options passed" — matching
+          // the bundler rewrite, which forwards the literal `undefined` from the
+          // AST as a third argument. Without this, local execution and bundled
+          // workflows would hand mocks different call shapes.
+          async function trigger(
+            args: Parameters<Job["trigger"]>[0],
+            options?: { authInvoker: AuthInvoker<string> | MachineUserName },
+          ) {
+            // oxlint-disable-next-line prefer-rest-params
+            return arguments.length >= 2
+              ? await dispatchTriggerWorkflow(config.name, args, options)
+              : await dispatchTriggerWorkflow(config.name, args);
+          },
     } as Workflow<Job>,
     "workflow",
   );

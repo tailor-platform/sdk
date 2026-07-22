@@ -1,8 +1,8 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
-import { CLIError } from "@/cli/shared/errors";
-import { logger } from "@/cli/shared/logger";
+import { defineAppCommand } from "#/cli/shared/command";
+import { CLIError } from "#/cli/shared/errors";
+import { logger } from "#/cli/shared/logger";
 import { extractMethodName, getMethodDescriptor, listMethodNames } from "./proto-reflect";
 import { renderInspectJson, renderInspectText } from "./render";
 

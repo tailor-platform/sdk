@@ -1,13 +1,7 @@
-import { assertDefined } from "@/utils/assert";
+import { assertDefined } from "#/utils/assert";
 import { type ASTNode, isStringLiteral, findProperty } from "./ast-utils";
 import { collectSdkBindings, isSdkFunctionCall } from "./sdk-binding-collector";
-import type {
-  Program,
-  CallExpression,
-  ObjectExpression,
-  ImportDeclaration,
-  ImportDefaultSpecifier,
-} from "@oxc-project/types";
+import type { Program, CallExpression, ObjectExpression } from "@oxc-project/types";
 
 export interface WorkflowLocation {
   name: string;
@@ -83,63 +77,4 @@ export function findAllWorkflows(program: Program, _sourceText: string): Workflo
 
   walk(program as unknown as ASTNode);
   return workflows;
-}
-
-/**
- * Build a map from export name to workflow name from detected workflows
- * @param workflows - Detected workflows
- * @returns Map from export name to workflow name
- */
-export function buildWorkflowNameMap(workflows: WorkflowLocation[]): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const workflow of workflows) {
-    if (workflow.exportName) {
-      map.set(workflow.exportName, workflow.name);
-    }
-  }
-  return map;
-}
-
-/**
- * Detect default imports in a source file and return a map from local name to import source
- * @param program - Parsed TypeScript program
- * @returns Map from local name to import source
- */
-export function detectDefaultImports(program: Program): Map<string, string> {
-  const imports = new Map<string, string>();
-
-  function walk(node: ASTNode | null | undefined): void {
-    if (!node || typeof node !== "object") return;
-
-    const nodeType = node.type as string | undefined;
-
-    if (nodeType === "ImportDeclaration") {
-      const importDecl = node as unknown as ImportDeclaration;
-      const source = importDecl.source.value;
-
-      if (typeof source === "string") {
-        for (const specifier of importDecl.specifiers) {
-          // import foo from "module"
-          if (specifier.type === "ImportDefaultSpecifier") {
-            const spec = specifier as ImportDefaultSpecifier;
-            if (spec.local.name) {
-              imports.set(spec.local.name, source);
-            }
-          }
-        }
-      }
-    }
-
-    for (const key of Object.keys(node)) {
-      const child = node[key] as unknown;
-      if (Array.isArray(child)) {
-        child.forEach((c: unknown) => walk(c as ASTNode | null));
-      } else if (child && typeof child === "object") {
-        walk(child as ASTNode);
-      }
-    }
-  }
-
-  walk(program as unknown as ASTNode);
-  return imports;
 }

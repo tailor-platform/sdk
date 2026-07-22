@@ -2,19 +2,9 @@
 
 Commands for managing function registries and viewing function execution logs.
 
-<!-- politty:command:function:heading:start -->
-
 ## function
 
-<!-- politty:command:function:heading:end -->
-
-<!-- politty:command:function:description:start -->
-
 Manage functions
-
-<!-- politty:command:function:description:end -->
-
-<!-- politty:command:function:usage:start -->
 
 **Usage**
 
@@ -22,9 +12,7 @@ Manage functions
 tailor-sdk function [command]
 ```
 
-<!-- politty:command:function:usage:end -->
-
-<!-- politty:command:function:subcommands:start -->
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 **Commands**
 
@@ -35,36 +23,15 @@ tailor-sdk function [command]
 | [`function logs`](#function-logs)         | List or get function execution logs.                            |
 | [`function test-run`](#function-test-run) | Run a function on the Tailor Platform server without deploying. |
 
-<!-- politty:command:function:subcommands:end -->
-
-<!-- politty:command:function:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:function:global-options-link:end -->
-<!-- politty:command:function get:heading:start -->
-
 ### function get
 
-<!-- politty:command:function get:heading:end -->
-
-<!-- politty:command:function get:description:start -->
-
 Get a function registry by name
-
-<!-- politty:command:function get:description:end -->
-
-<!-- politty:command:function get:usage:start -->
 
 **Usage**
 
 ```
 tailor-sdk function get [options]
 ```
-
-<!-- politty:command:function get:usage:end -->
-
-<!-- politty:command:function get:options:start -->
 
 **Options**
 
@@ -74,36 +41,17 @@ tailor-sdk function get [options]
 | `--profile <PROFILE>`           | `-p`  | Workspace profile | No       | -       | `TAILOR_PLATFORM_PROFILE`      |
 | `--name <NAME>`                 | `-n`  | Function name     | Yes      | -       | -                              |
 
-<!-- politty:command:function get:options:end -->
-
-<!-- politty:command:function get:global-options-link:start -->
-
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:function get:global-options-link:end -->
-<!-- politty:command:function list:heading:start -->
 
 ### function list
 
-<!-- politty:command:function list:heading:end -->
-
-<!-- politty:command:function list:description:start -->
-
 List function registries in a workspace
-
-<!-- politty:command:function list:description:end -->
-
-<!-- politty:command:function list:usage:start -->
 
 **Usage**
 
 ```
 tailor-sdk function list [options]
 ```
-
-<!-- politty:command:function list:usage:end -->
-
-<!-- politty:command:function list:options:start -->
 
 **Options**
 
@@ -114,27 +62,11 @@ tailor-sdk function list [options]
 | `--order <ORDER>`               | -     | Sort order (asc or desc)                                 | No       | `"desc"` | -                              |
 | `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0 or omit: unlimited) | No       | -        | -                              |
 
-<!-- politty:command:function list:options:end -->
-
-<!-- politty:command:function list:global-options-link:start -->
-
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:function list:global-options-link:end -->
-
-<!-- politty:command:function logs:heading:start -->
 
 ### function logs
 
-<!-- politty:command:function logs:heading:end -->
-
-<!-- politty:command:function logs:description:start -->
-
 List or get function execution logs.
-
-<!-- politty:command:function logs:description:end -->
-
-<!-- politty:command:function logs:usage:start -->
 
 **Usage**
 
@@ -142,19 +74,11 @@ List or get function execution logs.
 tailor-sdk function logs [options] [execution-id]
 ```
 
-<!-- politty:command:function logs:usage:end -->
-
-<!-- politty:command:function logs:arguments:start -->
-
 **Arguments**
 
 | Argument       | Description                                         | Required |
 | -------------- | --------------------------------------------------- | -------- |
 | `execution-id` | Execution ID (if provided, shows details with logs) | No       |
-
-<!-- politty:command:function logs:arguments:end -->
-
-<!-- politty:command:function logs:options:start -->
 
 **Options**
 
@@ -165,15 +89,7 @@ tailor-sdk function logs [options] [execution-id]
 | `--order <ORDER>`               | -     | Sort order (asc or desc)                         | No       | `"desc"` | -                              |
 | `--limit <LIMIT>`               | `-l`  | Maximum number of items to return (0: unlimited) | No       | `50`     | -                              |
 
-<!-- politty:command:function logs:options:end -->
-
-<!-- politty:command:function logs:global-options-link:start -->
-
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:function logs:global-options-link:end -->
-
-<!-- politty:command:function logs:examples:start -->
 
 **Examples**
 
@@ -201,29 +117,15 @@ $ tailor-sdk function logs --json
 $ tailor-sdk function logs <execution-id> --json
 ```
 
-<!-- politty:command:function logs:examples:end -->
-
-<!-- politty:command:function logs:notes:start -->
-
 **Notes**
 
 When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching `function test-run` output).
 
 Stack traces stay accurate even after later redeploys, because the trace is resolved against the exact build that produced the execution. If that build is no longer available, the command falls back to a plain-text error display.
 
-<!-- politty:command:function logs:notes:end -->
-
-<!-- politty:command:function test-run:heading:start -->
-
 ### function test-run
 
-<!-- politty:command:function test-run:heading:end -->
-<!-- politty:command:function test-run:description:start -->
-
 Run a function on the Tailor Platform server without deploying.
-
-<!-- politty:command:function test-run:description:end -->
-<!-- politty:command:function test-run:usage:start -->
 
 **Usage**
 
@@ -231,17 +133,11 @@ Run a function on the Tailor Platform server without deploying.
 tailor-sdk function test-run [options] <file>
 ```
 
-<!-- politty:command:function test-run:usage:end -->
-<!-- politty:command:function test-run:arguments:start -->
-
 **Arguments**
 
 | Argument | Description               | Required |
 | -------- | ------------------------- | -------- |
 | `file`   | Path to the function file | Yes      |
-
-<!-- politty:command:function test-run:arguments:end -->
-<!-- politty:command:function test-run:options:start -->
 
 **Options**
 
@@ -254,8 +150,7 @@ tailor-sdk function test-run [options] <file>
 | `--machine-user <MACHINE_USER>` | `-m`  | Machine user name for authentication. Falls back to the active profile's default machine user. | No       | -                    | `TAILOR_PLATFORM_MACHINE_USER_NAME` |
 | `--config <CONFIG>`             | `-c`  | Path to SDK config file                                                                        | No       | `"tailor.config.ts"` | -                                   |
 
-<!-- politty:command:function test-run:options:end -->
-<!-- politty:command:function test-run:examples:start -->
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
 **Examples**
 
@@ -277,9 +172,6 @@ $ tailor-sdk function test-run workflows/sample.ts --name validate-order
 $ tailor-sdk function test-run build/resolvers/add.js --arg '{"a":1,"b":2}'
 ```
 
-<!-- politty:command:function test-run:examples:end -->
-<!-- politty:command:function test-run:notes:start -->
-
 **Notes**
 
 You can pass either a source file (`.ts`) or a pre-bundled file (`.js`).
@@ -288,11 +180,3 @@ When a `.js` file is provided, detection and bundling are skipped and the file i
 > [!WARNING]
 > Workflow job `.trigger()` calls do not work in test-run mode.
 > Triggered jobs are not executed; only the target job's `body` function runs in isolation.
-
-<!-- politty:command:function test-run:notes:end -->
-
-<!-- politty:command:function test-run:global-options-link:start -->
-
-See [Global Options](../cli-reference.md#global-options) for options available to all commands.
-
-<!-- politty:command:function test-run:global-options-link:end -->

@@ -1,8 +1,8 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, test, expectTypeOf } from "vitest";
-import { defineAuth } from "@/configure/services/auth";
-import { db } from "@/configure/services/tailordb";
-import { createWorkflow, createWorkflowJob } from "@/configure/services/workflow";
+import { defineAuth } from "#/configure/services/auth/index";
+import { db } from "#/configure/services/tailordb/index";
+import { createWorkflow, createWorkflowJob } from "#/configure/services/workflow/index";
 import { type StartWorkflowOptions, type StartWorkflowTypedOptions } from "./start";
 
 const userType = db.type("User", {
@@ -223,6 +223,13 @@ describe("startWorkflow API types", () => {
       machineUser: "admin",
       arg: { any: "value" },
       configPath: "./tailor.config.ts",
+    });
+
+    acceptsDeprecatedOptions({
+      name: "legacy-workflow",
+      machineUser: "admin",
+      // @ts-expect-error - source tracking is internal to CLI commands
+      machineUserSource: "option",
     });
 
     acceptsDeprecatedOptions({

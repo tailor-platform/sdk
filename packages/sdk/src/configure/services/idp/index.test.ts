@@ -1,10 +1,19 @@
 import { describe, expect, test } from "vitest";
-import { defineIdp } from "./index";
+import { defineIdp, unsafeAllowAllIdPPermission } from "./index";
+
+let idpCounter = 0;
+function makeIdp<Config extends Record<string, unknown>>(config: Config) {
+  return defineIdp(`idp-${idpCounter++}`, {
+    permission: unsafeAllowAllIdPPermission,
+    clients: ["client-1"] as const,
+    ...config,
+  });
+}
 
 describe("defineIdp", () => {
   test("should infer literal types for clients", () => {
     const idp = defineIdp("my-idp", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["client-1", "client-2"] as const,
     });
 
@@ -18,7 +27,7 @@ describe("defineIdp", () => {
 
   test("should work with single client", () => {
     const idp = defineIdp("my-idp", {
-      authorization: "loggedIn",
+      permission: unsafeAllowAllIdPPermission,
       clients: ["only-client"] as const,
     });
 
@@ -26,81 +35,39 @@ describe("defineIdp", () => {
     expect(provider.clientName).toBe("only-client");
   });
 
-  test("should preserve authorization config", () => {
-    const idp1 = defineIdp("idp-1", {
-      authorization: "insecure",
-      clients: ["client-1"] as const,
-    });
-    expect(idp1.authorization).toBe("insecure");
-
-    const idp2 = defineIdp("idp-2", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-    });
-    expect(idp2.authorization).toBe("loggedIn");
-
-    const idp3 = defineIdp("idp-3", {
-      authorization: { cel: 'user.id == "test"' },
-      clients: ["client-1"] as const,
-    });
-    expect(idp3.authorization).toEqual({ cel: 'user.id == "test"' });
+  test("should preserve permission config", () => {
+    const idp = makeIdp({});
+    expect(idp.permission).toEqual(unsafeAllowAllIdPPermission);
   });
 
-  test("should preserve lang config", () => {
-    const idpEn = defineIdp("idp-en", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      lang: "en",
-    });
-    expect(idpEn.lang).toBe("en");
-
-    const idpJa = defineIdp("idp-ja", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      lang: "ja",
-    });
-    expect(idpJa.lang).toBe("ja");
-
-    const idpNoLang = defineIdp("idp-no-lang", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-    });
-    expect(idpNoLang.lang).toBeUndefined();
+  test.each([
+    ["en", "en"],
+    ["ja", "ja"],
+    [undefined, undefined],
+  ] as const)("should preserve lang config (%s)", (lang, expected) => {
+    const idp = makeIdp(lang === undefined ? {} : { lang });
+    expect(idp.lang).toBe(expected);
   });
 
   test("should preserve userAuthPolicy config", () => {
-    const idpWithPolicy = defineIdp("idp-with-policy", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {
-        useNonEmailIdentifier: true,
-        allowSelfPasswordReset: true,
-      },
+    const idpWithPolicy = makeIdp({
+      userAuthPolicy: { useNonEmailIdentifier: true, allowSelfPasswordReset: true },
     });
     expect(idpWithPolicy.userAuthPolicy?.useNonEmailIdentifier).toBe(true);
     expect(idpWithPolicy.userAuthPolicy?.allowSelfPasswordReset).toBe(true);
 
-    const idpWithPartialPolicy = defineIdp("idp-with-partial-policy", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {
-        allowSelfPasswordReset: false,
-      },
+    const idpWithPartialPolicy = makeIdp({
+      userAuthPolicy: { allowSelfPasswordReset: false },
     });
     expect(idpWithPartialPolicy.userAuthPolicy?.useNonEmailIdentifier).toBeUndefined();
     expect(idpWithPartialPolicy.userAuthPolicy?.allowSelfPasswordReset).toBe(false);
 
-    const idpNoPolicy = defineIdp("idp-no-policy", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-    });
+    const idpNoPolicy = makeIdp({});
     expect(idpNoPolicy.userAuthPolicy).toBeUndefined();
   });
 
   test("should preserve userAuthPolicy password policy fields", () => {
-    const idpWithPasswordPolicy = defineIdp("idp-with-password-policy", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
+    const idpWithPasswordPolicy = makeIdp({
       userAuthPolicy: {
         passwordRequireUppercase: true,
         passwordRequireLowercase: true,
@@ -117,13 +84,8 @@ describe("defineIdp", () => {
     expect(idpWithPasswordPolicy.userAuthPolicy?.passwordMinLength).toBe(10);
     expect(idpWithPasswordPolicy.userAuthPolicy?.passwordMaxLength).toBe(128);
 
-    const idpWithPartialPasswordPolicy = defineIdp("idp-with-partial-password-policy", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {
-        passwordRequireUppercase: true,
-        passwordMinLength: 8,
-      },
+    const idpWithPartialPasswordPolicy = makeIdp({
+      userAuthPolicy: { passwordRequireUppercase: true, passwordMinLength: 8 },
     });
     expect(idpWithPartialPasswordPolicy.userAuthPolicy?.passwordRequireUppercase).toBe(true);
     expect(idpWithPartialPasswordPolicy.userAuthPolicy?.passwordMinLength).toBe(8);
@@ -131,93 +93,47 @@ describe("defineIdp", () => {
   });
 
   test("should preserve userAuthPolicy allowedEmailDomains", () => {
-    const idpWithAllowedEmailDomains = defineIdp("idp-with-allowed-email-domains", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {
-        allowedEmailDomains: ["example.com", "corp.example.com"],
-      },
+    const idpWithAllowedEmailDomains = makeIdp({
+      userAuthPolicy: { allowedEmailDomains: ["example.com", "corp.example.com"] },
     });
     expect(idpWithAllowedEmailDomains.userAuthPolicy?.allowedEmailDomains).toEqual([
       "example.com",
       "corp.example.com",
     ]);
 
-    const idpWithEmptyAllowedEmailDomains = defineIdp("idp-with-empty-allowed-email-domains", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {
-        allowedEmailDomains: [],
-      },
+    const idpWithEmptyAllowedEmailDomains = makeIdp({
+      userAuthPolicy: { allowedEmailDomains: [] },
     });
     expect(idpWithEmptyAllowedEmailDomains.userAuthPolicy?.allowedEmailDomains).toEqual([]);
 
-    const idpNoAllowedEmailDomains = defineIdp("idp-no-allowed-email-domains", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {},
-    });
+    const idpNoAllowedEmailDomains = makeIdp({ userAuthPolicy: {} });
     expect(idpNoAllowedEmailDomains.userAuthPolicy?.allowedEmailDomains).toBeUndefined();
   });
 
-  test("should preserve userAuthPolicy allowGoogleOauth", () => {
-    const idpWithAllowGoogleOauth = defineIdp("idp-with-allow-google-oauth", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {
-        allowGoogleOauth: true,
-      },
+  test.each([
+    [true, true],
+    [false, false],
+    [undefined, undefined],
+  ] as const)("should preserve userAuthPolicy allowGoogleOauth (%s)", (value, expected) => {
+    const idp = makeIdp({
+      userAuthPolicy: value === undefined ? {} : { allowGoogleOauth: value },
     });
-    expect(idpWithAllowGoogleOauth.userAuthPolicy?.allowGoogleOauth).toBe(true);
-
-    const idpWithAllowGoogleOauthFalse = defineIdp("idp-with-allow-google-oauth-false", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {
-        allowGoogleOauth: false,
-      },
-    });
-    expect(idpWithAllowGoogleOauthFalse.userAuthPolicy?.allowGoogleOauth).toBe(false);
-
-    const idpNoAllowGoogleOauth = defineIdp("idp-no-allow-google-oauth", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {},
-    });
-    expect(idpNoAllowGoogleOauth.userAuthPolicy?.allowGoogleOauth).toBeUndefined();
+    expect(idp.userAuthPolicy?.allowGoogleOauth).toBe(expected);
   });
 
-  test("should preserve userAuthPolicy allowMicrosoftOauth", () => {
-    const idpWithAllowMicrosoftOauth = defineIdp("idp-with-allow-microsoft-oauth", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {
-        allowMicrosoftOauth: true,
-      },
+  test.each([
+    [true, true],
+    [false, false],
+    [undefined, undefined],
+  ] as const)("should preserve userAuthPolicy allowMicrosoftOauth (%s)", (value, expected) => {
+    const idp = makeIdp({
+      userAuthPolicy: value === undefined ? {} : { allowMicrosoftOauth: value },
     });
-    expect(idpWithAllowMicrosoftOauth.userAuthPolicy?.allowMicrosoftOauth).toBe(true);
-
-    const idpWithAllowMicrosoftOauthFalse = defineIdp("idp-with-allow-microsoft-oauth-false", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {
-        allowMicrosoftOauth: false,
-      },
-    });
-    expect(idpWithAllowMicrosoftOauthFalse.userAuthPolicy?.allowMicrosoftOauth).toBe(false);
-
-    const idpNoAllowMicrosoftOauth = defineIdp("idp-no-allow-microsoft-oauth", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {},
-    });
-    expect(idpNoAllowMicrosoftOauth.userAuthPolicy?.allowMicrosoftOauth).toBeUndefined();
+    expect(idp.userAuthPolicy?.allowMicrosoftOauth).toBe(expected);
   });
 
   test("should preserve userAuthPolicy disablePasswordAuth", () => {
-    const idpWithDisablePasswordAuth = defineIdp("idp-with-disable-password-auth", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
+    const idpWithDisablePasswordAuth = makeIdp({
       userAuthPolicy: {
         disablePasswordAuth: true,
         allowGoogleOauth: true,
@@ -226,170 +142,103 @@ describe("defineIdp", () => {
     });
     expect(idpWithDisablePasswordAuth.userAuthPolicy?.disablePasswordAuth).toBe(true);
 
-    const idpWithDisablePasswordAuthFalse = defineIdp("idp-with-disable-password-auth-false", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {
-        disablePasswordAuth: false,
-      },
+    const idpWithDisablePasswordAuthFalse = makeIdp({
+      userAuthPolicy: { disablePasswordAuth: false },
     });
     expect(idpWithDisablePasswordAuthFalse.userAuthPolicy?.disablePasswordAuth).toBe(false);
 
-    const idpNoDisablePasswordAuth = defineIdp("idp-no-disable-password-auth", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      userAuthPolicy: {},
-    });
+    const idpNoDisablePasswordAuth = makeIdp({ userAuthPolicy: {} });
     expect(idpNoDisablePasswordAuth.userAuthPolicy?.disablePasswordAuth).toBeUndefined();
   });
 
   test("should validate password length ranges", () => {
-    // Valid ranges
+    expect(() => makeIdp({ userAuthPolicy: { passwordMinLength: 6 } })).not.toThrow();
+    expect(() => makeIdp({ userAuthPolicy: { passwordMaxLength: 4096 } })).not.toThrow();
     expect(() =>
-      defineIdp("idp-valid-min", {
-        authorization: "loggedIn",
-        clients: ["client-1"] as const,
-        userAuthPolicy: {
-          passwordMinLength: 6,
-        },
-      }),
+      makeIdp({ userAuthPolicy: { passwordMinLength: 10, passwordMaxLength: 20 } }),
     ).not.toThrow();
 
-    expect(() =>
-      defineIdp("idp-valid-max", {
-        authorization: "loggedIn",
-        clients: ["client-1"] as const,
-        userAuthPolicy: {
-          passwordMaxLength: 4096,
-        },
-      }),
-    ).not.toThrow();
-
-    expect(() =>
-      defineIdp("idp-valid-length-consistency", {
-        authorization: "loggedIn",
-        clients: ["client-1"] as const,
-        userAuthPolicy: {
-          passwordMinLength: 10,
-          passwordMaxLength: 20,
-        },
-      }),
-    ).not.toThrow();
-
-    // Invalid ranges should throw during parsing
-    // Note: These tests verify the schema validation works,
-    // but defineIdp itself doesn't validate - validation happens in parser layer
+    // Invalid ranges should throw during parsing.
+    // defineIdp itself doesn't validate - validation happens in parser layer.
   });
 
-  test("should preserve publishUserEvents config", () => {
-    const idpWithPublishUserEvents = defineIdp("idp-with-publish-user-events", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      publishUserEvents: true,
-    });
-    expect(idpWithPublishUserEvents.publishUserEvents).toBe(true);
-
-    const idpWithPublishUserEventsFalse = defineIdp("idp-with-publish-user-events-false", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      publishUserEvents: false,
-    });
-    expect(idpWithPublishUserEventsFalse.publishUserEvents).toBe(false);
-
-    const idpNoPublishUserEvents = defineIdp("idp-no-publish-user-events", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-    });
-    expect(idpNoPublishUserEvents.publishUserEvents).toBeUndefined();
+  test.each([
+    [true, true],
+    [false, false],
+    [undefined, undefined],
+  ] as const)("should preserve publishUserEvents config (%s)", (value, expected) => {
+    const idp = makeIdp(value === undefined ? {} : { publishUserEvents: value });
+    expect(idp.publishUserEvents).toBe(expected);
   });
 
   test("should preserve gqlOperations config", () => {
-    const idpWithGqlOperations = defineIdp("idp-with-gql-operations", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      gqlOperations: {
-        create: false,
-        update: false,
-        delete: false,
-        read: false,
-        sendPasswordResetEmail: false,
-      },
-    });
-    expect(idpWithGqlOperations.gqlOperations).toEqual({
+    const fullOps = {
       create: false,
       update: false,
       delete: false,
       read: false,
       sendPasswordResetEmail: false,
-    });
+    };
+    const idpWithGqlOperations = makeIdp({ gqlOperations: fullOps });
+    expect(idpWithGqlOperations.gqlOperations).toEqual(fullOps);
 
-    const idpWithPartialGqlOperations = defineIdp("idp-with-partial-gql-operations", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      gqlOperations: {
-        create: false,
-        read: true,
-      },
-    });
-    expect(idpWithPartialGqlOperations.gqlOperations).toEqual({
-      create: false,
-      read: true,
-    });
+    const partialOps = { create: false, read: true };
+    const idpWithPartialGqlOperations = makeIdp({ gqlOperations: partialOps });
+    expect(idpWithPartialGqlOperations.gqlOperations).toEqual(partialOps);
 
-    const idpNoGqlOperations = defineIdp("idp-no-gql-operations", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-    });
+    const idpNoGqlOperations = makeIdp({});
     expect(idpNoGqlOperations.gqlOperations).toBeUndefined();
   });
 
   test("gqlOperations: 'query' stores alias as raw value", () => {
-    const idpWithQueryAlias = defineIdp("idp-with-query-alias", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      gqlOperations: "query",
-    });
+    const idpWithQueryAlias = makeIdp({ gqlOperations: "query" });
 
     // Configure layer stores the alias without normalization
     expect(idpWithQueryAlias.gqlOperations).toBe("query");
   });
 
   test("should preserve emailConfig", () => {
-    const idpWithEmailConfig = defineIdp("idp-with-email-config", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      emailConfig: {
-        fromName: "My App",
-        passwordResetSubject: "Reset your password",
-      },
+    const idpWithEmailConfig = makeIdp({
+      emailConfig: { fromName: "My App", passwordResetSubject: "Reset your password" },
     });
     expect(idpWithEmailConfig.emailConfig).toEqual({
       fromName: "My App",
       passwordResetSubject: "Reset your password",
     });
 
-    const idpWithPartialEmailConfig = defineIdp("idp-with-partial-email-config", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-      emailConfig: {
-        fromName: "My App",
-      },
-    });
-    expect(idpWithPartialEmailConfig.emailConfig).toEqual({
-      fromName: "My App",
-    });
+    const idpWithPartialEmailConfig = makeIdp({ emailConfig: { fromName: "My App" } });
+    expect(idpWithPartialEmailConfig.emailConfig).toEqual({ fromName: "My App" });
 
-    const idpNoEmailConfig = defineIdp("idp-no-email-config", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
-    });
+    const idpNoEmailConfig = makeIdp({});
     expect(idpNoEmailConfig.emailConfig).toBeUndefined();
   });
 
+  test("should preserve userAuthPolicy MFA fields", () => {
+    const idpWithMfa = makeIdp({
+      userAuthPolicy: {
+        enableMfa: true,
+        requireMfa: true,
+        allowedReturnOrigins: ["https://app.example.com", "http://localhost:3000"],
+        mfaIssuer: "My App",
+      },
+    });
+    expect(idpWithMfa.userAuthPolicy?.enableMfa).toBe(true);
+    expect(idpWithMfa.userAuthPolicy?.requireMfa).toBe(true);
+    expect(idpWithMfa.userAuthPolicy?.allowedReturnOrigins).toEqual([
+      "https://app.example.com",
+      "http://localhost:3000",
+    ]);
+    expect(idpWithMfa.userAuthPolicy?.mfaIssuer).toBe("My App");
+
+    const idpNoMfa = makeIdp({ userAuthPolicy: {} });
+    expect(idpNoMfa.userAuthPolicy?.enableMfa).toBeUndefined();
+    expect(idpNoMfa.userAuthPolicy?.requireMfa).toBeUndefined();
+    expect(idpNoMfa.userAuthPolicy?.allowedReturnOrigins).toBeUndefined();
+    expect(idpNoMfa.userAuthPolicy?.mfaIssuer).toBeUndefined();
+  });
+
   test("gqlOperations: 'query' works with other config options", () => {
-    const idpWithQueryAndOtherOptions = defineIdp("idp-with-query-and-options", {
-      authorization: "loggedIn",
-      clients: ["client-1"] as const,
+    const idpWithQueryAndOtherOptions = makeIdp({
       lang: "en",
       publishUserEvents: true,
       gqlOperations: "query",

@@ -11,6 +11,7 @@ import { fileUtilsPlugin } from "@tailor-platform/sdk/plugin/file-utils";
 import { kyselyTypePlugin } from "@tailor-platform/sdk/plugin/kysely-type";
 import { seedPlugin } from "@tailor-platform/sdk/plugin/seed";
 import { user } from "./tailordb/user";
+import { executionPolicies } from "./workflows/execution-policies";
 
 const website = defineStaticWebSite("my-frontend", {
   description: "my frontend application",
@@ -39,6 +40,7 @@ const idp = defineIdp("my-idp", {
     update: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     delete: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
     sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "MANAGER"]], permit: true }],
   },
   userAuthPolicy: {
     useNonEmailIdentifier: false,
@@ -49,6 +51,10 @@ const idp = defineIdp("my-idp", {
     passwordRequireNumeric: true,
     passwordMinLength: 8,
     passwordMaxLength: 128,
+    enableMfa: true,
+    requireMfa: false,
+    allowedReturnOrigins: [website.url],
+    mfaIssuer: "My App",
   },
   emailConfig: {
     fromName: "My App",
@@ -134,6 +140,7 @@ export default defineConfig({
   executor: { files: ["./executors/*.ts"] },
   workflow: {
     files: ["./workflows/**/*.ts"],
+    executionPolicies,
   },
   httpAdapter: {
     files: ["./adapters/**/*.ts"],

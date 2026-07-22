@@ -1,10 +1,10 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import {
   generateIdpTruncateScriptCode,
   generateIdpUserSchemaFile,
   processIdpUser,
 } from "./idp-user-processor";
-import type { GeneratorAuthInput } from "@/plugin/types";
+import type { GeneratorAuthInput } from "#/plugin/types";
 
 type TruncateResult = { success: boolean; deleted: number; total: number; errors: string[] };
 
@@ -101,7 +101,8 @@ describe("generateIdpUserSchemaFile", () => {
 });
 
 describe("generateIdpTruncateScriptCode", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     delete (globalThis as { tailor?: unknown }).tailor;
   });
 

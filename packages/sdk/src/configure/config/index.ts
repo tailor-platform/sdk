@@ -1,5 +1,5 @@
-import type { AppConfig } from "@/configure/config/types";
-import type { GeneratorConfig, Plugin } from "@/plugin/types";
+import type { AppConfig } from "#/configure/config/types";
+import type { GeneratorConfig, Plugin } from "#/plugin/types";
 
 /**
  * Define a Tailor SDK application configuration with shallow exactness.

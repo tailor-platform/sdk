@@ -1,10 +1,10 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { positiveIntArg } from "@/cli/shared/args";
-import { fetchAll, initOperatorClient, type OperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
+import { positiveIntArg } from "#/cli/shared/args";
+import { fetchAll, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
 import { listOrganizations } from "./list";
 import type { UserOrganizationInfo } from "./transform";
 

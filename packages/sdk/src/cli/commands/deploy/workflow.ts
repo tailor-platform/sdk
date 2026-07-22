@@ -1,8 +1,8 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { parseDuration } from "@/cli/shared/args";
-import { type OperatorClient, fetchAll } from "@/cli/shared/client";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { parseDuration } from "#/cli/shared/args";
+import { type OperatorClient, fetchAll } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { workflowJobFunctionName } from "./function-registry";
@@ -17,16 +17,16 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
+import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "#/types/workflow.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
-import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "@/types/workflow.generated";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
-import type { CreateWorkflowRequestSchema } from "@tailor-proto/tailor/v1/workflow_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
+import type { CreateWorkflowRequestSchema } from "@tailor-platform/tailor-proto/workflow_pb";
 import type {
   ConcurrencyPolicySchema,
   RetryPolicySchema,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 /**
  * Apply workflow changes for the given phase.
@@ -173,7 +173,7 @@ function filterJobFunctionVersions(
  * @param client - Operator client instance
  * @param changeSet - Workflow change set
  * @param appName - Application name
- * @param appId
+ * @param appId - Application ID used for job function metadata when available
  * @param unchangedWorkflowJobNames - Job function names used by unchanged workflows
  * @returns Map of job function names to versions
  */
@@ -339,7 +339,7 @@ export function buildWorkflowValidationShape(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param appName - Application name
- * @param appId
+ * @param appId - Application ID used for workflow metadata when available
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
  * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
@@ -363,7 +363,6 @@ export async function planWorkflow(
 
   const existingWorkflows = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, pageSize) => {
       const response = await client.listWorkflows({
         workspaceId,
@@ -373,7 +372,7 @@ export async function planWorkflow(
       return [response.workflows, response.nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "workflow", name),
+    getTrn: (name) => resourceTrn(workspaceId, "workflow", name),
   });
 
   for (const workflow of Object.values(workflows)) {

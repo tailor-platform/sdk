@@ -1,8 +1,22 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { AuthConnection_Status } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { applyAuthConnections, planAuthConnections } from "./auth-connection";
-import type { AuthService } from "@/cli/services/auth/service";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { AuthConnectionConfig } from "@/types/auth-connection.generated";
+import type { AuthService } from "#/cli/services/auth/service";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { AuthConnectionConfig } from "#/types/auth-connection.generated";
+
+const { mockLoggerWarn, mockLoggerInfo, mockSaveSecretsState } = vi.hoisted(() => ({
+  mockLoggerWarn: vi.fn(),
+  mockLoggerInfo: vi.fn(),
+  mockSaveSecretsState: vi.fn(),
+}));
+
+vi.mock("#/cli/shared/logger", () => ({
+  logger: {
+    warn: (...args: unknown[]) => mockLoggerWarn(...args),
+    info: (...args: unknown[]) => mockLoggerInfo(...args),
+  },
+}));
 
 const mockLoadSecretsState = vi.fn();
 
@@ -12,15 +26,16 @@ vi.mock("./secrets-state", async (importOriginal) => {
   return {
     ...actual,
     loadSecretsState: (...args: unknown[]) => mockLoadSecretsState(...args),
-    saveSecretsState: vi.fn(),
+    saveSecretsState: (...args: unknown[]) => mockSaveSecretsState(...args),
+    withSecretsStateLock: (_scope: unknown, fn: () => Promise<unknown>) => fn(),
     // Deterministic hash so tests can pin the "unchanged" secret state.
     hashValue: () => "fixed-hash",
   };
 });
 
-vi.mock("@/cli/shared/client", async (importOriginal) => {
+vi.mock("#/cli/shared/client", async (importOriginal) => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports
-  const actual = (await importOriginal()) as typeof import("@/cli/shared/client");
+  const actual = (await importOriginal()) as typeof import("#/cli/shared/client");
   return {
     ...actual,
     fetchAll: async <T>(fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>) => {
@@ -94,6 +109,9 @@ function createMockClient(opts: { connections: ConnectionFixture[] }): OperatorC
     }),
     setMetadata: vi.fn().mockResolvedValue({}),
     createAuthConnection: vi.fn().mockResolvedValue({}),
+    updateAuthConnection: vi
+      .fn()
+      .mockResolvedValue({ connection: { status: AuthConnection_Status.AUTHORIZED } }),
     deleteAuthConnection: vi.fn().mockResolvedValue({}),
   } as unknown as OperatorClient;
 }
@@ -112,12 +130,13 @@ function authsWith(names: string[]): ReadonlyArray<Readonly<AuthService>> {
   return [{ name: "auth-a", connections } as unknown as AuthService];
 }
 
-describe("planAuthConnections", () => {
-  beforeEach(() => {
-    mockLoadSecretsState.mockReset();
-    mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
-  });
+aroundEach(async (runTest) => {
+  mockLoadSecretsState.mockReset();
+  mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
+  await runTest();
+});
 
+describe("planAuthConnections", () => {
   test("uses label ownership: deletes app-owned connections and keeps others", async () => {
     const client = createMockClient({
       connections: [
@@ -198,12 +217,135 @@ describe("planAuthConnections", () => {
     expect(changeSet.updates.map((u) => u.name)).toEqual([]);
     expect(unmanaged.map((u) => u.resourceName)).toEqual([]);
   });
+
+  test("omits client_secret from update mask when clientSecret is empty (CI scenario)", async () => {
+    const client = createMockClient({
+      connections: [{ name: "conn", ownerLabel: appName }],
+    });
+    const ciConfig: AuthConnectionConfig = {
+      ...oauth2DesiredConfig,
+      clientSecret: "",
+      providerUrl: "https://changed.example.com",
+    } as AuthConnectionConfig;
+
+    const { changeSet } = await planAuthConnections(client, workspaceId, appName, undefined, [
+      { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
+    ]);
+
+    expect(changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
+    const [replace] = changeSet.replaces;
+    expect(replace).toBeDefined();
+    expect(replace!.updateRequest.updateMask?.paths).toContain("oauth2.provider_url");
+    expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
+  });
+
+  test("updates an existing same-name connection when state belongs to another workspace", async () => {
+    mockLoadSecretsState.mockImplementation((scope?: { workspaceId: string }) =>
+      scope?.workspaceId === "ws-a"
+        ? { vaults: {}, connections: { "shared-connection": "fixed-hash" } }
+        : { vaults: {}, connections: {} },
+    );
+    const client = createMockClient({
+      connections: [{ name: "shared-connection", ownerLabel: appName }],
+    });
+
+    const resultA = await planAuthConnections(
+      client,
+      "ws-a",
+      appName,
+      "shared-app-id",
+      authsWith(["shared-connection"]),
+    );
+    const resultB = await planAuthConnections(
+      client,
+      "ws-b",
+      appName,
+      "shared-app-id",
+      authsWith(["shared-connection"]),
+    );
+
+    expect(resultA.changeSet.unchanged.map((connection) => connection.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces.map((replace) => replace.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
+      "oauth2.client_secret",
+    );
+    expect(mockLoadSecretsState).toHaveBeenCalledWith({
+      workspaceId: "ws-b",
+      applicationId: "shared-app-id",
+      applicationName: appName,
+    });
+  });
+
+  test("updates an existing same-name connection when state belongs to another application", async () => {
+    mockLoadSecretsState.mockImplementation((scope?: { applicationId: string }) =>
+      scope?.applicationId === "app-a"
+        ? { vaults: {}, connections: { "shared-connection": "fixed-hash" } }
+        : { vaults: {}, connections: {} },
+    );
+    const client = createMockClient({
+      connections: [{ name: "shared-connection", ownerLabel: appName }],
+    });
+
+    const resultA = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      "app-a",
+      authsWith(["shared-connection"]),
+    );
+    const resultB = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      "app-b",
+      authsWith(["shared-connection"]),
+    );
+
+    expect(resultA.changeSet.unchanged.map((connection) => connection.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces.map((replace) => replace.name)).toEqual([
+      "shared-connection",
+    ]);
+    expect(resultB.changeSet.replaces[0]?.updateRequest.updateMask?.paths).toContain(
+      "oauth2.client_secret",
+    );
+    expect(mockLoadSecretsState).toHaveBeenCalledWith({
+      workspaceId,
+      applicationId: "app-b",
+      applicationName: appName,
+    });
+  });
 });
 
 describe("applyAuthConnections", () => {
-  beforeEach(() => {
-    mockLoadSecretsState.mockReset();
-    mockLoadSecretsState.mockReturnValue({ vaults: {}, connections: {} });
+  aroundEach(async (runTest) => {
+    mockSaveSecretsState.mockReset();
+    mockLoggerWarn.mockReset();
+    mockLoggerInfo.mockReset();
+    await runTest();
+  });
+
+  test("notifies user to authorize a newly created connection", async () => {
+    const client = createMockClient({ connections: [] });
+    const result = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      undefined,
+      authsWith(["new-conn"]),
+    );
+    expect(result.changeSet.creates.map((c) => c.name)).toEqual(["new-conn"]);
+
+    await applyAuthConnections(client, result, "create-update");
+
+    expect(mockLoggerInfo).toHaveBeenCalledWith(
+      expect.stringContaining("tailor-sdk authconnection authorize --name new-conn"),
+    );
   });
 
   test("delete phase removes connections via deleteAuthConnection", async () => {
@@ -221,7 +363,7 @@ describe("applyAuthConnections", () => {
     });
   });
 
-  test("replace deletes then recreates the connection", async () => {
+  test("replace updates the connection in-place without deleting it", async () => {
     const client = createMockClient({
       connections: [{ name: "conn", ownerLabel: appName }],
     });
@@ -236,10 +378,64 @@ describe("applyAuthConnections", () => {
 
     await applyAuthConnections(client, result, "create-update");
 
-    expect(client.deleteAuthConnection).toHaveBeenCalledWith({
-      workspaceId,
-      connectionName: "conn",
+    const updateFn = (client as OperatorClient & { updateAuthConnection: ReturnType<typeof vi.fn> })
+      .updateAuthConnection;
+    expect(updateFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        updateMask: { paths: ["oauth2.client_secret"] },
+      }),
+    );
+    expect(client.deleteAuthConnection).not.toHaveBeenCalled();
+    expect(client.createAuthConnection).not.toHaveBeenCalled();
+  });
+
+  test("does not save state when clientSecret is absent from update mask (CI scenario)", async () => {
+    const client = createMockClient({
+      connections: [{ name: "conn", ownerLabel: appName }],
     });
-    expect(client.createAuthConnection).toHaveBeenCalled();
+    const ciConfig: AuthConnectionConfig = {
+      ...oauth2DesiredConfig,
+      clientSecret: "",
+      providerUrl: "https://changed.example.com",
+    } as AuthConnectionConfig;
+
+    const result = await planAuthConnections(client, workspaceId, appName, undefined, [
+      { name: "auth-a", connections: { conn: ciConfig } } as unknown as AuthService,
+    ]);
+    expect(result.changeSet.replaces.map((r) => r.name)).toEqual(["conn"]);
+    const [replace] = result.changeSet.replaces;
+    expect(replace!.updateRequest.updateMask?.paths).not.toContain("oauth2.client_secret");
+
+    mockLoadSecretsState.mockClear();
+    mockSaveSecretsState.mockClear();
+    await applyAuthConnections(client, result, "create-update");
+
+    expect(mockLoadSecretsState).not.toHaveBeenCalled();
+    expect(mockSaveSecretsState).not.toHaveBeenCalled();
+  });
+
+  test("warns user to re-authorize when the server responds UNAUTHORIZED", async () => {
+    const client = createMockClient({
+      connections: [{ name: "conn", ownerLabel: appName }],
+    });
+    // Override to return UNAUTHORIZED
+    (
+      client as OperatorClient & { updateAuthConnection: ReturnType<typeof vi.fn> }
+    ).updateAuthConnection.mockResolvedValueOnce({
+      connection: { status: AuthConnection_Status.UNAUTHORIZED },
+    });
+
+    const result = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      undefined,
+      authsWith(["conn"]),
+    );
+    await applyAuthConnections(client, result, "create-update");
+
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      expect.stringContaining("tailor-sdk authconnection authorize --name conn"),
+    );
   });
 });

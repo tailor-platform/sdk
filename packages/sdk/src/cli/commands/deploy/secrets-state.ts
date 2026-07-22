@@ -1,50 +1,119 @@
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
+import pLimit, { type LimitFunction } from "p-limit";
 import * as path from "pathe";
 import { z } from "zod";
-import { getDistDir } from "@/cli/shared/dist-dir";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+
+const SecretsStateEntrySchema = z.object({
+  hash: z.string(),
+  updateTime: z.string().optional(),
+});
 
 const SecretsStateSchema = z.object({
-  vaults: z.record(z.string(), z.record(z.string(), z.string())),
+  vaults: z.record(z.string(), z.record(z.string(), SecretsStateEntrySchema)),
   connections: z.record(z.string(), z.string()).optional(),
 });
 
+const PersistedSecretsStateSchema = z.object({
+  version: z.literal(2),
+  workspaceId: z.string(),
+  applicationKey: z.string(),
+  state: SecretsStateSchema,
+});
+
 export type SecretsState = z.infer<typeof SecretsStateSchema>;
+type PersistedSecretsState = z.infer<typeof PersistedSecretsStateSchema>;
 
-/**
- * Get the file path for the secrets state JSON.
- * @returns Absolute path to secrets-state.json
- */
-export function getSecretsStatePath(): string {
-  return path.join(getDistDir(), "secrets-state.json");
+export interface SecretsStateScope {
+  readonly workspaceId: string;
+  readonly applicationId: string | undefined;
+  readonly applicationName: string;
 }
 
 /**
- * Load secrets hash state from disk.
- * @returns Persisted state, or empty state if file is missing or corrupted
+ * Get the file path for one workspace and application's secrets state JSON.
+ * @param scope - Workspace and application identity for the deployment
+ * @returns Absolute path to the scoped state file
  */
-export function loadSecretsState(): SecretsState {
-  const filePath = getSecretsStatePath();
-  if (!existsSync(filePath)) {
-    return { vaults: {} };
-  }
+export function getSecretsStatePath(scope: SecretsStateScope): string {
+  const scopeHash = hashValue(JSON.stringify([scope.workspaceId, applicationStateKey(scope)]));
+  return path.join(getDistDir(), "secrets-state", `${scopeHash}.json`);
+}
+
+function loadPersistedSecretsState(scope: SecretsStateScope): PersistedSecretsState | undefined {
   try {
-    const raw = readFileSync(filePath, "utf-8");
-    return SecretsStateSchema.parse(JSON.parse(raw));
+    const raw = readFileSync(getSecretsStatePath(scope), "utf-8");
+    const persistedState = PersistedSecretsStateSchema.parse(JSON.parse(raw));
+    if (
+      persistedState.workspaceId !== scope.workspaceId ||
+      persistedState.applicationKey !== applicationStateKey(scope)
+    ) {
+      return undefined;
+    }
+    return persistedState;
   } catch {
-    return { vaults: {} };
+    return undefined;
   }
 }
 
+function applicationStateKey(scope: SecretsStateScope): string {
+  if (!scope.applicationId) {
+    throw new Error(`Application "${scope.applicationName}" has no stable id for secrets state`);
+  }
+  return `id:${scope.applicationId}`;
+}
+
 /**
- * Save secrets hash state to disk.
+ * Load secrets hash state for one workspace and application from disk.
+ * @param scope - Workspace and application identity for the deployment
+ * @returns Persisted state, or empty state if the scope is missing or the file is invalid
+ */
+export function loadSecretsState(scope: SecretsStateScope): SecretsState {
+  if (!scope.applicationId) {
+    return { vaults: {} };
+  }
+  return loadPersistedSecretsState(scope)?.state ?? { vaults: {} };
+}
+
+/**
+ * Save secrets hash state for one workspace and application to disk.
+ * @param scope - Workspace and application identity for the deployment
  * @param state - The secrets state to persist
  */
-export function saveSecretsState(state: SecretsState): void {
-  const filePath = getSecretsStatePath();
+export function saveSecretsState(scope: SecretsStateScope, state: SecretsState): void {
+  if (!scope.applicationId) {
+    return;
+  }
+  const filePath = getSecretsStatePath(scope);
   const dir = path.dirname(filePath);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(filePath, JSON.stringify(state, null, 2), "utf-8");
+  // Write via a temp file and rename so concurrent readers never see torn JSON.
+  const tempPath = `${filePath}.tmp-${randomUUID()}`;
+  writeFileSync(
+    tempPath,
+    JSON.stringify(
+      {
+        version: 2,
+        workspaceId: scope.workspaceId,
+        applicationKey: applicationStateKey(scope),
+        state,
+      } satisfies PersistedSecretsState,
+      null,
+      2,
+    ),
+    "utf-8",
+  );
+  renameSync(tempPath, filePath);
 }
 
 /**
@@ -54,4 +123,161 @@ export function saveSecretsState(state: SecretsState): void {
  */
 export function hashValue(value: string): string {
   return createHash("sha256").update(value).digest("hex");
+}
+
+/**
+ * Serialize a platform timestamp into the string stored as update evidence.
+ * @param updateTime - Timestamp from a Secret Manager list or mutation response
+ * @returns Serialized timestamp, or undefined when the platform sent none
+ */
+export function serializeUpdateTime(updateTime: Timestamp | undefined): string | undefined {
+  return updateTime === undefined ? undefined : `${updateTime.seconds}.${updateTime.nanos}`;
+}
+
+const LOCK_POLL_INTERVAL_MS = 100;
+const LOCK_ACQUIRE_TIMEOUT_MS = 5 * 60 * 1000;
+// A holder refreshes the lock directory mtime while working, so a lock whose
+// mtime is older than the lease can only belong to a crashed or stopped
+// process and is safe to steal.
+const LOCK_HEARTBEAT_INTERVAL_MS = 10 * 1000;
+const LOCK_LEASE_MS = 60 * 1000;
+
+const lockQueues = new Map<string, LimitFunction>();
+
+/**
+ * Run a remote-update/state-save sequence exclusively for one target's secrets state.
+ *
+ * Serializes concurrent deploys to the same workspace and application (across
+ * processes sharing the same output directory) so the persisted hash state
+ * always reflects the last remote write.
+ * @param scope - Workspace and application identity for the deployment
+ * @param fn - Critical section performing remote updates and the state save
+ * @returns The value returned by fn
+ */
+export async function withSecretsStateLock<T>(
+  scope: SecretsStateScope,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (!scope.applicationId) {
+    return fn();
+  }
+  const lockPath = `${getSecretsStatePath(scope)}.lock`;
+  let queue = lockQueues.get(lockPath);
+  if (!queue) {
+    queue = pLimit(1);
+    lockQueues.set(lockPath, queue);
+  }
+  return queue(async () => {
+    const token = await acquireFileLock(lockPath);
+    const heartbeat = setInterval(() => refreshLock(lockPath, token), LOCK_HEARTBEAT_INTERVAL_MS);
+    heartbeat.unref();
+    try {
+      return await fn();
+    } finally {
+      clearInterval(heartbeat);
+      releaseFileLock(lockPath, token);
+    }
+  });
+}
+
+async function acquireFileLock(lockPath: string): Promise<string> {
+  mkdirSync(path.dirname(lockPath), { recursive: true });
+  const token = randomUUID();
+  const deadline = Date.now() + LOCK_ACQUIRE_TIMEOUT_MS;
+  for (;;) {
+    let created = true;
+    try {
+      mkdirSync(lockPath);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw error;
+      }
+      created = false;
+    }
+    if (created) {
+      try {
+        writeFileSync(
+          path.join(lockPath, "owner.json"),
+          JSON.stringify({ pid: process.pid, token }),
+        );
+      } catch (error) {
+        rmSync(lockPath, { recursive: true, force: true });
+        throw error;
+      }
+      return token;
+    }
+    if (isLockExpired(lockPath) && stealLock(lockPath)) {
+      continue;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        "Timed out waiting for another deploy to the same workspace and application to finish. " +
+          "Wait for it to complete and retry; an interrupted deploy recovers automatically " +
+          "within a minute.",
+      );
+    }
+    await new Promise((resolve) => setTimeout(resolve, LOCK_POLL_INTERVAL_MS));
+  }
+}
+
+function isLockExpired(lockPath: string): boolean {
+  try {
+    return Date.now() - statSync(lockPath).mtimeMs > LOCK_LEASE_MS;
+  } catch {
+    return false;
+  }
+}
+
+function readLockToken(lockPath: string): unknown {
+  try {
+    return (
+      JSON.parse(readFileSync(path.join(lockPath, "owner.json"), "utf-8")) as { token?: unknown }
+    ).token;
+  } catch {
+    return undefined;
+  }
+}
+
+function refreshLock(lockPath: string, token: string): void {
+  if (readLockToken(lockPath) !== token) {
+    return;
+  }
+  const now = new Date();
+  try {
+    utimesSync(lockPath, now, now);
+  } catch {
+    // The lock disappeared or was stolen; the release path handles ownership.
+  }
+}
+
+function releaseFileLock(lockPath: string, token: string): void {
+  // Only remove a lock this process still owns, so a holder whose lease
+  // expired cannot delete the current holder's lock.
+  if (readLockToken(lockPath) !== token) {
+    return;
+  }
+  rmSync(lockPath, { recursive: true, force: true });
+}
+
+function stealLock(lockPath: string): boolean {
+  // Rename first so concurrent stealers cannot remove a lock that another
+  // contender has just re-acquired.
+  const trash = `${lockPath}.stale-${process.pid}-${Date.now()}`;
+  try {
+    renameSync(lockPath, trash);
+  } catch {
+    return false;
+  }
+  if (isLockExpired(trash)) {
+    rmSync(trash, { recursive: true, force: true });
+    return true;
+  }
+  // A live holder re-acquired or refreshed the lock between the expiry check
+  // and the rename; hand it back.
+  try {
+    renameSync(trash, lockPath);
+  } catch {
+    rmSync(trash, { recursive: true, force: true });
+  }
+  return false;
 }

@@ -1,9 +1,9 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { deploy } from "@/cli/commands/deploy/deploy";
-import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
-import { defineAppCommand } from "@/cli/shared/command";
-import { assertWritable } from "@/cli/shared/readonly-guard";
+import { deployFromCLI } from "#/cli/commands/deploy/deploy";
+import { confirmationArgs, multiConfigArg, workspaceArgs } from "#/cli/shared/args";
+import { defineAppCommand } from "#/cli/shared/command";
+import { assertWritable } from "#/cli/shared/readonly-guard";
 
 export const deployCommand = defineAppCommand({
   name: "deploy",
@@ -11,8 +11,26 @@ export const deployCommand = defineAppCommand({
   description: "Deploy your application by applying the Tailor configuration.",
   args: z
     .object({
-      ...deploymentArgs,
+      ...workspaceArgs,
+      ...multiConfigArg,
       ...confirmationArgs,
+      "create-workspace": arg(z.boolean().optional(), {
+        description: "Create a workspace when the account has none",
+      }),
+      "workspace-name": arg(z.string().optional(), {
+        description: "Name for a workspace created during deploy",
+      }),
+      "workspace-region": arg(z.string().optional(), {
+        description: "Region for a workspace created during deploy",
+      }),
+      "organization-id": arg(z.string().optional(), {
+        description: "Organization ID for a workspace created during deploy",
+        env: "TAILOR_PLATFORM_ORGANIZATION_ID",
+      }),
+      "folder-id": arg(z.string().optional(), {
+        description: "Folder ID for a workspace created during deploy",
+        env: "TAILOR_PLATFORM_FOLDER_ID",
+      }),
       "dry-run": arg(z.boolean().optional(), {
         alias: "d",
         description: "Run the command without making any changes",
@@ -33,18 +51,31 @@ export const deployCommand = defineAppCommand({
     .strict(),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
-    const { initTelemetry } = await import("@/cli/telemetry");
+    const { initTelemetry } = await import("#/cli/telemetry/index");
     await initTelemetry();
-    await deploy({
-      workspaceId: args["workspace-id"],
-      profile: args.profile,
-      configPath: args.config,
-      dryRun: args["dry-run"],
-      yes: args.yes,
-      noSchemaCheck: args["no-schema-check"],
-      noValidate: args["no-validate"],
-      noCache: args["no-cache"],
-      cleanCache: args["clean-cache"],
-    });
+    await deployFromCLI(
+      {
+        workspaceId: args["workspace-id"],
+        profile: args.profile,
+        configPath: args.config,
+        dryRun: args["dry-run"],
+        yes: args.yes,
+        createWorkspace: args["create-workspace"],
+        workspaceName: args["workspace-name"],
+        workspaceRegion: args["workspace-region"],
+        organizationId: args["organization-id"],
+        folderId: args["folder-id"],
+        noSchemaCheck: args["no-schema-check"],
+        noValidate: args["no-validate"],
+        noCache: args["no-cache"],
+        cleanCache: args["clean-cache"],
+      },
+      {
+        envFile: args["env-file"],
+        envFileIfExists: args["env-file-if-exists"],
+        verbose: args.verbose,
+        json: args.json,
+      },
+    );
   },
 });

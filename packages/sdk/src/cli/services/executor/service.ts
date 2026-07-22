@@ -1,11 +1,11 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { loadFilesWithIgnores } from "@/cli/services/file-loader";
-import { logger, styles } from "@/cli/shared/logger";
-import { ExecutorSchema } from "@/parser/service/executor";
-import { isSdkBranded } from "@/utils/brand";
-import type { ExecutorServiceConfig } from "@/configure/config/types";
-import type { Executor } from "@/types/executor.generated";
+import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { logger, styles } from "#/cli/shared/logger";
+import { ExecutorSchema } from "#/parser/service/executor/index";
+import { isSdkBranded } from "#/utils/brand";
+import type { ExecutorServiceConfig } from "#/configure/config/types";
+import type { Executor } from "#/types/executor.generated";
 
 /**
  * Information about a plugin-generated executor converted to Executor format
@@ -33,6 +33,8 @@ export type ExecutorService = {
 export interface CreateExecutorServiceParams {
   /** The executor service configuration */
   config: ExecutorServiceConfig;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
 }
 
 /**
@@ -41,7 +43,7 @@ export interface CreateExecutorServiceParams {
  * @returns A new ExecutorService instance
  */
 export function createExecutorService(params: CreateExecutorServiceParams): ExecutorService {
-  const { config } = params;
+  const { config, baseDir } = params;
   const executors: Record<string, Executor> = {};
   const pluginExecutors: PluginExecutor[] = [];
   let loadPromise: Promise<Record<string, Executor> | undefined> | undefined;
@@ -85,12 +87,13 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
             return undefined;
           }
 
-          const executorFiles = loadFilesWithIgnores(config);
+          const executorFiles = loadFilesWithIgnores(config, baseDir);
 
           logger.newline();
           logger.log(`Found ${styles.highlight(executorFiles.length.toString())} executor files`);
 
           await Promise.all(executorFiles.map((executorFile) => loadExecutorForFile(executorFile)));
+          assertUniqueExecutorNames(executors);
           return executors;
         })();
       }
@@ -116,6 +119,30 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
           });
         }
       }
+      assertUniqueExecutorNames(executors);
     },
   };
+}
+
+/**
+ * Assert that every loaded executor has a unique name.
+ * Executors are stored by source file, so two files declaring the same
+ * `name` would otherwise silently share a single bundle cache entry.
+ * @param executors - Loaded executors keyed by source file
+ */
+function assertUniqueExecutorNames(executors: Record<string, Executor>): void {
+  const seenNames = new Map<string, string>();
+  for (const [file, executor] of Object.entries(executors)) {
+    const relativePath = path.relative(process.cwd(), file);
+    const existing = seenNames.get(executor.name);
+    if (existing) {
+      throw new Error(
+        `Duplicate executor name "${executor.name}" found:\n` +
+          `  - ${existing}\n` +
+          `  - ${relativePath}\n` +
+          `Each executor must have a unique name.`,
+      );
+    }
+    seenNames.set(executor.name, relativePath);
+  }
 }

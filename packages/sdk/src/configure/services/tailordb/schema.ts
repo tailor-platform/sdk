@@ -3,10 +3,13 @@ import {
   type AllowedValues,
   type AllowedValuesOutput,
   mapAllowedValues,
-} from "@/configure/types/field";
-import { brandValue } from "@/utils/brand";
-import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
-import type { Hook, Hooks, ExcludeNestedDBFields, TypeFeatures } from "./types";
+} from "#/configure/types/field";
+import {
+  parseInternal as parseFieldInternal,
+  type FieldParseArgs,
+  type FieldParseInternalArgs,
+} from "#/runtime/field-parse";
+import { brandValue } from "#/utils/brand";
 import type {
   TailorDBField as TailorDBFieldBase,
   TailorDBType as TailorDBTypeBase,
@@ -17,31 +20,268 @@ import type {
   TailorDBTypeMetadata,
   RawRelationConfig,
   RelationType,
-} from "@/configure/services/tailordb/types";
+} from "#/configure/services/tailordb/types";
 import type {
   FieldOptions,
   FieldOutput,
   TailorFieldType,
   TailorToTs,
-  TailorField as TailorFieldMinimal,
   FieldValidateInput,
   ValidateConfig,
   Validators,
-} from "@/configure/types/field.types";
-import type { PluginAttachment, PluginConfigs } from "@/plugin/types";
-import type { InferredAttributeMap, TailorUser } from "@/runtime/types";
-import type { output, InferFieldsOutput, Prettify } from "@/types/helpers";
-import type { RawPermissions } from "@/types/tailordb.generated";
+} from "#/configure/types/field.types";
+import type { PluginAttachment, PluginConfigs } from "#/plugin/types";
+import type { InferredAttributeMap } from "#/runtime/types";
+import type { output, InferFieldsOutput, TypeLevelError } from "#/types/helpers";
+import type { RawPermissions } from "#/types/tailordb.generated";
+import type { TailorTypeGqlPermission, TailorTypePermission } from "./permission";
+import type { Hook, Hooks, ExcludeNestedDBFields, TypeFeatures } from "./types";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
-// Helper alias: DB fields can be arbitrarily nested, so we intentionally keep this loose.
+// Erased DB fields stay assignable across builder method-state changes.
 // oxlint-disable-next-line no-explicit-any
-export type TailorAnyDBField = TailorDBField<any, any>;
+type AnyBuilderMethod = any;
+
+export type TailorAnyDBField = Omit<
+  TailorDBFieldBase<AnyBuilderMethod, AnyBuilderMethod>,
+  "fields"
+> & {
+  readonly fields: Record<string, AnyBuilderMethod>;
+  _metadata: DBFieldMetadata;
+  parse: AnyBuilderMethod;
+  readonly typeName: TypeLevelError<string>;
+  description: AnyBuilderMethod;
+  relation: AnyBuilderMethod;
+  index: AnyBuilderMethod;
+  unique: AnyBuilderMethod;
+  vector: AnyBuilderMethod;
+  hooks: AnyBuilderMethod;
+  validate: AnyBuilderMethod;
+  serial: AnyBuilderMethod;
+  clone: AnyBuilderMethod;
+};
 
 // Helper alias
 // oxlint-disable-next-line no-explicit-any
-export type TailorAnyDBType = TailorDBType<any, any>;
+export type TailorAnyDBType = TailorDBType<any, any, any>;
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type DBFieldTypeNameMethod<Defined extends DefinedDBFieldMetadata> =
+  IsAny<Defined> extends true
+    ? TypeLevelError<string>
+    : TypeLevelError<"typeName cannot be used on TailorDB fields">;
+
+type WithDBFieldDescription<Defined> = Defined & { description: true };
+type WithDBFieldRelation<Defined, S extends RelationType | RelationSelfConfig> = S extends
+  | "oneToOne"
+  | "1-1"
+  ? Defined & { unique: true; index: true; relation: true }
+  : S extends { type: "oneToOne" | "1-1" }
+    ? Defined & { unique: true; index: true; relation: true }
+    : Defined & { index: true; relation: true };
+type WithDBFieldIndex<Defined> = Defined & { index: true };
+type WithDBFieldUnique<Defined> = Defined & { unique: true; index: true };
+type WithDBFieldVector<Defined> = Defined & { vector: true };
+type WithDBFieldHooks<Defined, H> = Defined & {
+  hooks: {
+    create: H extends { create: unknown } ? true : false;
+    update: H extends { update: unknown } ? true : false;
+  };
+  serial: false;
+};
+type WithDBFieldValidate<Defined> = Defined & { validate: true };
+type WithDBFieldSerial<Defined> = Defined & {
+  serial: true;
+  hooks: { create: false; update: false };
+};
+type WithDBFieldCloneOptions<Defined extends DefinedDBFieldMetadata, NewOpt extends FieldOptions> =
+  IsAny<Defined> extends true
+    ? Defined
+    : Omit<Defined, "array"> & {
+        array: NewOpt extends { array: true } ? true : Defined["array"];
+      };
+type DBFieldCloneOptions<Defined extends DefinedDBFieldMetadata> = Omit<FieldOptions, "array"> & {
+  array?: Defined extends { validate: unknown } ? Defined["array"] : boolean;
+};
+type InvalidValidatedArrayCloneKeys<
+  Fields extends Record<string, TailorAnyDBField>,
+  K extends keyof Fields,
+  Opt extends FieldOptions,
+> = Opt extends { array: infer ArrayOption }
+  ? {
+      [P in K]: Fields[P] extends TailorDBField<infer Defined, infer _Output>
+        ? Defined extends { validate: unknown }
+          ? ArrayOption extends Defined["array"]
+            ? never
+            : P
+          : never
+        : never;
+    }[K]
+  : never;
+type DBFieldsCloneOptionsGuard<
+  Fields extends Record<string, TailorAnyDBField>,
+  K extends keyof Fields,
+  Opt extends FieldOptions,
+> = [InvalidValidatedArrayCloneKeys<Fields, K, Opt>] extends [never]
+  ? unknown
+  : TypeLevelError<"array cannot be changed on fields with custom validation">;
+type DefinedDBTypeMetadata = {
+  hooks?: true;
+  validate?: true;
+  features?: true;
+  indexes?: true;
+  files?: true;
+  permission?: true;
+  gqlPermission?: true;
+  description?: true;
+};
+type WithDBTypeMetadata<
+  Defined extends DefinedDBTypeMetadata,
+  Key extends keyof DefinedDBTypeMetadata,
+> = Defined & Record<Key, true>;
+type DBTypeDuplicateInputGuard<
+  Defined extends DefinedDBTypeMetadata,
+  Key extends keyof DefinedDBTypeMetadata,
+  Input,
+  Message extends string,
+> =
+  IsAny<Defined> extends true
+    ? Input
+    : Defined extends Record<Key, unknown>
+      ? TypeLevelError<Message>
+      : Input;
+type DBTypeDuplicateRestGuard<
+  Defined extends DefinedDBTypeMetadata,
+  Key extends keyof DefinedDBTypeMetadata,
+  Input extends unknown[],
+  Message extends string,
+> =
+  IsAny<Defined> extends true
+    ? Input
+    : Defined extends Record<Key, unknown>
+      ? [TypeLevelError<Message>, ...TypeLevelError<Message>[]]
+      : Input;
+type FileKeyConflictError<
+  Fields extends Record<string, TailorAnyDBField>,
+  User extends object,
+> = Partial<
+  Record<
+    keyof output<TailorDBType<Fields, User>> & string,
+    TypeLevelError<"file keys cannot use existing field names">
+  >
+>;
+type DBFieldDescriptionFn<Defined extends DefinedDBFieldMetadata, Output> = (
+  description: string,
+) => TailorDBField<WithDBFieldDescription<Defined>, Output>;
+type DBFieldRelationFn<Defined extends DefinedDBFieldMetadata, Output> = {
+  <S extends RelationType, T extends TailorAnyDBType>(
+    config: RelationConfig<S, T>,
+  ): TailorDBField<WithDBFieldRelation<Defined, S>, Output>;
+  <S extends RelationSelfConfig>(config: S): TailorDBField<WithDBFieldRelation<Defined, S>, Output>;
+};
+type DBFieldIndexFn<Defined extends DefinedDBFieldMetadata, Output> = () => TailorDBField<
+  WithDBFieldIndex<Defined>,
+  Output
+>;
+type DBFieldUniqueFn<Defined extends DefinedDBFieldMetadata, Output> = () => TailorDBField<
+  WithDBFieldUnique<Defined>,
+  Output
+>;
+type DBFieldVectorFn<Defined extends DefinedDBFieldMetadata, Output> = () => TailorDBField<
+  WithDBFieldVector<Defined>,
+  Output
+>;
+type DBFieldHooksFn<Defined extends DefinedDBFieldMetadata, Output> = <
+  const H extends Hook<unknown, Output>,
+>(
+  hooks: H,
+) => TailorDBField<WithDBFieldHooks<Defined, H>, Output>;
+type DBFieldValidateFn<Defined extends DefinedDBFieldMetadata, Output> = (
+  ...validate: FieldValidateInput<Output>[]
+) => TailorDBField<WithDBFieldValidate<Defined>, Output>;
+type DBFieldSerialFn<Defined extends DefinedDBFieldMetadata, Output> = (
+  config: SerialConfig<Defined["type"] & ("integer" | "string")>,
+) => TailorDBField<WithDBFieldSerial<Defined>, Output>;
+type DBFieldDescriptionMethod<Defined extends DefinedDBFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? DBFieldDescriptionFn<Defined, Output>
+    : Defined extends { description: unknown }
+      ? TypeLevelError<".description() has already been set">
+      : DBFieldDescriptionFn<Defined, Output>;
+type DBFieldRelationMethod<Defined extends DefinedDBFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? DBFieldRelationFn<Defined, Output>
+    : Defined extends { relation: unknown }
+      ? TypeLevelError<".relation() has already been set">
+      : DBFieldRelationFn<Defined, Output>;
+type DBFieldArrayCheck<A extends boolean, Ok, Msg extends string> = A extends true
+  ? TypeLevelError<Msg>
+  : Ok;
+type DBFieldIndexMethod<Defined extends DefinedDBFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? DBFieldIndexFn<Defined, Output>
+    : Defined extends { index: unknown }
+      ? TypeLevelError<".index() has already been set">
+      : DBFieldArrayCheck<
+          Defined["array"],
+          DBFieldIndexFn<Defined, Output>,
+          "index cannot be set on array fields"
+        >;
+type DBFieldUniqueMethod<Defined extends DefinedDBFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? DBFieldUniqueFn<Defined, Output>
+    : Defined extends { unique: unknown }
+      ? TypeLevelError<".unique() has already been set">
+      : DBFieldArrayCheck<
+          Defined["array"],
+          DBFieldUniqueFn<Defined, Output>,
+          "unique cannot be set on array fields"
+        >;
+type DBFieldVectorMethod<Defined extends DefinedDBFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? DBFieldVectorFn<Defined, Output>
+    : Defined extends { vector: unknown }
+      ? TypeLevelError<".vector() has already been set">
+      : Defined extends { type: "string"; array: false }
+        ? DBFieldVectorFn<Defined, Output>
+        : TypeLevelError<"vector can only be set on non-array string fields">;
+type DBFieldHooksMethod<Defined extends DefinedDBFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? DBFieldHooksFn<Defined, Output>
+    : Defined extends {
+          serial: true;
+          hooks: { create: false; update: false };
+        }
+      ? TypeLevelError<"hooks cannot be set after serial">
+      : Defined extends {
+            hooks: unknown;
+          }
+        ? TypeLevelError<".hooks() has already been set">
+        : Defined extends { type: "nested" }
+          ? TypeLevelError<"hooks cannot be set on nested type fields">
+          : DBFieldHooksFn<Defined, Output>;
+type DBFieldValidateMethod<Defined extends DefinedDBFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? DBFieldValidateFn<Defined, Output>
+    : Defined extends { validate: unknown }
+      ? TypeLevelError<".validate() has already been set">
+      : DBFieldValidateFn<Defined, Output>;
+type DBFieldSerialMethod<Defined extends DefinedDBFieldMetadata, Output> =
+  IsAny<Defined> extends true
+    ? DBFieldSerialFn<Defined, Output>
+    : Defined extends { serial: true }
+      ? TypeLevelError<".serial() has already been set">
+      : Defined extends { serial: false }
+        ? TypeLevelError<"serial cannot be set after hooks">
+        : IsAny<Output> extends true
+          ? Defined extends { type: "integer" | "string"; array: false }
+            ? DBFieldSerialFn<Defined, Output>
+            : TypeLevelError<"serial can only be set on non-array integer or string fields">
+          : null extends Output
+            ? TypeLevelError<"serial can only be set on non-array integer or string fields">
+            : Defined extends { type: "integer" | "string"; array: false }
+              ? DBFieldSerialFn<Defined, Output>
+              : TypeLevelError<"serial can only be set on non-array integer or string fields">;
 /**
  * Full TailorDBField interface with builder methods.
  * Extends the minimal structural interface from types/ with fluent API methods.
@@ -60,156 +300,63 @@ export interface TailorDBField<
   parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
 
   /**
-   * Internal parse method that tracks field path for nested validation
-   * @private
-   */
-  _parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<Output>;
-
-  /**
    * typeName is not available on TailorDB fields.
    * Use typeName on pipeline fields (t.enum / t.object) instead.
    */
-  typeName(this: never, typeName: string): never;
+  typeName: DBFieldTypeNameMethod<Defined>;
 
   /**
    * Set a description for the field
    */
-  description<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { description: unknown }
-      ? never
-      : TailorFieldMinimal<CurrentDefined, Output>,
-    description: string,
-  ): TailorDBField<Prettify<CurrentDefined & { description: true }>, Output>;
+  description: DBFieldDescriptionMethod<Defined, Output>;
 
   /**
    * Define a relation to another type.
    */
-  relation<S extends RelationType, T extends TailorAnyDBType, CurrentDefined extends Defined>(
-    this: CurrentDefined extends { relation: unknown }
-      ? never
-      : TailorDBField<CurrentDefined, Output>,
-    config: RelationConfig<S, T>,
-  ): TailorDBField<
-    S extends "oneToOne" | "1-1"
-      ? Prettify<CurrentDefined & { unique: true; index: true; relation: true }>
-      : Prettify<CurrentDefined & { index: true; relation: true }>,
-    Output
-  >;
-
-  /**
-   * Define a self-referencing relation
-   */
-  relation<S extends RelationSelfConfig, CurrentDefined extends Defined>(
-    this: CurrentDefined extends { relation: unknown }
-      ? never
-      : TailorDBField<CurrentDefined, Output>,
-    config: S,
-  ): TailorDBField<
-    S["type"] extends "oneToOne" | "1-1"
-      ? Prettify<CurrentDefined & { unique: true; index: true; relation: true }>
-      : Prettify<CurrentDefined & { index: true; relation: true }>,
-    Output
-  >;
+  relation: DBFieldRelationMethod<Defined, Output>;
 
   /**
    * Add an index to the field
    */
-  index<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { index: unknown }
-      ? never
-      : CurrentDefined extends { array: true }
-        ? never
-        : TailorDBField<CurrentDefined, Output>,
-  ): TailorDBField<Prettify<CurrentDefined & { index: true }>, Output>;
+  index: DBFieldIndexMethod<Defined, Output>;
 
   /**
    * Make the field unique (also adds an index)
    */
-  unique<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { unique: unknown }
-      ? never
-      : CurrentDefined extends { array: true }
-        ? never
-        : TailorDBField<CurrentDefined, Output>,
-  ): TailorDBField<Prettify<CurrentDefined & { unique: true; index: true }>, Output>;
+  unique: DBFieldUniqueMethod<Defined, Output>;
 
   /**
    * Enable vector search on the field (string type only)
    */
-  vector<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { vector: unknown }
-      ? never
-      : CurrentDefined extends { type: "string"; array: false }
-        ? TailorDBField<CurrentDefined, Output>
-        : never,
-  ): TailorDBField<Prettify<CurrentDefined & { vector: true }>, Output>;
+  vector: DBFieldVectorMethod<Defined, Output>;
 
   /**
    * Add hooks for create/update operations on this field.
    */
-  hooks<CurrentDefined extends Defined, const H extends Hook<unknown, Output>>(
-    this: CurrentDefined extends { hooks: unknown }
-      ? never
-      : CurrentDefined extends { type: "nested" }
-        ? never
-        : TailorDBField<CurrentDefined, Output>,
-    hooks: H,
-  ): TailorDBField<
-    Prettify<
-      CurrentDefined & {
-        hooks?: {
-          create: H extends { create: unknown } ? true : false;
-          update: H extends { update: unknown } ? true : false;
-        };
-        serial: false;
-      }
-    >,
-    Output
-  >;
+  hooks: DBFieldHooksMethod<Defined, Output>;
 
   /**
    * Add validation functions to the field.
+   *
+   * Validators receive `{ value, data, user }` and run after hooks and
+   * built-in type validation; they are skipped when built-in validation
+   * fails. For array fields, `value` is the complete array.
    */
-  validate<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { validate: unknown }
-      ? never
-      : TailorDBField<CurrentDefined, Output>,
-    ...validate: FieldValidateInput<Output>[]
-  ): TailorDBField<Prettify<CurrentDefined & { validate: true }>, Output>;
+  validate: DBFieldValidateMethod<Defined, Output>;
 
   /**
    * Configure serial/auto-increment behavior
    */
-  serial<CurrentDefined extends Defined>(
-    this: CurrentDefined extends { serial: unknown }
-      ? never
-      : Output extends null
-        ? never
-        : CurrentDefined extends { type: "integer" | "string"; array: false }
-          ? TailorDBField<CurrentDefined, Output>
-          : never,
-    config: SerialConfig<CurrentDefined["type"] & ("integer" | "string")>,
-  ): TailorDBField<
-    Prettify<
-      CurrentDefined & {
-        serial: true;
-        hooks: { create: false; update: false };
-      }
-    >,
-    Output
-  >;
+  serial: DBFieldSerialMethod<Defined, Output>;
 
   /**
-   * Clone the field with optional overrides for field options
+   * Clone the field with optional overrides for field options.
+   * The `array` option cannot change on fields with custom validation.
    */
-  clone<const NewOpt extends FieldOptions>(
+  clone<const NewOpt extends DBFieldCloneOptions<Defined>>(
     options?: NewOpt,
   ): TailorDBField<
-    Prettify<
-      Omit<Defined, "array"> & {
-        array: NewOpt extends { array: true } ? true : Defined["array"];
-      }
-    >,
+    WithDBFieldCloneOptions<Defined, NewOpt>,
     FieldOutput<TailorToTs[Defined["type"]], NewOpt>
   >;
 }
@@ -222,57 +369,104 @@ export interface TailorDBType<
   // oxlint-disable-next-line no-explicit-any
   Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
+  // oxlint-disable-next-line no-explicit-any
+  Defined extends DefinedDBTypeMetadata = any,
 > extends TailorDBTypeBase<Fields, User> {
   _description?: string;
 
-  hooks(hooks: Hooks<Fields>): TailorDBType<Fields, User>;
-  validate(validators: Validators<Fields>): TailorDBType<Fields, User>;
-  features(features: Omit<TypeFeatures, "pluralForm">): TailorDBType<Fields, User>;
-  indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]): TailorDBType<Fields, User>;
+  hooks(
+    hooks: DBTypeDuplicateInputGuard<
+      Defined,
+      "hooks",
+      Hooks<Fields>,
+      ".hooks() has already been set"
+    >,
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "hooks">>;
+  validate(
+    validators: DBTypeDuplicateInputGuard<
+      Defined,
+      "validate",
+      Validators<Fields>,
+      ".validate() has already been set"
+    >,
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "validate">>;
+  features(
+    features: DBTypeDuplicateInputGuard<
+      Defined,
+      "features",
+      Omit<TypeFeatures, "pluralForm">,
+      ".features() has already been set"
+    >,
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "features">>;
+  indexes(
+    ...indexes: DBTypeDuplicateRestGuard<
+      Defined,
+      "indexes",
+      IndexDef<TailorDBType<Fields, User, Defined>>[],
+      ".indexes() has already been set"
+    >
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "indexes">>;
   files<const F extends string>(
-    files: Record<F, string> & Partial<Record<keyof output<TailorDBType<Fields, User>>, never>>,
-  ): TailorDBType<Fields, User>;
+    files: DBTypeDuplicateInputGuard<
+      Defined,
+      "files",
+      Record<F, string> & FileKeyConflictError<Fields, User>,
+      ".files() has already been set"
+    >,
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "files">>;
   permission<
     U extends object = User,
-    P extends TailorTypePermission<U, output<TailorDBType<Fields, User>>> = TailorTypePermission<
-      U,
-      output<TailorDBType<Fields, User>>
-    >,
+    P extends TailorTypePermission<U, output<TailorDBType<Fields, User, Defined>>> =
+      TailorTypePermission<U, output<TailorDBType<Fields, User, Defined>>>,
   >(
-    permission: P,
-  ): TailorDBType<Fields, U>;
+    permission: DBTypeDuplicateInputGuard<
+      Defined,
+      "permission",
+      P,
+      ".permission() has already been set"
+    >,
+  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "permission">>;
   gqlPermission<
     U extends object = User,
     P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
   >(
-    permission: P,
-  ): TailorDBType<Fields, U>;
-  description(description: string): TailorDBType<Fields, User>;
+    permission: DBTypeDuplicateInputGuard<
+      Defined,
+      "gqlPermission",
+      P,
+      ".gqlPermission() has already been set"
+    >,
+  ): TailorDBType<Fields, U, WithDBTypeMetadata<Defined, "gqlPermission">>;
+  description(
+    description: DBTypeDuplicateInputGuard<
+      Defined,
+      "description",
+      string,
+      ".description() has already been set"
+    >,
+  ): TailorDBType<Fields, User, WithDBTypeMetadata<Defined, "description">>;
   pickFields<K extends keyof Fields>(keys: K[]): Pick<Fields, K>;
   pickFields<K extends keyof Fields, const Opt extends FieldOptions>(
     keys: K[],
-    options: Opt,
+    options: Opt & DBFieldsCloneOptionsGuard<Fields, K, Opt>,
   ): {
     [P in K]: Fields[P] extends TailorDBField<infer D, infer _O>
-      ? TailorDBField<
-          Omit<D, "array"> & {
-            array: Opt extends { array: true } ? true : D["array"];
-          },
-          FieldOutput<TailorToTs[D["type"]], Opt>
-        >
+      ? TailorDBField<WithDBFieldCloneOptions<D, Opt>, FieldOutput<TailorToTs[D["type"]], Opt>>
       : never;
   };
   omitFields<K extends keyof Fields>(keys: K[]): Omit<Fields, K>;
   plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
     [K in P]: PluginConfigs<keyof Fields & string>[K];
-  }): TailorDBType<Fields, User>;
+  }): TailorDBType<Fields, User, Defined>;
 }
 
 export type TailorDBInstance<
   // oxlint-disable-next-line no-explicit-any
   Fields extends Record<string, TailorAnyDBField> = any,
   User extends object = InferredAttributeMap,
-> = TailorDBType<Fields, User>;
+  // oxlint-disable-next-line no-explicit-any
+  Defined extends DefinedDBTypeMetadata = any,
+> = TailorDBType<Fields, User, Defined>;
 
 interface RelationConfig<S extends RelationType, T extends TailorDBType> {
   type: S;
@@ -301,35 +495,43 @@ function isRelationSelfConfig(
   return config.toward.type === "self";
 }
 
-const regex = {
-  uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
-  date: /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})$/,
-  time: /^(?<hour>\d{2}):(?<minute>\d{2})$/,
-  datetime:
-    /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})T(?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(.(?<millisec>\d{3}))?Z$/,
-  decimal: /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/,
-} as const;
-
-type FieldParseArgs = {
-  value: unknown;
-  data: unknown;
-  user: TailorUser;
+type DBFieldDefined<T extends TailorFieldType, Opt extends FieldOptions> = {
+  type: T;
+  array: Opt extends { array: true } ? true : false;
 };
-
-type FieldValidateValueArgs<T extends TailorFieldType> = {
-  value: TailorToTs[T];
-  data: unknown;
-  user: TailorUser;
-  pathArray: string[];
-};
-
-type FieldParseInternalArgs = {
-  // Runtime input is unknown/untyped; we validate and narrow it inside the parser.
-  // oxlint-disable-next-line no-explicit-any
-  value: any;
-  data: unknown;
-  user: TailorUser;
-  pathArray: string[];
+type DBFieldOutput<
+  T extends TailorFieldType,
+  Opt extends FieldOptions,
+  OutputBase = TailorToTs[T],
+> = FieldOutput<OutputBase, Opt>;
+type TailorDBFieldInstance<
+  T extends TailorFieldType,
+  Opt extends FieldOptions,
+  OutputBase = TailorToTs[T],
+> = TailorDBField<DBFieldDefined<T, Opt>, DBFieldOutput<T, Opt, OutputBase>>;
+type TailorDBFieldRuntimeInstance<
+  T extends TailorFieldType,
+  Opt extends FieldOptions,
+  OutputBase = TailorToTs[T],
+> = TailorDBFieldRuntime<DBFieldDefined<T, Opt>, DBFieldOutput<T, Opt, OutputBase>>;
+type TailorDBFieldRuntime<Defined extends DefinedDBFieldMetadata, Output> = Omit<
+  TailorDBFieldBase<Defined, Output>,
+  "fields"
+> & {
+  readonly fields: Record<string, TailorAnyDBField>;
+  _metadata: DBFieldMetadata;
+  description(description: string): object;
+  typeName(typeName: string): object;
+  validate(...validate: FieldValidateInput<Output>[]): object;
+  relation(config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig): object;
+  index(): object;
+  unique(): object;
+  vector(): object;
+  hooks(hooks: Hook<unknown, Output>): object;
+  serial(config: SerialConfig): object;
+  clone(options?: FieldOptions): TailorDBFieldRuntime<DefinedDBFieldMetadata, AnyBuilderMethod>;
+  parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
+  _setRawRelation(relation: RawRelationConfig): void;
 };
 
 /**
@@ -349,14 +551,28 @@ function createTailorDBField<
   options?: TOptions,
   fields?: Record<string, TailorAnyDBField>,
   values?: AllowedValues,
-): TailorDBField<
-  { type: T; array: TOptions extends { array: true } ? true : false },
-  FieldOutput<OutputBase, TOptions>
-> {
-  type FieldType = TailorDBField<
-    { type: T; array: TOptions extends { array: true } ? true : false },
-    FieldOutput<OutputBase, TOptions>
-  >;
+): TailorDBFieldInstance<T, TOptions, OutputBase>;
+function createTailorDBField<const T extends TailorFieldType, const TOptions extends FieldOptions>(
+  type: T,
+  options?: TOptions,
+  fields?: Record<string, TailorAnyDBField>,
+  values?: AllowedValues,
+): object {
+  return createTailorDBFieldRuntime(type, options, fields, values);
+}
+
+function createTailorDBFieldRuntime<
+  const T extends TailorFieldType,
+  const TOptions extends FieldOptions,
+  const OutputBase = TailorToTs[T],
+>(
+  type: T,
+  options?: TOptions,
+  fields?: Record<string, TailorAnyDBField>,
+  values?: AllowedValues,
+): TailorDBFieldRuntimeInstance<T, TOptions, OutputBase> {
+  type FieldValue = DBFieldOutput<T, TOptions, OutputBase>;
+  type FieldType = TailorDBFieldRuntimeInstance<T, TOptions, OutputBase>;
 
   const _metadata: DBFieldMetadata = { required: true };
   let _rawRelation: RawRelationConfig | undefined;
@@ -373,228 +589,11 @@ function createTailorDBField<
     _metadata.allowedValues = mapAllowedValues(values);
   }
 
-  /**
-   * Validate a single value (not an array element)
-   * Used internally for array element validation
-   * @param args - Value, context data, and user
-   * @returns Array of validation issues
-   */
-  function validateValue(args: FieldValidateValueArgs<T>): StandardSchemaV1.Issue[] {
-    const { value, data, user, pathArray } = args;
-    const issues: StandardSchemaV1.Issue[] = [];
-
-    // Type-specific validation
-    switch (type) {
-      case "string":
-        if (typeof value !== "string") {
-          issues.push({
-            message: `Expected a string: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-
-      case "integer":
-        if (typeof value !== "number" || !Number.isInteger(value)) {
-          issues.push({
-            message: `Expected an integer: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-
-      case "float":
-        if (typeof value !== "number" || !Number.isFinite(value)) {
-          issues.push({
-            message: `Expected a number: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-
-      case "boolean":
-        if (typeof value !== "boolean") {
-          issues.push({
-            message: `Expected a boolean: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-
-      case "uuid":
-        if (typeof value !== "string" || !regex.uuid.test(value)) {
-          issues.push({
-            message: `Expected a valid UUID: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-      case "date":
-        if (typeof value !== "string" || !regex.date.test(value)) {
-          issues.push({
-            message: `Expected to match "yyyy-MM-dd" format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-      case "datetime":
-        if (typeof value !== "string" || !regex.datetime.test(value)) {
-          issues.push({
-            message: `Expected to match ISO format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-      case "time":
-        if (typeof value !== "string" || !regex.time.test(value)) {
-          issues.push({
-            message: `Expected to match "HH:mm" format: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-      case "decimal":
-        if (typeof value !== "string" || !regex.decimal.test(value)) {
-          issues.push({
-            message: `Expected a decimal string: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-        break;
-
-      case "enum":
-        if (field._metadata.allowedValues) {
-          const allowedValues = field._metadata.allowedValues.map((v) => v.value);
-          if (typeof value !== "string" || !allowedValues.includes(value)) {
-            issues.push({
-              message: `Must be one of [${allowedValues.join(", ")}]: received ${String(value)}`,
-              path: pathArray.length > 0 ? pathArray : undefined,
-            });
-          }
-        }
-        break;
-
-      case "nested":
-        // Validate nested object fields
-        // runtime value may not match the declared type
-        // oxlint-disable typescript/no-unnecessary-condition
-        if (
-          typeof value !== "object" ||
-          value === null ||
-          Array.isArray(value) ||
-          value instanceof Date
-        ) {
-          // oxlint-enable typescript/no-unnecessary-condition
-          issues.push({
-            message: `Expected an object: received ${String(value)}`,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        } else if (Object.keys(field.fields).length > 0) {
-          for (const [fieldName, nestedField] of Object.entries(field.fields)) {
-            const fieldValue = (value as Record<string, unknown>)[fieldName];
-            const result = nestedField._parseInternal({
-              value: fieldValue,
-              data,
-              user,
-              pathArray: pathArray.concat(fieldName),
-            });
-            if (result.issues) {
-              issues.push(...result.issues);
-            }
-          }
-        }
-        break;
-    }
-
-    // Custom validation functions
-    const validateFns = field._metadata.validate;
-    if (validateFns && validateFns.length > 0) {
-      for (const validateInput of validateFns) {
-        const { fn, message } =
-          typeof validateInput === "function"
-            ? { fn: validateInput, message: "Validation failed" }
-            : { fn: validateInput[0], message: validateInput[1] };
-
-        if (!fn({ value, data, user })) {
-          issues.push({
-            message,
-            path: pathArray.length > 0 ? pathArray : undefined,
-          });
-        }
-      }
-    }
-
-    return issues;
-  }
-
-  /**
-   * Internal parse method that tracks field path for nested validation
-   * @param args - Parse arguments
-   * @returns Parse result with value or issues
-   */
-  function parseInternal(
-    args: FieldParseInternalArgs,
-  ): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
-    const { value, data, user, pathArray } = args;
-    const issues: StandardSchemaV1.Issue[] = [];
-
-    // 1. Check required/optional
-    const isNullOrUndefined = value === null || value === undefined;
-    if (field._metadata.required && isNullOrUndefined) {
-      issues.push({
-        message: "Required field is missing",
-        path: pathArray.length > 0 ? pathArray : undefined,
-      });
-      return { issues };
-    }
-
-    // If optional and null/undefined, skip further validation and normalize to null
-    if (!field._metadata.required && isNullOrUndefined) {
-      return { value: value ?? null };
-    }
-
-    // 2. Check array type
-    if (field._metadata.array) {
-      if (!Array.isArray(value)) {
-        issues.push({
-          message: "Expected an array",
-          path: pathArray.length > 0 ? pathArray : undefined,
-        });
-        return { issues };
-      }
-
-      // Validate each array element (without array flag)
-      for (let i = 0; i < value.length; i++) {
-        const elementValue = value[i];
-        const elementPath = pathArray.concat(`[${i}]`);
-
-        // Validate element with same type but without array flag
-        const elementIssues = validateValue({
-          value: elementValue,
-          data,
-          user,
-          pathArray: elementPath,
-        });
-        if (elementIssues.length > 0) {
-          issues.push(...elementIssues);
-        }
-      }
-
-      if (issues.length > 0) {
-        return { issues };
-      }
-      return { value: value as FieldOutput<OutputBase, TOptions> };
-    }
-
-    // 3. Type-specific validation and custom validation
-    const valueIssues = validateValue({ value, data, user, pathArray });
-    issues.push(...valueIssues);
-
-    if (issues.length > 0) {
-      return { issues };
-    }
-
-    return { value };
+  function parseInternal(args: FieldParseInternalArgs): StandardSchemaV1.Result<FieldValue> {
+    return parseFieldInternal<T, FieldValue>({
+      ...args,
+      field,
+    });
   }
 
   function cloneWith(metadataUpdates: Partial<DBFieldMetadata>) {
@@ -605,12 +604,9 @@ function createTailorDBField<
 
   const field: FieldType = {
     type,
-    fields: (fields ?? {}) as Record<string, TailorAnyDBField>,
-    _defined: undefined as unknown as {
-      type: T;
-      array: TOptions extends { array: true } ? true : false;
-    },
-    _output: undefined as FieldOutput<OutputBase, TOptions>,
+    fields: fields ?? {},
+    _defined: undefined as unknown as DBFieldDefined<T, TOptions>,
+    _output: undefined as FieldValue,
     _metadata,
 
     get metadata() {
@@ -622,19 +618,18 @@ function createTailorDBField<
     },
 
     description(description: string) {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ description }) as any;
+      return cloneWith({ description });
     },
 
-    // oxlint-disable-next-line no-explicit-any
-    typeName: ((typeName: string) => cloneWith({ typeName })) as any,
-
-    validate(...validateInputs: FieldValidateInput<FieldOutput<OutputBase, TOptions>>[]) {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ validate: validateInputs }) as any;
+    typeName(typeName: string) {
+      return cloneWith({ typeName });
     },
 
-    parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldOutput<OutputBase, TOptions>> {
+    validate(...validateInputs: FieldValidateInput<FieldValue>[]) {
+      return cloneWith({ validate: validateInputs });
+    },
+
+    parse(args: FieldParseArgs): StandardSchemaV1.Result<FieldValue> {
       return parseInternal({
         value: args.value,
         data: args.data,
@@ -643,14 +638,11 @@ function createTailorDBField<
       });
     },
 
-    _parseInternal: parseInternal,
-
     // TailorDBField specific methods
     relation(config: RelationConfig<RelationType, TailorDBType> | RelationSelfConfig) {
       const cloned = field.clone();
       const targetType = isRelationSelfConfig(config) ? "self" : config.toward.type.name;
-      // oxlint-disable-next-line no-explicit-any
-      (cloned as any)._setRawRelation({
+      cloned._setRawRelation({
         type: config.type,
         toward: {
           type: targetType,
@@ -659,36 +651,38 @@ function createTailorDBField<
         },
         backward: config.backward,
       });
-      // oxlint-disable-next-line no-explicit-any
-      return cloned as any;
+      return cloned;
     },
 
     index() {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ index: true }) as any;
+      return cloneWith({ index: true });
     },
 
     unique() {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ unique: true, index: true }) as any;
+      return cloneWith({ unique: true, index: true });
     },
 
     vector() {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ vector: true }) as any;
+      return cloneWith({ vector: true });
     },
 
-    hooks(hooks: Hook<unknown, FieldOutput<OutputBase, TOptions>>) {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ hooks }) as any;
+    hooks(hooks: Hook<unknown, FieldValue>) {
+      return cloneWith({ hooks });
     },
 
     serial(config: SerialConfig) {
-      // oxlint-disable-next-line no-explicit-any
-      return cloneWith({ serial: config }) as any;
+      return cloneWith({ serial: config });
     },
 
     clone(cloneOptions?: FieldOptions) {
+      if (
+        this._metadata.validate?.length &&
+        cloneOptions?.array !== undefined &&
+        cloneOptions.array !== (this._metadata.array === true)
+      ) {
+        throw new Error("Cannot change the array option on a field with custom validation");
+      }
+
       // Deep clone nested object fields if present
       let clonedFields = fields;
       if (fields) {
@@ -700,7 +694,7 @@ function createTailorDBField<
       }
 
       // Create a new field with cloned configuration
-      const clonedField = createTailorDBField(type, options, clonedFields, values);
+      const clonedField = createTailorDBFieldRuntime(type, options, clonedFields, values);
 
       // Deep copy metadata using cloneDeep (preserves function references)
       Object.assign(clonedField._metadata, cloneDeep(this._metadata));
@@ -717,17 +711,12 @@ function createTailorDBField<
 
       // Copy raw relation if exists
       if (_rawRelation) {
-        const clonedRawRelation = cloneDeep(_rawRelation);
-        // oxlint-disable-next-line no-explicit-any
-        (clonedField as any)._setRawRelation(clonedRawRelation);
+        clonedField._setRawRelation(cloneDeep(_rawRelation));
       }
 
-      // oxlint-disable-next-line no-explicit-any
-      return clonedField as any;
+      return clonedField;
     },
 
-    // Internal method for clone to set rawRelation
-    // @ts-ignore - Internal method not in interface
     _setRawRelation(relation: RawRelationConfig) {
       _rawRelation = relation;
     },
@@ -905,13 +894,35 @@ function createTailorDBType<
   name: string,
   fields: Fields,
   options: { pluralForm?: string; description?: string },
-): TailorDBType<Fields, User> {
+): TailorDBType<Fields, User, DefinedDBTypeMetadata> {
   let _description = options.description;
   let _settings: TypeFeatures = {};
-  let _indexes: IndexDef<TailorDBType<Fields, User>>[] = [];
+  let _indexes: IndexDef<TailorDBType<Fields, User, DefinedDBTypeMetadata>>[] = [];
   const _permissions: RawPermissions = {};
   let _files: Record<string, string> = {};
   const _plugins: PluginAttachment[] = [];
+  const _definedMethods = new Set<keyof DefinedDBTypeMetadata>();
+  if (options.description !== undefined) {
+    _definedMethods.add("description");
+  }
+
+  function runMethodOnce<T>(method: keyof DefinedDBTypeMetadata, action: () => T): T {
+    if (_definedMethods.has(method)) {
+      throw new Error(`.${method}() has already been set`);
+    }
+    const result = action();
+    _definedMethods.add(method);
+    return result;
+  }
+  type TypeAfter<Key extends keyof DefinedDBTypeMetadata> = TailorDBType<
+    Fields,
+    User,
+    WithDBTypeMetadata<DefinedDBTypeMetadata, Key>
+  >;
+  type TypeAfterUser<
+    NextUser extends object,
+    Key extends keyof DefinedDBTypeMetadata,
+  > = TailorDBType<Fields, NextUser, WithDBTypeMetadata<DefinedDBTypeMetadata, Key>>;
 
   if (options.pluralForm) {
     if (name === options.pluralForm) {
@@ -920,7 +931,7 @@ function createTailorDBType<
     _settings.pluralForm = options.pluralForm;
   }
 
-  const dbType: TailorDBType<Fields, User> = {
+  const dbType: TailorDBType<Fields, User, DefinedDBTypeMetadata> = {
     name,
     fields: { ...fields },
     _output: null as unknown as InferFieldsOutput<Fields>,
@@ -950,91 +961,107 @@ function createTailorDBType<
       };
     },
 
-    hooks(hooks: Hooks<Fields>) {
-      // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
-      // oxlint-disable-next-line no-explicit-any
-      Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
-        const field = this.fields[fieldName];
-        if (field === undefined) throw new Error(`field not found: ${fieldName}`);
-        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = (
-          field as TailorAnyDBField
-        ).hooks(fieldHooks);
+    hooks(hooks: Hooks<Fields>): TypeAfter<"hooks"> {
+      return runMethodOnce("hooks", () => {
+        // `Hooks<Fields>` is strongly typed, but `Object.entries()` loses that information.
+        // oxlint-disable-next-line no-explicit-any
+        Object.entries(hooks).forEach(([fieldName, fieldHooks]: [string, any]) => {
+          const field = this.fields[fieldName];
+          if (field === undefined) throw new Error(`field not found: ${fieldName}`);
+          (this.fields as Record<string, TailorAnyDBField>)[fieldName] = (
+            field as TailorAnyDBField
+          ).hooks(fieldHooks);
+        });
+        return this as TypeAfter<"hooks">;
       });
-      return this;
     },
 
-    validate(validators: Validators<Fields>) {
-      Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
-        const field = this.fields[fieldName] as TailorAnyDBField;
+    validate(validators: Validators<Fields>): TypeAfter<"validate"> {
+      return runMethodOnce("validate", () => {
+        Object.entries(validators).forEach(([fieldName, fieldValidators]) => {
+          const field = this.fields[fieldName] as TailorAnyDBField;
 
-        const validators = fieldValidators as
-          | FieldValidateInput<unknown>
-          | FieldValidateInput<unknown>[];
+          const validators = fieldValidators as
+            | FieldValidateInput<unknown>
+            | FieldValidateInput<unknown>[];
 
-        const isValidateConfig = (v: unknown): v is ValidateConfig<unknown> => {
-          return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
-        };
+          const isValidateConfig = (v: unknown): v is ValidateConfig<unknown> => {
+            return Array.isArray(v) && v.length === 2 && typeof v[1] === "string";
+          };
 
-        let updatedField: TailorAnyDBField;
-        if (Array.isArray(validators)) {
-          if (isValidateConfig(validators)) {
-            updatedField = field.validate(validators);
+          let updatedField: TailorAnyDBField;
+          if (Array.isArray(validators)) {
+            if (isValidateConfig(validators)) {
+              updatedField = field.validate(validators);
+            } else {
+              updatedField = field.validate(...validators);
+            }
           } else {
-            updatedField = field.validate(...validators);
+            updatedField = field.validate(validators);
           }
-        } else {
-          updatedField = field.validate(validators);
-        }
-        (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
+          (this.fields as Record<string, TailorAnyDBField>)[fieldName] = updatedField;
+        });
+        return this as TypeAfter<"validate">;
       });
-      return this;
     },
 
-    features(features: Omit<TypeFeatures, "pluralForm">) {
-      _settings = {
-        ..._settings,
-        ...features,
-      };
-      return this;
+    features(features: Omit<TypeFeatures, "pluralForm">): TypeAfter<"features"> {
+      return runMethodOnce("features", () => {
+        _settings = {
+          ..._settings,
+          ...features,
+        };
+        return this as TypeAfter<"features">;
+      });
     },
 
-    indexes(...indexes: IndexDef<TailorDBType<Fields, User>>[]) {
-      _indexes = indexes;
-      return this;
+    indexes(
+      ...indexes: IndexDef<TailorDBType<Fields, User, DefinedDBTypeMetadata>>[]
+    ): TypeAfter<"indexes"> {
+      return runMethodOnce("indexes", () => {
+        _indexes = indexes;
+        return this as TypeAfter<"indexes">;
+      });
     },
 
     files<const F extends string>(
-      files: Record<F, string> & Partial<Record<keyof output<TailorDBType<Fields, User>>, never>>,
-    ) {
-      _files = files;
-      return this;
+      files: Record<F, string> & FileKeyConflictError<Fields, User>,
+    ): TypeAfter<"files"> {
+      return runMethodOnce("files", () => {
+        _files = files;
+        return this as TypeAfter<"files">;
+      });
     },
 
     permission<
       U extends object = User,
-      P extends TailorTypePermission<U, output<TailorDBType<Fields, User>>> = TailorTypePermission<
-        U,
-        output<TailorDBType<Fields, User>>
-      >,
-    >(permission: P) {
-      const ret = this as TailorDBType<Fields, U>;
-      _permissions.record = permission as RawPermissions["record"];
-      return ret;
+      P extends TailorTypePermission<U, output<TailorDBType<Fields, User, DefinedDBTypeMetadata>>> =
+        TailorTypePermission<U, output<TailorDBType<Fields, User, DefinedDBTypeMetadata>>>,
+    >(permission: P): TypeAfterUser<U, "permission"> {
+      return runMethodOnce("permission", () => {
+        const ret = this as unknown as TypeAfterUser<U, "permission">;
+        _permissions.record = permission as RawPermissions["record"];
+        return ret;
+      });
     },
 
     gqlPermission<
       U extends object = User,
       P extends TailorTypeGqlPermission<U> = TailorTypeGqlPermission<U>,
-    >(permission: P) {
-      const ret = this as TailorDBType<Fields, U>;
-      _permissions.gql = permission as RawPermissions["gql"];
-      return ret;
+    >(permission: P): TypeAfterUser<U, "gqlPermission"> {
+      return runMethodOnce("gqlPermission", () => {
+        const ret = this as unknown as TypeAfterUser<U, "gqlPermission">;
+        _permissions.gql = permission as RawPermissions["gql"];
+        return ret;
+      });
     },
 
-    description(description: string) {
-      _description = description;
-      this._description = description;
-      return this;
+    description(description: string): TypeAfter<"description"> {
+      return runMethodOnce("description", () => {
+        _description = description;
+        this._description = description;
+        return this as TypeAfter<"description">;
+      });
     },
 
     pickFields<K extends keyof Fields, const Opt extends FieldOptions>(keys: K[], options?: Opt) {
@@ -1068,7 +1095,7 @@ function createTailorDBType<
 
     plugin<P extends keyof PluginConfigs<keyof Fields & string>>(config: {
       [K in P]: PluginConfigs<keyof Fields & string>[K];
-    }): TailorDBType<Fields, User> {
+    }): TailorDBType<Fields, User, AnyBuilderMethod> {
       for (const [pluginId, pluginConfig] of Object.entries(config)) {
         _plugins.push({ pluginId, config: pluginConfig });
       }
@@ -1081,9 +1108,10 @@ function createTailorDBType<
 
 const idField = uuid();
 type idField = typeof idField;
-type DBType<F extends { id?: never } & Record<string, TailorAnyDBField>> = TailorDBInstance<
-  { id: idField } & F
->;
+type DBType<
+  F extends { id?: never } & Record<string, TailorAnyDBField>,
+  Defined extends DefinedDBTypeMetadata = DefinedDBTypeMetadata,
+> = TailorDBInstance<{ id: idField } & F, InferredAttributeMap, Defined>;
 
 /**
  * Creates a new database type with the specified fields.
@@ -1118,12 +1146,12 @@ function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField
   name: string | [string, string],
   description: string,
   fields: F,
-): DBType<F>;
+): DBType<F, WithDBTypeMetadata<DefinedDBTypeMetadata, "description">>;
 function dbType<const F extends { id?: never } & Record<string, TailorAnyDBField>>(
   name: string | [string, string],
   fieldsOrDescription: string | F,
   fields?: F,
-): DBType<F> {
+): DBType<F> | DBType<F, WithDBTypeMetadata<DefinedDBTypeMetadata, "description">> {
   const typeName = Array.isArray(name) ? name[0] : name;
   const pluralForm = Array.isArray(name) ? name[1] : undefined;
 

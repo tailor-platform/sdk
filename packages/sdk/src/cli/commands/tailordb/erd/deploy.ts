@@ -1,9 +1,9 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { deploymentArgs } from "@/cli/shared/args";
-import { defineAppCommand } from "@/cli/shared/command";
-import { logger } from "@/cli/shared/logger";
-import { assertWritable } from "@/cli/shared/readonly-guard";
+import { deploymentArgs } from "#/cli/shared/args";
+import { defineAppCommand } from "#/cli/shared/command";
+import { logger } from "#/cli/shared/logger";
+import { assertWritable } from "#/cli/shared/readonly-guard";
 import { deployStaticWebsite, logSkippedFiles } from "../../staticwebsite/deploy";
 import { prepareErdBuilds } from "./export";
 import { initErdDeployContext } from "./utils";

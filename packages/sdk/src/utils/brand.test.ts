@@ -35,28 +35,15 @@ describe("brand", () => {
       expect(isSdkBranded(obj)).toBe(true);
     });
 
-    test("returns true when kind matches", () => {
-      const obj = brandValue({ name: "test" }, "executor");
+    test.each([
+      ["executor", "executor", true],
+      ["executor", "tailordb-type", false],
+      ["workflow", ["workflow", "workflow-job"], true],
+      ["executor", ["workflow", "workflow-job"], false],
+    ] as const)("branded as %s, filtered by %j => %s", (brandKind, filterKind, expected) => {
+      const obj = brandValue({ name: "test" }, brandKind);
 
-      expect(isSdkBranded(obj, "executor")).toBe(true);
-    });
-
-    test("returns false when kind does not match", () => {
-      const obj = brandValue({ name: "test" }, "executor");
-
-      expect(isSdkBranded(obj, "tailordb-type")).toBe(false);
-    });
-
-    test("returns true when kind matches one of array entries", () => {
-      const obj = brandValue({ name: "test" }, "workflow");
-
-      expect(isSdkBranded(obj, ["workflow", "workflow-job"])).toBe(true);
-    });
-
-    test("returns false when kind matches none of array entries", () => {
-      const obj = brandValue({ name: "test" }, "executor");
-
-      expect(isSdkBranded(obj, ["workflow", "workflow-job"])).toBe(false);
+      expect(isSdkBranded(obj, filterKind)).toBe(expected);
     });
 
     test("returns false for plain objects", () => {
@@ -73,13 +60,12 @@ describe("brand", () => {
       expect(isSdkBranded(obj, "tailordb-type")).toBe(true);
     });
 
-    test("returns false for null/undefined/primitives", () => {
-      expect(isSdkBranded(null)).toBe(false);
-      expect(isSdkBranded(undefined)).toBe(false);
-      expect(isSdkBranded(42)).toBe(false);
-      expect(isSdkBranded("string")).toBe(false);
-      expect(isSdkBranded(true)).toBe(false);
-    });
+    test.each([null, undefined, 42, "string", true])(
+      "returns false for non-object value %s",
+      (value) => {
+        expect(isSdkBranded(value)).toBe(false);
+      },
+    );
   });
 
   describe("brand visibility", () => {

@@ -1,5 +1,57 @@
 # @tailor-platform/sdk-codemod
 
+## 0.3.8
+
+### Patch Changes
+
+- [#1818](https://github.com/tailor-platform/sdk/pull/1818) [`56608cc`](https://github.com/tailor-platform/sdk/commit/56608ccc445c1aeb683ddfd72965446b1062cfbd) Thanks [@toiroakr](https://github.com/toiroakr)! - Adopt Vitest 4.1 `aroundEach`/`aroundAll` hooks across the test suites, and update the TailorDB client mock example in the testing docs to the same style
+
+## 0.3.7
+
+### Patch Changes
+
+- [#1744](https://github.com/tailor-platform/sdk/pull/1744) [`3ca5b48`](https://github.com/tailor-platform/sdk/commit/3ca5b48fca4e8e1f0878350afc11d42d36bf3cab) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.2
+
+## 0.3.6
+
+### Patch Changes
+
+- [#1688](https://github.com/tailor-platform/sdk/pull/1688) [`7f67996`](https://github.com/tailor-platform/sdk/commit/7f679963adc1df438e49200f1170415629817f44) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.44.1
+
+## 0.3.5
+
+### Patch Changes
+
+- [#1659](https://github.com/tailor-platform/sdk/pull/1659) [`6ba468f`](https://github.com/tailor-platform/sdk/commit/6ba468f4654a723ab4db01d3f3474ae96c25cc71) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency picomatch to v4.0.5
+
+## 0.3.4
+
+### Patch Changes
+
+- [#1626](https://github.com/tailor-platform/sdk/pull/1626) [`06cc5f2`](https://github.com/tailor-platform/sdk/commit/06cc5f2960c5a09e9783d6b0923ed8c1b3d606a8) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.0
+
+## 0.3.3
+### Patch Changes
+
+
+
+- [#1598](https://github.com/tailor-platform/sdk/pull/1598) [`a5a4c58`](https://github.com/tailor-platform/sdk/commit/a5a4c58cabc24af3088d85c7a0d975d5be459def) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.10.1
+
+## 0.3.2
+### Patch Changes
+
+
+
+- [#1525](https://github.com/tailor-platform/sdk/pull/1525) [`425a19d`](https://github.com/tailor-platform/sdk/commit/425a19dd58da6e373b739d3b3e838c2ff3d1736a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency semver to v7.8.5
+
+
+
+- [#1533](https://github.com/tailor-platform/sdk/pull/1533) [`e3bc2ce`](https://github.com/tailor-platform/sdk/commit/e3bc2ce65ab30ee53e5de0eb48ca6c24049fcd1b) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.9.2
+
+
+
+- [#1554](https://github.com/tailor-platform/sdk/pull/1554) [`a2ca1f9`](https://github.com/tailor-platform/sdk/commit/a2ca1f989a69153138ddef66931f1e8a94c8c3e9) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.44.0
+
 ## 0.3.1
 ### Patch Changes
 

@@ -1,6 +1,6 @@
-import { readPackageJson } from "@/cli/shared/package-json";
+import { readPackageJson } from "#/cli/shared/package-json";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 export type WithLabel<T> = Partial<
   Record<
@@ -35,6 +35,7 @@ export type ResourceKind =
   | "executor"
   | "workflow"
   | "workflow_job_function"
+  | "workflow_job_function_execution_policy"
   | "staticwebsite"
   | "aigateway"
   | "tailordb"

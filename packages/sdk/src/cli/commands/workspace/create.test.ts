@@ -1,12 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { readPlatformConfig, writePlatformConfig } from "@/cli/shared/context";
-import { silenceLogger } from "@/cli/shared/test-helpers/silence-logger";
-import { resetKeyringState } from "@/cli/shared/token-store";
-import { createCommand } from "./create";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { initOperatorClient } from "#/cli/shared/client";
+import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
+import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
+import { resetKeyringState } from "#/cli/shared/token-store";
+import { createCommand, createWorkspace } from "./create";
 
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-workspace-create-${Date.now()}-${Math.random()}`);
 
@@ -24,7 +24,7 @@ vi.mock("@napi-rs/keyring", () => ({
   },
 }));
 
-vi.mock("@/cli/shared/client", async (importOriginal) => ({
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
   initOperatorClient: vi.fn(),
 }));
@@ -65,85 +65,160 @@ function stubClient() {
   } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
 }
 
-beforeAll(() => {
+aroundAll(async (runSuite) => {
   fs.mkdirSync(xdgTempDir, { recursive: true });
-});
-
-afterAll(() => {
+  await runSuite();
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
 describe("workspace create --permission", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     vi.stubEnv("TAILOR_PLATFORM_TOKEN", "mock-token");
     seedConfig();
     stubClient();
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
-    // Clean up the on-disk config between tests so prior writes don't leak.
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
   });
 
-  test("persists readonly: true when --permission read is combined with --profile-name", async () => {
+  async function runCreate(...extraArgs: string[]) {
     using _logger = silenceLogger("out", "success", "warn");
-    await runCommand(createCommand, [
-      "--name",
-      "test-ws",
-      "--region",
-      "us-west",
+    await runCommand(createCommand, ["--name", "test-ws", "--region", "us-west", ...extraArgs]);
+    return readPlatformConfig();
+  }
+
+  test("persists readonly: true when --permission read is combined with --profile-name", async () => {
+    const config = await runCreate(
       "--profile-name",
       "bootstrap",
       "--profile-user",
       "u@example.com",
       "--permission",
       "read",
-    ]);
-
-    const config = await readPlatformConfig();
+    );
     expect(config.profiles.bootstrap?.readonly).toBe(true);
   });
 
+  test("validates programmatic options before initializing a client", async () => {
+    await expect(createWorkspace({ name: "x", region: "us-west" })).rejects.toThrow(
+      "Name must be at least 3 characters",
+    );
+    expect(initOperatorClient).not.toHaveBeenCalled();
+  });
+
+  test("rejects an explicitly empty profile instead of falling back", async () => {
+    await expect(
+      createWorkspace({ name: "test-ws", region: "us-west", profile: "" }),
+    ).rejects.toThrow("Profile must not be empty");
+    expect(initOperatorClient).not.toHaveBeenCalled();
+  });
+
   test("omits the readonly key when --profile-name is given without --permission read", async () => {
-    using _logger = silenceLogger("out", "success", "warn");
-    await runCommand(createCommand, [
-      "--name",
-      "test-ws",
-      "--region",
-      "us-west",
+    const config = await runCreate(
       "--profile-name",
       "bootstrap",
       "--profile-user",
       "u@example.com",
-    ]);
-
-    const config = await readPlatformConfig();
+    );
     expect(config.profiles.bootstrap).toBeDefined();
     // We do not store readonly: false; the field should be absent so the
     // YAML output stays compatible with existing v2 configs.
     expect(config.profiles.bootstrap?.readonly).toBeUndefined();
   });
 
-  test("creates no profile when --permission read is passed without --profile-name", async () => {
+  test("creates a profile for a user whose token is scoped to TAILOR_PLATFORM_URL", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "dev-client");
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.dev.tailor.tech");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          token_expires_at: "2099-12-31T00:00:00Z",
+          access_token: "custom-token",
+        },
+      },
+      profiles: {},
+      current_user: "u@example.com",
+    });
     using _logger = silenceLogger("out", "success", "warn");
-    // Matches the existing --profile-user behavior: profile-only flags are
-    // silently inert when --profile-name is absent. We don't store the flag
-    // anywhere because no profile was created to attach it to.
+
     await runCommand(createCommand, [
       "--name",
       "test-ws",
       "--region",
       "us-west",
-      "--permission",
-      "read",
+      "--profile-name",
+      "bootstrap",
     ]);
 
+    expect(initOperatorClient).toHaveBeenCalledWith("custom-token", undefined);
     const config = await readPlatformConfig();
+    expect(config.profiles.bootstrap).toMatchObject({
+      user: "u@example.com",
+      workspace_id: validUUID,
+      platform_url: "https://api.dev.tailor.tech",
+      oauth2_client_id: "dev-client",
+      console_url: "https://console.dev.tailor.tech",
+    });
+  });
+
+  test("creates a profile when the active profile selects a custom platform", async () => {
+    vi.stubEnv("TAILOR_PLATFORM_TOKEN", undefined);
+    vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
+    writePlatformConfig({
+      version: 2,
+      min_sdk_version: "1.29.0",
+      users: {
+        "https://api.dev.tailor.tech|u@example.com": {
+          storage: "file",
+          token_expires_at: "2099-12-31T00:00:00Z",
+          access_token: "custom-token",
+        },
+      },
+      profiles: {
+        dev: {
+          user: "u@example.com",
+          workspace_id: validUUID,
+          platform_url: "https://api.dev.tailor.tech",
+        },
+      },
+      current_user: null,
+    });
+    using _logger = silenceLogger("out", "success", "warn");
+
+    await runCommand(createCommand, [
+      "--name",
+      "test-ws",
+      "--region",
+      "us-west",
+      "--profile-name",
+      "bootstrap",
+    ]);
+
+    expect(initOperatorClient).toHaveBeenCalledWith("custom-token", {
+      platformUrl: "https://api.dev.tailor.tech",
+    });
+    const config = await readPlatformConfig();
+    expect(config.profiles.bootstrap).toMatchObject({
+      user: "u@example.com",
+      workspace_id: validUUID,
+      platform_url: "https://api.dev.tailor.tech",
+    });
+  });
+
+  test("creates no profile when --permission read is passed without --profile-name", async () => {
+    // Matches the existing --profile-user behavior: profile-only flags are
+    // silently inert when --profile-name is absent. We don't store the flag
+    // anywhere because no profile was created to attach it to.
+    const config = await runCreate("--permission", "read");
     expect(Object.keys(config.profiles)).toHaveLength(0);
   });
 });

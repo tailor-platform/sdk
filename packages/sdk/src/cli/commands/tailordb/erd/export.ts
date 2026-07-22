@@ -1,14 +1,14 @@
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { configArg } from "@/cli/shared/args";
-import { defineAppCommand } from "@/cli/shared/command";
-import { logger } from "@/cli/shared/logger";
+import { configArg } from "#/cli/shared/args";
+import { defineAppCommand } from "#/cli/shared/command";
+import { logger } from "#/cli/shared/logger";
 import { loadLocalErdSchema, type LocalErdSchemaContext } from "./local-schema";
 import { buildTailorDbErdSchema } from "./schema";
 import { initErdCommand } from "./utils";
 import { writeViewerDist } from "./viewer";
-import type { TailorDBNamespaceData } from "@/plugin/types";
+import type { TailorDBNamespaceData } from "#/plugin/types";
 
 const DEFAULT_ERD_BASE_DIR = ".tailor-sdk/erd";
 

@@ -2,22 +2,26 @@
 //
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
-import type { AIGatewayConfig } from "@/configure/services/aigateway/types";
-import type { AuthConfig } from "@/configure/services/auth/types";
-import type { IdPConfig } from "@/configure/services/idp/types";
-import type { SecretsConfig } from "@/configure/services/secrets/types";
-import type { StaticWebsiteConfig } from "@/configure/services/staticwebsite/types";
-import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
-import type { LogLevelEnum } from "@/types/app-config.generated";
+import type { AIGatewayConfig } from "#/configure/services/aigateway/types";
+import type { AuthConfig } from "#/configure/services/auth/types";
+import type { IdPConfig } from "#/configure/services/idp/types";
+import type { SecretsConfig } from "#/configure/services/secrets/types";
+import type { StaticWebsiteConfig } from "#/configure/services/staticwebsite/types";
+import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
+import type { ExecutionPolicyInstance } from "#/configure/services/workflow/execution-policy.types";
+import type { LogLevelEnum } from "#/types/app-config.generated";
 
 export type LogLevel = LogLevelEnum;
 export type LogLevelInput = LogLevel | (string & {});
 
+/** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
 export type ExecutorServiceInput = ExecutorServiceConfig;
 
+/** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
 export type HttpAdapterServiceInput = { files: string[]; ignores?: string[] };
 
+/** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
 export type ResolverServiceConfig = { files: string[]; ignores?: string[] };
 export type ResolverExternalConfig = { external: true };
 export type ResolverServiceInput = {
@@ -25,10 +29,13 @@ export type ResolverServiceInput = {
 };
 
 export type WorkflowServiceConfig = {
+  /** Resolved relative to this config's own directory, not the invocation directory. */
   files: string[];
   job_files?: string[];
   ignores?: string[];
   job_ignores?: string[];
+  /** Workspace-level execution policies for workflow job functions. */
+  executionPolicies?: Record<string, ExecutionPolicyInstance>;
 };
 export type WorkflowServiceInput = WorkflowServiceConfig;
 
@@ -42,7 +49,7 @@ export type WorkflowServiceInput = WorkflowServiceConfig;
  * - `idp`: Array of IdP configs, e.g. `[myIdp]`
  * - `staticWebsites`: Array of static website configs, e.g. `[website]`
  * - `aiGateways`: Array of AI Gateway configs, e.g. `[gateway]`
- * - `db`, `resolver`, `executor`, `workflow`: Service configs with file globs
+ * - `db`, `resolver`, `executor`, `workflow`, `httpAdapter`: Service configs with file globs (resolved relative to this config file's own directory, not the invocation directory)
  */
 export interface AppConfig<
   Auth extends AuthConfig = AuthConfig,

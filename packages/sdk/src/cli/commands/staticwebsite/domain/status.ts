@@ -1,4 +1,4 @@
-import { CustomDomainStatus } from "@tailor-proto/tailor/v1/staticwebsite_resource_pb";
+import { CustomDomainStatus } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 
 export const statusLabels: Record<CustomDomainStatus, string> = {
   [CustomDomainStatus.UNSPECIFIED]: "unspecified",

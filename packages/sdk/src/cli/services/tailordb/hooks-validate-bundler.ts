@@ -1,14 +1,15 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { parseSync } from "oxc-parser";
-import { join, resolve } from "pathe";
+import { resolve } from "pathe";
 import * as rolldown from "rolldown";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { platformBundleDefinePlugin } from "@/cli/shared/platform-bundle-plugin";
-import { stringifyFunction, tailorUserMap } from "@/parser/service/tailordb/field";
-import { setPrecompiledScriptExpr } from "@/parser/service/tailordb/hooks-validate-precompiled-expr";
-import { assertDefined } from "@/utils/assert";
+import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
+import { stringifyFunction, tailorUserMap } from "#/parser/service/tailordb/field";
+import { setPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
+import { assertDefined } from "#/utils/assert";
+import { assertParsableExpression } from "#/utils/script-expr";
 import { ES_BUILTINS } from "./es-builtins";
-import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 import type {
   BindingPattern,
   ExportNamedDeclaration,
@@ -433,13 +434,17 @@ async function bundleScriptTarget(args: {
   kind: "hooks" | "validate";
   sourceFilePath: string;
   sourceBindings: Map<string, SourceBinding>;
-  tempDir: string;
+  typeName: string;
   targetIndex: number;
   tsconfig: string | undefined;
 }): Promise<string> {
-  const { fn, kind, sourceFilePath, sourceBindings, tempDir, targetIndex, tsconfig } = args;
+  const { fn, kind, sourceFilePath, sourceBindings, typeName, targetIndex, tsconfig } = args;
+  const context = `${kind} in ${sourceFilePath}`;
   const fnSource = stringifyFunction(fn);
-  const inlineExpr = `(${fnSource})({ value: _value, data: _data, user: ${tailorUserMap} })`;
+  const inlineExpr = assertParsableExpression(
+    `(${fnSource})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+    context,
+  );
 
   // Check if the function has free variables that need bundling
   const freeVars = findUndefinedReferences(`const __fn = ${fnSource};`);
@@ -451,7 +456,7 @@ async function bundleScriptTarget(args: {
   const { imports, declarations, unresolved } = resolveNeededBindings(freeVars, sourceBindings);
   if (unresolved.length > 0) {
     throw new Error(
-      `${kind} in ${sourceFilePath} captures unresolvable variables (${unresolved.join(", ")}). ` +
+      `${context} captures unresolvable variables (${unresolved.join(", ")}). ` +
         "Hooks and validators must not reference variables that cannot be resolved from the source file.\n" +
         `  ${kind}: ${fnSource}`,
     );
@@ -463,13 +468,15 @@ async function bundleScriptTarget(args: {
     fnSource,
     sourceFilePath,
   );
-  const entryPath = join(tempDir, `tailordb-script-${targetIndex}.entry.ts`);
-
-  writeFileSync(entryPath, entryContent);
+  const entry = createVirtualEntry(
+    `tailordb-script:${typeName}:${targetIndex}`,
+    entryContent,
+    "ts",
+  );
 
   const buildResult = await rolldown.build({
-    plugins: [platformBundleDefinePlugin],
-    input: entryPath,
+    plugins: [entry.plugin, platformBundleDefinePlugin],
+    input: entry.input,
     write: false,
     output: {
       format: "cjs",
@@ -487,7 +494,7 @@ async function bundleScriptTarget(args: {
   } as rolldown.BuildOptions);
 
   const bundledCode = buildResult.output[0].code;
-  return buildPrecompiledExpr(bundledCode);
+  return assertParsableExpression(buildPrecompiledExpr(bundledCode), context);
 }
 
 /**
@@ -509,38 +516,29 @@ export async function precompileTailorDBTypeScripts(
   // Collect source bindings once for all targets in this file
   const sourceBindings = collectSourceBindings(sourceFilePath);
 
-  // Use type name in temp dir to avoid race conditions when multiple type files
-  // are precompiled concurrently via Promise.all in service.ts
-  const tempDir = resolve(getDistDir(), "hooks-validate-scripts", type.name);
-  mkdirSync(tempDir, { recursive: true });
-
-  try {
-    const results = await Promise.allSettled(
-      targets.map((target, index) =>
-        bundleScriptTarget({
-          fn: target.fn,
-          kind: target.kind,
-          sourceFilePath,
-          sourceBindings,
-          tempDir,
-          targetIndex: index,
-          tsconfig,
-        }),
-      ),
-    );
-    const firstError = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
-    if (firstError) {
-      throw firstError.reason;
+  const results = await Promise.allSettled(
+    targets.map((target, index) =>
+      bundleScriptTarget({
+        fn: target.fn,
+        kind: target.kind,
+        sourceFilePath,
+        sourceBindings,
+        typeName: type.name,
+        targetIndex: index,
+        tsconfig,
+      }),
+    ),
+  );
+  const firstError = results.find((r): r is PromiseRejectedResult => r.status === "rejected");
+  if (firstError) {
+    throw firstError.reason;
+  }
+  for (const [index, result] of results.entries()) {
+    if (result.status === "fulfilled") {
+      setPrecompiledScriptExpr(
+        assertDefined(targets[index], `bundle target at index ${index} missing`).fn,
+        result.value,
+      );
     }
-    for (const [index, result] of results.entries()) {
-      if (result.status === "fulfilled") {
-        setPrecompiledScriptExpr(
-          assertDefined(targets[index], `bundle target at index ${index} missing`).fn,
-          result.value,
-        );
-      }
-    }
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true });
   }
 }

@@ -1,8 +1,8 @@
 import {
   WorkflowExecution_Status,
   WorkflowJobExecution_Status,
-} from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 export type WorkflowWaitUntil = "success" | "suspended" | "terminal";
 

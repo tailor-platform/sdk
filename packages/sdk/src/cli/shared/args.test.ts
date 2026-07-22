@@ -1,24 +1,27 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
-import { PageDirection } from "@tailor-proto/tailor/v1/resource_pb";
+import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
-import { describe, expect, beforeEach, afterEach, test, vi } from "vitest";
-import { loadEnvFiles, durationArg, parseDuration, positiveIntArg, toPageDirection } from "./args";
+import { describe, expect, aroundEach, test, vi } from "vitest";
+import {
+  loadEnvFiles,
+  durationArg,
+  parseDuration,
+  positiveIntArg,
+  resolveMachineUserInputSource,
+  toPageDirection,
+} from "./args";
+import { tempCwd } from "./test-helpers/temp-cwd";
 
 describe("loadEnvFiles", () => {
   const originalEnv = process.env;
   let tempDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     process.env = { ...originalEnv };
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-env-test-"));
-    vi.spyOn(process, "cwd").mockReturnValue(tempDir);
-  });
-
-  afterEach(() => {
+    using tmp = tempCwd("tailor-env-test-");
+    tempDir = tmp.dir;
+    await runTest();
     process.env = originalEnv;
-    vi.restoreAllMocks();
-    fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
   describe("required env files (envFiles)", () => {
@@ -138,42 +141,27 @@ describe("durationArg", () => {
     expect(durationArg.parse("1m")).toBe("1m");
   });
 
-  test("rejects invalid format", () => {
-    expect(() => durationArg.parse("3")).toThrow(
-      /Invalid duration format|Cannot read properties of null/,
-    );
-    expect(() => durationArg.parse("3x")).toThrow(
-      /Invalid duration format|Cannot read properties of null/,
-    );
-    expect(() => durationArg.parse("abc")).toThrow(
-      /Invalid duration format|Cannot read properties of null/,
-    );
-    expect(() => durationArg.parse("")).toThrow(
+  test.each(["3", "3x", "abc", ""])("rejects invalid format: %s", (value) => {
+    expect(() => durationArg.parse(value)).toThrow(
       /Invalid duration format|Cannot read properties of null/,
     );
   });
 
-  test("rejects zero duration", () => {
-    expect(() => durationArg.parse("0ms")).toThrow(/Duration must be greater than 0/);
-    expect(() => durationArg.parse("0s")).toThrow(/Duration must be greater than 0/);
-    expect(() => durationArg.parse("0m")).toThrow(/Duration must be greater than 0/);
+  test.each(["0ms", "0s", "0m"])("rejects zero duration: %s", (value) => {
+    expect(() => durationArg.parse(value)).toThrow(/Duration must be greater than 0/);
   });
 });
 
 describe("parseDuration", () => {
-  test("converts seconds to milliseconds", () => {
-    expect(parseDuration("3s")).toBe(3000);
-    expect(parseDuration("1s")).toBe(1000);
-  });
-
-  test("returns milliseconds as-is", () => {
-    expect(parseDuration("500ms")).toBe(500);
-    expect(parseDuration("1ms")).toBe(1);
-  });
-
-  test("converts minutes to milliseconds", () => {
-    expect(parseDuration("1m")).toBe(60000);
-    expect(parseDuration("2m")).toBe(120000);
+  test.each([
+    ["3s", 3000],
+    ["1s", 1000],
+    ["500ms", 500],
+    ["1ms", 1],
+    ["1m", 60000],
+    ["2m", 120000],
+  ])("parses %s to %d ms", (input, expected) => {
+    expect(parseDuration(input)).toBe(expected);
   });
 });
 
@@ -211,5 +199,50 @@ describe("toPageDirection", () => {
 
   test("maps desc to PageDirection.DESC", () => {
     expect(toPageDirection("desc")).toBe(PageDirection.DESC);
+  });
+});
+
+describe("resolveMachineUserInputSource", () => {
+  aroundEach(async (runTest) => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", undefined);
+    await runTest();
+    vi.unstubAllEnvs();
+  });
+
+  test("returns undefined when no machine user value was parsed", () => {
+    expect(resolveMachineUserInputSource(undefined, ["query"])).toBeUndefined();
+  });
+
+  test.each([
+    ["long option", ["query", "--machine-user", "bot"]],
+    ["long option with value", ["query", "--machine-user=bot"]],
+    ["camel-case long option", ["query", "--machineUser", "bot"]],
+    ["hidden alias", ["query", "--machineuser", "bot"]],
+    ["short option", ["query", "-m", "bot"]],
+    ["short option with value", ["query", "-m=bot"]],
+  ])("reports option source for %s", (_label, argv) => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "bot");
+    expect(resolveMachineUserInputSource("bot", argv)).toBe("option");
+  });
+
+  test("reports env source when value matches env and no flag is present", () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "bot");
+    expect(resolveMachineUserInputSource("bot", ["query"])).toBe("env");
+  });
+
+  test("reports option source when a positional value was explicitly provided", () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "bot");
+    expect(
+      resolveMachineUserInputSource("bot", ["machineuser", "token", "bot"], {
+        valueIsExplicit: true,
+      }),
+    ).toBe("option");
+  });
+
+  test("does not scan arguments after --", () => {
+    vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", "bot");
+    expect(resolveMachineUserInputSource("bot", ["query", "--", "--machine-user", "bot"])).toBe(
+      "env",
+    );
   });
 });

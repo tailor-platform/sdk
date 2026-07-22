@@ -1,5 +1,4 @@
-import { Code, ConnectError } from "@connectrpc/connect";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { isOwnedByApp, sdkNameLabelKey, type WithLabel } from "./label";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 
@@ -7,10 +6,9 @@ type ResourcePageFetcher<T> = (pageToken: string, maxPageSize: number) => Promis
 
 export interface FetchExistingResourcesWithLabelsParams<T> {
   client: OperatorClient;
-  workspaceId: string;
   fetchPage: ResourcePageFetcher<T>;
   getName: (resource: T) => string | undefined;
-  getTrn: (workspaceId: string, name: string) => string;
+  getTrn: (name: string) => string;
 }
 
 /**
@@ -18,7 +16,6 @@ export interface FetchExistingResourcesWithLabelsParams<T> {
  * @template T
  * @param params - Resource fetch parameters
  * @param params.client - Operator client instance
- * @param params.workspaceId - Workspace ID
  * @param params.fetchPage - Function that fetches one resource page
  * @param params.getName - Function that extracts the resource name
  * @param params.getTrn - Function that builds the resource TRN
@@ -27,17 +24,8 @@ export interface FetchExistingResourcesWithLabelsParams<T> {
 export async function fetchExistingResourcesWithLabels<T>(
   params: FetchExistingResourcesWithLabelsParams<T>,
 ): Promise<WithLabel<T>> {
-  const { client, workspaceId, fetchPage, getName, getTrn } = params;
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
-      return await fetchPage(pageToken, maxPageSize);
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
-  });
+  const { client, fetchPage, getName, getTrn } = params;
+  const withoutLabel = await fetchAllTolerant(fetchPage);
   const existingResources: WithLabel<T> = {};
   await Promise.all(
     withoutLabel.map(async (resource) => {
@@ -46,7 +34,7 @@ export async function fetchExistingResourcesWithLabels<T>(
         return;
       }
       const { metadata } = await client.getMetadata({
-        trn: getTrn(workspaceId, name),
+        trn: getTrn(name),
       });
       existingResources[name] = {
         resource,

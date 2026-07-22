@@ -1,17 +1,26 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
-import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
-import { afterEach, beforeEach, describe, test, expect, vi } from "vitest";
-import { reportCrash } from "@/cli/crashreport";
+import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
+import { aroundEach, describe, test, expect, vi } from "vitest";
+import { reportCrash } from "#/cli/crashreport/index";
 import {
   concurrencyLimitInterceptor,
   createTransport,
   fetchAll,
+  fetchAllTolerant,
+  fetchMachineUserToken,
   fetchPaged,
   formatRequestParams,
+  getConsoleBaseUrl,
+  getEffectivePlatformConfig,
+  getOAuth2ClientId,
+  getOrNull,
+  getPlatformBaseUrl,
+  initOperatorClient,
   MAX_PAGE_SIZE,
   parseMethodName,
+  rememberPlatformConfigForToken,
   resolveStaticWebsiteUrls,
   RETRY_SAFE_CREATE_METHODS,
   retryInterceptor,
@@ -23,12 +32,13 @@ vi.mock("@connectrpc/connect-node", () => ({
   createConnectTransport: vi.fn(() => ({ type: "node-transport" })),
 }));
 
-vi.mock("@/cli/crashreport", () => ({
+vi.mock("#/cli/crashreport/index", () => ({
   reportCrash: vi.fn(),
 }));
 
 describe("createTransport", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.clearAllMocks();
   });
 
@@ -44,6 +54,85 @@ describe("createTransport", () => {
   });
 });
 
+describe("initOperatorClient", () => {
+  aroundEach(async (runTest) => {
+    await runTest();
+    rememberPlatformConfigForToken("token-a");
+    vi.clearAllMocks();
+  });
+
+  test("uses the platform config remembered for the access token", async () => {
+    rememberPlatformConfigForToken("token-a", {
+      platformUrl: "https://api.dev.tailor.tech",
+    });
+
+    await initOperatorClient("token-a");
+    const connectNode = await import("@connectrpc/connect-node");
+
+    expect(connectNode.createConnectTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: "https://api.dev.tailor.tech",
+      }),
+    );
+  });
+});
+
+describe("getConsoleBaseUrl", () => {
+  aroundEach(async (runTest) => {
+    await runTest();
+    vi.unstubAllEnvs();
+  });
+
+  test("infers the Console URL from profile platform URL before using env console URL", () => {
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.other.tailor.tech");
+
+    expect(getConsoleBaseUrl({ platformUrl: "https://api.dev.tailor.tech" })).toBe(
+      "https://console.dev.tailor.tech",
+    );
+  });
+
+  test("uses env console URL when profile platform URL cannot infer a custom Console URL", () => {
+    vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", "https://console.other.tailor.tech");
+
+    expect(getConsoleBaseUrl({ platformUrl: "https://platform.dev.tailor.tech" })).toBe(
+      "https://console.other.tailor.tech",
+    );
+  });
+});
+
+describe("platform environment variables", () => {
+  aroundEach(async (runTest) => {
+    await runTest();
+    vi.unstubAllEnvs();
+  });
+
+  test("uses legacy platform env vars when renamed vars are absent", () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+
+    expect(getPlatformBaseUrl()).toBe("https://api.legacy.tailor.tech");
+    expect(getOAuth2ClientId()).toBe("legacy-client");
+    expect(getEffectivePlatformConfig()).toEqual({
+      platformUrl: "https://api.legacy.tailor.tech",
+      oauth2ClientId: "legacy-client",
+    });
+  });
+
+  test("prefers renamed platform env vars over legacy env vars", () => {
+    vi.stubEnv("PLATFORM_URL", "https://api.legacy.tailor.tech");
+    vi.stubEnv("PLATFORM_OAUTH2_CLIENT_ID", "legacy-client");
+    vi.stubEnv("TAILOR_PLATFORM_URL", "https://api.dev.tailor.tech");
+    vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", "dev-client");
+
+    expect(getPlatformBaseUrl()).toBe("https://api.dev.tailor.tech");
+    expect(getOAuth2ClientId()).toBe("dev-client");
+    expect(getEffectivePlatformConfig()).toEqual({
+      platformUrl: "https://api.dev.tailor.tech",
+      oauth2ClientId: "dev-client",
+    });
+  });
+});
+
 describe("fetchAll", () => {
   test("passes MAX_PAGE_SIZE to callback", async () => {
     const fn = vi.fn().mockResolvedValue([["item1"], ""]);
@@ -51,6 +140,67 @@ describe("fetchAll", () => {
     await fetchAll(fn);
 
     expect(fn).toHaveBeenCalledWith("", MAX_PAGE_SIZE);
+  });
+});
+
+describe("fetchAllTolerant", () => {
+  test("returns every page when the fetcher succeeds", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([["a"], "next"])
+      .mockResolvedValueOnce([["b"], ""]);
+
+    const items = await fetchAllTolerant(fn);
+
+    expect(items).toEqual(["a", "b"]);
+    expect(fn).toHaveBeenNthCalledWith(1, "", MAX_PAGE_SIZE);
+    expect(fn).toHaveBeenNthCalledWith(2, "next", MAX_PAGE_SIZE);
+  });
+
+  test("returns an empty list when the fetcher raises NotFound", async () => {
+    const fn = vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    await expect(fetchAllTolerant(fn)).resolves.toEqual([]);
+  });
+
+  test("keeps already fetched pages when a later page raises NotFound", async () => {
+    const fn = vi
+      .fn()
+      .mockResolvedValueOnce([["a"], "next"])
+      .mockRejectedValueOnce(new ConnectError("not found", Code.NotFound));
+
+    await expect(fetchAllTolerant(fn)).resolves.toEqual(["a"]);
+  });
+
+  test("rethrows non-NotFound errors", async () => {
+    const error = new ConnectError("unavailable", Code.Unavailable);
+    const fn = vi.fn().mockRejectedValue(error);
+
+    await expect(fetchAllTolerant(fn)).rejects.toBe(error);
+  });
+});
+
+describe("getOrNull", () => {
+  test("returns the fetched value when the getter succeeds", async () => {
+    await expect(getOrNull(async () => ({ id: "item-1" }))).resolves.toEqual({ id: "item-1" });
+  });
+
+  test("returns undefined when the getter raises NotFound", async () => {
+    await expect(
+      getOrNull(async () => {
+        throw new ConnectError("not found", Code.NotFound);
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  test("rethrows non-NotFound errors", async () => {
+    const error = new ConnectError("unavailable", Code.Unavailable);
+
+    await expect(
+      getOrNull(async () => {
+        throw error;
+      }),
+    ).rejects.toBe(error);
   });
 });
 
@@ -119,11 +269,10 @@ describe("fetchPaged", () => {
 describe("retryInterceptor", () => {
   // Stub timers so the real backoff (500ms base) does not slow the suite or make
   // it flaky under load; runAllTimersAsync below drives the awaited setTimeout.
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.useFakeTimers();
     vi.mocked(reportCrash).mockClear();
-  });
-  afterEach(() => {
+    await runTest();
     vi.useRealTimers();
   });
 
@@ -181,6 +330,18 @@ describe("retryInterceptor", () => {
 
     expect(res).toBe(okResponse);
     expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry workspace creation when the outcome is ambiguous", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("unavailable", Code.Unavailable))
+      .mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.createWorkspace))),
+    ).rejects.toThrow("unavailable");
+    expect(next).toHaveBeenCalledOnce();
   });
 
   test("treats AlreadyExists after a retry as success for Create methods", async () => {
@@ -339,7 +500,8 @@ describe("retryInterceptor", () => {
 
 describe("concurrencyLimitInterceptor", () => {
   const original = process.env.TAILOR_APPLY_CONCURRENCY;
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     if (original === undefined) {
       delete process.env.TAILOR_APPLY_CONCURRENCY;
     } else {
@@ -395,77 +557,22 @@ describe("concurrencyLimitInterceptor", () => {
 });
 
 describe("parseMethodName", () => {
-  test("parses Create methods", () => {
-    expect(parseMethodName("CreateWorkflow")).toEqual({
-      operation: "create",
-      resourceType: "Workflow",
-    });
-    expect(parseMethodName("CreateTailorDBService")).toEqual({
-      operation: "create",
-      resourceType: "TailorDBService",
-    });
-    expect(parseMethodName("CreateTailorDBType")).toEqual({
-      operation: "create",
-      resourceType: "TailorDBType",
-    });
-  });
-
-  test("parses Update methods", () => {
-    expect(parseMethodName("UpdateWorkflow")).toEqual({
-      operation: "update",
-      resourceType: "Workflow",
-    });
-    expect(parseMethodName("UpdateTailorDBType")).toEqual({
-      operation: "update",
-      resourceType: "TailorDBType",
-    });
-  });
-
-  test("parses Delete methods", () => {
-    expect(parseMethodName("DeleteWorkflow")).toEqual({
-      operation: "delete",
-      resourceType: "Workflow",
-    });
-    expect(parseMethodName("DeleteExecutorExecutor")).toEqual({
-      operation: "delete",
-      resourceType: "ExecutorExecutor",
-    });
-  });
-
-  test("parses Set methods", () => {
-    expect(parseMethodName("SetMetadata")).toEqual({
-      operation: "set",
-      resourceType: "Metadata",
-    });
-  });
-
-  test("parses List methods", () => {
-    expect(parseMethodName("ListWorkflows")).toEqual({
-      operation: "list",
-      resourceType: "Workflows",
-    });
-    expect(parseMethodName("ListWorkflowJobFunctions")).toEqual({
-      operation: "list",
-      resourceType: "WorkflowJobFunctions",
-    });
-  });
-
-  test("parses Get methods", () => {
-    expect(parseMethodName("GetStaticWebsite")).toEqual({
-      operation: "get",
-      resourceType: "StaticWebsite",
-    });
-  });
-
-  test("returns default for unknown method patterns", () => {
-    expect(parseMethodName("UnknownMethod")).toEqual({
-      operation: "perform",
-      resourceType: "resource",
-    });
-    expect(parseMethodName("")).toEqual({
-      operation: "perform",
-      resourceType: "resource",
-    });
+  test.each([
+    ["CreateWorkflow", "create", "Workflow"],
+    ["CreateTailorDBService", "create", "TailorDBService"],
+    ["CreateTailorDBType", "create", "TailorDBType"],
+    ["UpdateWorkflow", "update", "Workflow"],
+    ["UpdateTailorDBType", "update", "TailorDBType"],
+    ["DeleteWorkflow", "delete", "Workflow"],
+    ["DeleteExecutorExecutor", "delete", "ExecutorExecutor"],
+    ["SetMetadata", "set", "Metadata"],
+    ["ListWorkflows", "list", "Workflows"],
+    ["ListWorkflowJobFunctions", "list", "WorkflowJobFunctions"],
+    ["GetStaticWebsite", "get", "StaticWebsite"],
+    ["UnknownMethod", "perform", "resource"],
+    ["", "perform", "resource"],
+  ])("parses %s as { operation: %s, resourceType: %s }", (methodName, operation, resourceType) => {
+    expect(parseMethodName(methodName)).toEqual({ operation, resourceType });
   });
 });
 
@@ -624,5 +731,53 @@ describe("resolveStaticWebsiteUrls", () => {
     expect(warnSpy).toHaveBeenCalledWith(
       'Static website "my-site" not found for CORS configuration. Excluding from CORS.',
     );
+  });
+});
+
+describe("fetchMachineUserToken", () => {
+  const fetchMock = vi.fn();
+
+  aroundEach(async (runTest) => {
+    vi.stubGlobal("fetch", fetchMock);
+    await runTest();
+    vi.unstubAllGlobals();
+  });
+
+  test("returns the parsed token on success", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 }),
+    });
+
+    const result = await fetchMachineUserToken("https://example.com", "client-id", "client-secret");
+
+    expect(result).toEqual({ token_type: "Bearer", access_token: "token-1", expires_in: 3600 });
+  });
+
+  test("includes status, statusText, and response body in the error on failure", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 403,
+      statusText: "Forbidden",
+      text: () => Promise.resolve("access denied"),
+    });
+
+    await expect(
+      fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
+    ).rejects.toThrow("Failed to fetch machine user token: 403 Forbidden access denied");
+  });
+
+  test("falls back to an empty body when reading the response body fails", async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: "Internal Server Error",
+      text: () => Promise.reject(new Error("stream already read")),
+    });
+
+    await expect(
+      fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
+    ).rejects.toThrow("Failed to fetch machine user token: 500 Internal Server Error");
   });
 });

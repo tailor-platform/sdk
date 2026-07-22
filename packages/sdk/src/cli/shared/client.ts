@@ -10,27 +10,108 @@ import {
   type Transport,
   type UnaryResponse,
 } from "@connectrpc/connect";
-import { OperatorService } from "@tailor-proto/tailor/v1/service_pb";
 import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";
 import { logger } from "./logger";
 import { userAgent } from "./user-agent";
+import type { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 
-export const platformBaseUrl = process.env.PLATFORM_URL ?? "https://api.tailor.tech";
+export const defaultPlatformBaseUrl = "https://api.tailor.tech";
+export const defaultConsoleBaseUrl = "https://console.tailor.tech";
 
-const oauth2ClientId =
-  process.env.PLATFORM_OAUTH2_CLIENT_ID ?? "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
+const defaultOAuth2ClientId = "cpoc_0Iudir72fqSpqC6GQ58ri1cLAqcq5vJl";
 const oauth2DiscoveryEndpoint = "/.well-known/oauth-authorization-server/oauth2/platform";
+
+export type PlatformClientConfig = {
+  platformUrl?: string;
+  oauth2ClientId?: string;
+  consoleUrl?: string;
+};
+
+const tokenPlatformConfigs = new Map<string, PlatformClientConfig>();
+
+function getEnvPlatformUrl(): string | undefined {
+  return process.env.TAILOR_PLATFORM_URL ?? process.env.PLATFORM_URL;
+}
+
+function getEnvOAuth2ClientId(): string | undefined {
+  return process.env.TAILOR_PLATFORM_OAUTH2_CLIENT_ID ?? process.env.PLATFORM_OAUTH2_CLIENT_ID;
+}
+
+export function normalizeBaseUrl(value: string): string {
+  const url = new URL(value);
+  url.hash = "";
+  url.search = "";
+  return url.toString().replace(/\/$/, "");
+}
+
+export function getEffectivePlatformConfig(config: PlatformClientConfig = {}) {
+  const platformUrl = config.platformUrl ?? getEnvPlatformUrl();
+  const oauth2ClientId = config.oauth2ClientId ?? getEnvOAuth2ClientId();
+  const consoleUrl = config.consoleUrl ?? process.env.TAILOR_PLATFORM_CONSOLE_URL;
+  const effective = {
+    ...(platformUrl ? { platformUrl } : {}),
+    ...(oauth2ClientId ? { oauth2ClientId } : {}),
+    ...(consoleUrl ? { consoleUrl } : {}),
+  };
+  return Object.keys(effective).length > 0 ? effective : undefined;
+}
+
+export function rememberPlatformConfigForToken(accessToken: string, config?: PlatformClientConfig) {
+  const effectiveConfig = getEffectivePlatformConfig(config);
+  if (effectiveConfig) {
+    tokenPlatformConfigs.set(accessToken, effectiveConfig);
+  } else {
+    tokenPlatformConfigs.delete(accessToken);
+  }
+}
+
+function getPlatformConfigForToken(accessToken: string): PlatformClientConfig | undefined {
+  return tokenPlatformConfigs.get(accessToken);
+}
+
+export function getPlatformBaseUrl(config: PlatformClientConfig = {}) {
+  return normalizeBaseUrl(config.platformUrl ?? getEnvPlatformUrl() ?? defaultPlatformBaseUrl);
+}
+
+export function isDefaultPlatform(config?: PlatformClientConfig): boolean {
+  return getPlatformBaseUrl(config) === normalizeBaseUrl(defaultPlatformBaseUrl);
+}
+
+export function getOAuth2ClientId(config: PlatformClientConfig = {}) {
+  return config.oauth2ClientId ?? getEnvOAuth2ClientId() ?? defaultOAuth2ClientId;
+}
+
+function inferConsoleBaseUrl(platformBaseUrl: string) {
+  const platformUrl = new URL(platformBaseUrl);
+  if (platformUrl.hostname.startsWith("api.")) {
+    platformUrl.hostname = platformUrl.hostname.replace(/^api\./, "console.");
+    return normalizeBaseUrl(platformUrl.toString());
+  }
+  return defaultConsoleBaseUrl;
+}
+
+export function getConsoleBaseUrl(config: PlatformClientConfig = {}) {
+  if (config.consoleUrl) return normalizeBaseUrl(config.consoleUrl);
+  if (config.platformUrl) {
+    const inferredUrl = inferConsoleBaseUrl(config.platformUrl);
+    if (inferredUrl !== defaultConsoleBaseUrl) return inferredUrl;
+  }
+  if (process.env.TAILOR_PLATFORM_CONSOLE_URL)
+    return normalizeBaseUrl(process.env.TAILOR_PLATFORM_CONSOLE_URL);
+  return inferConsoleBaseUrl(getPlatformBaseUrl(config));
+}
 
 /**
  * Initialize an OAuth2 client for Tailor Platform.
+ * @param config - Optional platform connection settings
  * @returns Configured OAuth2 client
  */
-export function initOAuth2Client() {
+export function initOAuth2Client(config?: PlatformClientConfig) {
   return new OAuth2Client({
-    clientId: oauth2ClientId,
-    server: platformBaseUrl,
+    clientId: getOAuth2ClientId(config),
+    server: getPlatformBaseUrl(config),
     discoveryEndpoint: oauth2DiscoveryEndpoint,
   });
 }
@@ -40,10 +121,15 @@ export type OperatorClient = Client<typeof OperatorService>;
 /**
  * Initialize an Operator client with the given access token.
  * @param accessToken - Access token for authentication
+ * @param config - Optional platform connection settings
  * @returns Configured Operator client
  */
-export async function initOperatorClient(accessToken: string) {
-  const { createTracingInterceptor } = await import("@/cli/telemetry/interceptor");
+export async function initOperatorClient(accessToken: string, config?: PlatformClientConfig) {
+  const platformConfig = config ?? getPlatformConfigForToken(accessToken);
+  const [{ createTracingInterceptor }, { OperatorService }] = await Promise.all([
+    import("#/cli/telemetry/interceptor"),
+    import("@tailor-platform/tailor-proto/service_pb"),
+  ]);
 
   const interceptors: Interceptor[] = [
     await userAgentInterceptor(),
@@ -56,7 +142,7 @@ export async function initOperatorClient(accessToken: string) {
     concurrencyLimitInterceptor(),
   ];
 
-  const transport = await createTransport(platformBaseUrl, interceptors);
+  const transport = await createTransport(getPlatformBaseUrl(platformConfig), interceptors);
   return createClient(OperatorService, transport);
 }
 
@@ -106,9 +192,9 @@ async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor>
 /**
  * Create an interceptor that retries failed unary requests with backoff.
  *
- * Retries any unary method on `Unavailable`/`ResourceExhausted`, and `Internal`
- * only for methods declared idempotent, up to 3 attempts (despite the historical
- * "idempotent" naming, the first two codes are retried regardless of idempotency).
+ * Retries unary methods on `Unavailable`/`ResourceExhausted`, and `Internal`
+ * only for methods declared idempotent, up to 3 attempts. Workspace creation is
+ * excluded because it has no idempotency key and a lost response is ambiguous.
  * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
  * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
  * success, since it means a prior attempt already committed the resource
@@ -154,10 +240,10 @@ export function retryInterceptor(): Interceptor {
           // or non-idempotent compound create under load — #1350). The top-level
           // handler skips ConnectError, so route it to error tracking here before
           // letting it surface as the deploy error.
-          const { reportCrash } = await import("@/cli/crashreport");
+          const { reportCrash } = await import("#/cli/crashreport/index");
           await reportCrash(error, "handledError");
         }
-        if (isRetirable(error, req.method.idempotency)) {
+        if (req.method.name !== "CreateWorkspace" && isRetirable(error, req.method.idempotency)) {
           lastError = error;
           logger.debug(
             `retry: ${req.method.name} attempt ${i + 1} failed with ` +
@@ -208,8 +294,10 @@ function connectCodeName(error: unknown): string {
  *
  * Membership is deliberately an allowlist, not `startsWith("Create")`: swallowing
  * synthesizes an empty response (see `synthesizeEmptyUnaryResponse`), which is only
- * safe when every caller ignores the response body. These are the deploy/apply
- * resource creations that fire under heavy parallelism and discard their response.
+ * safe when every caller tolerates an empty response body. These are the deploy/apply
+ * resource creations that fire under heavy parallelism and discard their response —
+ * except `CreateSecretManagerSecret`, whose caller reads `secret.updateTime` but
+ * degrades safely when it is absent (the next deploy re-updates the secret).
  *
  * Intentionally excluded because their callers read the response body — swallowing
  * would hand back an empty message and corrupt downstream state:
@@ -253,6 +341,7 @@ export const RETRY_SAFE_CREATE_METHODS: ReadonlySet<string> = new Set([
   "CreateTenantConfig",
   "CreateUserProfileConfig",
   "CreateWorkflow",
+  "CreateWorkflowJobFunctionExecutionPolicy",
 ]);
 
 /**
@@ -441,6 +530,53 @@ export async function fetchAll<T>(
   return items;
 }
 
+/**
+ * @internal
+ * @param error - Error value to inspect
+ * @returns Whether the error is a Connect NotFound error
+ */
+export function isNotFoundError(error: unknown): boolean {
+  return error instanceof ConnectError && error.code === Code.NotFound;
+}
+
+/**
+ * Fetch all paginated resources, treating an absent resource group as empty.
+ * @template T
+ * @param fn - Page fetcher returning items and next page token
+ * @returns Items fetched before pagination completes or the fetcher raises NotFound
+ */
+export async function fetchAllTolerant<T>(
+  fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>,
+): Promise<T[]> {
+  return await fetchAll(async (pageToken, maxPageSize) => {
+    try {
+      return await fn(pageToken, maxPageSize);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return [[], ""];
+      }
+      throw error;
+    }
+  });
+}
+
+/**
+ * Fetch a single resource, treating NotFound as an absent value.
+ * @template T
+ * @param fn - Resource getter
+ * @returns Fetched resource, or undefined when the getter raises NotFound
+ */
+export async function getOrNull<T>(fn: () => Promise<T>): Promise<T | undefined> {
+  try {
+    return await fn();
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return undefined;
+    }
+    throw error;
+  }
+}
+
 interface FetchPagedOptions {
   /** Maximum number of items to return. 0 or undefined means unlimited. */
   limit?: number;
@@ -490,10 +626,11 @@ export async function fetchPaged<T>(
 /**
  * Fetch user info from the Tailor Platform userinfo endpoint.
  * @param accessToken - Access token for the current user
+ * @param config - Optional platform connection settings
  * @returns Parsed user info
  */
-export async function fetchUserInfo(accessToken: string) {
-  const userInfoUrl = new URL("/auth/platform/userinfo", platformBaseUrl).href;
+export async function fetchUserInfo(accessToken: string, config?: PlatformClientConfig) {
+  const userInfoUrl = new URL("/auth/platform/userinfo", getPlatformBaseUrl(config)).href;
   const resp = await fetch(userInfoUrl, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -578,8 +715,7 @@ export async function resolveStaticWebsiteUrls(
           );
           return [];
         } catch (error) {
-          const isNotFound = error instanceof ConnectError && error.code === Code.NotFound;
-          if (isNotFound && expectedLocalNames?.has(siteName)) {
+          if (isNotFoundError(error) && expectedLocalNames?.has(siteName)) {
             return [url];
           }
           logger.warn(
@@ -618,7 +754,10 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
     body: formData,
   });
   if (!resp.ok) {
-    throw new Error("Failed to fetch machine user token");
+    const body = await resp.text().catch(() => "");
+    throw new Error(
+      `Failed to fetch machine user token: ${resp.status} ${resp.statusText} ${body.slice(0, 500)}`,
+    );
   }
   const rawJson = await resp.json();
 
@@ -634,13 +773,18 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
  * Fetch an OAuth2 token for a platform machine user via client_credentials grant.
  * @param clientId - Client ID for the platform machine user
  * @param clientSecret - Client secret for the platform machine user
+ * @param config - Optional platform connection settings
  * @returns OAuth2 token
  */
-export async function fetchPlatformMachineUserToken(clientId: string, clientSecret: string) {
+export async function fetchPlatformMachineUserToken(
+  clientId: string,
+  clientSecret: string,
+  config?: PlatformClientConfig,
+) {
   const client = new OAuth2Client({
     clientId,
     clientSecret,
-    server: platformBaseUrl,
+    server: getPlatformBaseUrl(config),
     discoveryEndpoint: oauth2DiscoveryEndpoint,
   });
   return await client.clientCredentials();

@@ -6,7 +6,7 @@ import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
 import type { AuthConnection, AuthHook, AuthHookPoint, AuthIDPConfig, AuthOAuth2Client, AuthSCIMConfig, AuthSCIMResource, AuthService, ControlplaneMachineUser, MachineUser, PATScope, PersonalAccessToken, TenantProviderConfig, UserProfileProviderConfig } from "./auth_resource_pb";
 import type { PageDirection } from "./resource_pb";
-import type { Timestamp, Value } from "@bufbuild/protobuf/wkt";
+import type { FieldMask, Timestamp, Value } from "@bufbuild/protobuf/wkt";
 
 /**
  * Describes the file tailor/v1/auth.proto.
@@ -1678,6 +1678,51 @@ export declare type CreateAuthConnectionResponse = Message<"tailor.v1.CreateAuth
  * Use `create(CreateAuthConnectionResponseSchema)` to create a new message.
  */
 export declare const CreateAuthConnectionResponseSchema: GenMessage<CreateAuthConnectionResponse>;
+
+/**
+ * @generated from message tailor.v1.UpdateAuthConnectionRequest
+ */
+export declare type UpdateAuthConnectionRequest = Message<"tailor.v1.UpdateAuthConnectionRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: tailor.v1.AuthConnection connection = 2;
+   */
+  connection?: AuthConnection;
+
+  /**
+   * @generated from field: google.protobuf.FieldMask update_mask = 100;
+   */
+  updateMask?: FieldMask;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateAuthConnectionRequest.
+ * Use `create(UpdateAuthConnectionRequestSchema)` to create a new message.
+ */
+export declare const UpdateAuthConnectionRequestSchema: GenMessage<UpdateAuthConnectionRequest>;
+
+/**
+ * @generated from message tailor.v1.UpdateAuthConnectionResponse
+ */
+export declare type UpdateAuthConnectionResponse = Message<"tailor.v1.UpdateAuthConnectionResponse"> & {
+  /**
+   * The updated connection. Its status reflects whether the change revoked the
+   * session (STATUS_UNAUTHORIZED) or left it intact (STATUS_AUTHORIZED).
+   *
+   * @generated from field: tailor.v1.AuthConnection connection = 1;
+   */
+  connection?: AuthConnection;
+};
+
+/**
+ * Describes the message tailor.v1.UpdateAuthConnectionResponse.
+ * Use `create(UpdateAuthConnectionResponseSchema)` to create a new message.
+ */
+export declare const UpdateAuthConnectionResponseSchema: GenMessage<UpdateAuthConnectionResponse>;
 
 /**
  * @generated from message tailor.v1.ListAuthConnectionsRequest

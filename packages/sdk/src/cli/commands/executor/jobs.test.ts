@@ -2,21 +2,21 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import {
   ExecutorJobStatus,
   ExecutorTargetType,
-} from "@tailor-proto/tailor/v1/executor_resource_pb";
-import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
-import { beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
+} from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { getExecutorWaitFailureMessage, watchExecutorJob } from "./jobs";
-import type { ExecutorJob } from "@tailor-proto/tailor/v1/executor_resource_pb";
-import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import type { ExecutorJob } from "@tailor-platform/tailor-proto/executor_resource_pb";
+import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   fetchAll: async <T>(
     fn: (pageToken: string, maxPageSize: number) => Promise<[T[], string]>,
   ): Promise<T[]> => {
@@ -34,10 +34,26 @@ function executorJob(status: ExecutorJobStatus): ExecutorJob {
   } as ExecutorJob;
 }
 
+type OperatorClientMockOverrides = {
+  [K in keyof Awaited<ReturnType<typeof initOperatorClient>>]?: ReturnType<typeof vi.fn>;
+} & {
+  targetType?: ExecutorTargetType;
+};
+
+function mockOperatorClient(overrides: OperatorClientMockOverrides = {}) {
+  const { targetType = ExecutorTargetType.WEBHOOK, ...rest } = overrides;
+  vi.mocked(initOperatorClient).mockResolvedValue({
+    getExecutorExecutor: vi.fn().mockResolvedValue({ executor: { targetType } }),
+    getExecutorJob: vi.fn().mockResolvedValue({ job: executorJob(ExecutorJobStatus.SUCCESS) }),
+    listExecutorJobAttempts: vi.fn().mockResolvedValue({ attempts: [], nextPageToken: "" }),
+    ...rest,
+  } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+}
+
 describe("watchExecutorJob", () => {
   let getExecutorJobMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
 
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
@@ -50,18 +66,8 @@ describe("watchExecutorJob", () => {
         job: executorJob(ExecutorJobStatus.SUCCESS),
       });
 
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getExecutorExecutor: vi.fn().mockResolvedValue({
-        executor: {
-          targetType: ExecutorTargetType.WEBHOOK,
-        },
-      }),
-      getExecutorJob: getExecutorJobMock,
-      listExecutorJobAttempts: vi.fn().mockResolvedValue({
-        attempts: [],
-        nextPageToken: "",
-      }),
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    mockOperatorClient({ getExecutorJob: getExecutorJobMock });
+    await runTest();
   });
 
   test("retries retryable job polling failures", async () => {
@@ -125,15 +131,8 @@ describe("watchExecutorJob", () => {
       })
       .mockRejectedValueOnce(new Error("logs unavailable"));
 
-    vi.mocked(initOperatorClient).mockResolvedValue({
-      getExecutorExecutor: vi.fn().mockResolvedValue({
-        executor: {
-          targetType: ExecutorTargetType.WORKFLOW,
-        },
-      }),
-      getExecutorJob: vi.fn().mockResolvedValue({
-        job: executorJob(ExecutorJobStatus.SUCCESS),
-      }),
+    mockOperatorClient({
+      targetType: ExecutorTargetType.WORKFLOW,
       listExecutorJobAttempts: vi.fn().mockResolvedValue({
         attempts: [
           {
@@ -146,7 +145,7 @@ describe("watchExecutorJob", () => {
         nextPageToken: "",
       }),
       getWorkflowExecution: getWorkflowExecutionMock,
-    } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    });
 
     const result = await watchExecutorJob({
       executorName: "my-executor",

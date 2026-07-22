@@ -2,40 +2,39 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadMachineUserName } from "@/cli/shared/context";
-import { executeScript } from "@/cli/shared/script-executor";
-import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
-import { testRunCommand } from "./test-run";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadMachineUserName } from "#/cli/shared/context";
+import { executeScript } from "#/cli/shared/script-executor";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { resolveResolverArg, testRunCommand } from "./test-run";
 
-vi.mock("@/cli/shared/config-loader", () => ({
+vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
   loadWorkspaceId: vi.fn().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
   loadMachineUserName: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/script-executor", () => ({
+vi.mock("#/cli/shared/script-executor", () => ({
   executeScript: vi.fn(),
 }));
 
 describe("function test-run --json", () => {
-  let tmpDir: string;
   let scriptPath: string;
   let getAuthMachineUserMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-test-run-json-test-"));
+  aroundEach(async (runTest) => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "function-test-run-json-test-"));
     scriptPath = path.join(tmpDir, "fn.js");
     fs.writeFileSync(scriptPath, "export default async function main() { return { ok: true }; }");
 
@@ -63,9 +62,7 @@ describe("function test-run --json", () => {
       logs: "",
       result: '{"ok":true}',
     });
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -122,10 +119,39 @@ describe("function test-run --json", () => {
     await runCommand(testRunCommand, [scriptPath, "--machine-user", "flag-bot"]);
 
     expect(loadMachineUserName).toHaveBeenCalledWith(
-      expect.objectContaining({ machineUser: "flag-bot" }),
+      expect.objectContaining({ machineUser: "flag-bot", machineUserSource: "option" }),
     );
     expect(getAuthMachineUserMock).toHaveBeenCalledWith(
       expect.objectContaining({ name: "flag-or-profile-bot" }),
     );
+  });
+});
+
+describe("resolveResolverArg", () => {
+  const machineUser = {
+    name: "admin",
+    id: "00000000-0000-0000-0000-000000000000",
+    attributes: null,
+    attributeList: [],
+  };
+  const rejectingSchema = {
+    parse: () => ({ issues: [{ message: "Required field is missing" }] }),
+  };
+
+  test("passes a null arg through for the server to report", () => {
+    const result = resolveResolverArg("null", rejectingSchema, machineUser, "ws-id");
+    expect(result).toBe("null");
+  });
+
+  test("unwraps the deprecated input wrapper when only the wrapped value parses", () => {
+    using _stderr = captureStderr();
+    const inputSchema = {
+      parse: ({ value }: { value: unknown }) =>
+        (value as Record<string, unknown>).a === 1
+          ? {}
+          : { issues: [{ message: "Required field is missing" }] },
+    };
+    const result = resolveResolverArg('{"input":{"a":1}}', inputSchema, machineUser, "ws-id");
+    expect(result).toBe('{"a":1}');
   });
 });

@@ -3,8 +3,8 @@ import {
   Condition_Operator,
   ConditionSchema,
   FilterSchema,
-} from "@tailor-proto/tailor/v1/resource_pb";
-import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+} from "@tailor-platform/tailor-proto/resource_pb";
+import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
 import {
@@ -13,12 +13,12 @@ import {
   parseDuration,
   toPageDirection,
   workspaceArgs,
-} from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { formatKeyValueTable } from "@/cli/shared/format";
-import { styles, logger } from "@/cli/shared/logger";
+} from "#/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { formatKeyValueTable } from "#/cli/shared/format";
+import { styles, logger } from "#/cli/shared/logger";
 import { waitArgs } from "./args";
 import { type WorkflowWaitUntil } from "./status";
 import {
@@ -33,7 +33,7 @@ import {
   waitForWorkflowExecutionById,
   type WorkflowWaitResult,
 } from "./waiter";
-import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
+import type { FunctionExecution } from "@tailor-platform/tailor-proto/function_resource_pb";
 
 type WorkflowLike = {
   name: string;

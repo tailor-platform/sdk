@@ -6,7 +6,7 @@
  * `TailorDBFileError` solely through `typeof` so the test does not require
  * the platform runtime to inject those values into the unit test environment.
  */
-import "@/runtime/globals";
+import "#/runtime/globals";
 import { describe, expectTypeOf, test } from "vitest";
 
 describe("@tailor-platform/sdk/runtime/globals activates ambient globals", () => {
@@ -24,6 +24,28 @@ describe("@tailor-platform/sdk/runtime/globals activates ambient globals", () =>
     expectTypeOf<ReturnType<typeof tailor.workflow.triggerWorkflow>>().toEqualTypeOf<
       Promise<string>
     >();
+  });
+
+  test("tailor.workflow.startWorkflow returns Promise<string>", () => {
+    expectTypeOf<ReturnType<typeof tailor.workflow.startWorkflow>>().toEqualTypeOf<
+      Promise<string>
+    >();
+  });
+
+  test("tailor.workflow.resumeWorkflow returns Promise<string>", () => {
+    expectTypeOf<ReturnType<typeof tailor.workflow.resumeWorkflow>>().toEqualTypeOf<
+      Promise<string>
+    >();
+  });
+
+  test("tailor.workflow.resumeWorkflowExecution returns Promise<string>", () => {
+    expectTypeOf<ReturnType<typeof tailor.workflow.resumeWorkflowExecution>>().toEqualTypeOf<
+      Promise<string>
+    >();
+  });
+
+  test("tailor.workflow.startJobFunction is declared as a function", () => {
+    expectTypeOf<typeof tailor.workflow.startJobFunction>().toBeFunction();
   });
 
   test("tailor.context.Invoker is exposed as a namespace type", () => {

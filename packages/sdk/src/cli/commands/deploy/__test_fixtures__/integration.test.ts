@@ -1,9 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
-import { setupInvokerMock, setupTailordbMock, setupTailorErrorsMock } from "@/utils/test/mock";
+import { aroundAll, describe, expect, test, vi } from "vitest";
+import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
+import { setupInvokerMock, setupTailordbMock, setupTailorErrorsMock } from "#/utils/test/mock";
 import { prepareFixtures } from "./prepare";
-import type { BundledScripts } from "@/cli/commands/deploy/function-registry";
+import type { BundledScripts } from "#/cli/commands/deploy/function-registry";
 
 type MainFunction = (args: Record<string, unknown>) => unknown | Promise<unknown>;
 
@@ -49,7 +50,7 @@ describe("deploy command integration tests", () => {
     return files;
   };
 
-  beforeAll(async () => {
+  aroundAll(async (runSuite) => {
     vi.useFakeTimers();
     vi.setSystemTime(fixedSystemTime);
     setupTailordbMock();
@@ -58,12 +59,10 @@ describe("deploy command integration tests", () => {
     const result = await prepareFixtures();
     outputDir = result.outputDir;
     bundledScripts = result.bundledScripts;
-  }, 120000);
-
-  afterAll(() => {
+    await runSuite();
     delete process.env.TAILOR_SDK_OUTPUT_DIR;
     vi.useRealTimers();
-  });
+  }, 120000);
 
   test("compare directory structure", () => {
     const actualFiles = collectGeneratedFiles(outputDir).toSorted();
@@ -72,9 +71,14 @@ describe("deploy command integration tests", () => {
     const pluginFiles = actualFiles.filter((f) => f === "db.ts" || f === "enums.ts");
     expect(pluginFiles.length).toBeGreaterThan(0);
 
-    // Entry files should exist on disk (rolldown input)
-    const entryFiles = actualFiles.filter((f) => f.endsWith(".entry.js"));
-    expect(entryFiles.length).toBeGreaterThan(0);
+    // Deployment bundling should not leave entry files on disk
+    const entryFiles = actualFiles.filter(
+      (f) => f.endsWith(".entry.js") || f.endsWith(".entry.ts"),
+    );
+    expect(entryFiles).toEqual([]);
+
+    // Unrelated files in former bundle directories should be preserved
+    expect(actualFiles).toContain("resolvers/keep.txt");
 
     // Bundle output files should NOT exist on disk (in-memory only)
     const bundleOutputFiles = actualFiles.filter(
@@ -96,93 +100,67 @@ describe("deploy command integration tests", () => {
   });
 
   describe("validation", () => {
+    let main: MainFunction;
+    const addResolverBundleKey = resolverBundleKey("test-resolver", "add");
+
+    aroundAll(async (runSuite) => {
+      const code = bundledScripts.resolvers.get(addResolverBundleKey);
+      if (!code) {
+        throw new Error("resolvers/add bundle not found");
+      }
+      main = await importFromCode(code, "resolvers/add");
+      await runSuite();
+    });
+
+    test("resolvers/add bundle is defined", () => {
+      expect(bundledScripts.resolvers.get(addResolverBundleKey)).toBeDefined();
+    });
+
     test("resolvers/add validates input correctly - valid values", async () => {
-      const code = bundledScripts.resolvers.get("add");
-      expect(code).toBeDefined();
-      const main = await importFromCode(code!, "resolvers/add");
       await expect(main({ input: { a: 4, b: 6 } })).resolves.not.toThrow();
     });
 
-    test("resolvers/add validates input correctly - negative value throws TailorErrors", async () => {
-      const code = bundledScripts.resolvers.get("add");
-      expect(code).toBeDefined();
-      const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: -1, b: 5 } })).rejects.toSatisfy((error: Error) => {
-        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
-        expect(parsed.errors).toContainEqual({
-          message: "Value must be non-negative",
-          path: ["a"],
-        });
-        return true;
-      });
-    });
-
-    test("resolvers/add validates input correctly - value >= 10 throws TailorErrors", async () => {
-      const code = bundledScripts.resolvers.get("add");
-      expect(code).toBeDefined();
-      const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: 10, b: 5 } })).rejects.toSatisfy((error: Error) => {
-        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
-        expect(parsed.errors).toContainEqual({
-          message: "Value must be less than 10",
-          path: ["a"],
-        });
-        return true;
-      });
-    });
-
-    test("resolvers/add validates input correctly - b negative throws TailorErrors", async () => {
-      const code = bundledScripts.resolvers.get("add");
-      expect(code).toBeDefined();
-      const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: 5, b: -2 } })).rejects.toSatisfy((error: Error) => {
-        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
-        expect(parsed.errors).toContainEqual({
-          message: "Value must be non-negative",
-          path: ["b"],
-        });
-        return true;
-      });
-    });
-
-    test("resolvers/add validates input correctly - b >= 10 throws TailorErrors", async () => {
-      const code = bundledScripts.resolvers.get("add");
-      expect(code).toBeDefined();
-      const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: 5, b: 15 } })).rejects.toSatisfy((error: Error) => {
-        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
-        expect(parsed.errors).toContainEqual({
-          message: "Value must be less than 10",
-          path: ["b"],
-        });
-        return true;
-      });
-    });
-
-    test("resolvers/add validates input correctly - multiple errors", async () => {
-      const code = bundledScripts.resolvers.get("add");
-      expect(code).toBeDefined();
-      const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: -1, b: -2 } })).rejects.toSatisfy((error: Error) => {
-        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
-        expect(parsed.errors).toEqual([
+    test.each([
+      [
+        "negative value throws TailorErrors",
+        { a: -1, b: 5 },
+        [{ message: "Value must be non-negative", path: ["a"] }],
+      ],
+      [
+        "value >= 10 throws TailorErrors",
+        { a: 10, b: 5 },
+        [{ message: "Value must be less than 10", path: ["a"] }],
+      ],
+      [
+        "b negative throws TailorErrors",
+        { a: 5, b: -2 },
+        [{ message: "Value must be non-negative", path: ["b"] }],
+      ],
+      [
+        "b >= 10 throws TailorErrors",
+        { a: 5, b: 15 },
+        [{ message: "Value must be less than 10", path: ["b"] }],
+      ],
+      [
+        "multiple errors",
+        { a: -1, b: -2 },
+        [
           { message: "Value must be non-negative", path: ["a"] },
           { message: "Value must be non-negative", path: ["b"] },
-        ]);
-        return true;
-      });
-    });
-
-    test("resolvers/add validates input correctly - both >= 10", async () => {
-      const code = bundledScripts.resolvers.get("add");
-      expect(code).toBeDefined();
-      const main = await importFromCode(code!, "resolvers/add");
-      await expect(main({ input: { a: 10, b: 15 } })).rejects.toSatisfy((error: Error) => {
-        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
-        expect(parsed.errors).toEqual([
+        ],
+      ],
+      [
+        "both >= 10",
+        { a: 10, b: 15 },
+        [
           { message: "Value must be less than 10", path: ["a"] },
           { message: "Value must be less than 10", path: ["b"] },
-        ]);
+        ],
+      ],
+    ])("resolvers/add validates input correctly - %s", async (_name, input, expectedErrors) => {
+      await expect(main({ input })).rejects.toSatisfy((error: Error) => {
+        const parsed = JSON.parse(error.message.replace("TailorErrors: ", ""));
+        expect(parsed.errors).toEqual(expectedErrors);
         return true;
       });
     });

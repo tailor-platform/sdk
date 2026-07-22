@@ -1,17 +1,17 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import { truncate } from "./truncate";
+import { describe, test, expect, vi, aroundEach } from "vitest";
+import { truncate, type TruncateOptions } from "./truncate";
 
 // Mock dependencies
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
   loadWorkspaceId: vi.fn().mockResolvedValue("mock-workspace-id"),
 }));
 
-vi.mock("@/cli/shared/readonly-guard", () => ({
+vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn().mockResolvedValue({
     truncateTailorDBType: vi.fn().mockResolvedValue(undefined),
     truncateTailorDBTypes: vi.fn().mockResolvedValue(undefined),
@@ -21,7 +21,7 @@ vi.mock("@/cli/shared/client", () => ({
   }),
 }));
 
-vi.mock("@/cli/shared/config-loader", () => ({
+vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn().mockResolvedValue({
     config: {
       db: {
@@ -32,7 +32,7 @@ vi.mock("@/cli/shared/config-loader", () => ({
   }),
 }));
 
-vi.mock("@/cli/shared/logger", () => ({
+vi.mock("#/cli/shared/logger", () => ({
   logger: {
     success: vi.fn(),
     info: vi.fn(),
@@ -45,67 +45,66 @@ vi.mock("@/cli/shared/logger", () => ({
   symbols: {},
 }));
 
-vi.mock("@/cli/shared/prompt", () => ({
+vi.mock("#/cli/shared/prompt", () => ({
   prompt: {
     confirm: vi.fn().mockResolvedValue(true),
     text: vi.fn().mockResolvedValue(""),
   },
 }));
 
+async function getMockClient() {
+  const { initOperatorClient } = await import("#/cli/shared/client");
+  return initOperatorClient("mock-token");
+}
+
 describe("truncate command", () => {
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     // Re-setup default mock behavior after clearAllMocks
-    const { prompt } = await import("@/cli/shared/prompt");
+    const { prompt } = await import("#/cli/shared/prompt");
     vi.mocked(prompt.confirm).mockResolvedValue(true);
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.restoreAllMocks();
   });
 
   describe("argument validation", () => {
-    test("throws error when no options are specified", async () => {
-      await expect(truncate({})).rejects.toThrow(
+    const mutuallyExclusiveError =
+      "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.";
+
+    test.each<[string, TruncateOptions, string]>([
+      [
+        "no options are specified",
+        {},
         "Please specify one of: --all, --namespace <name>, or type names",
-      );
-    });
-
-    test("throws error when --all is specified with --namespace", async () => {
-      await expect(truncate({ all: true, namespace: "tailordb" })).rejects.toThrow(
-        "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
-      );
-    });
-
-    test("throws error when --all is specified with type names", async () => {
-      await expect(truncate({ all: true, types: ["User"] })).rejects.toThrow(
-        "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
-      );
-    });
-
-    test("throws error when --namespace is specified with type names", async () => {
-      await expect(truncate({ namespace: "tailordb", types: ["User"] })).rejects.toThrow(
-        "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
-      );
-    });
-
-    test("throws error when all three options are specified", async () => {
-      await expect(
-        truncate({
-          all: true,
-          namespace: "tailordb",
-          types: ["User"],
-        }),
-      ).rejects.toThrow(
-        "Options --all, --namespace, and type names are mutually exclusive. Please specify only one.",
-      );
+      ],
+      [
+        "--all is specified with --namespace",
+        { all: true, namespace: "tailordb" },
+        mutuallyExclusiveError,
+      ],
+      [
+        "--all is specified with type names",
+        { all: true, types: ["User"] },
+        mutuallyExclusiveError,
+      ],
+      [
+        "--namespace is specified with type names",
+        { namespace: "tailordb", types: ["User"] },
+        mutuallyExclusiveError,
+      ],
+      [
+        "all three options are specified",
+        { all: true, namespace: "tailordb", types: ["User"] },
+        mutuallyExclusiveError,
+      ],
+    ])("throws error when %s", async (_, options, message) => {
+      await expect(truncate(options)).rejects.toThrow(message);
     });
   });
 
   describe("truncate with --all flag", () => {
     test("truncates all namespaces", async () => {
-      const { initOperatorClient } = await import("@/cli/shared/client");
-      const client = await initOperatorClient("mock-token");
+      const client = await getMockClient();
 
       await truncate({ all: true });
 
@@ -121,8 +120,7 @@ describe("truncate command", () => {
     });
 
     test("excludes external namespaces", async () => {
-      const { loadConfig } = await import("@/cli/shared/config-loader");
-      const { initOperatorClient } = await import("@/cli/shared/client");
+      const { loadConfig } = await import("#/cli/shared/config-loader");
       vi.mocked(loadConfig).mockResolvedValueOnce({
         config: {
           db: {
@@ -131,7 +129,7 @@ describe("truncate command", () => {
           },
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);
-      const client = await initOperatorClient("mock-token");
+      const client = await getMockClient();
 
       await truncate({ all: true });
 
@@ -143,9 +141,8 @@ describe("truncate command", () => {
     });
 
     test("warns and returns when only external namespaces exist", async () => {
-      const { loadConfig } = await import("@/cli/shared/config-loader");
-      const { initOperatorClient } = await import("@/cli/shared/client");
-      const { logger } = await import("@/cli/shared/logger");
+      const { loadConfig } = await import("#/cli/shared/config-loader");
+      const { logger } = await import("#/cli/shared/logger");
       vi.mocked(loadConfig).mockResolvedValueOnce({
         config: {
           db: {
@@ -153,7 +150,7 @@ describe("truncate command", () => {
           },
         },
       } as unknown as Awaited<ReturnType<typeof loadConfig>>);
-      const client = await initOperatorClient("mock-token");
+      const client = await getMockClient();
 
       await truncate({ all: true });
 
@@ -164,8 +161,7 @@ describe("truncate command", () => {
 
   describe("truncate with --namespace flag", () => {
     test("truncates all types in specified namespace", async () => {
-      const { initOperatorClient } = await import("@/cli/shared/client");
-      const client = await initOperatorClient("mock-token");
+      const client = await getMockClient();
 
       await truncate({ namespace: "tailordb" });
 
@@ -183,7 +179,7 @@ describe("truncate command", () => {
     });
 
     test("rejects external namespaces with a dedicated error", async () => {
-      const { loadConfig } = await import("@/cli/shared/config-loader");
+      const { loadConfig } = await import("#/cli/shared/config-loader");
       vi.mocked(loadConfig).mockResolvedValueOnce({
         config: {
           db: {
@@ -200,41 +196,26 @@ describe("truncate command", () => {
   });
 
   describe("truncate with type names", () => {
-    test("truncates single type", async () => {
-      const { initOperatorClient } = await import("@/cli/shared/client");
-      const client = await initOperatorClient("mock-token");
+    test.each<[string, string[]]>([
+      ["truncates single type", ["User"]],
+      ["truncates multiple types", ["User", "Order"]],
+    ])("%s", async (_, types) => {
+      const client = await getMockClient();
 
-      await truncate({ types: ["User"] });
+      await truncate({ types });
 
-      expect(client.truncateTailorDBType).toHaveBeenCalledTimes(1);
-      expect(client.truncateTailorDBType).toHaveBeenCalledWith({
-        workspaceId: "mock-workspace-id",
-        namespaceName: "tailordb",
-        tailordbTypeName: "User",
-      });
-    });
-
-    test("truncates multiple types", async () => {
-      const { initOperatorClient } = await import("@/cli/shared/client");
-      const client = await initOperatorClient("mock-token");
-
-      await truncate({ types: ["User", "Order"] });
-
-      expect(client.truncateTailorDBType).toHaveBeenCalledTimes(2);
-      expect(client.truncateTailorDBType).toHaveBeenCalledWith({
-        workspaceId: "mock-workspace-id",
-        namespaceName: "tailordb",
-        tailordbTypeName: "User",
-      });
-      expect(client.truncateTailorDBType).toHaveBeenCalledWith({
-        workspaceId: "mock-workspace-id",
-        namespaceName: "tailordb",
-        tailordbTypeName: "Order",
-      });
+      expect(client.truncateTailorDBType).toHaveBeenCalledTimes(types.length);
+      for (const tailordbTypeName of types) {
+        expect(client.truncateTailorDBType).toHaveBeenCalledWith({
+          workspaceId: "mock-workspace-id",
+          namespaceName: "tailordb",
+          tailordbTypeName,
+        });
+      }
     });
 
     test("throws error when type not found in any namespace", async () => {
-      const { initOperatorClient } = await import("@/cli/shared/client");
+      const { initOperatorClient } = await import("#/cli/shared/client");
 
       vi.mocked(initOperatorClient).mockResolvedValue({
         truncateTailorDBType: vi.fn(),

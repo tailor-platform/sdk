@@ -2,8 +2,8 @@
  * Internal test utilities for SDK development.
  * These are NOT exported to library users.
  */
-import { TailorDBTypeSchema } from "@/parser/service/tailordb/schema";
-import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "@/types/tailordb.generated";
+import { TailorDBTypeSchema } from "#/parser/service/tailordb/schema";
+import type { TailorDBTypeRaw as TailorDBTypeSchemaOutput } from "#/types/tailordb.generated";
 
 /**
  * Converts a single db.type() result to schema-parsed output for testing.

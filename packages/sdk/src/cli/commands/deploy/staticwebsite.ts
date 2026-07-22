@@ -1,13 +1,12 @@
 import { type MessageInitShape } from "@bufbuild/protobuf";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type AddCustomDomainRequestSchema,
   type CreateStaticWebsiteRequestSchema,
   type DeleteStaticWebsiteRequestSchema,
   type RemoveCustomDomainRequestSchema,
   type UpdateStaticWebsiteRequestSchema,
-} from "@tailor-proto/tailor/v1/staticwebsite_pb";
-import { type OperatorClient } from "@/cli/shared/client";
+} from "@tailor-platform/tailor-proto/staticwebsite_pb";
+import { getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
@@ -16,10 +15,10 @@ import {
   trackDesiredResourceOwnership,
   trackRemainingResourceOwner,
 } from "./owned-resource";
+import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
-import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-proto/tailor/v1/staticwebsite_resource_pb";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
+import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 
 /**
  * Apply static website changes for the given phase.
@@ -132,6 +131,18 @@ function areStaticWebsitesEqual(
 }
 
 /**
+ * Static website names expected to exist after this deploy run.
+ * @param context - Planning context
+ * @returns Names from the deploy-run scope when set, otherwise the application's own websites
+ */
+export function expectedLocalStaticWebsiteNames(context: PlanContext): ReadonlySet<string> {
+  return (
+    context.expectedLocalStaticWebsiteNames ??
+    new Set(context.application.staticWebsiteServices.map((website) => website.name))
+  );
+}
+
+/**
  * Plan static website changes based on current and desired state.
  * @param context - Planning context
  * @returns Planned changes
@@ -152,7 +163,6 @@ export async function planStaticWebsite(context: PlanContext) {
 
   const existingWebsites = await fetchExistingResourcesWithLabels({
     client,
-    workspaceId,
     fetchPage: async (pageToken, pageSize) => {
       const { staticwebsites, nextPageToken } = await client.listStaticWebsites({
         workspaceId,
@@ -162,7 +172,7 @@ export async function planStaticWebsite(context: PlanContext) {
       return [staticwebsites, nextPageToken];
     },
     getName: (resource) => resource.name,
-    getTrn: (workspaceId, name) => resourceTrn(workspaceId, "staticwebsite", name),
+    getTrn: (name) => resourceTrn(workspaceId, "staticwebsite", name),
   });
 
   // Track owned website names to plan custom domains afterward
@@ -265,12 +275,12 @@ export async function planStaticWebsite(context: PlanContext) {
   );
   await Promise.all(
     websitesToFetchDomains.map(async (name) => {
-      try {
+      const domainsWithLabels = await getOrNull(async () => {
         const { customDomains } = await client.listCustomDomains({
           workspaceId,
           staticWebsiteName: name,
         });
-        const domainsWithLabels = await Promise.all(
+        return await Promise.all(
           customDomains.map(async (d) => {
             const { metadata } = await client.getMetadata({
               trn: customDomainTrn(workspaceId, name, d.domain),
@@ -281,12 +291,9 @@ export async function planStaticWebsite(context: PlanContext) {
             };
           }),
         );
+      });
+      if (domainsWithLabels) {
         existingDomainsByWebsite.set(name, domainsWithLabels);
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return;
-        }
-        throw error;
       }
     }),
   );

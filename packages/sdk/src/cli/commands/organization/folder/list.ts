@@ -1,11 +1,11 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { orderArg, organizationArgs, paginationArgs, toPageDirection } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { orderArg, organizationArgs, paginationArgs, toPageDirection } from "#/cli/shared/args";
+import { fetchPaged, initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 import { folderListInfo, type FolderListInfo } from "../transform";
 
 const listFoldersOptionsSchema = z.object({

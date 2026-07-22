@@ -3,6 +3,8 @@ import { describe, expect, test, vi } from "vitest";
 import { mainCommand } from "./index";
 import type { AnyCommand, ExtractedFields, SubCommandValue } from "politty";
 
+const allowedHybridCommandPaths = new Set(["api"]);
+
 vi.mock("node:module", async () => {
   const actual = await vi.importActual("node:module");
   return {
@@ -48,29 +50,68 @@ const checkArgs = (extracted: ExtractedFields, path: string[]): void => {
   }
 };
 
-async function walkCommand(cmd: SubCommandValue, path: string[] = []): Promise<void> {
+const checkNoHybridPositionalCommand = (command: AnyCommand, path: string[]): void => {
+  if (!command.subCommands || !command.run || !command.args) return;
+
+  const extracted = extractFields(command.args);
+  const positionalFields = extracted.fields.filter((field) => field.positional);
+  if (positionalFields.length === 0) return;
+
+  const commandPath = path.join(" ");
+  if (allowedHybridCommandPaths.has(commandPath)) return;
+
+  throw new Error(
+    `Command "${commandPath}": commands with subcommands must not also define positional args (${positionalFields.map((field) => field.name).join(", ")}) and a run handler`,
+  );
+};
+
+async function walkCommand(
+  cmd: SubCommandValue,
+  visit: (command: AnyCommand, path: string[]) => void,
+  path: string[] = [],
+): Promise<void> {
   const resolved = await resolveCommand(cmd);
 
-  // Check for duplicate aliases if the command has args
-  if (resolved.args) {
-    const extracted = extractFields(resolved.args);
-    checkArgs(extracted, path);
-  }
+  visit(resolved, path);
 
   if (resolved.subCommands) {
     for (const [name, sub] of Object.entries(resolved.subCommands)) {
-      await walkCommand(sub, [...path, name]);
+      await walkCommand(sub, visit, [...path, name]);
     }
+  }
+}
+
+async function walkMainCommands(visit: (command: AnyCommand, path: string[]) => void) {
+  const subCommands = mainCommand.subCommands;
+  expect(subCommands).toBeDefined();
+
+  for (const [name, cmd] of Object.entries(subCommands ?? {})) {
+    await walkCommand(cmd, visit, [name]);
   }
 }
 
 describe("CLI options", () => {
   test("does not have duplicate short option aliases in any command", async () => {
-    const subCommands = mainCommand.subCommands;
-    expect(subCommands).toBeDefined();
+    let checked = 0;
 
-    for (const [name, cmd] of Object.entries(mainCommand.subCommands ?? {})) {
-      await walkCommand(cmd, [name]);
-    }
+    await walkMainCommands((command, path) => {
+      if (!command.args) return;
+
+      checked += 1;
+      checkArgs(extractFields(command.args), path);
+    });
+
+    expect(checked).toBeGreaterThan(0);
+  });
+
+  test("does not define hybrid commands with positional args", async () => {
+    let checked = 0;
+
+    await walkMainCommands((command, path) => {
+      checked += 1;
+      checkNoHybridPositionalCommand(command, path);
+    });
+
+    expect(checked).toBeGreaterThan(0);
   });
 });

@@ -1,14 +1,16 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import pLimit from "p-limit";
-import { formatTimestamp } from "@/cli/shared/format";
-import { logger, type FieldTransformer } from "@/cli/shared/logger";
-import type { OperatorClient } from "@/cli/shared/client";
-import type { Workspace } from "@tailor-proto/tailor/v1/workspace_resource_pb";
+import { formatTimestamp } from "#/cli/shared/format";
+import { logger, type FieldTransformer } from "#/cli/shared/logger";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { Workspace } from "@tailor-platform/tailor-proto/workspace_resource_pb";
 
 export interface WorkspaceInfo {
   id: string;
   name: string;
   folderName?: string;
+  organizationId?: string;
+  folderId?: string;
   region: string;
   createdAt: Date | null;
   updatedAt: Date | null;
@@ -25,6 +27,8 @@ export const workspaceInfo = (workspace: Workspace, folderName?: string): Worksp
     id: workspace.id,
     name: workspace.name,
     region: workspace.region,
+    ...(workspace.organizationId ? { organizationId: workspace.organizationId } : {}),
+    ...(workspace.folderId ? { folderId: workspace.folderId } : {}),
     createdAt: formatTimestamp(workspace.createTime),
     updatedAt: formatTimestamp(workspace.updateTime),
   };

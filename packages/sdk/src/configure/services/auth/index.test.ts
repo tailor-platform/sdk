@@ -1,15 +1,15 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { randomUUID } from "node:crypto";
 import { describe, expect, test, expectTypeOf } from "vitest";
-import { t } from "@/configure/types/type";
+import { t } from "#/configure/types/type";
 import { db } from "../tailordb/schema";
 import { defineAuth, type AuthInvoker } from "./index";
 import type {
   BeforeLoginHook,
   BeforeLoginHookArgs,
   FederatedIdentity,
-} from "@/configure/services/auth/types";
-import type { AuthInvoker as ProtoAuthInvoker } from "@tailor-proto/tailor/v1/auth_resource_pb";
+} from "#/configure/services/auth/types";
+import type { AuthInvoker as ProtoAuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import type { JsonObject } from "type-fest";
 
 const userType = db.type("User", {
@@ -38,6 +38,7 @@ const attributeMapConfig: AttributeMap = {
 
 const attributeListConfig: AttributeList = ["externalId"];
 const machineUserAttributeList: [string] = [randomUUID()];
+const basicUserProfile = { type: userType, usernameField: "email" } as const;
 
 describe("defineAuth", () => {
   test("creates auth configuration with userProfile and machineUsers", () => {
@@ -69,10 +70,7 @@ describe("defineAuth", () => {
 
   test("creates auth configuration with invoker method", () => {
     const authConfig = defineAuth("test-service", {
-      userProfile: {
-        type: userType,
-        usernameField: "email",
-      },
+      userProfile: basicUserProfile,
       machineUsers: {
         admin: {},
         worker: {},
@@ -90,10 +88,7 @@ describe("defineAuth", () => {
 
   test("creates minimal auth configuration", () => {
     const authConfig = defineAuth("minimal", {
-      userProfile: {
-        type: userType,
-        usernameField: "email",
-      },
+      userProfile: basicUserProfile,
     });
 
     expect(authConfig.name).toBe("minimal");
@@ -159,13 +154,72 @@ describe("defineAuth", () => {
     });
   });
 
+  test("mirrors user field optionality in userProfile-derived machine user attributes", () => {
+    const mirrorUserType = db.type("MirrorUser", {
+      email: db.string().unique(),
+      role: db.string(),
+      nickname: db.string({ optional: true }),
+    });
+
+    const authConfig = defineAuth("mirror-optional", {
+      userProfile: {
+        type: mirrorUserType,
+        usernameField: "email",
+        attributes: { role: true, nickname: true },
+      },
+      machineUsers: {
+        omitted: { attributes: { role: "ADMIN" } },
+        nullified: { attributes: { role: "ADMIN", nickname: null } },
+      },
+    });
+
+    expect(authConfig.machineUsers?.omitted.attributes.role).toBe("ADMIN");
+    expect(authConfig.machineUsers?.nullified.attributes.nickname).toBeNull();
+
+    // role derives from a required field and must be set
+    // (structural check — overload resolution differs in tsgo)
+    expectTypeOf<{ attributes: { nickname: string } }>().not.toExtend<
+      NonNullable<typeof authConfig.machineUsers>["omitted"]
+    >();
+  });
+
+  test("mirrors machineUserAttributes field optionality", () => {
+    const authConfig = defineAuth("machine-only-optional", {
+      machineUserAttributes: {
+        role: t.string(),
+        note: t.string({ optional: true }),
+      },
+      machineUsers: {
+        worker: { attributes: { role: "WORKER" } },
+      },
+    });
+
+    expect(authConfig.machineUsers?.worker.attributes.role).toBe("WORKER");
+
+    // role is a required field and must be set
+    // (structural check — overload resolution differs in tsgo)
+    expectTypeOf<{ attributes: { note: string } }>().not.toExtend<
+      NonNullable<typeof authConfig.machineUsers>["worker"]
+    >();
+  });
+
+  test("allows omitting attributes entirely when all machineUserAttributes fields are optional", () => {
+    const authConfig = defineAuth("machine-only-all-optional", {
+      machineUserAttributes: {
+        note: t.string({ optional: true }),
+      },
+      machineUsers: {
+        worker: {},
+      },
+    });
+
+    expect(authConfig.machineUsers?.worker.attributes).toBeUndefined();
+  });
+
   describe("name literal type inference", () => {
     test("infers name as literal type", () => {
       const authConfig = defineAuth("my-auth-service", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
       });
 
       expectTypeOf(authConfig.name).toEqualTypeOf<"my-auth-service">();
@@ -173,10 +227,7 @@ describe("defineAuth", () => {
 
     test("preserves name literal in readonly object", () => {
       const _authConfig = defineAuth("production-auth", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
         machineUsers: {
           admin: {},
         },
@@ -191,10 +242,7 @@ describe("defineAuth", () => {
 
     test("name type is available for type extraction", () => {
       const _authConfig = defineAuth("typed-auth", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
       });
 
       type ExtractedName = typeof _authConfig.name;
@@ -208,10 +256,7 @@ describe("defineAuth", () => {
         // no return value
       };
       const authConfig = defineAuth("hook-auth", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
         machineUsers: {
           "hook-invoker": {},
         },
@@ -237,10 +282,7 @@ describe("defineAuth", () => {
 
     test("works with multiple machine users without narrowing MachineUserNames", () => {
       const authConfig = defineAuth("multi-mu-hook", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
         machineUsers: {
           admin: {},
           worker: {},
@@ -279,10 +321,7 @@ describe("defineAuth", () => {
 
     test("is optional — existing tests continue to pass without it", () => {
       const authConfig = defineAuth("no-hook", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
       });
 
       expect(authConfig.hooks).toBeUndefined();
@@ -331,10 +370,7 @@ describe("defineAuth", () => {
 
     test("invoker() returns AuthInvoker compatible object", () => {
       const authConfig = defineAuth("test-auth", {
-        userProfile: {
-          type: userType,
-          usernameField: "email",
-        },
+        userProfile: basicUserProfile,
         machineUsers: {
           admin: {},
         },

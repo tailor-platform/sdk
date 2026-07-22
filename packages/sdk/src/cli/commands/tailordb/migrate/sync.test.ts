@@ -3,14 +3,14 @@ import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { prompt } from "@/cli/shared/prompt";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { prompt } from "#/cli/shared/prompt";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { syncCommand } from "./sync";
+import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
@@ -30,29 +30,29 @@ const state = vi.hoisted(() => ({
   setMetadata: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/config-loader", () => ({
+vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn().mockResolvedValue("mock-token"),
   loadWorkspaceId: vi.fn().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
 }));
 
-vi.mock("@/cli/shared/client", async (importOriginal) => ({
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
   ...(await importOriginal()),
   initOperatorClient: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/readonly-guard", () => ({
+vi.mock("#/cli/shared/readonly-guard", () => ({
   assertWritable: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/cli/shared/prompt", () => ({
+vi.mock("#/cli/shared/prompt", () => ({
   prompt: { confirm: vi.fn() },
 }));
 
-vi.mock("@/cli/services/application", () => ({
+vi.mock("#/cli/services/application", () => ({
   defineApplication: vi.fn(() => ({
     tailorDBServices: [
       {
@@ -153,11 +153,9 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
 }
 
 describe("tailordb migration sync", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-sync-test-"));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-sync-test-"));
     state.migrationsDir = path.join(tmpDir, "migrations");
 
     writeInitialSchema({ User: snapshotType("User") });
@@ -200,9 +198,9 @@ describe("tailordb migration sync", () => {
       getMetadata: state.getMetadata,
       setMetadata: state.setMetadata,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-  });
 
-  afterEach(() => {
+    await runTest();
+
     vi.restoreAllMocks();
     state.listTailorDBTypes.mockReset();
     state.createTailorDBType.mockReset();
@@ -354,19 +352,10 @@ describe("tailordb migration sync", () => {
     });
   });
 
-  test("rejects an invalid migration number format", async () => {
-    const result = await runCommand(syncCommand, ["abc", "--yes"]);
+  test.each(["abc", "00", "01"])("rejects invalid migration number format %j", async (input) => {
+    const result = await runCommand(syncCommand, [input, "--yes"]);
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/Invalid migration number format/);
-    expect(state.setMetadata).not.toHaveBeenCalled();
-  });
-
-  test("rejects integer forms with leading zeros", async () => {
-    for (const input of ["00", "01"]) {
-      const result = await runCommand(syncCommand, [input, "--yes"]);
-      expect(result.success).toBe(false);
-      expect(String(result.error)).toMatch(/Invalid migration number format/);
-    }
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 

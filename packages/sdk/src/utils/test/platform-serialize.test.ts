@@ -21,43 +21,25 @@ describe("platformSerialize", () => {
   });
 
   describe("Platform parity errors", () => {
-    test("throws on NaN", () => {
-      expect(() => platformSerialize({ n: NaN })).toThrow(/non-finite/);
-    });
+    class Dto {
+      constructor(public x: number) {}
+    }
 
-    test("throws on Infinity", () => {
-      expect(() => platformSerialize({ n: Infinity })).toThrow(/non-finite/);
+    test.each([
+      ["NaN", { n: NaN }, /non-finite/],
+      ["Infinity", { n: Infinity }, /non-finite/],
+      ["BigInt", { n: 1n }, /BigInt/],
+      ["Date instances", { at: new Date() }, /Date instance/],
+      ["Map instances", { m: new Map() }, /Map instance/],
+      ["Set instances", { s: new Set() }, /Set instance/],
+      ["Error instances", { e: new Error("boom") }, /Error instance/],
+      ["user-defined class instances", { d: new Dto(1) }, /Dto instance/],
+    ] as const)("throws on %s", (_label, value, pattern) => {
+      expect(() => platformSerialize(value)).toThrow(pattern);
     });
 
     test("throws on -Infinity", () => {
       expect(() => platformSerialize(-Infinity)).toThrow(/non-finite/);
-    });
-
-    test("throws on BigInt", () => {
-      expect(() => platformSerialize({ n: 1n })).toThrow(/BigInt/);
-    });
-
-    test("throws on Date instances", () => {
-      expect(() => platformSerialize({ at: new Date() })).toThrow(/Date instance/);
-    });
-
-    test("throws on Map instances", () => {
-      expect(() => platformSerialize({ m: new Map() })).toThrow(/Map instance/);
-    });
-
-    test("throws on Set instances", () => {
-      expect(() => platformSerialize({ s: new Set() })).toThrow(/Set instance/);
-    });
-
-    test("throws on Error instances", () => {
-      expect(() => platformSerialize({ e: new Error("boom") })).toThrow(/Error instance/);
-    });
-
-    test("throws on user-defined class instances", () => {
-      class Dto {
-        constructor(public x: number) {}
-      }
-      expect(() => platformSerialize({ d: new Dto(1) })).toThrow(/Dto instance/);
     });
 
     test("throws on circular references via JSON.stringify", () => {

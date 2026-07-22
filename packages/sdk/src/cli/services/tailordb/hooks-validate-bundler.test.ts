@@ -1,14 +1,53 @@
-import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "pathe";
-import { describe, expect, test, beforeAll, afterAll } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
+import { getPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
 import {
   findUndefinedReferences,
   collectSourceBindings,
   resolveNeededBindings,
   buildMinimalEntryFromResolved,
+  precompileTailorDBTypeScripts,
   type SourceBinding,
 } from "./hooks-validate-bundler";
+import type { TailorDBTypeRaw } from "#/types/tailordb.generated";
+import type * as rolldown from "rolldown";
+
+let expectVirtualEntry = false;
+
+type RolldownModule = typeof rolldown;
+
+vi.mock("rolldown", async (importOriginal) => {
+  const original = await importOriginal<RolldownModule>();
+  return {
+    ...original,
+    build: async (...args: Parameters<RolldownModule["build"]>) => {
+      if (!expectVirtualEntry) {
+        return original.build(...args);
+      }
+
+      const options = args[0] as unknown as rolldown.BuildOptions;
+      const input = options.input;
+      if (typeof input !== "string" || existsSync(input)) {
+        throw new Error(`Expected a virtual TailorDB script entry, received ${String(input)}`);
+      }
+      const plugins = options.plugins as rolldown.Plugin[];
+      if (!plugins.some((plugin) => plugin.name === "tailor-sdk-virtual-entry")) {
+        throw new Error("Virtual entry plugin was not configured");
+      }
+
+      return {
+        output: [{ code: "module.exports.main = input => input.value;" }],
+      } as unknown as Awaited<ReturnType<RolldownModule["build"]>>;
+    },
+  };
+});
+
+aroundEach(async (runTest) => {
+  await runTest();
+  expectVirtualEntry = false;
+});
 
 /**
  * Extract free variables from a function source for testing.
@@ -18,124 +57,160 @@ import {
 const extractFreeVariables = (fnSource: string) =>
   findUndefinedReferences(`const __fn = ${fnSource};`);
 
+const bindingsMap = (
+  entries: Array<[name: string, sourceText: string, kind: SourceBinding["kind"]]>,
+) =>
+  new Map<string, SourceBinding>(
+    entries.map(([name, sourceText, kind]) => [name, { name, sourceText, kind }]),
+  );
+
+describe("precompileTailorDBTypeScripts", () => {
+  test("bundles captured declarations with TypeScript syntax", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-typescript-entry-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, 'const prefix: string = "PREFIX";\n');
+    const prefix = "unused";
+    const createHook = ({ value }: { value: string }) => prefix + value;
+    const type = {
+      name: "SharedType",
+      fields: {
+        value: {
+          type: "string",
+          metadata: { hooks: { create: createHook } },
+        },
+      },
+    } as unknown as TailorDBTypeRaw;
+
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(createHook)).toBeDefined();
+  });
+
+  test("uses an in-memory entry for scripts with source dependencies", async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "tailordb-script-entry-"));
+    const sourceFile = join(tempDir, "type.ts");
+    writeFileSync(sourceFile, 'const prefix = "PREFIX";\n');
+    const prefix = "unused";
+    const createHook = ({ value }: { value: string }) => prefix + value;
+    const type = {
+      name: "SharedType",
+      fields: {
+        value: {
+          type: "string",
+          metadata: { hooks: { create: createHook } },
+        },
+      },
+    } as unknown as TailorDBTypeRaw;
+
+    expectVirtualEntry = true;
+    try {
+      await precompileTailorDBTypeScripts(type, sourceFile, undefined);
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+
+    expect(getPrecompiledScriptExpr(createHook)).toContain("module.exports.main");
+  });
+});
+
 describe("findUndefinedReferences", () => {
-  test("returns empty set for self-contained function", () => {
-    const vars = extractFreeVariables("({ value }) => value.length > 5");
-    expect(vars.size).toBe(0);
-  });
-
-  test("detects a single free variable", () => {
-    const vars = extractFreeVariables("({ value }) => value.length < MAX_LENGTH");
-    expect(vars).toEqual(new Set(["MAX_LENGTH"]));
-  });
-
-  test("detects multiple free variables", () => {
-    const vars = extractFreeVariables("({ data }) => formatAddress(data, PREFIX)");
-    expect(vars).toEqual(new Set(["formatAddress", "PREFIX"]));
-  });
-
-  test("does not treat destructured parameters as free variables", () => {
-    const vars = extractFreeVariables("({ value, data, user }) => value + data.name + user.id");
-    expect(vars.size).toBe(0);
-  });
-
-  test("does not treat local variables as free variables", () => {
-    const vars = extractFreeVariables("({ value }) => { const x = 1; return value + x; }");
-    expect(vars.size).toBe(0);
-  });
-
-  test("detects free variables in function body with local variables", () => {
-    const vars = extractFreeVariables(
+  test.each<[name: string, fnSource: string, expected: string[]]>([
+    ["returns empty set for self-contained function", "({ value }) => value.length > 5", []],
+    ["detects a single free variable", "({ value }) => value.length < MAX_LENGTH", ["MAX_LENGTH"]],
+    [
+      "detects multiple free variables",
+      "({ data }) => formatAddress(data, PREFIX)",
+      ["formatAddress", "PREFIX"],
+    ],
+    [
+      "does not treat destructured parameters as free variables",
+      "({ value, data, user }) => value + data.name + user.id",
+      [],
+    ],
+    [
+      "does not treat local variables as free variables",
+      "({ value }) => { const x = 1; return value + x; }",
+      [],
+    ],
+    [
+      "detects free variables in function body with local variables",
       "({ value }) => { const x = helper(value); return x + OFFSET; }",
-    );
-    expect(vars).toEqual(new Set(["helper", "OFFSET"]));
-  });
-
-  test("handles regular function syntax", () => {
-    const vars = extractFreeVariables("function({ data }) { return compute(data); }");
-    expect(vars).toEqual(new Set(["compute"]));
+      ["helper", "OFFSET"],
+    ],
+    [
+      "handles regular function syntax",
+      "function({ data }) { return compute(data); }",
+      ["compute"],
+    ],
+  ])("%s", (_name, fnSource, expected) => {
+    const vars = extractFreeVariables(fnSource);
+    expect(vars).toEqual(new Set(expected));
   });
 });
 
 describe("collectSourceBindings", () => {
   let tempDir: string;
+  let fileCounter = 0;
 
-  beforeAll(() => {
+  aroundAll(async (runSuite) => {
     tempDir = mkdtempSync(join(tmpdir(), "test-bindings-"));
-  });
-
-  afterAll(() => {
+    await runSuite();
     rmSync(tempDir, { recursive: true, force: true });
   });
 
+  const collectFromSource = (content: string) => {
+    const filePath = join(tempDir, `source-${fileCounter++}.ts`);
+    writeFileSync(filePath, content);
+    return collectSourceBindings(filePath);
+  };
+
   test("collects import specifiers", () => {
-    const filePath = join(tempDir, "imports.ts");
-    writeFileSync(
-      filePath,
+    const bindings = collectFromSource(
       `import { formatAddress, MAX_LENGTH } from "./helpers";\nimport defaultExport from "./mod";\n`,
     );
 
-    const bindings = collectSourceBindings(filePath);
-
-    expect(bindings.has("formatAddress")).toBe(true);
     expect(bindings.get("formatAddress")?.kind).toBe("import");
-    expect(bindings.has("MAX_LENGTH")).toBe(true);
     expect(bindings.get("MAX_LENGTH")?.kind).toBe("import");
-    expect(bindings.has("defaultExport")).toBe(true);
     expect(bindings.get("defaultExport")?.kind).toBe("import");
   });
 
   test("collects namespace imports", () => {
-    const filePath = join(tempDir, "namespace.ts");
-    writeFileSync(filePath, `import * as utils from "./utils";\n`);
+    const bindings = collectFromSource(`import * as utils from "./utils";\n`);
 
-    const bindings = collectSourceBindings(filePath);
-
-    expect(bindings.has("utils")).toBe(true);
     expect(bindings.get("utils")?.kind).toBe("import");
   });
 
   test("collects top-level variable declarations", () => {
-    const filePath = join(tempDir, "vars.ts");
-    writeFileSync(filePath, `const MAX_LENGTH = 100;\nconst PREFIX = "ADDR";\nlet counter = 0;\n`);
+    const bindings = collectFromSource(
+      `const MAX_LENGTH = 100;\nconst PREFIX = "ADDR";\nlet counter = 0;\n`,
+    );
 
-    const bindings = collectSourceBindings(filePath);
-
-    expect(bindings.has("MAX_LENGTH")).toBe(true);
     expect(bindings.get("MAX_LENGTH")?.kind).toBe("declaration");
     expect(bindings.has("PREFIX")).toBe(true);
     expect(bindings.has("counter")).toBe(true);
   });
 
   test("collects top-level function declarations", () => {
-    const filePath = join(tempDir, "funcs.ts");
-    writeFileSync(filePath, `function compute(x) { return x * 2; }\n`);
+    const bindings = collectFromSource(`function compute(x) { return x * 2; }\n`);
 
-    const bindings = collectSourceBindings(filePath);
-
-    expect(bindings.has("compute")).toBe(true);
     expect(bindings.get("compute")?.kind).toBe("declaration");
   });
 
   test("collects exported declarations", () => {
-    const filePath = join(tempDir, "exports.ts");
-    writeFileSync(
-      filePath,
+    const bindings = collectFromSource(
       `export const TAX_RATE = 0.1;\nexport function calcTotal(price) { return price * (1 + TAX_RATE); }\n`,
     );
 
-    const bindings = collectSourceBindings(filePath);
-
-    expect(bindings.has("TAX_RATE")).toBe(true);
     expect(bindings.get("TAX_RATE")?.kind).toBe("declaration");
-    expect(bindings.has("calcTotal")).toBe(true);
     expect(bindings.get("calcTotal")?.kind).toBe("declaration");
   });
 
   test("does not include builder chain as free variable binding", () => {
-    const filePath = join(tempDir, "type.ts");
-    writeFileSync(
-      filePath,
+    const bindings = collectFromSource(
       [
         `import { db } from "@tailor-platform/sdk";`,
         `import { formatAddress } from "./helpers";`,
@@ -147,12 +222,7 @@ describe("collectSourceBindings", () => {
       ].join("\n"),
     );
 
-    const bindings = collectSourceBindings(filePath);
-
-    // Should have db, formatAddress, MAX, customer
-    expect(bindings.has("db")).toBe(true);
     expect(bindings.get("db")?.kind).toBe("import");
-    expect(bindings.has("formatAddress")).toBe(true);
     expect(bindings.get("formatAddress")?.kind).toBe("import");
     expect(bindings.has("MAX")).toBe(true);
     expect(bindings.has("customer")).toBe(true);
@@ -161,23 +231,9 @@ describe("collectSourceBindings", () => {
 
 describe("resolveNeededBindings", () => {
   test("resolves import bindings for free variables", () => {
-    const sourceBindings = new Map<string, SourceBinding>([
-      [
-        "formatAddress",
-        {
-          name: "formatAddress",
-          sourceText: `import { formatAddress } from "./helpers";`,
-          kind: "import",
-        },
-      ],
-      [
-        "db",
-        {
-          name: "db",
-          sourceText: `import { db } from "@tailor-platform/sdk";`,
-          kind: "import",
-        },
-      ],
+    const sourceBindings = bindingsMap([
+      ["formatAddress", `import { formatAddress } from "./helpers";`, "import"],
+      ["db", `import { db } from "@tailor-platform/sdk";`, "import"],
     ]);
 
     const freeVars = extractFreeVariables(`({ data }) => formatAddress(data)`);
@@ -190,16 +246,7 @@ describe("resolveNeededBindings", () => {
   });
 
   test("resolves declaration bindings for free variables", () => {
-    const sourceBindings = new Map<string, SourceBinding>([
-      [
-        "MAX_LENGTH",
-        {
-          name: "MAX_LENGTH",
-          sourceText: `const MAX_LENGTH = 100;`,
-          kind: "declaration",
-        },
-      ],
-    ]);
+    const sourceBindings = bindingsMap([["MAX_LENGTH", `const MAX_LENGTH = 100;`, "declaration"]]);
 
     const freeVars = extractFreeVariables(`({ value }) => value.length < MAX_LENGTH`);
     const result = resolveNeededBindings(freeVars, sourceBindings);
@@ -210,23 +257,9 @@ describe("resolveNeededBindings", () => {
   });
 
   test("recursively resolves declaration dependencies", () => {
-    const sourceBindings = new Map<string, SourceBinding>([
-      [
-        "config",
-        {
-          name: "config",
-          sourceText: `const config = { max: 100 };`,
-          kind: "declaration",
-        },
-      ],
-      [
-        "MAX_LENGTH",
-        {
-          name: "MAX_LENGTH",
-          sourceText: `const MAX_LENGTH = config.max;`,
-          kind: "declaration",
-        },
-      ],
+    const sourceBindings = bindingsMap([
+      ["config", `const config = { max: 100 };`, "declaration"],
+      ["MAX_LENGTH", `const MAX_LENGTH = config.max;`, "declaration"],
     ]);
 
     const freeVars = extractFreeVariables(`({ value }) => value.length < MAX_LENGTH`);
@@ -239,23 +272,10 @@ describe("resolveNeededBindings", () => {
   });
 
   test("recursively resolves dependencies through TypeScript-typed declarations", () => {
-    const sourceBindings = new Map<string, SourceBinding>([
-      [
-        "LOCAL_PREFIX",
-        {
-          name: "LOCAL_PREFIX",
-          sourceText: `const LOCAL_PREFIX = "item-";`,
-          kind: "declaration",
-        },
-      ],
-      [
-        "addPrefix",
-        {
-          name: "addPrefix",
-          sourceText: `function addPrefix(value: string | null): string { return value ? \`\${LOCAL_PREFIX}\${value}\` : LOCAL_PREFIX + "unknown"; }`,
-          kind: "declaration",
-        },
-      ],
+    const addPrefixSource = `function addPrefix(value: string | null): string { return value ? \`\${LOCAL_PREFIX}\${value}\` : LOCAL_PREFIX + "unknown"; }`;
+    const sourceBindings = bindingsMap([
+      ["LOCAL_PREFIX", `const LOCAL_PREFIX = "item-";`, "declaration"],
+      ["addPrefix", addPrefixSource, "declaration"],
     ]);
 
     const freeVars = extractFreeVariables(`({ value }) => addPrefix(value)`);
@@ -264,37 +284,18 @@ describe("resolveNeededBindings", () => {
     expect(result.declarations).toHaveLength(2);
     // Dependencies must appear before dependents (topological order)
     expect(result.declarations[0]).toBe(`const LOCAL_PREFIX = "item-";`);
-    expect(result.declarations[1]).toBe(
-      `function addPrefix(value: string | null): string { return value ? \`\${LOCAL_PREFIX}\${value}\` : LOCAL_PREFIX + "unknown"; }`,
-    );
+    expect(result.declarations[1]).toBe(addPrefixSource);
     expect(result.unresolved).toHaveLength(0);
   });
 
   test("resolves mixed imports and declarations", () => {
-    const sourceBindings = new Map<string, SourceBinding>([
-      [
-        "format",
-        {
-          name: "format",
-          sourceText: `import { format } from "./format-utils";`,
-          kind: "import",
-        },
-      ],
-      [
-        "PREFIX",
-        {
-          name: "PREFIX",
-          sourceText: `const PREFIX = "ADDR";`,
-          kind: "declaration",
-        },
-      ],
+    const sourceBindings = bindingsMap([
+      ["format", `import { format } from "./format-utils";`, "import"],
+      ["PREFIX", `const PREFIX = "ADDR";`, "declaration"],
       [
         "formatAddress",
-        {
-          name: "formatAddress",
-          sourceText: `function formatAddress(data) { return PREFIX + ": " + format(data); }`,
-          kind: "declaration",
-        },
+        `function formatAddress(data) { return PREFIX + ": " + format(data); }`,
+        "declaration",
       ],
     ]);
 
@@ -312,9 +313,8 @@ describe("resolveNeededBindings", () => {
   });
 
   test("returns empty when no free variables", () => {
-    const sourceBindings = new Map<string, SourceBinding>();
     const freeVars = extractFreeVariables(`({ value }) => value > 5`);
-    const result = resolveNeededBindings(freeVars, sourceBindings);
+    const result = resolveNeededBindings(freeVars, bindingsMap([]));
 
     expect(result.imports).toHaveLength(0);
     expect(result.declarations).toHaveLength(0);
@@ -322,16 +322,7 @@ describe("resolveNeededBindings", () => {
   });
 
   test("reports unresolved free variables", () => {
-    const sourceBindings = new Map<string, SourceBinding>([
-      [
-        "MAX_LENGTH",
-        {
-          name: "MAX_LENGTH",
-          sourceText: `const MAX_LENGTH = 100;`,
-          kind: "declaration",
-        },
-      ],
-    ]);
+    const sourceBindings = bindingsMap([["MAX_LENGTH", `const MAX_LENGTH = 100;`, "declaration"]]);
 
     const freeVars = extractFreeVariables(
       `({ value }) => externalFn(value) && value.length < MAX_LENGTH`,

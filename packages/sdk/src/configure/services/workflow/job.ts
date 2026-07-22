@@ -1,7 +1,8 @@
-import { brandValue } from "@/utils/brand";
+import { brandValue } from "#/utils/brand";
 import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
-import type { TailorEnv, TailorInvoker } from "@/runtime/types";
-import type { JsonCompatible } from "@/types/helpers";
+import type { TailorEnv, TailorInvoker } from "#/runtime/types";
+import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
+import type { JsonCompatible, TypeLevelError } from "#/types/helpers";
 
 /**
  * Context object passed as the second argument to workflow job body functions.
@@ -14,21 +15,21 @@ export type WorkflowJobContext = {
 /**
  * The body function type for a workflow job.
  * Resolves to the callable signature when `I` / `O` are JsonValue-compatible,
- * or to a template-literal error string that surfaces at the `body:` property.
+ * or to a type-level error that surfaces at the `body:` property.
  */
 type JobBody<I, O> = [null] extends [I]
-  ? "ERROR: Input cannot be null at the top level"
+  ? TypeLevelError<"Input cannot be null at the top level">
   : [I] extends [undefined]
     ? [O] extends [JsonCompatible<O> | undefined | void]
       ? (input: I, context: WorkflowJobContext) => O | Promise<O>
-      : "ERROR: Output must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
+      : TypeLevelError<"Output must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">
     : [undefined] extends [I]
-      ? "ERROR: Input cannot include undefined at the top level"
+      ? TypeLevelError<"Input cannot include undefined at the top level">
       : [I] extends [JsonCompatible<I>]
         ? [O] extends [JsonCompatible<O> | undefined | void]
           ? (input: I, context: WorkflowJobContext) => O | Promise<O>
-          : "ERROR: Output must be JsonValue-compatible (plain objects/arrays; no class instances or functions)"
-        : "ERROR: Input must be JsonValue-compatible (plain objects/arrays; no class instances or functions)";
+          : TypeLevelError<"Output must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">
+        : TypeLevelError<"Input must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">;
 
 /**
  * WorkflowJob represents a job that can be triggered in a workflow.
@@ -42,17 +43,20 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
   name: Name;
   /**
    * Trigger this job with the given input. Returns a Promise that resolves
-   * to the job's output value.
+   * to the job's output value. Accepts an optional second argument to pass
+   * `executionPolicyKey` for platform-side concurrency enforcement.
    * @example
    * body: async (input) => {
    *   const a = await jobA.trigger({ id: input.id });
-   *   const b = await jobB.trigger({ id: input.id });
+   *   const b = await jobB.trigger({ id: input.id }, {
+   *     executionPolicyKey: `tenant-api.${input.tenantId}`,
+   *   });
    *   return { a, b };
    * }
    */
   trigger: [Input] extends [undefined]
-    ? () => Promise<Awaited<Output>>
-    : (input: Input) => Promise<Awaited<Output>>;
+    ? (input?: undefined, options?: TriggerJobFunctionOptions) => Promise<Awaited<Output>>
+    : (input: Input, options?: TriggerJobFunctionOptions) => Promise<Awaited<Output>>;
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
 }
 
@@ -112,7 +116,19 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
           "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",
         );
       }
-    : async (args?: unknown) => (await dispatchTriggerJob(config.name, args)) as Awaited<O>;
+    : // Preserve arity: use `arguments.length` (regular function, not arrow) so
+      // `.trigger(args, undefined)` is treated as "options passed" — matching
+      // the bundler rewrite, which forwards the literal `undefined` from the
+      // AST as a third argument. Without this, local execution and bundled
+      // workflows would hand mocks different call shapes.
+      async function trigger(args?: unknown, options?: TriggerJobFunctionOptions) {
+        // oxlint-disable-next-line prefer-rest-params
+        return (
+          arguments.length >= 2
+            ? await dispatchTriggerJob(config.name, args, options)
+            : await dispatchTriggerJob(config.name, args)
+        ) as Awaited<O>;
+      };
 
   return brandValue(
     { name: config.name, trigger, body } as WorkflowJob<Name, I, Awaited<O>>,

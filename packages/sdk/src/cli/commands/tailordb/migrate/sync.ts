@@ -2,18 +2,24 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { resourceTrn } from "@/cli/commands/deploy/label";
-import { confirmationArgs, deploymentArgs } from "@/cli/shared/args";
-import { logBetaWarning } from "@/cli/shared/beta";
-import { fetchAll, initOperatorClient, type OperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger, styles } from "@/cli/shared/logger";
-import { prompt } from "@/cli/shared/prompt";
-import { assertWritable } from "@/cli/shared/readonly-guard";
-import { PluginManager } from "@/plugin/manager";
-import { assertDefined } from "@/utils/assert";
+import { resourceTrn } from "#/cli/commands/deploy/label";
+import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
+import { logBetaWarning } from "#/cli/shared/beta";
+import {
+  fetchAll,
+  fetchAllTolerant,
+  getOrNull,
+  initOperatorClient,
+  type OperatorClient,
+} from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger, styles } from "#/cli/shared/logger";
+import { prompt } from "#/cli/shared/prompt";
+import { assertWritable } from "#/cli/shared/readonly-guard";
+import { PluginManager } from "#/plugin/manager";
+import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { parseMigrationNumberArg } from "./migration-number";
@@ -37,7 +43,7 @@ import {
   MIGRATION_LABEL_PREFIX,
   parseMigrationLabelNumber,
 } from "./types";
-import type { TailorDBType as ProtoTailorDBType } from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 export interface SyncOptions {
   configPath?: string;
@@ -57,21 +63,14 @@ async function fetchRemoteGqlPermissions(
   workspaceId: string,
   namespace: string,
 ): Promise<RemoteGqlPermission[]> {
-  return fetchAll(async (pageToken, maxPageSize) => {
-    try {
-      const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
-        workspaceId,
-        namespaceName: namespace,
-        pageToken,
-        pageSize: maxPageSize,
-      });
-      return [permissions, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+  return fetchAllTolerant(async (pageToken, maxPageSize) => {
+    const { permissions, nextPageToken } = await client.listTailorDBGQLPermissions({
+      workspaceId,
+      namespaceName: namespace,
+      pageToken,
+      pageSize: maxPageSize,
+    });
+    return [permissions, nextPageToken];
   });
 }
 
@@ -126,7 +125,7 @@ async function assertMigrationsReproduceLocalTypes(
   const { config, plugins } = loaded;
   const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
   const { defineApplication, generatePluginFilesIfNeeded } =
-    await import("@/cli/services/application");
+    await import("#/cli/services/application");
   const application = defineApplication({ config, pluginManager });
 
   const tailordbService = application.tailorDBServices.find(
@@ -155,8 +154,9 @@ async function assertMigrationsReproduceLocalTypes(
   const executorService =
     application.executorService ??
     (pluginExecutorFiles.length > 0
-      ? (await import("@/cli/services/executor/service")).createExecutorService({
+      ? (await import("#/cli/services/executor/service")).createExecutorService({
           config: { files: [] },
+          baseDir: path.dirname(config.path),
         })
       : undefined);
   await executorService?.loadExecutors();
@@ -231,17 +231,13 @@ async function fetchRemoteMigrationState(
   client: OperatorClient,
   trn: string,
 ): Promise<RemoteMigrationState> {
-  try {
+  const metadata = await getOrNull(async () => {
     const { metadata } = await client.getMetadata({ trn });
-    const labels = metadata?.labels ?? {};
-    const label = labels[MIGRATION_LABEL_KEY];
-    return { labels, current: label ? parseMigrationLabelNumber(label) : null };
-  } catch (error) {
-    if (error instanceof ConnectError && error.code === Code.NotFound) {
-      return { labels: {}, current: null };
-    }
-    throw error;
-  }
+    return metadata;
+  });
+  const labels = metadata?.labels ?? {};
+  const label = labels[MIGRATION_LABEL_KEY];
+  return { labels, current: label ? parseMigrationLabelNumber(label) : null };
 }
 
 function selectTargetNamespace(

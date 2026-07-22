@@ -4,17 +4,14 @@
  * Verifies that {@link idp.Client} forwards each method to the platform's
  * `tailor.idp.Client` and records calls with method, args, and namespace.
  */
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import * as idp from "@/runtime/idp";
-import { cleanupMocks, mockIdp, injectMocks } from "@/vitest/mock";
+import { aroundEach, describe, expect, test } from "vitest";
+import * as idp from "#/runtime/idp";
+import { mockIdp, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/idp", () => {
-  beforeEach(() => {
-    injectMocks(globalThis);
-  });
-
-  afterEach(() => {
-    cleanupMocks(globalThis);
+  aroundEach(async (runTest) => {
+    using _mocks = injectMocks(globalThis);
+    await runTest();
   });
 
   test("Client.user forwards args and namespace", async () => {
@@ -73,18 +70,22 @@ describe("@tailor-platform/sdk/runtime/idp", () => {
   test("Client.sendPasswordResetEmail forwards", async () => {
     using idpM = mockIdp();
     const client = new idp.Client({ namespace: "ns" });
-    const ok = await client.sendPasswordResetEmail({
-      userId: "u-1",
-      redirectUri: "https://example.com/reset",
-    });
+    const args = { userId: "u-1", redirectUri: "https://example.com/reset" };
+    const ok = await client.sendPasswordResetEmail(args);
 
     expect(ok).toBe(true);
     expect(idpM.calls).toEqual([
-      {
-        method: "sendPasswordResetEmail",
-        args: [{ userId: "u-1", redirectUri: "https://example.com/reset" }],
-        namespace: "ns",
-      },
+      { method: "sendPasswordResetEmail", args: [args], namespace: "ns" },
     ]);
+  });
+
+  test("Client.unenrollMfa forwards", async () => {
+    using idpM = mockIdp();
+    const client = new idp.Client({ namespace: "ns" });
+    const args = { userId: "u-1", mfaFactorId: "f-1" };
+    const ok = await client.unenrollMfa(args);
+
+    expect(ok).toBe(true);
+    expect(idpM.calls).toEqual([{ method: "unenrollMfa", args: [args], namespace: "ns" }]);
   });
 });

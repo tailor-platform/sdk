@@ -32,19 +32,12 @@ import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
 import { commonArgs, isVerbose } from "./shared/args";
-import { isCLIError } from "./shared/errors";
+import { errorToJson, isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
-import { isNativeTypeScriptRuntime } from "./shared/runtime";
+import { registerTypeScriptRuntime } from "./shared/register-typescript-runtime";
 
-// Register tsx for TypeScript loading on Node.js.
-// Bun and Deno handle TypeScript natively, so registration is skipped.
-// tsx's own register() picks `module.registerHooks` on Node ≥ 24.11.1 / 25.1 / 26
-// (avoiding the DEP0205 deprecation) and falls back to `module.register` on older runtimes.
-if (!isNativeTypeScriptRuntime()) {
-  const { register } = await import("tsx/esm/api");
-  register();
-}
+await registerTypeScriptRuntime(new URL("./tsconfig-paths-hook.mjs", import.meta.url));
 
 // Runs before globalArgs effects load --env-file, so env file overrides for
 // TAILOR_CRASH_REPORTS_* are not available for early startup failures.
@@ -98,7 +91,9 @@ runMain(mainCommand, {
   displayErrors: false,
   cleanup: async ({ error }) => {
     if (error) {
-      if (isCLIError(error)) {
+      if (logger.jsonMode) {
+        logger.log(JSON.stringify(errorToJson(error, { includeStack: isVerbose() })));
+      } else if (isCLIError(error)) {
         logger.log(error.format());
         if (isVerbose() && error.stack) {
           logger.debug(`\nStack trace:\n${error.stack}`);
@@ -122,11 +117,11 @@ runMain(mainCommand, {
         (!(error instanceof Error) || error instanceof TypeError || error instanceof RangeError);
       if (shouldReport) {
         // Lazy import to match shutdownTelemetry pattern and keep cleanup handler lightweight.
-        const { reportCrash } = await import("@/cli/crashreport");
+        const { reportCrash } = await import("#/cli/crashreport/index");
         await reportCrash(error, "handledError");
       }
     }
-    const { shutdownTelemetry } = await import("@/cli/telemetry");
+    const { shutdownTelemetry } = await import("#/cli/telemetry/index");
     await shutdownTelemetry();
   },
 });

@@ -2,7 +2,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import {
   type AuthOAuth2Client,
   AuthOAuth2Client_GrantType,
-} from "@tailor-proto/tailor/v1/auth_resource_pb";
+} from "@tailor-platform/tailor-proto/auth_resource_pb";
 
 const grantTypeToString = (grantType: AuthOAuth2Client_GrantType): string => {
   switch (grantType) {

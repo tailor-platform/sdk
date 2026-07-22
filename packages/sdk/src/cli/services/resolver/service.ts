@@ -1,11 +1,11 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { loadFilesWithIgnores } from "@/cli/services/file-loader";
-import { logger, styles } from "@/cli/shared/logger";
-import { ResolverSchema } from "@/parser/service/resolver";
-import { isSdkBranded } from "@/utils/brand";
-import type { ResolverServiceConfig } from "@/configure/config/types";
-import type { Resolver } from "@/types/resolver.generated";
+import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { logger, styles } from "#/cli/shared/logger";
+import { ResolverSchema } from "#/parser/service/resolver/index";
+import { isSdkBranded } from "#/utils/brand";
+import type { ResolverServiceConfig } from "#/configure/config/types";
+import type { Resolver } from "#/types/resolver.generated";
 
 export type ResolverService = {
   readonly namespace: string;
@@ -18,11 +18,13 @@ export type ResolverService = {
  * Creates a new ResolverService instance.
  * @param namespace - The namespace for this resolver service
  * @param config - The resolver service configuration
+ * @param baseDir - Directory the config's file patterns are resolved against
  * @returns A new ResolverService instance
  */
 export function createResolverService(
   namespace: string,
   config: ResolverServiceConfig,
+  baseDir: string,
 ): ResolverService {
   const resolvers: Record<string, Resolver> = {};
 
@@ -64,13 +66,38 @@ export function createResolverService(
         return;
       }
 
-      const resolverFiles = loadFilesWithIgnores(config);
+      const resolverFiles = loadFilesWithIgnores(config, baseDir);
 
       logger.log(
         `Found ${styles.highlight(resolverFiles.length.toString())} resolver files for service ${styles.highlight(`"${namespace}"`)}`,
       );
 
       await Promise.all(resolverFiles.map((resolverFile) => loadResolverForFile(resolverFile)));
+      assertUniqueResolverNames(resolvers, namespace);
     },
   };
+}
+
+/**
+ * Assert that every loaded resolver in a namespace has a unique name.
+ * Resolvers are stored by source file, so two files declaring the same
+ * `name` would otherwise silently share a single bundle cache entry.
+ * @param resolvers - Loaded resolvers keyed by source file
+ * @param namespace - The namespace the resolvers belong to
+ */
+function assertUniqueResolverNames(resolvers: Record<string, Resolver>, namespace: string): void {
+  const seenNames = new Map<string, string>();
+  for (const [file, resolver] of Object.entries(resolvers)) {
+    const relativePath = path.relative(process.cwd(), file);
+    const existing = seenNames.get(resolver.name);
+    if (existing) {
+      throw new Error(
+        `Duplicate resolver name "${resolver.name}" found in namespace "${namespace}":\n` +
+          `  - ${existing}\n` +
+          `  - ${relativePath}\n` +
+          `Each resolver must have a unique name within a namespace.`,
+      );
+    }
+    seenNames.set(resolver.name, relativePath);
+  }
 }

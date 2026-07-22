@@ -4,14 +4,14 @@
  * Two delivery paths:
  * - Apply config: shipped with apply and evaluated by the platform before
  *   invoking user code.
- * - Bundle inline: interpolated into the generated `.entry.js` wrapper and
+ * - Bundle inline: interpolated into the generated entry module and
  *   evaluated inside the bundled script at function entry.
  *
  * The user field mapping (server → SDK) shared across services is defined in
  * `@/parser/service/tailordb` as `tailorUserMap`.
  */
-import { tailorUserMap } from "@/parser/service/tailordb";
-import type { Trigger } from "@/types/executor.generated";
+import { tailorUserMap } from "#/parser/service/tailordb/index";
+import type { Trigger } from "#/types/executor.generated";
 
 // ---------------------------------------------------------------------------
 // Bundle inline

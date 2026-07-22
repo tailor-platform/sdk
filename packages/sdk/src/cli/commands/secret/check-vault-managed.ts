@@ -1,6 +1,6 @@
-import { resourceTrn, sdkNameLabelKey } from "@/cli/commands/deploy/label";
-import { logger } from "@/cli/shared/logger";
-import type { OperatorClient } from "@/cli/shared/client";
+import { resourceTrn, sdkNameLabelKey } from "#/cli/commands/deploy/label";
+import { logger } from "#/cli/shared/logger";
+import type { OperatorClient } from "#/cli/shared/client";
 
 type CheckVaultManagedParams = {
   client: OperatorClient;

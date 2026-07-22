@@ -1,13 +1,12 @@
 import { fromJson, type MessageInitShape } from "@bufbuild/protobuf";
 import { ValueSchema } from "@bufbuild/protobuf/wkt";
-import { Code, ConnectError } from "@connectrpc/connect";
 import {
   type CreateIdPClientRequestSchema,
   type CreateIdPServiceRequestSchema,
   type DeleteIdPClientRequestSchema,
   type DeleteIdPServiceRequestSchema,
   type UpdateIdPServiceRequestSchema,
-} from "@tailor-proto/tailor/v1/idp_pb";
+} from "@tailor-platform/tailor-proto/idp_pb";
 import {
   IdPLang,
   IdPPermissionOperator,
@@ -17,31 +16,69 @@ import {
   type IdPPermissionPolicySchema as ProtoIdPPermissionPolicySchema,
   type IdPPermissionSchema as ProtoIdPPermissionSchema,
   type IdPService as ProtoIdPService,
-} from "@tailor-proto/tailor/v1/idp_resource_pb";
-import { fetchAll, type OperatorClient } from "@/cli/shared/client";
-import { logger } from "@/cli/shared/logger";
-import { findOmittedPermitRules, parseIdPPermission } from "@/parser/service/idp/permission";
-import { assertDefined } from "@/utils/assert";
+} from "@tailor-platform/tailor-proto/idp_resource_pb";
+import {
+  fetchAllTolerant,
+  getOrNull,
+  resolveStaticWebsiteUrls,
+  type OperatorClient,
+} from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
+import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp/permission";
+import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
 import {
-  buildMetaRequest,
-  hasMatchingSdkVersion,
-  isOwnedByApp,
-  resourceTrn,
-  sdkNameLabelKey,
-  type WithLabel,
-} from "./label";
-import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { ApplyPhase, PlanContext } from "@/cli/commands/deploy/types";
+  fetchExistingResourcesWithLabels,
+  trackDesiredResourceOwnership,
+  trackRemainingResourceOwner,
+} from "./owned-resource";
+import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
+import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type {
   IdPPermissionOperand,
   StandardIdPActionPermission,
   StandardIdPPermission,
   StandardIdPPermissionCondition,
-} from "@/parser/service/idp/types";
-import type { IdP, IdPLang as IdPLangInput } from "@/types/idp.generated";
-import type { SetMetadataRequestSchema } from "@tailor-proto/tailor/v1/metadata_pb";
+} from "#/parser/service/idp/types";
+import type { IdP, IdPLang as IdPLangInput } from "#/types/idp.generated";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
+import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
+
+type IdPServiceMutationRequest = {
+  workspaceId?: string;
+  namespaceName?: string;
+  userAuthPolicy?: { allowedReturnOrigins?: string[] } | undefined;
+};
+
+async function resolveServiceReturnOrigins(
+  client: OperatorClient,
+  request: IdPServiceMutationRequest,
+): Promise<void> {
+  const policy = request.userAuthPolicy;
+  const originals = policy?.allowedReturnOrigins;
+  if (!policy || !originals?.length) {
+    return;
+  }
+  const resolved = await resolveStaticWebsiteUrls(
+    client,
+    assertDefined(request.workspaceId, "request missing workspaceId"),
+    originals,
+    `IdP service "${request.namespaceName ?? ""}" allowedReturnOrigins`,
+  );
+  // resolveStaticWebsiteUrls warn-and-drops unresolvable entries, which is fine
+  // for CORS but would silently clear an authoritative field here (UpdateIdP is
+  // a full replacement, and `enable_mfa: true` requires ≥1 origin). Fail fast.
+  if (resolved.length !== originals.length) {
+    throw new Error(
+      `IdP service "${request.namespaceName ?? ""}" allowedReturnOrigins: ` +
+        `${originals.length - resolved.length} of ${originals.length} entries could not be resolved. ` +
+        `Check that each "<name>:url" entry refers to a deployed static website.`,
+    );
+  }
+  policy.allowedReturnOrigins = resolved;
+}
 
 /**
  * Build the vault name for an IdP client.
@@ -80,10 +117,12 @@ export async function applyIdP(
     // Services
     await Promise.all([
       ...changeSet.service.creates.map(async (create) => {
+        await resolveServiceReturnOrigins(client, create.request);
         await client.createIdPService(create.request);
         await client.setMetadata(create.metaRequest);
       }),
       ...changeSet.service.updates.map(async (update) => {
+        await resolveServiceReturnOrigins(client, update.request);
         await client.updateIdPService(update.request);
         await client.setMetadata(update.metaRequest);
       }),
@@ -118,17 +157,13 @@ export async function applyIdP(
         // Ensure the vault and secret exist
         const vaultName = idpClientVaultName(update.namespaceName, update.name);
         const secretName = idpClientSecretName(update.namespaceName, update.name);
-        try {
-          await client.getSecretManagerVault({
+        const vault = await getOrNull(async () => {
+          return await client.getSecretManagerVault({
             workspaceId: update.workspaceId,
             secretmanagerVaultName: vaultName,
           });
-          return;
-        } catch (error) {
-          if (!(error instanceof ConnectError && error.code === Code.NotFound)) {
-            throw error;
-          }
-        }
+        });
+        if (vault) return;
         await client.createSecretManagerVault({
           workspaceId: update.workspaceId,
           secretmanagerVaultName: vaultName,
@@ -177,6 +212,7 @@ export async function planIdP(context: PlanContext) {
     idpUserTriggerTargets,
   } = context;
   const idps = forRemoval ? [] : application.idpServices;
+  const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const {
     changeSet: serviceChangeSet,
     conflicts,
@@ -189,6 +225,7 @@ export async function planIdP(context: PlanContext) {
     application.id,
     idps,
     idpUserTriggerTargets ?? new Set<string>(),
+    expectedLocalWebsites,
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
@@ -247,12 +284,20 @@ function normalizeComparableUserAuthPolicy(
     passwordRequireLowercase: policy?.passwordRequireLowercase ?? false,
     passwordRequireNonAlphanumeric: policy?.passwordRequireNonAlphanumeric ?? false,
     passwordRequireNumeric: policy?.passwordRequireNumeric ?? false,
-    passwordMinLength: policy?.passwordMinLength ?? 0,
-    passwordMaxLength: policy?.passwordMaxLength ?? 0,
+    // The platform fills an omitted policy with password_min_length 6 and
+    // password_max_length 4096 and echoes those back; it also coerces an
+    // explicit 0 to the same defaults, which is why these use || (not ??) —
+    // every falsy local value must compare equal to the stored defaults.
+    passwordMinLength: policy?.passwordMinLength || 6,
+    passwordMaxLength: policy?.passwordMaxLength || 4096,
     allowedEmailDomains: (policy?.allowedEmailDomains ?? []).toSorted(),
     allowGoogleOauth: policy?.allowGoogleOauth ?? false,
     disablePasswordAuth: policy?.disablePasswordAuth ?? false,
     allowMicrosoftOauth: policy?.allowMicrosoftOauth ?? false,
+    enableMfa: policy?.enableMfa ?? false,
+    requireMfa: policy?.requireMfa ?? false,
+    allowedReturnOrigins: (policy?.allowedReturnOrigins ?? []).toSorted(),
+    mfaIssuer: policy?.mfaIssuer ?? "",
   };
 }
 
@@ -265,6 +310,8 @@ function normalizeComparableDisableGqlOperations(
     delete: value?.delete ?? false,
     read: value?.read ?? false,
     sendPasswordResetEmail: value?.sendPasswordResetEmail ?? false,
+    requestMfaSettingsUrl: value?.requestMfaSettingsUrl ?? false,
+    unenrollMfa: value?.unenrollMfa ?? false,
   };
 }
 
@@ -311,7 +358,8 @@ function normalizeComparablePermission(
     permission.read.length === 0 &&
     permission.update.length === 0 &&
     permission.delete.length === 0 &&
-    permission.sendPasswordResetEmail.length === 0
+    permission.sendPasswordResetEmail.length === 0 &&
+    permission.unenrollMfa.length === 0
   ) {
     return undefined;
   }
@@ -331,6 +379,7 @@ function normalizeComparablePermission(
     update: permission.update.map(normalizePolicy),
     delete: permission.delete.map(normalizePolicy),
     sendPasswordResetEmail: permission.sendPasswordResetEmail.map(normalizePolicy),
+    unenrollMfa: permission.unenrollMfa.map(normalizePolicy),
   };
 }
 
@@ -356,43 +405,26 @@ async function planServices(
   appId: string | undefined,
   idps: ReadonlyArray<IdP>,
   idpUserTriggerTargets: ReadonlySet<string>,
+  expectedLocalWebsites: ReadonlySet<string>,
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("IdP services");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
 
-  const withoutLabel = await fetchAll(async (pageToken, maxPageSize) => {
-    try {
+  const existingServices = await fetchExistingResourcesWithLabels({
+    client,
+    fetchPage: async (pageToken, maxPageSize) => {
       const { idpServices, nextPageToken } = await client.listIdPServices({
         workspaceId,
         pageToken,
         pageSize: maxPageSize,
       });
       return [idpServices, nextPageToken];
-    } catch (error) {
-      if (error instanceof ConnectError && error.code === Code.NotFound) {
-        return [[], ""];
-      }
-      throw error;
-    }
+    },
+    getName: (resource) => resource.namespace?.name,
+    getTrn: (name) => resourceTrn(workspaceId, "idp", name),
   });
-  const existingServices: WithLabel<(typeof withoutLabel)[number]> = {};
-  await Promise.all(
-    withoutLabel.map(async (resource) => {
-      if (!resource.namespace?.name) {
-        return;
-      }
-      const { metadata } = await client.getMetadata({
-        trn: resourceTrn(workspaceId, "idp", resource.namespace.name),
-      });
-      existingServices[resource.namespace.name] = {
-        resource,
-        label: metadata?.labels[sdkNameLabelKey],
-        allLabels: metadata?.labels,
-      };
-    }),
-  );
 
   for (const idp of idps) {
     const namespaceName = idp.name;
@@ -440,10 +472,20 @@ async function planServices(
     }
     const parsedPermission = parseIdPPermission(idp.permission);
     const protoPermission = parsedPermission ? protoIdPPermission(parsedPermission) : undefined;
+    const resolvedReturnOrigins = await resolveStaticWebsiteUrls(
+      client,
+      workspaceId,
+      userAuthPolicy?.allowedReturnOrigins ? [...userAuthPolicy.allowedReturnOrigins] : [],
+      `IdP service "${namespaceName}" allowedReturnOrigins`,
+      { expectedLocalNames: expectedLocalWebsites },
+    );
+    const userAuthPolicyForCompare = userAuthPolicy
+      ? { ...userAuthPolicy, allowedReturnOrigins: resolvedReturnOrigins }
+      : userAuthPolicy;
     const desired = normalizeComparableIdPService({
       authorization,
       lang,
-      userAuthPolicy: normalizeComparableUserAuthPolicy(userAuthPolicy),
+      userAuthPolicy: normalizeComparableUserAuthPolicy(userAuthPolicyForCompare),
       publishUserEvents,
       disableGqlOperations: normalizeComparableDisableGqlOperations(
         convertGqlOperationsToDisable(idp.gqlOperations),
@@ -464,21 +506,16 @@ async function planServices(
     };
 
     if (existing) {
-      const owned = isOwnedByApp(existing.allLabels, appName, appId);
-      if (!owned) {
-        if (!existing.label) {
-          unmanaged.push({
-            resourceType: "IdP service",
-            resourceName: idp.name,
-          });
-        } else {
-          conflicts.push({
-            resourceType: "IdP service",
-            resourceName: idp.name,
-            currentOwner: existing.label,
-          });
-        }
-      }
+      const owned = trackDesiredResourceOwnership({
+        labels: existing.allLabels,
+        ownerLabel: existing.label,
+        appName,
+        appId,
+        resourceType: "IdP service",
+        resourceName: idp.name,
+        conflicts,
+        unmanaged,
+      });
       if (
         owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
@@ -503,11 +540,13 @@ async function planServices(
   }
   Object.entries(existingServices).forEach(([namespaceName]) => {
     const entry = existingServices[namespaceName];
-    const label = entry?.label;
-    const owned = isOwnedByApp(entry?.allLabels, appName, appId);
-    if (label && !owned) {
-      resourceOwners.add(label);
-    }
+    const owned = trackRemainingResourceOwner({
+      labels: entry?.allLabels,
+      ownerLabel: entry?.label,
+      appName,
+      appId,
+      resourceOwners,
+    });
     if (owned) {
       changeSet.deletes.push({
         name: namespaceName,
@@ -549,21 +588,14 @@ async function planClients(
   const changeSet = createChangeSet<CreateClient, UpdateClient, DeleteClient>("IdP clients");
 
   const fetchClients = (namespaceName: string) => {
-    return fetchAll(async (pageToken, maxPageSize) => {
-      try {
-        const { clients, nextPageToken } = await client.listIdPClients({
-          workspaceId,
-          namespaceName,
-          pageToken,
-          pageSize: maxPageSize,
-        });
-        return [clients, nextPageToken];
-      } catch (error) {
-        if (error instanceof ConnectError && error.code === Code.NotFound) {
-          return [[], ""];
-        }
-        throw error;
-      }
+    return fetchAllTolerant(async (pageToken, maxPageSize) => {
+      const { clients, nextPageToken } = await client.listIdPClients({
+        workspaceId,
+        namespaceName,
+        pageToken,
+        pageSize: maxPageSize,
+      });
+      return [clients, nextPageToken];
     });
   };
 
@@ -665,6 +697,8 @@ function convertGqlOperationsToDisable(
     delete: gqlOperations.delete === false,
     read: gqlOperations.read === false,
     sendPasswordResetEmail: gqlOperations.sendPasswordResetEmail === false,
+    requestMfaSettingsUrl: gqlOperations.requestMfaSettingsUrl === false,
+    unenrollMfa: gqlOperations.unenrollMfa === false,
   };
 }
 
@@ -677,6 +711,7 @@ function protoIdPPermission(
     update: permission.update.map((p) => protoIdPPolicy(p)),
     delete: permission.delete.map((p) => protoIdPPolicy(p)),
     sendPasswordResetEmail: permission.sendPasswordResetEmail.map((p) => protoIdPPolicy(p)),
+    unenrollMfa: permission.unenrollMfa.map((p) => protoIdPPolicy(p)),
   };
 }
 

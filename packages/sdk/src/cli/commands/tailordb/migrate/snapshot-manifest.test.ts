@@ -82,42 +82,41 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.description).toBe("A user in the system");
     });
 
-    test("sets publishRecordEvents from options", () => {
-      const snapshotType = createTestSnapshotType("User");
+    test.each([
+      { publishRecordEvents: true, expected: true },
+      { publishRecordEvents: false, expected: false },
+    ])(
+      "sets publishRecordEvents to $expected from options.publishRecordEvents=$publishRecordEvents",
+      ({ publishRecordEvents, expected }) => {
+        const snapshotType = createTestSnapshotType("User");
 
-      const manifestWithEvents = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-        publishRecordEvents: true,
-      });
-      const manifestWithoutEvents = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-        publishRecordEvents: false,
-      });
+        const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+          publishRecordEvents,
+        });
 
-      expect(manifestWithEvents.schema?.settings?.publishRecordEvents).toBe(true);
-      expect(manifestWithoutEvents.schema?.settings?.publishRecordEvents).toBe(false);
-    });
+        expect(manifest.schema?.settings?.publishRecordEvents).toBe(expected);
+      },
+    );
 
-    test("reads publishEvents from snapshot settings", () => {
-      const snapshotTypeWithEvents = createTestSnapshotType("User", {
-        settings: { publishEvents: true },
-      });
-      const snapshotTypeWithoutEvents = createTestSnapshotType("Post", {
-        settings: { publishEvents: false },
-      });
+    test.each([
+      { publishEvents: true, expected: true },
+      { publishEvents: false, expected: false },
+    ])(
+      "reads publishEvents=$publishEvents from snapshot settings as $expected",
+      ({ publishEvents, expected }) => {
+        const snapshotType = createTestSnapshotType("User", { settings: { publishEvents } });
 
-      const manifestWithEvents = generateTailorDBTypeManifestFromSnapshot(snapshotTypeWithEvents);
-      const manifestWithoutEvents =
-        generateTailorDBTypeManifestFromSnapshot(snapshotTypeWithoutEvents);
+        const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
 
-      expect(manifestWithEvents.schema?.settings?.publishRecordEvents).toBe(true);
-      expect(manifestWithoutEvents.schema?.settings?.publishRecordEvents).toBe(false);
-    });
+        expect(manifest.schema?.settings?.publishRecordEvents).toBe(expected);
+      },
+    );
 
     test("prioritizes snapshot settings.publishEvents over options.publishRecordEvents", () => {
       const snapshotType = createTestSnapshotType("User", {
         settings: { publishEvents: true },
       });
 
-      // Even with options.publishRecordEvents: false, snapshot settings should take precedence
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
         publishRecordEvents: false,
       });
@@ -452,114 +451,56 @@ describe("snapshot-manifest", () => {
       expect(manifests.has("Comment")).toBe(true);
     });
 
-    test("applies executorUsedTypes to enable publishRecordEvents", () => {
-      const snapshot = createTestSnapshot({
-        User: createTestSnapshotType("User"),
-        Post: createTestSnapshotType("Post"),
-      });
-
-      const manifests = generateAllTypeManifestsFromSnapshot(snapshot, {
-        executorUsedTypes: new Set(["User"]),
-      });
-
-      expect(manifests.get("User")?.schema?.settings?.publishRecordEvents).toBe(true);
-      expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(false);
-    });
-
-    test("applies manual publishEvents setting from snapshot", () => {
-      const snapshot = createTestSnapshot({
-        User: createTestSnapshotType("User", {
-          settings: { publishEvents: true },
-        }),
-        Post: createTestSnapshotType("Post"),
-      });
-
-      const manifests = generateAllTypeManifestsFromSnapshot(snapshot);
-
-      expect(manifests.get("User")?.schema?.settings?.publishRecordEvents).toBe(true);
-      expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(false);
-    });
-
-    test("throws error when executor uses type with publishEvents=false", () => {
-      const snapshot = createTestSnapshot({
-        User: createTestSnapshotType("User", {
-          settings: { publishEvents: false },
-        }),
-      });
-
-      expect(() =>
-        generateAllTypeManifestsFromSnapshot(snapshot, {
-          executorUsedTypes: new Set(["User"]),
-        }),
-      ).toThrow(
-        'Type "User" has publishEvents set to false, but it is used by an executor with a record trigger.',
+    test.each([
+      {
+        name: "applies executorUsedTypes to enable publishRecordEvents",
+        types: { User: {}, Post: {} },
+        options: { executorUsedTypes: new Set(["User"]) },
+        expected: { User: true, Post: false },
+      },
+      {
+        name: "applies manual publishEvents setting from snapshot",
+        types: { User: { settings: { publishEvents: true } }, Post: {} },
+        options: {},
+        expected: { User: true, Post: false },
+      },
+      {
+        name: "respects explicit publishEvents=false when no executor uses the type",
+        types: { User: { settings: { publishEvents: false } }, Post: {} },
+        options: {},
+        expected: { User: false, Post: false },
+      },
+      {
+        name: "combines manual setting and executor usage correctly",
+        types: {
+          User: { settings: { publishEvents: true } },
+          Post: { settings: { publishEvents: false } },
+          Comment: {},
+        },
+        options: { executorUsedTypes: new Set(["Comment"]) },
+        expected: { User: true, Post: false, Comment: true },
+      },
+      {
+        name: "falls back to baseOptions.publishRecordEvents when no manual setting and no executor",
+        types: { User: {}, Post: {} },
+        options: { executorUsedTypes: new Set(["Other"]), publishRecordEvents: true },
+        expected: { User: true, Post: true },
+      },
+    ])("$name", ({ types, options, expected }) => {
+      const snapshot = createTestSnapshot(
+        Object.fromEntries(
+          Object.entries(types).map(([name, overrides]) => [
+            name,
+            createTestSnapshotType(name, overrides),
+          ]),
+        ),
       );
-    });
 
-    test("respects explicit publishEvents=false when no executor uses the type", () => {
-      const snapshot = createTestSnapshot({
-        User: createTestSnapshotType("User", {
-          settings: { publishEvents: false },
-        }),
-        Post: createTestSnapshotType("Post"),
-      });
+      const manifests = generateAllTypeManifestsFromSnapshot(snapshot, options);
 
-      const manifests = generateAllTypeManifestsFromSnapshot(snapshot);
-
-      // User: explicit false → false
-      expect(manifests.get("User")?.schema?.settings?.publishRecordEvents).toBe(false);
-      // Post: no setting → false
-      expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(false);
-    });
-
-    test("combines manual setting and executor usage correctly", () => {
-      const snapshot = createTestSnapshot({
-        User: createTestSnapshotType("User", {
-          settings: { publishEvents: true },
-        }),
-        Post: createTestSnapshotType("Post", {
-          settings: { publishEvents: false },
-        }),
-        Comment: createTestSnapshotType("Comment"),
-      });
-
-      // Only Comment is used by executor (not Post which has publishEvents=false)
-      const manifests = generateAllTypeManifestsFromSnapshot(snapshot, {
-        executorUsedTypes: new Set(["Comment"]),
-      });
-
-      // User: manual true, no executor → true
-      expect(manifests.get("User")?.schema?.settings?.publishRecordEvents).toBe(true);
-      // Post: manual false, no executor → false
-      expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(false);
-      // Comment: no setting, executor uses it → true
-      expect(manifests.get("Comment")?.schema?.settings?.publishRecordEvents).toBe(true);
-    });
-
-    test("falls back to baseOptions.publishRecordEvents when no manual setting and no executor", () => {
-      const snapshot = createTestSnapshot({
-        User: createTestSnapshotType("User"),
-        Post: createTestSnapshotType("Post"),
-      });
-
-      // executorUsedTypes is defined but doesn't contain these types
-      // baseOptions.publishRecordEvents is true
-      const manifests = generateAllTypeManifestsFromSnapshot(snapshot, {
-        executorUsedTypes: new Set(["Other"]), // Neither User nor Post
-        publishRecordEvents: true,
-      });
-
-      // Both should use baseOptions.publishRecordEvents = true
-      expect(manifests.get("User")?.schema?.settings?.publishRecordEvents).toBe(true);
-      expect(manifests.get("Post")?.schema?.settings?.publishRecordEvents).toBe(true);
-    });
-
-    test("returns empty map for empty snapshot", () => {
-      const snapshot = createTestSnapshot({});
-
-      const manifests = generateAllTypeManifestsFromSnapshot(snapshot);
-
-      expect(manifests.size).toBe(0);
+      for (const [name, expectedValue] of Object.entries(expected)) {
+        expect(manifests.get(name)?.schema?.settings?.publishRecordEvents).toBe(expectedValue);
+      }
     });
 
     test("applies namespace gqlOperations to all types", () => {
@@ -580,82 +521,85 @@ describe("snapshot-manifest", () => {
       expect(manifests.get("User")?.schema?.settings?.disableGqlOperations?.create).toBe(true);
       expect(manifests.get("Post")?.schema?.settings?.disableGqlOperations?.create).toBe(true);
     });
+
+    test("throws error when executor uses type with publishEvents=false", () => {
+      const snapshot = createTestSnapshot({
+        User: createTestSnapshotType("User", {
+          settings: { publishEvents: false },
+        }),
+      });
+
+      expect(() =>
+        generateAllTypeManifestsFromSnapshot(snapshot, {
+          executorUsedTypes: new Set(["User"]),
+        }),
+      ).toThrow(
+        'Type "User" has publishEvents set to false, but it is used by an executor with a record trigger.',
+      );
+    });
+
+    test("returns empty map for empty snapshot", () => {
+      const snapshot = createTestSnapshot({});
+
+      const manifests = generateAllTypeManifestsFromSnapshot(snapshot);
+
+      expect(manifests.size).toBe(0);
+    });
   });
 
   describe("compareSnapshotWithRemote", () => {
-    test("identifies types to create", () => {
-      const snapshot = createTestSnapshot({
-        User: createTestSnapshotType("User"),
-        Post: createTestSnapshotType("Post"),
-      });
-
-      const existingTypes = new Set(["User"]);
-
-      const comparison = compareSnapshotWithRemote(snapshot, existingTypes);
-
-      expect(comparison.creates).toEqual(["Post"]);
-      expect(comparison.updates).toEqual(["User"]);
-      expect(comparison.deletes).toEqual([]);
-    });
-
-    test("identifies types to update", () => {
-      const snapshot = createTestSnapshot({
-        User: createTestSnapshotType("User"),
-        Post: createTestSnapshotType("Post"),
-      });
-
-      const existingTypes = new Set(["User", "Post"]);
-
-      const comparison = compareSnapshotWithRemote(snapshot, existingTypes);
-
-      expect(comparison.creates).toEqual([]);
-      expect(comparison.updates).toContain("User");
-      expect(comparison.updates).toContain("Post");
-      expect(comparison.deletes).toEqual([]);
-    });
-
-    test("identifies types to delete", () => {
-      const snapshot = createTestSnapshot({
-        User: createTestSnapshotType("User"),
-      });
-
-      const existingTypes = new Set(["User", "Post", "Comment"]);
-
-      const comparison = compareSnapshotWithRemote(snapshot, existingTypes);
-
-      expect(comparison.creates).toEqual([]);
-      expect(comparison.updates).toEqual(["User"]);
-      expect(comparison.deletes).toContain("Post");
-      expect(comparison.deletes).toContain("Comment");
-    });
-
-    test("handles empty snapshot", () => {
-      const snapshot = createTestSnapshot({});
-
-      const existingTypes = new Set(["User", "Post"]);
+    test.each([
+      {
+        name: "identifies types to create",
+        types: ["User", "Post"],
+        existing: ["User"],
+        creates: ["Post"],
+        updates: ["User"],
+        deletes: [],
+      },
+      {
+        name: "identifies types to update",
+        types: ["User", "Post"],
+        existing: ["User", "Post"],
+        creates: [],
+        updates: ["User", "Post"],
+        deletes: [],
+      },
+      {
+        name: "identifies types to delete",
+        types: ["User"],
+        existing: ["User", "Post", "Comment"],
+        creates: [],
+        updates: ["User"],
+        deletes: ["Post", "Comment"],
+      },
+      {
+        name: "handles empty snapshot",
+        types: [],
+        existing: ["User", "Post"],
+        creates: [],
+        updates: [],
+        deletes: ["User", "Post"],
+      },
+      {
+        name: "handles empty remote",
+        types: ["User", "Post"],
+        existing: [],
+        creates: ["User", "Post"],
+        updates: [],
+        deletes: [],
+      },
+    ])("$name", ({ types, existing, creates, updates, deletes }) => {
+      const snapshot = createTestSnapshot(
+        Object.fromEntries(types.map((name) => [name, createTestSnapshotType(name)])),
+      );
+      const existingTypes = new Set(existing);
 
       const comparison = compareSnapshotWithRemote(snapshot, existingTypes);
 
-      expect(comparison.creates).toEqual([]);
-      expect(comparison.updates).toEqual([]);
-      expect(comparison.deletes).toContain("User");
-      expect(comparison.deletes).toContain("Post");
-    });
-
-    test("handles empty remote", () => {
-      const snapshot = createTestSnapshot({
-        User: createTestSnapshotType("User"),
-        Post: createTestSnapshotType("Post"),
-      });
-
-      const existingTypes = new Set<string>();
-
-      const comparison = compareSnapshotWithRemote(snapshot, existingTypes);
-
-      expect(comparison.creates).toContain("User");
-      expect(comparison.creates).toContain("Post");
-      expect(comparison.updates).toEqual([]);
-      expect(comparison.deletes).toEqual([]);
+      expect(comparison.creates.toSorted()).toEqual([...creates].toSorted());
+      expect(comparison.updates.toSorted()).toEqual([...updates].toSorted());
+      expect(comparison.deletes.toSorted()).toEqual([...deletes].toSorted());
     });
   });
 });

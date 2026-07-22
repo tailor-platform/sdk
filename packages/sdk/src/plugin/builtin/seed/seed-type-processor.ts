@@ -1,5 +1,5 @@
+import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { SeedTypeInfo } from "./types";
-import type { TailorDBType } from "@/parser/service/tailordb/types";
 
 /**
  * Processes TailorDB types to extract seed type information

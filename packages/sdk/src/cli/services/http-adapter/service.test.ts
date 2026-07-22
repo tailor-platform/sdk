@@ -1,12 +1,13 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { createHttpAdapterService } from "./service";
 
 describe("createHttpAdapterService.loadAdapters", () => {
   let tmpDir: string | undefined;
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     if (tmpDir) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
       tmpDir = undefined;
@@ -47,7 +48,10 @@ export const shared = (value: string) => value.toUpperCase();
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [adapterFile, helperFile] } });
+    const service = createHttpAdapterService({
+      config: { files: [adapterFile, helperFile] },
+      baseDir: process.cwd(),
+    });
     await service.loadAdapters();
 
     expect(service.adapters).toHaveLength(1);
@@ -68,7 +72,7 @@ export default createHttpAdapter({
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [file] } });
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
     await service.loadAdapters();
 
     expect(service.adapters).toHaveLength(1);
@@ -89,7 +93,7 @@ export default createHttpAdapter({
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [file] } });
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
     await service.loadAdapters();
 
     expect(service.adapters).toHaveLength(1);
@@ -109,7 +113,7 @@ export default createHttpAdapter({
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [file] } });
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
     await expect(service.loadAdapters()).rejects.toThrow(/async `input\.get` function/);
   });
 
@@ -118,8 +122,6 @@ export default createHttpAdapter({
       "missing-default.ts",
       `
 import { createHttpAdapter } from "@tailor-platform/sdk";
-// User forgot to default-export the adapter. Without this guard the adapter
-// would be silently dropped from the deployment.
 export const adapter = createHttpAdapter({
   name: "missing-default",
   pathPattern: "/x",
@@ -128,7 +130,7 @@ export const adapter = createHttpAdapter({
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [file] } });
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
     await expect(service.loadAdapters()).rejects.toThrow(/must be the default export/);
   });
 
@@ -144,7 +146,7 @@ export default {
 `,
     );
 
-    const service = createHttpAdapterService({ config: { files: [file] } });
+    const service = createHttpAdapterService({ config: { files: [file] }, baseDir: process.cwd() });
     await service.loadAdapters();
 
     // Not produced by createHttpAdapter -> treated as a non-adapter file.

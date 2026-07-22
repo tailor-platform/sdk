@@ -1,6 +1,6 @@
 import * as path from "pathe";
-import { assertDefined } from "@/utils/assert";
-import ml from "@/utils/multiline";
+import { assertDefined } from "#/utils/assert";
+import ml from "#/utils/multiline";
 import {
   processIdpUser,
   generateIdpUserSchemaFile,
@@ -14,7 +14,8 @@ import {
   type PluginSchemaParams,
 } from "./lines-db-processor";
 import { processSeedTypeInfo } from "./seed-type-processor";
-import type { Plugin, GeneratorResult, TailorDBReadyContext } from "@/plugin/types";
+import { escapeSeedScriptCodeForTemplateLiteral } from "./template-literal";
+import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
 
 /** Unique identifier for the seed generator plugin. */
 export const SeedGeneratorID = "@tailor-platform/seed";
@@ -92,7 +93,7 @@ function generateIdpUserSeedFunction(hasIdpUser: boolean, idpNamespace: string |
       }
       console.log(styleText("dim", \`    Processing \${rows.length} _User records...\`));
 
-      const idpSeedCode = \/* js *\/\`${scriptCode.replace(/`/g, "\\`").replace(/\$/g, "\\$")}\`;
+      const idpSeedCode = \/* js *\/\`${escapeSeedScriptCodeForTemplateLiteral(scriptCode)}\`;
 
       const result = await executeScript({
         client: operatorClient,
@@ -178,7 +179,7 @@ function generateIdpUserTruncateFunction(hasIdpUser: boolean, idpNamespace: stri
     const truncateIdpUser = async () => {
       console.log(styleText("cyan", "Truncating _User via tailor.idp.Client..."));
 
-      const idpTruncateCode = \/* js *\/\`${scriptCode.replace(/`/g, "\\`").replace(/\$/g, "\\$")}\`;
+      const idpTruncateCode = \/* js *\/\`${escapeSeedScriptCodeForTemplateLiteral(scriptCode)}\`;
 
       const result = await executeScript({
         client: operatorClient,

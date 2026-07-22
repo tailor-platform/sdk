@@ -1,14 +1,16 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { z } from "zod";
-import { deploymentArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger } from "@/cli/shared/logger";
-import { assertDefined } from "@/utils/assert";
+import { deploymentArgs } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 import { createWorkspaceNameTransformer, resolveWorkspaceFolderName } from "./workspace/transform";
-import type { Application } from "@tailor-proto/tailor/v1/application_resource_pb";
+import type { OperatorClient } from "#/cli/shared/client";
+import type { Application } from "@tailor-platform/tailor-proto/application_resource_pb";
 
 export interface ShowOptions {
   workspaceId?: string;
@@ -35,7 +37,14 @@ export interface ApplicationInfo {
   updatedAt: Date | null;
 }
 
-export interface ShowInfo extends ApplicationInfo, WorkspaceInfo {}
+export interface AIGatewayInfo {
+  name: string;
+  url: string;
+}
+
+export interface ShowInfo extends ApplicationInfo, WorkspaceInfo {
+  aiGateways: AIGatewayInfo[];
+}
 
 function applicationInfo(app: Application): ApplicationInfo {
   return {
@@ -51,10 +60,31 @@ function applicationInfo(app: Application): ApplicationInfo {
   };
 }
 
+async function fetchAIGateways(
+  client: OperatorClient,
+  workspaceId: string,
+  names: string[],
+): Promise<AIGatewayInfo[]> {
+  const gateways = await Promise.all(
+    names.map(async (name) => {
+      try {
+        const { aigateway } = await client.getAIGateway({ workspaceId, aigatewayName: name });
+        return aigateway ? { name: aigateway.name, url: aigateway.url } : undefined;
+      } catch (error) {
+        if (error instanceof ConnectError && error.code === Code.NotFound) {
+          return undefined;
+        }
+        throw error;
+      }
+    }),
+  );
+  return gateways.filter((gateway): gateway is AIGatewayInfo => gateway !== undefined);
+}
+
 /**
  * Show applied application information for the current workspace.
  * @param options - Show options
- * @returns Application information
+ * @returns Deployed application, workspace, and AI Gateway information
  */
 export async function show(options?: ShowOptions): Promise<ShowInfo> {
   // Load and validate options
@@ -68,7 +98,10 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
   });
 
   const { config } = await loadConfig(options?.configPath);
-  const [workspaceResp, resp] = await Promise.all([
+  const aiGatewayNames = config.aiGateways?.length
+    ? [...new Set(config.aiGateways.map((gateway) => gateway.name))]
+    : [];
+  const [workspaceResp, resp, aiGateways] = await Promise.all([
     client.getWorkspace({
       workspaceId,
     }),
@@ -76,6 +109,7 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
       workspaceId,
       applicationName: config.name,
     }),
+    fetchAIGateways(client, workspaceId, aiGatewayNames),
   ]);
   const { name, ...appInfo } = applicationInfo(
     assertDefined(resp.application, `application "${config.name}" not found in workspace`),
@@ -90,6 +124,7 @@ export async function show(options?: ShowOptions): Promise<ShowInfo> {
     ...(workspaceFolderName ? { workspaceFolderName } : {}),
     workspaceRegion: workspace?.region ?? "",
     ...appInfo,
+    aiGateways,
   };
 }
 

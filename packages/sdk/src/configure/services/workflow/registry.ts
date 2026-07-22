@@ -1,6 +1,7 @@
-import { platformSerialize } from "@/utils/test/platform-serialize";
+import { platformSerialize } from "#/utils/test/platform-serialize";
 import { buildJobContext } from "./test-env-key";
-import type { TailorEnv, TailorInvoker } from "@/runtime/types";
+import type { TailorEnv, TailorInvoker } from "#/runtime/types";
+import type { StartJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
 
 /**
  * Body signature shared by workflow jobs at registry-write time.
@@ -20,8 +21,14 @@ const JOB_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:job-regi
 const WORKFLOW_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:workflow-registry");
 
 type PlatformWorkflow = {
-  triggerWorkflow: (name: string, args?: unknown, options?: unknown) => Promise<string>;
-  triggerJobFunction: (name: string, args?: unknown) => unknown;
+  startWorkflow: (name: string, args?: unknown, options?: StartWorkflowOptions) => Promise<string>;
+  triggerWorkflow: (
+    name: string,
+    args?: unknown,
+    options?: StartWorkflowOptions,
+  ) => Promise<string>;
+  startJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
+  triggerJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
 };
 
 type GlobalWithRegistry = typeof globalThis & {
@@ -121,18 +128,36 @@ export async function runRegisteredWorkflow(name: string, args?: unknown): Promi
 
 // `.trigger()` routes through the installed `tailor.workflow` shim, falling back
 // to running the registered body/workflow locally when none is installed.
-export function dispatchTriggerJob(name: string, args?: unknown): unknown {
+// Preserve arity: the shim sees a 2-argument call when the caller supplied no
+// options, and a 3-argument call otherwise, mirroring the bundler rewrite so
+// mocks observe the same shape in local execution and in bundled workflows.
+export function dispatchTriggerJob(
+  name: string,
+  args?: unknown,
+  options?: StartJobFunctionOptions,
+): unknown {
   const workflow = currentPlatformWorkflow();
-  return workflow ? workflow.triggerJobFunction(name, args) : runRegisteredJob(name, args);
+  if (!workflow) return runRegisteredJob(name, args);
+  // oxlint-disable-next-line prefer-rest-params
+  return arguments.length >= 3
+    ? workflow.triggerJobFunction(name, args, options)
+    : workflow.triggerJobFunction(name, args);
 }
 
+// Accepts `unknown` because the SDK-side `.trigger()` accepts a wider options
+// shape than the platform surface (e.g. `authInvoker` may be a machine-user
+// name string that the bundler normalizes at build time). Local execution
+// forwards the value verbatim; only the bundled path enforces the platform
+// contract.
 export function dispatchTriggerWorkflow(
   name: string,
   args?: unknown,
   options?: unknown,
 ): Promise<string> {
   const workflow = currentPlatformWorkflow();
-  return workflow
-    ? workflow.triggerWorkflow(name, args, options)
-    : runRegisteredWorkflow(name, args);
+  if (!workflow) return runRegisteredWorkflow(name, args);
+  // oxlint-disable-next-line prefer-rest-params
+  return arguments.length >= 3
+    ? workflow.triggerWorkflow(name, args, options as StartWorkflowOptions | undefined)
+    : workflow.triggerWorkflow(name, args);
 }

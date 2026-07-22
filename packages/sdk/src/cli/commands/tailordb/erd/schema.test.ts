@@ -1,14 +1,14 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, test, expect, aroundEach, vi } from "vitest";
 import { buildTailorDbErdSchema, writeTailorDbErdSchemaToFile } from "./schema";
 import type {
   OperatorFieldConfig,
   ParsedField,
   TailorDBType,
-} from "@/parser/service/tailordb/types";
-import type { TailorDBNamespaceData } from "@/plugin/types";
+} from "#/parser/service/tailordb/types";
+import type { TailorDBNamespaceData } from "#/plugin/types";
 
 function createField(
   name: string,
@@ -288,11 +288,9 @@ describe("buildTailorDbErdSchema", () => {
 describe("writeTailorDbErdSchemaToFile", () => {
   let tempDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-erd-schema-"));
-  });
-
-  afterEach(() => {
+    await runTest();
     fs.rmSync(tempDir, { recursive: true, force: true });
     vi.restoreAllMocks();
   });

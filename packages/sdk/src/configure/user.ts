@@ -1,4 +1,4 @@
-import type { TailorUser } from "@/runtime/types";
+import type { TailorUser } from "#/runtime/types";
 
 /** Represents an unauthenticated user in the Tailor platform. */
 export const unauthenticatedTailorUser: TailorUser = {

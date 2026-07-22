@@ -1,7 +1,7 @@
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { defineAppCommand } from "@/cli/shared/command";
+import { defineAppCommand } from "#/cli/shared/command";
 
 export const upgradeCommand = defineAppCommand({
   name: "upgrade",
@@ -22,7 +22,7 @@ export const upgradeCommand = defineAppCommand({
     })
     .strict(),
   run: async (args) => {
-    const { initTelemetry } = await import("@/cli/telemetry");
+    const { initTelemetry } = await import("#/cli/telemetry/index");
     await initTelemetry();
 
     const { upgrade } = await import("./service");

@@ -1,52 +1,53 @@
 import * as path from "pathe";
-import { generatePluginExecutorFiles } from "@/cli/commands/generate/plugin-executor-generator";
-import { generatePluginTypeFiles } from "@/cli/commands/generate/plugin-type-generator";
-import { bundleAuthHooks } from "@/cli/services/auth/bundler";
-import { createAuthService, type AuthService } from "@/cli/services/auth/service";
-import { bundleExecutors } from "@/cli/services/executor/bundler";
-import { createExecutorService, type ExecutorService } from "@/cli/services/executor/service";
+import { generatePluginExecutorFiles } from "#/cli/commands/generate/plugin-executor-generator";
+import { generatePluginTypeFiles } from "#/cli/commands/generate/plugin-type-generator";
+import { bundleAuthHooks } from "#/cli/services/auth/bundler";
+import { createAuthService, type AuthService } from "#/cli/services/auth/service";
+import { bundleExecutors } from "#/cli/services/executor/bundler";
+import { createExecutorService, type ExecutorService } from "#/cli/services/executor/service";
 import {
   bundleHttpAdapters,
   type HttpAdapterBundleResult,
-} from "@/cli/services/http-adapter/bundler";
+} from "#/cli/services/http-adapter/bundler";
 import {
   createHttpAdapterService,
   type HttpAdapterService,
-} from "@/cli/services/http-adapter/service";
-import { bundleResolvers } from "@/cli/services/resolver/bundler";
-import { createResolverService, type ResolverService } from "@/cli/services/resolver/service";
-import { createTailorDBService, type TailorDBService } from "@/cli/services/tailordb/service";
-import { assertUniqueLocalTailorDBTypeNames } from "@/cli/services/tailordb/type-name-validation";
-import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "@/cli/services/workflow/bundler";
-import { createWorkflowService, type WorkflowService } from "@/cli/services/workflow/service";
-import { resolveBundleLogLevel } from "@/cli/shared/bundle-log-level";
-import { type LoadedConfig } from "@/cli/shared/config-loader";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { resolveInlineSourcemap } from "@/cli/shared/inline-sourcemap";
-import { logger } from "@/cli/shared/logger";
-import { buildTriggerContext } from "@/cli/shared/trigger-context";
+} from "#/cli/services/http-adapter/service";
+import { bundleResolvers } from "#/cli/services/resolver/bundler";
+import { createResolverService, type ResolverService } from "#/cli/services/resolver/service";
+import { createTailorDBService, type TailorDBService } from "#/cli/services/tailordb/service";
+import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
+import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
+import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
+import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
+import { type LoadedConfig } from "#/cli/shared/config-loader";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
+import { logger } from "#/cli/shared/logger";
+import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
+import { buildTriggerContext } from "#/cli/shared/trigger-context";
 import {
   type AppConfig,
   type ExecutorServiceInput,
   type HttpAdapterServiceInput,
   type ResolverServiceInput,
   type WorkflowServiceConfig,
-} from "@/configure/config/types";
-import { type AuthConfig } from "@/configure/services/auth/types";
-import { type IdPConfig } from "@/configure/services/idp/types";
-import { AIGatewaySchema } from "@/parser/service/aigateway";
-import { AuthConfigSchema } from "@/parser/service/auth";
-import { IdPSchema } from "@/parser/service/idp";
-import { SecretsSchema } from "@/parser/service/secrets";
-import { StaticWebsiteSchema } from "@/parser/service/staticwebsite";
-import { TailorDBServiceConfigSchema } from "@/parser/service/tailordb";
-import type { BundleCache } from "@/cli/cache/bundle-cache";
-import type { BundledScripts } from "@/cli/commands/deploy/function-registry-types";
-import type { TailorDBServiceInput } from "@/configure/services/tailordb/types";
-import type { PluginManager } from "@/plugin/manager";
-import type { AIGateway, AIGatewayInput } from "@/types/aigateway.generated";
-import type { IdP } from "@/types/idp.generated";
-import type { StaticWebsite, StaticWebsiteInput } from "@/types/staticwebsite.generated";
+} from "#/configure/config/types";
+import { type AuthConfig } from "#/configure/services/auth/types";
+import { type IdPConfig } from "#/configure/services/idp/types";
+import { AIGatewaySchema } from "#/parser/service/aigateway/index";
+import { AuthConfigSchema } from "#/parser/service/auth/index";
+import { IdPSchema } from "#/parser/service/idp/index";
+import { SecretsSchema } from "#/parser/service/secrets/index";
+import { StaticWebsiteSchema } from "#/parser/service/staticwebsite/index";
+import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/index";
+import type { BundleCache } from "#/cli/cache/bundle-cache";
+import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
+import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
+import type { PluginManager } from "#/plugin/manager";
+import type { AIGateway, AIGatewayInput } from "#/types/aigateway.generated";
+import type { IdP } from "#/types/idp.generated";
+import type { StaticWebsite, StaticWebsiteInput } from "#/types/staticwebsite.generated";
 
 export type SecretVault = {
   readonly vaultName: string;
@@ -96,6 +97,7 @@ type DefineTailorDBResult = {
 
 function defineTailorDB(
   config: TailorDBServiceInput | undefined,
+  baseDir: string,
   pluginManager?: PluginManager,
 ): DefineTailorDBResult {
   const tailorDBServices: TailorDBService[] = [];
@@ -116,6 +118,7 @@ function defineTailorDB(
         namespace,
         config: parsedConfig,
         pluginManager,
+        baseDir,
       });
       tailorDBServices.push(tailorDB);
     }
@@ -130,7 +133,10 @@ type DefineResolverResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
-function defineResolver(config: ResolverServiceInput | undefined): DefineResolverResult {
+function defineResolver(
+  config: ResolverServiceInput | undefined,
+  baseDir: string,
+): DefineResolverResult {
   const resolverServices: ResolverService[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
 
@@ -140,7 +146,7 @@ function defineResolver(config: ResolverServiceInput | undefined): DefineResolve
 
   for (const [namespace, serviceConfig] of Object.entries(config)) {
     if (!("external" in serviceConfig)) {
-      const resolverService = createResolverService(namespace, serviceConfig);
+      const resolverService = createResolverService(namespace, serviceConfig, baseDir);
       resolverServices.push(resolverService);
     }
     subgraphs.push({ Type: "pipeline", Name: namespace });
@@ -210,28 +216,33 @@ function defineAuth(
 
 function defineExecutor(
   config: ExecutorServiceInput | undefined,
+  baseDir: string,
   hasPluginExecutors: boolean,
 ): ExecutorService | undefined {
   if (!config && !hasPluginExecutors) {
     return undefined;
   }
-  return createExecutorService({ config: config ?? { files: [] } });
+  return createExecutorService({ config: config ?? { files: [] }, baseDir });
 }
 
-function defineWorkflow(config: WorkflowServiceConfig | undefined): WorkflowService | undefined {
+function defineWorkflow(
+  config: WorkflowServiceConfig | undefined,
+  baseDir: string,
+): WorkflowService | undefined {
   if (!config) {
     return undefined;
   }
-  return createWorkflowService({ config });
+  return createWorkflowService({ config, baseDir });
 }
 
 function defineHttpAdapterService(
   config: HttpAdapterServiceInput | undefined,
+  baseDir: string,
 ): HttpAdapterService | undefined {
   if (!config) {
     return undefined;
   }
-  return createHttpAdapterService({ config });
+  return createHttpAdapterService({ config, baseDir });
 }
 
 function defineStaticWebsites(
@@ -312,9 +323,13 @@ type DefineServicesResult = {
   ignoreNullishValues: boolean;
 };
 
-function defineServices(config: AppConfig, pluginManager?: PluginManager): DefineServicesResult {
-  const tailordbResult = defineTailorDB(config.db, pluginManager);
-  const resolverResult = defineResolver(config.resolver);
+function defineServices(
+  config: AppConfig,
+  baseDir: string,
+  pluginManager?: PluginManager,
+): DefineServicesResult {
+  const tailordbResult = defineTailorDB(config.db, baseDir, pluginManager);
+  const resolverResult = defineResolver(config.resolver, baseDir);
   const idpResult = defineIdp(config.idp);
   const authResult = defineAuth(
     config.auth,
@@ -402,11 +417,12 @@ export interface DefineApplicationParams {
  */
 export function defineApplication(params: DefineApplicationParams): Application {
   const { config, pluginManager } = params;
-  const services = defineServices(config, pluginManager);
+  const baseDir = path.dirname(config.path);
+  const services = defineServices(config, baseDir, pluginManager);
   // Plugin executors are not known at define-time; generate/apply flows handle them after type loading.
-  const executorService = defineExecutor(config.executor, false);
-  const workflowService = defineWorkflow(config.workflow);
-  const httpAdapterService = defineHttpAdapterService(config.httpAdapter);
+  const executorService = defineExecutor(config.executor, baseDir, false);
+  const workflowService = defineWorkflow(config.workflow, baseDir);
+  const httpAdapterService = defineHttpAdapterService(config.httpAdapter, baseDir);
 
   return buildApplication({
     config,
@@ -466,6 +482,7 @@ export async function loadApplication(
   params: DefineApplicationParams,
 ): Promise<LoadApplicationResult> {
   const { config, pluginManager, bundleCache } = params;
+  const baseDir = path.dirname(config.path);
 
   // 1. Define services (synchronous)
   const {
@@ -477,7 +494,7 @@ export async function loadApplication(
     aiGatewayServices,
     secrets,
     ignoreNullishValues,
-  } = defineServices(config, pluginManager);
+  } = defineServices(config, baseDir, pluginManager);
 
   // 2. Load TailorDB types and process namespace plugins
   for (const tailordb of tailordbResult.tailorDBServices) {
@@ -496,16 +513,16 @@ export async function loadApplication(
   );
 
   // 4. Determine final executorService (const, no reassignment)
-  const executorService = defineExecutor(config.executor, pluginExecutorFiles.length > 0);
+  const executorService = defineExecutor(config.executor, baseDir, pluginExecutorFiles.length > 0);
 
   // 5. Load and collect workflows
-  const workflowService = defineWorkflow(config.workflow);
+  const workflowService = defineWorkflow(config.workflow, baseDir);
   if (workflowService) {
     await workflowService.loadWorkflows();
   }
 
   // 6. Load and collect HTTP adapters
-  const httpAdapterService = defineHttpAdapterService(config.httpAdapter);
+  const httpAdapterService = defineHttpAdapterService(config.httpAdapter, baseDir);
   if (httpAdapterService) {
     await httpAdapterService.loadAdapters();
   }
@@ -514,6 +531,7 @@ export async function loadApplication(
   const triggerContext = await buildTriggerContext(
     config.workflow,
     authResult.authService?.config.name,
+    baseDir,
   );
 
   // 8. Resolve bundle settings
@@ -533,13 +551,14 @@ export async function loadApplication(
     const resolverBundles = await bundleResolvers(
       pipeline.namespace,
       pipeline.config,
+      baseDir,
       triggerContext,
       bundleCache,
       inlineSourcemap,
       bundleLogLevel,
     );
     for (const [name, code] of resolverBundles) {
-      bundledScripts.resolvers.set(name, code);
+      bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
     }
   }
 
@@ -552,6 +571,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      baseDir,
     });
   }
 
@@ -564,6 +584,7 @@ export async function loadApplication(
       mainJobNames,
       config.env ?? {},
       triggerContext,
+      baseDir,
       bundleCache,
       inlineSourcemap,
       bundleLogLevel,
@@ -581,6 +602,7 @@ export async function loadApplication(
         methods: a.methods,
         hasOutput: a.hasOutput,
       })),
+      baseDir,
       bundleCache,
       bundleLogLevel,
     );
@@ -598,6 +620,7 @@ export async function loadApplication(
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      baseDir,
     });
   }
 

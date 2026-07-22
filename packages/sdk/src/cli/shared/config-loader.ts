@@ -1,14 +1,14 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { AppConfigSchema } from "@/parser/app-config/schema";
-import { CodeGeneratorSchema, BaseGeneratorConfigSchema } from "@/parser/generator-config/schema";
-import { PluginConfigSchema } from "@/parser/plugin-config";
-import { builtinPlugins } from "@/plugin/builtin/registry";
+import { AppConfigSchema } from "#/parser/app-config/schema";
+import { CodeGeneratorSchema, BaseGeneratorConfigSchema } from "#/parser/generator-config/schema";
+import { PluginConfigSchema } from "#/parser/plugin-config/index";
+import { builtinPlugins } from "#/plugin/builtin/registry";
 import { loadConfigPath } from "./context";
 import { installCliTailordbStub } from "./mock";
-import type { AppConfig } from "@/configure/config/types";
-import type { Plugin } from "@/plugin/types";
+import type { AppConfig } from "#/configure/config/types";
+import type { Plugin } from "#/plugin/types";
 import type { z } from "zod";
 
 /**

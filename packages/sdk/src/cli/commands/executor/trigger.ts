@@ -1,16 +1,16 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { ExecutorTriggerType } from "@tailor-proto/tailor/v1/executor_resource_pb";
+import { ExecutorTriggerType } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
-import { durationArg, parseDuration, workspaceArgs } from "@/cli/shared/args";
-import { initOperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { logger, styles } from "@/cli/shared/logger";
-import { assertWritable } from "@/cli/shared/readonly-guard";
+import { durationArg, parseDuration, workspaceArgs } from "#/cli/shared/args";
+import { initOperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { logger, styles } from "#/cli/shared/logger";
+import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getExecutorWaitFailureMessage, watchExecutorJob } from "./jobs";
 import { executorTriggerTypeToString } from "./status";
-import type { IncomingWebhookTrigger, ScheduleTriggerInput } from "@/types/executor.generated";
+import type { IncomingWebhookTrigger, ScheduleTriggerInput } from "#/types/executor.generated";
 import type { JsonObject } from "@bufbuild/protobuf";
 
 /**

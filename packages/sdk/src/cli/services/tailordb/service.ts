@@ -1,25 +1,28 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
-import { loadFilesWithIgnores } from "@/cli/services/file-loader";
-import { logger, styles } from "@/cli/shared/logger";
-import { parseTypes, TailorDBTypeSchema } from "@/parser/service/tailordb";
-import { findOmittedPermitRules } from "@/parser/service/tailordb/permission";
-import { assertDefined } from "@/utils/assert";
-import { isSdkBranded } from "@/utils/brand";
+import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { logger, styles } from "#/cli/shared/logger";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import { parseTypes, TailorDBTypeSchema } from "#/parser/service/tailordb/index";
+import {
+  findMissingPermissionConfig,
+  findOmittedPermitRules,
+} from "#/parser/service/tailordb/permission";
+import { assertDefined } from "#/utils/assert";
+import { isSdkBranded } from "#/utils/brand";
 import { precompileTailorDBTypeScripts } from "./hooks-validate-bundler";
 import { formatTailorDBTypeSourceInfo } from "./type-name-validation";
 import type {
   TypeSourceInfo,
   TypeSourceInfoEntry,
   TailorDBType,
-} from "@/parser/service/tailordb/types";
-import type { PluginManager } from "@/plugin/manager";
-import type { PluginAttachment } from "@/plugin/types";
+} from "#/parser/service/tailordb/types";
+import type { PluginManager } from "#/plugin/manager";
+import type { PluginAttachment } from "#/plugin/types";
 import type {
   TailorDBServiceConfig,
   TailorDBTypeRaw as TailorDBTypeSchemaOutput,
-} from "@/types/tailordb.generated";
+} from "#/types/tailordb.generated";
 
 export type TailorDBService = {
   readonly namespace: string;
@@ -41,6 +44,8 @@ export interface CreateTailorDBServiceParams {
   config: TailorDBServiceConfig;
   /** Plugin manager for processing plugins */
   pluginManager?: PluginManager;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
 }
 
 /**
@@ -49,7 +54,7 @@ export interface CreateTailorDBServiceParams {
  * @returns A new TailorDBService instance
  */
 export function createTailorDBService(params: CreateTailorDBServiceParams): TailorDBService {
-  const { namespace, config, pluginManager } = params;
+  const { namespace, config, pluginManager, baseDir } = params;
   type TailorDBTypesByName = Record<string, TailorDBTypeSchemaOutput>;
   const createRawTypesByName = (): TailorDBTypesByName =>
     Object.create(null) as TailorDBTypesByName;
@@ -108,6 +113,45 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           );
         }
       }
+    }
+  };
+
+  // Require .permission()/.gqlPermission() to be set explicitly. TailorDB
+  // fails closed for record operations without a .permission(), producing an
+  // opaque "internal error" instead of a clear denial when only
+  // .gqlPermission() is set. Catching the omission here, rather than at
+  // deploy/insert time, surfaces it while the type is still local.
+  const validateRequiredPermissions = (): void => {
+    const errors: string[] = [];
+    for (const fileTypes of Object.values(rawTypes)) {
+      for (const [typeName, type] of Object.entries(fileTypes)) {
+        const effectiveGqlOperations =
+          type.metadata.settings?.gqlOperations ?? config.gqlOperations;
+        const { missingPermission, missingGqlPermission } = findMissingPermissionConfig(
+          type.metadata.permissions,
+          effectiveGqlOperations,
+        );
+        if (!missingPermission && !missingGqlPermission) {
+          continue;
+        }
+        const source = formatTailorDBTypeSourceInfo(typeSourceInfo[typeName]);
+        const location = source ? ` (${source})` : "";
+        if (missingPermission) {
+          errors.push(
+            `TailorDB type "${typeName}"${location} has no .permission() configured. TailorDB denies all record operations for types without permission; call .permission(...) to grant access explicitly.`,
+          );
+        }
+        if (missingGqlPermission) {
+          errors.push(
+            `TailorDB type "${typeName}"${location} has no .gqlPermission() configured, but GraphQL operations are enabled for it. Call .gqlPermission(...) to grant GraphQL access explicitly, or disable GraphQL exposure with .features({ gqlOperations: { create: false, update: false, delete: false, read: false } }).`,
+          );
+        }
+      }
+    }
+    if (errors.length > 0) {
+      throw new Error(
+        `TailorDB permission configuration errors in service "${namespace}":\n${errors.map((e) => `  - ${e}`).join("\n")}`,
+      );
     }
   };
 
@@ -237,14 +281,9 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
             return undefined;
           }
 
-          const typeFiles = [...new Set(loadFilesWithIgnores(config))];
+          const typeFiles = [...new Set(loadFilesWithIgnores(config, baseDir))];
 
-          let tsconfig: string | undefined;
-          try {
-            tsconfig = await resolveTSConfig();
-          } catch {
-            tsconfig = undefined;
-          }
+          const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
           logger.newline();
           logger.log(
@@ -260,6 +299,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
           }
           doParseTypes();
           warnOmittedPermit();
+          validateRequiredPermissions();
           return types;
         })();
       }
@@ -323,6 +363,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       // Re-parse types to include namespace plugin types
       if (hasGeneratedTypes || hadPreviousGeneratedTypes) {
         doParseTypes();
+        validateRequiredPermissions();
       }
     },
   };

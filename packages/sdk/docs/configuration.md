@@ -82,6 +82,8 @@ export default defineConfig({
 
 **ignores**: Glob patterns to exclude files. Optional. By default, `**/*.test.ts` and `**/*.spec.ts` are automatically ignored. If you explicitly specify `ignores`, the default patterns will not be applied. Use `ignores: []` to include all files including test files.
 
+**Pattern resolution**: `files` and `ignores` patterns are resolved relative to the directory of the `tailor.config.ts` file that declares them, not the directory you run the command from. This matters when deploying [multiple configs](./cli/application.md#deploy) together — each config's patterns only match files under its own directory. If a config's _relative_ patterns match nothing under its own directory, the SDK falls back to resolving them from the directory you ran the command from and logs a warning (this fallback doesn't apply to already-absolute patterns, since their resolution can't change). Update such patterns to be relative to the config's own directory — this fallback will be removed in v2.
+
 ### External Resources
 
 You can reference resources managed by Terraform or other SDK projects to include them in your application's subgraph. External resources are not deployed by this project but can be used for shared access across multiple applications.
@@ -118,8 +120,14 @@ Configure the Built-in IdP service using `defineIdp()`. See [IdP](./services/idp
 import { defineIdp } from "@tailor-platform/sdk";
 
 const idp = defineIdp("my-idp", {
-  authorization: "loggedIn",
   clients: ["my-client"],
+  permission: {
+    create: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    read: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    update: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    delete: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    sendPasswordResetEmail: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  },
 });
 
 export default defineConfig({
@@ -279,6 +287,30 @@ export default defineConfig({
 **files**: Glob patterns to match workflow files. Required.
 
 **ignores**: Glob patterns to exclude files. Optional.
+
+### Workflow Execution Policies
+
+Register workspace-scoped execution policies that workflow job functions reference at runtime for per-key concurrency control. See [Execution Policies](./services/workflow.md#execution-policies) in the Workflow guide for the declaration API.
+
+```typescript
+import { defineWorkflowExecutionPolicies } from "@tailor-platform/sdk";
+
+const executionPolicies = defineWorkflowExecutionPolicies((define) => ({
+  premium: define({ concurrencyPolicy: { maxConcurrentExecutions: 5 } }),
+  tenantApi: define({
+    name: "tenant-api",
+    matchType: "prefix",
+    concurrencyPolicy: { maxConcurrentExecutions: 3 },
+  }),
+}));
+
+export default defineConfig({
+  workflow: {
+    files: ["workflows/**/*.ts"],
+    executionPolicies,
+  },
+});
+```
 
 ### Plugins
 

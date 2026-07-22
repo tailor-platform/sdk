@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { runCodemods } from "./runner";
 import type { CodemodPackage } from "./types";
 
@@ -36,7 +36,8 @@ function makeCodemod(id: string, scriptPath: string, filePatterns?: string[]): C
 describe("runCodemods", () => {
   let tmpDir: string;
 
-  afterEach(async () => {
+  aroundEach(async (runTest) => {
+    await runTest();
     if (tmpDir) {
       await fs.promises.rm(tmpDir, { recursive: true, force: true });
     }
@@ -48,7 +49,7 @@ describe("runCodemods", () => {
     // Transform B: renames "midFunc" → "newFunc" (depends on A's output)
     const transformBPath = path.join(os.tmpdir(), "transform-b.ts");
 
-    beforeEach(async () => {
+    aroundEach(async (runTest) => {
       await fs.promises.writeFile(
         transformAPath,
         `export default function transformA(source) {
@@ -65,9 +66,7 @@ describe("runCodemods", () => {
         }`,
         "utf-8",
       );
-    });
-
-    afterEach(async () => {
+      await runTest();
       await fs.promises.rm(transformAPath, { force: true });
       await fs.promises.rm(transformBPath, { force: true });
     });
@@ -165,7 +164,7 @@ describe("runCodemods", () => {
   describe("filePatterns filtering", () => {
     const transformPath = path.join(os.tmpdir(), "transform-upper.ts");
 
-    beforeEach(async () => {
+    aroundEach(async (runTest) => {
       await fs.promises.writeFile(
         transformPath,
         `export default function transform(source) {
@@ -173,9 +172,7 @@ describe("runCodemods", () => {
         }`,
         "utf-8",
       );
-    });
-
-    afterEach(async () => {
+      await runTest();
       await fs.promises.rm(transformPath, { force: true });
     });
 

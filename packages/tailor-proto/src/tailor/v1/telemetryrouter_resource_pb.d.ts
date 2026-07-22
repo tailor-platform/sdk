@@ -13,9 +13,9 @@ import type { SecretValue } from "./secret_manager_resource_pb";
 export declare const file_tailor_v1_telemetryrouter_resource: GenFile;
 
 /**
- * @generated from message tailor.v1.TelemetryExport
+ * @generated from message tailor.v1.OTLPExporter
  */
-export declare type TelemetryExport = Message<"tailor.v1.TelemetryExport"> & {
+export declare type OTLPExporter = Message<"tailor.v1.OTLPExporter"> & {
   /**
    * @generated from field: string name = 1;
    */
@@ -32,9 +32,9 @@ export declare type TelemetryExport = Message<"tailor.v1.TelemetryExport"> & {
   endpoint: string;
 
   /**
-   * @generated from field: tailor.v1.TelemetryExportProtocol protocol = 4;
+   * @generated from field: tailor.v1.OTLPExporterProtocol protocol = 4;
    */
-  protocol: TelemetryExportProtocol;
+  protocol: OTLPExporterProtocol;
 
   /**
    * @generated from field: map<string, string> headers = 5;
@@ -42,9 +42,9 @@ export declare type TelemetryExport = Message<"tailor.v1.TelemetryExport"> & {
   headers: { [key: string]: string };
 
   /**
-   * @generated from field: tailor.v1.TelemetryExportAuthConfig auth = 6;
+   * @generated from field: tailor.v1.OTLPExporterAuthConfig auth = 6;
    */
-  auth?: TelemetryExportAuthConfig;
+  auth?: OTLPExporterAuthConfig;
 
   /**
    * @generated from field: tailor.v1.TracesConfig traces = 7;
@@ -73,10 +73,10 @@ export declare type TelemetryExport = Message<"tailor.v1.TelemetryExport"> & {
 };
 
 /**
- * Describes the message tailor.v1.TelemetryExport.
- * Use `create(TelemetryExportSchema)` to create a new message.
+ * Describes the message tailor.v1.OTLPExporter.
+ * Use `create(OTLPExporterSchema)` to create a new message.
  */
-export declare const TelemetryExportSchema: GenMessage<TelemetryExport>;
+export declare const OTLPExporterSchema: GenMessage<OTLPExporter>;
 
 /**
  * @generated from message tailor.v1.TracesConfig
@@ -127,37 +127,37 @@ export declare type LogsConfig = Message<"tailor.v1.LogsConfig"> & {
 export declare const LogsConfigSchema: GenMessage<LogsConfig>;
 
 /**
- * @generated from message tailor.v1.TelemetryExportAuthConfig
+ * @generated from message tailor.v1.OTLPExporterAuthConfig
  */
-export declare type TelemetryExportAuthConfig = Message<"tailor.v1.TelemetryExportAuthConfig"> & {
+export declare type OTLPExporterAuthConfig = Message<"tailor.v1.OTLPExporterAuthConfig"> & {
   /**
-   * @generated from oneof tailor.v1.TelemetryExportAuthConfig.method
+   * @generated from oneof tailor.v1.OTLPExporterAuthConfig.method
    */
   method: {
     /**
-     * @generated from field: tailor.v1.TelemetryExportApiKeyAuth api_key = 1;
+     * @generated from field: tailor.v1.OTLPExporterApiKeyAuth api_key = 1;
      */
-    value: TelemetryExportApiKeyAuth;
+    value: OTLPExporterApiKeyAuth;
     case: "apiKey";
   } | {
     /**
-     * @generated from field: tailor.v1.TelemetryExportBearerTokenAuth bearer_token = 2;
+     * @generated from field: tailor.v1.OTLPExporterBearerTokenAuth bearer_token = 2;
      */
-    value: TelemetryExportBearerTokenAuth;
+    value: OTLPExporterBearerTokenAuth;
     case: "bearerToken";
   } | { case: undefined; value?: undefined };
 };
 
 /**
- * Describes the message tailor.v1.TelemetryExportAuthConfig.
- * Use `create(TelemetryExportAuthConfigSchema)` to create a new message.
+ * Describes the message tailor.v1.OTLPExporterAuthConfig.
+ * Use `create(OTLPExporterAuthConfigSchema)` to create a new message.
  */
-export declare const TelemetryExportAuthConfigSchema: GenMessage<TelemetryExportAuthConfig>;
+export declare const OTLPExporterAuthConfigSchema: GenMessage<OTLPExporterAuthConfig>;
 
 /**
- * @generated from message tailor.v1.TelemetryExportApiKeyAuth
+ * @generated from message tailor.v1.OTLPExporterApiKeyAuth
  */
-export declare type TelemetryExportApiKeyAuth = Message<"tailor.v1.TelemetryExportApiKeyAuth"> & {
+export declare type OTLPExporterApiKeyAuth = Message<"tailor.v1.OTLPExporterApiKeyAuth"> & {
   /**
    * @generated from field: string header_name = 1;
    */
@@ -170,15 +170,15 @@ export declare type TelemetryExportApiKeyAuth = Message<"tailor.v1.TelemetryExpo
 };
 
 /**
- * Describes the message tailor.v1.TelemetryExportApiKeyAuth.
- * Use `create(TelemetryExportApiKeyAuthSchema)` to create a new message.
+ * Describes the message tailor.v1.OTLPExporterApiKeyAuth.
+ * Use `create(OTLPExporterApiKeyAuthSchema)` to create a new message.
  */
-export declare const TelemetryExportApiKeyAuthSchema: GenMessage<TelemetryExportApiKeyAuth>;
+export declare const OTLPExporterApiKeyAuthSchema: GenMessage<OTLPExporterApiKeyAuth>;
 
 /**
- * @generated from message tailor.v1.TelemetryExportBearerTokenAuth
+ * @generated from message tailor.v1.OTLPExporterBearerTokenAuth
  */
-export declare type TelemetryExportBearerTokenAuth = Message<"tailor.v1.TelemetryExportBearerTokenAuth"> & {
+export declare type OTLPExporterBearerTokenAuth = Message<"tailor.v1.OTLPExporterBearerTokenAuth"> & {
   /**
    * @generated from field: tailor.v1.SecretValue secret_value = 1;
    */
@@ -186,10 +186,10 @@ export declare type TelemetryExportBearerTokenAuth = Message<"tailor.v1.Telemetr
 };
 
 /**
- * Describes the message tailor.v1.TelemetryExportBearerTokenAuth.
- * Use `create(TelemetryExportBearerTokenAuthSchema)` to create a new message.
+ * Describes the message tailor.v1.OTLPExporterBearerTokenAuth.
+ * Use `create(OTLPExporterBearerTokenAuthSchema)` to create a new message.
  */
-export declare const TelemetryExportBearerTokenAuthSchema: GenMessage<TelemetryExportBearerTokenAuth>;
+export declare const OTLPExporterBearerTokenAuthSchema: GenMessage<OTLPExporterBearerTokenAuth>;
 
 /**
  * ResourceAttributesConfig is a workspace-level singleton that controls
@@ -236,27 +236,27 @@ export declare type ResourceAttributesConfig = Message<"tailor.v1.ResourceAttrib
 export declare const ResourceAttributesConfigSchema: GenMessage<ResourceAttributesConfig>;
 
 /**
- * @generated from enum tailor.v1.TelemetryExportProtocol
+ * @generated from enum tailor.v1.OTLPExporterProtocol
  */
-export enum TelemetryExportProtocol {
+export enum OTLPExporterProtocol {
   /**
-   * @generated from enum value: TELEMETRY_EXPORT_PROTOCOL_UNSPECIFIED = 0;
+   * @generated from enum value: OTLP_EXPORTER_PROTOCOL_UNSPECIFIED = 0;
    */
-  UNSPECIFIED = 0,
+  OTLP_EXPORTER_PROTOCOL_UNSPECIFIED = 0,
 
   /**
-   * @generated from enum value: TELEMETRY_EXPORT_PROTOCOL_GRPC = 1;
+   * @generated from enum value: OTLP_EXPORTER_PROTOCOL_GRPC = 1;
    */
-  GRPC = 1,
+  OTLP_EXPORTER_PROTOCOL_GRPC = 1,
 
   /**
-   * @generated from enum value: TELEMETRY_EXPORT_PROTOCOL_HTTP = 2;
+   * @generated from enum value: OTLP_EXPORTER_PROTOCOL_HTTP = 2;
    */
-  HTTP = 2,
+  OTLP_EXPORTER_PROTOCOL_HTTP = 2,
 }
 
 /**
- * Describes the enum tailor.v1.TelemetryExportProtocol.
+ * Describes the enum tailor.v1.OTLPExporterProtocol.
  */
-export declare const TelemetryExportProtocolSchema: GenEnum<TelemetryExportProtocol>;
+export declare const OTLPExporterProtocolSchema: GenEnum<OTLPExporterProtocol>;
 

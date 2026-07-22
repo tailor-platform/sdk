@@ -1,20 +1,20 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
-import { FunctionExecution_Type } from "@tailor-proto/tailor/v1/function_resource_pb";
+import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { arg } from "politty";
 import { z } from "zod";
-import { pagedLogArgs, toPageDirection, workspaceArgs } from "@/cli/shared/args";
-import { fetchPaged, initOperatorClient, type OperatorClient } from "@/cli/shared/client";
-import { defineAppCommand } from "@/cli/shared/command";
-import { loadAccessToken, loadWorkspaceId } from "@/cli/shared/context";
-import { formatKeyValueTable } from "@/cli/shared/format";
-import { functionExecutionStatusToString } from "@/cli/shared/function-execution";
+import { pagedLogArgs, toPageDirection, workspaceArgs } from "#/cli/shared/args";
+import { fetchPaged, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { defineAppCommand } from "#/cli/shared/command";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { formatKeyValueTable } from "#/cli/shared/format";
+import { functionExecutionStatusToString } from "#/cli/shared/function-execution";
 import {
   downloadFunctionScript,
   scriptNameToRegistryName,
-} from "@/cli/shared/function-script-download";
-import { logger, styles } from "@/cli/shared/logger";
-import { formatErrorWithSourcemap } from "@/cli/shared/stack-trace";
-import type { FunctionExecution } from "@tailor-proto/tailor/v1/function_resource_pb";
+} from "#/cli/shared/function-script-download";
+import { logger, styles } from "#/cli/shared/logger";
+import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
+import type { FunctionExecution } from "@tailor-platform/tailor-proto/function_resource_pb";
 
 interface FunctionExecutionListInfo {
   id: string;

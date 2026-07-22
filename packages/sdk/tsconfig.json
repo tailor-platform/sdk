@@ -3,13 +3,11 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./",
-    "verbatimModuleSyntax": true,
     "noUncheckedIndexedAccess": true,
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo",
     "paths": {
-      "@/*": ["./src/*"],
-      "@tailor-proto/*": ["../tailor-proto/src/*"]
+      "@tailor-platform/sdk": ["./src/configure/index.ts"]
     }
   },
   "include": [
@@ -17,6 +15,7 @@
     "./scripts/**/*.ts",
     "./eslint-rules/**/*.ts",
     "./e2e/**/*.ts",
+    "./knip.ts",
     "./tsdown.config.ts",
     "./vitest.config.ts",
     "./zinfer.config.ts"

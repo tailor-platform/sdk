@@ -1,26 +1,26 @@
-import { WorkflowExecution_Status } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi } from "vitest";
-import { initOperatorClient } from "@/cli/shared/client";
-import { loadConfig } from "@/cli/shared/config-loader";
-import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "@/cli/shared/context";
-import { captureStderr, captureStdout } from "@/cli/shared/test-helpers/capture-output";
-import { jsonMode } from "@/cli/shared/test-helpers/json-mode";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { initOperatorClient } from "#/cli/shared/client";
+import { loadConfig } from "#/cli/shared/config-loader";
+import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/shared/context";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resolveWorkflow } from "./get";
 import { startCommand, startWorkflow } from "./start";
-import type { WorkflowExecution } from "@tailor-proto/tailor/v1/workflow_resource_pb";
+import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
-vi.mock("@/cli/shared/context", () => ({
+vi.mock("#/cli/shared/context", () => ({
   loadAccessToken: vi.fn(),
   loadWorkspaceId: vi.fn(),
   loadMachineUserName: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", () => ({
   initOperatorClient: vi.fn(),
 }));
 
-vi.mock("@/cli/shared/config-loader", () => ({
+vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
 
@@ -33,7 +33,7 @@ describe("startWorkflow runtime overload", () => {
   let getWorkflowExecutionMock: ReturnType<typeof vi.fn>;
   let testStartWorkflowMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
 
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
@@ -73,6 +73,7 @@ describe("startWorkflow runtime overload", () => {
         id: `id:${workflowName}`,
       } as never;
     });
+    await runTest();
   });
 
   test("prefers legacy shape when name exists even if workflow key is present", async () => {
@@ -155,6 +156,7 @@ describe("startWorkflow runtime overload", () => {
 
     expect(loadMachineUserName).toHaveBeenCalledWith({
       machineUser: undefined,
+      machineUserSource: undefined,
       profile: undefined,
     });
     expect(testStartWorkflowMock).toHaveBeenCalledWith(
@@ -169,6 +171,7 @@ describe("startWorkflow runtime overload", () => {
 
     expect(loadMachineUserName).toHaveBeenCalledWith({
       machineUser: "flag-bot",
+      machineUserSource: undefined,
       profile: undefined,
     });
   });

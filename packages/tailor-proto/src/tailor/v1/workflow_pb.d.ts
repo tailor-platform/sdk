@@ -4,7 +4,7 @@
 
 import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import type { Message } from "@bufbuild/protobuf";
-import type { ConcurrencyPolicy, RetryPolicy, Workflow, WorkflowExecution, WorkflowJobFunction, WorkflowJobFunctionExecutionPolicy } from "./workflow_resource_pb";
+import type { ConcurrencyPolicy, RetryPolicy, Workflow, WorkflowExecution, WorkflowJobFunction, WorkflowJobFunctionExecutionPolicy, WorkflowJobFunctionSummary } from "./workflow_resource_pb";
 import type { Filter, PageDirection } from "./resource_pb";
 import type { AuthInvoker } from "./auth_resource_pb";
 
@@ -532,9 +532,16 @@ export declare const ListWorkflowJobFunctionsRequestSchema: GenMessage<ListWorkf
  */
 export declare type ListWorkflowJobFunctionsResponse = Message<"tailor.v1.ListWorkflowJobFunctionsResponse"> & {
   /**
-   * @generated from field: repeated tailor.v1.WorkflowJobFunction job_functions = 1;
+   * Returns the lightweight WorkflowJobFunctionSummary projection (no script /
+   * script_ref) so workspace-wide listings do not have to materialise multi-MB
+   * payloads. Field tags match WorkflowJobFunction, so the change is wire
+   * compatible for clients that only read id / name / version / created_at.
+   * Use GetWorkflowJobFunction / GetWorkflowJobFunctionByName to fetch the
+   * script body for a specific job function.
+   *
+   * @generated from field: repeated tailor.v1.WorkflowJobFunctionSummary job_functions = 1;
    */
-  jobFunctions: WorkflowJobFunction[];
+  jobFunctions: WorkflowJobFunctionSummary[];
 
   /**
    * @generated from field: string next_page_token = 2;
@@ -751,6 +758,10 @@ export declare type CreateWorkflowJobFunctionExecutionPolicyRequest = Message<"t
   workspaceId: string;
 
   /**
+   * 2..64 chars, starts with [a-z0-9], middle from [a-z0-9_:.-], last char
+   * is [a-z0-9] or `*` (trailing-wildcard form). Platform does not assign
+   * meaning to the prefix's tail character; the caller decides.
+   *
    * @generated from field: string execution_policy_key = 2;
    */
   executionPolicyKey: string;
@@ -759,6 +770,11 @@ export declare type CreateWorkflowJobFunctionExecutionPolicyRequest = Message<"t
    * @generated from field: optional tailor.v1.ConcurrencyPolicy concurrency_policy = 3;
    */
   concurrencyPolicy?: ConcurrencyPolicy;
+
+  /**
+   * @generated from field: string execution_policy_name = 4;
+   */
+  executionPolicyName: string;
 };
 
 /**
@@ -793,9 +809,9 @@ export declare type UpdateWorkflowJobFunctionExecutionPolicyRequest = Message<"t
   workspaceId: string;
 
   /**
-   * @generated from field: string execution_policy_key = 2;
+   * @generated from field: string execution_policy_name = 2;
    */
-  executionPolicyKey: string;
+  executionPolicyName: string;
 
   /**
    * @generated from field: optional tailor.v1.ConcurrencyPolicy concurrency_policy = 3;
@@ -835,9 +851,9 @@ export declare type DeleteWorkflowJobFunctionExecutionPolicyRequest = Message<"t
   workspaceId: string;
 
   /**
-   * @generated from field: string id = 2;
+   * @generated from field: string execution_policy_name = 2;
    */
-  id: string;
+  executionPolicyName: string;
 };
 
 /**
@@ -868,9 +884,9 @@ export declare type GetWorkflowJobFunctionExecutionPolicyRequest = Message<"tail
   workspaceId: string;
 
   /**
-   * @generated from field: string id = 2;
+   * @generated from field: string execution_policy_name = 2;
    */
-  id: string;
+  executionPolicyName: string;
 };
 
 /**
@@ -905,6 +921,11 @@ export declare type GetWorkflowJobFunctionExecutionPolicyByKeyRequest = Message<
   workspaceId: string;
 
   /**
+   * Looks up a policy by its declared key (exact or wildcard form). Pass the
+   * wildcard pattern literal (e.g. `tenant-api*`) to fetch a wildcard
+   * policy; concrete keys do not resolve here, the dispatch path uses
+   * prefix resolution instead.
+   *
    * @generated from field: string execution_policy_key = 2;
    */
   executionPolicyKey: string;

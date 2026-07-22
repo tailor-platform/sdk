@@ -42,14 +42,30 @@ import type {
   ListUsersOptions as IdpListUsersOptions,
   ListUsersResponse as IdpListUsersResponse,
   SendPasswordResetEmailInput as IdpSendPasswordResetEmailInput,
+  UnenrollMfaInput as IdpUnenrollMfaInput,
   UpdateUserInput as IdpUpdateUserInput,
   User as IdpUser,
   UserQuery as IdpUserQuery,
 } from "./idp";
 import type {
   AuthInvoker as WorkflowAuthInvoker,
+  StartWorkflowOptions as WorkflowStartWorkflowOptions,
   TriggerWorkflowOptions as WorkflowTriggerWorkflowOptions,
 } from "./workflow";
+
+type TailorIdpClientConfig = IdpClientConfig;
+type TailorIdpCreateUserInput = IdpCreateUserInput;
+type TailorIdpClientInstance = IdpClientInstance;
+type TailorIdpListUsersOptions = IdpListUsersOptions;
+type TailorIdpListUsersResponse = IdpListUsersResponse;
+type TailorIdpSendPasswordResetEmailInput = IdpSendPasswordResetEmailInput;
+type TailorIdpUnenrollMfaInput = IdpUnenrollMfaInput;
+type TailorIdpUpdateUserInput = IdpUpdateUserInput;
+type TailorIdpUser = IdpUser;
+type TailorIdpUserQuery = IdpUserQuery;
+type TailorWorkflowAuthInvoker = WorkflowAuthInvoker;
+type TailorWorkflowTriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
+type TailorWorkflowStartWorkflowOptions = WorkflowStartWorkflowOptions;
 
 declare global {
   namespace tailordb {
@@ -101,20 +117,23 @@ declare global {
     }
 
     namespace idp {
-      type Client = IdpClientInstance;
-      type ClientConfig = IdpClientConfig;
-      type User = IdpUser;
-      type UserQuery = IdpUserQuery;
-      type ListUsersOptions = IdpListUsersOptions;
-      type ListUsersResponse = IdpListUsersResponse;
-      type CreateUserInput = IdpCreateUserInput;
-      type UpdateUserInput = IdpUpdateUserInput;
-      type SendPasswordResetEmailInput = IdpSendPasswordResetEmailInput;
+      type Client = TailorIdpClientInstance;
+      type ClientConfig = TailorIdpClientConfig;
+      type User = TailorIdpUser;
+      type UserQuery = TailorIdpUserQuery;
+      type ListUsersOptions = TailorIdpListUsersOptions;
+      type ListUsersResponse = TailorIdpListUsersResponse;
+      type CreateUserInput = TailorIdpCreateUserInput;
+      type UpdateUserInput = TailorIdpUpdateUserInput;
+      type SendPasswordResetEmailInput = TailorIdpSendPasswordResetEmailInput;
+      type UnenrollMfaInput = TailorIdpUnenrollMfaInput;
     }
 
     namespace workflow {
-      type AuthInvoker = WorkflowAuthInvoker;
-      type TriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
+      type AuthInvoker = TailorWorkflowAuthInvoker;
+      type StartWorkflowOptions = TailorWorkflowStartWorkflowOptions;
+      /** @deprecated Use `StartWorkflowOptions` instead. */
+      type TriggerWorkflowOptions = TailorWorkflowTriggerWorkflowOptions;
     }
 
     namespace context {

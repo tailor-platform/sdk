@@ -1,8 +1,8 @@
 import { arg } from "politty";
 import { z } from "zod";
-import { parseDuration, workspaceArgs } from "@/cli/shared/args";
-import { defineAppCommand } from "@/cli/shared/command";
-import { logger } from "@/cli/shared/logger";
+import { parseDuration, workspaceArgs } from "#/cli/shared/args";
+import { defineAppCommand } from "#/cli/shared/command";
+import { logger } from "#/cli/shared/logger";
 import { workflowWaitControlArgs } from "./args";
 import { getWorkflowExecution, printExecutionWithLogs } from "./executions";
 import {

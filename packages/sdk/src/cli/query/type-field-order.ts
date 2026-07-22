@@ -1,7 +1,8 @@
 import { pathToFileURL } from "node:url";
-import { loadFilesWithIgnores } from "@/cli/services/file-loader";
-import { TailorDBTypeSchema } from "@/parser/service/tailordb";
-import type { LoadedConfig } from "@/cli/shared/config-loader";
+import * as path from "pathe";
+import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
+import type { LoadedConfig } from "#/cli/shared/config-loader";
 
 type TypeFieldOrderMap = Map<string, string[]>;
 
@@ -22,7 +23,8 @@ export async function loadTypeFieldOrder(
     return fieldOrder;
   }
 
-  const typeFiles = loadFilesWithIgnores(dbConfig);
+  const baseDir = path.dirname(config.path);
+  const typeFiles = loadFilesWithIgnores(dbConfig, baseDir);
 
   await Promise.all(
     typeFiles.map(async (typeFile) => {

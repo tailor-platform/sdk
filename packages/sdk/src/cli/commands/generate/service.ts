@@ -9,38 +9,38 @@ import {
   type GeneratorResult,
   type DependencyKind,
   hasDependency,
-} from "@/cli/commands/generate/types";
+} from "#/cli/commands/generate/types";
 import {
   defineApplication,
   generatePluginFilesIfNeeded,
   type Application,
-} from "@/cli/services/application";
-import { createExecutorService } from "@/cli/services/executor/service";
-import { assertUniqueLocalTailorDBTypeNames } from "@/cli/services/tailordb/type-name-validation";
-import { loadConfig, type LoadedConfig, type Generator } from "@/cli/shared/config-loader";
-import { getDistDir } from "@/cli/shared/dist-dir";
-import { logger, styles } from "@/cli/shared/logger";
-import { generateUserTypes } from "@/cli/shared/type-generator";
-import { withSpan } from "@/cli/telemetry";
-import { PluginManager } from "@/plugin/manager";
-import { assertDefined } from "@/utils/assert";
+} from "#/cli/services/application";
+import { createExecutorService } from "#/cli/services/executor/service";
+import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
+import { loadConfig, type LoadedConfig, type Generator } from "#/cli/shared/config-loader";
+import { getDistDir } from "#/cli/shared/dist-dir";
+import { logger, styles } from "#/cli/shared/logger";
+import { generateUserTypes } from "#/cli/shared/type-generator";
+import { withSpan } from "#/cli/telemetry/index";
+import { PluginManager } from "#/plugin/manager";
+import { assertDefined } from "#/utils/assert";
 import { createDependencyWatcher, type DependencyWatcher } from "./watch";
-import type { GenerateOptions } from "./options";
 import type {
   TypeSourceInfo,
   TypeSourceInfoEntry,
   TailorDBType,
-} from "@/parser/service/tailordb/types";
+} from "#/parser/service/tailordb/types";
 import type {
   TailorDBNamespaceData,
   ResolverNamespaceData,
   Plugin,
   PluginAttachment,
-} from "@/plugin/types";
-import type { Executor } from "@/types/executor.generated";
-import type { Resolver } from "@/types/resolver.generated";
+} from "#/plugin/types";
+import type { Executor } from "#/types/executor.generated";
+import type { Resolver } from "#/types/resolver.generated";
+import type { GenerateOptions } from "./options";
 
-export type { CodeGenerator } from "@/cli/commands/generate/types";
+export type { CodeGenerator } from "#/cli/commands/generate/types";
 
 type TypeInfo = {
   types: Record<string, TailorDBType>;
@@ -696,7 +696,7 @@ export function createGenerationManager(params: {
           const executorService =
             app.executorService ??
             (pluginExecutorFiles.length > 0
-              ? createExecutorService({ config: { files: [] } })
+              ? createExecutorService({ config: { files: [] }, baseDir: path.dirname(config.path) })
               : undefined);
           return { pluginExecutorFiles, executorService };
         },
@@ -804,8 +804,13 @@ export function createGenerationManager(params: {
         restartWatchProcess();
       });
 
+      // Watch groups' relative patterns resolve against the config file's own
+      // directory, not process.cwd() — matching how services/bundlers resolve
+      // `files` patterns, so watch mode stays correct in multi-config setups.
+      const configDir = path.dirname(config.path);
+
       // Watch config file
-      await watcher.addWatchGroup("Config", [config.path]);
+      await watcher.addWatchGroup("Config", [config.path], configDir);
 
       // Watch application services
       const app = application;
@@ -813,7 +818,7 @@ export function createGenerationManager(params: {
       // Watch TailorDB services
       for (const db of app.tailorDBServices) {
         const dbNamespace = db.namespace;
-        await watcher.addWatchGroup(`TailorDB/${dbNamespace}`, db.config.files);
+        await watcher.addWatchGroup(`TailorDB/${dbNamespace}`, db.config.files, configDir);
       }
 
       // Watch Resolver services
@@ -822,6 +827,7 @@ export function createGenerationManager(params: {
         await watcher.addWatchGroup(
           `Resolver/${resolverNamespace}`,
           resolverService["config"].files,
+          configDir,
         );
       }
 

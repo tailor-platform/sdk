@@ -25,40 +25,20 @@ function getInvalidOperandIssue(gql: unknown) {
 }
 
 describe("TailorDBTypeSchema gqlPermission validation", () => {
-  test("should reject record operand in gqlPermission", () => {
+  test.each([
+    ["record", "ownerId", "=", "123", "read"],
+    ["oldRecord", "status", "=", "active", "update"],
+    ["newRecord", "status", "=", "active", "create"],
+  ] as const)("should reject %s operand in gqlPermission", (operand, field, op, value, action) => {
     const issue = getInvalidOperandIssue([
       {
-        conditions: [[{ record: "ownerId" }, "=", "123"]],
-        actions: ["read"],
+        conditions: [[{ [operand]: field }, op, value]],
+        actions: [action],
         permit: true,
       },
     ]);
     expect(issue).toBeDefined();
-    expect(issue?.message).toContain('"record" operand is not supported in gqlPermission');
-  });
-
-  test("should reject oldRecord operand in gqlPermission", () => {
-    const issue = getInvalidOperandIssue([
-      {
-        conditions: [[{ oldRecord: "status" }, "=", "active"]],
-        actions: ["update"],
-        permit: true,
-      },
-    ]);
-    expect(issue).toBeDefined();
-    expect(issue?.message).toContain('"oldRecord" operand is not supported in gqlPermission');
-  });
-
-  test("should reject newRecord operand in gqlPermission", () => {
-    const issue = getInvalidOperandIssue([
-      {
-        conditions: [[{ newRecord: "status" }, "=", "active"]],
-        actions: ["create"],
-        permit: true,
-      },
-    ]);
-    expect(issue).toBeDefined();
-    expect(issue?.message).toContain('"newRecord" operand is not supported in gqlPermission');
+    expect(issue?.message).toContain(`"${operand}" operand is not supported in gqlPermission`);
   });
 
   test("should allow user operand in gqlPermission", () => {

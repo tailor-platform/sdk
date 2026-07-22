@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "checks": [
+    {
+      "id": "profile-domain-created",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "profile|creator",
+      "flags": "i",
+      "description": "source includes the creator profile domain"
+    },
+    {
+      "id": "handle-constraint-declared",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "handle|unique|index|lookup",
+      "flags": "i",
+      "description": "source declares lookup or uniqueness behavior for the public handle"
+    },
+    {
+      "id": "uploaded-avatar-asset-declared",
+      "kind": "content-match",
+      "glob": "**/*.ts",
+      "pattern": "avatar|portrait|asset|upload|file",
+      "flags": "i",
+      "description": "source declares the uploaded avatar asset"
+    }
+  ]
+}

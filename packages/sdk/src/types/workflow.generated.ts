@@ -28,30 +28,36 @@ export type ConcurrencyPolicy = {
 };
 export type ConcurrencyPolicyInput = ConcurrencyPolicy;
 
+/**
+ * Workspace-unique execution policy name embedded in the resource TRN
+ */
+export type ExecutionPolicyName = string;
+export type ExecutionPolicyNameInput = ExecutionPolicyName;
+
+/**
+ * Execution policy key passed to startJobFunction's (or its frozen alias triggerJobFunction's) executionPolicyKey option
+ */
+export type ExecutionPolicyKey = string;
+export type ExecutionPolicyKeyInput = ExecutionPolicyKey;
+
+export type WorkflowJobFunctionExecutionPolicy = {
+  /** Workspace-unique execution policy name embedded in the resource TRN */
+  name: ExecutionPolicyName;
+  /** Execution policy key passed to startJobFunction's (or its frozen alias triggerJobFunction's) executionPolicyKey option */
+  key: ExecutionPolicyKey;
+  /** Optional per-key concurrency cap for job function dispatches matching this policy */
+  concurrencyPolicy?: ConcurrencyPolicy;
+};
+export type WorkflowJobFunctionExecutionPolicyInput = WorkflowJobFunctionExecutionPolicy;
+
 export type Workflow = {
   /** Workflow name */
   name: string;
   /** Main job that starts the workflow */
-  mainJob: {
-    /** Workflow name */
-    name: string;
-    trigger: Function;
-    body: Function;
-  };
+  mainJob: WorkflowJob;
   /** Retry policy for the workflow */
-  retryPolicy?:
-    | {
-        maxRetries: number;
-        initialBackoff: `${number}ms` | `${number}s` | `${number}m`;
-        maxBackoff: `${number}ms` | `${number}s` | `${number}m`;
-        backoffMultiplier: number;
-      }
-    | undefined;
+  retryPolicy?: RetryPolicy;
   /** Concurrency policy for the workflow */
-  concurrencyPolicy?:
-    | {
-        maxConcurrentExecutions: number;
-      }
-    | undefined;
+  concurrencyPolicy?: ConcurrencyPolicy;
 };
 export type WorkflowInput = Workflow;

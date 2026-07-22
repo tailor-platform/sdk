@@ -16,6 +16,8 @@ import type {
   TypeAddedChange,
   TypeRemovedChange,
   TypeModifiedChange,
+  TypeSettingsModifiedChange,
+  SnapshotTypeSettingsState,
   FieldAddedChange,
   FieldRemovedChange,
   FieldModifiedChange,
@@ -51,6 +53,28 @@ import type {
   SnapshotPermissionOperand,
   SnapshotPermissionCondition,
 } from "./snapshot-types";
+
+function snapshotRecordSchema<T>(valueSchema: z.ZodType<T>): z.ZodType<Record<string, T>> {
+  return z
+    .custom<Record<string, unknown>>(
+      (value) => typeof value === "object" && value !== null && !Array.isArray(value),
+      { message: "Expected record" },
+    )
+    .transform((value, ctx) => {
+      const record = Object.create(null) as Record<string, T>;
+      for (const key of Object.keys(value)) {
+        const result = valueSchema.safeParse(value[key]);
+        if (!result.success) {
+          for (const issue of result.error.issues) {
+            ctx.addIssue({ ...issue, path: [key, ...issue.path] });
+          }
+          continue;
+        }
+        record[key] = result.data;
+      }
+      return record;
+    }) as z.ZodType<Record<string, T>>;
+}
 
 // ============================================================================
 // Snapshot Leaf Types
@@ -100,7 +124,7 @@ export const snapshotFieldConfigSchema: z.ZodType<SnapshotFieldConfig> = z.loose
   validate: z.array(snapshotValidationSchema).optional(),
   serial: snapshotSerialSchema.optional(),
   scale: z.number().optional(),
-  fields: z.lazy(() => z.record(z.string(), snapshotFieldConfigSchema)).optional(),
+  fields: z.lazy(() => snapshotRecordSchema(snapshotFieldConfigSchema)).optional(),
 }) as z.ZodType<SnapshotFieldConfig>;
 
 export const snapshotIndexConfigSchema: z.ZodType<SnapshotIndexConfig> = z.looseObject({
@@ -206,7 +230,7 @@ export const tailorDBSnapshotTypeSchema: z.ZodType<TailorDBSnapshotType> = z.loo
   // loadSnapshot backfills it via inflection so we accept undefined here.
   pluralForm: z.string().optional() as z.ZodType<string>,
   description: z.string().optional(),
-  fields: z.record(z.string(), snapshotFieldConfigSchema),
+  fields: snapshotRecordSchema(snapshotFieldConfigSchema),
   settings: z
     .looseObject({
       aggregation: z.boolean().optional(),
@@ -222,10 +246,10 @@ export const tailorDBSnapshotTypeSchema: z.ZodType<TailorDBSnapshotType> = z.loo
       publishEvents: z.boolean().optional(),
     })
     .optional(),
-  indexes: z.record(z.string(), snapshotIndexConfigSchema).optional(),
-  files: z.record(z.string(), z.string()).optional(),
-  forwardRelationships: z.record(z.string(), snapshotRelationshipSchema).optional(),
-  backwardRelationships: z.record(z.string(), snapshotRelationshipSchema).optional(),
+  indexes: snapshotRecordSchema(snapshotIndexConfigSchema).optional(),
+  files: snapshotRecordSchema(z.string()).optional(),
+  forwardRelationships: snapshotRecordSchema(snapshotRelationshipSchema).optional(),
+  backwardRelationships: snapshotRecordSchema(snapshotRelationshipSchema).optional(),
   permissions: z
     .looseObject({
       record: snapshotRecordPermissionSchema.optional(),
@@ -242,7 +266,7 @@ export const schemaSnapshotSchema: z.ZodType<SchemaSnapshot> = z.looseObject({
   version: z.number(),
   namespace: z.string(),
   createdAt: z.string(),
-  types: z.record(z.string(), tailorDBSnapshotTypeSchema),
+  types: snapshotRecordSchema(tailorDBSnapshotTypeSchema),
 });
 
 // ============================================================================
@@ -250,8 +274,28 @@ export const schemaSnapshotSchema: z.ZodType<SchemaSnapshot> = z.looseObject({
 // ============================================================================
 
 const typeSettingsPatchSchema: z.ZodType<TypeSettingsPatch> = z.looseObject({
-  indexes: z.record(z.string(), snapshotIndexConfigSchema).optional(),
-  files: z.record(z.string(), z.string()).optional(),
+  indexes: snapshotRecordSchema(snapshotIndexConfigSchema).optional(),
+  files: snapshotRecordSchema(z.string()).optional(),
+});
+
+const snapshotTypeSettingsStateSchema: z.ZodType<SnapshotTypeSettingsState> = z.looseObject({
+  description: z.string().optional(),
+  pluralForm: z.string(),
+  settings: z
+    .looseObject({
+      aggregation: z.boolean().optional(),
+      bulkUpsert: z.boolean().optional(),
+      gqlOperations: z
+        .looseObject({
+          create: z.boolean().optional(),
+          update: z.boolean().optional(),
+          delete: z.boolean().optional(),
+          read: z.boolean().optional(),
+        })
+        .optional(),
+      publishEvents: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 const snapshotPermissionStateSchema: z.ZodType<SnapshotPermissionState> = z.looseObject({
@@ -282,6 +326,14 @@ const typeModifiedChangeSchema = z.looseObject({
   before: typeSettingsPatchSchema.optional(),
   after: typeSettingsPatchSchema.optional(),
 }) as unknown as z.ZodType<TypeModifiedChange>;
+
+const typeSettingsModifiedChangeSchema = z.looseObject({
+  kind: z.literal("type_settings_modified"),
+  typeName: z.string(),
+  reason: z.string().optional(),
+  before: snapshotTypeSettingsStateSchema,
+  after: snapshotTypeSettingsStateSchema,
+}) as unknown as z.ZodType<TypeSettingsModifiedChange>;
 
 const fieldAddedChangeSchema = z.looseObject({
   kind: z.literal("field_added"),
@@ -400,6 +452,7 @@ export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kin
   typeAddedChangeSchema as unknown as DiscriminableSchema,
   typeRemovedChangeSchema as unknown as DiscriminableSchema,
   typeModifiedChangeSchema as unknown as DiscriminableSchema,
+  typeSettingsModifiedChangeSchema as unknown as DiscriminableSchema,
   fieldAddedChangeSchema as unknown as DiscriminableSchema,
   fieldRemovedChangeSchema as unknown as DiscriminableSchema,
   fieldModifiedChangeSchema as unknown as DiscriminableSchema,

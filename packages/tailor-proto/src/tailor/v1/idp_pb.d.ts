@@ -147,6 +147,13 @@ export declare type CreateIdPServiceResponse = Message<"tailor.v1.CreateIdPServi
 export declare const CreateIdPServiceResponseSchema: GenMessage<CreateIdPServiceResponse>;
 
 /**
+ * UpdateIdPServiceRequest is a full replacement of the idp service config.
+ * Every field on `user_auth_policy` (and the other config sub-messages) is
+ * written through to storage; proto3 default values (false, "", []) overwrite
+ * the previously stored value. Clients must read the current config with
+ * GetIdPService and resend the entire `user_auth_policy` payload, mutating
+ * only the field they intend to change. Partial updates are not supported.
+ *
  * @generated from message tailor.v1.UpdateIdPServiceRequest
  */
 export declare type UpdateIdPServiceRequest = Message<"tailor.v1.UpdateIdPServiceRequest"> & {

@@ -28,7 +28,7 @@ import {
   type TailorDBType_PermissionSchema,
   type TailorDBType_RelationshipConfigSchema,
   type TailorDBTypeSchema,
-} from "@tailor-proto/tailor/v1/tailordb_resource_pb";
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as inflection from "inflection";
 import { isSnapshotFieldRefOperand } from "./snapshot";
 import type {

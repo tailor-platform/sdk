@@ -37,7 +37,7 @@ export async function initTelemetry(): Promise<void> {
     import("@opentelemetry/exporter-trace-otlp-proto"),
     import("@opentelemetry/resources"),
     import("@opentelemetry/semantic-conventions"),
-    import("@/cli/shared/package-json"),
+    import("#/cli/shared/package-json"),
   ]);
 
   const packageJson = await readPackageJson();

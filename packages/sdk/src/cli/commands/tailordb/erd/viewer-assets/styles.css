@@ -14,6 +14,12 @@
   --accent-glow: rgba(73, 80, 229, 0.34);
   --warn: #f2b84b;
   --danger: #ff6b5f;
+  --diff-added: #4ed983;
+  --diff-added-bg: rgba(78, 217, 131, 0.14);
+  --diff-changed: #f2b84b;
+  --diff-changed-bg: rgba(242, 184, 75, 0.14);
+  --diff-removed: #ff6b5f;
+  --diff-removed-bg: rgba(255, 107, 95, 0.14);
   --shadow: 0 16px 34px rgba(0, 0, 0, 0.42);
   --card-width: 260px;
   --toolbar-height: 56px;
@@ -139,7 +145,43 @@ button:hover {
 
 .toolbar-actions {
   display: flex;
+  align-items: center;
+  gap: 10px;
   justify-content: flex-end;
+}
+
+.view-mode-control {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(72px, 1fr));
+  min-width: 152px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 2px;
+  background: #171a19;
+}
+
+.view-mode-control[hidden] {
+  display: none;
+}
+
+.view-mode-button {
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.view-mode-button:hover {
+  background: #252a28;
+  color: var(--text);
+}
+
+.view-mode-button[aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
 }
 
 .primary-action {
@@ -249,6 +291,93 @@ button:hover {
   font-weight: 700;
 }
 
+.table-list-label,
+.table-name-wrap,
+.field-name,
+.detail-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-name-wrap {
+  flex: 1 1 auto;
+}
+
+.table-list-name,
+.field-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-badge {
+  display: inline-grid;
+  flex: 0 0 auto;
+  min-width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.diff-badge-added {
+  background: var(--diff-added-bg);
+  color: var(--diff-added);
+}
+
+.diff-badge-changed {
+  background: var(--diff-changed-bg);
+  color: var(--diff-changed);
+}
+
+.diff-badge-removed {
+  background: var(--diff-removed-bg);
+  color: var(--diff-removed);
+}
+
+.diff-detail {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.detail-row.is-diff-added .diff-detail {
+  color: var(--diff-added);
+}
+
+.detail-row.is-diff-changed .diff-detail {
+  color: var(--diff-changed);
+}
+
+.detail-row.is-diff-removed .diff-detail {
+  color: var(--diff-removed);
+}
+
+.table-list-row.is-diff-added .table-select {
+  background: linear-gradient(90deg, var(--diff-added-bg), transparent);
+  color: var(--text);
+}
+
+.table-list-row.is-diff-changed .table-select {
+  background: linear-gradient(90deg, var(--diff-changed-bg), transparent);
+  color: var(--text);
+}
+
+.table-list-row.is-diff-removed .table-select {
+  background: linear-gradient(90deg, var(--diff-removed-bg), transparent);
+  color: var(--text);
+}
+
 .table-list-row.is-hidden .table-select {
   color: #69716e;
 }
@@ -344,6 +473,25 @@ button:hover {
   stroke-width: 3;
 }
 
+.edge.is-diff-added {
+  stroke: var(--diff-added);
+}
+
+.edge.is-diff-changed {
+  stroke: var(--diff-changed);
+}
+
+.edge.is-diff-removed {
+  stroke: var(--diff-removed);
+  stroke-dasharray: 8 5;
+}
+
+.edge.is-selected.is-diff-added,
+.edge.is-selected.is-diff-changed,
+.edge.is-selected.is-diff-removed {
+  stroke-width: 3;
+}
+
 .edge-cardinality {
   pointer-events: none;
 }
@@ -362,6 +510,21 @@ button:hover {
   fill: var(--canvas);
   stroke: var(--accent);
   stroke-width: 3;
+}
+
+.edge-cardinality.is-diff-added line,
+.edge-cardinality.is-diff-added circle {
+  stroke: var(--diff-added);
+}
+
+.edge-cardinality.is-diff-changed line,
+.edge-cardinality.is-diff-changed circle {
+  stroke: var(--diff-changed);
+}
+
+.edge-cardinality.is-diff-removed line,
+.edge-cardinality.is-diff-removed circle {
+  stroke: var(--diff-removed);
 }
 
 .table-card {
@@ -408,6 +571,27 @@ button:hover {
   opacity: 0.36;
 }
 
+.table-card.is-diff-added {
+  border-color: var(--diff-added);
+  box-shadow:
+    0 0 0 1px rgba(78, 217, 131, 0.32),
+    0 16px 30px rgba(0, 0, 0, 0.38);
+}
+
+.table-card.is-diff-changed {
+  border-color: var(--diff-changed);
+  box-shadow:
+    0 0 0 1px rgba(242, 184, 75, 0.3),
+    0 16px 30px rgba(0, 0, 0, 0.38);
+}
+
+.table-card.is-diff-removed {
+  border-color: var(--diff-removed);
+  box-shadow:
+    0 0 0 1px rgba(255, 107, 95, 0.32),
+    0 16px 30px rgba(0, 0, 0, 0.38);
+}
+
 .table-card.is-dragging {
   z-index: 4;
   cursor: grabbing;
@@ -422,7 +606,25 @@ button:hover {
   padding: 0 16px;
 }
 
+.table-card.is-diff-added .table-head {
+  background: linear-gradient(90deg, var(--diff-added-bg), transparent);
+}
+
+.table-card.is-diff-changed .table-head {
+  background: linear-gradient(90deg, var(--diff-changed-bg), transparent);
+}
+
+.table-card.is-diff-removed .table-head {
+  background: linear-gradient(90deg, var(--diff-removed-bg), transparent);
+}
+
+.table-card.is-diff-removed .table-name {
+  text-decoration: line-through;
+  text-decoration-color: var(--diff-removed);
+}
+
 .table-name {
+  min-width: 0;
   overflow: hidden;
   font-size: 16px;
   font-weight: 700;
@@ -455,18 +657,34 @@ button:hover {
   color: var(--text);
 }
 
-.field-name,
-.field-type {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.table-field.is-diff-added {
+  background: var(--diff-added-bg);
+  color: var(--text);
+}
+
+.table-field.is-diff-changed {
+  background: var(--diff-changed-bg);
+  color: var(--text);
+}
+
+.table-field.is-diff-removed {
+  background: var(--diff-removed-bg);
+  color: var(--text);
+}
+
+.table-field.is-diff-removed .field-name-text {
+  text-decoration: line-through;
+  text-decoration-color: var(--diff-removed);
 }
 
 .field-type {
   max-width: 92px;
+  overflow: hidden;
   color: #7f8784;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .details-inner {
@@ -521,6 +739,26 @@ button:hover {
   border-radius: 4px;
   padding: 9px;
   background: #2a2d2c;
+}
+
+.detail-row.is-diff-added {
+  border-color: rgba(78, 217, 131, 0.58);
+  background: linear-gradient(90deg, var(--diff-added-bg), #2a2d2c 72%);
+}
+
+.detail-row.is-diff-changed {
+  border-color: rgba(242, 184, 75, 0.58);
+  background: linear-gradient(90deg, var(--diff-changed-bg), #2a2d2c 72%);
+}
+
+.detail-row.is-diff-removed {
+  border-color: rgba(255, 107, 95, 0.58);
+  background: linear-gradient(90deg, var(--diff-removed-bg), #2a2d2c 72%);
+}
+
+.detail-row.is-diff-removed strong {
+  text-decoration: line-through;
+  text-decoration-color: var(--diff-removed);
 }
 
 .detail-row strong {
@@ -742,6 +980,15 @@ button:hover {
     grid-template-columns: 1fr auto;
     gap: 10px;
     padding: 8px;
+  }
+
+  .toolbar-actions {
+    grid-column: 1 / -1;
+    justify-content: stretch;
+  }
+
+  .view-mode-control {
+    flex: 1 1 auto;
   }
 
   .toolbar-search {

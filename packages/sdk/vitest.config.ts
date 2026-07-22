@@ -3,9 +3,6 @@ import * as path from "node:path";
 import { defineConfig } from "vitest/config";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 
-const srcDir = path.resolve(__dirname, "./src");
-const protoDir = path.resolve(__dirname, "../tailor-proto/src");
-
 type PackageExport = {
   import?: string;
   default?: string;
@@ -89,8 +86,6 @@ export default defineConfig({
   plugins: [{ name: "yaml-text", load: loadYamlText }],
   resolve: {
     alias: [
-      { find: /^@(?=\/|$)/, replacement: srcDir },
-      { find: /^@tailor-proto(?=\/|$)/, replacement: protoDir },
       // Keep package self-imports on the source tree so V8 coverage does not
       // remap built package exports and direct source imports as separate files.
       ...sdkSourceAliases,
@@ -151,7 +146,15 @@ export default defineConfig({
     environment: "node",
     globals: true,
     watch: false,
-    typecheck: { enabled: true },
+    // The dedicated tsconfig narrows tsc to the type-test files and their
+    // imports; the full-project surface is already covered by `pnpm typecheck`.
+    // Keep `include` and the tsconfig's `include` covering the same files so
+    // every collected type test is actually compiled.
+    typecheck: {
+      enabled: true,
+      tsconfig: "./tsconfig.vitest-typecheck.json",
+      include: ["src/**/*.{test,spec}-d.ts"],
+    },
     coverage: {
       reporter: ["text", "lcov"],
     },

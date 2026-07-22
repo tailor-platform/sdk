@@ -2,7 +2,9 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
+import type * as Chokidar from "chokidar";
 
 const madgeMock = vi.hoisted(() =>
   vi.fn(async () => ({
@@ -15,6 +17,14 @@ vi.mock("madge", () => ({
   default: madgeMock,
 }));
 
+const chokidarWatchMock = vi.hoisted(() => vi.fn());
+
+vi.mock("chokidar", async (importOriginal) => {
+  const actual = await importOriginal<typeof Chokidar>();
+  chokidarWatchMock.mockImplementation(actual.watch);
+  return { ...actual, watch: chokidarWatchMock };
+});
+
 import {
   createDependencyGraphManager,
   createDependencyWatcher,
@@ -26,29 +36,21 @@ import {
 
 let manager: DependencyGraphManager;
 
-beforeEach(() => {
+aroundEach(async (runTest) => {
   madgeMock.mockReset();
   madgeMock.mockImplementation(async () => ({
     obj: () => ({}),
     circular: () => [],
   }));
+  chokidarWatchMock.mockClear();
   manager = createDependencyGraphManager();
+  await runTest();
 });
 
-/**
- * Create temporary directory for testing
- * @returns Path to the created temporary directory
- */
 async function createTempDir(): Promise<string> {
   return await fs.mkdtemp(path.join(os.tmpdir(), "dependency-watcher-test-"));
 }
 
-/**
- * Create files for testing
- * @param filePath - Path of the file to create
- * @param content - File contents
- * @returns Promise that resolves when the file is created
- */
 async function createTestFile(filePath: string, content: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, content);
@@ -58,15 +60,13 @@ describe("DependencyWatcher", () => {
   let tempDir: string;
   let watcher: DependencyWatcher;
 
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     tempDir = await createTempDir();
     watcher = createDependencyWatcher({
       debounceTime: 10,
       detectCircularDependencies: true,
     });
-  });
-
-  afterEach(async () => {
+    await runTest();
     await watcher.stop();
     await fs.rm(tempDir, { recursive: true, force: true });
   });
@@ -86,7 +86,7 @@ describe("DependencyWatcher", () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
-      await watcher.addWatchGroup("test-group", [testFile]);
+      await watcher.addWatchGroup("test-group", [testFile], tempDir);
 
       const status = watcher.getWatchStatus();
       expect(status.groupCount).toBe(1);
@@ -100,7 +100,7 @@ describe("DependencyWatcher", () => {
       await createTestFile(testFile2, 'export const file2 = "world";');
 
       const pattern = path.join(tempDir, "*.ts");
-      await watcher.addWatchGroup("test-group", [pattern]);
+      await watcher.addWatchGroup("test-group", [pattern], tempDir);
 
       const status = watcher.getWatchStatus();
       expect(status.groupCount).toBe(1);
@@ -111,7 +111,7 @@ describe("DependencyWatcher", () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
-      await watcher.addWatchGroup("test-group", [testFile]);
+      await watcher.addWatchGroup("test-group", [testFile], tempDir);
       await watcher.removeWatchGroup("test-group");
 
       const status = watcher.getWatchStatus();
@@ -119,23 +119,96 @@ describe("DependencyWatcher", () => {
       expect(status.fileCount).toBe(0);
     });
 
+    test("unwatches the resolved absolute files, not the original relative pattern", async () => {
+      const testFile = path.join(tempDir, "src", "test.ts");
+      await createTestFile(testFile, 'export const test = "hello";');
+
+      await watcher.addWatchGroup("test-group", ["src/*.ts"], tempDir);
+
+      const chokidarInstance = chokidarWatchMock.mock.results[0]?.value;
+      const unwatchSpy = vi.spyOn(chokidarInstance, "unwatch");
+
+      await watcher.removeWatchGroup("test-group");
+
+      expect(unwatchSpy).toHaveBeenCalledWith([path.resolve(testFile)]);
+    });
+
     test("duplicate group ID causes error", async () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
-      await watcher.addWatchGroup("test-group", [testFile]);
+      await watcher.addWatchGroup("test-group", [testFile], tempDir);
 
-      await expect(watcher.addWatchGroup("test-group", [testFile])).rejects.toThrow(WatcherError);
+      await expect(watcher.addWatchGroup("test-group", [testFile], tempDir)).rejects.toThrow(
+        WatcherError,
+      );
+    });
+
+    test("resolves relative patterns against baseDir, not process.cwd()", async () => {
+      const testFile = path.join(tempDir, "src", "test.ts");
+      await createTestFile(testFile, 'export const test = "hello";');
+
+      const unrelatedCwd = await createTempDir();
+      const originalCwd = process.cwd();
+      process.chdir(unrelatedCwd);
+      try {
+        await watcher.addWatchGroup("test-group", ["src/*.ts"], tempDir);
+      } finally {
+        process.chdir(originalCwd);
+        await fs.rm(unrelatedCwd, { recursive: true, force: true });
+      }
+
+      const status = watcher.getWatchStatus();
+      expect(status.fileCount).toBe(1);
+    });
+
+    test("falls back to process.cwd() when baseDir matches nothing (legacy cwd-relative config)", async () => {
+      // baseDir has no "src" directory at all; the pattern only matches
+      // something under a different cwd, mirroring a config written before
+      // baseDir-relative resolution existed.
+      const legacyCwd = await createTempDir();
+      const legacyFile = path.join(legacyCwd, "src", "legacy.ts");
+      await createTestFile(legacyFile, 'export const legacy = "hello";');
+
+      const originalCwd = process.cwd();
+      process.chdir(legacyCwd);
+      try {
+        await watcher.addWatchGroup("test-group", ["src/*.ts"], tempDir);
+      } finally {
+        process.chdir(originalCwd);
+        await fs.rm(legacyCwd, { recursive: true, force: true });
+      }
+
+      const status = watcher.getWatchStatus();
+      expect(status.fileCount).toBe(1);
+    });
+
+    test("warns again for a different group falling back for the same baseDir", async () => {
+      const legacyCwd = await createTempDir();
+      await createTestFile(path.join(legacyCwd, "src", "legacy.ts"), 'export const a = "hello";');
+      await createTestFile(path.join(legacyCwd, "other", "legacy.ts"), 'export const b = "hello";');
+
+      using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+      const originalCwd = process.cwd();
+      process.chdir(legacyCwd);
+      try {
+        await watcher.addWatchGroup("group-a", ["src/*.ts"], tempDir);
+        await watcher.addWatchGroup("group-b", ["other/*.ts"], tempDir);
+      } finally {
+        process.chdir(originalCwd);
+        await fs.rm(legacyCwd, { recursive: true, force: true });
+      }
+
+      expect(warnSpy).toHaveBeenCalledTimes(2);
     });
   });
 
   describe("validation", () => {
-    test("invalid group ID causes error", async () => {
-      await expect(watcher.addWatchGroup("", ["test.ts"])).rejects.toThrow(WatcherError);
-    });
-
-    test("empty pattern array causes error", async () => {
-      await expect(watcher.addWatchGroup("test-group", [])).rejects.toThrow(WatcherError);
+    test.each([
+      ["invalid group ID", "", ["test.ts"]],
+      ["empty pattern array", "test-group", []],
+    ])("%s causes error", async (_, groupId, patterns) => {
+      await expect(watcher.addWatchGroup(groupId, patterns, tempDir)).rejects.toThrow(WatcherError);
     });
   });
 
@@ -144,7 +217,7 @@ describe("DependencyWatcher", () => {
       const testFile = path.join(tempDir, "test.ts");
       await createTestFile(testFile, 'export const test = "hello";');
 
-      await watcher.addWatchGroup("test-group", [testFile]);
+      await watcher.addWatchGroup("test-group", [testFile], tempDir);
 
       const impact = watcher.calculateImpact(testFile);
       expect(impact.changedFile).toBe(testFile);
@@ -182,8 +255,8 @@ describe("DependencyWatcher", () => {
       await createTestFile(testFile1, 'export const file1 = "hello";');
       await createTestFile(testFile2, 'export const file2 = "world";');
 
-      await watcher.addWatchGroup("group1", [testFile1]);
-      await watcher.addWatchGroup("group2", [testFile2]);
+      await watcher.addWatchGroup("group1", [testFile1], tempDir);
+      await watcher.addWatchGroup("group2", [testFile2], tempDir);
 
       const status = watcher.getWatchStatus();
       expect(status.isWatching).toBe(true);
@@ -204,11 +277,9 @@ describe("DependencyWatcher", () => {
 describe("DependencyGraphManager", () => {
   let tempDir: string;
 
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     tempDir = await createTempDir();
-  });
-
-  afterEach(async () => {
+    await runTest();
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 

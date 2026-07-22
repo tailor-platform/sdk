@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, test, expect, aroundEach, vi } from "vitest";
 
 vi.mock("std-env", () => ({
   isCI: false,
@@ -7,14 +7,12 @@ vi.mock("std-env", () => ({
 describe("parseCrashReportConfig", () => {
   const originalEnv = process.env;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     process.env = { ...originalEnv };
     delete process.env.TAILOR_CRASH_REPORTS_LOCAL;
     delete process.env.TAILOR_CRASH_REPORTS_REMOTE;
     vi.resetModules();
-  });
-
-  afterEach(() => {
+    await runTest();
     process.env = originalEnv;
   });
 
@@ -27,48 +25,32 @@ describe("parseCrashReportConfig", () => {
     expect(config.localDir).toContain("crash-reports");
   });
 
-  test("returns disabled when TAILOR_CRASH_REPORTS_LOCAL is off", async () => {
-    process.env.TAILOR_CRASH_REPORTS_LOCAL = "off";
-    const { parseCrashReportConfig } = await import("./config");
-    const config = parseCrashReportConfig();
-    expect(config.localEnabled).toBe(false);
-    expect(config.remoteEnabled).toBe(false);
-  });
+  test.each([
+    ["off", "off", false, false],
+    ["OFF", "off", false, false],
+    ["on", "on", true, true],
+    ["off", "on", false, true],
+  ] as const)(
+    "resolves localEnabled/remoteEnabled for LOCAL=%s REMOTE=%s",
+    async (local, remote, expectedLocal, expectedRemote) => {
+      process.env.TAILOR_CRASH_REPORTS_LOCAL = local;
+      process.env.TAILOR_CRASH_REPORTS_REMOTE = remote;
 
-  test("returns disabled when TAILOR_CRASH_REPORTS_LOCAL is OFF (case insensitive)", async () => {
-    process.env.TAILOR_CRASH_REPORTS_LOCAL = "OFF";
-    const { parseCrashReportConfig } = await import("./config");
-    const config = parseCrashReportConfig();
-    expect(config.localEnabled).toBe(false);
-  });
-
-  test("returns remoteEnabled when TAILOR_CRASH_REPORTS_REMOTE is on", async () => {
-    process.env.TAILOR_CRASH_REPORTS_REMOTE = "on";
-    const { parseCrashReportConfig } = await import("./config");
-    const config = parseCrashReportConfig();
-    expect(config.localEnabled).toBe(true);
-    expect(config.remoteEnabled).toBe(true);
-  });
-
-  test("remoteEnabled is independent of localEnabled", async () => {
-    process.env.TAILOR_CRASH_REPORTS_LOCAL = "off";
-    process.env.TAILOR_CRASH_REPORTS_REMOTE = "on";
-    const { parseCrashReportConfig } = await import("./config");
-    const config = parseCrashReportConfig();
-    expect(config.localEnabled).toBe(false);
-    expect(config.remoteEnabled).toBe(true);
-  });
+      const { parseCrashReportConfig } = await import("./config");
+      const config = parseCrashReportConfig();
+      expect(config.localEnabled).toBe(expectedLocal);
+      expect(config.remoteEnabled).toBe(expectedRemote);
+    },
+  );
 });
 
 describe("parseCrashReportConfig in CI", () => {
   const originalEnv = process.env;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     process.env = { ...originalEnv };
     vi.resetModules();
-  });
-
-  afterEach(() => {
+    await runTest();
     process.env = originalEnv;
   });
 

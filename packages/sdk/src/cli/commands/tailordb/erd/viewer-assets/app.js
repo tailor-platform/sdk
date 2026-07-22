@@ -13,6 +13,7 @@ const FIT_PADDING = 80;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2.2;
 const DEFAULT_SHOW_MODE = "TABLE_NAME";
+const DEFAULT_VIEW_MODE = "diff";
 const SHOW_MODE_OPTIONS = [
   { value: "ALL_FIELDS", label: "All Fields" },
   { value: "TABLE_NAME", label: "Table Name" },
@@ -40,10 +41,17 @@ const elements = {
   fitView: document.getElementById("fit-view"),
   showMode: document.getElementById("show-mode"),
   showModeMenu: document.getElementById("show-mode-menu"),
+  viewModeControl: document.getElementById("view-mode-control"),
+  viewModeCurrent: document.getElementById("view-mode-current"),
+  viewModeDiff: document.getElementById("view-mode-diff"),
   copyLink: document.getElementById("copy-link"),
 };
 
 let schema;
+let diffViewSchema;
+let currentViewSchema;
+let diffMetadata;
+let erdDiff;
 let layout;
 let selectedTable;
 let searchText = "";
@@ -56,8 +64,29 @@ let activeCardDrag;
 let activeCanvasPan;
 let activeViewportAnimation;
 let suppressNextCanvasClick = false;
+let viewMode = DEFAULT_VIEW_MODE;
 const manualNodePositions = new Map();
 const hiddenTableNames = new Set();
+let diffIndex = new Map();
+let tableDiffIndex = new Map();
+
+const DIFF_LABELS = {
+  added: "Added",
+  changed: "Changed",
+  removed: "Removed",
+};
+
+const DIFF_MARKS = {
+  added: "+",
+  changed: "~",
+  removed: "-",
+};
+
+const DIFF_ACTION_RANK = {
+  added: 2,
+  changed: 1,
+  removed: 3,
+};
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -73,6 +102,102 @@ function clamp(value, min, max) {
 
 function tableByName(name) {
   return schema?.tables.find((table) => table.name === name);
+}
+
+function strongestDiffAction(current, next) {
+  if (!current) return next;
+  if (!next) return current;
+  return DIFF_ACTION_RANK[next] > DIFF_ACTION_RANK[current] ? next : current;
+}
+
+function diffKey(entity, path) {
+  return `${entity}:${path}`;
+}
+
+function diffChange(entity, path) {
+  return diffIndex.get(diffKey(entity, path));
+}
+
+function setTableDiffAction(tableName, action) {
+  if (!tableName || !action) return;
+  tableDiffIndex.set(tableName, strongestDiffAction(tableDiffIndex.get(tableName), action));
+}
+
+function tableNameFromEntityPath(path) {
+  return path.split(".")[0];
+}
+
+function tableNamesFromRelationChange(change) {
+  const relation = schema?.relations.find((item) => item.name === change.path);
+  if (relation) return [relation.sourceTable, relation.targetTable];
+
+  const [source, target] = change.path.split("->");
+  return [tableNameFromEntityPath(source || ""), tableNameFromEntityPath(target || "")].filter(
+    Boolean,
+  );
+}
+
+function setDiff(nextDiff) {
+  erdDiff = nextDiff;
+  diffIndex = new Map();
+  tableDiffIndex = new Map();
+  if (!nextDiff?.changes) return;
+
+  for (const change of nextDiff.changes) {
+    diffIndex.set(diffKey(change.entity, change.path), change);
+    if (change.entity === "table") {
+      setTableDiffAction(change.path, change.action);
+      continue;
+    }
+    if (change.entity === "column" || change.entity === "index") {
+      setTableDiffAction(tableNameFromEntityPath(change.path), "changed");
+      continue;
+    }
+    if (change.entity === "relation") {
+      for (const tableName of tableNamesFromRelationChange(change)) {
+        setTableDiffAction(tableName, "changed");
+      }
+    }
+  }
+}
+
+function diffClass(action) {
+  return action ? `is-diff-${action}` : "";
+}
+
+function diffBadge(action, detail) {
+  if (!action) return "";
+  const title = detail ? `${DIFF_LABELS[action]}: ${detail}` : DIFF_LABELS[action];
+  return `<span class="diff-badge diff-badge-${action}" title="${escapeHtml(title)}">${DIFF_MARKS[action]}</span>`;
+}
+
+function diffDetail(change) {
+  if (!change?.detail) return "";
+  return `<span class="diff-detail">${escapeHtml(change.detail)}</span>`;
+}
+
+function tableDiffChange(tableName) {
+  return diffChange("table", tableName);
+}
+
+function tableDiffAction(tableName) {
+  return tableDiffIndex.get(tableName);
+}
+
+function columnDiffChange(tableName, columnName) {
+  return diffChange("column", `${tableName}.${columnName}`);
+}
+
+function indexDiffChange(tableName, indexName) {
+  return diffChange("index", `${tableName}.${indexName}`);
+}
+
+function relationDiffChange(relation) {
+  return diffChange("relation", relation.name);
+}
+
+function relationDiffAction(relation) {
+  return relationDiffChange(relation)?.action;
 }
 
 function showModeOption(value) {
@@ -98,6 +223,10 @@ function readHashState() {
   if (showModeOption(nextShowMode)) {
     showMode = nextShowMode;
   }
+  const nextViewMode = params.get("view");
+  if (nextViewMode === "current" || nextViewMode === "diff") {
+    viewMode = nextViewMode;
+  }
   hiddenTableNames.clear();
   for (const tableName of (params.get("hidden") || "").split(",")) {
     if (tableName) hiddenTableNames.add(tableName);
@@ -117,6 +246,9 @@ function writeHashState() {
   if (hiddenTableNames.size > 0) {
     params.set("hidden", [...hiddenTableNames].toSorted((a, b) => a.localeCompare(b)).join(","));
   }
+  if (canSwitchViewMode() && viewMode !== DEFAULT_VIEW_MODE) {
+    params.set("view", viewMode);
+  }
   params.set("z", viewport.z.toFixed(3));
   try {
     history.replaceState(null, "", `#${params.toString()}`);
@@ -130,17 +262,29 @@ function writeHashState() {
 const SCHEMA_BLOCK_PATTERN =
   /<script type="application\/json" id="erd-schema">([\s\S]*?)<\/script>/;
 
-// Read the schema from the embedded `#erd-schema` data block in the current
-// document (the viewer is always a self-contained HTML).
-function embeddedSchema() {
+function embeddedJson(id) {
   if (typeof document === "undefined") return undefined;
-  const element = document.getElementById("erd-schema");
+  const element = document.getElementById(id);
   if (!element) return undefined;
   try {
     return JSON.parse(element.textContent);
   } catch {
     return undefined;
   }
+}
+
+// Read the schema from the embedded `#erd-schema` data block in the current
+// document (the viewer is always a self-contained HTML).
+function embeddedSchema() {
+  return embeddedJson("erd-schema");
+}
+
+function embeddedDiff() {
+  return embeddedJson("erd-diff");
+}
+
+function embeddedCurrentSchema() {
+  return embeddedJson("erd-current-schema");
 }
 
 // Re-fetch the served HTML and extract its embedded schema. Used by watch mode
@@ -297,8 +441,10 @@ function eyeIcon(hidden) {
 }
 
 function renderHeader() {
-  elements.namespace.textContent = schema.namespace;
-  elements.revision.textContent = `${schema.tables.length} tables / ${schema.relations.length} relations / ${schema.revision}`;
+  elements.namespace.textContent = erdDiff ? `${schema.namespace} diff` : schema.namespace;
+  elements.revision.textContent = erdDiff
+    ? `${schema.tables.length} tables / ${schema.relations.length} relations / +${erdDiff.summary.added} ~${erdDiff.summary.changed} -${erdDiff.summary.removed} / ${erdDiff.baseRevision} -> ${erdDiff.headRevision}`
+    : `${schema.tables.length} tables / ${schema.relations.length} relations / ${schema.revision}`;
   const visibleCount = visibleTables().length;
   elements.tableSummary.textContent =
     visibleCount === schema.tables.length
@@ -318,8 +464,10 @@ function renderTableList() {
     .map((table) => {
       const hidden = isTableHidden(table.name);
       const visibilityLabel = hidden ? "Show" : "Hide";
+      const change = tableDiffChange(table.name);
+      const action = tableDiffAction(table.name);
       return `
-          <div class="table-list-row ${hidden ? "is-hidden" : ""}">
+          <div class="table-list-row ${hidden ? "is-hidden" : ""} ${diffClass(action)}">
             <button
               type="button"
               class="table-select"
@@ -327,7 +475,10 @@ function renderTableList() {
               aria-current="${table.name === selectedTable}"
             >
               <span class="table-list-icon" aria-hidden="true"></span>
-              <span>${escapeHtml(table.name)}</span>
+              <span class="table-list-label">
+                <span class="table-list-name">${escapeHtml(table.name)}</span>
+                ${diffBadge(action, change?.detail)}
+              </span>
             </button>
             <button
               type="button"
@@ -363,14 +514,19 @@ function tableFieldRows(table) {
   return `
     <div class="table-fields">
       ${columns
-        .map(
-          (column) => `
-            <div class="table-field ${isKeyColumn(column) ? "is-key" : ""}">
-              <span class="field-name">${escapeHtml(column.name)}</span>
+        .map((column) => {
+          const change = columnDiffChange(table.name, column.name);
+          const action = change?.action;
+          return `
+            <div class="table-field ${isKeyColumn(column) ? "is-key" : ""} ${diffClass(action)}">
+              <span class="field-name">
+                <span class="field-name-text">${escapeHtml(column.name)}</span>
+                ${diffBadge(action, change?.detail)}
+              </span>
               <span class="field-type">${escapeHtml(column.type)}${column.array ? "[]" : ""}</span>
             </div>
-          `,
-        )
+          `;
+        })
         .join("")}
     </div>
   `;
@@ -383,10 +539,12 @@ function renderNodes() {
       const node = layout.nodes.get(table.name);
       const related = isTableRelatedToSelection(table.name);
       const muted = !matchesSearch(table) || !related;
+      const change = tableDiffChange(table.name);
+      const action = tableDiffAction(table.name);
       return `
         <button
           type="button"
-          class="table-card ${table.name === selectedTable ? "is-selected" : ""} ${related ? "is-related" : ""} ${muted ? "is-muted" : ""}"
+          class="table-card ${table.name === selectedTable ? "is-selected" : ""} ${related ? "is-related" : ""} ${muted ? "is-muted" : ""} ${diffClass(action)}"
           data-table="${escapeHtml(table.name)}"
           aria-label="Focus table ${escapeHtml(table.name)}"
           aria-pressed="${table.name === selectedTable}"
@@ -394,7 +552,10 @@ function renderNodes() {
         >
           <div class="table-head">
             <span class="table-icon" aria-hidden="true"></span>
-            <div class="table-name">${escapeHtml(table.name)}</div>
+            <div class="table-name-wrap">
+              <div class="table-name">${escapeHtml(table.name)}</div>
+              ${diffBadge(action, change?.detail)}
+            </div>
           </div>
           ${tableFieldRows(table)}
         </button>
@@ -547,7 +708,7 @@ function oneMarker(x, y) {
   `;
 }
 
-function cardinalityMarker(cardinality, point, sideSign, selected) {
+function cardinalityMarker(cardinality, point, sideSign, selected, action) {
   const crowFootTip = CROW_FOOT_TIP_OFFSET;
   const crowFootJoin = CROW_FOOT_JOIN_OFFSET;
   const outer = CARDINALITY_OUTER_OFFSET;
@@ -578,7 +739,7 @@ function cardinalityMarker(cardinality, point, sideSign, selected) {
   }
 
   return `
-    <g class="edge-cardinality ${selected ? "is-selected" : ""}">
+    <g class="edge-cardinality ${selected ? "is-selected" : ""} ${diffClass(action)}">
       ${parts.join("")}
     </g>
   `;
@@ -599,10 +760,11 @@ function renderEdges() {
       const geometry = edgeGeometry(source, target);
       const cardinality = relationCardinality(relation);
       const direction = geometry.sourceRight ? 1 : -1;
+      const action = relationDiffAction(relation);
       return `
-          <path class="edge ${selected ? "is-selected" : ""}" d="${geometry.d}"></path>
-          ${cardinalityMarker(cardinality.source, geometry.sourceNodePoint, direction, selected)}
-          ${cardinalityMarker(cardinality.target, geometry.targetNodePoint, -direction, selected)}
+          <path class="edge ${selected ? "is-selected" : ""} ${diffClass(action)}" d="${geometry.d}"></path>
+          ${cardinalityMarker(cardinality.source, geometry.sourceNodePoint, direction, selected, action)}
+          ${cardinalityMarker(cardinality.target, geometry.targetNodePoint, -direction, selected, action)}
         `;
     })
     .join("");
@@ -621,7 +783,18 @@ function relationRows(table, direction) {
             direction === "out"
               ? `${relation.sourceColumns.join(", ")} -> ${relation.targetTable}.${relation.targetColumns.join(", ")}`
               : `${relation.sourceTable}.${relation.sourceColumns.join(", ")} -> ${relation.targetColumns.join(", ")}`;
-          return `<div class="detail-row"><strong>${escapeHtml(label)}</strong><code>${escapeHtml(relation.kind)}</code></div>`;
+          const change = relationDiffChange(relation);
+          const action = change?.action;
+          return `<div class="detail-row ${diffClass(action)}">
+            <div>
+              <span class="detail-name">
+                <strong>${escapeHtml(label)}</strong>
+                ${diffBadge(action, change?.detail)}
+              </span>
+              ${diffDetail(change)}
+            </div>
+            <code>${escapeHtml(relation.kind)}</code>
+          </div>`;
         })
         .join("")}
     </div>
@@ -654,13 +827,22 @@ function renderDetails() {
     return;
   }
 
+  const tableChange = tableDiffChange(table.name);
+  const tableAction = tableDiffAction(table.name);
   elements.details.hidden = false;
   elements.main.classList.remove("is-details-collapsed");
   elements.details.innerHTML = `
     <div class="details-inner">
       <section>
-        <h2><span class="table-icon" aria-hidden="true"></span>${escapeHtml(table.name)}</h2>
+        <h2>
+          <span class="table-icon" aria-hidden="true"></span>
+          <span class="detail-name">
+            <span>${escapeHtml(table.name)}</span>
+            ${diffBadge(tableAction, tableChange?.detail)}
+          </span>
+        </h2>
         <p>${escapeHtml(table.description || table.pluralForm)}</p>
+        ${diffDetail(tableChange)}
       </section>
       <section class="details-section">
         <h3>Outgoing Relations</h3>
@@ -674,18 +856,24 @@ function renderDetails() {
         <h3>Columns</h3>
         <div class="detail-list">
           ${table.columns
-            .map(
-              (column) => `
-                <div class="detail-row">
+            .map((column) => {
+              const change = columnDiffChange(table.name, column.name);
+              const action = change?.action;
+              return `
+                <div class="detail-row ${diffClass(action)}">
                   <div>
-                    <strong>${escapeHtml(column.name)}</strong>
+                    <span class="detail-name">
+                      <strong>${escapeHtml(column.name)}</strong>
+                      ${diffBadge(action, change?.detail)}
+                    </span>
+                    ${diffDetail(change)}
                     ${column.description ? `<p>${escapeHtml(column.description)}</p>` : ""}
                     ${columnPills(column)}
                   </div>
                   <code>${escapeHtml(column.type)}${column.array ? "[]" : ""}</code>
                 </div>
-              `,
-            )
+              `;
+            })
             .join("")}
         </div>
       </section>
@@ -695,14 +883,22 @@ function renderDetails() {
               <h3>Indexes</h3>
               <div class="detail-list">
                 ${table.indexes
-                  .map(
-                    (index) => `
-                      <div class="detail-row">
-                        <strong>${escapeHtml(index.name)}</strong>
+                  .map((index) => {
+                    const change = indexDiffChange(table.name, index.name);
+                    const action = change?.action;
+                    return `
+                      <div class="detail-row ${diffClass(action)}">
+                        <div>
+                          <span class="detail-name">
+                            <strong>${escapeHtml(index.name)}</strong>
+                            ${diffBadge(action, change?.detail)}
+                          </span>
+                          ${diffDetail(change)}
+                        </div>
                         <code>${escapeHtml(index.fields.join(", "))}${index.unique ? " unique" : ""}</code>
                       </div>
-                    `,
-                  )
+                    `;
+                  })
                   .join("")}
               </div>
             </section>`
@@ -758,6 +954,43 @@ function renderShowModeControls() {
       setShowMode(button.dataset.showMode);
     });
   });
+}
+
+function canSwitchViewMode() {
+  return Boolean(diffViewSchema && currentViewSchema && diffMetadata);
+}
+
+function renderViewModeControls() {
+  const enabled = canSwitchViewMode();
+  elements.viewModeControl.hidden = !enabled;
+  if (!enabled) return;
+
+  elements.viewModeCurrent.setAttribute("aria-pressed", String(viewMode === "current"));
+  elements.viewModeDiff.setAttribute("aria-pressed", String(viewMode === "diff"));
+}
+
+function activateViewMode(nextViewMode) {
+  if (nextViewMode === "current" && canSwitchViewMode()) {
+    viewMode = "current";
+    schema = currentViewSchema;
+    setDiff(undefined);
+    return;
+  }
+
+  viewMode = DEFAULT_VIEW_MODE;
+  schema = diffViewSchema;
+  setDiff(diffMetadata);
+}
+
+function setViewMode(nextViewMode) {
+  if (!canSwitchViewMode() || nextViewMode === viewMode) return;
+
+  activateViewMode(nextViewMode);
+  if (selectedTable && !tableByName(selectedTable)) {
+    selectedTable = undefined;
+  }
+  clearSelectionIfHidden();
+  renderAll({ center: false });
 }
 
 function setShowModeMenuOpen(open) {
@@ -932,6 +1165,7 @@ function renderAll(options = {}) {
   renderHeader();
   renderTableList();
   renderShowModeControls();
+  renderViewModeControls();
   renderEdges();
   renderNodes();
   renderDetails();
@@ -1071,6 +1305,8 @@ function wireInteractions() {
   elements.showMode.addEventListener("click", () => {
     setShowModeMenuOpen(elements.showModeMenu.hidden);
   });
+  elements.viewModeCurrent.addEventListener("click", () => setViewMode("current"));
+  elements.viewModeDiff.addEventListener("click", () => setViewMode("diff"));
   elements.copyLink.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(location.href);
@@ -1146,6 +1382,10 @@ function startPolling() {
       const nextSchema = await fetchServedSchema();
       if (nextSchema.revision !== schema.revision) {
         schema = nextSchema;
+        diffViewSchema = nextSchema;
+        currentViewSchema = undefined;
+        diffMetadata = undefined;
+        setDiff(undefined);
         if (selectedTable && !tableByName(selectedTable)) {
           selectedTable = undefined;
         }
@@ -1163,7 +1403,10 @@ async function main() {
   readHashState();
   wireInteractions();
   try {
-    schema = embeddedSchema() ?? (await fetchServedSchema());
+    diffViewSchema = embeddedSchema() ?? (await fetchServedSchema());
+    currentViewSchema = embeddedCurrentSchema();
+    diffMetadata = embeddedDiff();
+    activateViewMode(viewMode);
     if (selectedTable && !tableByName(selectedTable)) {
       selectedTable = undefined;
     }
