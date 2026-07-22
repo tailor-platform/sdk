@@ -1,5 +1,4 @@
 name: ERD Schema
-# pinact:skip-file
 
 on:
   push:
@@ -58,7 +57,7 @@ jobs:
       - name: Build ERD plugin
         run: pnpm --filter @tailor-platform/sdk-plugin-tailordb-erd run build
 
-      - uses: tailor-platform/actions/erd-schema-export@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
+      - uses: tailor-platform/actions/erd-schema-export@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           namespace: ${{ matrix.namespace }}
           package-manager: pnpm
@@ -110,7 +109,7 @@ jobs:
       - name: Build ERD plugin
         run: pnpm --filter @tailor-platform/sdk-plugin-tailordb-erd run build
 
-      - uses: tailor-platform/actions/erd-schema-preview@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
+      - uses: tailor-platform/actions/erd-schema-preview@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           namespace: ${{ matrix.namespace }}
           package-manager: pnpm
@@ -150,7 +149,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: tailor-platform/actions/erd-schema-comment@0bd69a0fc9aab3f818b636aa111995441a2c1a03 # v2 branch (unreleased)
+      - uses: tailor-platform/actions/erd-schema-comment@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           base-ref: ${{ github.event.pull_request.base.ref }}
           github-token: ${{ github.token }}
