@@ -16,7 +16,10 @@ const sdk = vi.hoisted(() => ({
   truncate: vi.fn(),
 }));
 
-const loadSeedData = vi.hoisted(() => vi.fn());
+const jsonl = vi.hoisted(() => ({
+  assertSeedDataDirectory: vi.fn(),
+  loadSeedData: vi.fn(),
+}));
 
 const logger = vi.hoisted(() => ({
   debug: vi.fn(),
@@ -30,7 +33,7 @@ const logger = vi.hoisted(() => ({
 }));
 
 vi.mock("@tailor-platform/sdk/cli", () => sdk);
-vi.mock("./jsonl", () => ({ loadSeedData }));
+vi.mock("./jsonl", () => jsonl);
 vi.mock("./shared/logger", () => ({ logger }));
 
 beforeEach(() => {
@@ -67,7 +70,7 @@ beforeEach(() => {
       success: true,
     }),
   );
-  loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+  jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
     Object.fromEntries(
       typeNames.map((typeName) => [typeName, typeName === "_User" ? [{ name: "Ada" }] : []]),
     ),
@@ -87,6 +90,22 @@ async function runApply(args: string[]): Promise<void> {
 }
 
 describe("seedApplyCommand", () => {
+  test("rejects a missing generated data directory before remote operations", async () => {
+    jsonl.assertSeedDataDirectory.mockImplementationOnce(() => {
+      throw new Error("Seed data directory not found: /seed/data");
+    });
+
+    const result = await runApplyCommand(["--machine-user", "manager", "--truncate", "--yes"]);
+
+    expect(result.exitCode).toBe(1);
+    expect(jsonl.assertSeedDataDirectory).toHaveBeenCalledWith("/seed/data");
+    expect(sdk.show).not.toHaveBeenCalled();
+    expect(sdk.loadAccessToken).not.toHaveBeenCalled();
+    expect(sdk.loadWorkspaceId).not.toHaveBeenCalled();
+    expect(sdk.truncate).not.toHaveBeenCalled();
+    expect(sdk.executeScript).not.toHaveBeenCalled();
+  });
+
   test("succeeds without remote operations when the project has no seed targets", async () => {
     sdk.loadSeedContext.mockResolvedValueOnce({
       distPath: "/seed",
@@ -106,6 +125,8 @@ describe("seedApplyCommand", () => {
     expect(sdk.initOperatorClient).not.toHaveBeenCalled();
     expect(sdk.truncate).not.toHaveBeenCalled();
     expect(sdk.executeScript).not.toHaveBeenCalled();
+    expect(jsonl.assertSeedDataDirectory).not.toHaveBeenCalled();
+    expect(jsonl.loadSeedData).not.toHaveBeenCalled();
   });
 
   test("succeeds without remote operations when --skip-idp removes the only target", async () => {
