@@ -141,6 +141,11 @@
       "types": "./dist/runtime/aigateway.d.mts",
       "import": "./dist/runtime/aigateway.mjs",
       "default": "./dist/runtime/aigateway.mjs"
+    },
+    "./runtime/logger": {
+      "types": "./dist/runtime/logger.d.mts",
+      "import": "./dist/runtime/logger.mjs",
+      "default": "./dist/runtime/logger.mjs"
     }
   },
   "scripts": {

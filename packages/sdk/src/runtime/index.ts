@@ -21,6 +21,7 @@ import type { TailorContextAPI } from "./context";
 import type { TailorDBFileAPI } from "./file";
 import type { TailorIconvAPI } from "./iconv";
 import type { TailorIdpAPI } from "./idp";
+import type { TailorLoggerAPI } from "./logger";
 import type { TailorSecretmanagerAPI } from "./secretmanager";
 import type { TailorWorkflowAPI } from "./workflow";
 
@@ -32,6 +33,7 @@ export * as workflow from "./workflow";
 export * as context from "./context";
 export * as file from "./file";
 export * as aigateway from "./aigateway";
+export * as logger from "./logger";
 
 /** SQL command type recorded on a {@link TailordbQueryResult}. */
 export type TailordbCommandType =
@@ -72,6 +74,7 @@ export interface TailorRuntime {
   workflow: TailorWorkflowAPI;
   context: TailorContextAPI;
   aigateway: TailorAigatewayAPI;
+  logger: TailorLoggerAPI;
 }
 
 /** Top-level `tailordb` runtime object. */

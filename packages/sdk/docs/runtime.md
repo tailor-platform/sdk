@@ -20,6 +20,7 @@ import {
   context,
   file,
   aigateway,
+  logger,
 } from "@tailor-platform/sdk/runtime";
 
 const utf8 = iconv.convert(sjisBuffer, "Shift_JIS", "UTF-8");
@@ -38,6 +39,8 @@ const invoker = context.getInvoker();
 const { metadata } = await file.upload("my-namespace", "Document", "attachment", recordId, bytes);
 
 const { url } = await aigateway.get("my-aigateway");
+
+logger.info("order processed", { orderId: "o-1", total: 99.5 });
 ```
 
 ## Subpath imports
@@ -83,6 +86,7 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 - `context` — execution context (`getInvoker`)
 - `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `downloadStream`, `uploadStream`, `openDownloadStream` _(deprecated)_)
 - `aigateway` — AI Gateway URL resolution (`get`)
+- `logger` — structured logging with severity and attributes; the message is written to standard output, the full entry with its attributes is exported over OpenTelemetry where the attributes are queryable (`debug`, `info`, `warn`, `error`, `setAttributes`)
 
 ## Testing
 
