@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test, vi } from "vitest";
-import { CLIError, errorToJson } from "./errors";
+import { errorToJson } from "./error-json";
+import { CLIError } from "./errors";
 import { CIPromptError } from "./logger";
 
 describe("errorToJson", () => {
