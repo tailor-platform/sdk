@@ -22,38 +22,75 @@ function maxOf(values: number[], fallback = 0): number {
   return values.reduce((max, value) => (value > max ? value : max), fallback);
 }
 
-const ESCAPE_CODE_POINT = 0x1b;
 const TAB_WIDTH = 8;
 
 function isStrippableControlCharacter(char: string): boolean {
   const codePoint = char.codePointAt(0) ?? 0;
-  if (char === "\n" || codePoint === ESCAPE_CODE_POINT) {
+  if (char === "\n") {
     return false;
   }
   return codePoint <= 0x1f || codePoint === 0x7f;
 }
 
+// Only SGR (color/style) escape sequences are meant to survive; a bare ESC
+// that isn't part of a recognized SGR sequence (e.g. a screen-clear CSI
+// sequence, or a BEL-terminated OSC sequence) is treated like any other
+// control character below and stripped, rather than passed through to the
+// terminal or left with its terminator removed.
 function normalizeControlCharacters(value: string): string {
-  const chars: string[] = [];
-  for (const char of value) {
-    if (char === "\t") {
-      chars.push(" ".repeat(TAB_WIDTH));
-    } else if (!isStrippableControlCharacter(char)) {
-      chars.push(char);
-    }
-  }
-  return chars.join("");
+  const sgrSequences = value.match(ANSI_ESCAPE_PATTERN) ?? [];
+  return value
+    .split(ANSI_ESCAPE_PATTERN)
+    .map((segment) => {
+      const chars: string[] = [];
+      for (const char of segment) {
+        if (char === "\t") {
+          chars.push(" ".repeat(TAB_WIDTH));
+        } else if (!isStrippableControlCharacter(char)) {
+          chars.push(char);
+        }
+      }
+      return chars.join("");
+    })
+    .reduce((result, segment, i) => result + segment + (sgrSequences[i] ?? ""), "");
 }
 
 function sanitizeCell(cell: unknown): string {
   return normalizeControlCharacters(String(cell ?? "").replace(CARRIAGE_RETURN_PATTERN, "\n"));
 }
 
+const REGIONAL_INDICATOR_MIN = 0x1f1e6;
+const REGIONAL_INDICATOR_MAX = 0x1f1ff;
+const VARIATION_SELECTOR_16 = 0xfe0f;
+const COMBINING_ENCLOSING_KEYCAP = 0x20e3;
+
+function isRegionalIndicator(codePoint: number): boolean {
+  return codePoint >= REGIONAL_INDICATOR_MIN && codePoint <= REGIONAL_INDICATOR_MAX;
+}
+
+// Flag pairs, keycap sequences (digit/#/* + optional VS16 + enclosing keycap),
+// and VS16-forced emoji presentation all render as 2 columns in terminals even
+// though their first code point alone would measure as narrow/neutral.
+function isWideEmojiSequence(codePoints: number[]): boolean {
+  if (codePoints.length === 2 && codePoints.every(isRegionalIndicator)) {
+    return true;
+  }
+  return (
+    codePoints.includes(VARIATION_SELECTOR_16) || codePoints.includes(COMBINING_ENCLOSING_KEYCAP)
+  );
+}
+
 function displayWidth(value: string): number {
   let width = 0;
   for (const { segment } of graphemeSegmenter.segment(value.replace(ANSI_ESCAPE_PATTERN, ""))) {
-    const codePoint = segment.codePointAt(0);
-    width += codePoint === undefined ? 0 : eastAsianWidth(codePoint);
+    const codePoints = Array.from(segment, (char) => char.codePointAt(0) ?? 0);
+    const firstCodePoint = codePoints[0];
+    width +=
+      firstCodePoint === undefined
+        ? 0
+        : isWideEmojiSequence(codePoints)
+          ? 2
+          : eastAsianWidth(firstCodePoint);
   }
   return width;
 }
@@ -87,9 +124,10 @@ function validateConsistentColumnCount(rows: string[][]): void {
 /**
  * Renders a 2D array of values as a table using single-line Unicode box-drawing borders.
  * Column widths account for East Asian wide characters (measured per grapheme cluster,
- * so combining marks and ZWJ emoji sequences aren't overcounted) and strip ANSI SGR
- * (color/style) escape codes before measuring. Use this instead of importing a
- * table-rendering package directly.
+ * so combining marks and ZWJ emoji sequences aren't overcounted, and flags, keycaps, and
+ * VS16-forced emoji presentation are measured as 2 columns) and strip ANSI SGR (color/style)
+ * escape codes before measuring. Use this instead of importing a table-rendering package
+ * directly.
  * @param data - Table rows; every row must have the same number of columns. Each cell is
  * stringified (`null`/`undefined` become an empty string rather than the literal text
  * "null"/"undefined"), may contain embedded newlines, has `\r`/`\r\n` normalized to `\n`,

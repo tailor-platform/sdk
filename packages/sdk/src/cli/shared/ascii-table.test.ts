@@ -282,6 +282,26 @@ describe("renderTable", () => {
     `);
   });
 
+  test("strips a bare ESC that starts a non-SGR sequence (e.g. a screen-clear CSI sequence)", () => {
+    const result = renderTable([["a\x1b[2Jb", "x"]]);
+    expect(result).toBe(ml`
+      ┌───────┬───┐
+      │ a[2Jb │ x │
+      └───────┴───┘
+
+    `);
+  });
+
+  test("strips both ESC and BEL from a BEL-terminated OSC sequence", () => {
+    const result = renderTable([["a\x1b]52;c;AAA=\x07b", "x"]]);
+    expect(result).toBe(ml`
+      ┌──────────────┬───┐
+      │ a]52;c;AAA=b │ x │
+      └──────────────┴───┘
+
+    `);
+  });
+
   test("measures each line of a multi-line cell independently, even across a grapheme-cluster boundary", () => {
     // "👨‍👩‍👧" is man + ZWJ + woman + ZWJ + girl: a single grapheme cluster
     // that must be measured as one wide (2-column) glyph, not as five
@@ -294,6 +314,45 @@ describe("renderTable", () => {
       │ key │ 日本語 │
       │     │ 👨‍👩‍👧     │
       └─────┴────────┘
+
+    `);
+  });
+
+  test("measures a flag (regional indicator pair) as width 2, not width 1", () => {
+    const flag = String.fromCodePoint(0x1f1ef, 0x1f1f5); // 🇯🇵
+    const result = renderTable([[flag], ["aa"]]);
+    expect(result).toBe(ml`
+      ┌────┐
+      │ ${flag} │
+      ├────┤
+      │ aa │
+      └────┘
+
+    `);
+  });
+
+  test("measures a keycap sequence as width 2, not width 1", () => {
+    const keycap = String.fromCodePoint(0x31, 0xfe0f, 0x20e3); // 1️⃣
+    const result = renderTable([[keycap], ["aa"]]);
+    expect(result).toBe(ml`
+      ┌────┐
+      │ ${keycap} │
+      ├────┤
+      │ aa │
+      └────┘
+
+    `);
+  });
+
+  test("measures a VS16-forced emoji-presentation symbol as width 2, not width 1", () => {
+    const heart = String.fromCodePoint(0x2764, 0xfe0f); // ❤️
+    const result = renderTable([[heart], ["aa"]]);
+    expect(result).toBe(ml`
+      ┌────┐
+      │ ${heart} │
+      ├────┤
+      │ aa │
+      └────┘
 
     `);
   });
