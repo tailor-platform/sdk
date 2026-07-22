@@ -87,6 +87,13 @@ export const ResolverPermissionSchema = z
     z
       .array(ResolverPermissionPolicySchema)
       .min(1, "Resolver permission must have at least one policy")
+      .refine(
+        (policies) => policies.some((policy) => policy.permit === true),
+        "Resolver permission must include at least one `permit: true` policy — a policy array " +
+          "with only `permit: false` policies still lets any caller through by simply not " +
+          "authenticating, since none of the deny conditions apply to a caller with no user " +
+          "attributes at all",
+      )
       .readonly(),
     z.literal("allowAnonymous"),
   ])

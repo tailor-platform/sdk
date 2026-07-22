@@ -45,14 +45,14 @@ export type ResolverPermissionPolicy<User extends object = InferredAttributeMap>
  * Access requirement for a resolver, evaluated against the original caller
  * (`context.user`) before `body` runs — unaffected by `authInvoker`.
  *
- * A `permit: false` policy always denies matching callers, even ones another
- * policy would otherwise allow. Combined with a `permit: true` policy, this
- * carves out an explicit exception from a broader grant. With at least one
- * `permit: true` policy present (whether or not `permit: false` policies are
- * also present), this is an allow-list (deny by default, granted only by a
- * matching `permit: true` policy). With only `permit: false` policies and no
- * `permit: true` at all, there's no allow-list to fall back on, so it's a
- * pure blocklist instead (everyone else stays allowed). `"allowAnonymous"`
+ * At least one `permit: true` policy is required: a caller is granted only by
+ * a matching `permit: true` policy (deny by default), and a matching
+ * `permit: false` policy always overrides that grant, even when another
+ * policy would otherwise allow the same caller — use it to carve out an
+ * explicit exception from a broader grant. A policy array with only
+ * `permit: false` policies is rejected, since none of its conditions apply to
+ * a caller presenting no user attributes at all (e.g. one who simply doesn't
+ * authenticate), so it wouldn't actually keep anyone out. `"allowAnonymous"`
  * explicitly documents that anonymous callers are allowed.
  * @example
  * const permission: ResolverPermission = [
@@ -68,11 +68,6 @@ export type ResolverPermissionPolicy<User extends object = InferredAttributeMap>
  * // Exception: allow logged-in users broadly, but reject a banned role
  * const permission: ResolverPermission = [
  *   { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
- *   { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false },
- * ];
- * @example
- * // Blocklist: reject a specific role, leave the resolver open to everyone else
- * const permission: ResolverPermission = [
  *   { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false },
  * ];
  * @example

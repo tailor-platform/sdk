@@ -37,6 +37,23 @@ describe("ResolverPermissionSchema", () => {
     expect(() => ResolverPermissionSchema.parse("allowAnonymous")).not.toThrow();
   });
 
+  test("accepts a mix of `permit: true` and `permit: false` policies", () => {
+    expect(() =>
+      ResolverPermissionSchema.parse([
+        { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+        { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false },
+      ]),
+    ).not.toThrow();
+  });
+
+  test("rejects a policy array with only `permit: false` policies", () => {
+    expect(() =>
+      ResolverPermissionSchema.parse([
+        { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false },
+      ]),
+    ).toThrow("must include at least one `permit: true` policy");
+  });
+
   test("rejects an empty policy array", () => {
     expect(() => ResolverPermissionSchema.parse([])).toThrow(
       "permission must have at least one policy",

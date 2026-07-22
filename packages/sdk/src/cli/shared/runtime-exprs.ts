@@ -191,12 +191,16 @@ function policyEntryExpr(policy: ResolverPermissionPolicy): string {
  *
  * Rejects the call with `TailorErrorMessage` when the caller doesn't match
  * `permission`, evaluated against `context.user` — the original caller,
- * unaffected by `authInvoker`. A `permit: false` policy always denies matching
- * callers. With no `permit: true` policy, `permission` is a pure blocklist
- * (everyone else is allowed); with at least one, it's an allow-list (deny by
- * default, granted only by a matching `permit: true` policy). The thrown
- * message only includes the description(s) of the policy/policies that
- * actually caused the denial.
+ * unaffected by `authInvoker`. `permission` is deny-by-default: a caller is
+ * granted only by a matching `permit: true` policy, and a matching
+ * `permit: false` policy always overrides that grant. The thrown message only
+ * includes the description(s) of the policy/policies that actually caused the
+ * denial.
+ *
+ * The schema requires at least one `permit: true` policy (an array of only
+ * `permit: false` policies is rejected at build time), so `allowPolicies` is
+ * never empty here for schema-valid input; this function still handles that
+ * case defensively since it also runs against test-authored raw shapes.
  * @param permission - The resolver's `permission` config
  * @returns A JS statement, or `undefined` when `permission` is omitted or `"allowAnonymous"`
  */
