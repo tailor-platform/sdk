@@ -377,13 +377,30 @@ export default createResolver({
 - `{ user: "id" }` — the caller's user ID
 - `{ user: "someAttribute" }` — any string or boolean attribute enabled in `auth.userProfile.attributes` (or `auth.machineUserAttributes` for machine users); array attributes aren't supported, since conditions only compare against a single string/boolean value
 
-Multiple conditions within the same policy's `conditions` array are combined with AND. `permit` is required. A `permit: false` policy always denies matching callers. With no `permit: true` policy, `permission` is a pure blocklist (everyone else is allowed); with at least one `permit: true` policy, it becomes an allow-list (denied by default, granted only by a matching `permit: true` policy). This lets you express different eligibility paths, e.g. allowing machine-user callers unconditionally while gating regular users behind a role check:
+Multiple conditions within the same policy's `conditions` array are combined with AND. `permit` is required, with no implicit default.
+
+A `permit: false` policy always denies matching callers, even ones another policy would otherwise allow. Combine it with `permit: true` policies to carve out an explicit exception, e.g. granting access broadly but rejecting one banned role:
+
+```typescript
+permission: [
+  { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+  { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false },
+],
+```
+
+With at least one `permit: true` policy present, `permission` becomes an allow-list: denied by default, granted only by a matching `permit: true` policy (a matching `permit: false` policy still overrides that grant). This lets you express different eligibility paths, e.g. allowing machine-user callers unconditionally while gating regular users behind a role check:
 
 ```typescript
 permission: [
   { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
   { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
 ],
+```
+
+Providing only `permit: false` policies (no `permit: true` at all) is a different pattern from the exception-carving above: with no `permit: true` policy, there's no allow-list to fall back on, so the resolver stays open to everyone by default (the same as omitting `permission`) and only matching callers are rejected — a pure blocklist, for gating out specific callers without opting into a full allow-list:
+
+```typescript
+permission: [{ conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false }],
 ```
 
 Besides a policy array, `permission` also accepts:
