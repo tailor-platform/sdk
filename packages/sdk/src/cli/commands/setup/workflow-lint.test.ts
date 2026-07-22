@@ -193,12 +193,14 @@ describe("tailor-platform/actions drift-check/generate-check version pin", () =>
   // (see package.json#bin), so bumping either action to v2 breaks every
   // generated workflow's drift-check/generate-check step. Keep both pinned to
   // v1 until the CLI binary itself is renamed to `tailor`.
-  function majorVersion(content: string, actionName: string): number {
-    const match = content.match(
-      new RegExp(`tailor-platform/actions/${actionName}@[0-9a-f]{40} # v(\\d+)`),
-    );
-    expect(match, `no ${actionName} reference found`).not.toBeNull();
-    return Number(match?.[1]);
+  function majorVersions(content: string, actionName: string): number[] {
+    const matches = [
+      ...content.matchAll(
+        new RegExp(`tailor-platform/actions/${actionName}@[0-9a-f]{40} # v(\\d+)`, "g"),
+      ),
+    ];
+    expect(matches.length, `no ${actionName} reference found`).toBeGreaterThan(0);
+    return matches.map((match) => Number(match[1]));
   }
 
   test("branch/tag workflows pin drift-check and generate-check below v2", () => {
@@ -215,8 +217,12 @@ describe("tailor-platform/actions drift-check/generate-check version pin", () =>
     });
 
     for (const content of [branch, tag]) {
-      expect(majorVersion(content, "drift-check")).toBeLessThan(2);
-      expect(majorVersion(content, "generate-check")).toBeLessThan(2);
+      for (const version of majorVersions(content, "drift-check")) {
+        expect(version).toBeLessThan(2);
+      }
+      for (const version of majorVersions(content, "generate-check")) {
+        expect(version).toBeLessThan(2);
+      }
     }
   });
 
@@ -228,7 +234,9 @@ describe("tailor-platform/actions drift-check/generate-check version pin", () =>
       packageManager: "pnpm",
     });
 
-    expect(majorVersion(preview, "generate-check")).toBeLessThan(2);
+    for (const version of majorVersions(preview, "generate-check")) {
+      expect(version).toBeLessThan(2);
+    }
   });
 });
 
