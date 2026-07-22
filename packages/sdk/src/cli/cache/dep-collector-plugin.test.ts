@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { createDepCollectorPlugin } from "./dep-collector-plugin";
 import type { Plugin } from "rolldown";
 
@@ -26,9 +26,10 @@ describe("createDepCollectorPlugin", () => {
   let getResult: () => string[];
   let load: (id: string) => unknown;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     ({ plugin, getResult } = createDepCollectorPlugin());
     load = extractLoadHandler(plugin);
+    await runTest();
   });
 
   test("returns an object with plugin and getResult", () => {

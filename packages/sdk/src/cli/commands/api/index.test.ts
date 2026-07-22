@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { runCommand } from "politty";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { getMethodDescriptor } from "./proto-reflect";
 import { apiCommand, normalizeBodyFieldKeys } from "./index";
 
@@ -70,7 +70,8 @@ describe("normalizeBodyFieldKeys", () => {
 describe("api command workspaceId injection (end-to-end body contract)", () => {
   const WS = randomUUID();
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     apiCallMock.mockReset();
     vi.unstubAllEnvs();
   });

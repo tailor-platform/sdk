@@ -7,10 +7,15 @@ export type HttpAdapterConfigInput = {
   pathPattern: string;
   /** Per-method functions that transform HTTP requests to GraphQL requests */
   input: {
+    /** Handler for GET requests */
     get?: Function | undefined;
+    /** Handler for POST requests */
     post?: Function | undefined;
+    /** Handler for PUT requests */
     put?: Function | undefined;
+    /** Handler for PATCH requests */
     patch?: Function | undefined;
+    /** Handler for DELETE requests */
     delete?: Function | undefined;
   };
   /** Whether the adapter is active */
@@ -32,10 +37,15 @@ export type HttpAdapterConfig = {
   priority: number;
   /** Per-method functions that transform HTTP requests to GraphQL requests */
   input: {
+    /** Handler for GET requests */
     get?: Function | undefined;
+    /** Handler for POST requests */
     post?: Function | undefined;
+    /** Handler for PUT requests */
     put?: Function | undefined;
+    /** Handler for PATCH requests */
     patch?: Function | undefined;
+    /** Handler for DELETE requests */
     delete?: Function | undefined;
   };
   /** Function that transforms GraphQL response to HTTP response */

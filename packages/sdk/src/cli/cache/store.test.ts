@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { createCacheStore } from "./store";
 import type { CacheEntry, CacheManifest } from "./types";
 
@@ -9,12 +9,10 @@ describe("createCacheStore", () => {
   let tmpDir: string;
   let cacheDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cache-store-test-"));
     cacheDir = path.join(tmpDir, "cache");
-  });
-
-  afterEach(() => {
+    await runTest();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 

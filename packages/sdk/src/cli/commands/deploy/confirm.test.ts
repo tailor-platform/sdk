@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { confirmOwnerConflict, type OwnerConflict } from "./confirm";
 import type { prompt as promptModule } from "#/cli/shared/prompt";
 
@@ -30,12 +30,10 @@ vi.mock("#/cli/shared/prompt", () => ({
 describe("confirmOwnerConflict", () => {
   let prompt: typeof promptModule;
 
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     ({ prompt } = await import("#/cli/shared/prompt"));
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.restoreAllMocks();
   });
 

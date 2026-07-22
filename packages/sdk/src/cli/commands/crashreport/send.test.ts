@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { formatCrashReport } from "#/cli/crashreport/writer";
 import { parseCrashLogFile } from "./send";
 import type { CrashReport } from "#/cli/crashreport/report";
@@ -31,11 +31,9 @@ function makeCrashReport(overrides?: Partial<CrashReport>): CrashReport {
 describe("crashreport send command", () => {
   let tmpDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "crash-report-send-test-"));
-  });
-
-  afterEach(() => {
+    await runTest();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 

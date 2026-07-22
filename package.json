@@ -46,12 +46,12 @@
     "perf:typecheck": "pnpm --filter example perf:typecheck"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "1.0.0-next.6",
-    "@changesets/cli": "3.0.0-next.8",
+    "@changesets/changelog-github": "1.0.0-next.7",
+    "@changesets/cli": "3.0.0-next.9",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.3",
     "eslint-plugin-zod": "4.7.0",
-    "knip": "6.26.0",
+    "knip": "6.27.0",
     "lefthook": "2.1.10",
     "madge": "8.0.0",
     "oxfmt": "0.58.0",
@@ -64,5 +64,5 @@
   "engines": {
     "node": ">= 22.15.0"
   },
-  "packageManager": "pnpm@11.11.0"
+  "packageManager": "pnpm@11.15.0"
 }

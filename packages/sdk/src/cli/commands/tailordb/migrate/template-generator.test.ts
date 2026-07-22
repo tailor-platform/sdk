@@ -1,7 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, expect, test, beforeEach, afterEach } from "vitest";
+import { describe, expect, test, aroundEach } from "vitest";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import {
   SCHEMA_FILE_NAME,
@@ -22,11 +22,9 @@ import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 describe("template-generator", () => {
   let tempDir: string;
 
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "migration-test-"));
-  });
-
-  afterEach(async () => {
+    await runTest();
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 

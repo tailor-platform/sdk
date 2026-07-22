@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { byName, createApplyLimiter, resolveApplyConcurrency } from "./apply-concurrency";
 
 const original = process.env.TAILOR_APPLY_CONCURRENCY;
-afterEach(() => {
+aroundEach(async (runTest) => {
+  await runTest();
   if (original === undefined) {
     delete process.env.TAILOR_APPLY_CONCURRENCY;
   } else {

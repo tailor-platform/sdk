@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { describe, expect, test, vi, beforeEach, afterAll } from "vitest";
+import { describe, expect, test, vi, aroundAll, aroundEach } from "vitest";
 import {
   SCHEMA_SNAPSHOT_VERSION,
   type MigrationDiff,
@@ -130,11 +130,13 @@ function createMetadataClient(
 describe("migration", () => {
   let testDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     testDir = makeTestDir("test");
+    await runTest();
   });
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     try {
       fs.rmSync(TEST_MIGRATIONS_BASE, { recursive: true, force: true });
     } catch {
@@ -437,10 +439,11 @@ describe("migration", () => {
         machineUsers: ["test-machine-user"],
         dbConfig: {},
         env: {},
+        configDir: "/project",
       };
     }
 
-    beforeEach(() => {
+    aroundEach(async (runTest) => {
       bundleMigrationScriptMock.mockReset();
       executeScriptMock.mockReset();
       bundleMigrationScriptMock.mockResolvedValue({
@@ -452,6 +455,7 @@ describe("migration", () => {
         logs: "",
         result: "",
       });
+      await runTest();
     });
 
     test("skips migrations without a script file on disk", async () => {

@@ -1,9 +1,10 @@
 import * as os from "node:os";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { resolveBundleConcurrency, withBundleConcurrency } from "./bundle-concurrency";
 
 describe("resolveBundleConcurrency", () => {
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
@@ -42,10 +43,9 @@ describe("withBundleConcurrency", () => {
   // time. With real timers the worker delays below could exceed the 5s test
   // timeout on a loaded CI runner, producing flaky failures even though the
   // logic is correct; `runAllTimersAsync` drives the awaited setTimeouts instead.
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.useFakeTimers();
-  });
-  afterEach(() => {
+    await runTest();
     vi.useRealTimers();
     vi.unstubAllEnvs();
   });
