@@ -102,7 +102,9 @@ export type FunctionOperation = {
   authInvoker?:
     | string
     | {
+        /** Auth namespace */
         namespace: string;
+        /** Machine user name for authentication */
         machineUserName: string;
       }
     | undefined;
@@ -120,7 +122,9 @@ export type GqlOperationInput = {
   authInvoker?:
     | string
     | {
+        /** Auth namespace */
         namespace: string;
+        /** Machine user name for authentication */
         machineUserName: string;
       }
     | undefined;
@@ -137,7 +141,9 @@ export type GqlOperation = {
   authInvoker?:
     | string
     | {
+        /** Auth namespace */
         namespace: string;
+        /** Machine user name for authentication */
         machineUserName: string;
       }
     | undefined;
@@ -214,21 +220,28 @@ export type Executor = {
               [x: string]: unknown;
             }
           | undefined;
+        /** Auth invoker for the function execution */
         authInvoker?:
           | string
           | {
+              /** Auth namespace */
               namespace: string;
+              /** Machine user name for authentication */
               machineUserName: string;
             }
           | undefined;
       }
     | {
         kind: "function" | "jobFunction";
+        /** Function implementation */
         body: Function;
+        /** Auth invoker for the function execution */
         authInvoker?:
           | string
           | {
+              /** Auth namespace */
               namespace: string;
+              /** Machine user name for authentication */
               machineUserName: string;
             }
           | undefined;
@@ -236,20 +249,28 @@ export type Executor = {
     | {
         kind: "graphql";
         query: string;
+        /** Target application name for the GraphQL query */
         appName?: string | undefined;
+        /** Function to compute GraphQL variables */
         variables?: Function | undefined;
+        /** Auth invoker for the function execution */
         authInvoker?:
           | string
           | {
+              /** Auth namespace */
               namespace: string;
+              /** Machine user name for authentication */
               machineUserName: string;
             }
           | undefined;
       }
     | {
         kind: "webhook";
+        /** Function returning the webhook URL */
         url: Function;
+        /** Function to compute the request body */
         requestBody?: Function | undefined;
+        /** HTTP headers for the webhook request */
         headers?:
           | {
               [x: string]:

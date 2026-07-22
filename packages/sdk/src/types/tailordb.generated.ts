@@ -14,9 +14,13 @@ export type GqlOperationsInput =
     };
 
 export type GqlOperations = {
+  /** Enable create mutation (default: true) */
   create?: boolean | undefined;
+  /** Enable update mutation (default: true) */
   update?: boolean | undefined;
+  /** Enable delete mutation (default: true) */
   delete?: boolean | undefined;
+  /** Enable read queries - get, list, aggregation (default: true) */
   read?: boolean | undefined;
 };
 
@@ -33,7 +37,6 @@ export type DBFieldMetadata = {
   allowedValues?:
     | {
         value: string;
-        /** Field description */
         description?: string | undefined;
       }[]
     | undefined;
@@ -52,7 +55,9 @@ export type DBFieldMetadata = {
   /** Lifecycle hooks for the field */
   hooks?:
     | {
+        /** Hook function called on record creation */
         create?: Function | undefined;
+        /** Hook function called on record update */
         update?: Function | undefined;
       }
     | undefined;
@@ -61,8 +66,11 @@ export type DBFieldMetadata = {
   /** Serial (auto-increment) configuration */
   serial?:
     | {
+        /** Starting value for the serial sequence */
         start: number;
+        /** Maximum value for the serial sequence */
         maxValue?: number | undefined;
+        /** Format string for serial value (string type only) */
         format?: string | undefined;
       }
     | undefined;
@@ -75,9 +83,11 @@ export type RawRelationConfig = {
   /** Relation cardinality type */
   type: "1-1" | "n-1" | "keyOnly" | "oneToOne" | "manyToOne" | "N-1";
   toward: {
-    /** Relation cardinality type */
+    /** Target type name, or 'self' for self-relations */
     type: string;
+    /** Custom forward relation name */
     as?: string | undefined;
+    /** Target field to join on (default: 'id') */
     key?: string | undefined;
   };
   /** Backward relation name on the target type */
@@ -96,9 +106,13 @@ export type TailorDBTypeParsedSettingsInput = {
   gqlOperations?:
     | "query"
     | {
+        /** Enable create mutation (default: true) */
         create?: boolean | undefined;
+        /** Enable update mutation (default: true) */
         update?: boolean | undefined;
+        /** Enable delete mutation (default: true) */
         delete?: boolean | undefined;
+        /** Enable read queries - get, list, aggregation (default: true) */
         read?: boolean | undefined;
       }
     | undefined;
@@ -1098,7 +1112,9 @@ export type TailorDBServiceConfigInput = {
   /** Migration configuration */
   migration?:
     | {
+        /** Directory containing migration files */
         directory: string;
+        /** Machine user name for migration execution */
         machineUser?: string | undefined;
       }
     | undefined;
@@ -1106,9 +1122,13 @@ export type TailorDBServiceConfigInput = {
   gqlOperations?:
     | "query"
     | {
+        /** Enable create mutation (default: true) */
         create?: boolean | undefined;
+        /** Enable update mutation (default: true) */
         update?: boolean | undefined;
+        /** Enable delete mutation (default: true) */
         delete?: boolean | undefined;
+        /** Enable read queries - get, list, aggregation (default: true) */
         read?: boolean | undefined;
       }
     | undefined;
@@ -1124,7 +1144,9 @@ export type TailorDBServiceConfig = {
   /** Migration configuration */
   migration?:
     | {
+        /** Directory containing migration files */
         directory: string;
+        /** Machine user name for migration execution */
         machineUser?: string | undefined;
       }
     | undefined;

@@ -1,3 +1,9 @@
+import type {
+  UserBooleanArrayOperand,
+  UserBooleanOperand,
+  UserStringArrayOperand,
+  UserStringOperand,
+} from "#/configure/types/permission-operand.types";
 import type { InferredAttributeMap } from "#/runtime/types";
 
 // --- Permission types (UX-focused, for configure layer) ---
@@ -73,39 +79,6 @@ type GqlPermissionAction = "read" | "create" | "update" | "delete" | "aggregate"
 type EqualityOperator = "=" | "!=";
 type ContainsOperator = "in" | "not in";
 type HasAnyOperator = "hasAny" | "not hasAny";
-
-// Helper types for User field extraction
-type StringFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends string ? K : never;
-}[keyof User];
-
-type StringArrayFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends string[] ? K : never;
-}[keyof User];
-
-type BooleanFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends boolean ? K : never;
-}[keyof User];
-
-type BooleanArrayFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends boolean[] ? K : never;
-}[keyof User];
-
-type UserStringOperand<User extends object = InferredAttributeMap> = {
-  user: StringFieldKeys<User> | "id";
-};
-
-type UserStringArrayOperand<User extends object = InferredAttributeMap> = {
-  user: StringArrayFieldKeys<User>;
-};
-
-type UserBooleanOperand<User extends object = InferredAttributeMap> = {
-  user: BooleanFieldKeys<User> | "_loggedIn";
-};
-
-type UserBooleanArrayOperand<User extends object = InferredAttributeMap> = {
-  user: BooleanArrayFieldKeys<User>;
-};
 
 type RecordOperand<Type extends object, Update extends boolean = false> = Update extends true
   ? { oldRecord: (keyof Type & string) | "id" } | { newRecord: (keyof Type & string) | "id" }

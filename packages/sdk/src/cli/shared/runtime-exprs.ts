@@ -12,6 +12,7 @@
  */
 import { tailorUserMap } from "#/parser/service/tailordb/index";
 import type { Trigger } from "#/types/executor.generated";
+import type { Resolver } from "#/types/resolver.generated";
 
 // ---------------------------------------------------------------------------
 // Bundle inline
@@ -101,4 +102,168 @@ export function buildResolverOperationHookExpr(
   env: Record<string, string | number | boolean>,
 ): string {
   return `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`;
+}
+
+type ResolverPermissionPolicies = Extract<NonNullable<Resolver["permission"]>, readonly unknown[]>;
+type ResolverPermissionPolicy = ResolverPermissionPolicies[number];
+type ResolverPermissionOperand = string | boolean | { user: string };
+type ResolverPermissionCondition = readonly [
+  ResolverPermissionOperand,
+  "=" | "!=",
+  ResolverPermissionOperand,
+];
+
+function isSingleResolverCondition(
+  conditions: ResolverPermissionPolicy["conditions"],
+): conditions is ResolverPermissionCondition {
+  return conditions.length === 3 && typeof conditions[1] === "string";
+}
+
+function resolverPermissionOperandExpr(operand: ResolverPermissionOperand): string {
+  if (typeof operand === "object") {
+    if (operand.user === "_loggedIn") {
+      return `(context.user.type !== "")`;
+    }
+    if (operand.user === "id") {
+      return `context.user.id`;
+    }
+    return `context.user.attributes?.[${JSON.stringify(operand.user)}]`;
+  }
+  return JSON.stringify(operand);
+}
+
+// `_loggedIn` always evaluates to a defined boolean, and `id` is always a
+// defined string (a nil UUID for unauthenticated callers), but an arbitrary
+// attribute lookup (`context.user.attributes?.[key]`) can be `undefined` --
+// either because the whole attribute map is null or the key isn't set.
+function isArbitraryAttributeOperand(operand: ResolverPermissionOperand): boolean {
+  return typeof operand === "object" && operand.user !== "_loggedIn" && operand.user !== "id";
+}
+
+function resolverPermissionConditionExpr(condition: ResolverPermissionCondition): string {
+  const [left, operator, right] = condition;
+  const leftExpr = resolverPermissionOperandExpr(left);
+  const rightExpr = resolverPermissionOperandExpr(right);
+
+  if (operator === "!=") {
+    // A missing attribute must not satisfy `!=` -- otherwise an
+    // attribute-less caller would unintentionally match a policy meant to
+    // exclude only a specific value (`{ user: "role" } != "BANNED"` should
+    // not let a caller with no `role` attribute at all through).
+    const userOperandExpr = isArbitraryAttributeOperand(left)
+      ? leftExpr
+      : isArbitraryAttributeOperand(right)
+        ? rightExpr
+        : undefined;
+    if (userOperandExpr) {
+      return `(${userOperandExpr} !== undefined && ${leftExpr} !== ${rightExpr})`;
+    }
+  }
+
+  const jsOperator = operator === "=" ? "===" : "!==";
+  return `(${leftExpr} ${jsOperator} ${rightExpr})`;
+}
+
+function resolverPermissionPolicyExpr(policy: ResolverPermissionPolicy): string {
+  const conditions = isSingleResolverCondition(policy.conditions)
+    ? [policy.conditions]
+    : policy.conditions;
+  if (conditions.length === 0) {
+    throw new Error(
+      "Resolver permission policy must have at least one condition, got an empty array.",
+    );
+  }
+  return conditions.map(resolverPermissionConditionExpr).join(" && ");
+}
+
+/**
+ * Build a JS object literal capturing whether `policy` matched and its
+ * (possibly empty) description, for runtime denial-reason attribution.
+ * @param policy - The policy to compile
+ * @returns A JS object literal expression: `{ matched, description }`
+ */
+function policyEntryExpr(policy: ResolverPermissionPolicy): string {
+  return `{ matched: ${resolverPermissionPolicyExpr(policy)}, description: ${JSON.stringify(policy.description ?? "")} }`;
+}
+
+/**
+ * Build the permission guard statement injected at resolver entry.
+ *
+ * Rejects the call with `TailorErrorMessage` when the caller doesn't match
+ * `permission`, evaluated against `context.user` — the original caller,
+ * unaffected by `authInvoker`. `permission` is deny-by-default: a caller is
+ * granted only by a matching `permit: true` policy, and a matching
+ * `permit: false` policy always overrides that grant. The thrown message only
+ * includes the description(s) of the policy/policies that actually caused the
+ * denial.
+ *
+ * The schema requires at least one `permit: true` policy (an array of only
+ * `permit: false` policies is rejected at build time), so `allowPolicies` is
+ * never empty here for schema-valid input; this function still handles that
+ * case defensively since it also runs against test-authored raw shapes.
+ * @param permission - The resolver's `permission` config
+ * @returns A JS statement, or `undefined` when `permission` is omitted or `"allowAnonymous"`
+ */
+export function buildResolverPermissionGuardExpr(
+  permission: Resolver["permission"],
+): string | undefined {
+  if (!permission || permission === "allowAnonymous") {
+    return undefined;
+  }
+  if (permission.length === 0) {
+    throw new Error("Resolver permission must have at least one policy, got an empty array.");
+  }
+  const denyPolicies = permission.filter((policy) => policy.permit === false);
+  const allowPolicies = permission.filter((policy) => policy.permit !== false);
+
+  const denyEntriesExpr = `[${denyPolicies.map(policyEntryExpr).join(", ")}]`;
+  const allowEntriesExpr = `[${allowPolicies.map(policyEntryExpr).join(", ")}]`;
+
+  return `{
+    const $denyPolicies = ${denyEntriesExpr};
+    const $allowPolicies = ${allowEntriesExpr};
+    const $matchedDeny = $denyPolicies.filter((p) => p.matched);
+    const $anyAllowMatched = $allowPolicies.some((p) => p.matched);
+    if ($matchedDeny.length > 0 || ($allowPolicies.length > 0 && !$anyAllowMatched)) {
+      const $reasons = ($matchedDeny.length > 0 ? $matchedDeny : $allowPolicies)
+        .map((p) => p.description)
+        .filter(Boolean);
+      throw new TailorErrorMessage($reasons.length > 0 ? "access denied: " + $reasons.join("; ") : "access denied");
+    }
+  }`;
+}
+
+/**
+ * Build the permission guard and input-validation statements shared by every
+ * resolver entry wrapper (production bundling and `function test-run`).
+ *
+ * Kept as a single generator so a resolver-wrapping behavior (like the
+ * permission guard) can't be added to one entry-point template and forgotten
+ * in the other. References `context.user`, `context.input`, and
+ * `_internalResolver` — the caller's wrapper must bind a `context` object
+ * with `user`/`input` properties before inlining this expression.
+ * @param permission - The resolver's `permission` config
+ * @returns A JS statement block to inline before calling `_internalResolver.body(...)`
+ */
+export function buildResolverPermissionAndInputCheckExpr(
+  permission: Resolver["permission"],
+): string {
+  const permissionGuardExpr = buildResolverPermissionGuardExpr(permission);
+  return `
+    ${permissionGuardExpr ?? ""}
+    if (_internalResolver.input) {
+      const result = t.object(_internalResolver.input).parse({
+        value: context.input,
+        data: context.input,
+        user: context.user,
+      });
+
+      if (result.issues) {
+        throw new TailorErrors(result.issues.map(issue => ({
+          message: issue.message,
+          path: issue.path ?? [],
+        })));
+      }
+    }
+  `;
 }

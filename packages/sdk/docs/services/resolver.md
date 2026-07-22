@@ -350,6 +350,60 @@ createResolver({
    });
    ```
 
+## Permissions
+
+### Access Requirement (`permission`)
+
+By default, a resolver with no in-body check is reachable by an anonymous (unauthenticated) caller. Set `permission` to reject callers that don't match a condition, evaluated before `body` runs:
+
+```typescript
+import { createResolver, t } from "@tailor-platform/sdk";
+
+export default createResolver({
+  name: "getMyOrders",
+  operation: "query",
+  permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  output: t.object({ count: t.int() }),
+  body: async (context) => {
+    // context.user is guaranteed to be an authenticated caller here
+    return { count: 0 };
+  },
+});
+```
+
+`permission` uses the same `conditions`/`permit` notation as TailorDB's `.permission()` — an array of policies, restricted to `user` operands (a resolver has no associated record to compare against) with equality (`=`/`!=`) comparisons:
+
+- `{ user: "_loggedIn" }` — whether the caller is authenticated
+- `{ user: "id" }` — the caller's user ID
+- `{ user: "someAttribute" }` — any string or boolean attribute enabled in `auth.userProfile.attributes` (or `auth.machineUserAttributes` for machine users); array attributes aren't supported, since conditions only compare against a single string/boolean value
+
+Multiple conditions within the same policy's `conditions` array are combined with AND. `permit` is required, with no implicit default. At least one `permit: true` policy is required: `permission` is an allow-list, denied by default and granted only by a matching `permit: true` policy. This lets you express different eligibility paths, e.g. allowing machine-user callers unconditionally while gating regular users behind a role check:
+
+```typescript
+permission: [
+  { conditions: [[{ user: "isServiceAccount" }, "=", true]], permit: true },
+  { conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true },
+],
+```
+
+A `permit: false` policy always denies matching callers, even ones another policy would otherwise allow. Combine it with a `permit: true` policy to carve out an explicit exception, e.g. granting access broadly but rejecting one banned role:
+
+```typescript
+permission: [
+  { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+  { conditions: [[{ user: "role" }, "=", "BANNED"]], permit: false },
+],
+```
+
+A policy array made up of only `permit: false` policies is rejected: since none of its conditions apply to a caller presenting no user attributes at all, it wouldn't actually keep anyone out who's willing to drop their credentials, so it can't stand in for an allow-list.
+
+Besides a policy array, `permission` also accepts:
+
+- `"allowAnonymous"` — explicitly documents that anonymous callers are allowed. Behaves the same as omitting `permission`, but records the decision so it isn't mistaken for an oversight.
+- Omitted (default) — unchanged: anonymous callers can still reach the resolver.
+
+This check is based on `context.user`, the original caller, so it still applies even when `authInvoker` swaps in a machine user for database access.
+
 ## Authentication
 
 Specify an `authInvoker` to execute the resolver with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names you defined in your auth config:

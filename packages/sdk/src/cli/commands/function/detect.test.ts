@@ -57,6 +57,26 @@ export default {
       expect(result.name).toBe("my-resolver");
     });
 
+    test("carries the resolver's `permission` config through for test-run to enforce", async () => {
+      const filePath = writeFile(
+        "resolver-permission.mjs",
+        `
+export default {
+  operation: "query",
+  name: "protected",
+  permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  body: (ctx) => ctx.input,
+  output: { type: "string", metadata: {}, fields: {} },
+};
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.permission).toEqual([
+        { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+      ]);
+    });
+
     test("builds a working local input parser from real t.* fields", async () => {
       const configureTypesUrl = pathToFileURL(
         path.join(__dirname, "../../../configure/types/index.ts"),
