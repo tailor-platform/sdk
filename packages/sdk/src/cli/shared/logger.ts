@@ -1,7 +1,7 @@
 import { formatWithOptions, type InspectOptions } from "node:util";
 import chalk from "chalk";
 import { formatDistanceToNowStrict } from "date-fns";
-import { getBorderCharacters, table } from "table";
+import { renderTable } from "./ascii-table";
 import { parseBoolean } from "./parse-boolean";
 
 /**
@@ -253,10 +253,7 @@ export const logger = {
         key,
         transformValue(key, value, data, true),
       ]);
-      const t = table(formattedEntries, {
-        singleLine: false,
-        border: getBorderCharacters("norc"),
-      });
+      const t = renderTable(formattedEntries, { singleLine: false });
       process.stdout.write(t);
       return;
     }
@@ -273,8 +270,7 @@ export const logger = {
       ),
     );
 
-    const t = table([headers, ...rows], {
-      border: getBorderCharacters("norc"),
+    const t = renderTable([headers, ...rows], {
       drawHorizontalLine: (lineIndex, rowCount) => {
         return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount;
       },
