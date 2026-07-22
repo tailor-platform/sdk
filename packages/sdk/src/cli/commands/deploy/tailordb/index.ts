@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import * as fs from "node:fs";
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import {
   type CreateTailorDBGQLPermissionRequestSchema,
@@ -37,6 +39,7 @@ import {
   formatSchemaDrifts,
   createSnapshotType,
   getLatestMigrationNumber,
+  getMigrationFilePath,
   getMigrationFiles,
   INITIAL_SCHEMA_NUMBER,
   type RemoteGqlPermission,
@@ -350,7 +353,58 @@ function formatRemoteVerificationResults(results: RemoteSchemaVerificationResult
 type ValidateAndDetectResult = {
   pendingMigrations: PendingMigration[];
   namespacesWithMigrations: NamespaceWithMigrations[];
+  migrationFileState: Record<string, string>;
 };
+
+const MIGRATION_FILE_KINDS = ["schema", "diff", "migrate", "db"] as const;
+
+/**
+ * Capture the migration files that a deployment plan depends on.
+ * @param namespacesWithMigrations - Configured migration directories by namespace
+ * @returns SHA-256 digest by namespace
+ */
+export function captureMigrationFileState(
+  namespacesWithMigrations: ReadonlyArray<NamespaceWithMigrations>,
+): Record<string, string> {
+  const state: Record<string, string> = {};
+  for (const { namespace, migrationsDir } of namespacesWithMigrations.toSorted((a, b) =>
+    a.namespace.localeCompare(b.namespace),
+  )) {
+    const hash = createHash("sha256");
+    const migrationNumbers = [
+      ...new Set(getMigrationFiles(migrationsDir).map(({ number }) => number)),
+    ].toSorted((a, b) => a - b);
+    for (const migrationNumber of migrationNumbers) {
+      for (const kind of MIGRATION_FILE_KINDS) {
+        const filePath = getMigrationFilePath(migrationsDir, migrationNumber, kind);
+        hash.update(`${formatMigrationNumber(migrationNumber)}/${kind}\0`);
+        if (fs.existsSync(filePath)) {
+          hash.update(fs.readFileSync(filePath));
+        } else {
+          hash.update("<missing>");
+        }
+        hash.update("\0");
+      }
+    }
+    state[namespace] = hash.digest("hex");
+  }
+  return state;
+}
+
+function migrationFileStatesEqual(
+  planned: Readonly<Record<string, string>>,
+  current: Readonly<Record<string, string>>,
+): boolean {
+  const plannedNamespaces = Object.keys(planned).toSorted();
+  const currentNamespaces = Object.keys(current).toSorted();
+  return (
+    plannedNamespaces.length === currentNamespaces.length &&
+    plannedNamespaces.every(
+      (namespace, index) =>
+        namespace === currentNamespaces[index] && planned[namespace] === current[namespace],
+    )
+  );
+}
 
 /**
  * Validate migration files and detect pending migrations
@@ -468,7 +522,11 @@ export async function validateAndDetectMigrations(
     }
   }
 
-  return { pendingMigrations, namespacesWithMigrations };
+  return {
+    pendingMigrations,
+    namespacesWithMigrations,
+    migrationFileState: captureMigrationFileState(namespacesWithMigrations),
+  };
 }
 
 /**
@@ -556,7 +614,7 @@ async function validateTailorDBMigrationState(
     typesByNamespace.set(tailordb.namespace, tailordb.types);
   }
 
-  return validateAndDetectMigrations(
+  const validation = await validateAndDetectMigrations(
     client,
     context.workspaceId,
     typesByNamespace,
@@ -564,6 +622,12 @@ async function validateTailorDBMigrationState(
     context.noSchemaCheck,
     context.tailorDBInputs,
   );
+  if (!migrationFileStatesEqual(context.migrationFileState, validation.migrationFileState)) {
+    throw new Error(
+      "Migration files changed after deployment planning. Run the deployment again to create a fresh plan.",
+    );
+  }
+  return validation;
 }
 
 /**
@@ -1387,8 +1451,8 @@ export async function planTailorDB(context: PlanContext) {
   for (const tailordb of tailordbs) {
     typesByNamespace.set(tailordb.namespace, tailordb.types);
   }
-  const { namespacesWithMigrations } = forRemoval
-    ? { namespacesWithMigrations: [] }
+  const { namespacesWithMigrations, migrationFileState } = forRemoval
+    ? { namespacesWithMigrations: [], migrationFileState: {} }
     : await validateAndDetectMigrations(
         client,
         workspaceId,
@@ -1441,6 +1505,7 @@ export async function planTailorDB(context: PlanContext) {
       config,
       noSchemaCheck: noSchemaCheck ?? false,
       namespacesWithMigrations,
+      migrationFileState,
     },
   };
 }

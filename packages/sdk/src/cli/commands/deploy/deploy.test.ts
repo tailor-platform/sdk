@@ -60,6 +60,7 @@ function emptyResults(): PlanResults {
         config: {} as PlanResults["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
         namespacesWithMigrations: [],
+        migrationFileState: {},
       },
     },
     staticWebsite: {

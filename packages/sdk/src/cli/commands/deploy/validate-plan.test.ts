@@ -50,6 +50,7 @@ function emptyInput(): ValidatePlanInput {
         config: {} as ValidatePlanInput["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
         namespacesWithMigrations: [],
+        migrationFileState: {},
       },
     },
     staticWebsite: {
