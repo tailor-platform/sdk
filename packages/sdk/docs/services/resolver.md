@@ -404,7 +404,7 @@ Besides a policy array, `permission` also accepts:
 
 This check is based on `context.user`, the original caller, so it still applies even when `authInvoker` swaps in a machine user for database access.
 
-### Running as a Machine User (`authInvoker`)
+## Authentication
 
 Specify an `authInvoker` to execute the resolver with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names you defined in your auth config:
 
