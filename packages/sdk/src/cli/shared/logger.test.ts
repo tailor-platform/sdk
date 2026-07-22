@@ -145,6 +145,16 @@ describe("logger", () => {
       expect(output).toBe("");
     });
 
+    test("writes nothing when every item has no displayable fields", () => {
+      const emptyItems = captureStdout(() => logger.out([{}, {}]));
+      expect(emptyItems).toBe("");
+
+      const allFieldsExcluded = captureStdout(() =>
+        logger.out([{ secret: "x" }], { display: { secret: null } }),
+      );
+      expect(allFieldsExcluded).toBe("");
+    });
+
     test("formats null, undefined, Date, and nested object values", () => {
       const output = captureStdout(() =>
         logger.out({

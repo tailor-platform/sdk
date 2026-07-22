@@ -264,6 +264,9 @@ export const logger = {
 
     const allHeaders = Array.from(new Set(data.flatMap((item) => Object.keys(item))));
     const headers = allHeaders.filter((h) => !isExcluded(h));
+    if (headers.length === 0) {
+      return;
+    }
     const rows = data.map((item) =>
       headers.map((header) =>
         transformValue(header, (item as Record<string, unknown>)[header], item),
