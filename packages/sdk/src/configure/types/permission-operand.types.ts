@@ -9,19 +9,19 @@
 import type { InferredAttributeMap } from "#/runtime/types";
 
 export type StringFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends string ? K : never;
+  [K in keyof User]: NonNullable<User[K]> extends string ? K : never;
 }[keyof User];
 
 export type StringArrayFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends string[] ? K : never;
+  [K in keyof User]: NonNullable<User[K]> extends string[] ? K : never;
 }[keyof User];
 
 export type BooleanFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends boolean ? K : never;
+  [K in keyof User]: NonNullable<User[K]> extends boolean ? K : never;
 }[keyof User];
 
 export type BooleanArrayFieldKeys<User extends object> = {
-  [K in keyof User]: User[K] extends boolean[] ? K : never;
+  [K in keyof User]: NonNullable<User[K]> extends boolean[] ? K : never;
 }[keyof User];
 
 export type UserStringOperand<User extends object = InferredAttributeMap> = {
