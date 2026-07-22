@@ -133,15 +133,30 @@ export async function detectPendingMigrations(
       const diff = loadDiff(diffPath);
 
       // The migration script is executed when migrate.ts exists on disk.
-      // Breaking changes still hard-require a script; warnings (e.g. field_removed)
-      // may optionally have one added via `tailordb migration script <num>`.
+      // Breaking changes hard-require a script unless the user recorded an
+      // explicit skip acknowledgment; warnings (e.g. field_removed) may
+      // optionally have one added via `tailordb migration script <num>`.
       const scriptPath = getMigrationFilePath(migrationsDir, file.number, "migrate");
       const hasScript = fs.existsSync(scriptPath);
-      if (diff.requiresMigrationScript && !hasScript) {
-        logger.warn(
-          `Migration ${namespace}/${file.number} requires a script but migrate.ts not found`,
+      if (diff.requiresMigrationScript && !hasScript && !diff.scriptSkipped) {
+        throw new Error(
+          `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.\n` +
+            `To resolve, either:\n` +
+            `  - Add a script: tailor-sdk tailordb migration script ${file.number}\n` +
+            `  - Or record that no script is needed: tailor-sdk tailordb migration script ${file.number} --no-script --reason "<why no data migration is needed>"`,
         );
-        continue;
+      }
+      if (diff.scriptSkipped) {
+        const migrationLabel = `${namespace}/${formatMigrationNumber(file.number)}`;
+        if (hasScript) {
+          logger.warn(
+            `Migration ${migrationLabel} has both a skip acknowledgment and migrate.ts; executing migrate.ts.`,
+          );
+        } else {
+          logger.info(
+            `Migration ${migrationLabel} runs without a script (skip acknowledged at ${diff.scriptSkipped.acknowledgedAt}: ${diff.scriptSkipped.reason})`,
+          );
+        }
       }
 
       pendingMigrations.push({

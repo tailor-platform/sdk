@@ -95,13 +95,13 @@ tailor-sdk tailordb migration <command>
 
 **Commands**
 
-| Command                                                       | Description                                                                                                               |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot. |
-| [`tailordb migration script`](#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory.                                          |
-| [`tailordb migration set`](#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
-| [`tailordb migration status`](#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
-| [`tailordb migration sync`](#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                     |
+| Command                                                       | Description                                                                                                                                          |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot.                            |
+| [`tailordb migration script`](#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none. |
+| [`tailordb migration set`](#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                                                       |
+| [`tailordb migration status`](#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                 |
+| [`tailordb migration sync`](#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                                                |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -128,7 +128,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 #### tailordb migration script
 
-Add a migration script (migrate.ts) template to an existing migration directory.
+Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.
 
 **Usage**
 
@@ -144,10 +144,12 @@ tailor-sdk tailordb migration script [options] <number>
 
 **Options**
 
-| Option                    | Alias | Description                                                       | Required | Default              | Env                               |
-| ------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
-| `--config <CONFIG>`       | `-c`  | Path to SDK config file                                           | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
-| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                                 |
+| Option                    | Alias | Description                                                                                  | Required | Default              | Env                               |
+| ------------------------- | ----- | -------------------------------------------------------------------------------------------- | -------- | -------------------- | --------------------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to SDK config file                                                                      | No       | `"tailor.config.ts"` | `TAILOR_PLATFORM_SDK_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                            | No       | -                    | -                                 |
+| `--no-script`             | -     | Record that this migration intentionally runs without a migration script (requires --reason) | No       | -                    | -                                 |
+| `--reason <REASON>`       | -     | Reason why no migration script is needed (used with --no-script)                             | No       | -                    | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

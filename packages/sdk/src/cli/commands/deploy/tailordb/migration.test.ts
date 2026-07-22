@@ -302,8 +302,7 @@ describe("migration", () => {
       expect(result).toHaveLength(0);
     });
 
-    test("warns when breaking change migration missing script", async () => {
-      const { logger } = await import("#/cli/shared/logger");
+    test("throws when breaking change migration missing script", async () => {
       const client = createMockClient({ tailordb: 0 });
 
       // Create migration with breaking change but no script (no migrate.ts file)
@@ -317,12 +316,106 @@ describe("migration", () => {
         { namespace: "tailordb", migrationsDir: testDir },
       ];
 
+      await expect(
+        detectPendingMigrations(client, workspaceId, namespacesWithMigrations),
+      ).rejects.toThrow(/requires a migration script but migrate\.ts was not found/);
+    });
+
+    test("error for missing script mentions both resolution paths", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const error = await detectPendingMigrations(
+        client,
+        workspaceId,
+        namespacesWithMigrations,
+      ).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+
+      expect(error).not.toBeNull();
+      expect(error!.message).toContain("tailordb migration script 1");
+      expect(error!.message).toContain("--no-script");
+    });
+
+    test("throws before returning later migrations when a script is missing", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+      writeDiffFile(testDir, 2, createMockMigrationDiff());
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      await expect(
+        detectPendingMigrations(client, workspaceId, namespacesWithMigrations),
+      ).rejects.toThrow(/requires a migration script/);
+    });
+
+    test("includes migration when script skip is acknowledged", async () => {
+      const { logger } = await import("#/cli/shared/logger");
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({
+          hasBreakingChanges: true,
+          requiresMigrationScript: true,
+          scriptSkipped: { reason: "no data yet", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+        }),
+      );
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
       const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
 
-      expect(result).toHaveLength(0);
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining("requires a script but migrate.ts not found"),
+      expect(result).toHaveLength(1);
+      expect(result[0]!.hasScript).toBe(false);
+      expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("no data yet"));
+    });
+
+    test("prefers migrate.ts over stale script skip acknowledgment", async () => {
+      const { logger } = await import("#/cli/shared/logger");
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({
+          hasBreakingChanges: true,
+          requiresMigrationScript: true,
+          scriptSkipped: { reason: "no data yet", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+        }),
       );
+      writeMigrateFile(testDir, 1, "export async function main() {}");
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.hasScript).toBe(true);
+      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("migrate.ts"));
     });
 
     test("includes breaking change migration with script", async () => {
