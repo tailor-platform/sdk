@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "pathe";
 import { afterEach, describe, expect, test } from "vitest";
-import { loadSeedData } from "./jsonl";
+import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 
 let tempDir: string | undefined;
 
@@ -21,6 +21,22 @@ afterEach(() => {
   }
 });
 
+describe("assertSeedDataDirectory", () => {
+  test("rejects a missing data directory", () => {
+    const dir = makeDataDir({});
+    rmSync(dir, { recursive: true });
+
+    expect(() => assertSeedDataDirectory(dir)).toThrow(`Seed data directory not found: ${dir}`);
+  });
+
+  test("rejects a data directory below a file path with an actionable error", () => {
+    const root = makeDataDir({ dist: "not a directory" });
+    const dir = path.join(root, "dist", "data");
+
+    expect(() => assertSeedDataDirectory(dir)).toThrow(`Seed data directory not found: ${dir}`);
+  });
+});
+
 describe("loadSeedData", () => {
   test("parses one JSON record per line", () => {
     const dir = makeDataDir({ "User.jsonl": '{"id":1}\n{"id":2}\n' });
@@ -30,6 +46,17 @@ describe("loadSeedData", () => {
   test("loads missing and empty files as empty lists", () => {
     const dir = makeDataDir({ "Empty.jsonl": "\n" });
     expect(loadSeedData(dir, ["Empty", "Missing"])).toEqual({ Empty: [], Missing: [] });
+  });
+
+  test("does not revalidate the data directory", () => {
+    const dir = makeDataDir({});
+    rmSync(dir, { recursive: true });
+
+    expect(loadSeedData(dir, ["User"])).toEqual({ User: [] });
+  });
+
+  test("loads no requested types without requiring a data directory", () => {
+    expect(loadSeedData("/missing", [])).toEqual({});
   });
 
   test("names the file and line for malformed JSON lines", () => {

@@ -1,6 +1,26 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import * as path from "pathe";
 import type { SeedData } from "@tailor-platform/sdk/cli";
+
+export function assertSeedDataDirectory(dataDir: string): void {
+  let stats: ReturnType<typeof statSync>;
+  try {
+    stats = statSync(dataDir);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") {
+      throw new Error(
+        `Seed data directory not found: ${dataDir}. Run \`tailor generate\` before applying seed data.`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+
+  if (!stats.isDirectory()) {
+    throw new Error(`Seed data path is not a directory: ${dataDir}`);
+  }
+}
 
 /**
  * Load seed rows from `<dataDir>/<typeName>.jsonl` for each type. Missing
