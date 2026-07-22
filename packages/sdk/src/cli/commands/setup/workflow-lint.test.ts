@@ -12,7 +12,8 @@
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { aroundAll, describe, expect, test } from "vitest";
+import { aroundAll, describe, expect, test, vi } from "vitest";
+import { readPackageJson } from "../../shared/package-json";
 import { tempDir } from "../../shared/test-helpers/temp-dir";
 import {
   renderBranchWorkflow,
@@ -186,14 +187,21 @@ describe("repository ERD schema workflow", () => {
   });
 });
 
-describe("tailor-platform/actions drift-check/generate-check version pin", () => {
-  // v2 of these actions runs `tailor ...` instead of `tailor-sdk ...`
-  // (tailor-platform/actions#51: "rename tailor-sdk CLI to tailor for SDK v2
-  // compatibility"). This package's CLI binary is still named `tailor-sdk`
-  // (see package.json#bin), so bumping either action to v2 breaks every
-  // generated workflow's drift-check/generate-check step. Keep both pinned to
-  // v1 until the CLI binary itself is renamed to `tailor`.
-  function majorVersions(content: string, actionName: string): number[] {
+describe("tailor-platform/actions CLI invocation contract", () => {
+  // tailor-platform/actions v1.x invokes this SDK as `tailor-sdk ...` and
+  // reads generated output from `.tailor-sdk/`. v2.x switched both to
+  // `tailor ...` and `.tailor/` (tailor-platform/actions#51: "rename
+  // tailor-sdk CLI to tailor for SDK v2 compatibility"). Each action pinned
+  // in the setup templates must match whichever major version's contract
+  // agrees with this package's actual CLI binary name (package.json#bin) and
+  // output directory (getDistDir()) — not simply stay below v2 forever. Once
+  // the SDK completes the same rename, bump both the pin and the maps below
+  // together; until then, a lone version bump fails here instead of silently
+  // breaking the generated workflow's step.
+  const CLI_BINARY_BY_MAJOR: Record<number, string> = { 1: "tailor-sdk", 2: "tailor" };
+  const OUTPUT_DIR_BY_MAJOR: Record<number, string> = { 1: ".tailor-sdk", 2: ".tailor" };
+
+  function actionVersions(content: string, actionName: string): number[] {
     const matches = [
       ...content.matchAll(
         new RegExp(`tailor-platform/actions/${actionName}@[0-9a-f]{40} # v(\\d+)`, "g"),
@@ -203,30 +211,59 @@ describe("tailor-platform/actions drift-check/generate-check version pin", () =>
     return matches.map((match) => Number(match[1]));
   }
 
-  test("branch/tag workflows pin drift-check and generate-check below v2", () => {
+  async function expectCliBinaryContract(content: string, actionName: string) {
+    const pkg = await readPackageJson();
+    const sdkBinaries = Object.keys(pkg.bin ?? {});
+    for (const major of actionVersions(content, actionName)) {
+      const expectedBinary = CLI_BINARY_BY_MAJOR[major];
+      expect(
+        expectedBinary,
+        `unknown ${actionName}@v${major}; add its CLI contract to CLI_BINARY_BY_MAJOR`,
+      ).toBeDefined();
+      expect(
+        sdkBinaries,
+        `${actionName}@v${major} invokes \`${expectedBinary}\`, but this package's bin is ${JSON.stringify(sdkBinaries)}`,
+      ).toContain(expectedBinary);
+    }
+  }
+
+  // setup/install only manage the package manager and dependencies;
+  // notify/preview-comment/tag-guard never touch the CLI at all — none of
+  // those are pinned here.
+  // oxlint-disable-next-line vitest/expect-expect -- assertions happen inside expectCliBinaryContract
+  test("branch/tag workflows: every CLI-invoking action matches this package's CLI binary name", async () => {
     const { content: branch } = renderBranchWorkflow({
       ...COMMON,
       branch: "main",
       packageManager: "pnpm",
       erdPreview: null,
+      seedValidate: true,
+      migrationDriftCheck: true,
     });
     const { content: tag } = renderTagWorkflow({
       ...COMMON,
       tagPattern: "v*",
       packageManager: "pnpm",
+      seedValidate: true,
+      migrationDriftCheck: true,
     });
 
     for (const content of [branch, tag]) {
-      for (const version of majorVersions(content, "drift-check")) {
-        expect(version).toBeLessThan(2);
-      }
-      for (const version of majorVersions(content, "generate-check")) {
-        expect(version).toBeLessThan(2);
+      for (const actionName of [
+        "drift-check",
+        "generate-check",
+        "plan",
+        "deploy",
+        "migration-drift-check",
+        "seed-validate",
+      ]) {
+        await expectCliBinaryContract(content, actionName);
       }
     }
   });
 
-  test("preview workflow pins generate-check below v2", () => {
+  // oxlint-disable-next-line vitest/expect-expect -- assertions happen inside expectCliBinaryContract
+  test("preview workflow: generate-check/preview-deploy/preview-cleanup match this package's CLI binary name", async () => {
     const { content: preview } = renderPreviewWorkflow({
       ...COMMON,
       branch: "main",
@@ -234,8 +271,35 @@ describe("tailor-platform/actions drift-check/generate-check version pin", () =>
       packageManager: "pnpm",
     });
 
-    for (const version of majorVersions(preview, "generate-check")) {
-      expect(version).toBeLessThan(2);
+    for (const actionName of ["generate-check", "preview-deploy", "preview-cleanup"]) {
+      await expectCliBinaryContract(preview, actionName);
+    }
+  });
+
+  test("seed-validate's hardcoded output path matches this package's actual output directory", async () => {
+    const { content: branch } = renderBranchWorkflow({
+      ...COMMON,
+      branch: "main",
+      packageManager: "pnpm",
+      erdPreview: null,
+      seedValidate: true,
+    });
+
+    vi.resetModules();
+    delete process.env.TAILOR_SDK_OUTPUT_DIR;
+    const { getDistDir } = await import("../../shared/dist-dir");
+    const actualOutputDir = getDistDir();
+
+    for (const major of actionVersions(branch, "seed-validate")) {
+      const expectedOutputDir = OUTPUT_DIR_BY_MAJOR[major];
+      expect(
+        expectedOutputDir,
+        `unknown seed-validate@v${major}; add its output-dir contract to OUTPUT_DIR_BY_MAJOR`,
+      ).toBeDefined();
+      expect(
+        actualOutputDir,
+        `seed-validate@v${major} reads from \`${expectedOutputDir}\`, but this package writes to \`${actualOutputDir}\``,
+      ).toBe(expectedOutputDir);
     }
   });
 });
