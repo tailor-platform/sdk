@@ -49,7 +49,7 @@ jobs:
         with:
           package-manager: __PACKAGE_MANAGER__
       - id: tailor-generate-check
-        uses: tailor-platform/actions/generate-check@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/generate-check@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2
         with:
           package-manager: __PACKAGE_MANAGER__
           # __WORKING_DIRECTORY__
