@@ -199,6 +199,7 @@ describe("migration flow: namespaces without pending migrations", () => {
         executorUsedTypes: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
+        namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;

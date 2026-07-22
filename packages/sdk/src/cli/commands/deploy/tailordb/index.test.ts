@@ -754,7 +754,7 @@ describe("planTailorDB (service level)", () => {
   describe("migration validation", () => {
     let migrationsDir: string;
 
-    beforeEach(() => {
+    aroundEach(async (runTest) => {
       migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), "plan-migrations-"));
       fs.mkdirSync(path.join(migrationsDir, "0000"));
       fs.writeFileSync(
@@ -766,10 +766,11 @@ describe("planTailorDB (service level)", () => {
           types: {},
         }),
       );
-    });
-
-    afterEach(() => {
-      fs.rmSync(migrationsDir, { recursive: true, force: true });
+      try {
+        await runTest();
+      } finally {
+        fs.rmSync(migrationsDir, { recursive: true, force: true });
+      }
     });
 
     test("fails at plan time when a breaking migration is missing its script", async () => {
@@ -1508,6 +1509,7 @@ describe("applyTailorDB type apply concurrency", () => {
         executorUsedTypes: new Set<string>(),
         config: { path: "/nonexistent/tailor.config.ts", name: "test-app", db: {} },
         noSchemaCheck: true,
+        namespacesWithMigrations: [],
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
 

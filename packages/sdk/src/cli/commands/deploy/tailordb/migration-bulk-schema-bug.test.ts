@@ -8,8 +8,8 @@
  */
 
 import { describe, test, expect, vi, aroundEach } from "vitest";
-import { applyTailorDB } from "./index";
 import * as migrationModule from "./migration";
+import { applyTailorDB } from "./index";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
