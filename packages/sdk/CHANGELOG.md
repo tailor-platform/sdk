@@ -1,5 +1,25 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.9
+
+### Major Changes
+
+- [#1811](https://github.com/tailor-platform/sdk/pull/1811) [`b2fc104`](https://github.com/tailor-platform/sdk/commit/b2fc104d9cdfc52e98c97bc18d80a9e2e9d5f4c2) Thanks [@toiroakr](https://github.com/toiroakr)! - Move the TailorDB `erdSite` setting out of the core config schema into the ERD plugin's own configuration. `db.<namespace>.erdSite` is no longer accepted in `tailor.config.ts`; configure the ERD deploy target on the plugin instead:
+  
+  ```ts
+  import { definePlugins } from "@tailor-platform/sdk";
+  import { tailordbErdPlugin } from "@tailor-platform/sdk-plugin-tailordb-erd";
+  
+  export const plugins = definePlugins(
+    // TailorDB namespace name → static website name
+    tailordbErdPlugin({ sites: { tailordb: "my-erd-site" } }),
+  );
+  ```
+  
+  The `tailor tailordb erd` commands resolve deploy targets from `tailordbErdPlugin({ sites })` and now validate each namespace against `config.db` and each site name against `staticWebsites`, so typos surface when the config is loaded instead of at deploy time. The `v2/erd-site-to-plugin` codemod migrates existing configs automatically. For programmatic users, `loadTailorDBNamespaces()` additionally returns the config module's registered `plugins`, and namespace selector callbacks receive them as a second argument.
+
+- [#1807](https://github.com/tailor-platform/sdk/pull/1807) [`817454f`](https://github.com/tailor-platform/sdk/commit/817454fff35e4093bce5fdcb9e1fcda8bbd1d7ef) Thanks [@dqn](https://github.com/dqn)! - `seedPlugin` no longer generates the `exec.mjs` seed runner. Seeding and validation move to the `tailor seed` commands provided by the `@tailor-platform/sdk-plugin-seed` CLI plugin: install it with `npm install -D @tailor-platform/sdk-plugin-seed`, replace `node <distPath>/exec.mjs` with `tailor seed apply` and `node <distPath>/exec.mjs validate` with `tailor seed validate`, and delete the stale generated `exec.mjs`. Seed data and schema generation (`data/*.jsonl`, `data/*.schema.ts`) is unchanged. Because the plugin reads the config at run time, `machineUserName` changes in seedPlugin options now take effect without regenerating. `@tailor-platform/sdk/cli` gains `loadSeedContext` (and `SeedContext` types) for this, `SeedData` is now JSON-typed, and `executeScript` accepts a plain object `invoker` (`ScriptInvoker`).
+
 ## 2.0.0-next.8
 
 ### Patch Changes
@@ -36,6 +56,46 @@
   ```
   
   Run the `v2/workflow-trigger-rename` codemod to migrate call sites automatically.
+
+## 1.80.1
+
+### Patch Changes
+
+- [#1831](https://github.com/tailor-platform/sdk/pull/1831) [`e24b3da`](https://github.com/tailor-platform/sdk/commit/e24b3da17656317a3729626d1cb34d90b8116356) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `IdPConfig`'s `permission` type so `defineIdp` calls with valid permission definitions using project-specific attribute keys are no longer rejected by `tsc`
+
+- [#1828](https://github.com/tailor-platform/sdk/pull/1828) [`46f2d49`](https://github.com/tailor-platform/sdk/commit/46f2d496407ec8c248ed60a3f519ef526e0896e4) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update rolldown
+
+- [#1818](https://github.com/tailor-platform/sdk/pull/1818) [`56608cc`](https://github.com/tailor-platform/sdk/commit/56608ccc445c1aeb683ddfd72965446b1062cfbd) Thanks [@toiroakr](https://github.com/toiroakr)! - Adopt Vitest 4.1 `aroundEach`/`aroundAll` hooks across the test suites, and update the TailorDB client mock example in the testing docs to the same style
+
+## 1.80.0
+
+### Minor Changes
+
+- [#1800](https://github.com/tailor-platform/sdk/pull/1800) [`d07a82a`](https://github.com/tailor-platform/sdk/commit/d07a82aa4ded74c3d84e157b4bed5c37ef0ec239) Thanks [@toiroakr](https://github.com/toiroakr)! - Machine user attribute keys now mirror the field's optionality: attributes derived from optional user fields (or optional `machineUserAttributes` fields) can be omitted, and `null`/`undefined` values are treated as "attribute not set" instead of being rejected at deploy time. Attributes derived from required fields remain mandatory, and undeclared attribute keys are still rejected. The generated `AttributeMap` type used to read `user.attributes` in resolvers, executors, and workflows now mirrors this same optionality, so an attribute derived from an optional field is typed as possibly absent instead of always present.
+
+### Patch Changes
+
+- [#1741](https://github.com/tailor-platform/sdk/pull/1741) [`f1cbda5`](https://github.com/tailor-platform/sdk/commit/f1cbda56df96670f18dccf2b7f2473430584f377) Thanks [@toiroakr](https://github.com/toiroakr)! - Resolve each config's `files` glob patterns and bundler `tsconfig` relative to that config file's own directory instead of the invocation `cwd`, so `--config a/tailor.config.ts,b/tailor.config.ts` no longer lets one app's file glob or path aliases bleed into another. If a `files` pattern matches nothing under the new directory, it falls back to resolving against `cwd` as before, so existing configs whose patterns were written against the invocation directory keep working.
+
+- [#1821](https://github.com/tailor-platform/sdk/pull/1821) [`d051132`](https://github.com/tailor-platform/sdk/commit/d0511324d7f34d36dacf608f7f78899d6e09f58f) Thanks [@toiroakr](https://github.com/toiroakr)! - Resolve the bundler `tsconfig` for migration scripts, `tailor query`, and `tailor function test-run` from the owning config's directory instead of the invocation `cwd`, so path aliases keep working when the command runs against a config outside the current directory.
+
+- [#1767](https://github.com/tailor-platform/sdk/pull/1767) [`c870196`](https://github.com/tailor-platform/sdk/commit/c8701961f90d7bdcc887c793c806d4f26cc9b197) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix tsconfig `paths` alias resolution for dynamically loaded resolver, executor, workflow, HTTP adapter, and TailorDB type files. Previously, an import like `import { foo } from "@/utils"` in one of these files would fail to resolve when the file lived outside the directory tsx was registered from (e.g. in multi-app setups). Each file's `paths` aliases are now resolved as a fallback from its own tsconfig, based on the importing file's own directory.
+
+- [#1781](https://github.com/tailor-platform/sdk/pull/1781) [`000db7e`](https://github.com/tailor-platform/sdk/commit/000db7ef91b699918a8da600faa183ebcb40ba7c) Thanks [@dqn](https://github.com/dqn)! - Prevent concurrent multi-config deployments from mixing resolver, executor, workflow, Auth hook, HTTP adapter, and TailorDB hook or validator bundles
+
+- [#1793](https://github.com/tailor-platform/sdk/pull/1793) [`a8f3e3a`](https://github.com/tailor-platform/sdk/commit/a8f3e3ab418840810a126377ecc2a543629ad318) Thanks [@dqn](https://github.com/dqn)! - Speed up deploy by running SDK version detection and function uploads concurrently
+
+- [#1785](https://github.com/tailor-platform/sdk/pull/1785) [`cb97bd4`](https://github.com/tailor-platform/sdk/commit/cb97bd45314c5897818233dc8bc3b84b83bea8a3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency tsx to v4.23.1
+
+- [#1805](https://github.com/tailor-platform/sdk/pull/1805) [`62e5055`](https://github.com/tailor-platform/sdk/commit/62e50556db8bb29f6495e048df823bb007473de5) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @oxc-project/types to v0.140.0
+
+- [#1823](https://github.com/tailor-platform/sdk/pull/1823) [`605c1e5`](https://github.com/tailor-platform/sdk/commit/605c1e51cf1853c69e7bf485c84e92756989d7b5) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency kysely to v0.29.4
+
+- [#1809](https://github.com/tailor-platform/sdk/pull/1809) [`d8700fd`](https://github.com/tailor-platform/sdk/commit/d8700fddaa2ca6511af4a57207a68586c3b52269) Thanks [@dqn](https://github.com/dqn)! - Fix deploy silently skipping a secret update after the remote value changed outside the current project directory (a deploy from another machine, or a console-side edit). Deploy now verifies each secret's last platform update time before skipping and re-updates the secret when it no longer matches. After upgrading, the first deploy re-pushes managed secrets once.
+
+- [#1806](https://github.com/tailor-platform/sdk/pull/1806) [`8483dd0`](https://github.com/tailor-platform/sdk/commit/8483dd079e177a90dfb9d64b4d60803dccc92177) Thanks [@dqn](https://github.com/dqn)! - Fix concurrent deploys to the same workspace and application from one project directory causing a later deploy to silently skip a needed secret update. Secret and auth-connection updates are now serialized per workspace and application.
+
+## 1.79.0
 
 ### Minor Changes
 

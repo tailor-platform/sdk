@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { buildStartContext, normalizeFilePath } from "#/cli/shared/start-context";
 import { bundleWorkflowJobs } from "./bundler";
 
@@ -73,7 +73,8 @@ export const mainJob = createWorkflowJob({
   describe("job start binding resolution", () => {
     let tmpDir: string | undefined;
 
-    afterEach(() => {
+    aroundEach(async (runTest) => {
+      await runTest();
       if (tmpDir) {
         fs.rmSync(tmpDir, { recursive: true, force: true });
         tmpDir = undefined;
@@ -222,7 +223,8 @@ export default createWorkflow({ name: "workflow", mainJob });
       startArgs?: string;
     };
 
-    afterEach(() => {
+    aroundEach(async (runTest) => {
+      await runTest();
       if (tmpDir) {
         fs.rmSync(tmpDir, { recursive: true, force: true });
         tmpDir = undefined;

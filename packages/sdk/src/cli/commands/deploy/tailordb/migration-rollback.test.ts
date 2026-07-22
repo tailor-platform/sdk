@@ -3,7 +3,7 @@
  * at its prior checkpoint and prior schema.
  */
 
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyTailorDB } from "./index";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
@@ -317,8 +317,9 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     }
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("deletes the type created by the failed migration's Pre-phase and does not advance the checkpoint", async () => {

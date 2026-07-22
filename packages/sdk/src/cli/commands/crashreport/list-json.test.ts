@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { parseCrashReportConfig } from "#/cli/crashreport/config";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
@@ -16,16 +16,14 @@ vi.mock("#/cli/crashreport/config", () => ({
 describe("crashreport list --json", () => {
   let tmpDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "crash-report-list-json-test-"));
     vi.mocked(parseCrashReportConfig).mockReturnValue({
       localEnabled: true,
       remoteEnabled: false,
       localDir: tmpDir,
     });
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });

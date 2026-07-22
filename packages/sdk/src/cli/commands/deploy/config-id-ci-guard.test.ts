@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 
 const configWithId = `import { defineConfig } from "@tailor-platform/sdk";
 export default defineConfig({
@@ -19,11 +19,9 @@ export default defineConfig({
 describe("ensureConfigIdForDeploy", () => {
   let tempDir: string;
 
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "config-id-ci-"));
-  });
-
-  afterEach(async () => {
+    await runTest();
     await fs.promises.rm(tempDir, { recursive: true, force: true });
     vi.resetModules();
     vi.doUnmock("std-env");

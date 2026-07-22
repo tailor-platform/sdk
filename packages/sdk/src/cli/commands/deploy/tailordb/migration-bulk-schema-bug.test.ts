@@ -7,7 +7,7 @@
  * See `services/tailordb-migration.md` §"Per-migration phases".
  */
 
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyTailorDB } from "./index";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
@@ -255,8 +255,9 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     } as any;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("per-migration semantics: migration #1 prePhase must NOT apply removals declared in later migration #5", async () => {

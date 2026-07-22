@@ -34,7 +34,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, test, expect, beforeAll } from "vitest";
+import { describe, test, expect, aroundAll } from "vitest";
 import { resourceTrn } from "../src/cli/commands/deploy/label";
 import {
   getMigrationFiles,
@@ -255,7 +255,7 @@ describe.sequential("E2E: TailorDB Migrations", () => {
     fs.writeFileSync(migratePath, content);
   }
 
-  beforeAll(async () => {
+  aroundAll(async (runSuite) => {
     // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken();
     client = await initOperatorClient(accessToken);
@@ -314,6 +314,8 @@ describe.sequential("E2E: TailorDB Migrations", () => {
       path.join(monorepoNodeModules, "@tailor-platform", "function-kysely-tailordb"),
       path.join(tailorPlatformDir, "function-kysely-tailordb"),
     );
+
+    await runSuite();
   }, 120000);
 
   /**

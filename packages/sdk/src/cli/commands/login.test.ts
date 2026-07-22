@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { runCommand } from "politty";
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import {
   closeConnectionPool,
   fetchPlatformMachineUserToken,
@@ -49,16 +49,14 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 
 const validUUID = "12345678-1234-4abc-8def-123456789012";
 
-beforeAll(() => {
+aroundAll(async (runSuite) => {
   fs.mkdirSync(xdgTempDir, { recursive: true });
-});
-
-afterAll(() => {
+  await runSuite();
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
 describe("login --profile", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     resetKeyringState();
     writePlatformConfig({
@@ -74,6 +72,7 @@ describe("login --profile", () => {
       },
       current_user: null,
     });
+    await runTest();
   });
 
   test("rejects a profile user mismatch with a profile update command", async () => {

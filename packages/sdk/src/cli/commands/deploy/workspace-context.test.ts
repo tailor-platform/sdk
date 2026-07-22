@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { loadWorkspaceContext, saveWorkspaceContext } from "./workspace-context";
 
 const temporaryDirectories: string[] = [];
@@ -15,11 +15,9 @@ async function temporaryDirectory(): Promise<string> {
 // getDistDir() memoizes its result across calls in the same worker; pin it
 // explicitly so this file's assumed ".tailor" dirname holds regardless of
 // what other shared-worker test files set TAILOR_BUILD_OUTPUT_DIR to.
-beforeEach(() => {
+aroundEach(async (runTest) => {
   process.env.TAILOR_BUILD_OUTPUT_DIR = ".tailor";
-});
-
-afterEach(async () => {
+  await runTest();
   delete process.env.TAILOR_BUILD_OUTPUT_DIR;
   const { rm } = await import("node:fs/promises");
   await Promise.all(

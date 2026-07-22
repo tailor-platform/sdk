@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { resolveWatchPaths } from "./serve";
 import type { ErdBuildResult } from "./export";
 import type { LocalErdSchemaContext } from "./local-schema";
@@ -9,11 +9,9 @@ import type { LocalErdSchemaContext } from "./local-schema";
 describe("resolveWatchPaths", () => {
   let tempDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-erd-watch-"));
-  });
-
-  afterEach(() => {
+    await runTest();
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { orderAndLimitCrashReports } from "./list";
 
 vi.mock("std-env", () => ({
@@ -11,14 +11,12 @@ vi.mock("std-env", () => ({
 describe("crashreport list command", () => {
   let tmpDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.stubEnv("TAILOR_CRASH_REPORTS_LOCAL", undefined);
     vi.stubEnv("TAILOR_CRASH_REPORTS_REMOTE", undefined);
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "crash-report-list-test-"));
     vi.resetModules();
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });

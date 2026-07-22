@@ -26,7 +26,7 @@ jobs:
       contents: read # checkout the repository
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -34,7 +34,7 @@ jobs:
         uses: ./.github/actions/install-deps
 
       - name: Check licenses
-        uses: tailor-platform/actions/check-licenses@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+        uses: tailor-platform/actions/check-licenses@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           license-groups: ${{ vars.CHECK_LICENSES_ALLOWED_LICENSE_GROUPS }}
           additional-licenses: ${{ vars.CHECK_LICENSES_ALLOWED_LICENSES }}

@@ -81,6 +81,10 @@ When migrations are configured (`db.tailordb.migration` in config), the `deploy`
 
 See [Automatic Migration Execution](../services/tailordb-migration.md#automatic-migration-execution) for details on automatic migration execution.
 
+**Concurrent Deploys:**
+
+Deploys that target the same workspace and application from the same project directory are serialized while secrets and auth connections are updated: one deploy proceeds and the other waits for it to finish. A deploy that cannot proceed within 5 minutes fails with an error, which normally means another deploy is still running. If a previous deploy was interrupted, the next deploy recovers automatically within about a minute. Deploys to different workspaces or applications are not affected.
+
 **Schema Check:**
 
 By default, `deploy` performs two verification steps:

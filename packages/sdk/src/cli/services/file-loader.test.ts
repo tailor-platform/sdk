@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import { loadFilesWithIgnores } from "./file-loader";
 
@@ -15,7 +15,8 @@ vi.mock("node:fs", async (importOriginal) => {
 describe("loadFilesWithIgnores", () => {
   const tmpDirs: string[] = [];
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     for (const dir of tmpDirs.splice(0)) {
       fs.rmSync(dir, { recursive: true, force: true });
     }

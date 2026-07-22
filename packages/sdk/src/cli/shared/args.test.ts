@@ -1,8 +1,7 @@
 import * as fs from "node:fs";
-import * as os from "node:os";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
 import * as path from "pathe";
-import { describe, expect, beforeEach, afterEach, test, vi } from "vitest";
+import { describe, expect, aroundEach, test, vi } from "vitest";
 import {
   loadEnvFiles,
   durationArg,
@@ -11,21 +10,18 @@ import {
   resolveMachineUserInputSource,
   toPageDirection,
 } from "./args";
+import { tempCwd } from "./test-helpers/temp-cwd";
 
 describe("loadEnvFiles", () => {
   const originalEnv = process.env;
   let tempDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     process.env = { ...originalEnv };
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-env-test-"));
-    vi.spyOn(process, "cwd").mockReturnValue(tempDir);
-  });
-
-  afterEach(() => {
+    using tmp = tempCwd("tailor-env-test-");
+    tempDir = tmp.dir;
+    await runTest();
     process.env = originalEnv;
-    vi.restoreAllMocks();
-    fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
   describe("required env files (envFiles)", () => {
@@ -207,11 +203,9 @@ describe("toPageDirection", () => {
 });
 
 describe("resolveMachineUserInputSource", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", undefined);
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 
