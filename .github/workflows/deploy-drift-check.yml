@@ -84,7 +84,7 @@ jobs:
           TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
           TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
           # Fresh checkout deploys a throwaway app; per-run id injection is intended here.
-          TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION: "true"
+          TAILOR_CI_ALLOW_ID_INJECTION: "true"
           RUN_ID: ${{ github.run_id }}
         run: |
           failed=()
