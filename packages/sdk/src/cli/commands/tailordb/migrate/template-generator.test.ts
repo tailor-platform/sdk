@@ -264,6 +264,44 @@ describe("template-generator", () => {
       expect(scriptContent).toContain("unique");
     });
 
+    test("should scope unique migrations for multiple fields independently", async () => {
+      const snapshotWithoutUnique = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            email: { type: "string", required: true, unique: false },
+            username: { type: "string", required: true, unique: false },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: ["email", "username"].map((fieldName) => ({
+          kind: "field_modified" as const,
+          typeName: "User",
+          fieldName,
+          before: { type: "string" as const, required: true, unique: false },
+          after: { type: "string" as const, required: true, unique: true },
+        })),
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { typeName: "User", fieldName: "email", reason: "Unique constraint added to field" },
+          {
+            typeName: "User",
+            fieldName: "username",
+            reason: "Unique constraint added to field",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithoutUnique);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent.match(/\{\n {4}const duplicates =/g) ?? []).toHaveLength(2);
+    });
+
     test("should generate row-touch migration script for decimal scale change", async () => {
       const snapshotWithScale2 = createTestSnapshot({
         Item: {

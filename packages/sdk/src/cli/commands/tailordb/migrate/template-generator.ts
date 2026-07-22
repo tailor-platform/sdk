@@ -239,25 +239,27 @@ function generateChangeScripts(change: DiffChange): string[] {
   // Unique constraint added
   if (!(before.unique ?? false) && (after.unique ?? false)) {
     scripts.push(`  // Ensure ${change.fieldName} values are unique before adding constraint
-  const duplicates = await trx
-    .selectFrom("${change.typeName}")
-    .select(["${change.fieldName}"])
-    .groupBy("${change.fieldName}")
-    .having((eb) => eb.fn.count("id"), ">", 1)
-    .execute();
-  for (const dup of duplicates) {
-    // Keep first record, add suffix to others
-    const records = await trx
+  {
+    const duplicates = await trx
       .selectFrom("${change.typeName}")
-      .select(["id", "${change.fieldName}"])
-      .where("${change.fieldName}", "=", dup.${change.fieldName})
+      .select(["${change.fieldName}"])
+      .groupBy("${change.fieldName}")
+      .having((eb) => eb.fn.count("id"), ">", 1)
       .execute();
-    for (let i = 1; i < records.length; i++) {
-      await trx
-        .updateTable("${change.typeName}")
-        .set({ ${change.fieldName}: \`\${records[i].${change.fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
-        .where("id", "=", records[i].id)
+    for (const dup of duplicates) {
+      // Keep first record, add suffix to others
+      const records = await trx
+        .selectFrom("${change.typeName}")
+        .select(["id", "${change.fieldName}"])
+        .where("${change.fieldName}", "=", dup.${change.fieldName})
         .execute();
+      for (let i = 1; i < records.length; i++) {
+        await trx
+          .updateTable("${change.typeName}")
+          .set({ ${change.fieldName}: \`\${records[i].${change.fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
+          .where("id", "=", records[i].id)
+          .execute();
+      }
     }
   }`);
   }
