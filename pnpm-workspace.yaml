@@ -9,6 +9,8 @@ minimumReleaseAgeExclude:
   - "@tailor-platform/*"
   # Renovate security update: undici@8.5.0
   - undici@8.5.0
+  # Security update: fast-uri host-confusion advisories (GHSA-v2hh-gcrm-f6hx)
+  - fast-uri@3.1.4
 
 blockExoticSubdeps: true
 trustPolicy: no-downgrade
@@ -40,6 +42,7 @@ allowBuilds:
 
 overrides:
   esbuild@>=0.17.0 <0.28.1: 0.28.1
+  fast-uri@>=3.0.0 <3.1.4: 3.1.4
 
 peerDependencyRules:
   allowedVersions:
