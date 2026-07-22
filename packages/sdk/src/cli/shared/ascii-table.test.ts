@@ -247,6 +247,11 @@ describe("renderTable", () => {
     expect(renderTable([])).toBe("");
   });
 
+  test("returns an empty string for rows with zero columns", () => {
+    expect(renderTable([[]])).toBe("");
+    expect(renderTable([[], []])).toBe("");
+  });
+
   test("throws when rows have an inconsistent number of columns", () => {
     expect(() =>
       renderTable([

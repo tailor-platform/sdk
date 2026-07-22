@@ -95,17 +95,18 @@ function validateConsistentColumnCount(rows: string[][]): void {
  * "null"/"undefined"), may contain embedded newlines, has `\r`/`\r\n` normalized to `\n`,
  * has tabs expanded to spaces, and has other control characters stripped.
  * @param config - Rendering options
- * @returns The rendered table terminated with a trailing newline, or `""` for empty input
+ * @returns The rendered table terminated with a trailing newline, or `""` when there are no
+ * rows or no columns to display
  */
 export function renderTable(data: unknown[][], config: AsciiTableConfig = {}): string {
   const rows = data.map((row) => row.map(sanitizeCell));
   validateConsistentColumnCount(rows);
 
   const rowCount = rows.length;
-  if (rowCount === 0) {
+  const columnCount = rows[0]?.length ?? 0;
+  if (rowCount === 0 || columnCount === 0) {
     return "";
   }
-  const columnCount = rows[0]?.length ?? 0;
 
   const rowsCellLines = rows.map((row) =>
     Array.from({ length: columnCount }, (_, col) => toCellLines(row[col] ?? "")),
