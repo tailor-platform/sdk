@@ -87,11 +87,13 @@ function validateConsistentColumnCount(rows: string[][]): void {
 /**
  * Renders a 2D array of values as a table using single-line Unicode box-drawing borders.
  * Column widths account for East Asian wide characters (measured per grapheme cluster,
- * so combining marks and ZWJ emoji sequences aren't overcounted) and strip ANSI codes
- * before measuring. Use this instead of importing a table-rendering package directly.
+ * so combining marks and ZWJ emoji sequences aren't overcounted) and strip ANSI SGR
+ * (color/style) escape codes before measuring. Use this instead of importing a
+ * table-rendering package directly.
  * @param data - Table rows; every row must have the same number of columns. Each cell is
- * stringified, may contain embedded newlines, has `\r`/`\r\n` normalized to `\n`, has tabs
- * expanded to spaces, and has other control characters stripped.
+ * stringified (`null`/`undefined` become an empty string rather than the literal text
+ * "null"/"undefined"), may contain embedded newlines, has `\r`/`\r\n` normalized to `\n`,
+ * has tabs expanded to spaces, and has other control characters stripped.
  * @param config - Rendering options
  * @returns The rendered table terminated with a trailing newline, or `""` for empty input
  */
