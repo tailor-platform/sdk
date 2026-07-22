@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, test, expect, aroundEach, vi } from "vitest";
 
 vi.mock("std-env", () => ({
   isCI: false,
@@ -7,14 +7,12 @@ vi.mock("std-env", () => ({
 describe("parseCrashReportConfig", () => {
   const originalEnv = process.env;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     process.env = { ...originalEnv };
     delete process.env.TAILOR_CRASH_REPORTS_LOCAL;
     delete process.env.TAILOR_CRASH_REPORTS_REMOTE;
     vi.resetModules();
-  });
-
-  afterEach(() => {
+    await runTest();
     process.env = originalEnv;
   });
 
@@ -49,12 +47,10 @@ describe("parseCrashReportConfig", () => {
 describe("parseCrashReportConfig in CI", () => {
   const originalEnv = process.env;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     process.env = { ...originalEnv };
     vi.resetModules();
-  });
-
-  afterEach(() => {
+    await runTest();
     process.env = originalEnv;
   });
 

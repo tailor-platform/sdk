@@ -11,7 +11,7 @@ import {
 } from "@tailor-platform/tailor-proto/tailordb_pb";
 import {
   type TailorDBType as ProtoTailorDBType,
-  type TailorDBTypeSchema,
+  TailorDBTypeSchema,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import {
@@ -56,7 +56,7 @@ import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
-import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
+import { areNormalizedEqual, normalizeProtoConfig, toComparableProtoJson } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "../label";
 import {
@@ -539,6 +539,7 @@ function buildMigrationContextForScripts(
       : undefined,
     dbConfig: dbConfigMap,
     env: migrationContext.config.env ?? {},
+    configDir: path.dirname(migrationContext.config.path),
   };
 }
 
@@ -583,6 +584,39 @@ export async function applyTailorDB(
 
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
+
+      // Step 1.5: The migration loop below only touches the namespaces of the
+      // pending migrations; changes planned for every other namespace must go
+      // through the normal flow or they would be silently dropped.
+      // Creates/updates run before the loop so migration scripts see the
+      // complete world; deletes are irreversible and stay last (Step 5).
+      const migratingNamespaces = new Set(pendingMigrations.map((m) => m.namespace));
+      const isOutsideMigrations = (namespaceName: string | undefined) =>
+        namespaceName !== undefined && !migratingNamespaces.has(namespaceName);
+
+      try {
+        for (const create of changeSet.type.creates) {
+          if (!isOutsideMigrations(create.request.namespaceName)) continue;
+          await client.createTailorDBType(create.request);
+        }
+        for (const update of changeSet.type.updates) {
+          if (!isOutsideMigrations(update.request.namespaceName)) continue;
+          await client.updateTailorDBType(update.request);
+        }
+      } catch (error) {
+        handleOptionalToRequiredError(error, [
+          "Run 'tailor-sdk tailordb migration generate' to create migration files.",
+          "Migration scripts allow you to handle existing data before applying the schema change.",
+        ]);
+      }
+      await Promise.all([
+        ...changeSet.gqlPermission.creates
+          .filter((create) => isOutsideMigrations(create.request.namespaceName))
+          .map((create) => client.createTailorDBGQLPermission(create.request)),
+        ...changeSet.gqlPermission.updates
+          .filter((update) => isOutsideMigrations(update.request.namespaceName))
+          .map((update) => client.updateTailorDBGQLPermission(update.request)),
+      ]);
 
       const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
 
@@ -669,6 +703,18 @@ export async function applyTailorDB(
           ),
         );
       }
+
+      // Step 5: Delete types outside the migrating namespaces (their GQL
+      // permissions were just removed above; migration postPhases never see them)
+      await Promise.all(
+        changeSet.type.deletes
+          .filter(
+            (del) =>
+              isOutsideMigrations(del.request.namespaceName) &&
+              !deletedResources.types.has(del.name),
+          )
+          .map((del) => client.deleteTailorDBType(del.request)),
+      );
     } else {
       // Normal create-update flow without migrations
       // Services
@@ -1717,8 +1763,9 @@ const tailordbCompareKnownDefaults = {
   ]),
 } as const;
 
-function normalizeComparableTailorDBType(type: unknown) {
-  const normalized = normalizeProtoConfig(type) as {
+function normalizeComparableTailorDBType(type: MessageInitShape<typeof TailorDBTypeSchema>) {
+  const canonical = toComparableProtoJson(TailorDBTypeSchema, type);
+  const normalized = normalizeProtoConfig(canonical) as {
     name?: string;
     schema?: {
       description?: string;
@@ -1813,7 +1860,8 @@ function normalizeTailorDBCompareValue(
 
   if (
     path.at(-1) === "disableGqlOperations" &&
-    areNormalizedEqual(normalizedObject, tailordbCompareKnownDefaults.disableGqlOperations)
+    (Object.keys(normalizedObject).length === 0 ||
+      areNormalizedEqual(normalizedObject, tailordbCompareKnownDefaults.disableGqlOperations))
   ) {
     return undefined;
   }

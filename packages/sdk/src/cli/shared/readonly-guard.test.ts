@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { writePlatformConfig } from "./context";
 import { assertWritable } from "./readonly-guard";
 import { resetKeyringState } from "./token-store";
@@ -195,18 +195,16 @@ vi.mock("@napi-rs/keyring", () => ({
   },
 }));
 
-beforeAll(() => {
+aroundAll(async (runSuite) => {
   fs.mkdirSync(xdgTempDir, { recursive: true });
-});
-
-afterAll(() => {
+  await runSuite();
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
 const validUUID = "12345678-1234-4abc-8def-123456789012";
 
 describe("assertWritable", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.resetModules();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
@@ -221,9 +219,7 @@ describe("assertWritable", () => {
       },
       current_user: null,
     });
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 

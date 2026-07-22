@@ -1,5 +1,5 @@
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
@@ -58,8 +58,9 @@ function stubClient() {
 }
 
 describe("workspace delete command", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("accepts the bare workspace name when the prompt shows the folder-qualified name", async () => {

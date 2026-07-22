@@ -4,7 +4,7 @@ import {
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -34,7 +34,7 @@ vi.mock("#/cli/shared/readonly-guard", () => ({
 describe("triggerExecutor runtime overload", () => {
   let triggerExecutorMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
 
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
@@ -47,6 +47,7 @@ describe("triggerExecutor runtime overload", () => {
     vi.mocked(initOperatorClient).mockResolvedValue({
       triggerExecutor: triggerExecutorMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    await runTest();
   });
 
   test("prefers legacy shape when executorName exists even if executor key is present", async () => {

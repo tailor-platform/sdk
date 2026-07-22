@@ -1,17 +1,14 @@
 /**
  * Tests for `@tailor-platform/sdk/runtime/authconnection` typed wrappers.
  */
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { authconnection } from "#/runtime/authconnection";
-import { mockAuthconnection, cleanupMocks, injectMocks } from "#/vitest/mock";
+import { mockAuthconnection, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/authconnection", () => {
-  beforeEach(() => {
-    injectMocks(globalThis);
-  });
-
-  afterEach(() => {
-    cleanupMocks(globalThis);
+  aroundEach(async (runTest) => {
+    using _mocks = injectMocks(globalThis);
+    await runTest();
   });
 
   test("getConnectionToken forwards to global and records call", async () => {

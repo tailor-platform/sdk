@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { checkGitHub, findTargetDrift, resolveWithinRoot, type TargetState } from "./check";
 import { setupTarget, type BranchSetupOptions } from "./generate";
 import { LOCK_VERSION, type LockTarget, hashContent, writeLock } from "./lock";
@@ -183,8 +183,11 @@ describe("findTargetDrift", () => {
 describe("resolveWithinRoot", () => {
   const dir = path.join(os.tmpdir(), `rwr-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
-  beforeEach(() => fs.mkdirSync(dir, { recursive: true }));
-  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+  aroundEach(async (runTest) => {
+    fs.mkdirSync(dir, { recursive: true });
+    await runTest();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
 
   test("returns the joined path for a normal relative path", () => {
     expect(resolveWithinRoot(dir, "a/b.yml")).toBe(path.join(dir, "a/b.yml"));
@@ -237,7 +240,7 @@ describe("checkGitHub (integration)", () => {
     ...overrides,
   });
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     fs.mkdirSync(testDir, { recursive: true });
     fs.writeFileSync(path.join(testDir, "pnpm-lock.yaml"), "");
     fs.writeFileSync(
@@ -245,9 +248,9 @@ describe("checkGitHub (integration)", () => {
       `import { defineConfig } from "@tailor-platform/sdk";\nexport default defineConfig({ name: "my-app" });\n`,
       "utf-8",
     );
+    await runTest();
+    fs.rmSync(testDir, { recursive: true, force: true });
   });
-
-  afterEach(() => fs.rmSync(testDir, { recursive: true, force: true }));
 
   const wfPath = (): string => path.join(testDir, ".github/workflows/tailor-my-app.yml");
 

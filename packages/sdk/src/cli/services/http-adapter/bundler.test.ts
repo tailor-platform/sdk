@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { bundleHttpAdapters } from "./bundler";
 
 const nodeRequire = createRequire(import.meta.url);
@@ -11,7 +11,8 @@ const graphqlWebModule = nodeRequire.resolve("@0no-co/graphql.web");
 describe("bundleHttpAdapters", () => {
   let tmpDir: string | undefined;
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     if (tmpDir) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
       tmpDir = undefined;

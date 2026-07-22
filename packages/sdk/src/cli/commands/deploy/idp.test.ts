@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyIdP, type planIdP } from "./idp";
 import type { OperatorClient } from "#/cli/shared/client";
 
@@ -61,8 +61,9 @@ describe("applyIdP phase separation", () => {
     } as unknown as Awaited<ReturnType<typeof planIdP>>;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test.each([
@@ -141,8 +142,9 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
     } as unknown as OperatorClient;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("resolves :url placeholder before createIdPService", async () => {
