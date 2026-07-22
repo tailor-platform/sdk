@@ -344,7 +344,7 @@ describe("migration", () => {
       );
 
       expect(error).not.toBeNull();
-      expect(error!.message).toContain("tailordb migration script 1");
+      expect(error!.message).toContain("tailordb migration script 1 --namespace tailordb");
       expect(error!.message).toContain("--no-script");
     });
 

@@ -139,11 +139,12 @@ export async function detectPendingMigrations(
       const scriptPath = getMigrationFilePath(migrationsDir, file.number, "migrate");
       const hasScript = fs.existsSync(scriptPath);
       if (diff.requiresMigrationScript && !hasScript && !diff.scriptSkipped) {
+        const scriptCmd = `tailor-sdk tailordb migration script ${file.number} --namespace ${namespace}`;
         throw new Error(
           `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.\n` +
             `To resolve, either:\n` +
-            `  - Add a script: tailor-sdk tailordb migration script ${file.number}\n` +
-            `  - Or record that no script is needed: tailor-sdk tailordb migration script ${file.number} --no-script --reason "<why no data migration is needed>"`,
+            `  - Add a script: ${scriptCmd}\n` +
+            `  - Or record that no script is needed: ${scriptCmd} --no-script --reason "<why no data migration is needed>"`,
         );
       }
       if (diff.scriptSkipped) {
