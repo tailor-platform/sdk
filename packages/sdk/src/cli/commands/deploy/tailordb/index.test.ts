@@ -5,6 +5,7 @@ import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resou
 import * as path from "pathe";
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
+import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { sdkNameLabelKey } from "../label";
 import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
@@ -531,6 +532,77 @@ describe("planTailorDB (service level)", () => {
             serial: { start: "1", maxValue: "999" },
           },
         },
+      });
+
+      const application = createMockApplication([tailorDBService]);
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      };
+
+      const result = await planTailorDB(ctx);
+
+      expect(result.changeSet.type.unchanged).toEqual([{ name: "Invoice" }]);
+      expect(result.changeSet.type.updates).toHaveLength(0);
+    });
+
+    test("treats permission policy order differences as unchanged", async () => {
+      // Committed migration snapshots can carry the same permission policies in
+      // a different array order than the current config parse; the platform
+      // evaluates policies order-insensitively, so this must not read as drift.
+      const rolePolicy = {
+        conditions: [[{ user: "role" }, "eq", "MANAGER"]],
+        permit: "allow",
+      } as const;
+      const loggedInPolicy = {
+        conditions: [[{ user: "_loggedIn" }, "eq", true]],
+        permit: "allow",
+      } as const;
+      const makeType = (
+        read: readonly (typeof rolePolicy | typeof loggedInPolicy)[],
+        fields: Record<string, unknown>,
+      ) =>
+        ({
+          name: "Invoice",
+          pluralForm: "Invoices",
+          description: "Invoice type",
+          fields,
+          forwardRelationships: {},
+          backwardRelationships: {},
+          settings: {},
+          permissions: { record: { create: [], read, update: [], delete: [] } },
+          files: {},
+        }) as unknown as TailorDBType;
+
+      const localType = makeType([rolePolicy, loggedInPolicy], {
+        code: { name: "code", config: { type: "string", required: true } },
+      });
+      // The remote side is the manifest the SDK itself would have applied from a
+      // migration snapshot (snapshot-shaped fields), with the policies reversed.
+      const remoteManifest = generateTailorDBTypeManifestFromSnapshot(
+        makeType([loggedInPolicy, rolePolicy], {
+          code: { type: "string", required: true },
+        }) as unknown as Parameters<typeof generateTailorDBTypeManifestFromSnapshot>[0],
+      );
+
+      const tailorDBService = createMockTailorDBService("test-tailordb");
+      Object.defineProperty(tailorDBService, "types", {
+        value: { [localType.name]: localType },
+      });
+
+      const client = createRemoteTypeClient("test-tailordb", {
+        name: "Invoice",
+        description: "Invoice type",
+        pluralForm: "invoices",
+        fields: {},
+      });
+      (client.listTailorDBTypes as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tailordbTypes: [{ name: "Invoice", schema: remoteManifest.schema }],
+        nextPageToken: "",
       });
 
       const application = createMockApplication([tailorDBService]);

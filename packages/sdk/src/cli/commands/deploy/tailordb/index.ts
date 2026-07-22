@@ -1800,6 +1800,15 @@ function normalizeComparableTailorDBType(type: MessageInitShape<typeof TailorDBT
   );
 }
 
+function isPermissionPolicyArrayPath(path: readonly (string | number)[]): boolean {
+  return (
+    path.length === 3 &&
+    path[0] === "schema" &&
+    path[1] === "permission" &&
+    (path[2] === "create" || path[2] === "read" || path[2] === "update" || path[2] === "delete")
+  );
+}
+
 function normalizeTailorDBCompareValue(
   value: unknown,
   path: readonly (string | number)[],
@@ -1837,6 +1846,13 @@ function normalizeTailorDBCompareValue(
     // array per field; treat it as unset so it matches the omitted local value.
     if (items.length === 0 && path.at(-1) === "validate") {
       return undefined;
+    }
+    // The platform evaluates permission policies order-insensitively (any
+    // matching deny wins over any matching allow), while committed migration
+    // snapshots can record the same policies in a different order than the
+    // current config parse — so compare each action's policies as a set.
+    if (isPermissionPolicyArrayPath(path)) {
+      return items.toSorted((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1));
     }
     return items;
   }
