@@ -1,17 +1,6 @@
 import { describe, test, expect } from "vitest";
+import ml from "#/utils/multiline";
 import { renderTable } from "./ascii-table";
-
-// Tag for a multi-line expected value: write the table exactly as it should
-// print (including embedded newlines), starting the content on the line
-// right after the opening backtick, so a reader can compare it directly
-// against the printed output instead of decoding a list of quoted strings.
-function ml(strings: TemplateStringsArray, ...values: unknown[]): string {
-  let raw = strings[0] ?? "";
-  values.forEach((value, i) => {
-    raw += String(value) + (strings[i + 1] ?? "");
-  });
-  return raw.replace(/^\n/, "");
-}
 
 describe("renderTable", () => {
   test("renders a simple table with single-line borders", () => {
@@ -20,12 +9,13 @@ describe("renderTable", () => {
       ["c", "d"],
     ]);
     expect(result).toBe(ml`
-┌───┬───┐
-│ a │ b │
-├───┼───┤
-│ c │ d │
-└───┴───┘
-`);
+      ┌───┬───┐
+      │ a │ b │
+      ├───┼───┤
+      │ c │ d │
+      └───┴───┘
+
+    `);
   });
 
   test("aligns columns containing full-width characters", () => {
@@ -34,12 +24,13 @@ describe("renderTable", () => {
       ["a", "日本語のテスト"],
     ]);
     expect(result).toBe(ml`
-┌──────┬────────────────┐
-│ 名前 │ value          │
-├──────┼────────────────┤
-│ a    │ 日本語のテスト │
-└──────┴────────────────┘
-`);
+      ┌──────┬────────────────┐
+      │ 名前 │ value          │
+      ├──────┼────────────────┤
+      │ a    │ 日本語のテスト │
+      └──────┴────────────────┘
+
+    `);
   });
 
   test("ignores ANSI escape codes when measuring column width", () => {
@@ -49,31 +40,34 @@ describe("renderTable", () => {
       ["longer-value", "y"],
     ]);
     expect(result).toBe(ml`
-┌──────────────┬───┐
-│ short        │ ${bold("x")} │
-├──────────────┼───┤
-│ longer-value │ y │
-└──────────────┴───┘
-`);
+      ┌──────────────┬───┐
+      │ short        │ ${bold("x")} │
+      ├──────────────┼───┤
+      │ longer-value │ y │
+      └──────────────┴───┘
+
+    `);
   });
 
   test("expands row height for embedded newlines", () => {
     const result = renderTable([["key", "line1\nline2"]]);
     expect(result).toBe(ml`
-┌─────┬───────┐
-│ key │ line1 │
-│     │ line2 │
-└─────┴───────┘
-`);
+      ┌─────┬───────┐
+      │ key │ line1 │
+      │     │ line2 │
+      └─────┴───────┘
+
+    `);
   });
 
   test("normalizes Windows-style and lone carriage returns to newlines", () => {
     const expected = ml`
-┌─────┬───────┐
-│ key │ line1 │
-│     │ line2 │
-└─────┴───────┘
-`;
+      ┌─────┬───────┐
+      │ key │ line1 │
+      │     │ line2 │
+      └─────┴───────┘
+
+    `;
     expect(renderTable([["key", "line1\r\nline2"]])).toBe(expected);
     expect(renderTable([["key", "line1\rline2"]])).toBe(expected);
   });
@@ -87,11 +81,12 @@ describe("renderTable", () => {
       { singleLine: true },
     );
     expect(result).toBe(ml`
-┌───┬───┐
-│ a │ b │
-│ c │ d │
-└───┴───┘
-`);
+      ┌───┬───┐
+      │ a │ b │
+      │ c │ d │
+      └───┴───┘
+
+    `);
   });
 
   test("drawHorizontalLine controls which separators are drawn", () => {
@@ -107,13 +102,14 @@ describe("renderTable", () => {
       },
     );
     expect(result).toBe(ml`
-┌────┬────┐
-│ h1 │ h2 │
-├────┼────┤
-│ a  │ b  │
-│ c  │ d  │
-└────┴────┘
-`);
+      ┌────┬────┐
+      │ h1 │ h2 │
+      ├────┼────┤
+      │ a  │ b  │
+      │ c  │ d  │
+      └────┴────┘
+
+    `);
   });
 
   test("drawHorizontalLine gates the outer border too, not just inner separators", () => {
@@ -125,10 +121,11 @@ describe("renderTable", () => {
       { drawHorizontalLine: (lineIndex, rowCount) => lineIndex > 0 && lineIndex < rowCount },
     );
     expect(result).toBe(ml`
-│ a │ b │
-├───┼───┤
-│ c │ d │
-`);
+      │ a │ b │
+      ├───┼───┤
+      │ c │ d │
+
+    `);
   });
 
   test("draws every horizontal line by default", () => {
@@ -138,14 +135,15 @@ describe("renderTable", () => {
       ["e", "f"],
     ]);
     expect(result).toBe(ml`
-┌───┬───┐
-│ a │ b │
-├───┼───┤
-│ c │ d │
-├───┼───┤
-│ e │ f │
-└───┴───┘
-`);
+      ┌───┬───┐
+      │ a │ b │
+      ├───┼───┤
+      │ c │ d │
+      ├───┼───┤
+      │ e │ f │
+      └───┴───┘
+
+    `);
   });
 
   test("produces the exact expected layout for a simple ASCII table", () => {
@@ -154,45 +152,49 @@ describe("renderTable", () => {
       ["ccc", "d"],
     ]);
     expect(result).toBe(ml`
-┌─────┬────┐
-│ a   │ bb │
-├─────┼────┤
-│ ccc │ d  │
-└─────┴────┘
-`);
+      ┌─────┬────┐
+      │ a   │ bb │
+      ├─────┼────┤
+      │ ccc │ d  │
+      └─────┴────┘
+
+    `);
   });
 
   test("pads shorter cells when row heights differ within a row", () => {
     const result = renderTable([["one\ntwo\nthree", "x"]]);
     expect(result).toBe(ml`
-┌───────┬───┐
-│ one   │ x │
-│ two   │   │
-│ three │   │
-└───────┴───┘
-`);
+      ┌───────┬───┐
+      │ one   │ x │
+      │ two   │   │
+      │ three │   │
+      └───────┴───┘
+
+    `);
   });
 
   test("pads each line of a multi-line cell to the widest line in that column", () => {
     const result = renderTable([["key", "short\na-much-longer-line\nmid"]]);
     expect(result).toBe(ml`
-┌─────┬────────────────────┐
-│ key │ short              │
-│     │ a-much-longer-line │
-│     │ mid                │
-└─────┴────────────────────┘
-`);
+      ┌─────┬────────────────────┐
+      │ key │ short              │
+      │     │ a-much-longer-line │
+      │     │ mid                │
+      └─────┴────────────────────┘
+
+    `);
   });
 
   test("handles an empty line within a multi-line cell", () => {
     const result = renderTable([["a\n\nb", "x"]]);
     expect(result).toBe(ml`
-┌───┬───┐
-│ a │ x │
-│   │   │
-│ b │   │
-└───┴───┘
-`);
+      ┌───┬───┐
+      │ a │ x │
+      │   │   │
+      │ b │   │
+      └───┴───┘
+
+    `);
   });
 
   test("coerces non-string cell values", () => {
@@ -201,12 +203,13 @@ describe("renderTable", () => {
       [42, false, null, undefined],
     ]);
     expect(result).toBe(ml`
-┌────────┬─────────┬──────┬───────────┐
-│ number │ boolean │ null │ undefined │
-├────────┼─────────┼──────┼───────────┤
-│ 42     │ false   │      │           │
-└────────┴─────────┴──────┴───────────┘
-`);
+      ┌────────┬─────────┬──────┬───────────┐
+      │ number │ boolean │ null │ undefined │
+      ├────────┼─────────┼──────┼───────────┤
+      │ 42     │ false   │      │           │
+      └────────┴─────────┴──────┴───────────┘
+
+    `);
   });
 
   test("computes independent widths per column across multiple rows", () => {
@@ -215,12 +218,13 @@ describe("renderTable", () => {
       ["this-is-a-much-longer-value", "short"],
     ]);
     expect(result).toBe(ml`
-┌─────────────────────────────┬─────────────────────────────┐
-│ short                       │ this-is-a-much-longer-value │
-├─────────────────────────────┼─────────────────────────────┤
-│ this-is-a-much-longer-value │ short                       │
-└─────────────────────────────┴─────────────────────────────┘
-`);
+      ┌─────────────────────────────┬─────────────────────────────┐
+      │ short                       │ this-is-a-much-longer-value │
+      ├─────────────────────────────┼─────────────────────────────┤
+      │ this-is-a-much-longer-value │ short                       │
+      └─────────────────────────────┴─────────────────────────────┘
+
+    `);
   });
 
   test("combines ANSI styling and full-width characters in the same cell", () => {
@@ -230,12 +234,13 @@ describe("renderTable", () => {
       ["longer-status-label", "no"],
     ]);
     expect(result).toBe(ml`
-┌─────────────────────┬──────┐
-│ status              │ ${highlight("有効")} │
-├─────────────────────┼──────┤
-│ longer-status-label │ no   │
-└─────────────────────┴──────┘
-`);
+      ┌─────────────────────┬──────┐
+      │ status              │ ${highlight("有効")} │
+      ├─────────────────────┼──────┤
+      │ longer-status-label │ no   │
+      └─────────────────────┴──────┘
+
+    `);
   });
 
   test("returns an empty string for an empty data array", () => {
@@ -255,19 +260,21 @@ describe("renderTable", () => {
     const red = (text: string): string => `\x1b[31m${text}\x1b[39m`;
     const result = renderTable([["a\tb", red("red")]]);
     expect(result).toBe(ml`
-┌────────────┬─────┐
-│ a        b │ ${red("red")} │
-└────────────┴─────┘
-`);
+      ┌────────────┬─────┐
+      │ a        b │ ${red("red")} │
+      └────────────┴─────┘
+
+    `);
   });
 
   test("strips other stray control characters but preserves ANSI escapes", () => {
     const result = renderTable([["a\bb", "x"]]);
     expect(result).toBe(ml`
-┌────┬───┐
-│ ab │ x │
-└────┴───┘
-`);
+      ┌────┬───┐
+      │ ab │ x │
+      └────┴───┘
+
+    `);
   });
 
   test("measures each line of a multi-line cell independently, even across a grapheme-cluster boundary", () => {
@@ -278,23 +285,25 @@ describe("renderTable", () => {
     // padded out to match -- compare the two rows below directly.
     const result = renderTable([["key", "日本語\n👨‍👩‍👧"]]);
     expect(result).toBe(ml`
-┌─────┬────────┐
-│ key │ 日本語 │
-│     │ 👨‍👩‍👧     │
-└─────┴────────┘
-`);
+      ┌─────┬────────┐
+      │ key │ 日本語 │
+      │     │ 👨‍👩‍👧     │
+      └─────┴────────┘
+
+    `);
   });
 
   test("handles a single-column table", () => {
     const result = renderTable([["a"], ["bb"], ["ccc"]]);
     expect(result).toBe(ml`
-┌─────┐
-│ a   │
-├─────┤
-│ bb  │
-├─────┤
-│ ccc │
-└─────┘
-`);
+      ┌─────┐
+      │ a   │
+      ├─────┤
+      │ bb  │
+      ├─────┤
+      │ ccc │
+      └─────┘
+
+    `);
   });
 });
