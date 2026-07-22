@@ -10,7 +10,12 @@
 
 import * as fs from "node:fs/promises";
 import { writeDbTypesFile } from "./db-types-generator";
-import { getMigrationDirPath, getMigrationFilePath, type SchemaSnapshot } from "./snapshot";
+import {
+  DEFAULT_DECIMAL_SCALE,
+  getMigrationDirPath,
+  getMigrationFilePath,
+  type SchemaSnapshot,
+} from "./snapshot";
 import type { MigrationDiff, DiffChange } from "./diff-calculator";
 
 /**
@@ -149,11 +154,15 @@ export function generateMigrationScript(diff: MigrationDiff): string {
   const updates: string[] = [];
 
   for (const change of diff.changes) {
-    updates.push(...generateChangeScripts(change));
-
     const decimalScaleScript = generateDecimalScaleChangeScript(change);
+    updates.push(...generateChangeScripts(change, decimalScaleScript !== null));
     if (decimalScaleScript) {
       updates.push(decimalScaleScript);
+
+      const uniqueConstraintScript = generateUniqueConstraintScript(change);
+      if (uniqueConstraintScript) {
+        updates.push(uniqueConstraintScript);
+      }
     }
   }
 
@@ -186,9 +195,10 @@ ${updates.join("\n\n")}
 /**
  * Generate scripts for a single change
  * @param {DiffChange} change - Diff change to generate script for
+ * @param {boolean} deferUniqueConstraint - Generate the unique check after decimal re-serialization
  * @returns {string[]} Script contents, or an empty array if no script is needed
  */
-function generateChangeScripts(change: DiffChange): string[] {
+function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false): string[] {
   if (change.kind === "field_added") {
     const field = change.after;
     if (field.required) {
@@ -232,31 +242,11 @@ function generateChangeScripts(change: DiffChange): string[] {
   // No script generation needed here
 
   // Unique constraint added
-  if (!(before.unique ?? false) && (after.unique ?? false)) {
-    scripts.push(`  // Ensure ${change.fieldName} values are unique before adding constraint
-  {
-    const duplicates = await trx
-      .selectFrom("${change.typeName}")
-      .select(["${change.fieldName}"])
-      .groupBy("${change.fieldName}")
-      .having((eb) => eb.fn.count("id"), ">", 1)
-      .execute();
-    for (const dup of duplicates) {
-      // Keep first record, add suffix to others
-      const records = await trx
-        .selectFrom("${change.typeName}")
-        .select(["id", "${change.fieldName}"])
-        .where("${change.fieldName}", "=", dup.${change.fieldName})
-        .execute();
-      for (let i = 1; i < records.length; i++) {
-        await trx
-          .updateTable("${change.typeName}")
-          .set({ ${change.fieldName}: \`\${records[i].${change.fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
-          .where("id", "=", records[i].id)
-          .execute();
-      }
+  if (!deferUniqueConstraint) {
+    const uniqueConstraintScript = generateUniqueConstraintScript(change);
+    if (uniqueConstraintScript) {
+      scripts.push(uniqueConstraintScript);
     }
-  }`);
   }
 
   // Enum values removed
@@ -304,6 +294,38 @@ function generateChangeScripts(change: DiffChange): string[] {
   return scripts;
 }
 
+function generateUniqueConstraintScript(change: DiffChange): string | null {
+  if (change.kind !== "field_modified") return null;
+
+  const { before, after } = change;
+  if ((before.unique ?? false) || !(after.unique ?? false)) return null;
+
+  return `  // Ensure ${change.fieldName} values are unique before adding constraint
+  {
+    const duplicates = await trx
+      .selectFrom("${change.typeName}")
+      .select(["${change.fieldName}"])
+      .groupBy("${change.fieldName}")
+      .having((eb) => eb.fn.count("id"), ">", 1)
+      .execute();
+    for (const dup of duplicates) {
+      // Keep first record, add suffix to others
+      const records = await trx
+        .selectFrom("${change.typeName}")
+        .select(["id", "${change.fieldName}"])
+        .where("${change.fieldName}", "=", dup.${change.fieldName})
+        .execute();
+      for (let i = 1; i < records.length; i++) {
+        await trx
+          .updateTable("${change.typeName}")
+          .set({ ${change.fieldName}: \`\${records[i].${change.fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
+          .where("id", "=", records[i].id)
+          .execute();
+      }
+    }
+  }`;
+}
+
 function generateDecimalScaleChangeScript(change: DiffChange): string | null {
   if (change.kind !== "field_modified") return null;
 
@@ -313,12 +335,19 @@ function generateDecimalScaleChangeScript(change: DiffChange): string | null {
 
   const valueExpression =
     !before.required && after.required ? `row.${change.fieldName}!` : `row.${change.fieldName}`;
+  const beforeScale = before.scale ?? DEFAULT_DECIMAL_SCALE;
+  const afterScale = after.scale ?? DEFAULT_DECIMAL_SCALE;
+  const roundingWarning =
+    afterScale < beforeScale
+      ? `
+  // Values that exceed the new scale may be rounded half-up, so review the
+  // resulting precision before deploying.`
+      : "";
 
   return `  // Re-save existing ${change.typeName} rows so ${change.fieldName} is stored under the new scale.
   // This is a workaround for a platform-side gap where rows written under the
-  // previous scale could fail on later updates until re-saved; it is not a data
-  // transformation. Keep it unless your platform is confirmed to handle stored
-  // values across scale changes.
+  // previous scale could fail on later updates until re-saved. Keep it unless
+  // your platform is confirmed to handle stored values across scale changes.${roundingWarning}
   {
     let lastId: string | undefined;
     while (true) {
@@ -339,6 +368,7 @@ function generateDecimalScaleChangeScript(change: DiffChange): string | null {
           .updateTable("${change.typeName}")
           .set({ ${change.fieldName}: ${valueExpression} })
           .where("id", "=", row.id)
+          .where("${change.fieldName}", "=", ${valueExpression})
           .execute();
       }
       lastId = rows[rows.length - 1]!.id;

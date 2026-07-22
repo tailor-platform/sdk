@@ -349,13 +349,13 @@ describe("template-generator", () => {
       expect(scriptContent.match(/\{\n {4}const orphanedRecords =/g) ?? []).toHaveLength(2);
     });
 
-    test("should generate row-touch migration script for decimal scale change", async () => {
-      const snapshotWithScale2 = createTestSnapshot({
+    test("should warn that decreasing decimal scale can round values", async () => {
+      const snapshotWithScale4 = createTestSnapshot({
         Item: {
           name: "Item",
           pluralForm: "Items",
           fields: {
-            price: { type: "decimal", required: true, scale: 2 },
+            price: { type: "decimal", required: true, scale: 4 },
           },
         },
       });
@@ -366,18 +366,18 @@ describe("template-generator", () => {
             kind: "field_modified",
             typeName: "Item",
             fieldName: "price",
-            before: { type: "decimal", required: true, scale: 2 },
-            after: { type: "decimal", required: true, scale: 4 },
+            before: { type: "decimal", required: true, scale: 4 },
+            after: { type: "decimal", required: true, scale: 2 },
           },
         ],
         hasBreakingChanges: true,
         breakingChanges: [
-          { typeName: "Item", fieldName: "price", reason: "Decimal scale changed from 2 to 4" },
+          { typeName: "Item", fieldName: "price", reason: "Decimal scale changed from 4 to 2" },
         ],
         requiresMigrationScript: true,
       });
 
-      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale2);
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale4);
 
       expect(result.migrateFilePath).toBeDefined();
 
@@ -388,7 +388,9 @@ describe("template-generator", () => {
       expect(scriptContent).toContain(".limit(100)");
       expect(scriptContent).toContain('.where("id", ">", lastId)');
       expect(scriptContent).toContain(".set({ price: row.price })");
+      expect(scriptContent).toContain('.where("price", "=", row.price)');
       expect(scriptContent).toContain("platform-side");
+      expect(scriptContent).toContain("may be rounded");
       expect(scriptContent).not.toContain("No data migration needed");
     });
 
@@ -432,12 +434,12 @@ describe("template-generator", () => {
     });
 
     test("should preserve unique migration when decimal scale also changes", async () => {
-      const snapshotWithScale2 = createTestSnapshot({
+      const snapshotWithScale4 = createTestSnapshot({
         Item: {
           name: "Item",
           pluralForm: "Items",
           fields: {
-            price: { type: "decimal", required: true, unique: false, scale: 2 },
+            price: { type: "decimal", required: true, unique: false, scale: 4 },
           },
         },
       });
@@ -448,8 +450,8 @@ describe("template-generator", () => {
             kind: "field_modified",
             typeName: "Item",
             fieldName: "price",
-            before: { type: "decimal", required: true, unique: false, scale: 2 },
-            after: { type: "decimal", required: true, unique: true, scale: 4 },
+            before: { type: "decimal", required: true, unique: false, scale: 4 },
+            after: { type: "decimal", required: true, unique: true, scale: 2 },
           },
         ],
         hasBreakingChanges: true,
@@ -459,11 +461,14 @@ describe("template-generator", () => {
         requiresMigrationScript: true,
       });
 
-      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale2);
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale4);
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
 
       expect(scriptContent).toContain("const duplicates");
       expect(scriptContent).toContain(".set({ price: row.price })");
+      expect(scriptContent.indexOf(".set({ price: row.price })")).toBeLessThan(
+        scriptContent.indexOf("const duplicates"),
+      );
     });
 
     test("should preserve required, unique, and scale migrations on the same decimal field", async () => {
