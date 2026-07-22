@@ -1,42 +1,14 @@
+import type {
+  UserBooleanArrayOperand,
+  UserBooleanOperand,
+  UserStringArrayOperand,
+  UserStringOperand,
+} from "#/configure/types/permission-operand.types";
 import type { IdPUserField } from "#/parser/service/idp/types";
 import type { InferredAttributes } from "#/runtime/types";
 
 type EqualityOperator = "=" | "!=";
 type ContainsOperator = "in" | "not in";
-
-// `-?` keeps the indexed access from folding optional fields' `never` into
-// `undefined`; `Exclude` lets an optional field's value type still match.
-type StringFieldKeys<User extends object> = {
-  [K in keyof User]-?: Exclude<User[K], undefined> extends string ? K : never;
-}[keyof User];
-
-type StringArrayFieldKeys<User extends object> = {
-  [K in keyof User]-?: Exclude<User[K], undefined> extends string[] ? K : never;
-}[keyof User];
-
-type BooleanFieldKeys<User extends object> = {
-  [K in keyof User]-?: Exclude<User[K], undefined> extends boolean ? K : never;
-}[keyof User];
-
-type BooleanArrayFieldKeys<User extends object> = {
-  [K in keyof User]-?: Exclude<User[K], undefined> extends boolean[] ? K : never;
-}[keyof User];
-
-type UserStringOperand<User extends object = InferredAttributes> = {
-  user: StringFieldKeys<User> | "id";
-};
-
-type UserStringArrayOperand<User extends object = InferredAttributes> = {
-  user: StringArrayFieldKeys<User>;
-};
-
-type UserBooleanOperand<User extends object = InferredAttributes> = {
-  user: BooleanFieldKeys<User> | "_loggedIn";
-};
-
-type UserBooleanArrayOperand<User extends object = InferredAttributes> = {
-  user: BooleanArrayFieldKeys<User>;
-};
 
 type IdPUserOperand<Update extends boolean = false> = Update extends true
   ? { oldIdpUser: IdPUserField } | { newIdpUser: IdPUserField }
