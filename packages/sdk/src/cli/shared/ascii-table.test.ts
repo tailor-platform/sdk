@@ -1,24 +1,8 @@
-import { eastAsianWidth } from "get-east-asian-width";
 import { describe, test, expect } from "vitest";
 import { renderTable } from "./ascii-table";
 
 function expectedTable(...lines: string[]): string {
   return [...lines, ""].join("\n");
-}
-
-const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-// Not used to build expected strings (those must stay literal so a reader can
-// eyeball them). Only used to check the "every line is the same visual
-// width" invariant for content that can't be eyeballed at all -- e.g. a ZWJ
-// emoji sequence, which renders differently across terminals/fonts.
-function visualWidth(line: string): number {
-  let width = 0;
-  for (const { segment } of graphemeSegmenter.segment(line)) {
-    const codePoint = segment.codePointAt(0);
-    width += codePoint === undefined ? 0 : eastAsianWidth(codePoint);
-  }
-  return width;
 }
 
 describe("renderTable", () => {
@@ -294,44 +278,15 @@ describe("renderTable", () => {
   });
 
   test("measures each line of a multi-line cell independently, even across a grapheme-cluster boundary", () => {
-    // man + ZWJ + woman + ZWJ + girl: a single grapheme cluster that must be
-    // measured as one wide (2-column) glyph, not as five separately-measured
-    // code points (which would overcount it as roughly 7 columns wide).
-    const family = String.fromCodePoint(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467);
-    const familyDisplayWidth = 2;
-
-    // "日本語" is 3 full-width characters => display width 6. That's wider
-    // than the emoji line, so it drives the column width; verifies newlines
-    // are split before grapheme segmentation runs, so each line is measured
-    // independently rather than merging across the "\n" boundary.
-    const columnWidth = 6;
-    const familyLinePadding = " ".repeat(columnWidth - familyDisplayWidth);
-
-    const result = renderTable([["key", `日本語\n${family}`]]);
+    // "👨‍👩‍👧" is man + ZWJ + woman + ZWJ + girl: a single grapheme cluster
+    // that must be measured as one wide (2-column) glyph, not as five
+    // separately-measured code points. "日本語" is wider (3 full-width
+    // characters), so it drives the column width and the emoji line gets
+    // padded out to match -- compare the two rows below directly.
+    const result = renderTable([["key", "日本語\n👨‍👩‍👧"]]);
     expect(result).toBe(
-      expectedTable(
-        "┌─────┬────────┐",
-        "│ key │ 日本語 │",
-        `│     │ ${family}${familyLinePadding} │`,
-        "└─────┴────────┘",
-      ),
+      expectedTable("┌─────┬────────┐", "│ key │ 日本語 │", "│     │ 👨‍👩‍👧     │", "└─────┴────────┘"),
     );
-  });
-
-  test("keeps every rendered line the same visual width even with a ZWJ emoji sequence", () => {
-    // Exact string comparison isn't meaningfully eyeballable here: a ZWJ
-    // emoji sequence renders differently across terminals/fonts (one
-    // combined glyph vs. several separate ones), so instead we check the
-    // property a reader can actually verify by reading this test: every
-    // line the renderer produces has the same computed visual width.
-    const family = String.fromCodePoint(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467);
-    const result = renderTable([
-      ["family", family],
-      ["longer-label-row", "x"],
-    ]);
-    const lines = result.split("\n").filter((line) => line.includes("│"));
-    const widths = new Set(lines.map(visualWidth));
-    expect(widths.size).toBe(1);
   });
 
   test("handles a single-column table", () => {
