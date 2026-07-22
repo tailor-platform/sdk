@@ -101,7 +101,7 @@ jobs:
           mkdir -p packages/sdk-plugin-tailordb-erd/dist
           printf '#!/usr/bin/env node\n' > packages/sdk-plugin-tailordb-erd/dist/cli.js
 
-      # install-deps builds the SDK once, so the `tailor-sdk` CLI bin resolves.
+      # install-deps builds the SDK once, so the `tailor` CLI bin resolves.
       - name: Install deps
         uses: ./.github/actions/install-deps
 
