@@ -8,7 +8,7 @@ minimumReleaseAgeExclude:
   - "@tailor-platform/*"
   # Renovate security update: undici@8.5.0
   - undici@8.5.0
-  # Security fix: fast-uri host confusion (GHSA-v2hh-gcrm-f6hx / CVE-2026-16221)
+  # Renovate security update: fast-uri@3.1.4 (GHSA-v2hh-gcrm-f6hx / CVE-2026-16221)
   - fast-uri@3.1.4
 
 blockExoticSubdeps: true
