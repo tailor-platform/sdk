@@ -59,38 +59,27 @@ function sanitizeCell(cell: unknown): string {
   return normalizeControlCharacters(String(cell ?? "").replace(CARRIAGE_RETURN_PATTERN, "\n"));
 }
 
-const REGIONAL_INDICATOR_MIN = 0x1f1e6;
-const REGIONAL_INDICATOR_MAX = 0x1f1ff;
-const VARIATION_SELECTOR_16 = 0xfe0f;
-const COMBINING_ENCLOSING_KEYCAP = 0x20e3;
-
-function isRegionalIndicator(codePoint: number): boolean {
-  return codePoint >= REGIONAL_INDICATOR_MIN && codePoint <= REGIONAL_INDICATOR_MAX;
-}
-
-// Flag pairs, keycap sequences (digit/#/* + optional VS16 + enclosing keycap),
-// and VS16-forced emoji presentation all render as 2 columns in terminals even
-// though their first code point alone would measure as narrow/neutral.
-function isWideEmojiSequence(codePoints: number[]): boolean {
-  if (codePoints.length === 2 && codePoints.every(isRegionalIndicator)) {
-    return true;
-  }
-  return (
-    codePoints.includes(VARIATION_SELECTOR_16) || codePoints.includes(COMBINING_ENCLOSING_KEYCAP)
-  );
-}
+// Clusters made up entirely of non-printing code points (lone joiners,
+// variation selectors, combining marks, etc.) render with no visible glyph.
+const ZERO_WIDTH_CLUSTER_PATTERN =
+  /^(?:\p{Default_Ignorable_Code_Point}|\p{Control}|\p{Format}|\p{Nonspacing_Mark}|\p{Enclosing_Mark}|\p{Surrogate})+$/v;
+// RGI_Emoji covers flags, keycaps, and VS16-forced presentation sequences,
+// which render as 2 columns in terminals even though their first code point
+// alone would measure as narrow/neutral.
+const RGI_EMOJI_PATTERN = /^\p{RGI_Emoji}$/v;
 
 function displayWidth(value: string): number {
   let width = 0;
   for (const { segment } of graphemeSegmenter.segment(value.replace(ANSI_ESCAPE_PATTERN, ""))) {
-    const codePoints = Array.from(segment, (char) => char.codePointAt(0) ?? 0);
-    const firstCodePoint = codePoints[0];
-    width +=
-      firstCodePoint === undefined
-        ? 0
-        : isWideEmojiSequence(codePoints)
-          ? 2
-          : eastAsianWidth(firstCodePoint);
+    if (ZERO_WIDTH_CLUSTER_PATTERN.test(segment)) {
+      continue;
+    }
+    if (RGI_EMOJI_PATTERN.test(segment)) {
+      width += 2;
+      continue;
+    }
+    const codePoint = segment.codePointAt(0);
+    width += codePoint === undefined ? 0 : eastAsianWidth(codePoint);
   }
   return width;
 }
@@ -124,7 +113,8 @@ function validateConsistentColumnCount(rows: string[][]): void {
 /**
  * Renders a 2D array of values as a table using single-line Unicode box-drawing borders.
  * Column widths account for East Asian wide characters (measured per grapheme cluster,
- * so combining marks and ZWJ emoji sequences aren't overcounted, and flags, keycaps, and
+ * so combining marks and ZWJ emoji sequences aren't overcounted, non-printing clusters
+ * such as a lone joiner or combining mark measure as 0, and flags, keycaps, and
  * VS16-forced emoji presentation are measured as 2 columns) and strip ANSI SGR (color/style)
  * escape codes before measuring. Use this instead of importing a table-rendering package
  * directly.

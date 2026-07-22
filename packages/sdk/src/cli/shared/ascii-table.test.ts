@@ -357,6 +357,34 @@ describe("renderTable", () => {
     `);
   });
 
+  test("measures a lone zero-width joiner as width 0, not width 1", () => {
+    // Invisible on its own; the column width comes entirely from "aa" below.
+    const bareZwj = String.fromCodePoint(0x200d);
+    const result = renderTable([[bareZwj], ["aa"]]);
+    expect(result).toBe(ml`
+      ┌────┐
+      │ ${bareZwj}   │
+      ├────┤
+      │ aa │
+      └────┘
+
+    `);
+  });
+
+  test("measures a lone combining mark as width 0, not width 1", () => {
+    // Invisible without a base character; the column width comes entirely from "aa" below.
+    const bareCombiningAcute = String.fromCodePoint(0x0301);
+    const result = renderTable([[bareCombiningAcute], ["aa"]]);
+    expect(result).toBe(ml`
+      ┌────┐
+      │ ${bareCombiningAcute}   │
+      ├────┤
+      │ aa │
+      └────┘
+
+    `);
+  });
+
   test("handles a single-column table", () => {
     const result = renderTable([["a"], ["bb"], ["ccc"]]);
     expect(result).toBe(ml`
