@@ -74,15 +74,69 @@ beforeEach(() => {
   );
 });
 
-async function runApply(args: string[]): Promise<void> {
-  const result = await runCommand(seedApplyCommand, ["--machine-user", "manager", ...args], {
+function runApplyCommand(args: string[]) {
+  return runCommand(seedApplyCommand, args, {
     // Strip unknown global arguments like the plugin entrypoint.
     globalArgs: z.object(commonArgs),
   });
+}
+
+async function runApply(args: string[]): Promise<void> {
+  const result = await runApplyCommand(["--machine-user", "manager", ...args]);
   expect(result.exitCode).toBe(0);
 }
 
 describe("seedApplyCommand", () => {
+  test("succeeds without remote operations when the project has no seed targets", async () => {
+    sdk.loadSeedContext.mockResolvedValueOnce({
+      distPath: "/seed",
+      idpUser: null,
+      machineUserName: undefined,
+      namespaces: [],
+    });
+
+    const result = await runApplyCommand(["--truncate", "--yes", "--json"]);
+
+    expect(result.exitCode).toBe(0);
+    expect(logger.out).toHaveBeenCalledWith({ success: true, processed: {} });
+    expect(logger.success).toHaveBeenCalledWith("No seed targets found.");
+    expect(sdk.show).not.toHaveBeenCalled();
+    expect(sdk.loadAccessToken).not.toHaveBeenCalled();
+    expect(sdk.loadWorkspaceId).not.toHaveBeenCalled();
+    expect(sdk.initOperatorClient).not.toHaveBeenCalled();
+    expect(sdk.truncate).not.toHaveBeenCalled();
+    expect(sdk.executeScript).not.toHaveBeenCalled();
+  });
+
+  test("succeeds without remote operations when --skip-idp removes the only target", async () => {
+    sdk.loadSeedContext.mockResolvedValueOnce({
+      distPath: "/seed",
+      idpUser: {
+        seedScriptCode: "seed-user-code",
+        truncateScriptCode: "truncate-user-code",
+      },
+      machineUserName: undefined,
+      namespaces: [],
+    });
+
+    const result = await runApplyCommand([
+      "--machine-user",
+      "manager",
+      "--skip-idp",
+      "--truncate",
+      "--yes",
+    ]);
+
+    expect(result.exitCode).toBe(0);
+    expect(logger.success).toHaveBeenCalledWith("No seed targets found.");
+    expect(sdk.show).not.toHaveBeenCalled();
+    expect(sdk.loadAccessToken).not.toHaveBeenCalled();
+    expect(sdk.loadWorkspaceId).not.toHaveBeenCalled();
+    expect(sdk.initOperatorClient).not.toHaveBeenCalled();
+    expect(sdk.truncate).not.toHaveBeenCalled();
+    expect(sdk.executeScript).not.toHaveBeenCalled();
+  });
+
   test("truncates all TailorDB data and the IdP user before seeding by default", async () => {
     await runApply(["--truncate", "--yes"]);
 
