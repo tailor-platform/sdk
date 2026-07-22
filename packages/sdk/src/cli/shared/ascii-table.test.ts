@@ -253,6 +253,23 @@ describe("renderTable", () => {
     );
   });
 
+  test("measures each line of a multi-line cell independently, even across a grapheme-cluster boundary", () => {
+    // A cell whose first line is full-width text and whose second line is a
+    // ZWJ emoji sequence: verifies newlines are split before grapheme
+    // segmentation runs, so the two lines are measured independently rather
+    // than merging across the "\n" boundary.
+    const family = String.fromCodePoint(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467);
+    const result = renderTable([["key", `日本語\n${family}`]]);
+    expect(result).toBe(
+      expectedTable(
+        "┌─────┬────────┐",
+        "│ key │ 日本語 │",
+        `│     │ ${family}     │`,
+        "└─────┴────────┘",
+      ),
+    );
+  });
+
   test("handles a single-column table", () => {
     const result = renderTable([["a"], ["bb"], ["ccc"]]);
     expect(result).toBe(
