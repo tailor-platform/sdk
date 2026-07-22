@@ -10,12 +10,7 @@
 
 import * as fs from "node:fs/promises";
 import { writeDbTypesFile } from "./db-types-generator";
-import {
-  getMigrationDirPath,
-  getMigrationFilePath,
-  type SchemaSnapshot,
-  type SnapshotFieldConfig,
-} from "./snapshot";
+import { getMigrationDirPath, getMigrationFilePath, type SchemaSnapshot } from "./snapshot";
 import type { MigrationDiff, DiffChange } from "./diff-calculator";
 
 /**
@@ -288,54 +283,38 @@ function generateChangeScripts(change: DiffChange): string[] {
   ) {
     scripts.push(`  // Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}
   // Find records that don't have a valid reference in the new target table
-  const orphanedRecords = await trx
-    .selectFrom("${change.typeName}")
-    .leftJoin("${after.foreignKeyType}", "${change.typeName}.${change.fieldName}", "${after.foreignKeyType}.id")
-    .select(["${change.typeName}.id", "${change.typeName}.${change.fieldName}"])
-    .where("${after.foreignKeyType}.id", "is", null)
-    .where("${change.typeName}.${change.fieldName}", "is not", null)
-    .execute();
-  for (const record of orphanedRecords) {
-    await trx
-      .updateTable("${change.typeName}")
-      .set({ ${change.fieldName}: null }) // TODO: Set appropriate new reference
+  {
+    const orphanedRecords = await trx
+      .selectFrom("${change.typeName}")
+      .leftJoin("${after.foreignKeyType}", "${change.typeName}.${change.fieldName}", "${after.foreignKeyType}.id")
+      .select(["${change.typeName}.id", "${change.typeName}.${change.fieldName}"])
+      .where("${after.foreignKeyType}.id", "is", null)
+      .where("${change.typeName}.${change.fieldName}", "is not", null)
+      .execute();
+    for (const record of orphanedRecords) {
+      await trx
+        .updateTable("${change.typeName}")
+        .set({ ${change.fieldName}: null }) // TODO: Set appropriate new reference
         .where("id", "=", record.id)
         .execute();
+    }
   }`);
   }
 
   return scripts;
 }
 
-function hasDecimalScaleChange(before: SnapshotFieldConfig, after: SnapshotFieldConfig): boolean {
-  if (before.type === "decimal" && after.type === "decimal" && before.scale !== after.scale) {
-    return true;
-  }
-
-  for (const [fieldName, beforeNestedField] of Object.entries(before.fields ?? {})) {
-    const afterNestedField = after.fields?.[fieldName];
-    if (afterNestedField && hasDecimalScaleChange(beforeNestedField, afterNestedField)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 function generateDecimalScaleChangeScript(change: DiffChange): string | null {
   if (change.kind !== "field_modified") return null;
 
   const { before, after } = change;
-  if (!hasDecimalScaleChange(before, after)) return null;
+  if (before.type !== "decimal" || after.type !== "decimal" || before.scale === after.scale)
+    return null;
 
   const valueExpression =
     !before.required && after.required ? `row.${change.fieldName}!` : `row.${change.fieldName}`;
-  const scaleDescription =
-    before.type === "decimal" && after.type === "decimal"
-      ? `${change.fieldName} is stored under the new scale`
-      : `decimal values in ${change.fieldName} are stored under their new scales`;
 
-  return `  // Re-save existing ${change.typeName} rows so ${scaleDescription}.
+  return `  // Re-save existing ${change.typeName} rows so ${change.fieldName} is stored under the new scale.
   // This is a workaround for a platform-side gap where rows written under the
   // previous scale could fail on later updates until re-saved; it is not a data
   // transformation. Keep it unless your platform is confirmed to handle stored

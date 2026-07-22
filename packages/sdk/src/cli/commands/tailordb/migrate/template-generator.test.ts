@@ -302,6 +302,53 @@ describe("template-generator", () => {
       expect(scriptContent.match(/\{\n {4}const duplicates =/g) ?? []).toHaveLength(2);
     });
 
+    test("should scope foreign key migrations for multiple fields independently", async () => {
+      const snapshotWithOldReferences = createTestSnapshot({
+        Order: {
+          name: "Order",
+          pluralForm: "Orders",
+          fields: {
+            parentId: {
+              type: "uuid",
+              required: true,
+              foreignKeyType: "LegacyParent",
+            },
+            ownerId: {
+              type: "uuid",
+              required: true,
+              foreignKeyType: "LegacyOwner",
+            },
+          },
+        },
+      });
+
+      const changes = [
+        { fieldName: "parentId", beforeType: "LegacyParent", afterType: "Parent" },
+        { fieldName: "ownerId", beforeType: "LegacyOwner", afterType: "Owner" },
+      ];
+      const diff = createMockMigrationDiff({
+        changes: changes.map(({ fieldName, beforeType, afterType }) => ({
+          kind: "field_modified" as const,
+          typeName: "Order",
+          fieldName,
+          before: { type: "uuid" as const, required: true, foreignKeyType: beforeType },
+          after: { type: "uuid" as const, required: true, foreignKeyType: afterType },
+        })),
+        hasBreakingChanges: true,
+        breakingChanges: changes.map(({ fieldName, beforeType, afterType }) => ({
+          typeName: "Order",
+          fieldName,
+          reason: `Foreign key target changed from ${beforeType} to ${afterType}`,
+        })),
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithOldReferences);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent.match(/\{\n {4}const orphanedRecords =/g) ?? []).toHaveLength(2);
+    });
+
     test("should generate row-touch migration script for decimal scale change", async () => {
       const snapshotWithScale2 = createTestSnapshot({
         Item: {
@@ -342,52 +389,6 @@ describe("template-generator", () => {
       expect(scriptContent).toContain('.where("id", ">", lastId)');
       expect(scriptContent).toContain(".set({ price: row.price })");
       expect(scriptContent).toContain("platform-side");
-      expect(scriptContent).not.toContain("No data migration needed");
-    });
-
-    test("should touch the enclosing field for a nested decimal scale change", async () => {
-      const nestedPrice = (scale: number) => ({
-        type: "nested" as const,
-        required: true,
-        fields: {
-          price: { type: "decimal" as const, required: true, scale },
-        },
-      });
-      const snapshotWithScale2 = createTestSnapshot({
-        Item: {
-          name: "Item",
-          pluralForm: "Items",
-          fields: {
-            metadata: nestedPrice(2),
-          },
-        },
-      });
-      const diff = createMockMigrationDiff({
-        changes: [
-          {
-            kind: "field_modified",
-            typeName: "Item",
-            fieldName: "metadata",
-            before: nestedPrice(2),
-            after: nestedPrice(4),
-          },
-        ],
-        hasBreakingChanges: true,
-        breakingChanges: [
-          {
-            typeName: "Item",
-            fieldName: "metadata",
-            reason: "Decimal scale changed from 2 to 4 in nested field metadata.price",
-          },
-        ],
-        requiresMigrationScript: true,
-      });
-
-      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale2);
-      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
-
-      expect(scriptContent).toContain('.select(["id", "metadata"])');
-      expect(scriptContent).toContain(".set({ metadata: row.metadata })");
       expect(scriptContent).not.toContain("No data migration needed");
     });
 
