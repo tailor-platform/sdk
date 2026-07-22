@@ -97,6 +97,17 @@ export function markMigrationScriptSkipped(options: MarkScriptSkippedOptions): S
 }
 
 /**
+ * Remove a script skip acknowledgment after a real migration script is created.
+ * @param diffPath - Migration diff file to update
+ */
+export function clearMigrationScriptSkipped(diffPath: string): void {
+  const raw = JSON.parse(fs.readFileSync(diffPath, "utf-8")) as Record<string, unknown>;
+  if (!Object.hasOwn(raw, "scriptSkipped")) return;
+  delete raw.scriptSkipped;
+  fs.writeFileSync(diffPath, JSON.stringify(raw, null, 2));
+}
+
+/**
  * Add a migrate.ts template to an existing migration directory.
  * @param {ScriptOptions} options - Command options
  */
@@ -172,6 +183,7 @@ async function script(options: ScriptOptions): Promise<void> {
   const scriptContent = generateMigrationScript(diff);
   await fsPromises.writeFile(migratePath, scriptContent);
   await writeDbTypesFile(previousSnapshot, migrationsDir, migrationNumber, diff);
+  clearMigrationScriptSkipped(diffPath);
 
   logger.success(
     `Added migration script for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,

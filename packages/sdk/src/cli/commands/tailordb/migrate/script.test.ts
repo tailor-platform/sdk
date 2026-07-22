@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
-import { markMigrationScriptSkipped } from "./script";
+import { clearMigrationScriptSkipped, markMigrationScriptSkipped } from "./script";
 import { formatMigrationNumber, loadDiff, DIFF_FILE_NAME, MIGRATE_FILE_NAME } from "./snapshot";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import type { MigrationDiff } from "./diff-calculator";
@@ -135,5 +135,26 @@ describe("markMigrationScriptSkipped", () => {
     expect(() =>
       markMigrationScriptSkipped({ migrationsDir: testDir, migrationNumber: 1, reason: "skip" }),
     ).toThrow(/not found/);
+  });
+
+  test("clears a stale skip acknowledgment while preserving other diff fields", () => {
+    const diffPath = writeDiffFile(
+      testDir,
+      1,
+      createMockMigrationDiff({
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+        scriptSkipped: { reason: "no data", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+      }),
+    );
+    const raw = JSON.parse(fs.readFileSync(diffPath, "utf-8")) as Record<string, unknown>;
+    raw.futureField = "preserve-me";
+    fs.writeFileSync(diffPath, JSON.stringify(raw, null, 2));
+
+    clearMigrationScriptSkipped(diffPath);
+
+    const cleared = JSON.parse(fs.readFileSync(diffPath, "utf-8")) as Record<string, unknown>;
+    expect(cleared).not.toHaveProperty("scriptSkipped");
+    expect(cleared.futureField).toBe("preserve-me");
   });
 });

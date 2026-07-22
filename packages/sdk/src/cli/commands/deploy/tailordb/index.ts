@@ -544,6 +544,40 @@ function buildMigrationContextForScripts(
   };
 }
 
+type TailorDBPlanResult = Awaited<ReturnType<typeof planTailorDB>>;
+
+async function validateTailorDBMigrationState(
+  client: OperatorClient,
+  result: TailorDBPlanResult,
+): Promise<ValidateAndDetectResult> {
+  const { context } = result;
+  const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
+  for (const tailordb of context.tailorDBInputs) {
+    typesByNamespace.set(tailordb.namespace, tailordb.types);
+  }
+
+  return validateAndDetectMigrations(
+    client,
+    context.workspaceId,
+    typesByNamespace,
+    context.config,
+    context.noSchemaCheck,
+    context.tailorDBInputs,
+  );
+}
+
+/**
+ * Revalidate migration state before the deployment enters any mutation phase.
+ * @param client - Operator client instance
+ * @param result - Planned TailorDB changes
+ */
+export async function preflightTailorDB(
+  client: OperatorClient,
+  result: TailorDBPlanResult,
+): Promise<void> {
+  await validateTailorDBMigrationState(client, result);
+}
+
 /**
  * Apply TailorDB-related changes for the given phase.
  * @param client - Operator client instance
@@ -561,18 +595,9 @@ export async function applyTailorDB(
     // Plan-time validation makes dry runs fail fast. Repeat the full validation
     // at the apply boundary because migration files, remote checkpoints, or the
     // remote schema may have changed while waiting for confirmation.
-    const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
-    for (const tailordb of migrationContext.tailorDBInputs) {
-      typesByNamespace.set(tailordb.namespace, tailordb.types);
-    }
-
-    const { pendingMigrations, namespacesWithMigrations } = await validateAndDetectMigrations(
+    const { pendingMigrations, namespacesWithMigrations } = await validateTailorDBMigrationState(
       client,
-      migrationContext.workspaceId,
-      typesByNamespace,
-      migrationContext.config,
-      migrationContext.noSchemaCheck,
-      migrationContext.tailorDBInputs,
+      result,
     );
 
     if (pendingMigrations.length > 0) {
