@@ -338,6 +338,7 @@ describe("migration", () => {
         client,
         workspaceId,
         namespacesWithMigrations,
+        path.join(process.cwd(), "custom", "tailor.config.ts"),
       ).then(
         () => null,
         (e: unknown) => e as Error,
@@ -346,6 +347,7 @@ describe("migration", () => {
       expect(error).not.toBeNull();
       expect(error!.message).toContain("tailordb migration script 1 --namespace tailordb");
       expect(error!.message).toContain("--no-script");
+      expect(error!.message).toContain(`--config "${path.join("custom", "tailor.config.ts")}"`);
     });
 
     test("throws before returning later migrations when a script is missing", async () => {

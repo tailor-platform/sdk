@@ -10,6 +10,7 @@ import {
   AuthInvokerSchema,
   type AuthInvoker,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import * as path from "pathe";
 import { bundleMigrationScript } from "#/cli/commands/tailordb/migrate/bundler";
 import { type NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import {
@@ -101,12 +102,14 @@ async function getCurrentMigrationNumber(
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
+ * @param {string} [configPath] - Config file path, included in remediation guidance when provided
  * @returns {Promise<PendingMigration[]>} List of pending migrations
  */
 export async function detectPendingMigrations(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
+  configPath?: string,
 ): Promise<PendingMigration[]> {
   const pendingMigrations: PendingMigration[] = [];
 
@@ -139,7 +142,10 @@ export async function detectPendingMigrations(
       const scriptPath = getMigrationFilePath(migrationsDir, file.number, "migrate");
       const hasScript = fs.existsSync(scriptPath);
       if (diff.requiresMigrationScript && !hasScript && !diff.scriptSkipped) {
-        const scriptCmd = `tailor-sdk tailordb migration script ${file.number} --namespace ${namespace}`;
+        const configArg = configPath
+          ? ` --config "${path.relative(process.cwd(), configPath) || configPath}"`
+          : "";
+        const scriptCmd = `tailor-sdk tailordb migration script ${file.number} --namespace ${namespace}${configArg}`;
         throw new Error(
           `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.\n` +
             `To resolve, either:\n` +

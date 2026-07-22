@@ -7,7 +7,12 @@ import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { sdkNameLabelKey } from "../label";
-import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
+import {
+  applyTailorDB,
+  formatTailorDBResourceChangeEntries,
+  planTailorDB,
+  validateAndDetectMigrations,
+} from ".";
 import type { FieldDiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type {
   SnapshotFieldConfig,
@@ -884,6 +889,8 @@ describe("applyTailorDB phase separation", () => {
         tailorDBInputs: [],
         config: mockConfig,
         noSchemaCheck: true, // Skip migration checks in unit tests
+        pendingMigrations: [],
+        namespacesWithMigrations: [],
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
@@ -1083,8 +1090,28 @@ describe("applyTailorDB migration label reconciliation", () => {
         tailorDBInputs: [],
         config,
         noSchemaCheck,
+        pendingMigrations: [],
+        namespacesWithMigrations: [{ namespace: "test-tailordb", migrationsDir: tmpDir }],
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
+  }
+
+  function runValidation(
+    client: OperatorClient,
+    planResult: Awaited<ReturnType<typeof planTailorDB>>,
+  ) {
+    const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
+    for (const input of planResult.context.tailorDBInputs) {
+      typesByNamespace.set(input.namespace, input.types);
+    }
+    return validateAndDetectMigrations(
+      client,
+      planResult.context.workspaceId,
+      typesByNamespace,
+      planResult.context.config,
+      planResult.context.noSchemaCheck,
+      planResult.context.tailorDBInputs,
+    );
   }
 
   function createMigrationClient(
@@ -1254,7 +1281,7 @@ describe("applyTailorDB migration label reconciliation", () => {
 
     const planResult = planWithDeployDerivedSettings(userType);
 
-    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+    await expect(runValidation(client, planResult)).resolves.toBeDefined();
   });
 
   test("uses db config gqlOperations when the migration namespace has no deploy input", async () => {
@@ -1283,7 +1310,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       },
     };
 
-    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+    await expect(runValidation(client, planResult)).resolves.toBeDefined();
   });
 
   test("does not require unapplied deploy-derived settings during schema verification", async () => {
@@ -1305,7 +1332,7 @@ describe("applyTailorDB migration label reconciliation", () => {
 
     const planResult = planWithDeployDerivedSettings(userType);
 
-    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+    await expect(runValidation(client, planResult)).resolves.toBeDefined();
   });
 
   test("rejects remote-only deploy settings during schema verification", async () => {
@@ -1335,7 +1362,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     ];
     planResult.context.executorUsedTypes = new Set();
 
-    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+    await expect(runValidation(client, planResult)).rejects.toThrow(
       "Remote schema verification failed",
     );
   });
@@ -1367,7 +1394,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     ];
     planResult.context.executorUsedTypes = new Set();
 
-    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+    await expect(runValidation(client, planResult)).resolves.toBeDefined();
   });
 });
 

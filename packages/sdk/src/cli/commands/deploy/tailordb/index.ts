@@ -362,7 +362,7 @@ type ValidateAndDetectResult = {
  * @param {ReadonlyArray<TailorDBDeployInput>} tailorDBInputs - Deploy inputs for namespace defaults
  * @returns {Promise<ValidateAndDetectResult>} Pending migrations and namespaces that have migration directories configured
  */
-async function validateAndDetectMigrations(
+export async function validateAndDetectMigrations(
   client: OperatorClient,
   workspaceId: string,
   typesByNamespace: ReadonlyMap<string, Record<string, TailorDBSnapshotType>>,
@@ -442,6 +442,7 @@ async function validateAndDetectMigrations(
       client,
       workspaceId,
       namespacesWithMigrations,
+      config.path,
     );
 
     if (pendingMigrations.length > 0) {
@@ -451,7 +452,7 @@ async function validateAndDetectMigrations(
       const withScripts = pendingMigrations.filter((m) => m.hasScript);
       const withoutScripts = pendingMigrations.filter((m) => !m.hasScript);
 
-      logger.info(`Applying ${pendingMigrations.length} migration(s):`);
+      logger.info(`${pendingMigrations.length} pending migration(s) will be applied:`);
       if (withoutScripts.length > 0) {
         logger.info(
           `  • ${withoutScripts.length} schema change(s) (applied automatically with schema deployment)`,
@@ -557,21 +558,9 @@ export async function applyTailorDB(
   const { changeSet, context: migrationContext } = result;
 
   if (phase === "create-update") {
-    // Validate and detect migrations
-    // Build types by namespace map (snapshot-shaped, the canonical deploy form)
-    const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
-    for (const tailordb of migrationContext.tailorDBInputs) {
-      typesByNamespace.set(tailordb.namespace, tailordb.types);
-    }
-
-    const { pendingMigrations, namespacesWithMigrations } = await validateAndDetectMigrations(
-      client,
-      migrationContext.workspaceId,
-      typesByNamespace,
-      migrationContext.config,
-      migrationContext.noSchemaCheck,
-      migrationContext.tailorDBInputs,
-    );
+    // Migrations were validated and detected at plan time (planTailorDB), so a
+    // missing migration script fails before any resource is applied.
+    const { pendingMigrations, namespacesWithMigrations } = migrationContext;
 
     if (pendingMigrations.length > 0) {
       // Migration flow: Execute each migration sequentially (pre -> script -> post)
@@ -1354,6 +1343,23 @@ export async function planTailorDB(context: PlanContext) {
     }
   }
 
+  // Validate migrations at plan time so a missing migration script fails the
+  // deploy (including --dry-run) before any resource is applied.
+  const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
+  for (const tailordb of tailordbs) {
+    typesByNamespace.set(tailordb.namespace, tailordb.types);
+  }
+  const { pendingMigrations, namespacesWithMigrations } = forRemoval
+    ? { pendingMigrations: [], namespacesWithMigrations: [] }
+    : await validateAndDetectMigrations(
+        client,
+        workspaceId,
+        typesByNamespace,
+        config,
+        noSchemaCheck ?? false,
+        tailordbs,
+      );
+
   const {
     changeSet: serviceChangeSet,
     conflicts,
@@ -1396,6 +1402,8 @@ export async function planTailorDB(context: PlanContext) {
       executorUsedTypes,
       config,
       noSchemaCheck: noSchemaCheck ?? false,
+      pendingMigrations,
+      namespacesWithMigrations,
     },
   };
 }
