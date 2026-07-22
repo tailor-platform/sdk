@@ -153,6 +153,11 @@ export function generateMigrationScript(diff: MigrationDiff): string {
     if (script) {
       updates.push(script);
     }
+
+    const decimalScaleScript = generateDecimalScaleChangeScript(change);
+    if (decimalScaleScript) {
+      updates.push(decimalScaleScript);
+    }
   }
 
   if (updates.length === 0) {
@@ -252,25 +257,6 @@ function generateChangeScript(change: DiffChange): string | null {
   }`;
   }
 
-  // Decimal scale changed
-  if (before.type === "decimal" && after.type === "decimal" && before.scale !== after.scale) {
-    return `  // Re-save existing ${change.typeName} rows so ${change.fieldName} is stored under the new scale.
-  // This is a workaround for a platform-side gap where rows written under the
-  // previous scale could fail on later updates until re-saved; it is not a data
-  // transformation. Keep it unless your platform is confirmed to handle stored
-  // values across scale changes.
-  {
-    const rows = await trx.selectFrom("${change.typeName}").select(["id", "${change.fieldName}"]).execute();
-    for (const row of rows) {
-      await trx
-        .updateTable("${change.typeName}")
-        .set({ ${change.fieldName}: row.${change.fieldName} })
-        .where("id", "=", row.id)
-        .execute();
-    }
-  }`;
-  }
-
   // Enum values removed
   if (before.type === "enum" && after.type === "enum") {
     const beforeValues = (before.allowedValues ?? []).map((v) => v.value);
@@ -312,6 +298,31 @@ function generateChangeScript(change: DiffChange): string | null {
   }
 
   return null;
+}
+
+function generateDecimalScaleChangeScript(change: DiffChange): string | null {
+  if (change.kind !== "field_modified") return null;
+
+  const { before, after } = change;
+  if (before.type !== "decimal" || after.type !== "decimal" || before.scale === after.scale) {
+    return null;
+  }
+
+  return `  // Re-save existing ${change.typeName} rows so ${change.fieldName} is stored under the new scale.
+  // This is a workaround for a platform-side gap where rows written under the
+  // previous scale could fail on later updates until re-saved; it is not a data
+  // transformation. Keep it unless your platform is confirmed to handle stored
+  // values across scale changes.
+  {
+    const rows = await trx.selectFrom("${change.typeName}").select(["id", "${change.fieldName}"]).execute();
+    for (const row of rows) {
+      await trx
+        .updateTable("${change.typeName}")
+        .set({ ${change.fieldName}: row.${change.fieldName} })
+        .where("id", "=", row.id)
+        .execute();
+    }
+  }`;
 }
 
 /**

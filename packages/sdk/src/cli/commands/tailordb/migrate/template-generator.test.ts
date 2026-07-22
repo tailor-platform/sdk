@@ -303,6 +303,80 @@ describe("template-generator", () => {
       expect(scriptContent).not.toContain("No data migration needed");
     });
 
+    test("should preserve optional-to-required migration when decimal scale also changes", async () => {
+      const snapshotWithScale2 = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: false, scale: 2 },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "Item",
+            fieldName: "price",
+            before: { type: "decimal", required: false, scale: 2 },
+            after: { type: "decimal", required: true, scale: 4 },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "Item",
+            fieldName: "price",
+            reason: "Field changed from optional to required",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale2);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent).toContain('.where("price", "is", null)');
+      expect(scriptContent).toContain(".set({ price: row.price })");
+    });
+
+    test("should preserve unique migration when decimal scale also changes", async () => {
+      const snapshotWithScale2 = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: true, unique: false, scale: 2 },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "Item",
+            fieldName: "price",
+            before: { type: "decimal", required: true, unique: false, scale: 2 },
+            after: { type: "decimal", required: true, unique: true, scale: 4 },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { typeName: "Item", fieldName: "price", reason: "Unique constraint added to field" },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale2);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent).toContain("const duplicates");
+      expect(scriptContent).toContain(".set({ price: row.price })");
+    });
+
     test("should generate migration script for enum values removal", async () => {
       const allEnumValues = [
         { value: "PENDING" },
