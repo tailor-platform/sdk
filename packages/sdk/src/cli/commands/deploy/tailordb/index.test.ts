@@ -750,6 +750,65 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
   });
+
+  describe("migration validation", () => {
+    let migrationsDir: string;
+
+    beforeEach(() => {
+      migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), "plan-migrations-"));
+      fs.mkdirSync(path.join(migrationsDir, "0000"));
+      fs.writeFileSync(
+        path.join(migrationsDir, "0000", "schema.json"),
+        JSON.stringify({
+          version: 1,
+          namespace: "test-tailordb",
+          createdAt: new Date().toISOString(),
+          types: {},
+        }),
+      );
+    });
+
+    afterEach(() => {
+      fs.rmSync(migrationsDir, { recursive: true, force: true });
+    });
+
+    test("fails at plan time when a breaking migration is missing its script", async () => {
+      fs.mkdirSync(path.join(migrationsDir, "0001"));
+      fs.writeFileSync(
+        path.join(migrationsDir, "0001", "diff.json"),
+        JSON.stringify({
+          version: 1,
+          namespace: "test-tailordb",
+          createdAt: new Date().toISOString(),
+          changes: [],
+          hasBreakingChanges: true,
+          breakingChanges: [{ typeName: "User", fieldName: "email", reason: "Unique" }],
+          hasWarnings: false,
+          warnings: [],
+          requiresMigrationScript: true,
+        }),
+      );
+
+      const client = {
+        getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      } as unknown as OperatorClient;
+      const config = {
+        path: path.join(migrationsDir, "tailor.config.ts"),
+        name: appName,
+        db: { "test-tailordb": { migration: { directory: "." } } },
+      } as unknown as LoadedConfig;
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application: createMockApplication([createMockTailorDBService("test-tailordb")]),
+        forRemoval: false,
+        config,
+        noSchemaCheck: true,
+      };
+
+      await expect(planTailorDB(ctx)).rejects.toThrow(/requires a migration script/);
+    });
+  });
 });
 
 describe("formatTailorDBResourceChangeEntries", () => {
