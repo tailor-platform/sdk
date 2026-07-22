@@ -41,7 +41,7 @@ jobs:
 
       - uses: ./.github/actions/install-deps
 
-      - uses: tailor-platform/actions/erd-schema-export@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+      - uses: tailor-platform/actions/erd-schema-export@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           namespace: ${{ matrix.namespace }}
           package-manager: pnpm
@@ -79,7 +79,7 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      - uses: tailor-platform/actions/erd-schema-preview@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+      - uses: tailor-platform/actions/erd-schema-preview@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           namespace: ${{ matrix.namespace }}
           package-manager: pnpm
@@ -118,7 +118,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - uses: tailor-platform/actions/erd-schema-comment@a3c3032e14277e81039eb26ae1a425adb22eb532 # v1.7.0
+      - uses: tailor-platform/actions/erd-schema-comment@1f2d0cc26b84b9fdae8a3a0427526df31e6c966b # v2.0.0
         with:
           base-ref: ${{ github.event.pull_request.base.ref }}
           github-token: ${{ github.token }}
