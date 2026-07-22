@@ -558,9 +558,18 @@ export async function applyTailorDB(
   const { changeSet, context: migrationContext } = result;
 
   if (phase === "create-update") {
-    // Migrations were validated and detected at plan time (planTailorDB), so a
-    // missing migration script fails before any resource is applied.
-    const { pendingMigrations, namespacesWithMigrations } = migrationContext;
+    // Migrations were validated at plan time (planTailorDB), so a missing
+    // migration script fails before any resource is applied. Re-read the
+    // remote checkpoints here: a concurrent deploy may have advanced them
+    // after planning (e.g. while this one waited at the confirmation prompt),
+    // and executing a stale pending set would re-run applied scripts.
+    const { namespacesWithMigrations } = migrationContext;
+    const pendingMigrations = await detectPendingMigrations(
+      client,
+      migrationContext.workspaceId,
+      namespacesWithMigrations,
+      migrationContext.config.path,
+    );
 
     if (pendingMigrations.length > 0) {
       // Migration flow: Execute each migration sequentially (pre -> script -> post)
@@ -1349,8 +1358,8 @@ export async function planTailorDB(context: PlanContext) {
   for (const tailordb of tailordbs) {
     typesByNamespace.set(tailordb.namespace, tailordb.types);
   }
-  const { pendingMigrations, namespacesWithMigrations } = forRemoval
-    ? { pendingMigrations: [], namespacesWithMigrations: [] }
+  const { namespacesWithMigrations } = forRemoval
+    ? { namespacesWithMigrations: [] }
     : await validateAndDetectMigrations(
         client,
         workspaceId,
@@ -1402,7 +1411,6 @@ export async function planTailorDB(context: PlanContext) {
       executorUsedTypes,
       config,
       noSchemaCheck: noSchemaCheck ?? false,
-      pendingMigrations,
       namespacesWithMigrations,
     },
   };

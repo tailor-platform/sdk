@@ -40,6 +40,7 @@ vi.mock("./migration", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./migration");
   return {
     ...original,
+    detectPendingMigrations: vi.fn(),
     executeMigrations: vi.fn(),
     updateMigrationLabel: vi.fn().mockResolvedValue(undefined),
   };
@@ -186,15 +187,13 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
         executorUsedTypes: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
-        pendingMigrations: [],
         namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
       },
     };
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function setPendingMigrations(planResult: any, migrations: PendingMigration[]): void {
-    planResult.context.pendingMigrations = migrations;
+  function setPendingMigrations(migrations: PendingMigration[]): void {
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue(migrations);
   }
 
   function createMockPlanResult() {
@@ -332,7 +331,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    setPendingMigrations(planResult, [mkAddTypeMigration(1, "StockReservation")]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = Error: field 'supplierSnapshotName' not found"),
     );
@@ -368,7 +367,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
       },
     ];
 
-    setPendingMigrations(planResult, [mkAddTypeMigration(1, "StockReservation")]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = migration failed"),
     );
@@ -419,7 +418,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
       },
     ];
 
-    setPendingMigrations(planResult, [mkAddTypeMigration(1, "StockReservation")]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = migration failed"),
     );
@@ -437,7 +436,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    setPendingMigrations(planResult, [mkAddTypeMigration(1, "StockReservation")]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = migration failed"),
     );
@@ -460,7 +459,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const client = createMockClient();
     const planResult = createUpdatePlanResult();
 
-    setPendingMigrations(planResult, [mkAddFieldMigration(1, "GoodsReceipt", "note")]);
+    setPendingMigrations([mkAddFieldMigration(1, "GoodsReceipt", "note")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = migration failed"),
     );
@@ -493,7 +492,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const client = createMockClient();
     const planResult = createUpdatePlanResult();
 
-    setPendingMigrations(planResult, [
+    setPendingMigrations([
       mkAddFieldMigration(1, "GoodsReceipt", "note"),
       mkAddFieldMigration(2, "GoodsReceipt", "extra"),
     ]);
@@ -535,7 +534,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const planResult = createMockPlanResult();
     vi.mocked(client.createTailorDBType).mockRejectedValue(new Error("pre-phase create failed"));
 
-    setPendingMigrations(planResult, [mkAddTypeMigration(1, "StockReservation")]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
       "pre-phase create failed",
@@ -552,7 +551,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    setPendingMigrations(planResult, [mkAddTypeMigration(1, "StockReservation")]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = original migration failure"),
     );
@@ -580,7 +579,7 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    setPendingMigrations(planResult, [mkAddTypeMigration(1, "StockReservation")]);
+    setPendingMigrations([mkAddTypeMigration(1, "StockReservation")]);
     vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
       new Error("rpc error: code = Aborted desc = original migration failure"),
     );

@@ -889,7 +889,6 @@ describe("applyTailorDB phase separation", () => {
         tailorDBInputs: [],
         config: mockConfig,
         noSchemaCheck: true, // Skip migration checks in unit tests
-        pendingMigrations: [],
         namespacesWithMigrations: [],
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
@@ -1090,7 +1089,6 @@ describe("applyTailorDB migration label reconciliation", () => {
         tailorDBInputs: [],
         config,
         noSchemaCheck,
-        pendingMigrations: [],
         namespacesWithMigrations: [{ namespace: "test-tailordb", migrationsDir: tmpDir }],
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
