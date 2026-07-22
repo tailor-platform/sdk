@@ -1,5 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { create } from "@bufbuild/protobuf";
+import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
@@ -607,6 +609,75 @@ describe("planTailorDB (service level)", () => {
 
       expect(result.changeSet.type.updates).toHaveLength(1);
       expect(result.changeSet.type.unchanged).toHaveLength(0);
+    });
+
+    test("treats a redeploy of the exact type previously sent as unchanged when the platform echoes it as a proto message", async () => {
+      // Simulates the real client path: the platform stores what the SDK sent
+      // and returns it as a protobuf-es message, which materializes implicit
+      // proto3 fields (e.g. a newly added bool like `optionalOnCreate`) with
+      // their zero values even though the local manifest never sets them.
+      const tailordbType: TailorDBType = {
+        name: "Invoice",
+        pluralForm: "Invoices",
+        description: "Invoice type",
+        fields: {
+          code: {
+            name: "code",
+            config: {
+              type: "string",
+              required: true,
+            },
+          },
+        },
+        forwardRelationships: {},
+        backwardRelationships: {},
+        settings: {},
+        permissions: {},
+        files: {},
+      };
+
+      const makeCtx = (remoteTypes: unknown[]): PlanContext => {
+        const tailorDBService = createMockTailorDBService("test-tailordb");
+        Object.defineProperty(tailorDBService, "types", {
+          value: { [tailordbType.name]: tailordbType },
+        });
+        const client = {
+          listTailorDBServices: vi.fn().mockResolvedValue({
+            tailordbServices: [{ namespace: { name: "test-tailordb" } }],
+            nextPageToken: "",
+          }),
+          listTailorDBTypes: vi.fn().mockResolvedValue({
+            tailordbTypes: remoteTypes,
+            nextPageToken: "",
+          }),
+          getMetadata: vi.fn().mockResolvedValue({
+            metadata: { labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" } },
+          }),
+          listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
+            permissions: [],
+            nextPageToken: "",
+          }),
+        } as unknown as OperatorClient;
+        return {
+          client,
+          workspaceId,
+          application: createMockApplication([tailorDBService]),
+          forRemoval: false,
+          config: mockConfig,
+          noSchemaCheck: true,
+        };
+      };
+
+      // First plan against an empty workspace captures the exact manifest the
+      // SDK deploys; the second plan sees it echoed back as a proto message.
+      const firstPlan = await planTailorDB(makeCtx([]));
+      const deployedManifest = firstPlan.changeSet.type.creates[0]!.request.tailordbType!;
+      const remoteMessage = create(TailorDBTypeSchema, deployedManifest);
+
+      const result = await planTailorDB(makeCtx([remoteMessage]));
+
+      expect(result.changeSet.type.updates).toHaveLength(0);
+      expect(result.changeSet.type.unchanged).toEqual([{ name: "Invoice" }]);
     });
 
     test("treats an omitted remote field description as unchanged against the local empty-string manifest", async () => {
