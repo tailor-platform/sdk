@@ -264,6 +264,45 @@ describe("template-generator", () => {
       expect(scriptContent).toContain("unique");
     });
 
+    test("should generate row-touch migration script for decimal scale change", async () => {
+      const snapshotWithScale2 = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: true, scale: 2 },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "Item",
+            fieldName: "price",
+            before: { type: "decimal", required: true, scale: 2 },
+            after: { type: "decimal", required: true, scale: 4 },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { typeName: "Item", fieldName: "price", reason: "Decimal scale changed from 2 to 4" },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale2);
+
+      expect(result.migrateFilePath).toBeDefined();
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain('.selectFrom("Item")');
+      expect(scriptContent).toContain(".set({ price: row.price })");
+      expect(scriptContent).toContain("platform-side");
+      expect(scriptContent).not.toContain("No data migration needed");
+    });
+
     test("should generate migration script for enum values removal", async () => {
       const allEnumValues = [
         { value: "PENDING" },

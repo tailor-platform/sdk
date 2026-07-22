@@ -588,6 +588,50 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint");
     });
 
+    describe("decimal scale changes", () => {
+      function snapshotWithPrice(scale: number | undefined): SchemaSnapshot {
+        return {
+          ...createEmptySnapshot(),
+          types: {
+            Item: {
+              name: "Item",
+              pluralForm: "Items",
+              fields: {
+                id: { type: "uuid", required: true },
+                price: {
+                  type: "decimal",
+                  required: true,
+                  ...(scale !== undefined && { scale }),
+                },
+              },
+            },
+          },
+        };
+      }
+
+      test("classifies a decimal scale change as breaking", () => {
+        const diff = compareSnapshots(snapshotWithPrice(2), snapshotWithPrice(4));
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Decimal scale changed");
+        expect(diff.requiresMigrationScript).toBe(true);
+      });
+
+      test("does not flag an explicit scale equal to the platform default", () => {
+        const diff = compareSnapshots(snapshotWithPrice(undefined), snapshotWithPrice(6));
+
+        expect(diff.changes).toHaveLength(0);
+        expect(diff.hasBreakingChanges).toBe(false);
+      });
+
+      test("classifies a change from the omitted default scale as breaking", () => {
+        const diff = compareSnapshots(snapshotWithPrice(undefined), snapshotWithPrice(2));
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Decimal scale changed");
+      });
+    });
+
     test("detects enum values removal (breaking change)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),

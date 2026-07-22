@@ -1036,6 +1036,22 @@ function isBreakingFieldChange(
     };
   }
 
+  // Decimal scale changed - breaking (rows stored under the old scale must be
+  // re-saved so their stored precision matches the new schema)
+  if (
+    oldField &&
+    newField &&
+    oldField.type === "decimal" &&
+    newField.type === "decimal" &&
+    oldField.scale !== newField.scale
+  ) {
+    return {
+      typeName,
+      fieldName,
+      reason: `Decimal scale changed from ${oldField.scale} to ${newField.scale}`,
+    };
+  }
+
   // Enum values removed - breaking (existing records may have removed values)
   if (oldField && newField && oldField.type === "enum" && newField.type === "enum") {
     const oldAllowed = oldField.allowedValues ?? [];
