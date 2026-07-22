@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { isCLIError } from "#/cli/shared/errors";
 import { resolveDeployWorkspace } from "./workspace";
 import type * as ClientModule from "#/cli/shared/client";
@@ -89,7 +89,7 @@ const contextTargets = (...configPaths: string[]) =>
   configPaths.map((configPath) => ({ configPath, applicationId: `app:${configPath}` }));
 
 describe("resolveDeployWorkspace", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mocks.canPrompt.mockReturnValue(false);
     mocks.getPlatformBaseUrl.mockReturnValue("https://api.tailor.tech");
@@ -109,6 +109,7 @@ describe("resolveDeployWorkspace", () => {
         region: "us-west",
       },
     }));
+    await runTest();
   });
 
   test("uses an explicitly configured workspace without discovery", async () => {

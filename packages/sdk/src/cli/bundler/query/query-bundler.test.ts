@@ -1,21 +1,32 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { resolveTSConfig } from "pkg-types";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { bundleQueryScript } from "./query-bundler";
+import type * as pkgTypes from "pkg-types";
+
+type PkgTypesModule = typeof pkgTypes;
+
+vi.mock("pkg-types", async (importOriginal) => {
+  const original = await importOriginal<PkgTypesModule>();
+  return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
+});
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
 
 describe("query-bundler", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     const testDir = path.join(
       TEST_BUNDLER_BASE,
       `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     );
     fs.mkdirSync(testDir, { recursive: true });
     process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
+    await runTest();
   });
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     delete process.env.TAILOR_BUILD_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BUNDLER_BASE, { recursive: true, force: true });
@@ -25,8 +36,15 @@ describe("query-bundler", () => {
   });
 
   describe("bundleQueryScript", () => {
+    test("resolves tsconfig from the provided baseDir", async () => {
+      vi.mocked(resolveTSConfig).mockClear();
+      await bundleQueryScript("sql", __dirname);
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(__dirname);
+    });
+
     test("bundles SQL query script with expected runtime pieces", async () => {
-      const bundledCode = await bundleQueryScript("sql");
+      const bundledCode = await bundleQueryScript("sql", __dirname);
 
       expect(bundledCode).toContain("export");
       expect(bundledCode).toContain("main");
@@ -38,7 +56,7 @@ describe("query-bundler", () => {
     });
 
     test("bundles GraphQL query script with fetch and error handling", async () => {
-      const bundledCode = await bundleQueryScript("gql");
+      const bundledCode = await bundleQueryScript("gql", __dirname);
 
       expect(bundledCode).toContain("export");
       expect(bundledCode).toContain("main");
@@ -49,8 +67,8 @@ describe("query-bundler", () => {
     });
 
     test("keeps SQL and GraphQL runtime concerns separated", async () => {
-      const sqlBundle = await bundleQueryScript("sql");
-      const gqlBundle = await bundleQueryScript("gql");
+      const sqlBundle = await bundleQueryScript("sql", __dirname);
+      const gqlBundle = await bundleQueryScript("gql", __dirname);
 
       expect(sqlBundle).toContain("tailordb.Client");
       expect(sqlBundle).toContain("TailordbDialect");
@@ -65,8 +83,8 @@ describe("query-bundler", () => {
     test("writes entry files to query output directory (bundle output is in-memory only)", async () => {
       const outputDir = path.join(process.env.TAILOR_BUILD_OUTPUT_DIR!, "query");
 
-      await bundleQueryScript("sql");
-      await bundleQueryScript("gql");
+      await bundleQueryScript("sql", __dirname);
+      await bundleQueryScript("gql", __dirname);
 
       // Entry files are still written to disk (rolldown input)
       expect(fs.existsSync(path.join(outputDir, "query_sql.entry.ts"))).toBe(true);

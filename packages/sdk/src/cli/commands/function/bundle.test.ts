@@ -1,9 +1,18 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { resolveTSConfig } from "pkg-types";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
 import type { DetectedFunction } from "./detect";
+import type * as pkgTypes from "pkg-types";
+
+type PkgTypesModule = typeof pkgTypes;
+
+vi.mock("pkg-types", async (importOriginal) => {
+  const original = await importOriginal<PkgTypesModule>();
+  return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
+});
 
 const TEST_BASE = path.join(__dirname, "__test_bundler__");
 
@@ -19,13 +28,15 @@ const defaultWorkspaceId = "11111111-2222-3333-4444-555555555555";
 describe("bundleForTestRun", () => {
   let testDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     testDir = path.join(TEST_BASE, `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     fs.mkdirSync(testDir, { recursive: true });
     process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
+    await runTest();
   });
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     delete process.env.TAILOR_BUILD_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BASE, { recursive: true, force: true });
@@ -45,6 +56,7 @@ describe("bundleForTestRun", () => {
     return bundleForTestRun({
       detected,
       sourceFile,
+      baseDir: testDir,
       machineUser: defaultMachineUser,
       workspaceId: defaultWorkspaceId,
       ...options,
@@ -59,6 +71,22 @@ describe("bundleForTestRun", () => {
   }
 
   describe("plain function", () => {
+    test("resolves tsconfig from the provided baseDir", async () => {
+      vi.mocked(resolveTSConfig).mockClear();
+      const detected: DetectedFunction = { type: "plain", name: "tsconfig-base" };
+      await bundle(
+        "tsconfig-base.ts",
+        `
+export default function(input: any) {
+  return { hello: input.name };
+}
+`,
+        detected,
+      );
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(testDir);
+    });
+
     test("bundles a default-exported function as main", async () => {
       const detected: DetectedFunction = { type: "plain", name: "fn" };
       const result = await bundle(
@@ -190,6 +218,47 @@ export default {
 
       expect(result.bundledCode).toContain("machine_user");
       expect(result.bundledCode).toContain(defaultWorkspaceId);
+    });
+
+    test("injects the permission guard when the resolver has one", async () => {
+      const detected: DetectedFunction = {
+        type: "resolver",
+        name: "protected",
+        permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+      };
+      const result = await bundle(
+        "resolver-permission.ts",
+        `
+export default {
+  operation: "query",
+  name: "protected",
+  body: () => 1,
+  output: { type: "integer", metadata: {} },
+};
+`,
+        detected,
+      );
+
+      expect(result.bundledCode).toContain("TailorErrorMessage");
+      expect(result.bundledCode).toContain("access denied");
+    });
+
+    test("does not inject a guard when permission is omitted", async () => {
+      const detected: DetectedFunction = { type: "resolver", name: "open" };
+      const result = await bundle(
+        "resolver-open.ts",
+        `
+export default {
+  operation: "query",
+  name: "open",
+  body: () => 1,
+  output: { type: "integer", metadata: {} },
+};
+`,
+        detected,
+      );
+
+      expect(result.bundledCode).not.toContain("TailorErrorMessage");
     });
   });
 

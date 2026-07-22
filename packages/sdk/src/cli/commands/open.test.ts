@@ -1,6 +1,6 @@
 import open from "open";
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadConsoleBaseUrl, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -22,7 +22,7 @@ vi.mock("#/cli/shared/context", () => ({
 }));
 
 describe("open --json", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
     vi.mocked(loadConsoleBaseUrl).mockResolvedValue("https://console.tailor.tech");
@@ -32,6 +32,7 @@ describe("open --json", () => {
       },
     } as unknown as Awaited<ReturnType<typeof loadConfig>>);
     vi.mocked(open).mockResolvedValue({} as ChildProcess);
+    await runTest();
   });
 
   test.each([

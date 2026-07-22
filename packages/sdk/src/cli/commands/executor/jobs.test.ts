@@ -4,7 +4,7 @@ import {
   ExecutorTargetType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
 import { WorkflowExecution_Status } from "@tailor-platform/tailor-proto/workflow_resource_pb";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { getExecutorWaitFailureMessage, watchExecutorJob } from "./jobs";
@@ -53,7 +53,7 @@ function mockOperatorClient(overrides: OperatorClientMockOverrides = {}) {
 describe("watchExecutorJob", () => {
   let getExecutorJobMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
 
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
@@ -67,6 +67,7 @@ describe("watchExecutorJob", () => {
       });
 
     mockOperatorClient({ getExecutorJob: getExecutorJobMock });
+    await runTest();
   });
 
   test("retries retryable job polling failures", async () => {

@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { Spinner } from "./spinner";
 
 type FakeStream = {
@@ -41,11 +41,9 @@ function createStartedSpinner(opts: {
 }
 
 describe("Spinner", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.useFakeTimers();
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.useRealTimers();
   });
 

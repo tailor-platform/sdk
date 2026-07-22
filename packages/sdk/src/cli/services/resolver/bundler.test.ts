@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { bundleResolvers } from "./bundler";
 import type * as pkgTypes from "pkg-types";
@@ -120,6 +120,62 @@ describe("bundleResolvers", () => {
     ).resolves.toEqual(new Map());
   });
 
+  test("injects the permission guard into the entry file", async () => {
+    using tmp = tempCwd("sdk-bundler-permission-");
+    const resolverDir = path.join(tmp.dir, "src/backend/permissioncheck/resolver");
+    fs.mkdirSync(resolverDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(resolverDir, "protected.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "protected",\n` +
+        `  permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],\n` +
+        `  body: async () => 1,\n` +
+        `  output: { type: "integer", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+
+    const result = await bundleResolvers(
+      "permissioncheck",
+      { files: ["./src/backend/permissioncheck/resolver/*.ts"] },
+      tmp.dir,
+    );
+
+    const entryContent = result.get("protected");
+
+    expect(entryContent).toBeDefined();
+    expect(entryContent).toContain("caller!==null");
+    expect(entryContent).toContain("TailorErrorMessage");
+    expect(entryContent).toContain("access denied");
+  });
+
+  test("does not inject a guard when permission is omitted or allowAnonymous", async () => {
+    using tmp = tempCwd("sdk-bundler-nopermission-");
+    const resolverDir = path.join(tmp.dir, "src/backend/nopermission/resolver");
+    fs.mkdirSync(resolverDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(resolverDir, "open.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "open",\n` +
+        `  permission: "allowAnonymous",\n` +
+        `  body: async () => 1,\n` +
+        `  output: { type: "integer", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+
+    const result = await bundleResolvers(
+      "nopermission",
+      { files: ["./src/backend/nopermission/resolver/*.ts"] },
+      tmp.dir,
+    );
+
+    const entryContent = result.get("open");
+
+    expect(entryContent).toBeDefined();
+    expect(entryContent).not.toContain("TailorErrorMessage");
+  });
+
   test("resolves tsconfig relative to baseDir, not process.cwd()", async () => {
     using _tmp = tempCwd("sdk-bundler-tsconfig-");
     const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-bundler-tsconfig-other-"));
@@ -181,7 +237,8 @@ describe("bundleResolvers", () => {
   });
 
   describe("concurrency", () => {
-    afterEach(() => {
+    aroundEach(async (runTest) => {
+      await runTest();
       vi.unstubAllEnvs();
       buildTracker = undefined;
       concurrentBuildBarrier = undefined;

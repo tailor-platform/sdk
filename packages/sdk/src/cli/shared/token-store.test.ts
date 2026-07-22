@@ -1,4 +1,4 @@
-import { describe, expect, test, vi, beforeEach } from "vitest";
+import { describe, expect, test, vi, aroundEach } from "vitest";
 import {
   isKeyringAvailable,
   loadKeyringTokens,
@@ -37,9 +37,10 @@ vi.mock("@napi-rs/keyring", () => ({
 }));
 
 describe("token-store", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     resetKeyringState();
     passwords.clear();
+    await runTest();
   });
 
   describe("isKeyringAvailable", () => {

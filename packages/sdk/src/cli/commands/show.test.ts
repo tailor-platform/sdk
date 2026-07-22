@@ -1,6 +1,6 @@
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError } from "@connectrpc/connect";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
@@ -36,7 +36,7 @@ describe("show", () => {
     updateTime: timestampFromDate(new Date("2026-02-01T00:00:00Z")),
   };
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
@@ -57,6 +57,7 @@ describe("show", () => {
       getApplication: getApplicationMock,
       getAIGateway: getAIGatewayMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    await runTest();
   });
 
   test("includes the URL of every configured AI Gateway", async () => {

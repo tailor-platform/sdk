@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { _clearCacheForTesting, getGeneratedType } from "./get-generated-type";
 
 declare global {
@@ -10,16 +10,13 @@ declare global {
 }
 
 describe("getGeneratedType", () => {
-  let tempDir: string;
   let configPath: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     _clearCacheForTesting();
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-test-"));
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-test-"));
     configPath = path.join(tempDir, "tailor.config.mjs");
-  });
-
-  afterEach(() => {
+    await runTest();
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
