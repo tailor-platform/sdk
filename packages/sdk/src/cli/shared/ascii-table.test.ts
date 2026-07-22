@@ -1,18 +1,8 @@
-import { eastAsianWidth } from "get-east-asian-width";
 import { describe, test, expect } from "vitest";
 import { renderTable } from "./ascii-table";
 
-// eslint-disable-next-line no-control-regex
-const ANSI_ESCAPE_PATTERN = /\x1b\[[0-9;]*m/g;
-const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-function visualWidth(line: string): number {
-  let width = 0;
-  for (const { segment } of graphemeSegmenter.segment(line.replace(ANSI_ESCAPE_PATTERN, ""))) {
-    const codePoint = segment.codePointAt(0);
-    width += codePoint === undefined ? 0 : eastAsianWidth(codePoint);
-  }
-  return width;
+function expectedTable(...lines: string[]): string {
+  return [...lines, ""].join("\n");
 }
 
 describe("renderTable", () => {
@@ -21,11 +11,9 @@ describe("renderTable", () => {
       ["a", "b"],
       ["c", "d"],
     ]);
-    expect(result).toContain("┌");
-    expect(result).toContain("└");
-    expect(result).toContain("│");
-    expect(result).toContain("a");
-    expect(result).toContain("d");
+    expect(result).toBe(
+      expectedTable("┌───┬───┐", "│ a │ b │", "├───┼───┤", "│ c │ d │", "└───┴───┘"),
+    );
   });
 
   test("aligns columns containing full-width characters", () => {
@@ -33,9 +21,15 @@ describe("renderTable", () => {
       ["名前", "value"],
       ["a", "日本語のテスト"],
     ]);
-    const lines = result.split("\n").filter((line) => line.includes("│"));
-    const widths = new Set(lines.map(visualWidth));
-    expect(widths.size).toBe(1);
+    expect(result).toBe(
+      expectedTable(
+        "┌──────┬────────────────┐",
+        "│ 名前 │ value          │",
+        "├──────┼────────────────┤",
+        "│ a    │ 日本語のテスト │",
+        "└──────┴────────────────┘",
+      ),
+    );
   });
 
   test("ignores ANSI escape codes when measuring column width", () => {
@@ -44,28 +38,33 @@ describe("renderTable", () => {
       ["short", bold("x")],
       ["longer-value", "y"],
     ]);
-    const lines = result.split("\n").filter((line) => line.includes("│"));
-    const widths = new Set(lines.map(visualWidth));
-    expect(widths.size).toBe(1);
+    expect(result).toBe(
+      expectedTable(
+        "┌──────────────┬───┐",
+        `│ short        │ ${bold("x")} │`,
+        "├──────────────┼───┤",
+        "│ longer-value │ y │",
+        "└──────────────┴───┘",
+      ),
+    );
   });
 
   test("expands row height for embedded newlines", () => {
     const result = renderTable([["key", "line1\nline2"]]);
-    expect(result).toContain("line1");
-    expect(result).toContain("line2");
+    expect(result).toBe(
+      expectedTable("┌─────┬───────┐", "│ key │ line1 │", "│     │ line2 │", "└─────┴───────┘"),
+    );
   });
 
   test("normalizes Windows-style and lone carriage returns to newlines", () => {
-    const crlf = renderTable([["key", "line1\r\nline2"]]);
-    const lines = crlf.split("\n").filter((line) => line.includes("│"));
-    expect(lines).toHaveLength(2);
-    expect(lines[0]).toContain("line1");
-    expect(lines[1]).toContain("line2");
-    expect(crlf).not.toContain("\r");
-
-    const lonelyCr = renderTable([["key", "line1\rline2"]]);
-    expect(lonelyCr).not.toContain("\r");
-    expect(lonelyCr.split("\n").filter((line) => line.includes("│"))).toHaveLength(2);
+    const expected = expectedTable(
+      "┌─────┬───────┐",
+      "│ key │ line1 │",
+      "│     │ line2 │",
+      "└─────┴───────┘",
+    );
+    expect(renderTable([["key", "line1\r\nline2"]])).toBe(expected);
+    expect(renderTable([["key", "line1\rline2"]])).toBe(expected);
   });
 
   test("singleLine suppresses inner horizontal lines", () => {
@@ -76,10 +75,7 @@ describe("renderTable", () => {
       ],
       { singleLine: true },
     );
-    const lines = result.trim().split("\n");
-    expect(lines[0]).toContain("┌");
-    expect(lines[lines.length - 1]).toContain("└");
-    expect(result).not.toContain("├");
+    expect(result).toBe(expectedTable("┌───┬───┐", "│ a │ b │", "│ c │ d │", "└───┴───┘"));
   });
 
   test("drawHorizontalLine controls which separators are drawn", () => {
@@ -94,7 +90,16 @@ describe("renderTable", () => {
           lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount,
       },
     );
-    expect(result.match(/├/g)?.length).toBe(1);
+    expect(result).toBe(
+      expectedTable(
+        "┌────┬────┐",
+        "│ h1 │ h2 │",
+        "├────┼────┤",
+        "│ a  │ b  │",
+        "│ c  │ d  │",
+        "└────┴────┘",
+      ),
+    );
   });
 
   test("drawHorizontalLine gates the outer border too, not just inner separators", () => {
@@ -105,10 +110,7 @@ describe("renderTable", () => {
       ],
       { drawHorizontalLine: (lineIndex, rowCount) => lineIndex > 0 && lineIndex < rowCount },
     );
-    expect(result).not.toContain("┌");
-    expect(result).not.toContain("└");
-    expect(result).not.toContain("┐");
-    expect(result).not.toContain("┘");
+    expect(result).toBe(expectedTable("│ a │ b │", "├───┼───┤", "│ c │ d │"));
   });
 
   test("draws every horizontal line by default", () => {
@@ -117,7 +119,17 @@ describe("renderTable", () => {
       ["c", "d"],
       ["e", "f"],
     ]);
-    expect(result.match(/├/g)?.length).toBe(2);
+    expect(result).toBe(
+      expectedTable(
+        "┌───┬───┐",
+        "│ a │ b │",
+        "├───┼───┤",
+        "│ c │ d │",
+        "├───┼───┤",
+        "│ e │ f │",
+        "└───┴───┘",
+      ),
+    );
   });
 
   test("produces the exact expected layout for a simple ASCII table", () => {
@@ -126,28 +138,28 @@ describe("renderTable", () => {
       ["ccc", "d"],
     ]);
     expect(result).toBe(
-      ["┌─────┬────┐", "│ a   │ bb │", "├─────┼────┤", "│ ccc │ d  │", "└─────┴────┘", ""].join(
-        "\n",
-      ),
+      expectedTable("┌─────┬────┐", "│ a   │ bb │", "├─────┼────┤", "│ ccc │ d  │", "└─────┴────┘"),
     );
   });
 
   test("pads shorter cells when row heights differ within a row", () => {
     const result = renderTable([["one\ntwo\nthree", "x"]]);
-    const lines = result.split("\n").filter((line) => line.includes("│"));
-    expect(lines).toHaveLength(3);
-    expect(lines[0]).toContain("one");
-    expect(lines[1]).toContain("two");
-    expect(lines[2]).toContain("three");
-    // shorter cell's blank lines are padded, not left ragged
-    expect(lines[1]).toMatch(/│ x?\s+│$/);
+    expect(result).toBe(
+      expectedTable(
+        "┌───────┬───┐",
+        "│ one   │ x │",
+        "│ two   │   │",
+        "│ three │   │",
+        "└───────┴───┘",
+      ),
+    );
   });
 
   test("handles an empty line within a multi-line cell", () => {
     const result = renderTable([["a\n\nb", "x"]]);
-    const lines = result.split("\n").filter((line) => line.includes("│"));
-    expect(lines).toHaveLength(3);
-    expect(lines[1]).toMatch(/^│\s+│\s+│$/);
+    expect(result).toBe(
+      expectedTable("┌───┬───┐", "│ a │ x │", "│   │   │", "│ b │   │", "└───┴───┘"),
+    );
   });
 
   test("coerces non-string cell values", () => {
@@ -155,11 +167,15 @@ describe("renderTable", () => {
       ["number", "boolean", "null", "undefined"],
       [42, false, null, undefined],
     ]);
-    expect(result).toContain("42");
-    expect(result).toContain("false");
-    const lines = result.split("\n").filter((line) => line.includes("│"));
-    // null and undefined render as blank (padded) cells, not the strings "null"/"undefined"
-    expect(lines[1]).toMatch(/│\s+│\s+│$/);
+    expect(result).toBe(
+      expectedTable(
+        "┌────────┬─────────┬──────┬───────────┐",
+        "│ number │ boolean │ null │ undefined │",
+        "├────────┼─────────┼──────┼───────────┤",
+        "│ 42     │ false   │      │           │",
+        "└────────┴─────────┴──────┴───────────┘",
+      ),
+    );
   });
 
   test("computes independent widths per column across multiple rows", () => {
@@ -167,9 +183,15 @@ describe("renderTable", () => {
       ["short", "this-is-a-much-longer-value"],
       ["this-is-a-much-longer-value", "short"],
     ]);
-    const lines = result.split("\n").filter((line) => line.includes("│"));
-    const widths = new Set(lines.map(visualWidth));
-    expect(widths.size).toBe(1);
+    expect(result).toBe(
+      expectedTable(
+        "┌─────────────────────────────┬─────────────────────────────┐",
+        "│ short                       │ this-is-a-much-longer-value │",
+        "├─────────────────────────────┼─────────────────────────────┤",
+        "│ this-is-a-much-longer-value │ short                       │",
+        "└─────────────────────────────┴─────────────────────────────┘",
+      ),
+    );
   });
 
   test("combines ANSI styling and full-width characters in the same cell", () => {
@@ -178,10 +200,15 @@ describe("renderTable", () => {
       ["status", highlight("有効")],
       ["longer-status-label", "no"],
     ]);
-    const lines = result.split("\n").filter((line) => line.includes("│"));
-    const widths = new Set(lines.map(visualWidth));
-    expect(widths.size).toBe(1);
-    expect(result).toContain("\x1b[33m有効\x1b[39m");
+    expect(result).toBe(
+      expectedTable(
+        "┌─────────────────────┬──────┐",
+        `│ status              │ ${highlight("有効")} │`,
+        "├─────────────────────┼──────┤",
+        "│ longer-status-label │ no   │",
+        "└─────────────────────┴──────┘",
+      ),
+    );
   });
 
   test("returns an empty string for an empty data array", () => {
@@ -198,12 +225,9 @@ describe("renderTable", () => {
   });
 
   test("strips stray control characters but preserves ANSI escapes", () => {
-    const result = renderTable([["a\tb", "\x1b[31mred\x1b[39m"]]);
-    expect(result).not.toContain("\t");
-    expect(result).toContain("\x1b[31mred\x1b[39m");
-    const lines = result.split("\n").filter((line) => line.includes("│"));
-    const widths = new Set(lines.map(visualWidth));
-    expect(widths.size).toBe(1);
+    const red = (text: string): string => `\x1b[31m${text}\x1b[39m`;
+    const result = renderTable([["a\tb", red("red")]]);
+    expect(result).toBe(expectedTable("┌────┬─────┐", `│ ab │ ${red("red")} │`, "└────┴─────┘"));
   });
 
   test("measures ZWJ emoji sequences and combining marks as a single grapheme cluster", () => {
@@ -216,16 +240,23 @@ describe("renderTable", () => {
       ["combining", combining],
       ["longer-label-row", "x"],
     ]);
-    const lines = result.split("\n").filter((line) => line.includes("│"));
-    const widths = new Set(lines.map(visualWidth));
-    expect(widths.size).toBe(1);
+    expect(result).toBe(
+      expectedTable(
+        "┌──────────────────┬────┐",
+        `│ family           │ ${family} │`,
+        "├──────────────────┼────┤",
+        `│ combining        │ ${combining}  │`,
+        "├──────────────────┼────┤",
+        "│ longer-label-row │ x  │",
+        "└──────────────────┴────┘",
+      ),
+    );
   });
 
   test("handles a single-column table", () => {
     const result = renderTable([["a"], ["bb"], ["ccc"]]);
-    expect(result).toContain("┌");
-    expect(result).toContain("└");
-    expect(result).not.toContain("┬");
-    expect(result).not.toContain("┴");
+    expect(result).toBe(
+      expectedTable("┌─────┐", "│ a   │", "├─────┤", "│ bb  │", "├─────┤", "│ ccc │", "└─────┘"),
+    );
   });
 });
