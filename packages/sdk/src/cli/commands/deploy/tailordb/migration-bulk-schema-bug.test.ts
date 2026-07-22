@@ -9,7 +9,7 @@
 
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import * as migrationModule from "./migration";
-import { applyTailorDB } from "./index";
+import { applyTailorDB, captureMigrationFileState } from "./index";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -219,6 +219,9 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
         config: mockConfig,
         noSchemaCheck: true,
         namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
+        migrationFileState: captureMigrationFileState([
+          { namespace: "test-ns", migrationsDir: "/test/migrations" },
+        ]),
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;

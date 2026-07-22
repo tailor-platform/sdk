@@ -4,7 +4,7 @@
  */
 
 import { describe, test, expect, vi, aroundEach } from "vitest";
-import { applyTailorDB } from "./index";
+import { applyTailorDB, captureMigrationFileState } from "./index";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -188,6 +188,9 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
         config: mockConfig,
         noSchemaCheck: true,
         namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
+        migrationFileState: captureMigrationFileState([
+          { namespace: "test-ns", migrationsDir: "/test/migrations" },
+        ]),
       },
     };
   }
