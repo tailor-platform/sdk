@@ -6,6 +6,12 @@ name: Lockfile Audit Auto-fix
 # blocked by pre-existing vulnerabilities they didn't introduce (see the
 # regression-only check in lockfile-audit.yml), while still keeping
 # pnpm-lock.yaml free of known-vulnerable dependency versions.
+#
+# Also prunes pnpm-workspace.yaml's minimumReleaseAgeExclude list of entries
+# that have outlived their purpose (the pinned version is now older than
+# minimumReleaseAge on its own, so the bypass is a no-op) — nothing else,
+# Renovate included, ever removes those, so the list only grows over time
+# unless swept here.
 on:
   schedule:
     - cron: "0 3 * * *" # daily, 03:00 UTC
@@ -45,8 +51,41 @@ jobs:
       - name: Record pre-fix advisories
         run: pnpm audit --audit-level=moderate --json > /tmp/before-audit.json || true
 
-      - name: Attempt automatic fix
+      # "update" mode patches vulnerable versions directly in the lockfile and
+      # always leaves it installable, but can silently stop short: a package
+      # with two advisories at different patched-version thresholds (seen
+      # with fast-uri/GHSA-v2hh-gcrm-f6hx) gets bumped to the version that
+      # clears only the first one. "override" mode reaches further but can
+      # emit overlapping override/minimumReleaseAgeExclude ranges for the
+      # same package, which makes the following `pnpm install` hard-fail
+      # with ERR_PNPM_NO_MATURE_MATCHING_VERSION. So: try update, then try
+      # override on top of it, and roll back to the update-only result if
+      # override leaves the lockfile uninstallable.
+      - name: Attempt automatic fix (update mode)
         run: pnpm audit --fix update --ignore-registry-errors || true
+
+      - name: Attempt automatic fix (override fallback)
+        run: |
+          cp pnpm-lock.yaml /tmp/lock-safe.yaml
+          cp pnpm-workspace.yaml /tmp/workspace-safe.yaml
+
+          pnpm audit --fix override --ignore-registry-errors || true
+
+          # Dedupe/prune before installing: this is also what makes the
+          # overlapping-range case above actually installable in the first
+          # place, not just cosmetic cleanup.
+          node .github/scripts/lockfile-audit-fix-normalize.mjs | tee -a /tmp/normalize.log
+
+          if pnpm install > /tmp/install.log 2>&1; then
+            echo "Override fallback applied cleanly."
+          else
+            echo "::warning::pnpm install failed after the override fallback; reverting to the update-mode-only result."
+            cat /tmp/install.log
+            cp /tmp/lock-safe.yaml pnpm-lock.yaml
+            cp /tmp/workspace-safe.yaml pnpm-workspace.yaml
+            node .github/scripts/lockfile-audit-fix-normalize.mjs | tee -a /tmp/normalize.log
+            pnpm install --frozen-lockfile || true
+          fi
 
       - name: Check for lockfile changes
         id: diff
@@ -68,7 +107,7 @@ jobs:
           REMAINING=$(jq '[.metadata.vulnerabilities[]] | add // 0' /tmp/after-audit.json)
           {
             echo "body<<BODY_EOF"
-            echo "Automated fix from the daily lockfile audit (\`pnpm audit --fix update\`)."
+            echo "Automated fix from the daily lockfile audit (\`pnpm audit --fix\`)."
             echo ""
             echo "Fixed advisories:"
             while IFS= read -r id; do
@@ -80,6 +119,15 @@ jobs:
             if [ "$REMAINING" != "0" ]; then
               echo ""
               echo "$REMAINING advisories remain and could not be auto-fixed (no compatible patched version in range, or still blocked by \`minimumReleaseAge\`)."
+            fi
+            PRUNED=$(grep -o 'Dropping stale exclude entry "[^"]*"' /tmp/normalize.log 2>/dev/null | sed -E 's/Dropping stale exclude entry "(.*)"/\1/' | sort -u)
+            if [ -n "$PRUNED" ]; then
+              echo ""
+              echo "Removed \`minimumReleaseAgeExclude\` entries that are no longer needed (the pinned version is now old enough on its own):"
+              while IFS= read -r p; do
+                [ -z "$p" ] && continue
+                echo "- \`$p\`"
+              done <<< "$PRUNED"
             fi
             echo "BODY_EOF"
           } >> "$GITHUB_OUTPUT"
