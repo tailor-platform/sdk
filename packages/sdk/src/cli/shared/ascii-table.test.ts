@@ -155,6 +155,19 @@ describe("renderTable", () => {
     );
   });
 
+  test("pads each line of a multi-line cell to the widest line in that column", () => {
+    const result = renderTable([["key", "short\na-much-longer-line\nmid"]]);
+    expect(result).toBe(
+      expectedTable(
+        "┌─────┬────────────────────┐",
+        "│ key │ short              │",
+        "│     │ a-much-longer-line │",
+        "│     │ mid                │",
+        "└─────┴────────────────────┘",
+      ),
+    );
+  });
+
   test("handles an empty line within a multi-line cell", () => {
     const result = renderTable([["a\n\nb", "x"]]);
     expect(result).toBe(
@@ -265,17 +278,25 @@ describe("renderTable", () => {
   });
 
   test("measures each line of a multi-line cell independently, even across a grapheme-cluster boundary", () => {
-    // A cell whose first line is full-width text and whose second line is a
-    // ZWJ emoji sequence: verifies newlines are split before grapheme
-    // segmentation runs, so the two lines are measured independently rather
-    // than merging across the "\n" boundary.
+    // man + ZWJ + woman + ZWJ + girl: a single grapheme cluster that must be
+    // measured as one wide (2-column) glyph, not as five separately-measured
+    // code points (which would overcount it as roughly 7 columns wide).
     const family = String.fromCodePoint(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467);
+    const familyDisplayWidth = 2;
+
+    // "日本語" is 3 full-width characters => display width 6. That's wider
+    // than the emoji line, so it drives the column width; verifies newlines
+    // are split before grapheme segmentation runs, so each line is measured
+    // independently rather than merging across the "\n" boundary.
+    const columnWidth = 6;
+    const familyLinePadding = " ".repeat(columnWidth - familyDisplayWidth);
+
     const result = renderTable([["key", `日本語\n${family}`]]);
     expect(result).toBe(
       expectedTable(
         "┌─────┬────────┐",
         "│ key │ 日本語 │",
-        `│     │ ${family}     │`,
+        `│     │ ${family}${familyLinePadding} │`,
         "└─────┴────────┘",
       ),
     );
