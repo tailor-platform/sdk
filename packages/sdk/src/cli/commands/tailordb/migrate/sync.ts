@@ -333,10 +333,11 @@ async function sync(options: SyncOptions): Promise<void> {
     target.namespace,
   );
   const remoteGqlPermissionTypes = new Set(remoteGqlPermissions.map((p) => p.typeName));
-  const desiredGqlPermissions = Object.entries(snapshot.types).flatMap(([typeName, snapshotType]) =>
-    snapshotType.permissions?.gql
-      ? [{ typeName, permission: protoGqlPermission(snapshotType.permissions.gql) }]
-      : [],
+  const desiredGqlPermissions = Object.entries(snapshot.types).flatMap(
+    ([typeName, snapshotType]) =>
+      snapshotType.permissions?.gql
+        ? [{ typeName, permission: protoGqlPermission(snapshotType.permissions.gql) }]
+        : [],
   );
   const desiredGqlPermissionTypes = new Set(desiredGqlPermissions.map((p) => p.typeName));
   const gqlPermissionDeletes = remoteGqlPermissions.filter(
