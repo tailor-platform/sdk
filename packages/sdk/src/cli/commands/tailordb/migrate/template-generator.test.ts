@@ -8,6 +8,7 @@ import {
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
   DB_TYPES_FILE_NAME,
+  compareSnapshots,
   getMigrationDirPath,
   type SchemaSnapshot,
 } from "./snapshot";
@@ -339,6 +340,40 @@ describe("template-generator", () => {
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
       expect(scriptContent).toContain('.groupBy(["name"])');
       expect(scriptContent).not.toContain("No data migration needed");
+    });
+
+    test("should re-save decimal values before resolving unique index duplicates", async () => {
+      const previous = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: true, scale: 4 },
+          },
+        },
+      });
+      const current = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: true, scale: 2 },
+          },
+          indexes: {
+            price_idx: { fields: ["price"], unique: true },
+          },
+        },
+      });
+      const diff = compareSnapshots(previous, current);
+
+      const result = await generateDiffFiles(diff, tempDir, 1, previous);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      const decimalUpdatePosition = scriptContent.indexOf(".set({ price: row.price })");
+      const indexDedupePosition = scriptContent.indexOf('.groupBy(["price"])');
+
+      expect(decimalUpdatePosition).toBeGreaterThan(-1);
+      expect(indexDedupePosition).toBeGreaterThan(-1);
+      expect(decimalUpdatePosition).toBeLessThan(indexDedupePosition);
     });
 
     test("should scope unique migrations for multiple fields independently", async () => {
