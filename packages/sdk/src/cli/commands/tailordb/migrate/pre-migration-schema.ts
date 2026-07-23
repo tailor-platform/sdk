@@ -11,6 +11,12 @@
  * - `field_modified` optional→required, unique constraint added, enum
  *   value removed: keep the looser side until Post-phase.
  *
+ * and the type-level index adjustments:
+ *
+ * - `index_added` with `unique: true`: withhold the index until Post-phase.
+ * - `index_modified` that gains a unique constraint or re-points a unique
+ *   index at different fields: keep the previous definition until Post-phase.
+ *
  * Type-level deletions (`type_removed`) are handled by the deploy flow,
  * which retains the type until Post-phase rather than via this module.
  *
@@ -18,11 +24,15 @@
  * to fix up data.
  */
 
-import { convertFieldConfigToProto } from "./snapshot-manifest";
-import type { DiffChange, FieldDiffChange } from "./diff-calculator";
+import { isBreakingIndexChange } from "./snapshot";
+import { convertFieldConfigToProto, convertIndexToProto } from "./snapshot-manifest";
+import type { DiffChange, FieldDiffChange, IndexDiffChange } from "./diff-calculator";
 import type { PendingMigration } from "./types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { TailorDBType_FieldConfigSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import type {
+  TailorDBType_FieldConfigSchema,
+  TailorDBType_IndexSchema,
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 /**
  * Diff change kinds that require pre-migration schema adjustments.
@@ -135,6 +145,64 @@ export function applyPreMigrationFieldAdjustments(
           description,
         }));
       }
+    }
+  }
+}
+
+/**
+ * Map of pre-migration index changes needing relaxation:
+ * typeName -> indexName -> change.
+ */
+export type PreMigrationIndexChangesMap = Map<string, Map<string, IndexDiffChange>>;
+
+/**
+ * Build a map of type-level index changes that require pre-migration schema
+ * adjustment (the breaking ones — see {@link isBreakingIndexChange}).
+ * @param {PendingMigration[]} pendingMigrations - Pending migrations to scan
+ * @returns {PreMigrationIndexChangesMap} Map of changes keyed by typeName/indexName
+ */
+export function buildPreMigrationIndexChangesMap(
+  pendingMigrations: PendingMigration[],
+): PreMigrationIndexChangesMap {
+  const map: PreMigrationIndexChangesMap = new Map();
+  for (const migration of pendingMigrations) {
+    for (const change of migration.diff.changes) {
+      if (change.kind !== "index_added" && change.kind !== "index_modified") continue;
+      const before = change.kind === "index_modified" ? change.before : undefined;
+      if (!isBreakingIndexChange(change.typeName, change.indexName, before, change.after)) {
+        continue;
+      }
+      const perType = map.get(change.typeName) ?? new Map<string, IndexDiffChange>();
+      perType.set(change.indexName, change);
+      map.set(change.typeName, perType);
+    }
+  }
+  return map;
+}
+
+/**
+ * Apply pre-migration schema adjustments to a type's index map in place.
+ *
+ * The indexes map is the proto-shape `TailorDBType.schema.indexes` that will
+ * be sent in the Pre-phase. We mutate it so that:
+ *
+ * - Newly added unique indexes are withheld until Post-phase.
+ * - Modified indexes keep their previous definition until Post-phase.
+ *
+ * @param {Record<string, MessageInitShape<typeof TailorDBType_IndexSchema>>} indexes - Index map to adjust (mutated in place)
+ * @param {Map<string, IndexDiffChange>} typeIndexChanges - Changes for this type, keyed by indexName
+ */
+export function applyPreMigrationIndexAdjustments(
+  indexes: Record<string, MessageInitShape<typeof TailorDBType_IndexSchema>>,
+  typeIndexChanges: Map<string, IndexDiffChange>,
+): void {
+  for (const [indexName, change] of typeIndexChanges) {
+    if (change.kind === "index_added") {
+      delete indexes[indexName];
+      continue;
+    }
+    if (change.kind === "index_modified") {
+      indexes[indexName] = convertIndexToProto(change.before);
     }
   }
 }
