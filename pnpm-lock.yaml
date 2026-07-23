@@ -720,9 +720,6 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
-      '@connectrpc/connect':
-        specifier: 2.1.2
-        version: 2.1.2(@bufbuild/protobuf@2.12.1)
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../sdk
