@@ -588,6 +588,100 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint");
     });
 
+    describe("type-level index changes", () => {
+      function snapshotWithIndexes(
+        indexes: Record<string, { fields: string[]; unique?: boolean }> | undefined,
+      ): SchemaSnapshot {
+        return {
+          ...createEmptySnapshot(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {
+                id: { type: "uuid", required: true },
+                name: { type: "string", required: true },
+                org: { type: "string", required: true },
+              },
+              ...(indexes && { indexes }),
+            },
+          },
+        };
+      }
+
+      test("classifies unique index addition as breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes(undefined),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint added to index");
+        expect(diff.requiresMigrationScript).toBe(true);
+      });
+
+      test("keeps non-unique index addition non-breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes(undefined),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"] } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+        expect(diff.changes.some((c) => c.kind === "index_added")).toBe(true);
+      });
+
+      test("classifies unique constraint added to existing index as breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: false } }),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint added to index");
+      });
+
+      test("classifies field change on a unique index as breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes({ name_org: { fields: ["name"], unique: true } }),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Unique index fields changed");
+      });
+
+      test("keeps unique constraint removal non-breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: false } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+      });
+
+      test("keeps unique index removal non-breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
+          snapshotWithIndexes(undefined),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+      });
+
+      test("keeps field change on a non-unique index non-breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes({ name_org: { fields: ["name"] } }),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"] } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+      });
+    });
+
     test("detects enum values removal (breaking change)", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),

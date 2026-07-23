@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "1.80.1",
+  "version": "1.82.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -200,6 +200,7 @@
     "date-fns": "4.4.0",
     "es-toolkit": "1.49.0",
     "find-up-simple": "1.0.1",
+    "get-east-asian-width": "1.6.0",
     "get-tsconfig": "4.14.0",
     "globals": "17.7.0",
     "graphql": "17.0.2",
@@ -218,7 +219,6 @@
     "semver": "7.8.5",
     "sql-highlight": "6.1.0",
     "std-env": "4.2.0",
-    "table": "6.9.0",
     "ts-cron-validator": "1.1.5",
     "tsx": "4.23.1",
     "type-fest": "5.8.0",
@@ -239,7 +239,7 @@
     "oxlint": "1.74.0",
     "oxlint-tsgolint": "0.25.0",
     "sonda": "0.14.0",
-    "tsdown": "0.22.9",
+    "tsdown": "0.22.12",
     "typescript": "6.0.3",
     "vitest": "4.1.10",
     "zinfer": "0.2.7"

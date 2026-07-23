@@ -4,7 +4,10 @@ import { create } from "@bufbuild/protobuf";
 import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import { describe, test, expect, vi, aroundEach } from "vitest";
-import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
+import {
+  applyPreMigrationFieldAdjustments,
+  applyPreMigrationIndexAdjustments,
+} from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   formatMigrationNumber,
   type SnapshotFieldConfig,
@@ -20,7 +23,10 @@ import {
   planTailorDB,
   validateAndDetectMigrations,
 } from ".";
-import type { FieldDiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
+import type {
+  FieldDiffChange,
+  IndexDiffChange,
+} from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -29,7 +35,10 @@ import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { PlanContext } from "../types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { TailorDBType_FieldConfigSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import type {
+  TailorDBType_FieldConfigSchema,
+  TailorDBType_IndexSchema,
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 // Mock label.ts
 vi.mock("../label", async (importOriginal) => {
@@ -1066,6 +1075,87 @@ describe("applyPreMigrationFieldAdjustments", () => {
     applyPreMigrationFieldAdjustments(fields, typeChanges);
 
     expect(fields.keep!.required).toBe(true);
+  });
+});
+
+describe("applyPreMigrationIndexAdjustments", () => {
+  type ProtoIndex = MessageInitShape<typeof TailorDBType_IndexSchema>;
+
+  test("removes a newly-added unique index until the post-phase", () => {
+    const indexes: Record<string, ProtoIndex> = {
+      name_org: { fieldNames: ["name", "org"], unique: true },
+      existing: { fieldNames: ["name"], unique: false },
+    };
+    const indexChanges = new Map<string, IndexDiffChange>([
+      [
+        "name_org",
+        {
+          kind: "index_added",
+          typeName: "User",
+          indexName: "name_org",
+          after: { fields: ["name", "org"], unique: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationIndexAdjustments(indexes, indexChanges);
+
+    expect(indexes.name_org).toBeUndefined();
+    expect(indexes.existing).toBeDefined();
+  });
+
+  test("keeps the previous definition for an index gaining unique", () => {
+    const indexes: Record<string, ProtoIndex> = {
+      name_idx: { fieldNames: ["name"], unique: true },
+    };
+    const indexChanges = new Map<string, IndexDiffChange>([
+      [
+        "name_idx",
+        {
+          kind: "index_modified",
+          typeName: "User",
+          indexName: "name_idx",
+          before: { fields: ["name"], unique: false },
+          after: { fields: ["name"], unique: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationIndexAdjustments(indexes, indexChanges);
+
+    expect(indexes.name_idx).toEqual({ fieldNames: ["name"], unique: false });
+  });
+
+  test("keeps the previous definition for a unique index changing fields", () => {
+    const indexes: Record<string, ProtoIndex> = {
+      name_idx: { fieldNames: ["name", "org"], unique: true },
+    };
+    const indexChanges = new Map<string, IndexDiffChange>([
+      [
+        "name_idx",
+        {
+          kind: "index_modified",
+          typeName: "User",
+          indexName: "name_idx",
+          before: { fields: ["name"], unique: true },
+          after: { fields: ["name", "org"], unique: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationIndexAdjustments(indexes, indexChanges);
+
+    expect(indexes.name_idx).toEqual({ fieldNames: ["name"], unique: true });
+  });
+
+  test("does not modify indexes that are not in indexChanges", () => {
+    const indexes: Record<string, ProtoIndex> = {
+      keep: { fieldNames: ["name"], unique: true },
+    };
+
+    applyPreMigrationIndexAdjustments(indexes, new Map<string, IndexDiffChange>());
+
+    expect(indexes.keep).toEqual({ fieldNames: ["name"], unique: true });
   });
 });
 

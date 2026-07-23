@@ -49,27 +49,27 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
     expect(wf.resumeWorkflow.mock.calls).toEqual([["exec-1"]]);
   });
 
-  test("triggerJobFunction forwards and returns enqueued result", () => {
+  test("execJobFunction forwards and returns enqueued result", () => {
     using wf = mockWorkflow();
     wf.enqueueResult({ ok: true });
 
-    const result = workflow.triggerJobFunction("my-job", { id: 1 });
+    const result = workflow.execJobFunction("my-job", { id: 1 });
 
     expect(result).toEqual({ ok: true });
     expect(wf.triggeredJobs).toEqual([{ jobName: "my-job", args: { id: 1 } }]);
   });
 
-  test("triggerJobFunction forwards executionPolicyKey option", () => {
+  test("execJobFunction forwards executionPolicyKey option", () => {
     using wf = mockWorkflow();
     wf.enqueueResult({ ok: true });
 
     const policyKey = "premium" as ExecutionPolicyKey;
-    workflow.triggerJobFunction("my-job", { id: 1 }, { executionPolicyKey: policyKey });
+    workflow.execJobFunction("my-job", { id: 1 }, { executionPolicyKey: policyKey });
 
     expect(wf.triggeredJobs).toEqual([
       { jobName: "my-job", args: { id: 1 }, options: { executionPolicyKey: "premium" } },
     ]);
-    expect(wf.triggerJobFunction.mock.calls[0]?.[2]).toEqual({ executionPolicyKey: "premium" });
+    expect(wf.execJobFunction.mock.calls[0]?.[2]).toEqual({ executionPolicyKey: "premium" });
   });
 
   test("wait records the call and returns the configured result", () => {
@@ -119,7 +119,7 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
       expect(wf.resumeWorkflowExecution).toBe(wf.resumeWorkflow);
     });
 
-    test("startJobFunction behaves as an alias of triggerJobFunction", () => {
+    test("startJobFunction behaves as an alias of execJobFunction", () => {
       using wf = mockWorkflow();
       wf.enqueueResult({ canonical: true });
 
@@ -127,19 +127,32 @@ describe("@tailor-platform/sdk/runtime/workflow", () => {
 
       expect(result).toEqual({ canonical: true });
       expect(wf.startJobFunction.mock.calls).toEqual([["my-job", { id: 1 }]]);
-      expect(wf.startJobFunction).toBe(wf.triggerJobFunction);
+      expect(wf.startJobFunction).toBe(wf.execJobFunction);
     });
 
-    test("calls through canonical and legacy names share the same call log", () => {
+    test("triggerJobFunction behaves as an alias of execJobFunction", () => {
+      using wf = mockWorkflow();
+      wf.enqueueResult({ frozen: true });
+
+      const result = workflow.triggerJobFunction("my-job", { id: 1 });
+
+      expect(result).toEqual({ frozen: true });
+      expect(wf.triggerJobFunction.mock.calls).toEqual([["my-job", { id: 1 }]]);
+      expect(wf.triggerJobFunction).toBe(wf.execJobFunction);
+    });
+
+    test("calls through canonical and alias names share the same call log", () => {
       using wf = mockWorkflow();
       wf.setJobHandler(() => ({ ok: true }));
 
-      workflow.startJobFunction("job-a", { via: "canonical" });
-      workflow.triggerJobFunction("job-b", { via: "legacy" });
+      workflow.execJobFunction("job-a", { via: "canonical" });
+      workflow.startJobFunction("job-b", { via: "start-alias" });
+      workflow.triggerJobFunction("job-c", { via: "frozen-alias" });
 
       expect(wf.triggeredJobs).toEqual([
         { jobName: "job-a", args: { via: "canonical" } },
-        { jobName: "job-b", args: { via: "legacy" } },
+        { jobName: "job-b", args: { via: "start-alias" } },
+        { jobName: "job-c", args: { via: "frozen-alias" } },
       ]);
     });
   });
