@@ -3524,8 +3524,8 @@ packages:
     resolution: {integrity: sha512-9qny7Z9DsQU8Ou39ERsPU4OZQlSTP47ShQzuKZ6PRXpYLtIFgl/DEBYEXKlvcEa+9tHVcK8CF81Y2V72qaZhWA==}
     engines: {node: '>=18'}
 
-  obug@2.1.3:
-    resolution: {integrity: sha512-9miFgM2OFba7hB+pRgvtV84pYTBaoTHohvmIgiRt6dRIzbwEOIaNaP+dIlGs2fNFoB0SeISs0Jz5WFVRid6Xyg==}
+  obug@2.1.4:
+    resolution: {integrity: sha512-4a+OsYv9UktOJKE+l1A4OufDgdRF9PifWj+tJnHURo/P+WOxpG4GzUFL9qCalmWauao6ogiG+QvnCovwPoyAWA==}
     engines: {node: '>=12.20.0'}
 
   onetime@5.1.2:
@@ -5495,7 +5495,7 @@ snapshots:
       istanbul-lib-report: 3.0.1
       istanbul-reports: 3.2.0
       magicast: 0.5.3
-      obug: 2.1.3
+      obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.0
       vitest: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.1.3(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
@@ -6453,7 +6453,7 @@ snapshots:
       path-key: 4.0.0
       unicorn-magic: 0.3.0
 
-  obug@2.1.3: {}
+  obug@2.1.4: {}
 
   onetime@5.1.2:
     dependencies:
@@ -6788,7 +6788,7 @@ snapshots:
     dependencies:
       dts-resolver: 3.0.0(oxc-resolver@11.21.3)
       get-tsconfig: 5.0.0-beta.5
-      obug: 2.1.3
+      obug: 2.1.4
       rolldown: 1.2.0
       yuku-ast: 0.1.7
       yuku-codegen: 0.6.1
@@ -6981,7 +6981,7 @@ snapshots:
       empathic: 2.0.1
       hookable: 6.1.1
       import-without-cache: 0.4.0
-      obug: 2.1.3
+      obug: 2.1.4
       picomatch: 4.0.5
       rolldown: 1.2.0
       rolldown-plugin-dts: 0.27.9(@typescript/native-preview@7.0.0-dev.20260707.2)(oxc-resolver@11.21.3)(rolldown@1.2.0)(typescript@6.0.3)
@@ -7067,7 +7067,7 @@ snapshots:
       es-module-lexer: 2.3.0
       expect-type: 1.4.0
       magic-string: 0.30.21
-      obug: 2.1.3
+      obug: 2.1.4
       pathe: 2.0.3
       picomatch: 4.0.5
       std-env: 4.2.0
