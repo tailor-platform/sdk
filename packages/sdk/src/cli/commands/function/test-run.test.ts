@@ -125,4 +125,28 @@ describe("function test-run --json", () => {
       expect.objectContaining({ name: "flag-or-profile-bot" }),
     );
   });
+
+  test("rejects a --arg value that is not a JSON object", async () => {
+    using _stdout = captureStdout();
+    using _stderr = captureStderr();
+    using _json = jsonMode();
+
+    const callsBefore = vi.mocked(executeScript).mock.calls.length;
+
+    const result = await runCommand(testRunCommand, [
+      scriptPath,
+      "--machine-user",
+      "admin",
+      "--arg",
+      "[1,2,3]",
+    ]);
+
+    expect(result).toMatchObject({
+      success: false,
+      error: expect.objectContaining({
+        message: expect.stringContaining("--arg must be a JSON object"),
+      }),
+    });
+    expect(vi.mocked(executeScript).mock.calls.length).toBe(callsBefore);
+  });
 });

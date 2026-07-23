@@ -22,7 +22,9 @@ export const DEFAULT_POLL_INTERVAL = 1000;
 /**
  * Options for script execution
  */
-export interface ScriptExecutionOptions<T extends Jsonifiable = Jsonifiable> {
+export interface ScriptExecutionOptions<
+  T extends Record<string, Jsonifiable> = Record<string, Jsonifiable>,
+> {
   /** Operator client instance */
   client: OperatorClient;
   /** Workspace ID */
@@ -31,7 +33,7 @@ export interface ScriptExecutionOptions<T extends Jsonifiable = Jsonifiable> {
   name: string;
   /** Bundled script code to execute */
   code: string;
-  /** Optional JSON-serializable argument to pass to the script */
+  /** Optional JSON-serializable object argument to pass to the script */
   arg?: T;
   /** Auth invoker for script execution */
   invoker: ScriptInvoker;
@@ -122,9 +124,9 @@ export async function waitForExecution(
  * @param {ScriptExecutionOptions} options - Execution options
  * @returns {Promise<ScriptExecutionResult>} Execution result
  */
-export async function executeScript<T extends Jsonifiable = Jsonifiable>(
-  options: ScriptExecutionOptions<T>,
-): Promise<ScriptExecutionResult> {
+export async function executeScript<
+  T extends Record<string, Jsonifiable> = Record<string, Jsonifiable>,
+>(options: ScriptExecutionOptions<T>): Promise<ScriptExecutionResult> {
   const { client, workspaceId, name, code, arg, invoker, pollInterval } = options;
 
   // Execute the script

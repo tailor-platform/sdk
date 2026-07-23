@@ -211,7 +211,7 @@ describe("executeScript", () => {
     });
 
     // Regression: a typed-out options object must stay assignable to
-    // executeScript's parameter (arg is Jsonifiable, usable on its own).
+    // executeScript's parameter (arg is Record<string, Jsonifiable>, usable on its own).
     const options: ScriptExecutionOptions = {
       client,
       workspaceId: "workspace-1",
