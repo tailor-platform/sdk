@@ -41,15 +41,6 @@ jobs:
         with:
           persist-credentials: false
 
-      # pnpm links a package's bin only when its target file exists at install
-      # time, and neither a same-lockfile re-install nor `rebuild --pending`
-      # retries a skipped link. Stub the plugin's dist entry before install;
-      # the build below replaces it.
-      - name: Stub ERD plugin bin target
-        run: |
-          mkdir -p packages/sdk-plugin-tailordb-erd/dist
-          printf '#!/usr/bin/env node\n' > packages/sdk-plugin-tailordb-erd/dist/cli.js
-
       - uses: ./.github/actions/install-deps
 
       # install-deps also builds this plugin; kept as a safety net since `tailor
@@ -90,15 +81,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      # pnpm links a package's bin only when its target file exists at install
-      # time, and neither a same-lockfile re-install nor `rebuild --pending`
-      # retries a skipped link. Stub the plugin's dist entry before install;
-      # the build below replaces it.
-      - name: Stub ERD plugin bin target
-        run: |
-          mkdir -p packages/sdk-plugin-tailordb-erd/dist
-          printf '#!/usr/bin/env node\n' > packages/sdk-plugin-tailordb-erd/dist/cli.js
 
       # install-deps builds the SDK once, so the `tailor` CLI bin resolves.
       - name: Install deps
