@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { rolldown } from "rolldown";
+import * as rolldown from "rolldown";
 import { aroundEach, describe, expect, test } from "vitest";
 import {
   createLogLevelTreeshakeOptions,
@@ -121,12 +121,13 @@ export function handler() {
 `,
     );
 
-    const bundle = await rolldown({
+    const result = await rolldown.build({
       input: entry,
+      write: false,
+      output: { format: "esm" },
       treeshake: composeFunctionTreeshakeOptions([createLogLevelTreeshakeOptions(logLevel)]),
     });
-    const { output } = await bundle.generate({ format: "esm" });
-    return output[0].code;
+    return result.output[0].code;
   }
 
   test("keeps every severity at DEBUG", async () => {
