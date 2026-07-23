@@ -42,14 +42,30 @@ jobs:
       - name: Run Vitest lint
         run: pnpm run lint:vitest
 
-      # Ensure no executable files are present
+      # Ensure no executable files are committed
       # refs: https://github.com/changesets/action/issues/523
-      # Skip symlinks: `-x` follows symlinks to directories and reports them as executable.
+      # Checks git object modes (not the working tree) because pnpm chmods
+      # declared bin targets +x at install time. Those targets are exempt:
+      # they are committed as 755 so installs keep checkouts clean, and
+      # changesets/action never commits them.
       - name: Check for executable files
         run: |
-          executable_files=$(git ls-files | while read -r file; do [ ! -L "$file" ] && [ -x "$file" ] && echo "$file"; done || true)
+          bin_targets=$(node -e '
+            const fs = require("fs");
+            const path = require("path");
+            for (const pkgPath of process.argv.slice(1)) {
+              const { bin } = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+              if (!bin) continue;
+              for (const target of typeof bin === "string" ? [bin] : Object.values(bin)) {
+                console.log(path.posix.normalize(path.posix.join(path.posix.dirname(pkgPath), target)));
+              }
+            }
+          ' $(git ls-files '*package.json'))
+          executable_files=$(git ls-files --format='%(objectmode) %(path)' | while read -r mode file; do
+            [ "$mode" = "100755" ] && ! grep -Fqx "$file" <<< "$bin_targets" && echo "$file"
+          done || true)
           if [ -n "$executable_files" ]; then
-            echo "Error: Found executable files (changesets/action does not support executable files):"
+            echo "Error: Found committed executable files (changesets/action does not support executable files):"
             echo "$executable_files"
             exit 1
           fi
