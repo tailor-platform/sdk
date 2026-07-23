@@ -49,6 +49,31 @@ describe("bundle-log-level", () => {
     }
   });
 
+  test("drops globalThis.tailor.logger.debug at INFO and above", () => {
+    expect(manualPureFunctionsForLogLevel("DEBUG")).not.toContain("globalThis.tailor.logger.debug");
+    expect(manualPureFunctionsForLogLevel("INFO")).toContain("globalThis.tailor.logger.debug");
+    expect(manualPureFunctionsForLogLevel("INFO")).not.toContain("globalThis.tailor.logger.info");
+  });
+
+  test("maps WARN to globalThis.tailor.logger calls below warn", () => {
+    expect(manualPureFunctionsForLogLevel("WARN")).toEqual(
+      expect.arrayContaining(["globalThis.tailor.logger.debug", "globalThis.tailor.logger.info"]),
+    );
+    expect(manualPureFunctionsForLogLevel("WARN")).not.toContain("globalThis.tailor.logger.warn");
+    expect(manualPureFunctionsForLogLevel("WARN")).not.toContain("globalThis.tailor.logger.error");
+  });
+
+  test("maps SILENT to all levelled globalThis.tailor.logger calls", () => {
+    expect(manualPureFunctionsForLogLevel("SILENT")).toEqual(
+      expect.arrayContaining([
+        "globalThis.tailor.logger.debug",
+        "globalThis.tailor.logger.info",
+        "globalThis.tailor.logger.warn",
+        "globalThis.tailor.logger.error",
+      ]),
+    );
+  });
+
   test("omits manual pure functions for DEBUG", () => {
     expect(createLogLevelTreeshakeOptions("DEBUG")).not.toHaveProperty("manualPureFunctions");
   });

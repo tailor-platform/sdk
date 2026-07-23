@@ -104,7 +104,8 @@ export interface AppConfig<
    */
   inlineSourcemap?: boolean;
   /**
-   * Controls which `console.*` calls remain in bundled functions.
+   * Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`)
+   * calls remain in bundled functions.
    * @default "DEBUG"
    */
   logLevel?: LogLevelInput;
