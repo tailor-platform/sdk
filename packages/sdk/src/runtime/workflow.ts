@@ -213,20 +213,20 @@ export const execJobFunction: TailorWorkflowAPI["execJobFunction"] = (...args) =
 /**
  * Alias for {@link execJobFunction}. Kept for backward compatibility.
  * @deprecated Use {@link execJobFunction} instead.
- * @param args - Forwarded to {@link TailorWorkflowAPI.startJobFunction}
+ * @param args - Forwarded to {@link TailorWorkflowAPI.execJobFunction}
  * @returns The job's return value
  */
 export const startJobFunction: TailorWorkflowAPI["startJobFunction"] = (...args) =>
-  api().startJobFunction(...args);
+  api().execJobFunction(...args);
 
 /**
  * Frozen alias for {@link execJobFunction}. Kept for backward compatibility.
  * @deprecated Use {@link execJobFunction} instead.
- * @param args - Forwarded to {@link TailorWorkflowAPI.triggerJobFunction}
+ * @param args - Forwarded to {@link TailorWorkflowAPI.execJobFunction}
  * @returns The job's return value
  */
 export const triggerJobFunction: TailorWorkflowAPI["triggerJobFunction"] = (...args) =>
-  api().triggerJobFunction(...args);
+  api().execJobFunction(...args);
 
 /**
  * See {@link TailorWorkflowAPI.wait}.
