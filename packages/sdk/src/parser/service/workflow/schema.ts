@@ -75,7 +75,7 @@ export const ExecutionPolicyKeySchema = z
     "Invalid execution policy key: must match [a-z0-9_:.-] (2-64 chars; must start with [a-z0-9] and end with [a-z0-9] or a trailing '*')",
   )
   .describe(
-    "Execution policy key passed to startJobFunction's (or its frozen alias triggerJobFunction's) executionPolicyKey option",
+    "Execution policy key passed to execJobFunction's (or its aliases startJobFunction / triggerJobFunction) executionPolicyKey option",
   );
 
 export const WorkflowJobFunctionExecutionPolicySchema = z.object({

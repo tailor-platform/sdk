@@ -1,7 +1,7 @@
 import { platformSerialize } from "#/utils/test/platform-serialize";
 import { buildJobContext } from "./test-env-key";
 import type { TailorEnv, TailorInvoker } from "#/runtime/types";
-import type { StartJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
+import type { ExecJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
 
 /**
  * Body signature shared by workflow jobs at registry-write time.
@@ -27,8 +27,9 @@ type PlatformWorkflow = {
     args?: unknown,
     options?: StartWorkflowOptions,
   ) => Promise<string>;
-  startJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
-  triggerJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
+  execJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
+  startJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
+  triggerJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
 };
 
 type GlobalWithRegistry = typeof globalThis & {
@@ -60,7 +61,7 @@ function workflows(): Map<string, RegisteredWorkflow> {
 /**
  * Register a job body keyed by job name. Called as a side effect by
  * `createWorkflowJob` so the vitest mock can execute the body when
- * `globalThis.tailor.workflow.triggerJobFunction(name, args)` is invoked.
+ * `globalThis.tailor.workflow.execJobFunction(name, args)` is invoked.
  *
  * In production builds the bundler rewrites `.trigger()` calls so this registry
  * is never read; the gated write is dropped as dead code.
@@ -134,14 +135,14 @@ export async function runRegisteredWorkflow(name: string, args?: unknown): Promi
 export function dispatchTriggerJob(
   name: string,
   args?: unknown,
-  options?: StartJobFunctionOptions,
+  options?: ExecJobFunctionOptions,
 ): unknown {
   const workflow = currentPlatformWorkflow();
   if (!workflow) return runRegisteredJob(name, args);
   // oxlint-disable-next-line prefer-rest-params
   return arguments.length >= 3
-    ? workflow.triggerJobFunction(name, args, options)
-    : workflow.triggerJobFunction(name, args);
+    ? workflow.execJobFunction(name, args, options)
+    : workflow.execJobFunction(name, args);
 }
 
 // Accepts `unknown` because the SDK-side `.trigger()` accepts a wider options

@@ -2,11 +2,12 @@
 // Must stay free of `vitest` (`vi`): it loads via `./globals` in the environment
 // realm where `vi` is unavailable, hence relative imports only (no `@/` alias).
 import { runRegisteredJob, runRegisteredWorkflow } from "../configure/services/workflow/registry";
-import type { StartJobFunctionOptions, StartWorkflowOptions } from "../runtime/workflow";
+import type { ExecJobFunctionOptions, StartWorkflowOptions } from "../runtime/workflow";
 
 export interface DefaultWorkflowRuntime {
-  startJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
-  triggerJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
+  execJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
+  startJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
+  triggerJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
   startWorkflow: (name: string, args?: unknown, options?: StartWorkflowOptions) => Promise<string>;
   triggerWorkflow: (
     name: string,
@@ -24,7 +25,7 @@ export interface DefaultWorkflowRuntime {
 }
 
 export function createDefaultWorkflowRuntime(): DefaultWorkflowRuntime {
-  const startJobFunction: DefaultWorkflowRuntime["startJobFunction"] = (name, args) =>
+  const execJobFunction: DefaultWorkflowRuntime["execJobFunction"] = (name, args) =>
     runRegisteredJob(name, args);
   const startWorkflow: DefaultWorkflowRuntime["startWorkflow"] = (name, args) =>
     runRegisteredWorkflow(name, args);
@@ -32,8 +33,9 @@ export function createDefaultWorkflowRuntime(): DefaultWorkflowRuntime {
     executionId,
   ) => executionId;
   return {
-    startJobFunction,
-    triggerJobFunction: startJobFunction,
+    execJobFunction,
+    startJobFunction: execJobFunction,
+    triggerJobFunction: execJobFunction,
     startWorkflow,
     triggerWorkflow: startWorkflow,
     resumeWorkflowExecution,
