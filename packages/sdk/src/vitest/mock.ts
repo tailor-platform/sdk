@@ -36,6 +36,7 @@ export { mockAuthconnection, type MockAuthconnectionOptions } from "./mocks/auth
 export { mockFile, type MockFileOptions } from "./mocks/file";
 export { mockIconv, type MockIconvOptions } from "./mocks/iconv";
 export { mockIdp, type MockIdpOptions } from "./mocks/idp";
+export { mockLogger, type MockLoggerOptions } from "./mocks/logger";
 export { mockSecretmanager, type MockSecretmanagerOptions } from "./mocks/secretmanager";
 export {
   mockTailordb,
