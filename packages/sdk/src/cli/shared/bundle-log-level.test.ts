@@ -9,6 +9,7 @@ import {
   normalizeBundleLogLevel,
   resolveBundleLogLevel,
 } from "./bundle-log-level";
+import { composeFunctionTreeshakeOptions } from "./function-treeshake";
 
 // Use a file:// URL rather than fileURLToPath: a raw Windows path (backslashes
 // + drive letter) embedded in an import specifier string breaks resolution there.
@@ -122,12 +123,7 @@ export function handler() {
 
     const bundle = await rolldown({
       input: entry,
-      treeshake: {
-        moduleSideEffects: false,
-        annotations: true,
-        unknownGlobalSideEffects: false,
-        ...createLogLevelTreeshakeOptions(logLevel),
-      },
+      treeshake: composeFunctionTreeshakeOptions([createLogLevelTreeshakeOptions(logLevel)]),
     });
     const { output } = await bundle.generate({ format: "esm" });
     return output[0].code;
