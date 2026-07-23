@@ -1,5 +1,13 @@
 # @tailor-platform/sdk
 
+## 1.83.0
+
+### Minor Changes
+
+- [#1873](https://github.com/tailor-platform/sdk/pull/1873) [`79f5d61`](https://github.com/tailor-platform/sdk/commit/79f5d61993354dccb7a973a00b7e0f54a5dc0a60) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `tailor.workflow.execJobFunction` as the canonical name for executing a workflow job function and returning its result. `startJobFunction` and `triggerJobFunction` remain available as aliases with the same behavior; `@deprecated` markers now point users at `execJobFunction`. Bundled workflow output emitted by the SDK now targets the canonical `execJobFunction` name.
+
+- [#1861](https://github.com/tailor-platform/sdk/pull/1861) [`c970daf`](https://github.com/tailor-platform/sdk/commit/c970daf4bef76d0d83db5e4bf8405e156bd89a4e) Thanks [@dqn](https://github.com/dqn)! - Classify type-level unique index changes as breaking in `tailordb migration generate`: adding a unique index (or adding `unique` to an existing index, or changing a unique index's field set) now prompts for confirmation and auto-generates a `migrate.ts` that resolves duplicate value combinations before the constraint is enforced. During deploy, the pre-migration phase withholds the new unique index (or keeps the previous definition) until the migration script has run.
+
 ## 1.82.0
 
 ### Minor Changes
