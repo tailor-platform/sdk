@@ -9,9 +9,10 @@
     "directory": "packages/sdk-plugin-tailordb-erd"
   },
   "bin": {
-    "tailor-tailordb-erd": "./dist/cli.js"
+    "tailor-tailordb-erd": "./bin/cli.mjs"
   },
   "files": [
+    "bin",
     "CHANGELOG.md",
     "dist",
     "README.md"
