@@ -37,84 +37,43 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Determine changeset plan
-        id: plan
+      - name: Check for existing changeset
+        id: existing
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -eo pipefail
+          FILENAME=".changeset/renovate-${PR_NUMBER}.md"
+          if [ -f "$FILENAME" ]; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+            echo "Changeset $FILENAME already exists; skipping"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Snapshot base lockfile
+        if: steps.existing.outputs.found == 'false'
+        env:
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -eo pipefail
-
-          FILENAME=".changeset/renovate-${PR_NUMBER}.md"
-          if [ -f "$FILENAME" ]; then
-            echo "should_create=false" >> "$GITHUB_OUTPUT"
-            echo "add_skip_label=false" >> "$GITHUB_OUTPUT"
-            echo "Changeset $FILENAME already exists; skipping"
-            exit 0
-          fi
-
           git fetch --no-tags --quiet origin "$BASE_REF"
           BASE_SHA=$(git merge-base "origin/${BASE_REF}" HEAD)
+          git show "$BASE_SHA:pnpm-lock.yaml" > /tmp/renovate-base-lock.yaml
 
-          changed=$(git diff --name-only "$BASE_SHA" HEAD \
-            | grep -E '^packages/[^/]+/package\.json$' || true)
-
-          if [ -z "$changed" ]; then
-            echo "should_create=false" >> "$GITHUB_OUTPUT"
-            echo "add_skip_label=true" >> "$GITHUB_OUTPUT"
-            echo "No packages/*/package.json changes; skipping"
-            exit 0
-          fi
-
-          names=()
-          while IFS= read -r file; do
-            [ -z "$file" ] && continue
-            old=$(git show "$BASE_SHA:$file" 2>/dev/null \
-              | jq -S 'del(.devDependencies)' 2>/dev/null || echo "null")
-            new=$(jq -S 'del(.devDependencies)' "$file")
-            if [ "$old" = "$new" ]; then
-              echo "Skipping $file (devDependencies-only change)"
-              continue
-            fi
-            # Private packages are ignored by changesets; mixing them with
-            # public packages in one changeset breaks `changeset version`
-            # with a "Mixed changesets" error.
-            if [ "$(jq -r '.private // false' "$file")" = "true" ]; then
-              echo "Skipping $file (private package)"
-              continue
-            fi
-            name=$(jq -r '.name' "$file")
-            # @tailor-platform/create-sdk is in the fixed group with
-            # @tailor-platform/sdk (see .changeset/config.json), so normalize
-            # to avoid redundant entries — they always bump together.
-            if [ "$name" = "@tailor-platform/create-sdk" ]; then
-              name="@tailor-platform/sdk"
-            fi
-            names+=("$name")
-          done <<< "$changed"
-
-          if [ "${#names[@]}" -eq 0 ]; then
-            echo "should_create=false" >> "$GITHUB_OUTPUT"
-            echo "add_skip_label=true" >> "$GITHUB_OUTPUT"
-            echo "Only devDependencies changed; no changeset needed"
-            exit 0
-          fi
-
-          unique=$(printf '%s\n' "${names[@]}" | sort -u)
-          {
-            echo "should_create=true"
-            echo "add_skip_label=false"
-            echo "names<<NAMES_EOF"
-            echo "$unique"
-            echo "NAMES_EOF"
-          } >> "$GITHUB_OUTPUT"
+      - name: Determine changeset requirement
+        if: steps.existing.outputs.found == 'false'
+        id: changeset_check
+        uses: ./.github/actions/skip-changeset-check
+        with:
+          before-lockfile: /tmp/renovate-base-lock.yaml
 
       - name: Create changeset file
-        if: steps.plan.outputs.should_create == 'true'
+        if: steps.existing.outputs.found == 'false' && steps.changeset_check.outputs.has-runtime-changes == 'true'
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          NAMES: ${{ steps.plan.outputs.names }}
+          NAMES: ${{ steps.changeset_check.outputs.changed-names }}
         run: |
           set -eo pipefail
           FILENAME=".changeset/renovate-${PR_NUMBER}.md"
@@ -130,7 +89,7 @@ jobs:
           } > "$FILENAME"
 
       - name: Commit changeset
-        if: steps.plan.outputs.should_create == 'true'
+        if: steps.existing.outputs.found == 'false' && steps.changeset_check.outputs.has-runtime-changes == 'true'
         uses: suzuki-shunsuke/commit-action@06e3b49d4706498d325d29bd85adc82ecf2f5d8f # v1.0.0
         with:
           app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
@@ -141,7 +100,7 @@ jobs:
           fail_on_self_push: false
 
       - name: Add skip-changeset label
-        if: steps.plan.outputs.add_skip_label == 'true'
+        if: steps.existing.outputs.found == 'false' && steps.changeset_check.outputs.has-runtime-changes == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

@@ -74,6 +74,24 @@ function readPackageMeta(importerPath) {
   }
 }
 
+// Packages in the same changeset "fixed" group always release together, so a
+// change to one is reported under the group's first (primary) package name —
+// otherwise a changeset naming e.g. create-sdk alone would fail
+// `changeset version` with a "packages in a fixed group must release
+// together" error.
+function loadFixedGroupNormalizer() {
+  const map = new Map();
+  try {
+    const config = JSON.parse(readFileSync(".changeset/config.json", "utf8"));
+    for (const group of config.fixed ?? []) {
+      for (const name of group) map.set(name, group[0]);
+    }
+  } catch {
+    // no config.json or no "fixed" groups — normalization is a no-op
+  }
+  return (name) => map.get(name) ?? name;
+}
+
 function main() {
   const { before, after } = parseArgs(process.argv.slice(2));
 
@@ -81,6 +99,7 @@ function main() {
   const afterImporters = parseImporters(readFileSync(after, "utf8"));
 
   const paths = new Set([...Object.keys(beforeImporters), ...Object.keys(afterImporters)]);
+  const normalize = loadFixedGroupNormalizer();
   const changedNames = new Set();
 
   for (const importerPath of paths) {
@@ -90,13 +109,14 @@ function main() {
 
     const meta = readPackageMeta(importerPath);
     if (!meta || meta.private || !meta.name) continue;
-    changedNames.add(meta.name);
+    changedNames.add(normalize(meta.name));
   }
 
-  const hasRuntimeChanges = changedNames.size > 0;
+  const sortedNames = [...changedNames].sort();
+  const hasRuntimeChanges = sortedNames.length > 0;
   console.log(
     hasRuntimeChanges
-      ? `Runtime dependency changes detected in: ${[...changedNames].join(", ")}`
+      ? `Runtime dependency changes detected in: ${sortedNames.join(", ")}`
       : "No runtime dependency changes (devDependencies-only and/or policy-list pruning).",
   );
 
@@ -105,7 +125,7 @@ function main() {
     appendFileSync(outputFile, `has-runtime-changes=${hasRuntimeChanges}\n`);
     appendFileSync(
       outputFile,
-      `changed-names<<LOCKFILE_DIFF_EOF\n${[...changedNames].join("\n")}\nLOCKFILE_DIFF_EOF\n`,
+      `changed-names<<LOCKFILE_DIFF_EOF\n${sortedNames.join("\n")}\nLOCKFILE_DIFF_EOF\n`,
     );
   }
 }
