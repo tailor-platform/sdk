@@ -1,6 +1,5 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
-import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { rolldown } from "rolldown";
 import { aroundEach, describe, expect, test } from "vitest";
@@ -11,7 +10,9 @@ import {
   resolveBundleLogLevel,
 } from "./bundle-log-level";
 
-const loggerSourcePath = fileURLToPath(new URL("../../runtime/logger.ts", import.meta.url));
+// Use a file:// URL rather than fileURLToPath: a raw Windows path (backslashes
+// + drive letter) embedded in an import specifier string breaks resolution there.
+const loggerSourcePath = new URL("../../runtime/logger.ts", import.meta.url).href;
 
 describe("bundle-log-level", () => {
   test("defaults to DEBUG", () => {
