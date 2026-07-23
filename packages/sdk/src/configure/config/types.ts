@@ -105,7 +105,8 @@ export interface AppConfig<
   inlineSourcemap?: boolean;
   /**
    * Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`)
-   * calls remain in bundled functions.
+   * calls remain in bundled functions. `logger.setAttributes` has no severity and
+   * is never dropped.
    * @default "DEBUG"
    */
   logLevel?: LogLevelInput;

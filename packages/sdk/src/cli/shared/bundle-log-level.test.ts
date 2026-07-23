@@ -104,14 +104,14 @@ describe("bundle-log-level applied to the real runtime/logger.ts via rolldown", 
     fs.writeFileSync(
       entry,
       `
-import { debug, info, warn, error, setAttributes } from ${JSON.stringify(loggerSourcePath)};
+import * as logger from ${JSON.stringify(loggerSourcePath)};
 
 export function handler() {
-  setAttributes({ requestId: "r-1" });
-  debug("debug message");
-  info("info message");
-  warn("warn message");
-  error("error message");
+  logger.setAttributes({ requestId: "r-1" });
+  logger.debug("debug message");
+  logger.info("info message");
+  logger.warn("warn message");
+  logger.error("error message");
   return 42;
 }
 `,
