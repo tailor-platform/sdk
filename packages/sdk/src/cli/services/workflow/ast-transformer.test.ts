@@ -382,7 +382,7 @@ const job = createWorkflowJob({
 
 describe("AST Transformer - transformation logic", () => {
   describe("transformWorkflowSource", () => {
-    test("transforms start calls to startJobFunction", () => {
+    test("transforms start calls to execJobFunction", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -411,12 +411,12 @@ const mainJob = createWorkflowJob({
         allJobsMap,
       );
 
-      expect(result).toContain('tailor.workflow.startJobFunction("fetch-data", { id: input.id })');
+      expect(result).toContain('tailor.workflow.execJobFunction("fetch-data", { id: input.id })');
       // fetchData declaration is removed (const fetchData = ...)
       expect(result).not.toContain("const fetchData");
     });
 
-    test("forwards a second options argument to startJobFunction", () => {
+    test("forwards a second options argument to execJobFunction", () => {
       const source = `
 import { createWorkflowJob } from "@tailor-platform/sdk";
 
@@ -445,7 +445,7 @@ const mainJob = createWorkflowJob({
       );
 
       expect(result).toContain(
-        'tailor.workflow.startJobFunction("fetch-data", { id: input.id }, { executionPolicyKey: "premium" })',
+        'tailor.workflow.execJobFunction("fetch-data", { id: input.id }, { executionPolicyKey: "premium" })',
       );
     });
 
@@ -487,8 +487,8 @@ const mainJob = createWorkflowJob({
       expect(result).not.toContain("getDB");
       // mainJob body is preserved
       expect(result).toContain('result: "main"');
-      // start is transformed (job name appears in startJobFunction call)
-      expect(result).toContain('tailor.workflow.startJobFunction("heavy-job", undefined)');
+      // start is transformed (job name appears in execJobFunction call)
+      expect(result).toContain('tailor.workflow.execJobFunction("heavy-job", undefined)');
     });
 
     test("removes declarations of multiple other jobs", () => {
@@ -534,9 +534,9 @@ const mainJob = createWorkflowJob({
       expect(result).toContain('"main"');
       // heavy code is removed (part of job1/job2 body)
       expect(result).not.toContain("heavy code");
-      // starts are transformed (job names appear in startJobFunction calls)
-      expect(result).toContain('tailor.workflow.startJobFunction("job-one", undefined)');
-      expect(result).toContain('tailor.workflow.startJobFunction("job-two", undefined)');
+      // starts are transformed (job names appear in execJobFunction calls)
+      expect(result).toContain('tailor.workflow.execJobFunction("job-one", undefined)');
+      expect(result).toContain('tailor.workflow.execJobFunction("job-two", undefined)');
     });
 
     test("does not transform start calls inside fallback-removed job bodies", () => {
@@ -565,7 +565,7 @@ const mainJob = createWorkflowJob({
 
       expect(result).toContain("body: () => {}");
       expect(result).not.toContain("nestedJob.start");
-      expect(result).not.toContain("startJobFunction");
+      expect(result).not.toContain("execJobFunction");
     });
 
     test("does not modify jobs without start calls", () => {
@@ -974,7 +974,7 @@ const result = await myWorkflow.start({ id: 1 }, { invoker: "kiosk" });
     });
   });
   describe("job start transformation", () => {
-    test("transforms job.start() calls to tailor.workflow.startJobFunction()", () => {
+    test("transforms job.start() calls to tailor.workflow.execJobFunction()", () => {
       const source = `
 const result = await fetchCustomer.start({ customerId: "123" });
 `;
@@ -983,7 +983,7 @@ const result = await fetchCustomer.start({ customerId: "123" });
 
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain('tailor.workflow.startJobFunction("fetch-customer"');
+      expect(result).toContain('tailor.workflow.execJobFunction("fetch-customer"');
       expect(result).toContain('{ customerId: "123" }');
     });
 
@@ -996,10 +996,10 @@ const result = await simpleJob.start();
 
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain('tailor.workflow.startJobFunction("simple-job", undefined)');
+      expect(result).toContain('tailor.workflow.execJobFunction("simple-job", undefined)');
     });
 
-    test("forwards a second options argument to startJobFunction", () => {
+    test("forwards a second options argument to execJobFunction", () => {
       const source = `
 const result = await fetchCustomer.start({ id: "123" }, { executionPolicyKey: "premium" });
 `;
@@ -1009,7 +1009,7 @@ const result = await fetchCustomer.start({ id: "123" }, { executionPolicyKey: "p
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'tailor.workflow.startJobFunction("fetch-customer", { id: "123" }, { executionPolicyKey: "premium" })',
+        'tailor.workflow.execJobFunction("fetch-customer", { id: "123" }, { executionPolicyKey: "premium" })',
       );
     });
 
@@ -1023,7 +1023,7 @@ const result = await fetchCustomer.start({ id: "123" });
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       // Args only, no trailing options argument.
-      expect(result).toContain('tailor.workflow.startJobFunction("fetch-customer", { id: "123" })');
+      expect(result).toContain('tailor.workflow.execJobFunction("fetch-customer", { id: "123" })');
       expect(result).not.toContain('{ id: "123" }, ');
     });
   });
@@ -1067,7 +1067,7 @@ const unknown = await randomThing.start({ id: 3 });
       // Known workflow transformed
       expect(result).toContain('tailor.workflow.startWorkflow("order-processing"');
       // Known job transformed
-      expect(result).toContain('tailor.workflow.startJobFunction("fetch-data"');
+      expect(result).toContain('tailor.workflow.execJobFunction("fetch-data"');
       // Unknown NOT transformed
       expect(result).toContain("randomThing.start({ id: 3 })");
     });
@@ -1107,13 +1107,13 @@ async function processOrder(orderId: string) {
 
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain('tailor.workflow.startJobFunction("fetch-customer"');
+      expect(result).toContain('tailor.workflow.execJobFunction("fetch-customer"');
       expect(result).toContain('tailor.workflow.startWorkflow("order-processing"');
     });
   });
 
   describe("direct job start transformation", () => {
-    test("replaces job.start() with startJobFunction() and preserves await", () => {
+    test("replaces job.start() with execJobFunction() and preserves await", () => {
       const source = `
 const customer = await fetchCustomer.start({ customerId: "123" });
 console.log(customer);
@@ -1124,7 +1124,7 @@ console.log(customer);
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'const customer = await tailor.workflow.startJobFunction("fetch-customer", { customerId: "123" })',
+        'const customer = await tailor.workflow.execJobFunction("fetch-customer", { customerId: "123" })',
       );
     });
 
@@ -1141,8 +1141,8 @@ const notification = await sendNotification.start({ message: "Hello" });
 
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
-      expect(result).toContain('tailor.workflow.startJobFunction("fetch-customer"');
-      expect(result).toContain('tailor.workflow.startJobFunction("send-notification"');
+      expect(result).toContain('tailor.workflow.execJobFunction("fetch-customer"');
+      expect(result).toContain('tailor.workflow.execJobFunction("send-notification"');
     });
 
     test("does not wrap workflow.start() calls (already async)", () => {
@@ -1168,7 +1168,7 @@ const customerPromise = fetchCustomer.start({ customerId: "123" });
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'const customerPromise = tailor.workflow.startJobFunction("fetch-customer", { customerId: "123" })',
+        'const customerPromise = tailor.workflow.execJobFunction("fetch-customer", { customerId: "123" })',
       );
       expect(result).not.toMatch(/\bawait\b/);
     });
@@ -1189,10 +1189,10 @@ const [customer, notification] = await Promise.all([
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'tailor.workflow.startJobFunction("fetch-customer", { customerId: "123" })',
+        'tailor.workflow.execJobFunction("fetch-customer", { customerId: "123" })',
       );
       expect(result).toContain(
-        'tailor.workflow.startJobFunction("send-notification", { message: "Hello" })',
+        'tailor.workflow.execJobFunction("send-notification", { message: "Hello" })',
       );
       expect(result).toContain("await Promise.all([");
     });
@@ -1209,7 +1209,7 @@ fetchCustomer.start({ customerId: "123" }).then((customer) => {
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'tailor.workflow.startJobFunction("fetch-customer", { customerId: "123" }).then(',
+        'tailor.workflow.execJobFunction("fetch-customer", { customerId: "123" }).then(',
       );
     });
 
@@ -1241,7 +1241,7 @@ unknown.start(fetchCustomer.start({ customerId: "123" }));
       const result = transformStartCalls(source, workflowNameMap, jobNameMap);
 
       expect(result).toContain(
-        'tailor.workflow.startJobFunction("fetch-customer", { customerId: "123" })',
+        'tailor.workflow.execJobFunction("fetch-customer", { customerId: "123" })',
       );
       expect(result).toContain("unknown.start(");
     });

@@ -1,5 +1,5 @@
 import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
-import type { StartJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
+import type { ExecJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
 
 /**
  * Body signature shared by workflow jobs at registry-write time.
@@ -15,7 +15,8 @@ const JOB_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:job-regi
 
 type PlatformWorkflow = {
   startWorkflow: (name: string, args?: unknown, options?: StartWorkflowOptions) => Promise<string>;
-  startJobFunction: (name: string, args?: unknown, options?: StartJobFunctionOptions) => unknown;
+  execJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
+  startJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
 };
 
 type GlobalWithRegistry = typeof globalThis & {
@@ -36,7 +37,7 @@ function jobs(): Map<string, RegisteredJobBody> {
 /**
  * Register a job body keyed by job name. Called as a side effect by
  * `createWorkflowJob` so `runWorkflowLocally()` can execute dependent job
- * bodies when `globalThis.tailor.workflow.startJobFunction(name, args)` is invoked.
+ * bodies when `globalThis.tailor.workflow.execJobFunction(name, args)` is invoked.
  *
  * In production builds the bundler rewrites `.start()` calls so this registry
  * is never read; the gated write is dropped as dead code.
@@ -84,13 +85,13 @@ export const START_DEFAULT = "00000000-0000-4000-8000-000000000000";
 export function dispatchStartJob(
   name: string,
   args?: unknown,
-  options?: StartJobFunctionOptions,
+  options?: ExecJobFunctionOptions,
 ): unknown {
   const workflow = requirePlatformWorkflow();
   // oxlint-disable-next-line prefer-rest-params
   return arguments.length >= 3
-    ? workflow.startJobFunction(name, args, options)
-    : workflow.startJobFunction(name, args);
+    ? workflow.execJobFunction(name, args, options)
+    : workflow.execJobFunction(name, args);
 }
 
 // Accepts `unknown` because the SDK-side `.start()` accepts a wider options

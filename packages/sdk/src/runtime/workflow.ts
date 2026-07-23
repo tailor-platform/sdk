@@ -4,6 +4,12 @@
  * Thin typed wrapper around the platform-provided `tailor.workflow` runtime API.
  * At runtime this delegates to `globalThis.tailor.workflow`. Use `mockWorkflow`
  * from `@tailor-platform/sdk/vitest` to mock these calls in unit tests.
+ *
+ * The canonical names (`startWorkflow`, `execJobFunction`,
+ * `resumeWorkflowExecution`) mirror the public `tailor.v1` RPC vocabulary:
+ * `Exec*` is a blocking call that returns the job's result, while `Start*`
+ * returns only an execution ID. `startJobFunction` is kept as an alias of
+ * `execJobFunction` for code written against earlier v2 prereleases.
  * @example
  * import { workflow } from "@tailor-platform/sdk/runtime";
  *
@@ -39,14 +45,20 @@ declare const executionPolicyKeyBrand: unique symbol;
  */
 export type ExecutionPolicyKey = string & { readonly [executionPolicyKeyBrand]: never };
 
-/** Options for {@link startJobFunction}. */
-export interface StartJobFunctionOptions {
+/** Options for {@link execJobFunction}. */
+export interface ExecJobFunctionOptions {
   /**
    * Execution policy key matched by the platform against the policies
    * declared with `defineWorkflowExecutionPolicies` in `tailor.config.ts`.
    */
   executionPolicyKey?: ExecutionPolicyKey;
 }
+
+/**
+ * Alias for {@link ExecJobFunctionOptions}. Kept for backward compatibility.
+ * @deprecated Use {@link ExecJobFunctionOptions} instead.
+ */
+export type StartJobFunctionOptions = ExecJobFunctionOptions;
 
 /**
  * Platform API surface for `tailor.workflow`. Describes the shape the platform
@@ -70,10 +82,25 @@ export interface PlatformWorkflowAPI {
   resumeWorkflowExecution(executionId: string): Promise<string>;
 
   /**
-   * Starts a job function and returns its result.
+   * Executes a job function and returns its result via durable suspend/replay.
+   *
+   * Canonical name under the platform verb convention: `Exec*` blocks and
+   * returns the job's result, while `Start*` returns only an execution ID.
+   * {@link startJobFunction} is an alias that resolves to the same platform
+   * implementation.
    * @param jobName - Job name as defined in the workflow
    * @param args - Arguments forwarded to the job
-   * @param options - Optional start options (e.g. `executionPolicyKey`)
+   * @param options - Optional execution options (e.g. `executionPolicyKey`)
+   * @returns The job's return value
+   */
+  execJobFunction(jobName: string, args?: any, options?: ExecJobFunctionOptions): any;
+
+  /**
+   * Alias for {@link execJobFunction}. Kept for backward compatibility.
+   * @deprecated Use {@link execJobFunction} instead.
+   * @param jobName - Job name as defined in the workflow
+   * @param args - Arguments forwarded to the job
+   * @param options - Optional execution options (e.g. `executionPolicyKey`)
    * @returns The job's return value
    */
   startJobFunction(jobName: string, args?: any, options?: StartJobFunctionOptions): any;
@@ -116,12 +143,21 @@ const resumeWorkflowExecution: PlatformWorkflowAPI["resumeWorkflowExecution"] = 
   api().resumeWorkflowExecution(...args);
 
 /**
- * See {@link PlatformWorkflowAPI.startJobFunction}.
- * @param args - Forwarded to {@link PlatformWorkflowAPI.startJobFunction}
+ * See {@link PlatformWorkflowAPI.execJobFunction}.
+ * @param args - Forwarded to {@link PlatformWorkflowAPI.execJobFunction}
+ * @returns The job's return value
+ */
+const execJobFunction: PlatformWorkflowAPI["execJobFunction"] = (...args) =>
+  api().execJobFunction(...args);
+
+/**
+ * Alias for {@link execJobFunction}. Kept for backward compatibility.
+ * @deprecated Use {@link execJobFunction} instead.
+ * @param args - Forwarded to {@link PlatformWorkflowAPI.execJobFunction}
  * @returns The job's return value
  */
 const startJobFunction: PlatformWorkflowAPI["startJobFunction"] = (...args) =>
-  api().startJobFunction(...args);
+  api().execJobFunction(...args);
 
 const wait: PlatformWorkflowAPI["wait"] = (...args) => api().wait(...args);
 
@@ -131,6 +167,7 @@ const resolve: PlatformWorkflowAPI["resolve"] = (...args) => api().resolve(...ar
 export const workflow = {
   startWorkflow,
   resumeWorkflowExecution,
+  execJobFunction,
   startJobFunction,
   wait,
   resolve,
