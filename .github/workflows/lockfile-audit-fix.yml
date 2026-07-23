@@ -12,6 +12,10 @@ name: Lockfile Audit Auto-fix
 # minimumReleaseAge on its own, so the bypass is a no-op) — nothing else,
 # Renovate included, ever removes those, so the list only grows over time
 # unless swept here.
+#
+# When the resulting change only touches devDependencies and/or the
+# minimumReleaseAgeExclude list, no published package's consumers are
+# affected, so the PR gets the skip-changeset label instead of a changeset.
 on:
   schedule:
     - cron: "0 3 * * *" # daily, 03:00 UTC
@@ -47,6 +51,9 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "24.18.0"
+
+      - name: Snapshot lockfile before fix
+        run: cp pnpm-lock.yaml /tmp/lockfile-before-fix.yaml
 
       - name: Record pre-fix advisories
         run: pnpm audit --audit-level=moderate --json > /tmp/before-audit.json || true
@@ -96,6 +103,13 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Determine changeset requirement
+        if: steps.diff.outputs.changed == 'true'
+        id: changeset_check
+        uses: ./.github/actions/skip-changeset-check
+        with:
+          before-lockfile: /tmp/lockfile-before-fix.yaml
+
       - name: Summarize fixed advisories
         if: steps.diff.outputs.changed == 'true'
         id: summary
@@ -133,7 +147,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Add changeset
-        if: steps.diff.outputs.changed == 'true'
+        if: steps.diff.outputs.changed == 'true' && steps.changeset_check.outputs.has-runtime-changes == 'true'
         run: |
           cat > .changeset/lockfile-audit-fix.md <<'EOF'
           ---
@@ -175,7 +189,9 @@ jobs:
             pnpm-lock.yaml
             pnpm-workspace.yaml
             .changeset/lockfile-audit-fix.md
-          labels: security
+          labels: |
+            security
+            ${{ steps.changeset_check.outputs.has-runtime-changes == 'false' && 'skip-changeset' || '' }}
 
       - name: Notify Slack on failure
         if: failure()
