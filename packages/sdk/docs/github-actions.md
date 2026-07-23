@@ -92,7 +92,7 @@ write PR comments.
 
 `--erd-preview` is only available for branch targets with the plan job enabled;
 it cannot be combined with `--tag` or `--no-plan`. The namespace list is
-recorded in `.github/tailor-sdk.lock`; the pull request workflow compares the
+recorded in `.github/tailor.lock`; the pull request workflow compares the
 head and base lock files so newly added or removed namespaces can still produce
 all-added or all-removed viewer artifacts. Re-run `setup` after adding or
 removing TailorDB namespaces. `setup check` reports drift when the recorded ERD

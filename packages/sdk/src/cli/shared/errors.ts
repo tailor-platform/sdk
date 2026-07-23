@@ -15,7 +15,7 @@ export interface CLIErrorOptions {
 }
 
 export interface CLIErrorNextAction {
-  /** Executable name, such as `tailor-sdk`. */
+  /** Executable name, such as `tailor`. */
   command: string;
   /** Arguments passed directly to the executable. */
   args: readonly string[];
@@ -179,7 +179,7 @@ export function errorToJson(
 
 function executableHelpAction(command: string): CLIErrorNextAction {
   return {
-    command: "tailor-sdk",
+    command: "tailor",
     args: [...command.split(/\s+/).filter(Boolean), "--help"],
   };
 }

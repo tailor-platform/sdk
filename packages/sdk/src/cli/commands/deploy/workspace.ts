@@ -59,7 +59,7 @@ function suggestedWorkspaceName(): string {
 }
 
 function executableAction(args: readonly string[]): CLIErrorNextAction {
-  return { command: "tailor-sdk", args };
+  return { command: "tailor", args };
 }
 
 function deployArgs(options: ResolveDeployWorkspaceOptions): readonly string[] {
@@ -379,7 +379,7 @@ async function createWorkspace(
     options,
   );
   logger.success(`Created workspace: ${workspaceLabel(workspace)}`);
-  logger.info(`Reuse this workspace with: tailor-sdk deploy --workspace-id ${workspace.id}`);
+  logger.info(`Reuse this workspace with: tailor deploy --workspace-id ${workspace.id}`);
   logger.info(`Or set TAILOR_PLATFORM_WORKSPACE_ID=${workspace.id}.`);
   return { client, workspaceId: workspace.id };
 }

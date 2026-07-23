@@ -17,13 +17,13 @@ export function createVirtualEntry(
   code: string,
   sourceType: "js" | "ts" = "js",
 ): VirtualEntry {
-  const input = `tailor-sdk-entry:${name}.${sourceType}`;
+  const input = `tailor-entry:${name}.${sourceType}`;
   const resolvedId = `\0${input}`;
 
   return {
     input,
     plugin: {
-      name: "tailor-sdk-virtual-entry",
+      name: "tailor-virtual-entry",
       resolveId(source, importer) {
         return source === input && importer === undefined ? resolvedId : null;
       },

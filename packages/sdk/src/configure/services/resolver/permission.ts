@@ -22,7 +22,7 @@ type BooleanEqualityCondition<User extends object> =
  * against. Only equality (`=`/`!=`) is supported for now.
  *
  * The User type is extended by `tailor.d.ts`, which is automatically generated
- * when running `tailor-sdk generate`. Attributes enabled in the config file's
+ * when running `tailor generate`. Attributes enabled in the config file's
  * `auth.userProfile.attributes` (or `auth.machineUserAttributes` when
  * `userProfile` is omitted) become available as types.
  */

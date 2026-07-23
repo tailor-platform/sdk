@@ -80,10 +80,10 @@ function profileUpdateCommand(mismatch: ProfileUserMismatch) {
   const profileArg = quoteCommandArg(mismatch.profile);
   const userArg = quoteCommandArg(mismatch.authenticatedUser);
   if (profileArg && userArg) {
-    return `tailor-sdk profile update --user ${userArg} -- ${profileArg}`;
+    return `tailor profile update --user ${userArg} -- ${profileArg}`;
   }
   return [
-    "tailor-sdk profile update --user <authenticated-user> -- <profile>",
+    "tailor profile update --user <authenticated-user> -- <profile>",
     `profile = ${JSON.stringify(mismatch.profile)}`,
     `authenticated user = ${JSON.stringify(mismatch.authenticatedUser)}`,
   ].join("\n");
@@ -97,7 +97,7 @@ function retryInstruction(mismatch: ProfileUserMismatch) {
   if (!profileArg) {
     return "Then retry the browser login with the same profile value.";
   }
-  return `Then run:\n  tailor-sdk login --profile ${profileArg}`;
+  return `Then run:\n  tailor login --profile ${profileArg}`;
 }
 
 function profileUserMismatchError(mismatch: ProfileUserMismatch) {

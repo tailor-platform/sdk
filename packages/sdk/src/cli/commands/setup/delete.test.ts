@@ -157,7 +157,7 @@ describe("setupDelete", () => {
         yes: true,
         outputDir: testDir,
       }),
-    ).rejects.toThrow(/tailor-sdk\.lock is missing or empty/);
+    ).rejects.toThrow(/tailor\.lock is missing or empty/);
   });
 
   test("refuses to delete a file that is not recorded in the lock", async () => {
@@ -171,7 +171,7 @@ describe("setupDelete", () => {
         yes: true,
         outputDir: testDir,
       }),
-    ).rejects.toThrow(/not recorded in .github\/tailor-sdk\.lock/);
+    ).rejects.toThrow(/not recorded in .github\/tailor\.lock/);
     expect(fs.existsSync(strayFile)).toBe(true);
   });
 
@@ -187,7 +187,7 @@ describe("setupDelete", () => {
         yes: true,
         outputDir: testDir,
       }),
-    ).rejects.toThrow(/not recorded in .github\/tailor-sdk\.lock/);
+    ).rejects.toThrow(/not recorded in .github\/tailor\.lock/);
     expect(fs.existsSync(setupAction)).toBe(true);
   });
 

@@ -595,7 +595,7 @@ export default defineConfig({
 });
 ```
 
-This default is re-evaluated on every `tailor-sdk deploy`, so changing it also updates types that already exist on the platform, not only newly created ones.
+This default is re-evaluated on every `tailor deploy`, so changing it also updates types that already exist on the platform, not only newly created ones.
 
 ### Field Extraction (`pickFields` / `omitFields`)
 
