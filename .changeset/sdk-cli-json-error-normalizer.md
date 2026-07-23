@@ -2,4 +2,4 @@
 "@tailor-platform/sdk": minor
 ---
 
-Export the CLI JSON error normalizer for plugin authors.
+Export CLI JSON error normalization and serialization helpers for plugin authors.

@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test, vi } from "vitest";
-import { errorToJson } from "./error-json";
+import { errorToJson, serializeError } from "./error-json";
 import { CLIError } from "./errors";
 import { CIPromptError } from "./logger";
 
@@ -29,6 +29,21 @@ describe("errorToJson", () => {
           args: ["deploy", "--create-workspace", "--workspace-name", "example"],
         },
         context: { availableRegions: ["us-west"] },
+      },
+    });
+  });
+
+  test("serializes a stable fallback when the error context is not JSON-compatible", () => {
+    const error = CLIError({
+      code: "WORKSPACE_NOT_FOUND",
+      message: "No workspaces are available.",
+      context: { availableRegions: 1n },
+    });
+
+    expect(JSON.parse(serializeError(error, { includeStack: true }))).toEqual({
+      error: {
+        code: "WORKSPACE_NOT_FOUND",
+        message: "No workspaces are available.",
       },
     });
   });
