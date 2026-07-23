@@ -4,6 +4,8 @@ This file provides guidance to coding agents when working with code in this repo
 
 [!IMPORTANT] Read `AGENTS.local.md` if it exists.
 
+[!IMPORTANT] You are on `maintenance/v1`, the SDK **1.x maintenance branch** — `main` carries SDK 2.x. In short: bug/security fixes only, patch changesets only, PRs target `maintenance/v1` (never `main`), releases publish to the `v1` npm dist-tag (never `latest`) via `.github/workflows/release.yml`, and never apply 2.x renames (`tailor` CLI, `db.table()`, `TailorPrincipal`, …) on this branch.
+
 ## Agent Instruction Sources
 
 - `AGENTS.md` is the shared repository instruction entrypoint for Codex, Claude, and other coding agents.
