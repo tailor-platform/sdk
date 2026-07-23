@@ -20,7 +20,7 @@ jobs:
 
     if: >-
       github.event.pull_request.user.login != 'renovate[bot]' &&
-      github.event.pull_request.head.ref != 'changeset-release/main' &&
+      github.event.pull_request.head.ref != 'changeset-release/maintenance/v1' &&
       !contains(github.event.pull_request.labels.*.name, 'skip-changeset')
 
     steps:
