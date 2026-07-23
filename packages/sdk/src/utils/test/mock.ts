@@ -32,6 +32,11 @@ interface TailordbGlobal {
         args: unknown,
         options?: ExecJobFunctionOptions,
       ) => unknown;
+      startJobFunction: (
+        jobName: string,
+        args: unknown,
+        options?: ExecJobFunctionOptions,
+      ) => unknown;
       triggerJobFunction: (
         jobName: string,
         args: unknown,
@@ -136,6 +141,7 @@ export function setupWorkflowMock(handler: JobHandler): {
       },
       ...GlobalThis.tailor?.workflow,
       execJobFunction,
+      startJobFunction: execJobFunction,
       triggerJobFunction: execJobFunction,
     },
   } as typeof GlobalThis.tailor;
@@ -213,6 +219,7 @@ export function setupWaitPointMock(config?: { onWait?: WaitHandler; onResolve?: 
     ...GlobalThis.tailor,
     workflow: {
       execJobFunction: throwUnmocked,
+      startJobFunction: throwUnmocked,
       triggerJobFunction: throwUnmocked,
       ...GlobalThis.tailor?.workflow,
       wait: (key: string, payload?: unknown) => {
