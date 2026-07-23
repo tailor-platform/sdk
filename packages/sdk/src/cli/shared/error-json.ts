@@ -60,6 +60,24 @@ export function errorToJson(
   return { error: { code: "UNKNOWN_ERROR", message: String(error) } };
 }
 
+/**
+ * Serialize a CLI failure into the stable JSON error envelope.
+ * @param error - Failure to serialize
+ * @param options - JSON serialization options
+ * @returns Serialized JSON error envelope
+ */
+export function serializeError(error: unknown, options?: ErrorToJsonOptions): string {
+  const envelope = errorToJson(error, options);
+  try {
+    return JSON.stringify(envelope);
+  } catch {
+    const fallbackError = { ...envelope.error };
+    delete fallbackError.context;
+    delete fallbackError.stack;
+    return JSON.stringify({ error: fallbackError });
+  }
+}
+
 function executableHelpAction(command: string): CLIErrorNextAction {
   return {
     command: "tailor",

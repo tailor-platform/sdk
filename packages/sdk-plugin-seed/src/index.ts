@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
+import { serializeError } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { defineCommand, runMain } from "politty";
 import { z } from "zod";
 import { seedApplyCommand } from "./apply";
-import { serializeError } from "./error-output";
 import { commonArgs } from "./shared/args";
 import { logger } from "./shared/logger";
 import { seedValidateCommand } from "./validate";
@@ -41,7 +41,7 @@ void runMain(mainCommand, {
   cleanup: ({ error }) => {
     if (!error) return;
     if (logger.jsonMode) {
-      logger.log(serializeError(error, logger.verbose));
+      logger.log(serializeError(error, { includeStack: logger.verbose }));
     } else if (hasFormat(error)) {
       logger.log(error.format());
     } else if (error instanceof Error) {
