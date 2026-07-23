@@ -97,7 +97,7 @@ When the project has no saved selection, `deploy` discovers the account's worksp
 In CI and other non-interactive environments, workspace creation must be explicit:
 
 ```bash
-tailor-sdk deploy \
+tailor deploy \
   --create-workspace \
   --workspace-name example-workspace \
   --workspace-region us-west

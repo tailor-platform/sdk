@@ -33,7 +33,7 @@ vi.mock("rolldown", async (importOriginal) => {
         throw new Error(`Expected a virtual TailorDB script entry, received ${String(input)}`);
       }
       const plugins = options.plugins as rolldown.Plugin[];
-      if (!plugins.some((plugin) => plugin.name === "tailor-sdk-virtual-entry")) {
+      if (!plugins.some((plugin) => plugin.name === "tailor-virtual-entry")) {
         throw new Error("Virtual entry plugin was not configured");
       }
 

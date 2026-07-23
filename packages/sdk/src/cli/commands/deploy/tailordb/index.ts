@@ -605,7 +605,7 @@ export async function applyTailorDB(
         }
       } catch (error) {
         handleOptionalToRequiredError(error, [
-          "Run 'tailor-sdk tailordb migration generate' to create migration files.",
+          "Run 'tailor tailordb migration generate' to create migration files.",
           "Migration scripts allow you to handle existing data before applying the schema change.",
         ]);
       }
