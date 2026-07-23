@@ -50,7 +50,7 @@ jobs:
       # changesets/action never commits them.
       - name: Check for executable files
         run: |
-          bin_targets=$(node -e '
+          bin_targets=$(git ls-files '*package.json' | xargs node -e '
             const fs = require("fs");
             const path = require("path");
             for (const pkgPath of process.argv.slice(1)) {
@@ -60,7 +60,7 @@ jobs:
                 console.log(path.posix.normalize(path.posix.join(path.posix.dirname(pkgPath), target)));
               }
             }
-          ' $(git ls-files '*package.json'))
+          ')
           executable_files=$(git ls-files --format='%(objectmode) %(path)' | while read -r mode file; do
             [ "$mode" = "100755" ] && ! grep -Fqx "$file" <<< "$bin_targets" && echo "$file"
           done || true)
