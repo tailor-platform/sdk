@@ -589,6 +589,75 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint");
     });
 
+    describe("decimal scale changes", () => {
+      function snapshotWithPrice(scale: number | undefined): SchemaSnapshot {
+        return {
+          ...createEmptySnapshot(),
+          types: {
+            Item: {
+              name: "Item",
+              pluralForm: "Items",
+              fields: {
+                id: { type: "uuid", required: true },
+                price: {
+                  type: "decimal",
+                  required: true,
+                  ...(scale !== undefined && { scale }),
+                },
+              },
+            },
+          },
+        };
+      }
+
+      test("classifies a decimal scale change as breaking", () => {
+        const diff = compareSnapshots(snapshotWithPrice(2), snapshotWithPrice(4));
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Decimal scale changed");
+        expect(diff.requiresMigrationScript).toBe(true);
+      });
+
+      test("collects every reason for combined decimal field changes", () => {
+        const previous = snapshotWithPrice(4);
+        previous.types.Item!.fields.price = {
+          type: "decimal",
+          required: false,
+          unique: false,
+          scale: 4,
+        };
+        const current = snapshotWithPrice(2);
+        current.types.Item!.fields.price = {
+          type: "decimal",
+          required: true,
+          unique: true,
+          scale: 2,
+        };
+
+        const diff = compareSnapshots(previous, current);
+
+        expect(diff.breakingChanges.map(({ reason }) => reason)).toEqual([
+          "Field changed from optional to required",
+          "Unique constraint added to field",
+          "Decimal scale changed from 4 to 2",
+        ]);
+      });
+
+      test("does not flag an explicit scale equal to the platform default", () => {
+        const diff = compareSnapshots(snapshotWithPrice(undefined), snapshotWithPrice(6));
+
+        expect(diff.changes).toHaveLength(0);
+        expect(diff.hasBreakingChanges).toBe(false);
+      });
+
+      test("classifies a change from the omitted default scale as breaking", () => {
+        const diff = compareSnapshots(snapshotWithPrice(undefined), snapshotWithPrice(2));
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Decimal scale changed");
+      });
+    });
+
     describe("type-level index changes", () => {
       function snapshotWithIndexes(
         indexes: Record<string, { fields: string[]; unique?: boolean }> | undefined,
@@ -1839,6 +1908,25 @@ describe("snapshot", () => {
       );
 
       expect(() => loadDiff(filePath)).toThrow(filePath);
+    });
+
+    test("rejects a whitespace-only migration script skip reason", () => {
+      const filePath = path.join(testDir, "blank_skip_reason_diff.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: "t",
+          changes: [],
+          hasBreakingChanges: true,
+          breakingChanges: [],
+          requiresMigrationScript: true,
+          scriptSkipped: { reason: "   ", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+        }),
+      );
+
+      expect(() => loadDiff(filePath)).toThrow(/reason/i);
     });
   });
 

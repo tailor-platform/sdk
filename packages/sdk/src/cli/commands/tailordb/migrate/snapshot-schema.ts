@@ -37,6 +37,7 @@ import type {
   BreakingChangeInfo,
   WarningChangeInfo,
   MigrationDiff,
+  ScriptSkippedInfo,
 } from "./diff-calculator";
 import type {
   SnapshotHook,
@@ -504,6 +505,11 @@ export const warningChangeInfoSchema: z.ZodType<WarningChangeInfo> = z.looseObje
   reason: z.string(),
 });
 
+export const scriptSkippedInfoSchema: z.ZodType<ScriptSkippedInfo> = z.looseObject({
+  reason: z.string().trim().min(1),
+  acknowledgedAt: z.string(),
+});
+
 // MigrationDiff: `warnings` and `hasWarnings` are optional here so that
 // older diff.json files that predate these fields still validate cleanly.
 // loadDiff backfills both from the warnings array after validation.
@@ -519,4 +525,5 @@ export const migrationDiffSchema: z.ZodType<MigrationDiff> = z.looseObject({
   hasWarnings: z.boolean().optional() as z.ZodType<boolean>,
   warnings: z.array(warningChangeInfoSchema).optional() as z.ZodType<WarningChangeInfo[]>,
   requiresMigrationScript: z.boolean(),
+  scriptSkipped: scriptSkippedInfoSchema.optional(),
 });

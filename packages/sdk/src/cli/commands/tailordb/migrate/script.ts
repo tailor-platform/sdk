@@ -23,17 +23,88 @@ import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./con
 import { writeDbTypesFile } from "./db-types-generator";
 import { parseMigrationNumberArg } from "./migration-number";
 import {
+  formatMigrationNumber,
   getMigrationFilePath,
   loadDiff,
   reconstructSnapshotFromMigrations,
   INITIAL_SCHEMA_NUMBER,
 } from "./snapshot";
 import { generateMigrationScript } from "./template-generator";
+import type { ScriptSkippedInfo } from "./diff-calculator";
 
 export interface ScriptOptions {
   configPath?: string;
   number: string;
   namespace?: string;
+  noScript?: boolean;
+  reason?: string;
+}
+
+export interface MarkScriptSkippedOptions {
+  migrationsDir: string;
+  migrationNumber: number;
+  reason: string;
+}
+
+/**
+ * Record in diff.json that a migration requiring a script intentionally has none.
+ * @param {MarkScriptSkippedOptions} options - Target migration and skip reason
+ * @returns {ScriptSkippedInfo} The recorded acknowledgment
+ */
+export function markMigrationScriptSkipped(options: MarkScriptSkippedOptions): ScriptSkippedInfo {
+  const { migrationsDir, migrationNumber, reason } = options;
+  const label = formatMigrationNumber(migrationNumber);
+  const normalizedReason = reason.trim();
+  if (!normalizedReason) {
+    throw new Error("Migration script skip reason must not be empty.");
+  }
+
+  const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
+  if (!fs.existsSync(diffPath)) {
+    throw new Error(`Migration ${label} not found in ${migrationsDir}. Expected ${diffPath}.`);
+  }
+
+  const diff = loadDiff(diffPath);
+  if (!diff.requiresMigrationScript) {
+    throw new Error(`Migration ${label} does not require a migration script; nothing to skip.`);
+  }
+  if (diff.scriptSkipped) {
+    throw new Error(
+      `Migration ${label} already has a script skip recorded ` +
+        `(${diff.scriptSkipped.acknowledgedAt}: ${diff.scriptSkipped.reason}).`,
+    );
+  }
+
+  const migratePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
+  if (fs.existsSync(migratePath)) {
+    throw new Error(
+      `Migration script exists at ${migratePath}. ` +
+        `Delete migrate.ts first if this migration should run without a script.`,
+    );
+  }
+
+  const scriptSkipped: ScriptSkippedInfo = {
+    reason: normalizedReason,
+    acknowledgedAt: new Date().toISOString(),
+  };
+
+  // Edit the raw JSON so keys unknown to this SDK version survive the rewrite.
+  const raw = JSON.parse(fs.readFileSync(diffPath, "utf-8")) as Record<string, unknown>;
+  raw.scriptSkipped = scriptSkipped;
+  fs.writeFileSync(diffPath, JSON.stringify(raw, null, 2));
+
+  return scriptSkipped;
+}
+
+/**
+ * Remove a script skip acknowledgment after a real migration script is created.
+ * @param diffPath - Migration diff file to update
+ */
+export function clearMigrationScriptSkipped(diffPath: string): void {
+  const raw = JSON.parse(fs.readFileSync(diffPath, "utf-8")) as Record<string, unknown>;
+  if (!Object.hasOwn(raw, "scriptSkipped")) return;
+  delete raw.scriptSkipped;
+  fs.writeFileSync(diffPath, JSON.stringify(raw, null, 2));
 }
 
 /**
@@ -65,6 +136,27 @@ async function script(options: ScriptOptions): Promise<void> {
     "namespace with migrations not found",
   );
 
+  if (options.noScript) {
+    const reason = options.reason?.trim();
+    if (!reason) {
+      throw new Error("--reason is required with --no-script.");
+    }
+    const scriptSkipped = markMigrationScriptSkipped({
+      migrationsDir,
+      migrationNumber,
+      reason,
+    });
+    logger.success(
+      `Recorded that migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)} intentionally has no migration script`,
+    );
+    logger.info(`  Reason: ${scriptSkipped.reason}`);
+    logger.info(`  Diff file: ${getMigrationFilePath(migrationsDir, migrationNumber, "diff")}`);
+    return;
+  }
+  if (options.reason !== undefined) {
+    throw new Error("--reason can only be used together with --no-script.");
+  }
+
   const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
   if (!fs.existsSync(diffPath)) {
     throw new Error(
@@ -91,6 +183,7 @@ async function script(options: ScriptOptions): Promise<void> {
   const scriptContent = generateMigrationScript(diff);
   await fsPromises.writeFile(migratePath, scriptContent);
   await writeDbTypesFile(previousSnapshot, migrationsDir, migrationNumber, diff);
+  clearMigrationScriptSkipped(diffPath);
 
   logger.success(
     `Added migration script for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
@@ -135,7 +228,8 @@ function resolveTargetNamespace(
 
 export const scriptCommand = defineAppCommand({
   name: "script",
-  description: "Add a migration script (migrate.ts) template to an existing migration directory.",
+  description:
+    "Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.",
   args: z.strictObject({
     ...configArg,
     number: arg(z.string(), {
@@ -146,12 +240,21 @@ export const scriptCommand = defineAppCommand({
       alias: "n",
       description: "Target TailorDB namespace (required if multiple namespaces exist)",
     }),
+    "no-script": arg(z.boolean().optional(), {
+      description:
+        "Record that this migration intentionally runs without a migration script (requires --reason)",
+    }),
+    reason: arg(z.string().optional(), {
+      description: "Reason why no migration script is needed (used with --no-script)",
+    }),
   }),
   run: async (args) => {
     await script({
       configPath: args.config,
       number: args.number,
       namespace: args.namespace,
+      noScript: args["no-script"],
+      reason: args.reason,
     });
   },
 });

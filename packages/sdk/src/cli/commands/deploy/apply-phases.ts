@@ -8,7 +8,7 @@ import { applyIdP, type planIdP } from "./idp";
 import { applyPipeline, type planPipeline } from "./resolver";
 import { applySecretManager, type planSecretManager } from "./secret-manager";
 import { applyStaticWebsite, type planStaticWebsite } from "./staticwebsite";
-import { applyTailorDB, type planTailorDB } from "./tailordb";
+import { applyTailorDB, preflightTailorDB, type planTailorDB } from "./tailordb";
 import { applyWorkflow, type planWorkflow } from "./workflow";
 import {
   applyWorkflowJobFunctionExecutionPolicy,
@@ -53,6 +53,10 @@ export async function applyDeploymentPlans(
       await apply(deployment);
     }
   };
+
+  await withSpan("apply.preflight", async () => {
+    await forEachDeployment((d) => preflightTailorDB(client, d.tailorDB));
+  });
 
   await withSpan("apply.createUpdateServices", async () => {
     await forEachDeployment((d) =>

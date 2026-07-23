@@ -60,6 +60,8 @@ describe("migration CLI commands", () => {
       const shape = scriptCommand.args.shape;
       expect(shape).toHaveProperty("number");
       expect(shape).toHaveProperty("namespace");
+      expect(shape).toHaveProperty("no-script");
+      expect(shape).toHaveProperty("reason");
     });
   });
 
