@@ -36,7 +36,8 @@ import { workspaceCommand } from "./commands/workspace";
 import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
 import { commonArgs, isVerbose } from "./shared/args";
-import { errorToJson, isCLIError } from "./shared/errors";
+import { serializeError } from "./shared/error-json";
+import { isCLIError } from "./shared/errors";
 import { logger } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
 import { dispatchPluginWithInstallHint } from "./shared/plugin";
@@ -152,7 +153,7 @@ runMain(mainCommand, {
   cleanup: async ({ error }) => {
     if (error) {
       if (logger.jsonMode) {
-        logger.log(JSON.stringify(errorToJson(error, { includeStack: isVerbose() })));
+        logger.log(serializeError(error, { includeStack: isVerbose() }));
       } else if (isCLIError(error)) {
         logger.log(error.format());
         if (isVerbose() && error.stack) {

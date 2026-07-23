@@ -9,6 +9,7 @@ export type { BundledScripts } from "./commands/deploy/function-registry";
 export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
+export { errorToJson, serializeError, type ErrorToJsonOptions } from "./shared/error-json";
 export { generateUserTypes } from "./shared/type-generator";
 export {
   loadTailorDBNamespaces,

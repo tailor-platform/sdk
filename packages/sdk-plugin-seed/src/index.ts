@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
+import { serializeError } from "@tailor-platform/sdk/cli";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { defineCommand, runMain } from "politty";
@@ -37,17 +38,18 @@ void runMain(mainCommand, {
   // strip unknown keys
   globalArgs: z.object(commonArgs),
   displayErrors: false,
-  // Render the SDK's CLIError format (details/suggestion) like the host CLI does.
   cleanup: ({ error }) => {
     if (!error) return;
-    if (hasFormat(error)) {
+    if (logger.jsonMode) {
+      logger.log(serializeError(error, { includeStack: logger.verbose }));
+    } else if (hasFormat(error)) {
       logger.log(error.format());
     } else if (error instanceof Error) {
       logger.error(error.message);
     } else {
       logger.error(`Unknown error: ${String(error)}`);
     }
-    if (error instanceof Error && error.stack) {
+    if (!logger.jsonMode && error instanceof Error && error.stack) {
       logger.debug(`\nStack trace:\n${error.stack}`);
     }
   },
