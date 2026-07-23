@@ -958,46 +958,48 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
 }
 
 /**
- * Determine if a field change is a breaking change
+ * Collect breaking changes for a field change
  * @param {string} typeName - Name of the type containing the field
  * @param {string} fieldName - Name of the field being changed
  * @param {SnapshotFieldConfig | undefined} oldField - Old field configuration
  * @param {SnapshotFieldConfig | undefined} newField - New field configuration
- * @returns {BreakingChangeInfo | null} Breaking change info or null if not breaking
+ * @returns {BreakingChangeInfo[]} Breaking change information
  */
-function isBreakingFieldChange(
+function getBreakingFieldChanges(
   typeName: string,
   fieldName: string,
   oldField: SnapshotFieldConfig | undefined,
   newField: SnapshotFieldConfig | undefined,
-): BreakingChangeInfo | null {
+): BreakingChangeInfo[] {
+  const breakingChanges: BreakingChangeInfo[] = [];
+
   // Field added as required - breaking (existing records don't have this value)
   if (!oldField && newField && newField.required) {
-    return {
+    breakingChanges.push({
       typeName,
       fieldName,
       reason: "Required field added",
-    };
+    });
   }
 
   // Field type changed - unsupported (requires 3-step migration)
   if (oldField && newField && oldField.type !== newField.type) {
-    return {
+    breakingChanges.push({
       typeName,
       fieldName,
       reason: `Field type changed from ${oldField.type} to ${newField.type}`,
       unsupported: true,
       showThreeStepHint: true,
-    };
+    });
   }
 
   // Optional to required - breaking
   if (oldField && newField && !oldField.required && newField.required) {
-    return {
+    breakingChanges.push({
       typeName,
       fieldName,
       reason: "Field changed from optional to required",
-    };
+    });
   }
 
   // Array property changed - unsupported (requires 3-step migration)
@@ -1005,13 +1007,13 @@ function isBreakingFieldChange(
     const [fromType, toType] = oldField.array
       ? ["array", "single value"]
       : ["single value", "array"];
-    return {
+    breakingChanges.push({
       typeName,
       fieldName,
       reason: `Field changed from ${fromType} to ${toType}`,
       unsupported: true,
       showThreeStepHint: true,
-    };
+    });
   }
 
   // Foreign key relationship changed - breaking (existing references may become invalid)
@@ -1019,21 +1021,35 @@ function isBreakingFieldChange(
     const oldForeignKeyType = oldField.foreignKeyType;
     const newForeignKeyType = newField.foreignKeyType;
     if (oldForeignKeyType && newForeignKeyType && oldForeignKeyType !== newForeignKeyType) {
-      return {
+      breakingChanges.push({
         typeName,
         fieldName,
         reason: `Foreign key target type changed from ${oldForeignKeyType} to ${newForeignKeyType}`,
-      };
+      });
     }
   }
 
   // Unique constraint added - breaking (existing duplicate values would violate constraint)
   if (oldField && newField && !(oldField.unique ?? false) && (newField.unique ?? false)) {
-    return {
+    breakingChanges.push({
       typeName,
       fieldName,
       reason: "Unique constraint added to field",
-    };
+    });
+  }
+
+  // Decimal scale changed - breaking (rows stored under the old scale must be
+  // re-saved so their stored precision matches the new schema)
+  if (
+    oldField?.type === "decimal" &&
+    newField?.type === "decimal" &&
+    oldField.scale !== newField.scale
+  ) {
+    breakingChanges.push({
+      typeName,
+      fieldName,
+      reason: `Decimal scale changed from ${oldField.scale} to ${newField.scale}`,
+    });
   }
 
   // Enum values removed - breaking (existing records may have removed values)
@@ -1044,15 +1060,15 @@ function isBreakingFieldChange(
     const newValuesSet = new Set(newAllowed.map((v) => v.value));
     const removedValues = oldValues.filter((v) => !newValuesSet.has(v));
     if (removedValues.length > 0) {
-      return {
+      breakingChanges.push({
         typeName,
         fieldName,
         reason: `Enum values removed: ${removedValues.join(", ")}`,
-      };
+      });
     }
   }
 
-  return null;
+  return breakingChanges;
 }
 
 /**
@@ -1074,9 +1090,14 @@ function addChange(
 
   if (!change.fieldName) return;
 
-  const breaking = isBreakingFieldChange(change.typeName, change.fieldName, oldField, newField);
-  if (breaking) {
-    ctx.breakingChanges.push(breaking);
+  const breakingChanges = getBreakingFieldChanges(
+    change.typeName,
+    change.fieldName,
+    oldField,
+    newField,
+  );
+  if (breakingChanges.length > 0) {
+    ctx.breakingChanges.push(...breakingChanges);
     return;
   }
 
