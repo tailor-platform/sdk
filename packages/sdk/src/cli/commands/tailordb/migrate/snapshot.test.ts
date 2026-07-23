@@ -617,6 +617,31 @@ describe("snapshot", () => {
         expect(diff.requiresMigrationScript).toBe(true);
       });
 
+      test("collects every reason for combined decimal field changes", () => {
+        const previous = snapshotWithPrice(4);
+        previous.types.Item!.fields.price = {
+          type: "decimal",
+          required: false,
+          unique: false,
+          scale: 4,
+        };
+        const current = snapshotWithPrice(2);
+        current.types.Item!.fields.price = {
+          type: "decimal",
+          required: true,
+          unique: true,
+          scale: 2,
+        };
+
+        const diff = compareSnapshots(previous, current);
+
+        expect(diff.breakingChanges.map(({ reason }) => reason)).toEqual([
+          "Field changed from optional to required",
+          "Unique constraint added to field",
+          "Decimal scale changed from 4 to 2",
+        ]);
+      });
+
       test("does not flag an explicit scale equal to the platform default", () => {
         const diff = compareSnapshots(snapshotWithPrice(undefined), snapshotWithPrice(6));
 
