@@ -1,9 +1,8 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { formatDistanceToNowStrict } from "date-fns";
-// eslint-disable-next-line no-restricted-imports
-import { getBorderCharacters, table } from "table";
+import { renderTable } from "./ascii-table";
+import type { AsciiTableConfig } from "./ascii-table";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
-import type { TableUserConfig } from "table";
 
 /**
  * Format a protobuf Timestamp to ISO string.
@@ -23,16 +22,13 @@ export function formatTimestamp(timestamp: Timestamp | undefined): Date | null {
 
 /**
  * Formats a table with consistent single-line border style.
- * Use this instead of importing `table` directly.
+ * Use this instead of importing a table-rendering package directly.
  * @param data - Table data
  * @param config - Table configuration
  * @returns Formatted table string
  */
-export function formatTable(data: unknown[][], config?: TableUserConfig): string {
-  return table(data, {
-    ...config,
-    border: getBorderCharacters("norc"),
-  });
+export function formatTable(data: unknown[][], config?: AsciiTableConfig): string {
+  return renderTable(data, config);
 }
 
 /**
