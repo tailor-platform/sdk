@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => {
     applyIdP: vi.fn(async (_client, result, phase) => {
       calls.push(`idp:${marker(result)}:${String(phase)}`);
     }),
+    preflightTailorDB: vi.fn(async (_client, result) => {
+      calls.push(`tailordb-preflight:${marker(result)}`);
+    }),
     applyTailorDB: vi.fn(async (_client, result, phase) => {
       calls.push(`tailordb:${marker(result)}:${String(phase)}`);
     }),
@@ -50,7 +53,10 @@ vi.mock("./function-registry", () => ({ applyFunctionRegistry: mocks.applyFuncti
 vi.mock("./staticwebsite", () => ({ applyStaticWebsite: mocks.applyStaticWebsite }));
 vi.mock("./aigateway", () => ({ applyAIGateway: mocks.applyAIGateway }));
 vi.mock("./idp", () => ({ applyIdP: mocks.applyIdP }));
-vi.mock("./tailordb", () => ({ applyTailorDB: mocks.applyTailorDB }));
+vi.mock("./tailordb", () => ({
+  applyTailorDB: mocks.applyTailorDB,
+  preflightTailorDB: mocks.preflightTailorDB,
+}));
 vi.mock("./auth", () => ({ applyAuth: mocks.applyAuth }));
 vi.mock("./resolver", () => ({ applyPipeline: mocks.applyPipeline }));
 vi.mock("./application", () => ({ applyApplication: mocks.applyApplication }));
@@ -89,6 +95,8 @@ describe("applyDeploymentPlans", () => {
     ]);
 
     expect(mocks.calls).toEqual([
+      "tailordb-preflight:supplier-tailordb",
+      "tailordb-preflight:buyer-tailordb",
       "secret:supplier-secret:create-update",
       "secret:buyer-secret:create-update",
       "function:supplier-function:create-update",
@@ -146,5 +154,18 @@ describe("applyDeploymentPlans", () => {
       "function:supplier-function:delete",
       "function:buyer-function:delete",
     ]);
+  });
+
+  test("fails migration preflight before applying any resource", async () => {
+    mocks.calls.length = 0;
+    mocks.applySecretManager.mockClear();
+    mocks.preflightTailorDB.mockRejectedValueOnce(new Error("migration state changed"));
+
+    await expect(
+      applyDeploymentPlans({} as never, "workspace-id", [deployment("supplier")]),
+    ).rejects.toThrow("migration state changed");
+
+    expect(mocks.calls).toEqual([]);
+    expect(mocks.applySecretManager).not.toHaveBeenCalled();
   });
 });

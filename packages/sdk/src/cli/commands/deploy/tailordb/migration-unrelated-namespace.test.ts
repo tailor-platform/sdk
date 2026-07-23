@@ -7,7 +7,7 @@
  */
 
 import { describe, test, expect, vi, beforeEach } from "vitest";
-import { applyTailorDB } from "./index";
+import { applyTailorDB, captureMigrationFileState } from "./index";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -199,6 +199,10 @@ describe("migration flow: namespaces without pending migrations", () => {
         executorUsedTypes: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
+        namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
+        migrationFileState: captureMigrationFileState([
+          { namespace: "test-ns", migrationsDir: "/test/migrations" },
+        ]),
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;

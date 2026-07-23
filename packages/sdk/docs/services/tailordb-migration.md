@@ -131,6 +131,16 @@ tailor tailordb migration script 0002
 
 This writes `migrations/0002/migrate.ts` and `migrations/0002/db.ts` next to the existing `diff.json`. The removed field stays readable inside `migrate.ts` because the pre-migration phase keeps it on the type until the script finishes (see [Per-migration phases](#per-migration-phases)). The next `tailor deploy` runs the script automatically — `migrate.ts` is executed whenever the file exists on disk, regardless of whether the diff itself required it.
 
+### Breaking changes without a script
+
+Breaking changes require `migrate.ts`. If it is missing at deploy time (for example, the generated script was deleted), `tailor-sdk deploy` fails before applying the migration or anything after it. When there is genuinely nothing to migrate — say, the affected type holds no data yet — record an explicit acknowledgment instead of keeping an empty script:
+
+```bash
+tailor-sdk tailordb migration script 0002 --no-script --reason "no data yet, safe to skip"
+```
+
+This stores the reason in `migrations/0002/diff.json` (commit the change). The next `tailor-sdk deploy` applies the schema change as usual, skips only the script step, and logs the recorded reason. The command refuses to record a skip while `migrate.ts` exists — delete the script first. If `migrate.ts` is added back later, the script takes precedence over the acknowledgment and runs.
+
 ## Configuration
 
 ```typescript
@@ -226,6 +236,7 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 | Remove index                   | No        | No                | Schema change only (removing the unique constraint from an index is also non-breaking)                                                                                                                                                           |
 | Add unique constraint          | Yes       | Yes               | Script must resolve duplicate values                                                                                                                                                                                                             |
 | Remove unique constraint       | No        | No                | Schema change only                                                                                                                                                                                                                               |
+| Change decimal scale           | Yes       | Yes               | Auto-generated script re-saves existing rows under the new scale. Decreasing scale rounds values half-up and can lose precision. If the same change adds a unique constraint, duplicate handling runs after re-saving.                           |
 | Add enum value                 | No        | No                | Schema change only                                                                                                                                                                                                                               |
 | Remove enum value              | Yes       | Yes               | Script migrates records with removed values                                                                                                                                                                                                      |
 | Add type                       | No        | No                | Schema change only                                                                                                                                                                                                                               |
@@ -254,7 +265,7 @@ When you run `tailor deploy`, the SDK detects pending migrations (anything past 
 For each pending migration:
 
 1. **Pre-migration**: Type changes that would be breaking are applied in a relaxed form first. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the type so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped). Breaking type-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
-2. **Script execution**: If `migrate.ts` exists on disk for this migration, it is bundled and sent to the platform via the script execution API and runs as the configured machine user inside a transaction. The script is hard-required for breaking changes (`diff.requiresMigrationScript`) but is also executed when present for warning-tier diffs — see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts).
+2. **Script execution**: If `migrate.ts` exists on disk for this migration, it is bundled and sent to the platform via the script execution API and runs as the configured machine user inside a transaction. The script is hard-required for breaking changes (`diff.requiresMigrationScript`) — deploy fails if the file is missing, unless a `--no-script` acknowledgment was recorded (see [Breaking changes without a script](#breaking-changes-without-a-script)). It is also executed when present for warning-tier diffs — see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts).
 3. **Post-migration**: Required constraints are enforced; field and type deletions are applied (the columns/tables are physically dropped here); the `sdk-migration` label is bumped to this migration's number.
 
 This split is what allows existing rows to be backfilled before the database starts rejecting nulls, and what lets `migrate.ts` traverse foreign-key fields that the same migration removes.
@@ -481,4 +492,4 @@ For genuinely different schemas across environments, prefer separate workspaces 
 
 **Cause:** `diff.requiresMigrationScript` is true but `migrate.ts` is missing from the migration directory.
 
-**Resolution:** Either re-run `migration generate` (it skips already-generated diffs but will fill in a missing script), or restore the file from version control.
+**Resolution:** Restore the file from version control, or create it with `tailor-sdk tailordb migration script <N> --namespace <namespace>`. If the migration intentionally needs no data transformation, record that decision with `tailor-sdk tailordb migration script <N> --namespace <namespace> --no-script --reason "<why no data migration is needed>"` instead.

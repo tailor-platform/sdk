@@ -59,6 +59,8 @@ function emptyResults(): PlanResults {
         executorUsedTypes: new Set<string>(),
         config: {} as PlanResults["tailorDB"]["context"]["config"],
         noSchemaCheck: false,
+        namespacesWithMigrations: [],
+        migrationFileState: {},
       },
     },
     staticWebsite: {

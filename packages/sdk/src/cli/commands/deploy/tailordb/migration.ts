@@ -10,6 +10,7 @@ import {
   AuthInvokerSchema,
   type AuthInvoker,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
+import * as path from "pathe";
 import { bundleMigrationScript } from "#/cli/commands/tailordb/migrate/bundler";
 import { type NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
 import {
@@ -23,7 +24,7 @@ import {
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
 } from "#/cli/commands/tailordb/migrate/types";
-import { type OperatorClient } from "#/cli/shared/client";
+import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { logger, styles } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
 import { spinner } from "#/cli/shared/spinner";
@@ -91,8 +92,11 @@ async function getCurrentMigrationNumber(
     }
     const num = parseMigrationLabelNumber(label);
     return num ?? 0;
-  } catch {
-    return 0;
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return 0;
+    }
+    throw error;
   }
 }
 
@@ -101,12 +105,14 @@ async function getCurrentMigrationNumber(
  * @param {OperatorClient} client - Operator client instance
  * @param {string} workspaceId - Workspace ID
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
+ * @param {string} [configPath] - Config file path, included in remediation guidance when provided
  * @returns {Promise<PendingMigration[]>} List of pending migrations
  */
 export async function detectPendingMigrations(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
+  configPath?: string,
 ): Promise<PendingMigration[]> {
   const pendingMigrations: PendingMigration[] = [];
 
@@ -133,15 +139,34 @@ export async function detectPendingMigrations(
       const diff = loadDiff(diffPath);
 
       // The migration script is executed when migrate.ts exists on disk.
-      // Breaking changes still hard-require a script; warnings (e.g. field_removed)
-      // may optionally have one added via `tailordb migration script <num>`.
+      // Breaking changes hard-require a script unless the user recorded an
+      // explicit skip acknowledgment; warnings (e.g. field_removed) may
+      // optionally have one added via `tailordb migration script <num>`.
       const scriptPath = getMigrationFilePath(migrationsDir, file.number, "migrate");
       const hasScript = fs.existsSync(scriptPath);
-      if (diff.requiresMigrationScript && !hasScript) {
-        logger.warn(
-          `Migration ${namespace}/${file.number} requires a script but migrate.ts not found`,
+      if (diff.requiresMigrationScript && !hasScript && !diff.scriptSkipped) {
+        const configArg = configPath
+          ? ` --config "${path.relative(process.cwd(), configPath) || configPath}"`
+          : "";
+        const scriptCmd = `tailor tailordb migration script ${file.number} --namespace ${namespace}${configArg}`;
+        throw new Error(
+          `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.\n` +
+            `To resolve, either:\n` +
+            `  - Add a script: ${scriptCmd}\n` +
+            `  - Or record that no script is needed: ${scriptCmd} --no-script --reason "<why no data migration is needed>"`,
         );
-        continue;
+      }
+      if (diff.scriptSkipped) {
+        const migrationLabel = `${namespace}/${formatMigrationNumber(file.number)}`;
+        if (hasScript) {
+          logger.warn(
+            `Migration ${migrationLabel} has both a skip acknowledgment and migrate.ts; executing migrate.ts.`,
+          );
+        } else {
+          logger.info(
+            `Migration ${migrationLabel} runs without a script (skip acknowledged at ${diff.scriptSkipped.acknowledgedAt}: ${diff.scriptSkipped.reason})`,
+          );
+        }
       }
 
       pendingMigrations.push({
