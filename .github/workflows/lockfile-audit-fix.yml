@@ -167,6 +167,8 @@ jobs:
         with:
           token: ${{ steps.get_access_token.outputs.token }}
           commit-message: "fix(deps): automated lockfile security fix"
+          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
           branch: chore/lockfile-audit-fix
           delete-branch: true
           title: "fix(deps): automated lockfile security fix"
