@@ -342,7 +342,7 @@ export function transformFunctionTriggers(
       transformedCall = `tailor.workflow.triggerWorkflow(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
     } else {
       const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
-      transformedCall = `(async () => tailor.workflow.triggerJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart}))()`;
+      transformedCall = `(async () => tailor.workflow.execJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart}))()`;
     }
     replacements.push({
       start: call.callRange.start,

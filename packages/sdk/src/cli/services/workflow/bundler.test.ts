@@ -133,8 +133,8 @@ export default createWorkflow({ name: "workflow-b", mainJob: mainB });
 
       expect(result.mainJobDeps["main-a"]).toEqual(["main-a", "step-a"]);
       expect(result.usedJobNames).toEqual(["step-a", "main-a"]);
-      expect(result.bundledCode.get("main-a")).toMatch(/triggerJobFunction\([`'"]step-a/);
-      expect(result.bundledCode.get("main-a")).not.toMatch(/triggerJobFunction\([`'"]step-b/);
+      expect(result.bundledCode.get("main-a")).toMatch(/execJobFunction\([`'"]step-a/);
+      expect(result.bundledCode.get("main-a")).not.toMatch(/execJobFunction\([`'"]step-b/);
     });
 
     test("includes jobs referenced through aliased named imports", async () => {
@@ -176,7 +176,7 @@ export default createWorkflow({ name: "workflow", mainJob });
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job", "step-a"]);
       expect(result.usedJobNames).toEqual(["step-a", "main-job"]);
-      expect(result.bundledCode.get("main-job")).toMatch(/triggerJobFunction\([`'"]step-a/);
+      expect(result.bundledCode.get("main-job")).toMatch(/execJobFunction\([`'"]step-a/);
     });
 
     test("does not include a job whose binding is shadowed by a parameter", async () => {
@@ -210,7 +210,7 @@ export default createWorkflow({ name: "workflow", mainJob });
 
       expect(result.mainJobDeps["main-job"]).toEqual(["main-job"]);
       expect(result.usedJobNames).toEqual(["main-job"]);
-      expect(result.bundledCode.get("main-job")).not.toContain("triggerJobFunction");
+      expect(result.bundledCode.get("main-job")).not.toContain("execJobFunction");
     });
   });
 

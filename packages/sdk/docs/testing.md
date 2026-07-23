@@ -153,7 +153,7 @@ test("workflow triggers jobs", async () => {
 });
 ```
 
-Unconfigured definition mocks continue to run their real implementations. The lower-level `triggerJobFunction`, `triggerWorkflow`, `resumeWorkflow`, `wait`, and `resolve` mocks and the existing `setJobHandler`, `enqueueResult`, `enqueueResults`, and call-record helpers remain available.
+Unconfigured definition mocks continue to run their real implementations. The lower-level `execJobFunction`, `triggerWorkflow`, `resumeWorkflow`, `wait`, and `resolve` mocks and the existing `setJobHandler`, `enqueueResult`, `enqueueResults`, and call-record helpers remain available.
 
 Use `waitPoint(definition)` for typed wait-point control:
 
