@@ -91,10 +91,13 @@ describe("bundle-log-level applied to the real runtime/logger.ts via rolldown", 
   let tmpDir: string | undefined;
 
   aroundEach(async (runTest) => {
-    await runTest();
-    if (tmpDir) {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-      tmpDir = undefined;
+    try {
+      await runTest();
+    } finally {
+      if (tmpDir) {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        tmpDir = undefined;
+      }
     }
   });
 

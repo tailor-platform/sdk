@@ -52,7 +52,7 @@ export default defineConfig({
 
 This is a bundle-time setting. Changing `LOG_LEVEL` affects newly bundled deployments; already deployed functions must be redeployed.
 
-Only `logger.*` calls made through the `import { logger } from "@tailor-platform/sdk/runtime"` wrapper, or written as `globalThis.tailor.logger.*`, are covered. Other equivalent forms — such as the bare `tailor.logger.*` global or `self.tailor.logger.*` — are not affected by `logLevel`.
+Only `logger.*` calls made through the SDK's `logger` wrapper (from `@tailor-platform/sdk/runtime` or its `@tailor-platform/sdk/runtime/logger` subpath), or written as `globalThis.tailor.logger.*`, are covered. Other equivalent forms — such as the bare `tailor.logger.*` global or `self.tailor.logger.*` — are not affected by `logLevel`.
 
 ### Service Configuration
 
