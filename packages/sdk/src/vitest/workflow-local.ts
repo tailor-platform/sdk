@@ -241,7 +241,7 @@ function assertSameStart(record: StartRecord, jobName: string, args: unknown): v
 
 function createLocalWorkflowRuntime(
   previous: PlatformWorkflowAPI | undefined,
-  startJobFunction: (name: string, args?: unknown) => unknown,
+  execJobFunction: (name: string, args?: unknown) => unknown,
 ): PlatformWorkflowAPI {
   const startWorkflow: PlatformWorkflowAPI["startWorkflow"] = async (name, args, options) => {
     if (previous) {
@@ -260,7 +260,8 @@ function createLocalWorkflowRuntime(
   };
 
   return {
-    startJobFunction,
+    execJobFunction,
+    startJobFunction: execJobFunction,
     startWorkflow,
     resumeWorkflowExecution,
     wait: (key, payload) => {

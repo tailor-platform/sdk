@@ -368,7 +368,7 @@ export function transformStartCalls(
       transformedCall = `tailor.workflow.startWorkflow(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
     } else {
       const optionsPart = call.optionsText !== undefined ? `, ${call.optionsText}` : "";
-      transformedCall = `tailor.workflow.startJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
+      transformedCall = `tailor.workflow.execJobFunction(${JSON.stringify(call.targetName)}, ${call.argsText || "undefined"}${optionsPart})`;
     }
     replacements.push({
       start: call.callRange.start,

@@ -10,10 +10,10 @@ import { tailorRoot, withDispose } from "./shared";
 import type { WorkflowJob } from "#/configure/services/workflow/job";
 import type { WaitPointInstance } from "#/configure/services/workflow/wait-point";
 import type { Workflow } from "#/configure/services/workflow/workflow";
-import type { StartJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
+import type { ExecJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
 import type { TailorEnv } from "../../runtime/types";
 
-type JobHandler = (jobName: string, args: unknown, options?: StartJobFunctionOptions) => unknown;
+type JobHandler = (jobName: string, args: unknown, options?: ExecJobFunctionOptions) => unknown;
 
 type StartHandlerFn = (
   workflowName: string,
@@ -40,7 +40,7 @@ type SetWaitHandler = {
 interface StartedJob {
   jobName: string;
   args: unknown;
-  options?: StartJobFunctionOptions;
+  options?: ExecJobFunctionOptions;
 }
 
 interface ScopedMock {
@@ -99,6 +99,10 @@ function replaceStart<Start extends ProcedureFn>(definition: {
 /**
  * Acquire a disposable mock for workflow operations (`tailor.workflow`).
  * Restored on dispose.
+ *
+ * The canonical `execJobFunction` and its `startJobFunction` alias share the
+ * same underlying `vi.fn`, so calls through either name are recorded once and
+ * handlers configured on either name apply to both.
  * @returns Disposable workflow mock control object
  * @example
  * ```typescript
@@ -122,10 +126,10 @@ export function mockWorkflow() {
   const waitPointMocks = new Map<object, unknown>();
   const scopedMocks = new Set<ScopedMock>();
 
-  const defaultStartJob = (
+  const defaultExecJob = (
     jobName: string,
     _args?: unknown,
-    _options?: StartJobFunctionOptions,
+    _options?: ExecJobFunctionOptions,
   ): unknown => {
     throw new Error(
       `No workflow job mock for "${jobName}". Call mockWorkflow().setJobHandler(...) or enqueueResult(...), or use runWorkflowLocally() for local workflow execution.`,
@@ -143,7 +147,7 @@ export function mockWorkflow() {
 
   // Inner vi.fns hold the overridable behavior + call recording; the installed
   // shims below cross the platform JSON boundary (serialize args + results) once.
-  const startJobFunction = vi.fn(defaultStartJob);
+  const execJobFunction = vi.fn(defaultExecJob);
   const startWorkflow = vi.fn(defaultStartWorkflow);
   const resumeWorkflowExecution = vi.fn(defaultResumeWorkflowExecution);
   const wait = vi.fn((_key: string, _payload?: unknown): unknown => null);
@@ -156,12 +160,12 @@ export function mockWorkflow() {
   );
 
   // Preserve arity: recording `undefined` as the third element only when the
-  // caller supplied it, mirroring `.startJobFunction(name, args, options)`.
-  const jobFunctionShim = (...call: [string, unknown?, StartJobFunctionOptions?]) => {
+  // caller supplied it, mirroring `.execJobFunction(name, args, options)`.
+  const jobFunctionShim = (...call: [string, unknown?, ExecJobFunctionOptions?]) => {
     const out =
       call.length >= 3
-        ? startJobFunction(call[0], platformSerialize(call[1]), call[2])
-        : startJobFunction(call[0], platformSerialize(call[1]));
+        ? execJobFunction(call[0], platformSerialize(call[1]), call[2])
+        : execJobFunction(call[0], platformSerialize(call[1]));
     return out instanceof Promise ? out.then((v) => platformSerialize(v)) : platformSerialize(out);
   };
   // Preserve arity so a forwarded third `options` arg — even `undefined` — is
@@ -172,6 +176,9 @@ export function mockWorkflow() {
       : startWorkflow(call[0], platformSerialize(call[1]));
   const resumeShim = (executionId: string) => resumeWorkflowExecution(executionId);
   root.workflow = {
+    // The canonical and alias names share a single shim so calls through
+    // either name are recorded on the same underlying vi.fn.
+    execJobFunction: jobFunctionShim,
     startJobFunction: jobFunctionShim,
     startWorkflow: workflowShim,
     resumeWorkflowExecution: resumeShim,
@@ -186,8 +193,13 @@ export function mockWorkflow() {
   };
 
   const facade = {
-    /** The `startJobFunction` `vi.fn`. */
-    startJobFunction,
+    /** The `execJobFunction` `vi.fn`. */
+    execJobFunction,
+    /**
+     * Alias of `execJobFunction` (same `vi.fn` reference).
+     * @deprecated Use `execJobFunction` instead.
+     */
+    startJobFunction: execJobFunction,
     /** The `startWorkflow` `vi.fn`. */
     startWorkflow,
     /** The `resumeWorkflowExecution` `vi.fn`. */
@@ -280,37 +292,37 @@ export function mockWorkflow() {
      * @param handler - Function returning a result for a job name, args, and options
      */
     setJobHandler(handler: JobHandler): void {
-      startJobFunction.mockImplementation((name, args, options) => handler(name, args, options));
+      execJobFunction.mockImplementation((name, args, options) => handler(name, args, options));
     },
 
     /**
-     * Enqueue a single result for the next `startJobFunction` call (FIFO;
+     * Enqueue a single result for the next `execJobFunction` call (FIFO;
      * takes priority over `setJobHandler`).
      * @param result - Result to return from the next call
      */
     enqueueResult(result: unknown): void {
-      startJobFunction.mockImplementationOnce(() => result);
+      execJobFunction.mockImplementationOnce(() => result);
     },
 
     /**
-     * Enqueue results for multiple subsequent `startJobFunction` calls (FIFO).
+     * Enqueue results for multiple subsequent `execJobFunction` calls (FIFO).
      * @param results - Results to enqueue, one per upcoming call
      */
     enqueueResults(...results: unknown[]): void {
       for (const result of results) {
-        startJobFunction.mockImplementationOnce(() => result);
+        execJobFunction.mockImplementationOnce(() => result);
       }
     },
 
     /**
-     * All jobs started via `startJobFunction`, in order.
+     * All jobs executed via `execJobFunction`, in order.
      * @returns Started jobs array
      */
     get startedJobs(): StartedJob[] {
-      return startJobFunction.mock.calls.map(([jobName, args, options]) => ({
+      return execJobFunction.mock.calls.map(([jobName, args, options]) => ({
         jobName: jobName as string,
         args,
-        ...(options !== undefined && { options: options as StartJobFunctionOptions }),
+        ...(options !== undefined && { options: options as ExecJobFunctionOptions }),
       }));
     },
 
@@ -394,7 +406,7 @@ export function mockWorkflow() {
 
     /** Clear recorded calls while preserving configured responses. */
     clear(): void {
-      startJobFunction.mockClear();
+      execJobFunction.mockClear();
       startWorkflow.mockClear();
       resumeWorkflowExecution.mockClear();
       wait.mockClear();
@@ -404,8 +416,8 @@ export function mockWorkflow() {
 
     /** Reset all workflow responses and recorded calls (keeps the mock installed). */
     reset(): void {
-      startJobFunction.mockReset();
-      startJobFunction.mockImplementation(defaultStartJob);
+      execJobFunction.mockReset();
+      execJobFunction.mockImplementation(defaultExecJob);
       startWorkflow.mockReset();
       startWorkflow.mockImplementation(defaultStartWorkflow);
       resumeWorkflowExecution.mockReset();

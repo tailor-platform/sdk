@@ -240,6 +240,11 @@ export type DiffChange =
 export type FieldDiffChange = FieldAddedChange | FieldRemovedChange | FieldModifiedChange;
 
 /**
+ * Index-level diff change (added / removed / modified).
+ */
+export type IndexDiffChange = IndexAddedChange | IndexRemovedChange | IndexModifiedChange;
+
+/**
  * Migration diff - changes between two schema versions
  * Stored as XXXX/diff.json (e.g., 0001/diff.json)
  */

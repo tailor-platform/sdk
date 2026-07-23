@@ -114,8 +114,8 @@ export const step = createWorkflowJob({ name: "step-b", body: async () => "b" })
 
     const result = transform(`${firstSource}\nawait step.start();\n`, firstPath, context);
 
-    expect(result).toContain('tailor.workflow.startJobFunction("step-a", undefined)');
-    expect(result).not.toContain('tailor.workflow.startJobFunction("step-b"');
+    expect(result).toContain('tailor.workflow.execJobFunction("step-a", undefined)');
+    expect(result).not.toContain('tailor.workflow.execJobFunction("step-b"');
   });
 
   test("resolves aliased named imports", async () => {
@@ -127,7 +127,7 @@ await importedStep.start();
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
-    expect(result).toContain('tailor.workflow.startJobFunction("step-a", undefined)');
+    expect(result).toContain('tailor.workflow.execJobFunction("step-a", undefined)');
     expect(result).not.toContain("importedStep.start()");
   });
 
@@ -191,7 +191,7 @@ async function run(step: { start(): Promise<string> }) {
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
-    expect(result).toContain('startJobFunction("step-a", { source: "outer" })');
+    expect(result).toContain('execJobFunction("step-a", { source: "outer" })');
     expect(result).toContain("return step.start()");
   });
 
@@ -208,7 +208,7 @@ async function run() {
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
-    expect(result).toContain('startJobFunction("step-a", { source: "outer" })');
+    expect(result).toContain('execJobFunction("step-a", { source: "outer" })');
     expect(result).toContain("return step.start()");
   });
 
@@ -222,7 +222,7 @@ await step.start();
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
     expect(result).toContain("await step.start()");
-    expect(result).not.toContain("tailor.workflow.startJobFunction");
+    expect(result).not.toContain("tailor.workflow.execJobFunction");
   });
 
   test("escapes job and workflow names in generated calls", async () => {
@@ -233,6 +233,6 @@ await step.start();
 
     const result = transform(`${firstSource}\nawait step.start();\n`, firstPath, context);
 
-    expect(result).toContain(`startJobFunction(${JSON.stringify(jobName)}, undefined)`);
+    expect(result).toContain(`execJobFunction(${JSON.stringify(jobName)}, undefined)`);
   });
 });

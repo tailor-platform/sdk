@@ -57,6 +57,24 @@
   
   Run the `v2/workflow-trigger-rename` codemod to migrate call sites automatically.
 
+## 1.83.0
+
+### Minor Changes
+
+- [#1873](https://github.com/tailor-platform/sdk/pull/1873) [`79f5d61`](https://github.com/tailor-platform/sdk/commit/79f5d61993354dccb7a973a00b7e0f54a5dc0a60) Thanks [@k1LoW](https://github.com/k1LoW)! - Add `tailor.workflow.execJobFunction` as the canonical name for executing a workflow job function and returning its result. `startJobFunction` and `triggerJobFunction` remain available as aliases with the same behavior; `@deprecated` markers now point users at `execJobFunction`. Bundled workflow output emitted by the SDK now targets the canonical `execJobFunction` name.
+
+- [#1861](https://github.com/tailor-platform/sdk/pull/1861) [`c970daf`](https://github.com/tailor-platform/sdk/commit/c970daf4bef76d0d83db5e4bf8405e156bd89a4e) Thanks [@dqn](https://github.com/dqn)! - Classify type-level unique index changes as breaking in `tailordb migration generate`: adding a unique index (or adding `unique` to an existing index, or changing a unique index's field set) now prompts for confirmation and auto-generates a `migrate.ts` that resolves duplicate value combinations before the constraint is enforced. During deploy, the pre-migration phase withholds the new unique index (or keeps the previous definition) until the migration script has run.
+
+## 1.82.0
+
+### Minor Changes
+
+- [#1866](https://github.com/tailor-platform/sdk/pull/1866) [`1ae2485`](https://github.com/tailor-platform/sdk/commit/1ae24854f049ac51036842bacf4f35eb74ecd50c) Thanks [@toiroakr](https://github.com/toiroakr)! - `logLevel` now also controls `logger.*` calls (from `@tailor-platform/sdk/runtime`) in bundled functions, in addition to `console.*`. `logger.debug`/`logger.info`/`logger.warn`/`logger.error` are dropped at the same thresholds as their `console` counterparts.
+
+### Patch Changes
+
+- [#1848](https://github.com/tailor-platform/sdk/pull/1848) [`6f16760`](https://github.com/tailor-platform/sdk/commit/6f167606f01d3eacf157e81f7b7f4c6026b2dc99) Thanks [@toiroakr](https://github.com/toiroakr)! - Replaced the `table` dependency (heavy transitive deps, low OpenSSF Scorecard) with an in-house single-line box-drawing table renderer used by the CLI's tabular output (`logger.out`, `formatTable`/`formatKeyValueTable`/`formatTableWithHeaders`). Column width calculation now uses the small, dependency-free `get-east-asian-width` package for correct alignment with full-width (CJK) characters. No user-facing behavior change is expected.
+
 ## 1.81.0
 
 ### Minor Changes

@@ -10,7 +10,12 @@
 
 import * as fs from "node:fs/promises";
 import { writeDbTypesFile } from "./db-types-generator";
-import { getMigrationDirPath, getMigrationFilePath, type SchemaSnapshot } from "./snapshot";
+import {
+  getMigrationDirPath,
+  getMigrationFilePath,
+  isBreakingIndexChange,
+  type SchemaSnapshot,
+} from "./snapshot";
 import type { MigrationDiff, DiffChange } from "./diff-calculator";
 
 /**
@@ -187,6 +192,40 @@ ${updates.join("\n\n")}
  * @returns {string | null} Script content or null if no script needed
  */
 function generateChangeScript(change: DiffChange): string | null {
+  if (change.kind === "index_added" || change.kind === "index_modified") {
+    const before = change.kind === "index_modified" ? change.before : undefined;
+    if (!isBreakingIndexChange(change.typeName, change.indexName, before, change.after)) {
+      return null;
+    }
+    const fields = change.after.fields;
+    const fieldList = fields.map((f) => `"${f}"`).join(", ");
+    const whereClauses = fields.map((f) => `.where("${f}", "=", dup.${f})`).join("\n        ");
+    return `  // Resolve duplicate (${fields.join(", ")}) combinations before unique index "${change.indexName}" is enforced
+  {
+    const duplicates = await trx
+      .selectFrom("${change.typeName}")
+      .select([${fieldList}])
+      .groupBy([${fieldList}])
+      .having((eb) => eb.fn.count("id"), ">", 1)
+      .execute();
+    for (const dup of duplicates) {
+      const records = await trx
+        .selectFrom("${change.typeName}")
+        .select(["id"])
+        ${whereClauses}
+        .execute();
+      // Keep the first record; update or delete the others so the combination becomes unique
+      for (let i = 1; i < records.length; i++) {
+        await trx
+          .updateTable("${change.typeName}")
+          .set({ ${fields[0]}: null }) // TODO: Set appropriate unique value
+          .where("id", "=", records[i].id)
+          .execute();
+      }
+    }
+  }`;
+  }
+
   if (change.kind === "field_added") {
     const field = change.after;
     if (field.required) {

@@ -35,7 +35,7 @@ export type ExecutionPolicyName = string;
 export type ExecutionPolicyNameInput = ExecutionPolicyName;
 
 /**
- * Execution policy key passed to startJobFunction's executionPolicyKey option
+ * Execution policy key passed to execJobFunction's (or its alias startJobFunction's) executionPolicyKey option
  */
 export type ExecutionPolicyKey = string;
 export type ExecutionPolicyKeyInput = ExecutionPolicyKey;
@@ -43,7 +43,7 @@ export type ExecutionPolicyKeyInput = ExecutionPolicyKey;
 export type WorkflowJobFunctionExecutionPolicy = {
   /** Workspace-unique execution policy name embedded in the resource TRN */
   name: ExecutionPolicyName;
-  /** Execution policy key passed to startJobFunction's executionPolicyKey option */
+  /** Execution policy key passed to execJobFunction's (or its alias startJobFunction's) executionPolicyKey option */
   key: ExecutionPolicyKey;
   /** Optional per-key concurrency cap for job function dispatches matching this policy */
   concurrencyPolicy?: ConcurrencyPolicy;

@@ -335,7 +335,7 @@ function convertRelationshipToProto(
  * @param {SnapshotIndexConfig} indexConfig - Snapshot index config
  * @returns {MessageInitShape<typeof TailorDBType_IndexSchema>} Proto index config
  */
-function convertIndexToProto(
+export function convertIndexToProto(
   indexConfig: SnapshotIndexConfig,
 ): MessageInitShape<typeof TailorDBType_IndexSchema> {
   return {

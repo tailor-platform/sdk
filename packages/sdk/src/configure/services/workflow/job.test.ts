@@ -16,7 +16,7 @@ async function withRegisteredJobRuntime<T>(run: () => Promise<T>): Promise<T> {
   const root = globalThis as {
     tailor?: {
       workflow?: {
-        startJobFunction: (name: string, args?: unknown) => unknown;
+        execJobFunction: (name: string, args?: unknown) => unknown;
       };
     };
   };
@@ -25,7 +25,7 @@ async function withRegisteredJobRuntime<T>(run: () => Promise<T>): Promise<T> {
   root.tailor = {
     ...previousTailor,
     workflow: {
-      startJobFunction: (name, args) => {
+      execJobFunction: (name, args) => {
         const body = getRegisteredJob(name);
         if (!body) return null;
         const out = body(platformSerialize(args), buildJobContext());

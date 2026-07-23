@@ -973,6 +973,24 @@ describe("mock", () => {
       expect(callbackRan).toBe(false);
       expect(wf.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
     });
+
+    describe("canonical aliases", () => {
+      test("execJobFunction and startJobFunction share the same call log", () => {
+        using wf = mockWorkflow();
+        wf.setJobHandler(() => ({ ok: true }));
+        // oxlint-disable-next-line no-explicit-any
+        const g = globalThis as any;
+
+        g.tailor.workflow.execJobFunction("job-a", { via: "canonical" });
+        g.tailor.workflow.startJobFunction("job-b", { via: "alias" });
+
+        expect(wf.startedJobs).toEqual([
+          { jobName: "job-a", args: { via: "canonical" } },
+          { jobName: "job-b", args: { via: "alias" } },
+        ]);
+        expect(wf.startJobFunction).toBe(wf.execJobFunction);
+      });
+    });
   });
 
   describe("injectMocks / cleanupMocks (base platform globals)", () => {
