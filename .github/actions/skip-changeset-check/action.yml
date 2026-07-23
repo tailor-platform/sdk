@@ -27,7 +27,10 @@ runs:
   steps:
     - id: diff
       shell: bash
+      env:
+        BEFORE_LOCKFILE: ${{ inputs.before-lockfile }}
+        AFTER_LOCKFILE: ${{ inputs.after-lockfile }}
       run: |
         node "${{ github.action_path }}/../../scripts/lockfile-runtime-diff.mjs" \
-          --before "${{ inputs.before-lockfile }}" \
-          --after "${{ inputs.after-lockfile }}"
+          --before "$BEFORE_LOCKFILE" \
+          --after "$AFTER_LOCKFILE"
