@@ -1,5 +1,33 @@
 # @tailor-platform/sdk
 
+## 1.82.0
+
+### Minor Changes
+
+- [#1866](https://github.com/tailor-platform/sdk/pull/1866) [`1ae2485`](https://github.com/tailor-platform/sdk/commit/1ae24854f049ac51036842bacf4f35eb74ecd50c) Thanks [@toiroakr](https://github.com/toiroakr)! - `logLevel` now also controls `logger.*` calls (from `@tailor-platform/sdk/runtime`) in bundled functions, in addition to `console.*`. `logger.debug`/`logger.info`/`logger.warn`/`logger.error` are dropped at the same thresholds as their `console` counterparts.
+
+### Patch Changes
+
+- [#1848](https://github.com/tailor-platform/sdk/pull/1848) [`6f16760`](https://github.com/tailor-platform/sdk/commit/6f167606f01d3eacf157e81f7b7f4c6026b2dc99) Thanks [@toiroakr](https://github.com/toiroakr)! - Replaced the `table` dependency (heavy transitive deps, low OpenSSF Scorecard) with an in-house single-line box-drawing table renderer used by the CLI's tabular output (`logger.out`, `formatTable`/`formatKeyValueTable`/`formatTableWithHeaders`). Column width calculation now uses the small, dependency-free `get-east-asian-width` package for correct alignment with full-width (CJK) characters. No user-facing behavior change is expected.
+
+## 1.81.0
+
+### Minor Changes
+
+- [#1824](https://github.com/tailor-platform/sdk/pull/1824) [`617a263`](https://github.com/tailor-platform/sdk/commit/617a2632ae50f9b4db8e436d1da4c4888c907a58) Thanks [@haru0017](https://github.com/haru0017)! - Add a `logger` API for structured logging from Tailor Platform functions, exposing `debug`, `info`, `warn`, `error`, and `setAttributes`. The message is written to standard output, and the full entry with its attributes is exported over OpenTelemetry, where the attributes are queryable. Attribute values are typed to what OpenTelemetry can carry (`string`, `number`, `boolean`, and homogeneous arrays of those).
+
+- [#1718](https://github.com/tailor-platform/sdk/pull/1718) [`d688c30`](https://github.com/tailor-platform/sdk/commit/d688c303be1b6693a36b50a03d52c670c05d035a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `permission` field to `createResolver` for declaring a resolver's access requirement, using the same `conditions`/`permit` policy notation as TailorDB's `.permission()` (restricted to `user` operands, e.g. `permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }]`). Rejects non-matching callers before `body` runs. At least one `permit: true` policy is required (deny by default, granted only by a match); a matching `permit: false` policy always overrides that grant, for carving out an explicit exception. `permission: "allowAnonymous"` explicitly documents that anonymous callers are allowed. Omitting `permission` keeps prior behavior unchanged. `tailor-sdk function test-run` enforces the same guard.
+
+### Patch Changes
+
+- [#1797](https://github.com/tailor-platform/sdk/pull/1797) [`93c1659`](https://github.com/tailor-platform/sdk/commit/93c16590eb21537ded9272ec12ecc683b61de04e) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix deploy reporting spurious updates on every run: TailorDB types no longer drift when the platform proto gains new fields, IdP services without an explicit userAuthPolicy no longer drift against the platform's default password policy, and deploys with pending migrations no longer silently skip type changes in namespaces that have no migrations
+
+- [#1842](https://github.com/tailor-platform/sdk/pull/1842) [`b19c22b`](https://github.com/tailor-platform/sdk/commit/b19c22bd8a22c8ec79a5f02545222706101926c6) Thanks [@toiroakr](https://github.com/toiroakr)! - fix(deps): update transitive dependency fast-uri to 3.1.4 [security]
+
+- [#1822](https://github.com/tailor-platform/sdk/pull/1822) [`bcfc9ea`](https://github.com/tailor-platform/sdk/commit/bcfc9ea550744c9481fb29d8ed1629851fc0b1f0) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency execa to v10
+
+- [#1826](https://github.com/tailor-platform/sdk/pull/1826) [`bc85e4a`](https://github.com/tailor-platform/sdk/commit/bc85e4a72e25a9d0e0dadd7e2fae3a7be4d1ce59) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
 ## 1.80.1
 
 ### Patch Changes

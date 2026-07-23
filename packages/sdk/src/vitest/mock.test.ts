@@ -998,19 +998,23 @@ describe("mock", () => {
     });
 
     describe("canonical aliases", () => {
-      test("startJobFunction and triggerJobFunction share the same call log", () => {
+      test("execJobFunction, startJobFunction and triggerJobFunction share the same call log", () => {
         using wf = mockWorkflow();
+        const exec = (globalThis as any).tailor.workflow.execJobFunction;
         const start = (globalThis as any).tailor.workflow.startJobFunction;
         const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
 
-        start("job-a", { via: "canonical" });
-        trigger("job-b", { via: "legacy" });
+        exec("job-a", { via: "canonical" });
+        start("job-b", { via: "start-alias" });
+        trigger("job-c", { via: "frozen-alias" });
 
         expect(wf.triggeredJobs).toEqual([
           { jobName: "job-a", args: { via: "canonical" } },
-          { jobName: "job-b", args: { via: "legacy" } },
+          { jobName: "job-b", args: { via: "start-alias" } },
+          { jobName: "job-c", args: { via: "frozen-alias" } },
         ]);
-        expect(wf.startJobFunction).toBe(wf.triggerJobFunction);
+        expect(wf.startJobFunction).toBe(wf.execJobFunction);
+        expect(wf.triggerJobFunction).toBe(wf.execJobFunction);
       });
 
       test("startWorkflow honors setTriggerHandler", async () => {

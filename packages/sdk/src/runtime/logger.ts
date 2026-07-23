@@ -80,15 +80,17 @@ export interface TailorLoggerAPI {
   setAttributes(attributes: LogAttributes): void;
 }
 
-const api = (): TailorLoggerAPI =>
-  (globalThis as { tailor: { logger: TailorLoggerAPI } }).tailor.logger;
+// Each wrapper below inlines the `(globalThis as GlobalWithLogger).tailor.logger` cast
+// (rather than sharing a helper) so bundle-log-level.ts's manualPureFunctions
+// can statically match the callee and tree-shake calls below the build's logLevel.
+type GlobalWithLogger = { tailor: { logger: TailorLoggerAPI } };
 
 /**
  * See {@link TailorLoggerAPI.debug}.
  * @param args - Forwarded to {@link TailorLoggerAPI.debug}
  */
 export const debug: TailorLoggerAPI["debug"] = (...args) => {
-  api().debug(...args);
+  (globalThis as GlobalWithLogger).tailor.logger.debug(...args);
 };
 
 /**
@@ -96,7 +98,7 @@ export const debug: TailorLoggerAPI["debug"] = (...args) => {
  * @param args - Forwarded to {@link TailorLoggerAPI.info}
  */
 export const info: TailorLoggerAPI["info"] = (...args) => {
-  api().info(...args);
+  (globalThis as GlobalWithLogger).tailor.logger.info(...args);
 };
 
 /**
@@ -104,7 +106,7 @@ export const info: TailorLoggerAPI["info"] = (...args) => {
  * @param args - Forwarded to {@link TailorLoggerAPI.warn}
  */
 export const warn: TailorLoggerAPI["warn"] = (...args) => {
-  api().warn(...args);
+  (globalThis as GlobalWithLogger).tailor.logger.warn(...args);
 };
 
 /**
@@ -112,7 +114,7 @@ export const warn: TailorLoggerAPI["warn"] = (...args) => {
  * @param args - Forwarded to {@link TailorLoggerAPI.error}
  */
 export const error: TailorLoggerAPI["error"] = (...args) => {
-  api().error(...args);
+  (globalThis as GlobalWithLogger).tailor.logger.error(...args);
 };
 
 /**
@@ -120,5 +122,5 @@ export const error: TailorLoggerAPI["error"] = (...args) => {
  * @param args - Forwarded to {@link TailorLoggerAPI.setAttributes}
  */
 export const setAttributes: TailorLoggerAPI["setAttributes"] = (...args) => {
-  api().setAttributes(...args);
+  (globalThis as GlobalWithLogger).tailor.logger.setAttributes(...args);
 };

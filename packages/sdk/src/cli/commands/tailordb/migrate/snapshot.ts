@@ -1195,6 +1195,45 @@ function compareTypeFields(
 }
 
 /**
+ * Determine if a type-level index change is breaking. Mirrors the field-level
+ * unique reasoning: enforcing a unique constraint over existing rows can fail
+ * on duplicates, so both adding a unique index and re-pointing an existing
+ * unique index at a different field set require a data migration.
+ * @param {string} typeName - Name of the type containing the index
+ * @param {string} indexName - Name of the index being changed
+ * @param {SnapshotIndexConfig | undefined} oldIndex - Old index configuration
+ * @param {SnapshotIndexConfig | undefined} newIndex - New index configuration
+ * @returns {BreakingChangeInfo | null} Breaking change info or null if not breaking
+ */
+export function isBreakingIndexChange(
+  typeName: string,
+  indexName: string,
+  oldIndex: SnapshotIndexConfig | undefined,
+  newIndex: SnapshotIndexConfig | undefined,
+): BreakingChangeInfo | null {
+  if (!newIndex || !(newIndex.unique ?? false)) return null;
+
+  // Unique index added, or unique constraint added to an existing index
+  if (!oldIndex || !(oldIndex.unique ?? false)) {
+    return {
+      typeName,
+      reason: `Unique constraint added to index "${indexName}"`,
+    };
+  }
+
+  // Unique index re-pointed at a different field set: the old constraint is
+  // dropped and a new one enforced, so duplicates are just as possible.
+  if (JSON.stringify(oldIndex.fields.toSorted()) !== JSON.stringify(newIndex.fields.toSorted())) {
+    return {
+      typeName,
+      reason: `Unique index fields changed on index "${indexName}"`,
+    };
+  }
+
+  return null;
+}
+
+/**
  * Compare type-level indexes
  * @param {DiffContext} ctx - Diff context
  * @param {string} typeName - Type name
@@ -1220,6 +1259,10 @@ function compareIndexes(
         indexName,
         after: indexConfig,
       });
+      const breaking = isBreakingIndexChange(typeName, indexName, undefined, indexConfig);
+      if (breaking) {
+        ctx.breakingChanges.push(breaking);
+      }
     }
   }
 
@@ -1262,6 +1305,10 @@ function compareIndexes(
           before: oldIndex,
           after: newIndex,
         });
+        const breaking = isBreakingIndexChange(typeName, indexName, oldIndex, newIndex);
+        if (breaking) {
+          ctx.breakingChanges.push(breaking);
+        }
       }
     }
   }

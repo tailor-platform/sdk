@@ -26,7 +26,9 @@ import {
 } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import {
   applyPreMigrationFieldAdjustments,
+  applyPreMigrationIndexAdjustments,
   buildPreMigrationChangesMap,
+  buildPreMigrationIndexChangesMap,
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   reconstructSnapshotFromMigrations,
@@ -951,10 +953,12 @@ async function executeSingleMigrationPrePhase(
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
 ): Promise<void> {
-  // Build pre-migration changes map for this single migration. Includes both
+  // Build pre-migration changes maps for this single migration. Includes both
   // breaking changes (required-add, unique-add, enum value removal) and the
-  // warning-tier field_removed, since the Pre-phase relaxes both.
+  // warning-tier field_removed, since the Pre-phase relaxes both, plus the
+  // breaking type-level index changes.
   const preMigrationChanges = buildPreMigrationChangesMap([migration]);
+  const preMigrationIndexChanges = buildPreMigrationIndexChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const createdBeforeMigration = new Set(processedTypes.created);
 
@@ -978,6 +982,10 @@ async function executeSingleMigrationPrePhase(
     if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
       applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
     }
+    const indexChanges = preMigrationIndexChanges.get(typeName);
+    if (indexChanges && indexChanges.size > 0 && clonedRequest.tailordbType.schema?.indexes) {
+      applyPreMigrationIndexAdjustments(clonedRequest.tailordbType.schema.indexes, indexChanges);
+    }
 
     processedTypes.created.add(typeName);
     await client.createTailorDBType(clonedRequest);
@@ -1000,6 +1008,10 @@ async function executeSingleMigrationPrePhase(
     const typeChanges = preMigrationChanges.get(typeName);
     if (typeChanges && typeChanges.size > 0 && clonedTypeRequest.schema?.fields) {
       applyPreMigrationFieldAdjustments(clonedTypeRequest.schema.fields, typeChanges);
+    }
+    const indexChanges = preMigrationIndexChanges.get(typeName);
+    if (indexChanges && indexChanges.size > 0 && clonedTypeRequest.schema?.indexes) {
+      applyPreMigrationIndexAdjustments(clonedTypeRequest.schema.indexes, indexChanges);
     }
 
     processedTypes.updated.add(typeName);
@@ -1027,6 +1039,10 @@ async function executeSingleMigrationPrePhase(
     const typeChanges = preMigrationChanges.get(typeName);
     if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
       applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
+    }
+    const indexChanges = preMigrationIndexChanges.get(typeName);
+    if (indexChanges && indexChanges.size > 0 && clonedRequest.tailordbType.schema?.indexes) {
+      applyPreMigrationIndexAdjustments(clonedRequest.tailordbType.schema.indexes, indexChanges);
     }
 
     processedTypes.updated.add(typeName);
@@ -1101,9 +1117,14 @@ async function executeSingleMigrationPostPhase(
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
 ): Promise<void> {
-  // Re-use the pre-migration changes map to know which types were touched in
+  // Re-use the pre-migration changes maps to know which types were touched in
   // this migration (so we send the post-phase final-schema update for them).
   const preMigrationChanges = buildPreMigrationChangesMap([migration]);
+  const preMigrationIndexChanges = buildPreMigrationIndexChangesMap([migration]);
+  const adjustedTypes = new Set([
+    ...preMigrationChanges.keys(),
+    ...preMigrationIndexChanges.keys(),
+  ]);
   const affectedTypes = getAffectedTypeNames(migration);
   const deletedTypeNames = getDeletedTypeNames(migration);
 
@@ -1115,7 +1136,7 @@ async function executeSingleMigrationPostPhase(
     // For newly created types that had pre-migration adjustments in this migration, send update with snapshot[N] values
     for (const create of changeSet.type.creates) {
       const typeName = create.request.tailordbType?.name;
-      if (!typeName || !affectedTypes.has(typeName) || !preMigrationChanges.has(typeName)) {
+      if (!typeName || !affectedTypes.has(typeName) || !adjustedTypes.has(typeName)) {
         continue;
       }
       const snapshotType = buildSnapshotTypeManifest(
@@ -1135,7 +1156,7 @@ async function executeSingleMigrationPostPhase(
     // For updated types affected by this migration, send update with snapshot[N] values
     for (const update of changeSet.type.updates) {
       const typeName = update.request.tailordbType?.name;
-      if (!typeName || !affectedTypes.has(typeName) || !preMigrationChanges.has(typeName)) {
+      if (!typeName || !affectedTypes.has(typeName) || !adjustedTypes.has(typeName)) {
         continue;
       }
       const snapshotType = buildSnapshotTypeManifest(

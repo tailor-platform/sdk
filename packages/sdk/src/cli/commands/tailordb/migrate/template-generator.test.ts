@@ -264,6 +264,83 @@ describe("template-generator", () => {
       expect(scriptContent).toContain("unique");
     });
 
+    test("should generate migration script for unique index addition", async () => {
+      const snapshotWithoutIndex = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            name: { type: "string", required: true },
+            org: { type: "string", required: true },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "index_added",
+            typeName: "User",
+            indexName: "name_org",
+            after: { fields: ["name", "org"], unique: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { typeName: "User", reason: 'Unique constraint added to index "name_org"' },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithoutIndex);
+
+      expect(result.migrateFilePath).toBeDefined();
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain('.groupBy(["name", "org"])');
+      expect(scriptContent).toContain('.where("name", "=", dup.name)');
+      expect(scriptContent).toContain('.where("org", "=", dup.org)');
+      expect(scriptContent).not.toContain("No data migration needed");
+    });
+
+    test("should generate migration script when an existing index gains unique", async () => {
+      const snapshotWithIndex = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            name: { type: "string", required: true },
+          },
+          indexes: {
+            name_idx: { fields: ["name"], unique: false },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "index_modified",
+            typeName: "User",
+            indexName: "name_idx",
+            before: { fields: ["name"], unique: false },
+            after: { fields: ["name"], unique: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { typeName: "User", reason: 'Unique constraint added to index "name_idx"' },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithIndex);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain('.groupBy(["name"])');
+      expect(scriptContent).not.toContain("No data migration needed");
+    });
+
     test("should scope unique migrations for multiple fields independently", async () => {
       const snapshotWithoutUnique = createTestSnapshot({
         User: {
