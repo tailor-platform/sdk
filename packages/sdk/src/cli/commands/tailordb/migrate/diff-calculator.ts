@@ -251,6 +251,17 @@ export interface MigrationDiff {
   warnings: WarningChangeInfo[];
   /** Whether a migration script is required to handle data migration */
   requiresMigrationScript: boolean;
+  /** Explicit acknowledgment that this migration needs no script despite breaking changes */
+  scriptSkipped?: ScriptSkippedInfo;
+}
+
+/**
+ * Acknowledgment that a migration requiring a script intentionally has none.
+ * Recorded by `tailordb migration script <n> --no-script --reason "..."`.
+ */
+export interface ScriptSkippedInfo {
+  reason: string;
+  acknowledgedAt: string;
 }
 
 /**

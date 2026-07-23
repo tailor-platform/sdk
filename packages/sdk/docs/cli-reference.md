@@ -128,21 +128,21 @@ Commands for managing Tailor Platform applications (work with `tailor.config.ts`
 
 Commands for managing TailorDB tables, data, and schema migrations.
 
-| Command                                                                      | Description                                                                                                               |
-| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| [tailordb](./cli/tailordb.md#tailordb)                                       | Manage TailorDB tables and data.                                                                                          |
-| [tailordb truncate](./cli/tailordb.md#tailordb-truncate)                     | Truncate (delete all records from) TailorDB tables.                                                                       |
-| [tailordb migration](./cli/tailordb.md#tailordb-migration)                   | Manage TailorDB schema migrations.                                                                                        |
-| [tailordb migration generate](./cli/tailordb.md#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot. |
-| [tailordb migration script](./cli/tailordb.md#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory.                                          |
-| [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                            |
-| [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                      |
-| [tailordb migration sync](./cli/tailordb.md#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                     |
-| [tailordb erd](./cli/tailordb.md#tailordb-erd)                               | Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)                                                 |
-| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export TailorDB ERD static viewer from local TailorDB schema.                                                             |
-| [tailordb erd diff](./cli/tailordb.md#tailordb-erd-diff)                     | Render TailorDB ERD schema diff HTML from exported ERD viewers.                                                           |
-| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve TailorDB ERD locally with watch reload. (beta)                                                         |
-| [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                      |
+| Command                                                                      | Description                                                                                                                                          |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [tailordb](./cli/tailordb.md#tailordb)                                       | Manage TailorDB tables and data.                                                                                                                     |
+| [tailordb truncate](./cli/tailordb.md#tailordb-truncate)                     | Truncate (delete all records from) TailorDB tables.                                                                                                  |
+| [tailordb migration](./cli/tailordb.md#tailordb-migration)                   | Manage TailorDB schema migrations.                                                                                                                   |
+| [tailordb migration generate](./cli/tailordb.md#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot.                            |
+| [tailordb migration script](./cli/tailordb.md#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none. |
+| [tailordb migration set](./cli/tailordb.md#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                                                       |
+| [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                 |
+| [tailordb migration sync](./cli/tailordb.md#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                                                |
+| [tailordb erd](./cli/tailordb.md#tailordb-erd)                               | Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)                                                                            |
+| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export TailorDB ERD static viewer from local TailorDB schema.                                                                                        |
+| [tailordb erd diff](./cli/tailordb.md#tailordb-erd-diff)                     | Render TailorDB ERD schema diff HTML from exported ERD viewers.                                                                                      |
+| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve TailorDB ERD locally with watch reload. (beta)                                                                                    |
+| [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                                                 |
 
 ### [Query Commands](./cli/query.md)
 
