@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.82.0
+
+### Minor Changes
+
+- [#1866](https://github.com/tailor-platform/sdk/pull/1866) [`1ae2485`](https://github.com/tailor-platform/sdk/commit/1ae24854f049ac51036842bacf4f35eb74ecd50c) Thanks [@toiroakr](https://github.com/toiroakr)! - `logLevel` now also controls `logger.*` calls (from `@tailor-platform/sdk/runtime`) in bundled functions, in addition to `console.*`. `logger.debug`/`logger.info`/`logger.warn`/`logger.error` are dropped at the same thresholds as their `console` counterparts.
+
+### Patch Changes
+
+- [#1848](https://github.com/tailor-platform/sdk/pull/1848) [`6f16760`](https://github.com/tailor-platform/sdk/commit/6f167606f01d3eacf157e81f7b7f4c6026b2dc99) Thanks [@toiroakr](https://github.com/toiroakr)! - Replaced the `table` dependency (heavy transitive deps, low OpenSSF Scorecard) with an in-house single-line box-drawing table renderer used by the CLI's tabular output (`logger.out`, `formatTable`/`formatKeyValueTable`/`formatTableWithHeaders`). Column width calculation now uses the small, dependency-free `get-east-asian-width` package for correct alignment with full-width (CJK) characters. No user-facing behavior change is expected.
+
 ## 1.81.0
 
 ### Minor Changes
