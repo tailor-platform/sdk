@@ -16,6 +16,7 @@ import { aroundAll, describe, expect, test, vi } from "vitest";
 import { readPackageJson } from "../../shared/package-json";
 import { tempDir } from "../../shared/test-helpers/temp-dir";
 import {
+  renderActionWorkflow,
   renderBranchWorkflow,
   renderCoordinateWorkflow,
   renderPreviewWorkflow,
@@ -274,6 +275,39 @@ describe("tailor-platform/actions CLI invocation contract", () => {
     for (const actionName of ["generate-check", "preview-deploy", "preview-cleanup"]) {
       await expectCliBinaryContract(preview, actionName);
     }
+  });
+
+  // oxlint-disable-next-line vitest/expect-expect -- assertions happen inside expectCliBinaryContract
+  test("coordinate workflow: drift-check/generate-check/plan match this package's CLI binary name", async () => {
+    const coordCommon = {
+      coordinatorName: "main",
+      actionGroups: [{ id: "api", apps: [{ name: "api", dir: "." }] }],
+      environment: "production",
+      packageManager: "pnpm" as PackageManager,
+    };
+    const { content: coordBranch } = renderCoordinateWorkflow({
+      ...coordCommon,
+      kind: "branch",
+      branch: "main",
+    });
+    const { content: coordTag } = renderCoordinateWorkflow({
+      ...coordCommon,
+      kind: "tag",
+      branch: "main",
+      tagPattern: "v*",
+    });
+
+    for (const content of [coordBranch, coordTag]) {
+      for (const actionName of ["drift-check", "generate-check", "plan"]) {
+        await expectCliBinaryContract(content, actionName);
+      }
+    }
+  });
+
+  // oxlint-disable-next-line vitest/expect-expect -- assertions happen inside expectCliBinaryContract
+  test("action template (setup action): deploy matches this package's CLI binary name", async () => {
+    const { content } = renderActionWorkflow({ workspaceName: "my-app" });
+    await expectCliBinaryContract(content, "deploy");
   });
 
   test("seed-validate's hardcoded output path matches this package's actual output directory", async () => {
