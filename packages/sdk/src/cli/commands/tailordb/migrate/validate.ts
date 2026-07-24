@@ -8,6 +8,7 @@ import {
   toTailorDBDeployInput,
   verifyRemoteSchema,
 } from "#/cli/commands/deploy/tailordb/validation";
+import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import { initOperatorClient } from "#/cli/shared/client";
@@ -128,6 +129,7 @@ async function collectValidationReports(
     await service.loadTypes();
     await service.processNamespacePlugins();
   }
+  assertUniqueLocalTailorDBTypeNames({ tailorDBServices: application.tailorDBServices });
   for (const { namespace } of targetNamespaces) {
     if (!application.tailorDBServices.some((s) => s.namespace === namespace)) {
       throw new Error(`No TailorDB service found for namespace "${namespace}"`);

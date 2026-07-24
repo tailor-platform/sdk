@@ -17,6 +17,7 @@ import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-
 const state = vi.hoisted(() => ({
   migrationsDir: "",
   localTypes: {} as Record<string, unknown>,
+  extraServices: [] as unknown[],
   listTailorDBTypes: vi.fn(),
   listTailorDBGQLPermissions: vi.fn(),
   getMetadata: vi.fn(),
@@ -42,12 +43,14 @@ vi.mock("#/cli/services/application", () => ({
       {
         namespace: "tailordb",
         config: {},
+        typeSourceInfo: {},
         loadTypes: vi.fn().mockResolvedValue(undefined),
         processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
         get types() {
           return state.localTypes;
         },
       },
+      ...state.extraServices,
     ],
   })),
 }));
@@ -157,6 +160,7 @@ describe("tailordb migration validate", () => {
     writeInitialSchema({ User: snapshotType("User") });
     mockConfig();
     state.localTypes = { User: parsedType("User") };
+    state.extraServices = [];
 
     state.listTailorDBTypes.mockResolvedValue({
       tailordbTypes: [remoteType("User", ["id", "name"])],
@@ -350,6 +354,24 @@ describe("tailordb migration validate", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/boom/);
+  });
+
+  test("rejects duplicate type names across namespaces like deploy does", async () => {
+    state.extraServices = [
+      {
+        namespace: "other",
+        config: {},
+        typeSourceInfo: {},
+        loadTypes: vi.fn().mockResolvedValue(undefined),
+        processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
+        types: { User: parsedType("User") },
+      },
+    ];
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/Duplicate TailorDB type names/);
   });
 
   test("rejects an unknown --namespace", async () => {
