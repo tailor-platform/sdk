@@ -1,7 +1,7 @@
 import { extractFields, isLazyCommand } from "politty";
 import { describe, expect, test, vi } from "vitest";
+import { mainCommand } from "./main";
 import { BUILTIN_COMMAND_NAMES } from "./shared/builtin-commands";
-import { mainCommand } from "./index";
 import type { AnyCommand, ExtractedFields, SubCommandValue } from "politty";
 
 const allowedHybridCommandPaths = new Set(["api"]);

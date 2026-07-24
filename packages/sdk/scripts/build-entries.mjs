@@ -1,6 +1,6 @@
 export const entry = [
   "src/configure/index.ts",
-  "src/cli/index.ts",
+  "src/cli/main.ts",
   "src/cli/lib.ts",
   "src/utils/test/index.ts",
   "src/kysely/index.ts",

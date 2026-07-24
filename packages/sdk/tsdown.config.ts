@@ -1,9 +1,15 @@
-import { cpSync } from "node:fs";
+import { chmodSync, cpSync } from "node:fs";
 import path from "node:path";
 import Sonda from "sonda/rolldown";
 import { defineConfig, type TsdownPluginOption } from "tsdown";
 import { entry } from "./scripts/build-entries.mjs";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
+
+function copyToOutDir(outDir: string, source: string, dest: string, executable: boolean): void {
+  const target = path.join(outDir, dest);
+  cpSync(path.resolve(source), target);
+  if (executable) chmodSync(target, 0o755);
+}
 
 function yamlText() {
   return {
@@ -60,8 +66,9 @@ export default defineConfig([
     deps: { neverBundle: externalDeps },
     plugins: jsPlugins,
     onSuccess: (config) => {
-      cpSync(path.resolve("src/cli/ts-hook.mjs"), path.join(config.outDir, "cli/ts-hook.mjs"));
-      cpSync(path.resolve("src/cli/ts-hook.d.mts"), path.join(config.outDir, "cli/ts-hook.d.mts"));
+      copyToOutDir(config.outDir, "src/cli/ts-hook.mjs", "cli/ts-hook.mjs", false);
+      copyToOutDir(config.outDir, "src/cli/ts-hook.d.mts", "cli/ts-hook.d.mts", false);
+      copyToOutDir(config.outDir, "src/cli/index.mjs", "cli/index.mjs", true);
     },
   },
   {

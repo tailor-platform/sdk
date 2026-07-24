@@ -3,8 +3,8 @@ import { format } from "oxfmt";
 import { assertDocMatch } from "politty/docs";
 import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
+import { mainCommand } from "./main";
 import { commonArgs } from "./shared/args";
-import { mainCommand } from "./index";
 
 async function mdFormatter(content: string): Promise<string> {
   const result = await format("file.md", content);
