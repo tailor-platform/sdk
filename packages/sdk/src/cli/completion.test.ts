@@ -6,7 +6,7 @@ import {
   parseCompletionContext,
 } from "politty/completion";
 import { describe, expect, test, vi } from "vitest";
-import { mainCommand } from "./index";
+import { mainCommand } from "./main";
 
 vi.mock("node:module", async (importOriginal) => ({
   ...(await importOriginal()),
