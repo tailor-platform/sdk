@@ -5,6 +5,10 @@ import { defineConfig, type TsdownPluginOption } from "tsdown";
 import { entry } from "./scripts/build-entries.mjs";
 import { loadYamlText } from "./scripts/yaml-text-plugin.mjs";
 
+function copyToOutDir(outDir: string, source: string, dest: string): void {
+  cpSync(path.resolve(source), path.join(outDir, dest));
+}
+
 function yamlText() {
   return {
     name: "yaml-text",
@@ -60,8 +64,8 @@ export default defineConfig([
     deps: { neverBundle: externalDeps },
     plugins: jsPlugins,
     onSuccess: (config) => {
-      cpSync(path.resolve("src/cli/ts-hook.mjs"), path.join(config.outDir, "cli/ts-hook.mjs"));
-      cpSync(path.resolve("src/cli/ts-hook.d.mts"), path.join(config.outDir, "cli/ts-hook.d.mts"));
+      copyToOutDir(config.outDir, "src/cli/ts-hook.mjs", "cli/ts-hook.mjs");
+      copyToOutDir(config.outDir, "src/cli/ts-hook.d.mts", "cli/ts-hook.d.mts");
     },
   },
   {
