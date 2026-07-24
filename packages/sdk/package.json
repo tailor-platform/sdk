@@ -207,7 +207,7 @@
     "mime-types": "3.0.2",
     "open": "11.0.0",
     "oxc-parser": "0.140.0",
-    "p-limit": "7.3.0",
+    "p-limit": "7.3.1",
     "pathe": "2.0.3",
     "pgsql-ast-parser": "12.0.2",
     "pkg-types": "2.3.1",
@@ -218,7 +218,7 @@
     "std-env": "4.2.0",
     "ts-cron-validator": "1.1.5",
     "type-fest": "5.8.0",
-    "undici": "8.7.0",
+    "undici": "8.8.0",
     "xdg-basedir": "5.1.0",
     "zod": "4.4.3"
   },
