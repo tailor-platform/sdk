@@ -73,7 +73,8 @@ interface NamespaceValidationReport {
 
 /**
  * Assert that every migration whose diff requires a data migration script has
- * a migrate.ts on disk, so deploy will not silently skip it
+ * a migrate.ts on disk or an explicit skip acknowledgment, matching the
+ * contract deploy enforces for pending migrations
  * @param {string} migrationsDir - Migrations directory path
  * @param {string} namespace - TailorDB namespace (for error messages)
  */
@@ -81,7 +82,8 @@ function assertRequiredMigrationScripts(migrationsDir: string, namespace: string
   const missing: number[] = [];
   for (const file of getMigrationFiles(migrationsDir)) {
     if (file.type !== "diff") continue;
-    if (!loadDiff(file.path).requiresMigrationScript) continue;
+    const diff = loadDiff(file.path);
+    if (!diff.requiresMigrationScript || diff.scriptSkipped) continue;
     if (!fs.existsSync(getMigrationFilePath(migrationsDir, file.number, "migrate"))) {
       missing.push(file.number);
     }
@@ -90,7 +92,8 @@ function assertRequiredMigrationScripts(migrationsDir: string, namespace: string
     throw new Error(
       `Migration(s) ${missing.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
         "require a migration script but have no migrate.ts. " +
-        "Restore the script or recreate it with 'tailor-sdk tailordb migration script <number>'.",
+        "Add one with 'tailor-sdk tailordb migration script <number>', or record that no script " +
+        `is needed with 'tailor-sdk tailordb migration script <number> --no-script --reason "..."'.`,
     );
   }
 }

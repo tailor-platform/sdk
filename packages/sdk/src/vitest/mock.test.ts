@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { createWorkflowJob, WORKFLOW_TEST_ENV_KEY } from "../configure/services/workflow/job";
 import { createWorkflow } from "../configure/services/workflow/workflow";
 import {
@@ -16,12 +16,9 @@ import {
 } from "./mock";
 
 describe("mock", () => {
-  beforeEach(() => {
-    injectMocks(globalThis);
-  });
-
-  afterEach(() => {
-    cleanupMocks(globalThis);
+  aroundEach(async (runTest) => {
+    using _mocks = injectMocks(globalThis);
+    await runTest();
   });
 
   describe("mockTailordb", () => {
@@ -140,7 +137,8 @@ describe("mock", () => {
   });
 
   describe("mockWorkflow", () => {
-    afterEach(() => {
+    aroundEach(async (runTest) => {
+      await runTest();
       vi.unstubAllEnvs();
     });
 
@@ -1000,19 +998,23 @@ describe("mock", () => {
     });
 
     describe("canonical aliases", () => {
-      test("startJobFunction and triggerJobFunction share the same call log", () => {
+      test("execJobFunction, startJobFunction and triggerJobFunction share the same call log", () => {
         using wf = mockWorkflow();
+        const exec = (globalThis as any).tailor.workflow.execJobFunction;
         const start = (globalThis as any).tailor.workflow.startJobFunction;
         const trigger = (globalThis as any).tailor.workflow.triggerJobFunction;
 
-        start("job-a", { via: "canonical" });
-        trigger("job-b", { via: "legacy" });
+        exec("job-a", { via: "canonical" });
+        start("job-b", { via: "start-alias" });
+        trigger("job-c", { via: "frozen-alias" });
 
         expect(wf.triggeredJobs).toEqual([
           { jobName: "job-a", args: { via: "canonical" } },
-          { jobName: "job-b", args: { via: "legacy" } },
+          { jobName: "job-b", args: { via: "start-alias" } },
+          { jobName: "job-c", args: { via: "frozen-alias" } },
         ]);
-        expect(wf.startJobFunction).toBe(wf.triggerJobFunction);
+        expect(wf.startJobFunction).toBe(wf.execJobFunction);
+        expect(wf.triggerJobFunction).toBe(wf.execJobFunction);
       });
 
       test("startWorkflow honors setTriggerHandler", async () => {
@@ -1048,7 +1050,7 @@ describe("mock", () => {
     });
 
     test("injectMocks sets the runtime-active flag and the base surface", () => {
-      // beforeEach already called injectMocks, so the flag and base must be set.
+      // aroundEach already called injectMocks, so the flag and base must be set.
       expect(RUNTIME_FLAG_KEY in globalThis).toBe(true);
       expect((globalThis as any).tailor.context.getInvoker).toBeTypeOf("function");
       expect((globalThis as any).TailorErrors).toBeTypeOf("function");

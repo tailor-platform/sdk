@@ -1,12 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test } from "vitest";
 import { bundleSeedScript } from "./bundler";
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
 
 describe("seed-bundler", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     // Set TAILOR_SDK_OUTPUT_DIR to test directory so bundled output goes into test directory
     const testDir = path.join(
       TEST_BUNDLER_BASE,
@@ -14,9 +14,11 @@ describe("seed-bundler", () => {
     );
     fs.mkdirSync(testDir, { recursive: true });
     process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    await runTest();
   });
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     delete process.env.TAILOR_SDK_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BUNDLER_BASE, { recursive: true, force: true });

@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { fetchAll, initOperatorClient } from "#/cli/shared/client";
 import { fetchLatestToken, readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
@@ -51,21 +51,19 @@ vi.mock("#/cli/shared/context", async (importOriginal) => ({
 
 const validUUID = "12345678-1234-4abc-8def-123456789012";
 
-beforeAll(() => {
+aroundAll(async (runSuite) => {
   fs.mkdirSync(xdgTempDir, { recursive: true });
-});
-
-afterAll(() => {
+  await runSuite();
   fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
-beforeEach(() => {
+aroundEach(async (runTest) => {
   vi.clearAllMocks();
   resetKeyringState();
   vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
-});
 
-afterEach(() => {
+  await runTest();
+
   vi.unstubAllEnvs();
   // Clean up the on-disk config between tests so prior writes don't leak.
   const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
@@ -73,11 +71,12 @@ afterEach(() => {
 });
 
 describe("profile update --permission", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     writeProfiles({
       rw: { user: "u@example.com", workspace_id: validUUID },
       ro: { user: "u@example.com", workspace_id: validUUID, readonly: true },
     });
+    await runTest();
   });
 
   test("sets readonly: true on disk and skips remote validation when only --permission read is passed", async () => {
@@ -136,10 +135,11 @@ describe("profile update --permission", () => {
 });
 
 describe("profile update --machine-user", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     writeProfiles({
       myprofile: { user: "u@example.com", workspace_id: validUUID },
     });
+    await runTest();
   });
 
   test("sets machine_user on disk and skips remote validation", async () => {
@@ -167,7 +167,7 @@ describe("profile update --machine-user", () => {
 });
 
 describe("profile update --platform", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
@@ -188,9 +188,9 @@ describe("profile update --platform", () => {
       },
       current_user: null,
     });
-  });
 
-  afterEach(() => {
+    await runTest();
+
     vi.unstubAllEnvs();
     const configPath = path.join(xdgTempDir, "tailor-platform", "config.yaml");
     if (fs.existsSync(configPath)) fs.rmSync(configPath);
@@ -317,10 +317,11 @@ describe("profile update --platform", () => {
 });
 
 describe("profile update --machine-user-override", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     writeProfiles({
       myprofile: { user: "u@example.com", workspace_id: validUUID, machine_user: "bot" },
     });
+    await runTest();
   });
 
   test("persists machine_user_override: deny and skips remote validation", async () => {

@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { parseRunArgs, parseRunCommand } from "./args";
 import { classifySolverFailure, writeArtifactSummary } from "./artifact-summary";
 import { discoverProblems, selectProblems } from "./problems";
@@ -26,7 +26,8 @@ import type { Problem } from "./types";
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const tempDirs: string[] = [];
 
-afterEach(async () => {
+aroundEach(async (runTest) => {
+  await runTest();
   vi.unstubAllEnvs();
   const dirs = [...tempDirs];
   tempDirs.length = 0;

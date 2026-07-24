@@ -1,0 +1,208 @@
+name: Lockfile Audit Auto-fix
+
+# Runs the full lockfile audit daily, independent of any specific PR, and
+# opens (or updates) a PR with the lockfile changes whenever pnpm can
+# automatically resolve a fix. This keeps day-to-day PR reviews from being
+# blocked by pre-existing vulnerabilities they didn't introduce (see the
+# regression-only check in lockfile-audit.yml), while still keeping
+# pnpm-lock.yaml free of known-vulnerable dependency versions.
+#
+# Also prunes pnpm-workspace.yaml's minimumReleaseAgeExclude list of entries
+# that have outlived their purpose (the pinned version is now older than
+# minimumReleaseAge on its own, so the bypass is a no-op) — nothing else,
+# Renovate included, ever removes those, so the list only grows over time
+# unless swept here.
+#
+# When the resulting change only touches devDependencies and/or the
+# minimumReleaseAgeExclude list, no published package's consumers are
+# affected, so the PR gets the skip-changeset label instead of a changeset.
+on:
+  schedule:
+    - cron: "0 3 * * *" # daily, 03:00 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  audit-fix:
+    name: Audit and fix lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          standalone: true
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.18.0"
+
+      - name: Snapshot lockfile before fix
+        run: cp pnpm-lock.yaml /tmp/lockfile-before-fix.yaml
+
+      - name: Record pre-fix advisories
+        run: pnpm audit --audit-level=moderate --json > /tmp/before-audit.json || true
+
+      # "update" mode patches vulnerable versions directly in the lockfile and
+      # always leaves it installable, but can silently stop short: a package
+      # with two advisories at different patched-version thresholds (seen
+      # with fast-uri/GHSA-v2hh-gcrm-f6hx) gets bumped to the version that
+      # clears only the first one. "override" mode reaches further but can
+      # emit overlapping override/minimumReleaseAgeExclude ranges for the
+      # same package, which makes the following `pnpm install` hard-fail
+      # with ERR_PNPM_NO_MATURE_MATCHING_VERSION. So: try update, then try
+      # override on top of it, and roll back to the update-only result if
+      # override leaves the lockfile uninstallable.
+      - name: Attempt automatic fix (update mode)
+        run: pnpm audit --fix update --ignore-registry-errors || true
+
+      - name: Attempt automatic fix (override fallback)
+        run: |
+          cp pnpm-lock.yaml /tmp/lock-safe.yaml
+          cp pnpm-workspace.yaml /tmp/workspace-safe.yaml
+
+          pnpm audit --fix override --ignore-registry-errors || true
+
+          # Dedupe/prune before installing: this is also what makes the
+          # overlapping-range case above actually installable in the first
+          # place, not just cosmetic cleanup.
+          node .github/scripts/lockfile-audit-fix-normalize.mjs | tee -a /tmp/normalize.log
+
+          if pnpm install > /tmp/install.log 2>&1; then
+            echo "Override fallback applied cleanly."
+          else
+            echo "::warning::pnpm install failed after the override fallback; reverting to the update-mode-only result."
+            cat /tmp/install.log
+            cp /tmp/lock-safe.yaml pnpm-lock.yaml
+            cp /tmp/workspace-safe.yaml pnpm-workspace.yaml
+            node .github/scripts/lockfile-audit-fix-normalize.mjs | tee -a /tmp/normalize.log
+            pnpm install --frozen-lockfile || true
+          fi
+
+      - name: Check for lockfile changes
+        id: diff
+        run: |
+          if git diff --quiet -- pnpm-lock.yaml pnpm-workspace.yaml; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Determine changeset requirement
+        if: steps.diff.outputs.changed == 'true'
+        id: changeset_check
+        uses: ./.github/actions/skip-changeset-check
+        with:
+          before-lockfile: /tmp/lockfile-before-fix.yaml
+
+      - name: Summarize fixed advisories
+        if: steps.diff.outputs.changed == 'true'
+        id: summary
+        run: |
+          pnpm audit --audit-level=moderate --json > /tmp/after-audit.json || true
+          jq -r '.advisories[]?.github_advisory_id // empty' /tmp/before-audit.json | sort -u > /tmp/before-ids.txt
+          jq -r '.advisories[]?.github_advisory_id // empty' /tmp/after-audit.json | sort -u > /tmp/after-ids.txt
+          FIXED_IDS=$(comm -23 /tmp/before-ids.txt /tmp/after-ids.txt)
+          REMAINING=$(jq '[.metadata.vulnerabilities[]] | add // 0' /tmp/after-audit.json)
+          {
+            echo "body<<BODY_EOF"
+            echo "Automated fix from the daily lockfile audit (\`pnpm audit --fix\`)."
+            echo ""
+            echo "Fixed advisories:"
+            while IFS= read -r id; do
+              [ -z "$id" ] && continue
+              jq -r --arg id "$id" \
+                '.advisories[] | select(.github_advisory_id == $id) | "- [\(.github_advisory_id)](https://github.com/advisories/\(.github_advisory_id)): \(.title) (`\(.module_name)`, severity: \(.severity))"' \
+                /tmp/before-audit.json
+            done <<< "$FIXED_IDS"
+            if [ "$REMAINING" != "0" ]; then
+              echo ""
+              echo "$REMAINING advisories remain and could not be auto-fixed (no compatible patched version in range, or still blocked by \`minimumReleaseAge\`)."
+            fi
+            PRUNED=$(grep -o 'Dropping stale exclude entry "[^"]*"' /tmp/normalize.log 2>/dev/null | sed -E 's/Dropping stale exclude entry "(.*)"/\1/' | sort -u)
+            if [ -n "$PRUNED" ]; then
+              echo ""
+              echo "Removed \`minimumReleaseAgeExclude\` entries that are no longer needed (the pinned version is now old enough on its own):"
+              while IFS= read -r p; do
+                [ -z "$p" ] && continue
+                echo "- \`$p\`"
+              done <<< "$PRUNED"
+            fi
+            echo "BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Add changeset
+        if: steps.diff.outputs.changed == 'true' && steps.changeset_check.outputs.has-runtime-changes == 'true'
+        id: add_changeset
+        run: |
+          cat > .changeset/lockfile-audit-fix.md <<'EOF'
+          ---
+          "@tailor-platform/sdk": patch
+          ---
+
+          fix(deps): automated lockfile security fix
+          EOF
+
+      - name: Determine repository name
+        if: steps.diff.outputs.changed == 'true'
+        id: repo
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: echo "name=${REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
+
+      - name: Get GitHub App token
+        if: steps.diff.outputs.changed == 'true'
+        id: get_access_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
+          private-key: ${{ secrets.TAILOR_GITHUB_APP_PRIVATE_KEY }}
+          repositories: ${{ steps.repo.outputs.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Create or update pull request
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ steps.get_access_token.outputs.token }}
+          commit-message: "fix(deps): automated lockfile security fix"
+          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          branch: chore/lockfile-audit-fix
+          delete-branch: true
+          title: "fix(deps): automated lockfile security fix"
+          body: ${{ steps.summary.outputs.body }}
+          add-paths: |
+            pnpm-lock.yaml
+            pnpm-workspace.yaml
+            ${{ steps.add_changeset.outcome == 'success' && '.changeset/lockfile-audit-fix.md' || '' }}
+          labels: |
+            security
+            ${{ steps.add_changeset.outcome != 'success' && 'skip-changeset' || '' }}
+
+      - name: Notify Slack on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_SDK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          jq -n \
+            --arg run "$RUN_URL" \
+            '{text: ":rotating_light: Lockfile audit auto-fix workflow <\($run)|failed>"}' \
+            | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL"

@@ -7,7 +7,7 @@ import {
   type TailorDBType as ProtoTailorDBType,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
-import { describe, expect, expectTypeOf, test, beforeEach, afterAll, vi } from "vitest";
+import { describe, expect, expectTypeOf, test, aroundEach, aroundAll, vi } from "vitest";
 import {
   createSnapshotFromLocalTypes,
   loadSnapshot,
@@ -93,20 +93,22 @@ describe("snapshot", () => {
   const namespace = "tailordb";
   let testDir: string;
 
-  beforeEach(() => {
-    testDir = path.join(
-      TEST_MIGRATIONS_BASE,
-      `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    );
-    fs.mkdirSync(testDir, { recursive: true });
-  });
-
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     try {
       fs.rmSync(TEST_MIGRATIONS_BASE, { recursive: true, force: true });
     } catch {
       // Ignore cleanup errors
     }
+  });
+
+  aroundEach(async (runTest) => {
+    testDir = path.join(
+      TEST_MIGRATIONS_BASE,
+      `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    fs.mkdirSync(testDir, { recursive: true });
+    await runTest();
   });
 
   // ==========================================================================
@@ -584,6 +586,169 @@ describe("snapshot", () => {
 
       expect(diff.hasBreakingChanges).toBe(true);
       expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint");
+    });
+
+    describe("decimal scale changes", () => {
+      function snapshotWithPrice(scale: number | undefined): SchemaSnapshot {
+        return {
+          ...createEmptySnapshot(),
+          types: {
+            Item: {
+              name: "Item",
+              pluralForm: "Items",
+              fields: {
+                id: { type: "uuid", required: true },
+                price: {
+                  type: "decimal",
+                  required: true,
+                  ...(scale !== undefined && { scale }),
+                },
+              },
+            },
+          },
+        };
+      }
+
+      test("classifies a decimal scale change as breaking", () => {
+        const diff = compareSnapshots(snapshotWithPrice(2), snapshotWithPrice(4));
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Decimal scale changed");
+        expect(diff.requiresMigrationScript).toBe(true);
+      });
+
+      test("collects every reason for combined decimal field changes", () => {
+        const previous = snapshotWithPrice(4);
+        previous.types.Item!.fields.price = {
+          type: "decimal",
+          required: false,
+          unique: false,
+          scale: 4,
+        };
+        const current = snapshotWithPrice(2);
+        current.types.Item!.fields.price = {
+          type: "decimal",
+          required: true,
+          unique: true,
+          scale: 2,
+        };
+
+        const diff = compareSnapshots(previous, current);
+
+        expect(diff.breakingChanges.map(({ reason }) => reason)).toEqual([
+          "Field changed from optional to required",
+          "Unique constraint added to field",
+          "Decimal scale changed from 4 to 2",
+        ]);
+      });
+
+      test("does not flag an explicit scale equal to the platform default", () => {
+        const diff = compareSnapshots(snapshotWithPrice(undefined), snapshotWithPrice(6));
+
+        expect(diff.changes).toHaveLength(0);
+        expect(diff.hasBreakingChanges).toBe(false);
+      });
+
+      test("classifies a change from the omitted default scale as breaking", () => {
+        const diff = compareSnapshots(snapshotWithPrice(undefined), snapshotWithPrice(2));
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Decimal scale changed");
+      });
+    });
+
+    describe("type-level index changes", () => {
+      function snapshotWithIndexes(
+        indexes: Record<string, { fields: string[]; unique?: boolean }> | undefined,
+      ): SchemaSnapshot {
+        return {
+          ...createEmptySnapshot(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: {
+                id: { type: "uuid", required: true },
+                name: { type: "string", required: true },
+                org: { type: "string", required: true },
+              },
+              ...(indexes && { indexes }),
+            },
+          },
+        };
+      }
+
+      test("classifies unique index addition as breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes(undefined),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint added to index");
+        expect(diff.requiresMigrationScript).toBe(true);
+      });
+
+      test("keeps non-unique index addition non-breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes(undefined),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"] } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+        expect(diff.changes.some((c) => c.kind === "index_added")).toBe(true);
+      });
+
+      test("classifies unique constraint added to existing index as breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: false } }),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint added to index");
+      });
+
+      test("classifies field change on a unique index as breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes({ name_org: { fields: ["name"], unique: true } }),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.breakingChanges[0]!.reason).toContain("Unique index fields changed");
+      });
+
+      test("keeps unique constraint removal non-breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: false } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+      });
+
+      test("keeps unique index removal non-breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
+          snapshotWithIndexes(undefined),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+      });
+
+      test("keeps field change on a non-unique index non-breaking", () => {
+        const diff = compareSnapshots(
+          snapshotWithIndexes({ name_org: { fields: ["name"] } }),
+          snapshotWithIndexes({ name_org: { fields: ["name", "org"] } }),
+        );
+
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+      });
     });
 
     test("detects enum values removal (breaking change)", () => {
@@ -1613,6 +1778,25 @@ describe("snapshot", () => {
       );
 
       expect(() => loadDiff(filePath)).toThrow(filePath);
+    });
+
+    test("rejects a whitespace-only migration script skip reason", () => {
+      const filePath = path.join(testDir, "blank_skip_reason_diff.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: 1,
+          namespace,
+          createdAt: "t",
+          changes: [],
+          hasBreakingChanges: true,
+          breakingChanges: [],
+          requiresMigrationScript: true,
+          scriptSkipped: { reason: "   ", acknowledgedAt: "2026-07-22T00:00:00.000Z" },
+        }),
+      );
+
+      expect(() => loadDiff(filePath)).toThrow(/reason/i);
     });
   });
 

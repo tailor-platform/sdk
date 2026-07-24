@@ -1,15 +1,32 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { create } from "@bufbuild/protobuf";
+import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
-import { describe, test, expect, vi, beforeEach, afterEach } from "vitest";
-import { applyPreMigrationFieldAdjustments } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
-import { sdkNameLabelKey } from "../label";
-import { applyTailorDB, formatTailorDBResourceChangeEntries, planTailorDB } from ".";
-import type { FieldDiffChange } from "#/cli/commands/tailordb/migrate/diff-calculator";
-import type {
-  SnapshotFieldConfig,
-  TailorDBSnapshotType,
+import { describe, test, expect, vi, aroundEach } from "vitest";
+import {
+  applyPreMigrationFieldAdjustments,
+  applyPreMigrationIndexAdjustments,
+} from "#/cli/commands/tailordb/migrate/pre-migration-schema";
+import {
+  formatMigrationNumber,
+  type SnapshotFieldConfig,
+  type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
+import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
+import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
+import { sdkNameLabelKey } from "../label";
+import {
+  applyTailorDB,
+  captureMigrationFileState,
+  formatTailorDBResourceChangeEntries,
+  planTailorDB,
+  validateAndDetectMigrations,
+} from ".";
+import type {
+  FieldDiffChange,
+  IndexDiffChange,
+} from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -18,7 +35,10 @@ import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { PlanContext } from "../types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { TailorDBType_FieldConfigSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import type {
+  TailorDBType_FieldConfigSchema,
+  TailorDBType_IndexSchema,
+} from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 // Mock label.ts
 vi.mock("../label", async (importOriginal) => {
@@ -179,8 +199,9 @@ describe("planTailorDB (service level)", () => {
     } as unknown as OperatorClient;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   describe("rename scenarios (service level)", () => {
@@ -607,6 +628,75 @@ describe("planTailorDB (service level)", () => {
       expect(result.changeSet.type.unchanged).toHaveLength(0);
     });
 
+    test("treats a redeploy of the exact type previously sent as unchanged when the platform echoes it as a proto message", async () => {
+      // Simulates the real client path: the platform stores what the SDK sent
+      // and returns it as a protobuf-es message, which materializes implicit
+      // proto3 fields (e.g. a newly added bool like `optionalOnCreate`) with
+      // their zero values even though the local manifest never sets them.
+      const tailordbType: TailorDBType = {
+        name: "Invoice",
+        pluralForm: "Invoices",
+        description: "Invoice type",
+        fields: {
+          code: {
+            name: "code",
+            config: {
+              type: "string",
+              required: true,
+            },
+          },
+        },
+        forwardRelationships: {},
+        backwardRelationships: {},
+        settings: {},
+        permissions: {},
+        files: {},
+      };
+
+      const makeCtx = (remoteTypes: unknown[]): PlanContext => {
+        const tailorDBService = createMockTailorDBService("test-tailordb");
+        Object.defineProperty(tailorDBService, "types", {
+          value: { [tailordbType.name]: tailordbType },
+        });
+        const client = {
+          listTailorDBServices: vi.fn().mockResolvedValue({
+            tailordbServices: [{ namespace: { name: "test-tailordb" } }],
+            nextPageToken: "",
+          }),
+          listTailorDBTypes: vi.fn().mockResolvedValue({
+            tailordbTypes: remoteTypes,
+            nextPageToken: "",
+          }),
+          getMetadata: vi.fn().mockResolvedValue({
+            metadata: { labels: { [sdkNameLabelKey]: appName, "sdk-version": "v1-0-0" } },
+          }),
+          listTailorDBGQLPermissions: vi.fn().mockResolvedValue({
+            permissions: [],
+            nextPageToken: "",
+          }),
+        } as unknown as OperatorClient;
+        return {
+          client,
+          workspaceId,
+          application: createMockApplication([tailorDBService]),
+          forRemoval: false,
+          config: mockConfig,
+          noSchemaCheck: true,
+        };
+      };
+
+      // First plan against an empty workspace captures the exact manifest the
+      // SDK deploys; the second plan sees it echoed back as a proto message.
+      const firstPlan = await planTailorDB(makeCtx([]));
+      const deployedManifest = firstPlan.changeSet.type.creates[0]!.request.tailordbType!;
+      const remoteMessage = create(TailorDBTypeSchema, deployedManifest);
+
+      const result = await planTailorDB(makeCtx([remoteMessage]));
+
+      expect(result.changeSet.type.updates).toHaveLength(0);
+      expect(result.changeSet.type.unchanged).toEqual([{ name: "Invoice" }]);
+    });
+
     test("treats an omitted remote field description as unchanged against the local empty-string manifest", async () => {
       const tailordbType: TailorDBType = {
         name: "Event",
@@ -670,6 +760,66 @@ describe("planTailorDB (service level)", () => {
 
       expect(result.changeSet.type.unchanged).toEqual([{ name: "Event" }]);
       expect(result.changeSet.type.updates).toHaveLength(0);
+    });
+  });
+
+  describe("migration validation", () => {
+    let migrationsDir: string;
+
+    aroundEach(async (runTest) => {
+      migrationsDir = fs.mkdtempSync(path.join(os.tmpdir(), "plan-migrations-"));
+      fs.mkdirSync(path.join(migrationsDir, "0000"));
+      fs.writeFileSync(
+        path.join(migrationsDir, "0000", "schema.json"),
+        JSON.stringify({
+          version: 1,
+          namespace: "test-tailordb",
+          createdAt: new Date().toISOString(),
+          types: {},
+        }),
+      );
+      try {
+        await runTest();
+      } finally {
+        fs.rmSync(migrationsDir, { recursive: true, force: true });
+      }
+    });
+
+    test("fails at plan time when a breaking migration is missing its script", async () => {
+      fs.mkdirSync(path.join(migrationsDir, "0001"));
+      fs.writeFileSync(
+        path.join(migrationsDir, "0001", "diff.json"),
+        JSON.stringify({
+          version: 1,
+          namespace: "test-tailordb",
+          createdAt: new Date().toISOString(),
+          changes: [],
+          hasBreakingChanges: true,
+          breakingChanges: [{ typeName: "User", fieldName: "email", reason: "Unique" }],
+          hasWarnings: false,
+          warnings: [],
+          requiresMigrationScript: true,
+        }),
+      );
+
+      const client = {
+        getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
+      } as unknown as OperatorClient;
+      const config = {
+        path: path.join(migrationsDir, "tailor.config.ts"),
+        name: appName,
+        db: { "test-tailordb": { migration: { directory: "." } } },
+      } as unknown as LoadedConfig;
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application: createMockApplication([createMockTailorDBService("test-tailordb")]),
+        forRemoval: false,
+        config,
+        noSchemaCheck: true,
+      };
+
+      await expect(planTailorDB(ctx)).rejects.toThrow(/requires a migration script/);
     });
   });
 });
@@ -811,12 +961,15 @@ describe("applyTailorDB phase separation", () => {
         tailorDBInputs: [],
         config: mockConfig,
         noSchemaCheck: true, // Skip migration checks in unit tests
+        namespacesWithMigrations: [],
+        migrationFileState: {},
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test.each([
@@ -925,11 +1078,92 @@ describe("applyPreMigrationFieldAdjustments", () => {
   });
 });
 
+describe("applyPreMigrationIndexAdjustments", () => {
+  type ProtoIndex = MessageInitShape<typeof TailorDBType_IndexSchema>;
+
+  test("removes a newly-added unique index until the post-phase", () => {
+    const indexes: Record<string, ProtoIndex> = {
+      name_org: { fieldNames: ["name", "org"], unique: true },
+      existing: { fieldNames: ["name"], unique: false },
+    };
+    const indexChanges = new Map<string, IndexDiffChange>([
+      [
+        "name_org",
+        {
+          kind: "index_added",
+          typeName: "User",
+          indexName: "name_org",
+          after: { fields: ["name", "org"], unique: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationIndexAdjustments(indexes, indexChanges);
+
+    expect(indexes.name_org).toBeUndefined();
+    expect(indexes.existing).toBeDefined();
+  });
+
+  test("keeps the previous definition for an index gaining unique", () => {
+    const indexes: Record<string, ProtoIndex> = {
+      name_idx: { fieldNames: ["name"], unique: true },
+    };
+    const indexChanges = new Map<string, IndexDiffChange>([
+      [
+        "name_idx",
+        {
+          kind: "index_modified",
+          typeName: "User",
+          indexName: "name_idx",
+          before: { fields: ["name"], unique: false },
+          after: { fields: ["name"], unique: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationIndexAdjustments(indexes, indexChanges);
+
+    expect(indexes.name_idx).toEqual({ fieldNames: ["name"], unique: false });
+  });
+
+  test("keeps the previous definition for a unique index changing fields", () => {
+    const indexes: Record<string, ProtoIndex> = {
+      name_idx: { fieldNames: ["name", "org"], unique: true },
+    };
+    const indexChanges = new Map<string, IndexDiffChange>([
+      [
+        "name_idx",
+        {
+          kind: "index_modified",
+          typeName: "User",
+          indexName: "name_idx",
+          before: { fields: ["name"], unique: true },
+          after: { fields: ["name", "org"], unique: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationIndexAdjustments(indexes, indexChanges);
+
+    expect(indexes.name_idx).toEqual({ fieldNames: ["name"], unique: true });
+  });
+
+  test("does not modify indexes that are not in indexChanges", () => {
+    const indexes: Record<string, ProtoIndex> = {
+      keep: { fieldNames: ["name"], unique: true },
+    };
+
+    applyPreMigrationIndexAdjustments(indexes, new Map<string, IndexDiffChange>());
+
+    expect(indexes.keep).toEqual({ fieldNames: ["name"], unique: true });
+  });
+});
+
 describe("applyTailorDB migration label reconciliation", () => {
   let tmpDir: string;
   let configPath: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "applyTailorDB-migration-"));
     configPath = path.join(tmpDir, "tailor.config.ts");
     // Working tree latest migration = 0 (only baseline schema.json under 0000/)
@@ -944,9 +1178,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         types: {},
       }),
     );
-  });
-
-  afterEach(() => {
+    await runTest();
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     } catch {
@@ -1011,8 +1243,30 @@ describe("applyTailorDB migration label reconciliation", () => {
         tailorDBInputs: [],
         config,
         noSchemaCheck,
+        namespacesWithMigrations: [{ namespace: "test-tailordb", migrationsDir: tmpDir }],
+        migrationFileState: captureMigrationFileState([
+          { namespace: "test-tailordb", migrationsDir: tmpDir },
+        ]),
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
+  }
+
+  function runValidation(
+    client: OperatorClient,
+    planResult: Awaited<ReturnType<typeof planTailorDB>>,
+  ) {
+    const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
+    for (const input of planResult.context.tailorDBInputs) {
+      typesByNamespace.set(input.namespace, input.types);
+    }
+    return validateAndDetectMigrations(
+      client,
+      planResult.context.workspaceId,
+      typesByNamespace,
+      planResult.context.config,
+      planResult.context.noSchemaCheck,
+      planResult.context.tailorDBInputs,
+    );
   }
 
   function createMigrationClient(
@@ -1036,6 +1290,13 @@ describe("applyTailorDB migration label reconciliation", () => {
         : {}),
     } as unknown as OperatorClient;
     return { client, setMetadata };
+  }
+
+  function addSentinelTypeCreate(planResult: Awaited<ReturnType<typeof planTailorDB>>): void {
+    planResult.changeSet.type.creates.push({
+      name: "Sentinel",
+      request: { namespaceName: "test-tailordb" },
+    } as never);
   }
 
   test("forces migration label to working_tree_max when label is ahead of working tree (--no-schema-check)", async () => {
@@ -1065,6 +1326,63 @@ describe("applyTailorDB migration label reconciliation", () => {
       }),
     );
   });
+
+  test("revalidates migration file integrity immediately before apply", async () => {
+    for (const migrationNumber of [1, 2]) {
+      const migrationDir = path.join(tmpDir, formatMigrationNumber(migrationNumber));
+      fs.mkdirSync(migrationDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(migrationDir, "diff.json"),
+        JSON.stringify(createMockMigrationDiff({ namespace: "test-tailordb" }), null, 2),
+      );
+    }
+    const planResult = makePlanResult(true);
+    addSentinelTypeCreate(planResult);
+    fs.rmSync(path.join(tmpDir, "0001", "diff.json"));
+    planResult.context.migrationFileState = captureMigrationFileState(
+      planResult.context.namespacesWithMigrations,
+    );
+    const { client } = createMigrationClient({ "sdk-migration": "m0002" });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /Migration 0001 is missing \(gap in sequence\)/,
+    );
+    expect(client.createTailorDBService).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    [
+      "last migration",
+      (baseDir: string) => fs.rmSync(path.join(baseDir, "0002"), { recursive: true }),
+    ],
+    ["all migrations", (baseDir: string) => fs.rmSync(baseDir, { recursive: true })],
+  ])(
+    "rejects when %s disappears after planning with --no-schema-check",
+    async (_description, removeMigrations) => {
+      for (const migrationNumber of [1, 2]) {
+        const migrationDir = path.join(tmpDir, formatMigrationNumber(migrationNumber));
+        fs.mkdirSync(migrationDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(migrationDir, "diff.json"),
+          JSON.stringify(createMockMigrationDiff({ namespace: "test-tailordb" }), null, 2),
+        );
+      }
+      const planResult = makePlanResult(true);
+      planResult.context.migrationFileState = captureMigrationFileState(
+        planResult.context.namespacesWithMigrations,
+      );
+      addSentinelTypeCreate(planResult);
+      removeMigrations(tmpDir);
+      const { client } = createMigrationClient({ "sdk-migration": "m0002" });
+
+      await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+        /Migration files changed after deployment planning/,
+      );
+      expect(client.createTailorDBService).not.toHaveBeenCalled();
+      expect(client.createTailorDBType).not.toHaveBeenCalled();
+    },
+  );
 
   function userSnapshotType(): TailorDBSnapshotType {
     return {
@@ -1147,6 +1465,95 @@ describe("applyTailorDB migration label reconciliation", () => {
     return planResult;
   }
 
+  function unchangedRemoteSettings(): unknown {
+    return {
+      pluralForm: "users",
+      aggregation: false,
+      bulkUpsert: false,
+      publishRecordEvents: false,
+      disableGqlOperations: {
+        create: false,
+        update: false,
+        delete: false,
+        read: false,
+      },
+    };
+  }
+
+  test("revalidates local migration history immediately before apply", async () => {
+    const userType = userSnapshotType();
+    const userWithEmail: TailorDBSnapshotType = {
+      ...userType,
+      fields: {
+        ...userType.fields,
+        email: { type: "string", required: false },
+      },
+    };
+    writeUserSchemaSnapshot(userType);
+    const migrationDir = path.join(tmpDir, "0001");
+    fs.mkdirSync(migrationDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(migrationDir, "diff.json"),
+      JSON.stringify(
+        createMockMigrationDiff({
+          namespace: "test-tailordb",
+          changes: [
+            {
+              kind: "field_added",
+              typeName: "User",
+              fieldName: "email",
+              after: { type: "string", required: false },
+            },
+          ],
+        }),
+        null,
+        2,
+      ),
+    );
+
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [] },
+        types: { User: userWithEmail },
+      },
+    ];
+    planResult.context.executorUsedTypes = new Set();
+    addSentinelTypeCreate(planResult);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    await runValidation(client, planResult);
+
+    fs.rmSync(tmpDir, { recursive: true });
+    planResult.context.migrationFileState = captureMigrationFileState(
+      planResult.context.namespacesWithMigrations,
+    );
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "Schema migration check failed",
+    );
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+  });
+
+  test("revalidates remote schema immediately before apply", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    addSentinelTypeCreate(planResult);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    await runValidation(client, planResult);
+
+    vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+      tailordbTypes: [],
+      nextPageToken: "",
+    } as never);
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "Remote schema verification failed",
+    );
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+  });
+
   test("sets the migration label to 0000 on the first apply (no prior label, schema check enabled)", async () => {
     // Fresh project: `migration generate` created 0000/schema.json, the remote
     // namespace has no `sdk-migration` label yet. A single `apply` should
@@ -1182,7 +1589,7 @@ describe("applyTailorDB migration label reconciliation", () => {
 
     const planResult = planWithDeployDerivedSettings(userType);
 
-    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+    await expect(runValidation(client, planResult)).resolves.toBeDefined();
   });
 
   test("uses db config gqlOperations when the migration namespace has no deploy input", async () => {
@@ -1211,7 +1618,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       },
     };
 
-    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+    await expect(runValidation(client, planResult)).resolves.toBeDefined();
   });
 
   test("does not require unapplied deploy-derived settings during schema verification", async () => {
@@ -1233,7 +1640,7 @@ describe("applyTailorDB migration label reconciliation", () => {
 
     const planResult = planWithDeployDerivedSettings(userType);
 
-    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+    await expect(runValidation(client, planResult)).resolves.toBeDefined();
   });
 
   test("rejects remote-only deploy settings during schema verification", async () => {
@@ -1263,7 +1670,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     ];
     planResult.context.executorUsedTypes = new Set();
 
-    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+    await expect(runValidation(client, planResult)).rejects.toThrow(
       "Remote schema verification failed",
     );
   });
@@ -1295,6 +1702,72 @@ describe("applyTailorDB migration label reconciliation", () => {
     ];
     planResult.context.executorUsedTypes = new Set();
 
-    await expect(applyTailorDB(client, planResult, "create-update")).resolves.toBeUndefined();
+    await expect(runValidation(client, planResult)).resolves.toBeDefined();
+  });
+});
+
+describe("applyTailorDB type apply concurrency", () => {
+  test("applies type creates and updates sequentially", async () => {
+    const probe = createConcurrencyProbe();
+    const client = {
+      createTailorDBType: vi.fn().mockImplementation(probe.run),
+      updateTailorDBType: vi.fn().mockImplementation(probe.run),
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
+      deleteTailorDBType: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+
+    const changeOf = (name: string) => ({
+      name,
+      request: {
+        workspaceId: "test-workspace",
+        namespaceName: "test-tailordb",
+        tailordbType: { name },
+      },
+    });
+    const emptyChanges = (title: string) => ({
+      creates: [],
+      updates: [],
+      deletes: [],
+      title,
+      isEmpty: () => true,
+      lines: () => [],
+    });
+    const planResult = {
+      changeSet: {
+        service: emptyChanges("TailorDB Services"),
+        type: {
+          creates: ["CreateA", "CreateB", "CreateC"].map(changeOf),
+          updates: ["UpdateA", "UpdateB", "UpdateC"].map(changeOf),
+          deletes: [],
+          title: "TailorDB Types",
+          isEmpty: () => false,
+          lines: () => [],
+        },
+        gqlPermission: emptyChanges("TailorDB GQL Permissions"),
+      },
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+      context: {
+        workspaceId: "test-workspace",
+        application: { name: "test-app", tailorDBServices: [] } as unknown as Application,
+        tailorDBInputs: [],
+        executorUsedTypes: new Set<string>(),
+        config: { path: "/nonexistent/tailor.config.ts", name: "test-app", db: {} },
+        noSchemaCheck: true,
+        namespacesWithMigrations: [],
+        migrationFileState: {},
+      },
+    } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    expect(client.createTailorDBType).toHaveBeenCalledTimes(3);
+    expect(client.updateTailorDBType).toHaveBeenCalledTimes(3);
+    expect(probe.maxInFlight()).toBe(1);
   });
 });

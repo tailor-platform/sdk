@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { createCacheManager } from "./manager";
 
 vi.mock("#/cli/shared/logger", async (importOriginal) => ({
@@ -15,12 +15,10 @@ describe("createCacheManager", () => {
   let tmpDir: string;
   let cacheDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cache-manager-test-"));
     cacheDir = path.join(tmpDir, "cache");
-  });
-
-  afterEach(() => {
+    await runTest();
     fs.rmSync(tmpDir, { recursive: true, force: true });
     vi.restoreAllMocks();
   });

@@ -3,7 +3,7 @@ import * as os from "node:os";
 import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { runCommand } from "politty";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { prompt } from "#/cli/shared/prompt";
@@ -97,11 +97,9 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
 }
 
 describe("tailordb migration sync", () => {
-  let tmpDir: string;
-
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-sync-test-"));
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-sync-test-"));
     state.migrationsDir = path.join(tmpDir, "migrations");
 
     writeInitialSchema(state.migrationsDir, { User: snapshotType("User") });
@@ -146,9 +144,9 @@ describe("tailordb migration sync", () => {
       getMetadata: state.getMetadata,
       setMetadata: state.setMetadata,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
-  });
 
-  afterEach(() => {
+    await runTest();
+
     vi.restoreAllMocks();
     state.listTailorDBTypes.mockReset();
     state.createTailorDBType.mockReset();

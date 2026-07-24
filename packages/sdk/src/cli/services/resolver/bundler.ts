@@ -9,16 +9,18 @@ import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
-import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { buildResolverPermissionAndInputCheckExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
 import type { LogLevel } from "#/configure/config/types";
+import type { Resolver } from "#/types/resolver.generated";
 
 interface ResolverInfo {
   name: string;
   sourceFile: string;
+  permission: Resolver["permission"];
 }
 
 /**
@@ -71,6 +73,7 @@ export async function bundleResolvers(
     resolvers.push({
       name: resolver.name,
       sourceFile: file,
+      permission: resolver.permission,
     });
   }
 
@@ -127,6 +130,7 @@ async function bundleSingleResolver(
     contextHash,
     async build(cachePlugins) {
       const absoluteSourcePath = path.resolve(resolver.sourceFile);
+      const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr(resolver.permission);
 
       const entryContent = ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
@@ -134,21 +138,7 @@ async function bundleSingleResolver(
 
         const $tailor_resolver_body = async (context) => {
           const invoker = ${INVOKER_EXPR};
-          if (_internalResolver.input) {
-            const result = t.object(_internalResolver.input).parse({
-              value: context.input,
-              data: context.input,
-              user: context.user,
-            });
-
-            if (result.issues) {
-              throw new TailorErrors(result.issues.map(issue => ({
-                message: issue.message,
-                path: issue.path ?? [],
-              })));
-            }
-          }
-
+          ${guardAndInputCheckExpr}
           return _internalResolver.body({ ...context, invoker });
         };
 

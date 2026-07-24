@@ -282,7 +282,7 @@ describe("tailordb migration validate", () => {
   test("fails when a migration requiring a script has no migrate.ts", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    writeDiff(state.migrationsDir, 1, [], true);
+    writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
 
     const result = await runCommand(validateCommand, []);
 
@@ -291,6 +291,21 @@ describe("tailordb migration validate", () => {
     expect(report.valid).toBe(false);
     expect(report.migrationFiles.valid).toBe(false);
     expect(report.migrationFiles.error).toMatch(/require a migration script/);
+  });
+
+  test("accepts a required script skipped with an explicit acknowledgment", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], {
+      requiresMigrationScript: true,
+      scriptSkipped: { reason: "no data yet", acknowledgedAt: "2026-01-01T00:00:00.000Z" },
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(true);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.migrationFiles).toEqual({ valid: true });
   });
 
   test("fails when the remote migration state cannot be read", async () => {

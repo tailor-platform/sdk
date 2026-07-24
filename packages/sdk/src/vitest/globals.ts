@@ -89,13 +89,29 @@ function defaultGetInvoker(): ContextInvoker | null {
   return null;
 }
 
+// No-op logger stub so `tailor.logger.*` calls in code under test don't throw
+// without an explicit `mockLogger()`. `mockLogger()` overlays vi.fn spies and
+// restores this on dispose.
+function noop(): void {}
+const defaultLogger = {
+  debug: noop,
+  info: noop,
+  warn: noop,
+  error: noop,
+  setAttributes: noop,
+};
+
 /**
  * Install the always-present base platform globals (containers, context stub,
  * error classes, runtime flag). Per-namespace mocks are layered on top by the
  * `xMock()` factories in `./mock`.
+ *
+ * Acquire with a `using` declaration and the globals are removed when the
+ * scope exits; alternatively call `cleanupPlatformGlobals` yourself.
  * @param global - The global object to install into (typically `globalThis`)
+ * @returns A `Disposable` that removes the installed globals
  */
-export function installPlatformGlobals(global: typeof globalThis): void {
+export function installPlatformGlobals(global: typeof globalThis): Disposable {
   const g = global as Record<string, unknown>;
 
   g[RUNTIME_FLAG_KEY] = true;
@@ -107,12 +123,19 @@ export function installPlatformGlobals(global: typeof globalThis): void {
   g.tailor = {
     context: { getInvoker: defaultGetInvoker },
     workflow: createDefaultWorkflowRuntime(),
+    logger: { ...defaultLogger },
   };
   g.tailordb = {};
 
   g.TailorErrors = TailorErrorsMock;
   g.TailorErrorMessage = TailorErrorMessageMock;
   g.TailorDBFileError = TailorDBFileErrorMock;
+
+  return {
+    [Symbol.dispose]() {
+      cleanupPlatformGlobals(global);
+    },
+  };
 }
 
 /**

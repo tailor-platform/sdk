@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { formatCrashReport, writeCrashReport } from "./writer";
 import type { CrashReport } from "./report";
 
@@ -69,7 +69,8 @@ describe("writeCrashReport", () => {
     return dir;
   }
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     for (const dir of tmpDirs) {
       fs.rmSync(dir, { recursive: true, force: true });
     }

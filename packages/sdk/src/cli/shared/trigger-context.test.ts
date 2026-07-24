@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "pathe";
-import { afterEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { transformFunctionTriggers } from "#/cli/services/workflow/trigger-transformer";
 import {
   buildTriggerContext,
@@ -80,7 +80,8 @@ describe("serializeTriggerContext", () => {
 describe("buildTriggerContext", () => {
   const tempDirs: string[] = [];
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     for (const tempDir of tempDirs.splice(0)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -114,8 +115,8 @@ export const step = createWorkflowJob({ name: "step-b", body: async () => "b" })
 
     const result = transform(`${firstSource}\nawait step.trigger();\n`, firstPath, context);
 
-    expect(result).toContain('tailor.workflow.triggerJobFunction("step-a", undefined)');
-    expect(result).not.toContain('tailor.workflow.triggerJobFunction("step-b"');
+    expect(result).toContain('tailor.workflow.execJobFunction("step-a", undefined)');
+    expect(result).not.toContain('tailor.workflow.execJobFunction("step-b"');
   });
 
   test("resolves aliased named imports", async () => {
@@ -127,7 +128,7 @@ await importedStep.trigger();
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
-    expect(result).toContain('tailor.workflow.triggerJobFunction("step-a", undefined)');
+    expect(result).toContain('tailor.workflow.execJobFunction("step-a", undefined)');
     expect(result).not.toContain("importedStep.trigger()");
   });
 
@@ -191,7 +192,7 @@ async function run(step: { trigger(): Promise<string> }) {
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
-    expect(result).toContain('triggerJobFunction("step-a", { source: "outer" })');
+    expect(result).toContain('execJobFunction("step-a", { source: "outer" })');
     expect(result).toContain("return step.trigger()");
   });
 
@@ -208,7 +209,7 @@ async function run() {
 
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
-    expect(result).toContain('triggerJobFunction("step-a", { source: "outer" })');
+    expect(result).toContain('execJobFunction("step-a", { source: "outer" })');
     expect(result).toContain("return step.trigger()");
   });
 
@@ -222,7 +223,7 @@ await step.trigger();
     const result = transform(source, path.join(tempDir, "caller.ts"), context);
 
     expect(result).toContain("await step.trigger()");
-    expect(result).not.toContain("tailor.workflow.triggerJobFunction");
+    expect(result).not.toContain("tailor.workflow.execJobFunction");
   });
 
   test("escapes job and workflow names in generated calls", async () => {
@@ -233,6 +234,6 @@ await step.trigger();
 
     const result = transform(`${firstSource}\nawait step.trigger();\n`, firstPath, context);
 
-    expect(result).toContain(`triggerJobFunction(${JSON.stringify(jobName)}, undefined)`);
+    expect(result).toContain(`execJobFunction(${JSON.stringify(jobName)}, undefined)`);
   });
 });

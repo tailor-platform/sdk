@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from "vitest";
+import { describe, test, expect, vi, aroundEach } from "vitest";
 import { applySecretManager, planSecretManager } from "./secret-manager";
 import { hashValue } from "./secrets-state";
 import type { PlanContext } from "#/cli/commands/deploy/types";
@@ -21,6 +21,7 @@ vi.mock("./secrets-state", async (importOriginal) => {
     ...actual,
     loadSecretsState: (...args: unknown[]) => mockLoadSecretsState(...args),
     saveSecretsState: (...args: unknown[]) => mockSaveSecretsState(...args),
+    withSecretsStateLock: (_scope: unknown, fn: () => Promise<unknown>) => fn(),
   };
 });
 
@@ -64,7 +65,14 @@ function createMockApplyClient() {
   } as unknown as OperatorClient;
 }
 
-function createMockPlanClient(existingSecrets: string[] = [], vaultName = "my-vault") {
+type ExistingSecretFixture =
+  | string
+  | { name: string; updateTime?: { seconds: bigint; nanos: number } };
+
+function createMockPlanClient(
+  existingSecrets: ExistingSecretFixture[] = [],
+  vaultName = "my-vault",
+) {
   return {
     listSecretManagerVaults: vi.fn().mockResolvedValue({
       vaults: [{ name: vaultName }],
@@ -74,7 +82,9 @@ function createMockPlanClient(existingSecrets: string[] = [], vaultName = "my-va
       metadata: { labels: { "sdk-name": "test-app", "sdk-version": sdkVersion } },
     }),
     listSecretManagerSecrets: vi.fn().mockResolvedValue({
-      secrets: existingSecrets.map((name) => ({ name })),
+      secrets: existingSecrets.map((secret) =>
+        typeof secret === "string" ? { name: secret } : secret,
+      ),
       nextPageToken: "",
     }),
   } as unknown as OperatorClient;
@@ -154,15 +164,16 @@ describe("applySecretManager phase separation", () => {
     } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({
       vaults: {
         "my-vault": {
-          "orphan-secret": hashValue("orphan-value"),
+          "orphan-secret": { hash: hashValue("orphan-value") },
         },
       },
     });
+    await runTest();
   });
 
   test("create-update phase creates vaults and secrets, does not delete", async () => {
@@ -247,33 +258,23 @@ describe("applySecretManager phase separation", () => {
 });
 
 describe("planSecretManager hash-based diff", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
   });
 
-  test("skips update when hash matches stored state", async () => {
+  test("includes update when forceApplyAll is enabled even if evidence matches", async () => {
     const secretValue = "my-secret-value";
     mockLoadSecretsState.mockReturnValue({
-      vaults: { "my-vault": { "existing-secret": hashValue(secretValue) } },
+      vaults: {
+        "my-vault": { "existing-secret": { hash: hashValue(secretValue), updateTime: "100.5" } },
+      },
     });
 
-    const client = createMockPlanClient(["existing-secret"]);
-    const ctx = createPlanContext(client, [
-      { vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] },
+    const client = createMockPlanClient([
+      { name: "existing-secret", updateTime: { seconds: 100n, nanos: 5 } },
     ]);
-
-    const result = await planSecretManager(ctx);
-    expect(result.secretChangeSet.updates).toHaveLength(0);
-  });
-
-  test("includes update when forceApplyAll is enabled even if hash matches", async () => {
-    const secretValue = "my-secret-value";
-    mockLoadSecretsState.mockReturnValue({
-      vaults: { "my-vault": { "existing-secret": hashValue(secretValue) } },
-    });
-
-    const client = createMockPlanClient(["existing-secret"]);
     const ctx = {
       ...createPlanContext(client, [
         { vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] },
@@ -287,10 +288,14 @@ describe("planSecretManager hash-based diff", () => {
 
   test("includes update when hash does not match", async () => {
     mockLoadSecretsState.mockReturnValue({
-      vaults: { "my-vault": { "existing-secret": hashValue("old-value") } },
+      vaults: {
+        "my-vault": { "existing-secret": { hash: hashValue("old-value"), updateTime: "100.5" } },
+      },
     });
 
-    const client = createMockPlanClient(["existing-secret"]);
+    const client = createMockPlanClient([
+      { name: "existing-secret", updateTime: { seconds: 100n, nanos: 5 } },
+    ]);
     const ctx = createPlanContext(client, [
       { vaultName: "my-vault", secrets: [{ name: "existing-secret", value: "new-value" }] },
     ]);
@@ -316,10 +321,18 @@ describe("planSecretManager hash-based diff", () => {
     const secretValue = "my-secret-value";
     mockLoadSecretsState.mockImplementation((scope?: { workspaceId: string }) =>
       scope?.workspaceId === "ws-a"
-        ? { vaults: { "my-vault": { "existing-secret": hashValue(secretValue) } } }
+        ? {
+            vaults: {
+              "my-vault": {
+                "existing-secret": { hash: hashValue(secretValue), updateTime: "100.5" },
+              },
+            },
+          }
         : { vaults: {} },
     );
-    const client = createMockPlanClient(["existing-secret"]);
+    const client = createMockPlanClient([
+      { name: "existing-secret", updateTime: { seconds: 100n, nanos: 5 } },
+    ]);
     const ctxA = createPlanContext(
       client,
       [{ vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] }],
@@ -347,10 +360,18 @@ describe("planSecretManager hash-based diff", () => {
     const secretValue = "my-secret-value";
     mockLoadSecretsState.mockImplementation((scope?: { applicationId: string }) =>
       scope?.applicationId === "app-a"
-        ? { vaults: { "my-vault": { "existing-secret": hashValue(secretValue) } } }
+        ? {
+            vaults: {
+              "my-vault": {
+                "existing-secret": { hash: hashValue(secretValue), updateTime: "100.5" },
+              },
+            },
+          }
         : { vaults: {} },
     );
-    const client = createMockPlanClient(["existing-secret"]);
+    const client = createMockPlanClient([
+      { name: "existing-secret", updateTime: { seconds: 100n, nanos: 5 } },
+    ]);
     const ctxA = createPlanContext(
       client,
       [{ vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] }],
@@ -375,10 +396,152 @@ describe("planSecretManager hash-based diff", () => {
   });
 });
 
-describe("planSecretManager vault metadata and deletion", () => {
-  beforeEach(() => {
+describe("planSecretManager update-time evidence", () => {
+  const secretValue = "my-secret-value";
+  const storedEntry = { hash: hashValue(secretValue), updateTime: "100.5" };
+
+  aroundEach(async (runTest) => {
+    vi.clearAllMocks();
+    await runTest();
+  });
+
+  test("skips update when hash and remote updateTime both match stored evidence", async () => {
+    mockLoadSecretsState.mockReturnValue({
+      vaults: { "my-vault": { "existing-secret": storedEntry } },
+    });
+    const client = createMockPlanClient([
+      { name: "existing-secret", updateTime: { seconds: 100n, nanos: 5 } },
+    ]);
+    const ctx = createPlanContext(client, [
+      { vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] },
+    ]);
+
+    const result = await planSecretManager(ctx);
+    expect(result.secretChangeSet.updates).toHaveLength(0);
+  });
+
+  test("updates when the remote updateTime differs from stored evidence", async () => {
+    mockLoadSecretsState.mockReturnValue({
+      vaults: { "my-vault": { "existing-secret": storedEntry } },
+    });
+    const client = createMockPlanClient([
+      { name: "existing-secret", updateTime: { seconds: 200n, nanos: 0 } },
+    ]);
+    const ctx = createPlanContext(client, [
+      { vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] },
+    ]);
+
+    const result = await planSecretManager(ctx);
+    expect(result.secretChangeSet.updates).toHaveLength(1);
+  });
+
+  test("updates when the stored entry has no updateTime evidence", async () => {
+    mockLoadSecretsState.mockReturnValue({
+      vaults: { "my-vault": { "existing-secret": { hash: hashValue(secretValue) } } },
+    });
+    const client = createMockPlanClient([
+      { name: "existing-secret", updateTime: { seconds: 100n, nanos: 5 } },
+    ]);
+    const ctx = createPlanContext(client, [
+      { vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] },
+    ]);
+
+    const result = await planSecretManager(ctx);
+    expect(result.secretChangeSet.updates).toHaveLength(1);
+  });
+
+  test("updates when the remote secret carries no updateTime", async () => {
+    mockLoadSecretsState.mockReturnValue({
+      vaults: { "my-vault": { "existing-secret": storedEntry } },
+    });
+    const client = createMockPlanClient(["existing-secret"]);
+    const ctx = createPlanContext(client, [
+      { vaultName: "my-vault", secrets: [{ name: "existing-secret", value: secretValue }] },
+    ]);
+
+    const result = await planSecretManager(ctx);
+    expect(result.secretChangeSet.updates).toHaveLength(1);
+  });
+});
+
+describe("applySecretManager update-time evidence persistence", () => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
+  });
+
+  function evidencePlanResult() {
+    return {
+      stateScope,
+      vaultChangeSet: { creates: [], updates: [], deletes: [], replaces: [] },
+      secretChangeSet: {
+        creates: [
+          {
+            name: "my-vault/secret-a",
+            secretName: "secret-a",
+            workspaceId: "ws-1",
+            vaultName: "my-vault",
+            value: "value-a",
+          },
+        ],
+        updates: [
+          {
+            name: "my-vault/secret-b",
+            secretName: "secret-b",
+            workspaceId: "ws-1",
+            vaultName: "my-vault",
+            value: "value-b",
+          },
+        ],
+        deletes: [],
+        replaces: [],
+      },
+    } as unknown as Awaited<ReturnType<typeof planSecretManager>>;
+  }
+
+  test("stores updateTime evidence from create and update responses", async () => {
+    const client = {
+      ...createMockApplyClient(),
+      createSecretManagerSecret: vi.fn().mockResolvedValue({
+        secret: { name: "secret-a", updateTime: { seconds: 10n, nanos: 1 } },
+      }),
+      updateSecretManagerSecret: vi.fn().mockResolvedValue({
+        secret: { name: "secret-b", updateTime: { seconds: 20n, nanos: 2 } },
+      }),
+    } as unknown as OperatorClient;
+    const application = { secrets: [] } as unknown as Application;
+
+    await applySecretManager(client, evidencePlanResult(), "create-update", application);
+
+    const savedState = mockSaveSecretsState.mock.calls[0]![1];
+    expect(savedState.vaults["my-vault"]["secret-a"]).toEqual({
+      hash: hashValue("value-a"),
+      updateTime: "10.1",
+    });
+    expect(savedState.vaults["my-vault"]["secret-b"]).toEqual({
+      hash: hashValue("value-b"),
+      updateTime: "20.2",
+    });
+  });
+
+  test("stores hash without evidence when a create response is empty", async () => {
+    const client = createMockApplyClient();
+    const application = { secrets: [] } as unknown as Application;
+
+    await applySecretManager(client, evidencePlanResult(), "create-update", application);
+
+    const savedState = mockSaveSecretsState.mock.calls[0]![1];
+    expect(savedState.vaults["my-vault"]["secret-a"]).toEqual({ hash: hashValue("value-a") });
+    expect(savedState.vaults["my-vault"]["secret-b"]).toEqual({ hash: hashValue("value-b") });
+  });
+});
+
+describe("planSecretManager vault metadata and deletion", () => {
+  aroundEach(async (runTest) => {
+    vi.clearAllMocks();
+    mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
   });
 
   test("plans vault deletion for managed vaults removed from config", async () => {
@@ -542,9 +705,10 @@ describe("planSecretManager vault metadata and deletion", () => {
 });
 
 describe("applySecretManager metadata update", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
   });
 
   test("sets metadata on existing vault during create-update phase", async () => {
@@ -617,9 +781,10 @@ describe("applySecretManager metadata update", () => {
 });
 
 describe("applySecretManager state persistence", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
   });
 
   test("saves hashes for secret values created or updated during apply", async () => {
@@ -667,8 +832,8 @@ describe("applySecretManager state persistence", () => {
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
     const savedState = mockSaveSecretsState.mock.calls[0]![1];
-    expect(savedState.vaults["my-vault"]["secret-a"]).toBe(hashValue("value-a"));
-    expect(savedState.vaults["my-vault"]["secret-b"]).toBe(hashValue("value-b"));
+    expect(savedState.vaults["my-vault"]["secret-a"]).toEqual({ hash: hashValue("value-a") });
+    expect(savedState.vaults["my-vault"]["secret-b"]).toEqual({ hash: hashValue("value-b") });
   });
 
   test("does not save state when application is not provided", async () => {
@@ -705,8 +870,8 @@ describe("applySecretManager state persistence", () => {
     mockLoadSecretsState.mockReturnValue({
       vaults: {
         "my-vault": {
-          "secret-a": hashValue("value-a"),
-          orphan: hashValue("orphan-value"),
+          "secret-a": { hash: hashValue("value-a") },
+          orphan: { hash: hashValue("orphan-value") },
         },
       },
     });
@@ -734,7 +899,7 @@ describe("applySecretManager state persistence", () => {
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
     const savedState = mockSaveSecretsState.mock.calls[0]![1];
-    expect(savedState.vaults["my-vault"]["secret-a"]).toBe(hashValue("value-a"));
+    expect(savedState.vaults["my-vault"]["secret-a"]).toEqual({ hash: hashValue("value-a") });
     expect(savedState.vaults["my-vault"]["orphan"]).toBeUndefined();
   });
 
@@ -742,7 +907,7 @@ describe("applySecretManager state persistence", () => {
     mockLoadSecretsState.mockReturnValue({
       vaults: {
         "my-vault": {
-          "only-secret": hashValue("value"),
+          "only-secret": { hash: hashValue("value") },
         },
       },
     });
@@ -774,9 +939,10 @@ describe("applySecretManager state persistence", () => {
 });
 
 describe("planSecretManager ignoreNullishValues", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({ vaults: {} });
+    await runTest();
   });
 
   test.each([
@@ -843,15 +1009,16 @@ describe("planSecretManager ignoreNullishValues", () => {
 });
 
 describe("applySecretManager ignoreNullishValues state persistence", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     mockLoadSecretsState.mockReturnValue({
       vaults: {
         "my-vault": {
-          "nullish-secret": hashValue("previous-value"),
+          "nullish-secret": { hash: hashValue("previous-value") },
         },
       },
     });
+    await runTest();
   });
 
   test("nullish secret does not overwrite stored hash", async () => {
@@ -891,7 +1058,11 @@ describe("applySecretManager ignoreNullishValues state persistence", () => {
 
     expect(mockSaveSecretsState).toHaveBeenCalledTimes(1);
     const savedState = mockSaveSecretsState.mock.calls[0]![1];
-    expect(savedState.vaults["my-vault"]["nullish-secret"]).toBe(hashValue("previous-value"));
-    expect(savedState.vaults["my-vault"]["valued-secret"]).toBe(hashValue("real-value"));
+    expect(savedState.vaults["my-vault"]["nullish-secret"]).toEqual({
+      hash: hashValue("previous-value"),
+    });
+    expect(savedState.vaults["my-vault"]["valued-secret"]).toEqual({
+      hash: hashValue("real-value"),
+    });
   });
 });

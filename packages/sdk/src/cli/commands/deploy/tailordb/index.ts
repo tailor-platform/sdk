@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import * as fs from "node:fs";
 import { type MessageInitShape } from "@bufbuild/protobuf";
 import {
   type CreateTailorDBGQLPermissionRequestSchema,
@@ -9,7 +11,7 @@ import {
   type UpdateTailorDBGQLPermissionRequestSchema,
   type UpdateTailorDBTypeRequestSchema,
 } from "@tailor-platform/tailor-proto/tailordb_pb";
-import { type TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
+import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import {
   getNamespacesWithMigrations,
@@ -17,13 +19,16 @@ import {
 } from "#/cli/commands/tailordb/migrate/config";
 import {
   applyPreMigrationFieldAdjustments,
+  applyPreMigrationIndexAdjustments,
   buildPreMigrationChangesMap,
+  buildPreMigrationIndexChangesMap,
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   reconstructSnapshotFromMigrations,
   assertValidMigrationFiles,
   formatMigrationNumber,
   getLatestMigrationNumber,
+  getMigrationFilePath,
   getMigrationFiles,
   INITIAL_SCHEMA_NUMBER,
   type SchemaSnapshot,
@@ -38,7 +43,7 @@ import { byName } from "#/cli/shared/apply-concurrency";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
-import { areNormalizedEqual, normalizeProtoConfig } from "../compare";
+import { areNormalizedEqual, normalizeProtoConfig, toComparableProtoJson } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
 import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "../label";
 import {
@@ -76,7 +81,58 @@ import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/met
 type ValidateAndDetectResult = {
   pendingMigrations: PendingMigration[];
   namespacesWithMigrations: NamespaceWithMigrations[];
+  migrationFileState: Record<string, string>;
 };
+
+const MIGRATION_FILE_KINDS = ["schema", "diff", "migrate", "db"] as const;
+
+/**
+ * Capture the migration files that a deployment plan depends on.
+ * @param namespacesWithMigrations - Configured migration directories by namespace
+ * @returns SHA-256 digest by namespace
+ */
+export function captureMigrationFileState(
+  namespacesWithMigrations: ReadonlyArray<NamespaceWithMigrations>,
+): Record<string, string> {
+  const state: Record<string, string> = {};
+  for (const { namespace, migrationsDir } of namespacesWithMigrations.toSorted((a, b) =>
+    a.namespace.localeCompare(b.namespace),
+  )) {
+    const hash = createHash("sha256");
+    const migrationNumbers = [
+      ...new Set(getMigrationFiles(migrationsDir).map(({ number }) => number)),
+    ].toSorted((a, b) => a - b);
+    for (const migrationNumber of migrationNumbers) {
+      for (const kind of MIGRATION_FILE_KINDS) {
+        const filePath = getMigrationFilePath(migrationsDir, migrationNumber, kind);
+        hash.update(`${formatMigrationNumber(migrationNumber)}/${kind}\0`);
+        if (fs.existsSync(filePath)) {
+          hash.update(fs.readFileSync(filePath));
+        } else {
+          hash.update("<missing>");
+        }
+        hash.update("\0");
+      }
+    }
+    state[namespace] = hash.digest("hex");
+  }
+  return state;
+}
+
+function migrationFileStatesEqual(
+  planned: Readonly<Record<string, string>>,
+  current: Readonly<Record<string, string>>,
+): boolean {
+  const plannedNamespaces = Object.keys(planned).toSorted();
+  const currentNamespaces = Object.keys(current).toSorted();
+  return (
+    plannedNamespaces.length === currentNamespaces.length &&
+    plannedNamespaces.every(
+      (namespace, index) =>
+        namespace === currentNamespaces[index] && planned[namespace] === current[namespace],
+    )
+  );
+}
 
 /**
  * Validate migration files and detect pending migrations
@@ -88,7 +144,7 @@ type ValidateAndDetectResult = {
  * @param {ReadonlyArray<TailorDBDeployInput>} tailorDBInputs - Deploy inputs for namespace defaults
  * @returns {Promise<ValidateAndDetectResult>} Pending migrations and namespaces that have migration directories configured
  */
-async function validateAndDetectMigrations(
+export async function validateAndDetectMigrations(
   client: OperatorClient,
   workspaceId: string,
   typesByNamespace: ReadonlyMap<string, Record<string, TailorDBSnapshotType>>,
@@ -150,6 +206,7 @@ async function validateAndDetectMigrations(
       client,
       workspaceId,
       namespacesWithMigrations,
+      config.path,
     );
 
     if (pendingMigrations.length > 0) {
@@ -159,7 +216,7 @@ async function validateAndDetectMigrations(
       const withScripts = pendingMigrations.filter((m) => m.hasScript);
       const withoutScripts = pendingMigrations.filter((m) => !m.hasScript);
 
-      logger.info(`Applying ${pendingMigrations.length} migration(s):`);
+      logger.info(`${pendingMigrations.length} pending migration(s) will be applied:`);
       if (withoutScripts.length > 0) {
         logger.info(
           `  • ${withoutScripts.length} schema change(s) (applied automatically with schema deployment)`,
@@ -175,7 +232,11 @@ async function validateAndDetectMigrations(
     }
   }
 
-  return { pendingMigrations, namespacesWithMigrations };
+  return {
+    pendingMigrations,
+    namespacesWithMigrations,
+    migrationFileState: captureMigrationFileState(namespacesWithMigrations),
+  };
 }
 
 /**
@@ -247,7 +308,48 @@ function buildMigrationContextForScripts(
       : undefined,
     dbConfig: dbConfigMap,
     env: migrationContext.config.env ?? {},
+    configDir: path.dirname(migrationContext.config.path),
   };
+}
+
+type TailorDBPlanResult = Awaited<ReturnType<typeof planTailorDB>>;
+
+async function validateTailorDBMigrationState(
+  client: OperatorClient,
+  result: TailorDBPlanResult,
+): Promise<ValidateAndDetectResult> {
+  const { context } = result;
+  const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
+  for (const tailordb of context.tailorDBInputs) {
+    typesByNamespace.set(tailordb.namespace, tailordb.types);
+  }
+
+  const validation = await validateAndDetectMigrations(
+    client,
+    context.workspaceId,
+    typesByNamespace,
+    context.config,
+    context.noSchemaCheck,
+    context.tailorDBInputs,
+  );
+  if (!migrationFileStatesEqual(context.migrationFileState, validation.migrationFileState)) {
+    throw new Error(
+      "Migration files changed after deployment planning. Run the deployment again to create a fresh plan.",
+    );
+  }
+  return validation;
+}
+
+/**
+ * Revalidate migration state before the deployment enters any mutation phase.
+ * @param client - Operator client instance
+ * @param result - Planned TailorDB changes
+ */
+export async function preflightTailorDB(
+  client: OperatorClient,
+  result: TailorDBPlanResult,
+): Promise<void> {
+  await validateTailorDBMigrationState(client, result);
 }
 
 /**
@@ -264,20 +366,12 @@ export async function applyTailorDB(
   const { changeSet, context: migrationContext } = result;
 
   if (phase === "create-update") {
-    // Validate and detect migrations
-    // Build types by namespace map (snapshot-shaped, the canonical deploy form)
-    const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
-    for (const tailordb of migrationContext.tailorDBInputs) {
-      typesByNamespace.set(tailordb.namespace, tailordb.types);
-    }
-
-    const { pendingMigrations, namespacesWithMigrations } = await validateAndDetectMigrations(
+    // Plan-time validation makes dry runs fail fast. Repeat the full validation
+    // at the apply boundary because migration files, remote checkpoints, or the
+    // remote schema may have changed while waiting for confirmation.
+    const { pendingMigrations, namespacesWithMigrations } = await validateTailorDBMigrationState(
       client,
-      migrationContext.workspaceId,
-      typesByNamespace,
-      migrationContext.config,
-      migrationContext.noSchemaCheck,
-      migrationContext.tailorDBInputs,
+      result,
     );
 
     if (pendingMigrations.length > 0) {
@@ -291,6 +385,39 @@ export async function applyTailorDB(
 
       // Step 1: Create/update services once at the beginning (services don't need per-migration handling)
       await executeServicesCreation(client, changeSet);
+
+      // Step 1.5: The migration loop below only touches the namespaces of the
+      // pending migrations; changes planned for every other namespace must go
+      // through the normal flow or they would be silently dropped.
+      // Creates/updates run before the loop so migration scripts see the
+      // complete world; deletes are irreversible and stay last (Step 5).
+      const migratingNamespaces = new Set(pendingMigrations.map((m) => m.namespace));
+      const isOutsideMigrations = (namespaceName: string | undefined) =>
+        namespaceName !== undefined && !migratingNamespaces.has(namespaceName);
+
+      try {
+        for (const create of changeSet.type.creates) {
+          if (!isOutsideMigrations(create.request.namespaceName)) continue;
+          await client.createTailorDBType(create.request);
+        }
+        for (const update of changeSet.type.updates) {
+          if (!isOutsideMigrations(update.request.namespaceName)) continue;
+          await client.updateTailorDBType(update.request);
+        }
+      } catch (error) {
+        handleOptionalToRequiredError(error, [
+          "Run 'tailor-sdk tailordb migration generate' to create migration files.",
+          "Migration scripts allow you to handle existing data before applying the schema change.",
+        ]);
+      }
+      await Promise.all([
+        ...changeSet.gqlPermission.creates
+          .filter((create) => isOutsideMigrations(create.request.namespaceName))
+          .map((create) => client.createTailorDBGQLPermission(create.request)),
+        ...changeSet.gqlPermission.updates
+          .filter((update) => isOutsideMigrations(update.request.namespaceName))
+          .map((update) => client.updateTailorDBGQLPermission(update.request)),
+      ]);
 
       const migrationsRequiringScripts = pendingMigrations.filter((m) => m.hasScript);
 
@@ -377,6 +504,18 @@ export async function applyTailorDB(
           ),
         );
       }
+
+      // Step 5: Delete types outside the migrating namespaces (their GQL
+      // permissions were just removed above; migration postPhases never see them)
+      await Promise.all(
+        changeSet.type.deletes
+          .filter(
+            (del) =>
+              isOutsideMigrations(del.request.namespaceName) &&
+              !deletedResources.types.has(del.name),
+          )
+          .map((del) => client.deleteTailorDBType(del.request)),
+      );
     } else {
       // Normal create-update flow without migrations
       // Services
@@ -613,10 +752,12 @@ async function executeSingleMigrationPrePhase(
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
 ): Promise<void> {
-  // Build pre-migration changes map for this single migration. Includes both
+  // Build pre-migration changes maps for this single migration. Includes both
   // breaking changes (required-add, unique-add, enum value removal) and the
-  // warning-tier field_removed, since the Pre-phase relaxes both.
+  // warning-tier field_removed, since the Pre-phase relaxes both, plus the
+  // breaking type-level index changes.
   const preMigrationChanges = buildPreMigrationChangesMap([migration]);
+  const preMigrationIndexChanges = buildPreMigrationIndexChangesMap([migration]);
   const affectedTypes = getAffectedTypeNames(migration);
   const createdBeforeMigration = new Set(processedTypes.created);
 
@@ -640,6 +781,10 @@ async function executeSingleMigrationPrePhase(
     if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
       applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
     }
+    const indexChanges = preMigrationIndexChanges.get(typeName);
+    if (indexChanges && indexChanges.size > 0 && clonedRequest.tailordbType.schema?.indexes) {
+      applyPreMigrationIndexAdjustments(clonedRequest.tailordbType.schema.indexes, indexChanges);
+    }
 
     processedTypes.created.add(typeName);
     await client.createTailorDBType(clonedRequest);
@@ -662,6 +807,10 @@ async function executeSingleMigrationPrePhase(
     const typeChanges = preMigrationChanges.get(typeName);
     if (typeChanges && typeChanges.size > 0 && clonedTypeRequest.schema?.fields) {
       applyPreMigrationFieldAdjustments(clonedTypeRequest.schema.fields, typeChanges);
+    }
+    const indexChanges = preMigrationIndexChanges.get(typeName);
+    if (indexChanges && indexChanges.size > 0 && clonedTypeRequest.schema?.indexes) {
+      applyPreMigrationIndexAdjustments(clonedTypeRequest.schema.indexes, indexChanges);
     }
 
     processedTypes.updated.add(typeName);
@@ -689,6 +838,10 @@ async function executeSingleMigrationPrePhase(
     const typeChanges = preMigrationChanges.get(typeName);
     if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
       applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
+    }
+    const indexChanges = preMigrationIndexChanges.get(typeName);
+    if (indexChanges && indexChanges.size > 0 && clonedRequest.tailordbType.schema?.indexes) {
+      applyPreMigrationIndexAdjustments(clonedRequest.tailordbType.schema.indexes, indexChanges);
     }
 
     processedTypes.updated.add(typeName);
@@ -763,9 +916,14 @@ async function executeSingleMigrationPostPhase(
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
 ): Promise<void> {
-  // Re-use the pre-migration changes map to know which types were touched in
+  // Re-use the pre-migration changes maps to know which types were touched in
   // this migration (so we send the post-phase final-schema update for them).
   const preMigrationChanges = buildPreMigrationChangesMap([migration]);
+  const preMigrationIndexChanges = buildPreMigrationIndexChangesMap([migration]);
+  const adjustedTypes = new Set([
+    ...preMigrationChanges.keys(),
+    ...preMigrationIndexChanges.keys(),
+  ]);
   const affectedTypes = getAffectedTypeNames(migration);
   const deletedTypeNames = getDeletedTypeNames(migration);
 
@@ -777,7 +935,7 @@ async function executeSingleMigrationPostPhase(
     // For newly created types that had pre-migration adjustments in this migration, send update with snapshot[N] values
     for (const create of changeSet.type.creates) {
       const typeName = create.request.tailordbType?.name;
-      if (!typeName || !affectedTypes.has(typeName) || !preMigrationChanges.has(typeName)) {
+      if (!typeName || !affectedTypes.has(typeName) || !adjustedTypes.has(typeName)) {
         continue;
       }
       const snapshotType = buildSnapshotTypeManifest(
@@ -797,7 +955,7 @@ async function executeSingleMigrationPostPhase(
     // For updated types affected by this migration, send update with snapshot[N] values
     for (const update of changeSet.type.updates) {
       const typeName = update.request.tailordbType?.name;
-      if (!typeName || !affectedTypes.has(typeName) || !preMigrationChanges.has(typeName)) {
+      if (!typeName || !affectedTypes.has(typeName) || !adjustedTypes.has(typeName)) {
         continue;
       }
       const snapshotType = buildSnapshotTypeManifest(
@@ -986,6 +1144,23 @@ export async function planTailorDB(context: PlanContext) {
     }
   }
 
+  // Validate migrations at plan time so a missing migration script fails the
+  // deploy (including --dry-run) before any resource is applied.
+  const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
+  for (const tailordb of tailordbs) {
+    typesByNamespace.set(tailordb.namespace, tailordb.types);
+  }
+  const { namespacesWithMigrations, migrationFileState } = forRemoval
+    ? { namespacesWithMigrations: [], migrationFileState: {} }
+    : await validateAndDetectMigrations(
+        client,
+        workspaceId,
+        typesByNamespace,
+        config,
+        noSchemaCheck ?? false,
+        tailordbs,
+      );
+
   const {
     changeSet: serviceChangeSet,
     conflicts,
@@ -1028,6 +1203,8 @@ export async function planTailorDB(context: PlanContext) {
       executorUsedTypes,
       config,
       noSchemaCheck: noSchemaCheck ?? false,
+      namespacesWithMigrations,
+      migrationFileState,
     },
   };
 }
@@ -1403,8 +1580,9 @@ const tailordbCompareKnownDefaults = {
   ]),
 } as const;
 
-function normalizeComparableTailorDBType(type: unknown) {
-  const normalized = normalizeProtoConfig(type) as {
+function normalizeComparableTailorDBType(type: MessageInitShape<typeof TailorDBTypeSchema>) {
+  const canonical = toComparableProtoJson(TailorDBTypeSchema, type);
+  const normalized = normalizeProtoConfig(canonical) as {
     name?: string;
     schema?: {
       description?: string;
@@ -1482,7 +1660,8 @@ function normalizeTailorDBCompareValue(
 
   if (
     path.at(-1) === "disableGqlOperations" &&
-    areNormalizedEqual(normalizedObject, tailordbCompareKnownDefaults.disableGqlOperations)
+    (Object.keys(normalizedObject).length === 0 ||
+      areNormalizedEqual(normalizedObject, tailordbCompareKnownDefaults.disableGqlOperations))
   ) {
     return undefined;
   }

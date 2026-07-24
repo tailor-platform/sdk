@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { writeErdDiff } from "./diff-command";
 import type { TailorDbErdSchema } from "./types";
 
@@ -26,11 +26,9 @@ function htmlWithSchema(value: TailorDbErdSchema): string {
 }
 
 describe("writeErdDiff", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-erd-diff-"));
-  });
-
-  afterEach(() => {
+    await runTest();
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 

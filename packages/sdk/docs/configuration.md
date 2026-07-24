@@ -41,7 +41,7 @@ export default defineConfig({
 
 **Disable Introspection**: Disable GraphQL introspection. Default is `false`.
 
-**Log Level**: Controls which `console.*` calls are kept when deployment functions are bundled. Supported values are `"DEBUG"`, `"INFO"`, `"WARN"`, `"ERROR"`, and `"SILENT"`. The default is `"DEBUG"` and keeps all console calls. `console.log` is treated as a DEBUG-level call (matching the platform's OpenTelemetry severity mapping), so it is dropped at `"INFO"` and above. For production deployments, use `"WARN"` to keep `console.warn` and `console.error` while dropping debug, log, and info calls:
+**Log Level**: Controls which `console.*` and `logger.*` (from `@tailor-platform/sdk/runtime`) calls are kept when deployment functions are bundled. Supported values are `"DEBUG"`, `"INFO"`, `"WARN"`, `"ERROR"`, and `"SILENT"`. The default is `"DEBUG"` and keeps all calls. `console.log` is treated as a DEBUG-level call (matching the platform's OpenTelemetry severity mapping), so it is dropped at `"INFO"` and above, alongside `console.debug` and `logger.debug`. `logger.setAttributes` has no severity and is never dropped, regardless of `logLevel`. For production deployments, use `"WARN"` to keep warn/error calls while dropping debug, log, and info calls:
 
 ```typescript
 export default defineConfig({
@@ -51,6 +51,8 @@ export default defineConfig({
 ```
 
 This is a bundle-time setting. Changing `LOG_LEVEL` affects newly bundled deployments; already deployed functions must be redeployed.
+
+Only `logger.*` calls made through the SDK's `logger` wrapper (from `@tailor-platform/sdk/runtime` or its `@tailor-platform/sdk/runtime/logger` subpath), or written as `globalThis.tailor.logger.*`, are covered. Other equivalent forms — such as the bare `tailor.logger.*` global or `self.tailor.logger.*` — are not affected by `logLevel`.
 
 ### Service Configuration
 

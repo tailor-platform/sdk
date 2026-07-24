@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
-import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test } from "vitest";
 import { detectFunctionType } from "./detect";
 import type { TailorUser } from "#/runtime/types";
 
@@ -17,12 +17,14 @@ const user: TailorUser = {
 describe("detectFunctionType", () => {
   let testDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     testDir = path.join(TEST_BASE, `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     fs.mkdirSync(testDir, { recursive: true });
+    await runTest();
   });
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     try {
       fs.rmSync(TEST_BASE, { recursive: true, force: true });
     } catch {
@@ -53,6 +55,26 @@ export default {
       const result = await detectFunctionType({ filePath });
       expect(result.type).toBe("resolver");
       expect(result.name).toBe("my-resolver");
+    });
+
+    test("carries the resolver's `permission` config through for test-run to enforce", async () => {
+      const filePath = writeFile(
+        "resolver-permission.mjs",
+        `
+export default {
+  operation: "query",
+  name: "protected",
+  permission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+  body: (ctx) => ctx.input,
+  output: { type: "string", metadata: {}, fields: {} },
+};
+`,
+      );
+
+      const result = await detectFunctionType({ filePath });
+      expect(result.permission).toEqual([
+        { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+      ]);
     });
 
     test("builds a working local input parser from real t.* fields", async () => {

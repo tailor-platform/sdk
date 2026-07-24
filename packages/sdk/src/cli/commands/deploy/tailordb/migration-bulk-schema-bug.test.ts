@@ -7,8 +7,9 @@
  * See `services/tailordb-migration.md` §"Per-migration phases".
  */
 
-import { describe, test, expect, vi, beforeEach } from "vitest";
-import { applyTailorDB } from "./index";
+import { describe, test, expect, vi, aroundEach } from "vitest";
+import * as migrationModule from "./migration";
+import { applyTailorDB, captureMigrationFileState } from "./index";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { Application } from "#/cli/services/application";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
@@ -132,8 +133,6 @@ vi.mock("#/cli/commands/tailordb/migrate/snapshot", async (importOriginal) => {
   };
 });
 
-import * as migrationModule from "./migration";
-
 const mockConfig = { path: "/test/tailor.config.ts" } as LoadedConfig;
 
 describe("per-migration prePhase: schema is scoped to migration[N]", () => {
@@ -219,9 +218,17 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
         executorUsedTypes: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
+        namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
+        migrationFileState: captureMigrationFileState([
+          { namespace: "test-ns", migrationsDir: "/test/migrations" },
+        ]),
       },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any;
+  }
+
+  function setPendingMigrations(migrations: PendingMigration[]): void {
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue(migrations);
   }
 
   function mkFieldMigration(
@@ -255,15 +262,16 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     } as any;
   }
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
+    await runTest();
   });
 
   test("per-migration semantics: migration #1 prePhase must NOT apply removals declared in later migration #5", async () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
+    setPendingMigrations([
       mkFieldMigration("field_added", 1, "User", "permissions"),
       mkFieldMigration("field_removed", 5, "User", "roles"),
     ]);
@@ -291,9 +299,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
     const client = createMockClient();
     const planResult = createMockPlanResult();
 
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([
-      mkFieldMigration("field_added", 1, "SomeOtherType", "foo"),
-    ]);
+    setPendingMigrations([mkFieldMigration("field_added", 1, "SomeOtherType", "foo")]);
 
     await applyTailorDB(client, planResult, "create-update");
 
@@ -363,7 +369,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
         after: { type: "string", required: false, array: true },
       },
     ];
-    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([migration]);
+    setPendingMigrations([migration]);
 
     const applyPromise = applyTailorDB(client, planResult, "create-update");
     await firstCreateStartedPromise;

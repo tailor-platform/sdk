@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { parseYAML } from "confbox";
 import * as path from "pathe";
-import { describe, expect, test, vi, beforeEach, afterEach, afterAll, beforeAll } from "vitest";
+import { describe, expect, test, vi, aroundAll, aroundEach } from "vitest";
 import {
   loadConsoleBaseUrl,
   loadAccessToken,
@@ -104,15 +104,13 @@ describe("loadConfigPath", () => {
   const originalEnv = process.env;
   let tempDir: string;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.resetModules();
     process.env = { ...originalEnv };
     delete process.env.TAILOR_PLATFORM_SDK_CONFIG_PATH;
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailor-test-"));
     vi.spyOn(process, "cwd").mockReturnValue(tempDir);
-  });
-
-  afterEach(() => {
+    await runTest();
     process.env = originalEnv;
     vi.restoreAllMocks();
     fs.rmSync(tempDir, { recursive: true, force: true });
@@ -170,8 +168,10 @@ describe("loadConfigPath", () => {
   });
 });
 
-beforeAll(() => {
+aroundAll(async (runSuite) => {
   fs.mkdirSync(xdgTempDir, { recursive: true });
+  await runSuite();
+  fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });
 
 describe("loadWorkspaceId", () => {
@@ -180,7 +180,7 @@ describe("loadWorkspaceId", () => {
   const otherUUID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const invalidUUID = "not-a-uuid";
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.resetModules();
     refreshTokenMock.mockReset();
     resetKeyringState();
@@ -188,9 +188,7 @@ describe("loadWorkspaceId", () => {
     delete process.env.TAILOR_PLATFORM_WORKSPACE_ID;
     delete process.env.TAILOR_PLATFORM_PROFILE;
     writePlatformConfig(v2Config());
-  });
-
-  afterEach(() => {
+    await runTest();
     process.env = originalEnv;
   });
 
@@ -328,15 +326,13 @@ describe("loadWorkspaceId", () => {
 describe("loadMachineUserName", () => {
   const validUUID = "12345678-1234-4abc-8def-123456789012";
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.resetModules();
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_MACHINE_USER_NAME", undefined);
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
     writePlatformConfig(v2Config());
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 
@@ -418,7 +414,7 @@ describe("loadMachineUserName", () => {
     const envOverrideDetails =
       'The machine user is being set to "other-bot" via the TAILOR_PLATFORM_MACHINE_USER_NAME environment variable, which conflicts with this profile\'s pinned machine user "profile-bot".';
 
-    beforeEach(() => {
+    aroundEach(async (runTest) => {
       writePlatformConfig(
         v2Config({
           profiles: {
@@ -430,6 +426,7 @@ describe("loadMachineUserName", () => {
           },
         }),
       );
+      await runTest();
     });
 
     test("rejects with PROFILE_MACHINE_USER_OVERRIDE_DENIED when opts.machineUser differs", async () => {
@@ -536,7 +533,7 @@ describe("loadAccessToken", () => {
   const otherToken = "other-access-token";
   const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.resetModules();
     resetKeyringState();
     // Explicitly stub env vars to undefined instead of using vi.unstubAllEnvs().
@@ -548,6 +545,7 @@ describe("loadAccessToken", () => {
     vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
     vi.stubEnv("TAILOR_PLATFORM_OAUTH2_CLIENT_ID", undefined);
     writePlatformConfig(v2Config());
+    await runTest();
   });
 
   describe("env.TAILOR_PLATFORM_TOKEN", () => {
@@ -812,7 +810,7 @@ describe("loadAccessToken", () => {
 });
 
 describe("loadConsoleBaseUrl", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     resetKeyringState();
     vi.stubEnv("TAILOR_PLATFORM_URL", undefined);
     vi.stubEnv("TAILOR_PLATFORM_CONSOLE_URL", undefined);
@@ -824,9 +822,7 @@ describe("loadConsoleBaseUrl", () => {
       profiles: {},
       current_user: null,
     });
-  });
-
-  afterEach(() => {
+    await runTest();
     vi.unstubAllEnvs();
   });
 
@@ -882,8 +878,9 @@ describe("platformConfigFromProfile", () => {
 });
 
 describe("profile readonly field", () => {
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     resetKeyringState();
+    await runTest();
   });
 
   test("round-trips readonly: true through write/read", async () => {
@@ -905,8 +902,9 @@ describe("profile readonly field", () => {
 describe("V1 to V2 migration", () => {
   const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     resetKeyringState();
+    await runTest();
   });
 
   test("migrates V1 config to V2 in memory without rewriting disk", async () => {
@@ -953,16 +951,14 @@ describe("keyring user persistence on V2 -> V1 downgrade", () => {
   const futureDate = new Date(Date.now() + 3600 * 1000).toISOString();
   const originalEnv = process.env;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.resetModules();
     resetKeyringState();
     process.env = { ...originalEnv };
     // Downgrade only happens when TAILOR_USE_KEYRING is unset, which is the
     // default for every command that is not opting into keyring storage.
     delete process.env.TAILOR_USE_KEYRING;
-  });
-
-  afterEach(() => {
+    await runTest();
     process.env = originalEnv;
   });
 
@@ -1139,8 +1135,4 @@ describe.skipIf(process.platform === "win32")("writePlatformConfig file permissi
     expect(fs.statSync(configPath).mode & 0o777).toBe(0o600);
     expect(fs.statSync(path.dirname(configPath)).mode & 0o777).toBe(0o700);
   });
-});
-
-afterAll(() => {
-  fs.rmSync(xdgTempDir, { recursive: true, force: true });
 });

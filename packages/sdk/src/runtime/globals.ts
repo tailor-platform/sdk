@@ -47,6 +47,7 @@ import type {
   User as IdpUser,
   UserQuery as IdpUserQuery,
 } from "./idp";
+import type { LogAttributeValue, LogAttributes } from "./logger";
 import type {
   AuthInvoker as WorkflowAuthInvoker,
   StartWorkflowOptions as WorkflowStartWorkflowOptions,
@@ -66,6 +67,8 @@ type TailorIdpUserQuery = IdpUserQuery;
 type TailorWorkflowAuthInvoker = WorkflowAuthInvoker;
 type TailorWorkflowTriggerWorkflowOptions = WorkflowTriggerWorkflowOptions;
 type TailorWorkflowStartWorkflowOptions = WorkflowStartWorkflowOptions;
+type TailorLoggerLogAttributeValue = LogAttributeValue;
+type TailorLoggerLogAttributes = LogAttributes;
 
 declare global {
   namespace tailordb {
@@ -138,6 +141,11 @@ declare global {
 
     namespace context {
       type Invoker = ContextInvoker;
+    }
+
+    namespace logger {
+      type LogAttributeValue = TailorLoggerLogAttributeValue;
+      type LogAttributes = TailorLoggerLogAttributes;
     }
   }
 

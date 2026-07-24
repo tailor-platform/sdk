@@ -24,4 +24,5 @@ export const entry = [
   "src/runtime/context.ts",
   "src/runtime/file.ts",
   "src/runtime/aigateway.ts",
+  "src/runtime/logger.ts",
 ];

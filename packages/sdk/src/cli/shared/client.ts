@@ -294,8 +294,10 @@ function connectCodeName(error: unknown): string {
  *
  * Membership is deliberately an allowlist, not `startsWith("Create")`: swallowing
  * synthesizes an empty response (see `synthesizeEmptyUnaryResponse`), which is only
- * safe when every caller ignores the response body. These are the deploy/apply
- * resource creations that fire under heavy parallelism and discard their response.
+ * safe when every caller tolerates an empty response body. These are the deploy/apply
+ * resource creations that fire under heavy parallelism and discard their response —
+ * except `CreateSecretManagerSecret`, whose caller reads `secret.updateTime` but
+ * degrades safely when it is absent (the next deploy re-updates the secret).
  *
  * Intentionally excluded because their callers read the response body — swallowing
  * would hand back an empty message and corrupt downstream state:

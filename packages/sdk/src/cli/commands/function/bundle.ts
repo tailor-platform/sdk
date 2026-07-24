@@ -8,7 +8,6 @@
 
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
 import {
   createLogLevelTreeshakeOptions,
@@ -18,7 +17,8 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
-import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import { buildResolverPermissionAndInputCheckExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import type { LogLevelInput } from "#/configure/config/types";
@@ -41,6 +41,8 @@ interface BundleForTestRunOptions {
   detected: DetectedFunction;
   /** Absolute path to the source file */
   sourceFile: string;
+  /** Directory to resolve the bundler's tsconfig against (the owning config's directory) */
+  baseDir: string;
   /** Environment variables (injected into workflow job bundles) */
   env?: Record<string, string | number | boolean>;
   /** Inline sourcemap config value from defineConfig */
@@ -68,7 +70,7 @@ interface BundleForTestRunResult {
 export async function bundleForTestRun(
   options: BundleForTestRunOptions,
 ): Promise<BundleForTestRunResult> {
-  const { detected, sourceFile, env = {}, machineUser, workspaceId } = options;
+  const { detected, sourceFile, baseDir, env = {}, machineUser, workspaceId } = options;
   const inlineSourcemap = resolveInlineSourcemap(options.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(options.logLevel);
 
@@ -82,12 +84,7 @@ export async function bundleForTestRun(
   const entryContent = generateEntry(detected, sourceFile, env, machineUser, workspaceId);
   fs.writeFileSync(entryPath, entryContent);
 
-  let tsconfig: string | undefined;
-  try {
-    tsconfig = await resolveTSConfig();
-  } catch {
-    tsconfig = undefined;
-  }
+  const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   const buildResult = await rolldown.build({
     plugins: [platformBundleDefinePlugin],
@@ -151,36 +148,22 @@ function generateEntry(
       `;
 
     case "resolver": {
-      // Mirrors the production resolver bundler (services/resolver/bundler.ts).
+      // Mirrors the production resolver bundler (services/resolver/bundler.ts):
+      // both call buildResolverPermissionAndInputCheckExpr so the permission
+      // guard and input validation can't drift between the two entry points.
       // In production, the operationHook injects user/env into context.
       // For test-run, we embed machine user info since there's no operationHook.
       const userExpr = buildMachineUserExpr(machineUser, workspaceId);
+      const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr(detected.permission);
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";
 
-        const _env = ${JSON.stringify(env)};
-        const _user = ${userExpr};
-
-        const $tailor_resolver_body = async (context) => {
-          const _invoker = ${INVOKER_EXPR};
-          if (_internalResolver.input) {
-            const result = t.object(_internalResolver.input).parse({
-              value: context,
-              data: context,
-              user: _user,
-            });
-
-            if (result.issues) {
-              throw new TailorErrors(result.issues.map(issue => ({
-                message: issue.message,
-                path: issue.path ?? [],
-              })));
-            }
-          }
-
-          const enrichedContext = { input: context, env: _env, user: _user, invoker: _invoker };
-          return _internalResolver.body(enrichedContext);
+        const $tailor_resolver_body = async (rawInput) => {
+          const invoker = ${INVOKER_EXPR};
+          const context = { input: rawInput, env: ${JSON.stringify(env)}, user: ${userExpr}, invoker };
+          ${guardAndInputCheckExpr}
+          return _internalResolver.body(context);
         };
 
         export { $tailor_resolver_body as main };

@@ -5,11 +5,12 @@
  * At runtime this delegates to `globalThis.tailor.workflow`. Use `mockWorkflow`
  * from `@tailor-platform/sdk/vitest` to mock these calls in unit tests.
  *
- * The canonical names (`startWorkflow`, `startJobFunction`,
+ * The canonical names (`startWorkflow`, `execJobFunction`,
  * `resumeWorkflowExecution`) mirror the public `tailor.v1` RPC vocabulary.
  * The pre-alignment names (`triggerWorkflow`, `triggerJobFunction`,
- * `resumeWorkflow`) are kept as frozen aliases that reference the same platform
- * implementations, so existing code continues to work unchanged.
+ * `startJobFunction`, `resumeWorkflow`) are kept as aliases that reference
+ * the same platform implementations, so existing code continues to work
+ * unchanged.
  * @example
  * import { workflow } from "@tailor-platform/sdk/runtime";
  *
@@ -51,8 +52,8 @@ declare const executionPolicyKeyBrand: unique symbol;
  */
 export type ExecutionPolicyKey = string & { readonly [executionPolicyKeyBrand]: never };
 
-/** Options for {@link startJobFunction}. */
-export interface StartJobFunctionOptions {
+/** Options for {@link execJobFunction}. */
+export interface ExecJobFunctionOptions {
   /**
    * Execution policy key matched by the platform against the policies
    * declared with `defineWorkflowExecutionPolicies` in `tailor.config.ts`.
@@ -61,10 +62,16 @@ export interface StartJobFunctionOptions {
 }
 
 /**
- * Frozen alias for {@link StartJobFunctionOptions}. Kept for backward compatibility.
- * @deprecated Use {@link StartJobFunctionOptions} instead.
+ * Alias for {@link ExecJobFunctionOptions}. Kept for backward compatibility.
+ * @deprecated Use {@link ExecJobFunctionOptions} instead.
  */
-export type TriggerJobFunctionOptions = StartJobFunctionOptions;
+export type StartJobFunctionOptions = ExecJobFunctionOptions;
+
+/**
+ * Frozen alias for {@link ExecJobFunctionOptions}. Kept for backward compatibility.
+ * @deprecated Use {@link ExecJobFunctionOptions} instead.
+ */
+export type TriggerJobFunctionOptions = ExecJobFunctionOptions;
 
 /**
  * Platform API surface for `tailor.workflow`. Describes the shape the platform
@@ -116,21 +123,27 @@ export interface TailorWorkflowAPI {
   resumeWorkflow(executionId: string): Promise<string>;
 
   /**
-   * Starts a job function and returns its result.
+   * Executes a job function and returns its result.
    *
    * Canonical name that mirrors the `tailor.v1` RPC vocabulary.
-   * {@link triggerJobFunction} is a frozen alias that resolves to the same
-   * platform implementation.
+   * {@link startJobFunction} and {@link triggerJobFunction} are aliases that
+   * resolve to the same platform implementation.
    * @param jobName - Job name as defined in the workflow
    * @param args - Arguments forwarded to the job
-   * @param options - Optional start options (e.g. `executionPolicyKey`)
+   * @param options - Optional exec options (e.g. `executionPolicyKey`)
    * @returns The job's return value
+   */
+  execJobFunction(jobName: string, args?: any, options?: ExecJobFunctionOptions): any;
+
+  /**
+   * Alias for {@link execJobFunction}. Kept for backward compatibility.
+   * @deprecated Use {@link execJobFunction} instead.
    */
   startJobFunction(jobName: string, args?: any, options?: StartJobFunctionOptions): any;
 
   /**
-   * Frozen alias for {@link startJobFunction}. Kept for backward compatibility.
-   * @deprecated Use {@link startJobFunction} instead.
+   * Frozen alias for {@link execJobFunction}. Kept for backward compatibility.
+   * @deprecated Use {@link execJobFunction} instead.
    */
   triggerJobFunction(jobName: string, args?: any, options?: TriggerJobFunctionOptions): any;
 
@@ -190,21 +203,30 @@ export const resumeWorkflow: TailorWorkflowAPI["resumeWorkflow"] = (...args) =>
   api().resumeWorkflow(...args);
 
 /**
- * See {@link TailorWorkflowAPI.startJobFunction}.
- * @param args - Forwarded to {@link TailorWorkflowAPI.startJobFunction}
+ * See {@link TailorWorkflowAPI.execJobFunction}.
+ * @param args - Forwarded to {@link TailorWorkflowAPI.execJobFunction}
+ * @returns The job's return value
+ */
+export const execJobFunction: TailorWorkflowAPI["execJobFunction"] = (...args) =>
+  api().execJobFunction(...args);
+
+/**
+ * Alias for {@link execJobFunction}. Kept for backward compatibility.
+ * @deprecated Use {@link execJobFunction} instead.
+ * @param args - Forwarded to {@link TailorWorkflowAPI.execJobFunction}
  * @returns The job's return value
  */
 export const startJobFunction: TailorWorkflowAPI["startJobFunction"] = (...args) =>
-  api().startJobFunction(...args);
+  api().execJobFunction(...args);
 
 /**
- * Frozen alias for {@link startJobFunction}. Kept for backward compatibility.
- * @deprecated Use {@link startJobFunction} instead.
- * @param args - Forwarded to {@link TailorWorkflowAPI.triggerJobFunction}
+ * Frozen alias for {@link execJobFunction}. Kept for backward compatibility.
+ * @deprecated Use {@link execJobFunction} instead.
+ * @param args - Forwarded to {@link TailorWorkflowAPI.execJobFunction}
  * @returns The job's return value
  */
 export const triggerJobFunction: TailorWorkflowAPI["triggerJobFunction"] = (...args) =>
-  api().triggerJobFunction(...args);
+  api().execJobFunction(...args);
 
 /**
  * See {@link TailorWorkflowAPI.wait}.

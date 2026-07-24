@@ -1,17 +1,15 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { aroundEach, describe, expect, test } from "vitest";
 import { detectInstalledVersion } from "./version-detector";
 
 describe("version-detector", () => {
   let tmpDir: string;
 
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     tmpDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "version-detect-test-"));
-  });
-
-  afterEach(async () => {
+    await runTest();
     await fs.promises.rm(tmpDir, { recursive: true, force: true });
   });
 

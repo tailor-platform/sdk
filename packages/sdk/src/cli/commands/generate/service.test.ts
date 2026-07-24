@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, expect, test, beforeEach, afterEach, vi, afterAll } from "vitest";
+import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { defineApplication } from "#/cli/services/application";
 import { createResolver } from "#/configure/services/resolver/resolver";
 import { db } from "#/configure/services/tailordb/schema";
@@ -150,18 +150,18 @@ function parsedTestTypes(typeNames: string[], namespace = "test-namespace", sour
 }
 
 describe("GenerationManager", () => {
-  let tempDir: string;
   // For test-only access to private members
   // oxlint-disable-next-line no-explicit-any
   let manager: any;
   let mockConfig: LoadedConfig;
 
-  afterAll(() => {
+  aroundAll(async (runSuite) => {
+    await runSuite();
     vi.clearAllMocks();
   });
 
-  beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "generation-manager-test-"));
+  aroundEach(async (runTest) => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "generation-manager-test-"));
 
     mockConfig = {
       name: "testApp",
@@ -178,9 +178,9 @@ describe("GenerationManager", () => {
       // oxlint-disable-next-line no-explicit-any
       generators: [new TestGenerator()] as any,
     });
-  });
 
-  afterEach(() => {
+    await runTest();
+
     if (fs.existsSync(tempDir)) {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
@@ -274,7 +274,7 @@ describe("GenerationManager", () => {
   });
 
   describe("runGenerators (via generate)", () => {
-    beforeEach(() => {
+    aroundEach(async (runTest) => {
       manager.services = {
         tailordb: {
           "test-namespace": {
@@ -289,6 +289,7 @@ describe("GenerationManager", () => {
         },
         executor: {},
       };
+      await runTest();
     });
 
     test("processes all generators through generate method", async () => {
@@ -328,7 +329,7 @@ describe("GenerationManager", () => {
   describe("processGenerator", () => {
     let testGenerator: TestGenerator;
 
-    beforeEach(() => {
+    aroundEach(async (runTest) => {
       testGenerator = new TestGenerator();
       manager.generators = [testGenerator];
 
@@ -340,6 +341,7 @@ describe("GenerationManager", () => {
       manager.services.resolver["test-namespace"] = {
         testResolver: testResolver("testResolver"),
       };
+      await runTest();
     });
 
     test("complete processing of single generator", async () => {
@@ -374,9 +376,10 @@ describe("GenerationManager", () => {
   describe("processTailorDBNamespace", () => {
     let testGenerator: TestGenerator;
 
-    beforeEach(() => {
+    aroundEach(async (runTest) => {
       testGenerator = new TestGenerator();
       manager.generatorResults[testGenerator.id] = emptyGeneratorResult();
+      await runTest();
     });
 
     test("processes all types", async () => {
@@ -447,9 +450,10 @@ describe("GenerationManager", () => {
   describe("processResolverNamespace", () => {
     let testGenerator: TestGenerator;
 
-    beforeEach(() => {
+    aroundEach(async (runTest) => {
       testGenerator = new TestGenerator();
       manager.generatorResults[testGenerator.id] = emptyGeneratorResult();
+      await runTest();
     });
 
     test("processes all resolvers", async () => {
@@ -474,7 +478,7 @@ describe("GenerationManager", () => {
   describe("aggregate", () => {
     let testGenerator: TestGenerator;
 
-    beforeEach(() => {
+    aroundEach(async (runTest) => {
       testGenerator = new TestGenerator();
       manager.generatorResults[testGenerator.id] = {
         ...emptyGeneratorResult(),
@@ -485,6 +489,7 @@ describe("GenerationManager", () => {
           "test-namespace": { resolvers: "processed" },
         },
       };
+      await runTest();
     });
 
     test("calls generator aggregate method", async () => {
@@ -589,11 +594,12 @@ describe("GenerationManager", () => {
 describe("generate function", () => {
   let mockConfig: LoadedConfig;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     mockConfig = {
       name: "test-workspace",
       path: "tailor.config.ts",
     };
+    await runTest();
   });
 
   test("generate does not automatically call watch", async () => {
@@ -605,11 +611,10 @@ describe("generate function", () => {
 });
 
 describe("Integration Tests", () => {
-  let tempDir: string;
   let fullConfig: LoadedConfig;
 
-  beforeEach(async () => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "integration-test-"));
+  aroundEach(async (runTest) => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "integration-test-"));
 
     fullConfig = {
       name: "testApp",
@@ -625,9 +630,9 @@ describe("Integration Tests", () => {
         },
       },
     };
-  });
 
-  afterEach(() => {
+    await runTest();
+
     if (fs.existsSync(tempDir)) {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }

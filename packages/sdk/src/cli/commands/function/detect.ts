@@ -13,6 +13,7 @@ import { WorkflowJobSchema } from "#/parser/service/workflow/index";
 import { type FieldRuntime, parseInputFields } from "#/runtime/field-parse";
 import { assertDefined } from "#/utils/assert";
 import type { TailorUser } from "#/runtime/types";
+import type { Resolver } from "#/types/resolver.generated";
 
 export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
 
@@ -42,6 +43,8 @@ export interface DetectedFunction {
   hasInput?: boolean;
   /** For resolvers with input: pre-built schema object with .parse() for local format detection */
   inputSchema?: InputSchema;
+  /** For resolvers: the resolver's `permission` config, enforced the same way as production */
+  permission?: Resolver["permission"];
 }
 
 interface DetectFunctionOptions {
@@ -83,6 +86,7 @@ export async function detectFunctionType(
       name: resolverResult.data.name,
       hasInput: rawInput != null,
       inputSchema,
+      permission: resolverResult.data.permission,
     };
   }
 

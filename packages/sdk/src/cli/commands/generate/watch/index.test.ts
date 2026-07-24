@@ -2,7 +2,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { logger } from "#/cli/shared/logger";
 import type * as Chokidar from "chokidar";
 
@@ -36,7 +36,7 @@ import {
 
 let manager: DependencyGraphManager;
 
-beforeEach(() => {
+aroundEach(async (runTest) => {
   madgeMock.mockReset();
   madgeMock.mockImplementation(async () => ({
     obj: () => ({}),
@@ -44,6 +44,7 @@ beforeEach(() => {
   }));
   chokidarWatchMock.mockClear();
   manager = createDependencyGraphManager();
+  await runTest();
 });
 
 async function createTempDir(): Promise<string> {
@@ -59,15 +60,13 @@ describe("DependencyWatcher", () => {
   let tempDir: string;
   let watcher: DependencyWatcher;
 
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     tempDir = await createTempDir();
     watcher = createDependencyWatcher({
       debounceTime: 10,
       detectCircularDependencies: true,
     });
-  });
-
-  afterEach(async () => {
+    await runTest();
     await watcher.stop();
     await fs.rm(tempDir, { recursive: true, force: true });
   });
@@ -278,11 +277,9 @@ describe("DependencyWatcher", () => {
 describe("DependencyGraphManager", () => {
   let tempDir: string;
 
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     tempDir = await createTempDir();
-  });
-
-  afterEach(async () => {
+    await runTest();
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 

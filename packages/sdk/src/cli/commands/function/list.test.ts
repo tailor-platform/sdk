@@ -1,6 +1,6 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { PageDirection } from "@tailor-platform/tailor-proto/resource_pb";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { listFunctionRegistries } from "./list";
@@ -33,7 +33,7 @@ function fakeRegistry(name: string) {
 describe("listFunctionRegistries", () => {
   let listMock: ReturnType<typeof vi.fn>;
 
-  beforeEach(() => {
+  aroundEach(async (runTest) => {
     vi.clearAllMocks();
     vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
     vi.mocked(loadWorkspaceId).mockResolvedValue("workspace-1");
@@ -41,6 +41,7 @@ describe("listFunctionRegistries", () => {
     vi.mocked(initOperatorClient).mockResolvedValue({
       listFunctionRegistries: listMock,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    await runTest();
   });
 
   test.each([

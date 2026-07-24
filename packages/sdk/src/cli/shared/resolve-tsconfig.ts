@@ -27,7 +27,7 @@ export async function resolveTSConfigWithFallback(baseDir: string): Promise<stri
     warnedBaseDirs.add(baseDir);
     logger.warn(
       `No tsconfig found from "${baseDir}"; falling back to the tsconfig resolved from ` +
-        `process.cwd(). Move (or extend) a tsconfig into this config's own directory before ` +
+        `process.cwd(). Move (or extend) a tsconfig into this directory before ` +
         `v2, when this fallback will be removed.`,
     );
   }

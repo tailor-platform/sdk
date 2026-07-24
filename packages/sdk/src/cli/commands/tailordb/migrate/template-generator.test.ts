@@ -1,13 +1,14 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
-import { describe, expect, test, beforeEach, afterEach } from "vitest";
+import { describe, expect, test, aroundEach } from "vitest";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import {
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
   DB_TYPES_FILE_NAME,
+  compareSnapshots,
   getMigrationDirPath,
   type SchemaSnapshot,
 } from "./snapshot";
@@ -22,11 +23,9 @@ import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 describe("template-generator", () => {
   let tempDir: string;
 
-  beforeEach(async () => {
+  aroundEach(async (runTest) => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "migration-test-"));
-  });
-
-  afterEach(async () => {
+    await runTest();
     await fs.rm(tempDir, { recursive: true, force: true });
   });
 
@@ -264,6 +263,366 @@ describe("template-generator", () => {
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
       expect(scriptContent).toContain("email");
       expect(scriptContent).toContain("unique");
+    });
+
+    test("should generate migration script for unique index addition", async () => {
+      const snapshotWithoutIndex = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            name: { type: "string", required: true },
+            org: { type: "string", required: true },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "index_added",
+            typeName: "User",
+            indexName: "name_org",
+            after: { fields: ["name", "org"], unique: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { typeName: "User", reason: 'Unique constraint added to index "name_org"' },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithoutIndex);
+
+      expect(result.migrateFilePath).toBeDefined();
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain('.groupBy(["name", "org"])');
+      expect(scriptContent).toContain('.where("name", "=", dup.name)');
+      expect(scriptContent).toContain('.where("org", "=", dup.org)');
+      expect(scriptContent).not.toContain("No data migration needed");
+    });
+
+    test("should generate migration script when an existing index gains unique", async () => {
+      const snapshotWithIndex = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            name: { type: "string", required: true },
+          },
+          indexes: {
+            name_idx: { fields: ["name"], unique: false },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "index_modified",
+            typeName: "User",
+            indexName: "name_idx",
+            before: { fields: ["name"], unique: false },
+            after: { fields: ["name"], unique: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { typeName: "User", reason: 'Unique constraint added to index "name_idx"' },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithIndex);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain('.groupBy(["name"])');
+      expect(scriptContent).not.toContain("No data migration needed");
+    });
+
+    test("should re-save decimal values before resolving unique index duplicates", async () => {
+      const previous = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: true, scale: 4 },
+          },
+        },
+      });
+      const current = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: true, scale: 2 },
+          },
+          indexes: {
+            price_idx: { fields: ["price"], unique: true },
+          },
+        },
+      });
+      const diff = compareSnapshots(previous, current);
+
+      const result = await generateDiffFiles(diff, tempDir, 1, previous);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      const decimalUpdatePosition = scriptContent.indexOf(".set({ price: row.price })");
+      const indexDedupePosition = scriptContent.indexOf('.groupBy(["price"])');
+
+      expect(decimalUpdatePosition).toBeGreaterThan(-1);
+      expect(indexDedupePosition).toBeGreaterThan(-1);
+      expect(decimalUpdatePosition).toBeLessThan(indexDedupePosition);
+    });
+
+    test("should scope unique migrations for multiple fields independently", async () => {
+      const snapshotWithoutUnique = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            email: { type: "string", required: true, unique: false },
+            username: { type: "string", required: true, unique: false },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: ["email", "username"].map((fieldName) => ({
+          kind: "field_modified" as const,
+          typeName: "User",
+          fieldName,
+          before: { type: "string" as const, required: true, unique: false },
+          after: { type: "string" as const, required: true, unique: true },
+        })),
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { typeName: "User", fieldName: "email", reason: "Unique constraint added to field" },
+          {
+            typeName: "User",
+            fieldName: "username",
+            reason: "Unique constraint added to field",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithoutUnique);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent.match(/\{\n {4}const duplicates =/g) ?? []).toHaveLength(2);
+    });
+
+    test("should scope foreign key migrations for multiple fields independently", async () => {
+      const snapshotWithOldReferences = createTestSnapshot({
+        Order: {
+          name: "Order",
+          pluralForm: "Orders",
+          fields: {
+            parentId: {
+              type: "uuid",
+              required: true,
+              foreignKeyType: "LegacyParent",
+            },
+            ownerId: {
+              type: "uuid",
+              required: true,
+              foreignKeyType: "LegacyOwner",
+            },
+          },
+        },
+      });
+
+      const changes = [
+        { fieldName: "parentId", beforeType: "LegacyParent", afterType: "Parent" },
+        { fieldName: "ownerId", beforeType: "LegacyOwner", afterType: "Owner" },
+      ];
+      const diff = createMockMigrationDiff({
+        changes: changes.map(({ fieldName, beforeType, afterType }) => ({
+          kind: "field_modified" as const,
+          typeName: "Order",
+          fieldName,
+          before: { type: "uuid" as const, required: true, foreignKeyType: beforeType },
+          after: { type: "uuid" as const, required: true, foreignKeyType: afterType },
+        })),
+        hasBreakingChanges: true,
+        breakingChanges: changes.map(({ fieldName, beforeType, afterType }) => ({
+          typeName: "Order",
+          fieldName,
+          reason: `Foreign key target changed from ${beforeType} to ${afterType}`,
+        })),
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithOldReferences);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent.match(/\{\n {4}const orphanedRecords =/g) ?? []).toHaveLength(2);
+    });
+
+    test("should warn that decreasing decimal scale can round values", async () => {
+      const snapshotWithScale4 = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: true, scale: 4 },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "Item",
+            fieldName: "price",
+            before: { type: "decimal", required: true, scale: 4 },
+            after: { type: "decimal", required: true, scale: 2 },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { typeName: "Item", fieldName: "price", reason: "Decimal scale changed from 4 to 2" },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale4);
+
+      expect(result.migrateFilePath).toBeDefined();
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain('.selectFrom("Item")');
+      expect(scriptContent).toContain('.where("price", "is not", null)');
+      expect(scriptContent).toContain('.orderBy("id", "asc")');
+      expect(scriptContent).toContain(".limit(100)");
+      expect(scriptContent).toContain('.where("id", ">", lastId)');
+      expect(scriptContent).toContain(".set({ price: row.price })");
+      expect(scriptContent).toContain('.where("price", "=", row.price)');
+      expect(scriptContent).toContain("platform-side");
+      expect(scriptContent).toContain("may be rounded");
+      expect(scriptContent).not.toContain("No data migration needed");
+    });
+
+    test("should preserve optional-to-required migration when decimal scale also changes", async () => {
+      const snapshotWithScale2 = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: false, scale: 2 },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "Item",
+            fieldName: "price",
+            before: { type: "decimal", required: false, scale: 2 },
+            after: { type: "decimal", required: true, scale: 4 },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "Item",
+            fieldName: "price",
+            reason: "Field changed from optional to required",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale2);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent).toContain('.where("price", "is", null)');
+      expect(scriptContent).toContain(".set({ price: row.price! })");
+    });
+
+    test("should preserve unique migration when decimal scale also changes", async () => {
+      const snapshotWithScale4 = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: true, unique: false, scale: 4 },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "Item",
+            fieldName: "price",
+            before: { type: "decimal", required: true, unique: false, scale: 4 },
+            after: { type: "decimal", required: true, unique: true, scale: 2 },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          { typeName: "Item", fieldName: "price", reason: "Unique constraint added to field" },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale4);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent).toContain("const duplicates");
+      expect(scriptContent).toContain(".set({ price: row.price })");
+      expect(scriptContent.indexOf(".set({ price: row.price })")).toBeLessThan(
+        scriptContent.indexOf("const duplicates"),
+      );
+    });
+
+    test("should preserve required, unique, and scale migrations on the same decimal field", async () => {
+      const snapshotWithScale2 = createTestSnapshot({
+        Item: {
+          name: "Item",
+          pluralForm: "Items",
+          fields: {
+            price: { type: "decimal", required: false, unique: false, scale: 2 },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "Item",
+            fieldName: "price",
+            before: { type: "decimal", required: false, unique: false, scale: 2 },
+            after: { type: "decimal", required: true, unique: true, scale: 4 },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "Item",
+            fieldName: "price",
+            reason: "Field changed from optional to required",
+          },
+          { typeName: "Item", fieldName: "price", reason: "Unique constraint added to field" },
+          { typeName: "Item", fieldName: "price", reason: "Decimal scale changed from 2 to 4" },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithScale2);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent).toContain('.where("price", "is", null)');
+      expect(scriptContent).toContain("const duplicates");
+      expect(scriptContent).toContain(".set({ price: row.price! })");
     });
 
     test("should generate migration script for enum values removal", async () => {

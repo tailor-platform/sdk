@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { aroundAll, describe, expect, test } from "vitest";
 import {
   createBlockedGlobalsLifecycle,
   extractVaultStore,
@@ -94,11 +94,9 @@ describe("extractVaultStore", () => {
 describe("loadSecretsFromConfig", () => {
   let tmpDir: string;
 
-  beforeAll(() => {
+  aroundAll(async (runSuite) => {
     tmpDir = mkdtempSync(join(tmpdir(), "tailor-runtime-secrets-"));
-  });
-
-  afterAll(() => {
+    await runSuite();
     rmSync(tmpDir, { recursive: true, force: true });
   });
 

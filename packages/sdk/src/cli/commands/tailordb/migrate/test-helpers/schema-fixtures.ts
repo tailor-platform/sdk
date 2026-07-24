@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
-import { SCHEMA_SNAPSHOT_VERSION } from "../diff-calculator";
+import { SCHEMA_SNAPSHOT_VERSION, type MigrationDiff } from "../diff-calculator";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
 import type { SchemaSnapshot, TailorDBSnapshotType } from "../snapshot";
 
@@ -66,13 +66,13 @@ export function writeInitialSchema(
  * @param {string} migrationsDir - Migrations directory path
  * @param {number} number - Migration number
  * @param {unknown[]} changes - Diff change entries
- * @param {boolean} requiresMigrationScript - Whether the diff requires a migrate.ts
+ * @param {Partial<MigrationDiff>} overrides - Diff fields to override (e.g. requiresMigrationScript, scriptSkipped)
  */
 export function writeDiff(
   migrationsDir: string,
   number: number,
   changes: unknown[],
-  requiresMigrationScript = false,
+  overrides: Partial<MigrationDiff> = {},
 ): void {
   const dir = path.join(migrationsDir, number.toString().padStart(4, "0"));
   fs.mkdirSync(dir, { recursive: true });
@@ -87,7 +87,8 @@ export function writeDiff(
       breakingChanges: [],
       hasWarnings: false,
       warnings: [],
-      requiresMigrationScript,
+      requiresMigrationScript: false,
+      ...overrides,
     }),
   );
 }

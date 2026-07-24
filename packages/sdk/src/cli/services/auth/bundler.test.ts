@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { aroundEach, describe, expect, test, vi } from "vitest";
 import { bundleAuthHooks } from "./bundler";
 import type * as pkgTypes from "pkg-types";
 
@@ -16,7 +16,8 @@ vi.mock("pkg-types", async (importOriginal) => {
 describe("bundleAuthHooks", () => {
   let tmpDir: string | undefined;
 
-  afterEach(() => {
+  aroundEach(async (runTest) => {
+    await runTest();
     if (tmpDir) {
       fs.rmSync(tmpDir, { recursive: true, force: true });
       tmpDir = undefined;

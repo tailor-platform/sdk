@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from "vitest";
+import { aroundEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createWorkflowJob } from "../configure/services/workflow/job";
 import { defineWaitPoint } from "../configure/services/workflow/wait-point";
 import { createWorkflow } from "../configure/services/workflow/workflow";
 import {
-  cleanupMocks,
   injectMocks,
   mockAigateway,
   mockAuthconnection,
@@ -34,12 +33,9 @@ const approval = defineWaitPoint<{ message: string }, { approved: boolean }>(
 );
 
 describe("ergonomic runtime mocks", () => {
-  beforeEach(() => {
-    injectMocks(globalThis);
-  });
-
-  afterEach(() => {
-    cleanupMocks(globalThis);
+  aroundEach(async (runTest) => {
+    using _mocks = injectMocks(globalThis);
+    await runTest();
   });
 
   test("matches TailorDB queries without coupling responses to global call order", async () => {

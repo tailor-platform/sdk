@@ -16,7 +16,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, test, expect, beforeAll } from "vitest";
+import { describe, test, expect, aroundAll } from "vitest";
 import { deploy } from "../src/cli/commands/deploy/deploy";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
@@ -50,7 +50,7 @@ describe("E2E: Service deletion order", () => {
   // Node.js module caching).
   const sharedTestAppId = crypto.randomUUID();
 
-  beforeAll(async () => {
+  aroundAll(async (runSuite) => {
     // Initialize client (supports both TAILOR_PLATFORM_TOKEN env var and platform config login)
     const accessToken = await loadAccessToken();
     client = await initOperatorClient(accessToken);
@@ -81,6 +81,8 @@ describe("E2E: Service deletion order", () => {
     const nodeModulesDir = path.join(tempDir, "node_modules", "@tailor-platform");
     fs.mkdirSync(nodeModulesDir, { recursive: true });
     fs.symlinkSync(sdkRoot, path.join(nodeModulesDir, "sdk"));
+
+    await runSuite();
   }, 120000); // 2 minute timeout for workspace creation
 
   /**
