@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -280,6 +281,47 @@ describe("tailordb migration validate", () => {
       skipped: "no_migration_label",
     });
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+  });
+
+  test("fails when the remote migration checkpoint is not in the local history", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0005" } },
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(false);
+    expect(report.remoteSchema.remoteMigrationNumber).toBe(5);
+    expect(report.remoteSchema.checkpointMissingLocal).toBe(true);
+  });
+
+  test("reports malformed migration file contents per namespace", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    const dir = path.join(state.migrationsDir, "0001");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "diff.json"), "{ not json");
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(false);
+    expect(report.migrationFiles.valid).toBe(false);
+    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+  });
+
+  test("fails when the remote migration state cannot be read", async () => {
+    state.getMetadata.mockRejectedValue(new ConnectError("boom", Code.Internal));
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/boom/);
   });
 
   test("rejects an unknown --namespace", async () => {

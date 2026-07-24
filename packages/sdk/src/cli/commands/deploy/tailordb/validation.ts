@@ -26,7 +26,7 @@ import {
   type SnapshotSettings,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
-import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { resourceTrn } from "../label";
@@ -216,18 +216,19 @@ export async function getRemoteMigrationNumber(
   workspaceId: string,
   namespace: string,
 ): Promise<number | null> {
-  try {
-    const trn = resourceTrn(workspaceId, "tailordb", namespace);
+  // Only NotFound reads as "no migration state yet" (first apply); any other
+  // lookup failure propagates so it cannot silently skip remote verification.
+  const trn = resourceTrn(workspaceId, "tailordb", namespace);
+  const metadata = await getOrNull(async () => {
     const { metadata } = await client.getMetadata({ trn });
-    const label = metadata?.labels["sdk-migration"];
-    if (!label) return null; // No migration label means first apply
-    const match = label.match(/^m(\d+)$/);
-    return match
-      ? parseInt(assertDefined(match[1], "migration label capture group missing"), 10)
-      : null;
-  } catch {
-    return null;
-  }
+    return metadata;
+  });
+  const label = metadata?.labels["sdk-migration"];
+  if (!label) return null; // No migration label means first apply
+  const match = label.match(/^m(\d+)$/);
+  return match
+    ? parseInt(assertDefined(match[1], "migration label capture group missing"), 10)
+    : null;
 }
 
 /**

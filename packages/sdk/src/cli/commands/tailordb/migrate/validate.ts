@@ -18,7 +18,13 @@ import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { formatDiffSummary, formatMigrationDiff, type MigrationDiff } from "./diff-calculator";
-import { assertValidMigrationFiles, formatMigrationNumber, formatSchemaDrifts } from "./snapshot";
+import {
+  assertValidMigrationFiles,
+  formatMigrationNumber,
+  formatSchemaDrifts,
+  getLatestMigrationNumber,
+  reconstructSnapshotFromMigrations,
+} from "./snapshot";
 import type { RemoteSchemaVerificationSkipReason, SchemaDrift } from "./types";
 
 export interface ValidateOptions {
@@ -46,6 +52,8 @@ interface RemoteSchemaReport {
   drifts: SchemaDrift[];
   /** Set when the remote check could not run (no remote migration label, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
+  /** Set when the remote migration checkpoint does not exist in the local migration history */
+  checkpointMissingLocal?: boolean;
 }
 
 interface NamespaceValidationReport {
@@ -114,6 +122,9 @@ async function collectValidationReports(
   for (const target of targetNamespaces) {
     try {
       assertValidMigrationFiles(target.migrationsDir, target.namespace);
+      // Parse the whole history here so malformed snapshot/diff contents are
+      // reported per namespace instead of aborting the run for every namespace.
+      reconstructSnapshotFromMigrations(target.migrationsDir);
       checkableNamespaces.push(target);
     } catch (error) {
       migrationFileErrors.set(
@@ -154,16 +165,20 @@ async function collectValidationReports(
       hasDiff: local.hasDiff,
       ...(local.diff ? { diff: local.diff } : {}),
     };
+    const checkpointMissingLocal =
+      !remote.skipped &&
+      remote.remoteMigrationNumber > getLatestMigrationNumber(target.migrationsDir);
     const remoteSchema: RemoteSchemaReport = {
       remoteMigrationNumber: remote.remoteMigrationNumber,
       hasDrift: remote.hasDrift,
       drifts: remote.drifts,
       ...(remote.skipped ? { skipped: remote.skipped } : {}),
+      ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
     };
 
     return {
       namespace: target.namespace,
-      valid: !localSchema.hasDiff && !remoteSchema.hasDrift,
+      valid: !localSchema.hasDiff && !remoteSchema.hasDrift && !checkpointMissingLocal,
       migrationFiles: { valid: true },
       localSchema,
       remoteSchema,
@@ -197,7 +212,16 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
     }
 
     const remote = report.remoteSchema;
-    if (remote?.hasDrift) {
+    if (remote?.checkpointMissingLocal) {
+      logger.log(
+        `  Remote schema: ${styles.error(
+          `remote migration ${formatMigrationNumber(remote.remoteMigrationNumber)} is not in the local migration history`,
+        )}`,
+      );
+      if (remote.hasDrift) {
+        logger.log(formatSchemaDrifts(remote.drifts));
+      }
+    } else if (remote?.hasDrift) {
       logger.log(
         `  Remote schema: ${styles.error("drift detected")} (remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)})`,
       );
@@ -223,6 +247,11 @@ function printResolutionHints(reports: NamespaceValidationReport[]): void {
   }
   if (reports.some((r) => r.localSchema?.diff)) {
     logger.info("Run 'tailor-sdk tailordb migration generate' to create migration files.");
+  }
+  if (reports.some((r) => r.remoteSchema?.checkpointMissingLocal)) {
+    logger.info(
+      "The remote migration checkpoint is ahead of the local history. Pull the latest migration files, or run 'tailor-sdk tailordb migration status' to compare.",
+    );
   }
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
     logRemoteDriftGuidance();
