@@ -7,7 +7,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
-          include: ["index.test.js"],
+          include: ["index.test.js", "rules/*.test.js"],
         },
       },
     ],
