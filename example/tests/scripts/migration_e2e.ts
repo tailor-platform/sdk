@@ -14,7 +14,10 @@ import {
 } from "@tailor-platform/sdk/cli";
 import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_pb";
 
-type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
+interface JsonObject {
+  [key: string]: JsonValue;
+}
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const exampleDir = path.resolve(scriptDir, "..", "..");
@@ -272,7 +275,7 @@ const seedData = async (
     workspaceId,
     name: `${label}.js`,
     code: bundled.bundledCode,
-    arg: { data, order } as unknown as Record<string, JsonValue>,
+    arg: { data, order } as unknown as JsonObject,
     invoker,
   });
   if (!result.success) {
