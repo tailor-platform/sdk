@@ -10,9 +10,6 @@ export default {
     "e2e/fixtures/**",
     "src/cli/commands/deploy/__test_fixtures__/**",
     "src/cli/ts-hook.d.mts",
-    // Bin shim copied verbatim to dist/cli/index.mjs (tsdown.config.ts); its
-    // `./main.mjs` import only resolves post-build, not in src/.
-    "src/cli/index.mjs",
     "src/types/*.ts",
     "src/vitest/integration/vitest.config.ts",
     "zinfer.config.ts",
