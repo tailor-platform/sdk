@@ -67,6 +67,7 @@ Note: Migration scripts are automatically executed during `tailor-sdk deploy`. S
 {{politty:command:tailordb migration set}}
 {{politty:command:tailordb migration status}}
 {{politty:command:tailordb migration sync}}
+{{politty:command:tailordb migration validate}}
 
 **See also:** For migration concepts, configuration, workflow, and troubleshooting, see the [TailorDB Migrations guide](../services/tailordb-migration.md).
 

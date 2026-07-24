@@ -113,6 +113,7 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "tailordb/migrate/generate.ts",
   "tailordb/migrate/script.ts",
   "tailordb/migrate/status.ts",
+  "tailordb/migrate/validate.ts",
   // Upgrade (local SDK upgrade)
   "upgrade/index.ts",
   // User (read-only / local switch)
