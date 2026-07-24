@@ -27,6 +27,7 @@ import {
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
 import { assertDefined } from "#/utils/assert";
 import { resourceTrn } from "../label";
 import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
@@ -259,6 +260,7 @@ export async function verifyRemoteSchema(
         remoteMigrationNumber: 0,
         drifts: [],
         hasDrift: false,
+        skipped: "no_migration_label",
       });
       continue;
     }
@@ -275,6 +277,7 @@ export async function verifyRemoteSchema(
         remoteMigrationNumber,
         drifts: [],
         hasDrift: false,
+        skipped: "no_snapshot",
       });
       continue;
     }
@@ -306,6 +309,29 @@ export async function verifyRemoteSchema(
   }
 
   return results;
+}
+
+/**
+ * Log common causes of remote schema drift and how to resolve them
+ */
+export function logRemoteDriftGuidance(): void {
+  logger.info("This may indicate:");
+  logger.info("  - Another developer applied different migrations", { mode: "plain" });
+  logger.info("  - Manual schema changes were made directly", { mode: "plain" });
+  logger.info("  - Migration history is out of sync", { mode: "plain" });
+  logger.newline();
+  logger.info("To resolve:");
+  logger.info("  - Run 'tailor-sdk tailordb migration status' to compare local vs remote.", {
+    mode: "plain",
+  });
+  logger.info("  - If remote is correct, update local types and run 'migration generate'.", {
+    mode: "plain",
+  });
+  logger.info(
+    "  - If local migration history is correct, run 'migration sync <N>' to overwrite remote.",
+    { mode: "plain" },
+  );
+  logger.info("  - If only bookkeeping is stale, run 'migration set <N>'.", { mode: "plain" });
 }
 
 /**

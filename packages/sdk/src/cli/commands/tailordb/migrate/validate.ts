@@ -3,6 +3,7 @@ import { arg } from "politty";
 import { z } from "zod";
 import {
   checkMigrationDiffs,
+  logRemoteDriftGuidance,
   toTailorDBDeployInput,
   verifyRemoteSchema,
 } from "#/cli/commands/deploy/tailordb/validation";
@@ -18,7 +19,7 @@ import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { formatDiffSummary, formatMigrationDiff, type MigrationDiff } from "./diff-calculator";
 import { assertValidMigrationFiles, formatMigrationNumber, formatSchemaDrifts } from "./snapshot";
-import type { SchemaDrift } from "./types";
+import type { RemoteSchemaVerificationSkipReason, SchemaDrift } from "./types";
 
 export interface ValidateOptions {
   configPath?: string;
@@ -43,6 +44,8 @@ interface RemoteSchemaReport {
   remoteMigrationNumber: number;
   hasDrift: boolean;
   drifts: SchemaDrift[];
+  /** Set when the remote check could not run (no remote migration label, or no snapshot at the remote migration number) */
+  skipped?: RemoteSchemaVerificationSkipReason;
 }
 
 interface NamespaceValidationReport {
@@ -83,6 +86,8 @@ async function collectValidationReports(
   const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
   const { defineApplication } = await import("#/cli/services/application");
   const application = defineApplication({ config, pluginManager });
+  // Load every namespace (not just the targets): plugins registered while
+  // types load may contribute types to the target namespaces.
   for (const service of application.tailorDBServices) {
     await service.loadTypes();
     await service.processNamespacePlugins();
@@ -153,6 +158,7 @@ async function collectValidationReports(
       remoteMigrationNumber: remote.remoteMigrationNumber,
       hasDrift: remote.hasDrift,
       drifts: remote.drifts,
+      ...(remote.skipped ? { skipped: remote.skipped } : {}),
     };
 
     return {
@@ -196,6 +202,12 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
         `  Remote schema: ${styles.error("drift detected")} (remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)})`,
       );
       logger.log(formatSchemaDrifts(remote.drifts));
+    } else if (remote?.skipped === "no_migration_label") {
+      logger.log(`  Remote schema: ${styles.dim("skipped (no migration state on remote)")}`);
+    } else if (remote?.skipped === "no_snapshot") {
+      logger.log(
+        `  Remote schema: ${styles.dim(`skipped (no local snapshot for remote migration ${formatMigrationNumber(remote.remoteMigrationNumber)})`)}`,
+      );
     } else if (remote) {
       logger.log(
         `  Remote schema: ${styles.success("OK")} (remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)})`,
@@ -213,22 +225,7 @@ function printResolutionHints(reports: NamespaceValidationReport[]): void {
     logger.info("Run 'tailor-sdk tailordb migration generate' to create migration files.");
   }
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
-    logger.info("Remote schema drift may indicate:");
-    logger.info("  - Another developer applied different migrations", { mode: "plain" });
-    logger.info("  - Manual schema changes were made directly", { mode: "plain" });
-    logger.info("  - Migration history is out of sync", { mode: "plain" });
-    logger.info("To resolve:");
-    logger.info("  - Run 'tailor-sdk tailordb migration status' to compare local vs remote.", {
-      mode: "plain",
-    });
-    logger.info("  - If remote is correct, update local types and run 'migration generate'.", {
-      mode: "plain",
-    });
-    logger.info(
-      "  - If local migration history is correct, run 'migration sync <N>' to overwrite remote.",
-      { mode: "plain" },
-    );
-    logger.info("  - If only bookkeeping is stale, run 'migration set <N>'.", { mode: "plain" });
+    logRemoteDriftGuidance();
   }
 }
 

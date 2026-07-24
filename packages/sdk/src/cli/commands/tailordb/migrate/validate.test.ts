@@ -277,6 +277,7 @@ describe("tailordb migration validate", () => {
       remoteMigrationNumber: 0,
       hasDrift: false,
       drifts: [],
+      skipped: "no_migration_label",
     });
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });

@@ -57,6 +57,7 @@ import {
   formatMigrationCheckResults,
   formatRemoteVerificationResults,
   getRemoteMigrationNumber,
+  logRemoteDriftGuidance,
   toTailorDBDeployInput,
   verifyRemoteSchema,
   type TailorDBDeployInput,
@@ -137,25 +138,7 @@ async function validateAndDetectMigrations(
         logger.error("Remote schema drift detected:");
         logger.log(formatRemoteVerificationResults(remoteVerificationResults));
         logger.newline();
-        logger.info("This may indicate:");
-        logger.info("  - Another developer applied different migrations", { mode: "plain" });
-        logger.info("  - Manual schema changes were made directly", { mode: "plain" });
-        logger.info("  - Migration history is out of sync", { mode: "plain" });
-        logger.newline();
-        logger.info("To resolve:");
-        logger.info("  - Run 'tailor-sdk tailordb migration status' to compare local vs remote.", {
-          mode: "plain",
-        });
-        logger.info("  - If remote is correct, update local types and run 'migration generate'.", {
-          mode: "plain",
-        });
-        logger.info(
-          "  - If local migration history is correct, run 'migration sync <N>' to overwrite remote.",
-          { mode: "plain" },
-        );
-        logger.info("  - If only bookkeeping is stale, run 'migration set <N>'.", {
-          mode: "plain",
-        });
+        logRemoteDriftGuidance();
         logger.newline();
         logger.info("Use '--no-schema-check' to skip this check (not recommended).");
         throw new Error("Remote schema verification failed");
