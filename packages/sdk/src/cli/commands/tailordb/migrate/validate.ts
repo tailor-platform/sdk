@@ -14,6 +14,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
 import { PluginManager } from "#/plugin/manager";
+import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { formatDiffSummary, formatMigrationDiff, type MigrationDiff } from "./diff-calculator";
 import { assertValidMigrationFiles, formatMigrationNumber, formatSchemaDrifts } from "./snapshot";
@@ -136,16 +137,22 @@ async function collectValidationReports(
       };
     }
 
-    const local = localResults.find((r) => r.namespace === target.namespace);
-    const remote = remoteResults.find((r) => r.namespace === target.namespace);
+    const local = assertDefined(
+      localResults.find((r) => r.namespace === target.namespace),
+      `local schema check result missing for namespace "${target.namespace}"`,
+    );
+    const remote = assertDefined(
+      remoteResults.find((r) => r.namespace === target.namespace),
+      `remote schema check result missing for namespace "${target.namespace}"`,
+    );
     const localSchema: LocalSchemaReport = {
-      hasDiff: local?.hasDiff ?? false,
-      ...(local?.diff ? { diff: local.diff } : {}),
+      hasDiff: local.hasDiff,
+      ...(local.diff ? { diff: local.diff } : {}),
     };
     const remoteSchema: RemoteSchemaReport = {
-      remoteMigrationNumber: remote?.remoteMigrationNumber ?? 0,
-      hasDrift: remote?.hasDrift ?? false,
-      drifts: remote?.drifts ?? [],
+      remoteMigrationNumber: remote.remoteMigrationNumber,
+      hasDrift: remote.hasDrift,
+      drifts: remote.drifts,
     };
 
     return {
