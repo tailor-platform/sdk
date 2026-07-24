@@ -1,10 +1,11 @@
 /**
- * E2E tests for the compile-cache bin shim (src/cli/index.mjs).
+ * E2E tests for the compile-cache bin shim (dist/cli/index.mjs, generated at
+ * build time by `politty generate-shim`).
  *
  * Verifies that:
- * - `tailor`'s `bin` entry (dist/cli/index.mjs) is the hand-rolled shim that
- *   enables Node's on-disk compile cache before dynamically importing the
- *   real CLI entry (dist/cli/main.mjs).
+ * - `tailor`'s `bin` entry (dist/cli/index.mjs) is the generated shim that
+ *   enables Node's on-disk compile cache (via `politty/compile-cache`)
+ *   before dynamically importing the real CLI entry (dist/cli/main.mjs).
  * - The shim actually starts the CLI correctly and populates/reuses the
  *   on-disk cache across runs.
  *
@@ -19,7 +20,7 @@ import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 // Namespace import: `enableCompileCache` doesn't exist on Node < 22.8, and a
 // named import of a missing binding would fail at link time, before the
-// runtime feature check below can run — same reasoning as src/cli/index.mjs.
+// runtime feature check below can run.
 import * as nodeModule from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -67,8 +68,8 @@ describe("compile-cache bin shim", () => {
     expect(fs.existsSync(mainPath)).toBe(true);
 
     const content = fs.readFileSync(shimPath, "utf-8");
-    expect(content).toContain("nodeModule.enableCompileCache");
-    expect(content).toContain('PROGRAM_NAME = "tailor"');
+    expect(content).toContain('await import("politty/compile-cache")');
+    expect(content).toContain('enableCompileCache("tailor")');
     expect(content).toContain('await import("./main.mjs")');
   });
 
