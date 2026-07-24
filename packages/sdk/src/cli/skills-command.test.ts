@@ -3,10 +3,10 @@ import { join } from "pathe";
 import { extractFields, isLazyCommand, runCommand } from "politty";
 import { describe, expect, test, vi } from "vitest";
 import { z } from "zod";
+import { mainCommand } from "./main";
 import { commonArgs } from "./shared/args";
 import { logger } from "./shared/logger";
 import { tempCwd } from "./shared/test-helpers/temp-cwd";
-import { mainCommand } from "./index";
 import type { AnyCommand, RunResult, SubCommandValue } from "politty";
 
 vi.mock("node:module", async () => {
@@ -47,7 +47,7 @@ function expectCommandFailure(result: RunResult, message: string): void {
 
 async function importMainCommandForCurrentCwd(): Promise<AnyCommand> {
   vi.resetModules();
-  const module = await import("./index");
+  const module = await import("./main");
   return module.mainCommand;
 }
 
