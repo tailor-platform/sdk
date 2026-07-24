@@ -148,6 +148,7 @@ jobs:
 
       - name: Add changeset
         if: steps.diff.outputs.changed == 'true' && steps.changeset_check.outputs.has-runtime-changes == 'true'
+        id: add_changeset
         run: |
           cat > .changeset/lockfile-audit-fix.md <<'EOF'
           ---
@@ -190,10 +191,10 @@ jobs:
           add-paths: |
             pnpm-lock.yaml
             pnpm-workspace.yaml
-            ${{ steps.changeset_check.outputs.has-runtime-changes == 'true' && '.changeset/lockfile-audit-fix.md' || '' }}
+            ${{ steps.add_changeset.outcome == 'success' && '.changeset/lockfile-audit-fix.md' || '' }}
           labels: |
             security
-            ${{ steps.changeset_check.outputs.has-runtime-changes == 'false' && 'skip-changeset' || '' }}
+            ${{ steps.add_changeset.outcome != 'success' && 'skip-changeset' || '' }}
 
       - name: Notify Slack on failure
         if: failure()
