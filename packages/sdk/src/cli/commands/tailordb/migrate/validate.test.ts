@@ -8,10 +8,13 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
-import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
+import {
+  parsedType,
+  snapshotType,
+  writeDiff,
+  writeInitialSchema,
+} from "./test-helpers/schema-fixtures";
 import { validateCommand } from "./validate";
-import type { TailorDBType } from "#/parser/service/tailordb/types";
-import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 const state = vi.hoisted(() => ({
@@ -55,32 +58,6 @@ vi.mock("#/cli/services/application", () => ({
   })),
 }));
 
-function parsedType(name: string): TailorDBType {
-  return {
-    name,
-    pluralForm: `${name}s`,
-    fields: {
-      id: { name: "id", config: { type: "uuid", required: true } },
-      name: { name: "name", config: { type: "string", required: true } },
-    },
-    settings: {},
-    forwardRelationships: {},
-    backwardRelationships: {},
-    permissions: {},
-  };
-}
-
-function snapshotType(name: string): TailorDBSnapshotType {
-  return {
-    name,
-    pluralForm: `${name}s`,
-    fields: {
-      id: { type: "uuid", required: true },
-      name: { type: "string", required: true },
-    },
-  };
-}
-
 function remoteType(name: string, fieldNames: string[]): ProtoTailorDBType {
   const fields: Record<string, unknown> = {};
   for (const fieldName of fieldNames) {
@@ -101,37 +78,6 @@ function remoteType(name: string, fieldNames: string[]): ProtoTailorDBType {
     name,
     schema: { fields },
   } as unknown as ProtoTailorDBType;
-}
-
-function writeInitialSchema(types: Record<string, TailorDBSnapshotType>): void {
-  const snapshot: SchemaSnapshot = {
-    version: SCHEMA_SNAPSHOT_VERSION,
-    namespace: "tailordb",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    types,
-  };
-  const dir = path.join(state.migrationsDir, "0000");
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "schema.json"), JSON.stringify(snapshot));
-}
-
-function writeDiff(number: number, changes: unknown[], requiresMigrationScript = false): void {
-  const dir = path.join(state.migrationsDir, number.toString().padStart(4, "0"));
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, "diff.json"),
-    JSON.stringify({
-      version: SCHEMA_SNAPSHOT_VERSION,
-      namespace: "tailordb",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      changes,
-      hasBreakingChanges: false,
-      breakingChanges: [],
-      hasWarnings: false,
-      warnings: [],
-      requiresMigrationScript,
-    }),
-  );
 }
 
 function mockConfig(namespaces: string[] = ["tailordb"]): void {
@@ -157,7 +103,7 @@ describe("tailordb migration validate", () => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-validate-test-"));
     state.migrationsDir = path.join(tmpDir, "migrations");
 
-    writeInitialSchema({ User: snapshotType("User") });
+    writeInitialSchema(state.migrationsDir, { User: snapshotType("User") });
     mockConfig();
     state.localTypes = { User: parsedType("User") };
     state.extraServices = [];
@@ -251,7 +197,7 @@ describe("tailordb migration validate", () => {
   test("fails when migration files are invalid and skips the other checks", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    writeDiff(2, []);
+    writeDiff(state.migrationsDir, 2, []);
 
     const result = await runCommand(validateCommand, []);
 
@@ -336,7 +282,7 @@ describe("tailordb migration validate", () => {
   test("fails when a migration requiring a script has no migrate.ts", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
-    writeDiff(1, [], true);
+    writeDiff(state.migrationsDir, 1, [], true);
 
     const result = await runCommand(validateCommand, []);
 
