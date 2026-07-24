@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
@@ -23,6 +24,9 @@ import {
   formatMigrationNumber,
   formatSchemaDrifts,
   getLatestMigrationNumber,
+  getMigrationFilePath,
+  getMigrationFiles,
+  loadDiff,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
 import type { RemoteSchemaVerificationSkipReason, SchemaDrift } from "./types";
@@ -64,6 +68,30 @@ interface NamespaceValidationReport {
   localSchema?: LocalSchemaReport;
   /** Omitted when the migration files are invalid (the check cannot run) */
   remoteSchema?: RemoteSchemaReport;
+}
+
+/**
+ * Assert that every migration whose diff requires a data migration script has
+ * a migrate.ts on disk, so deploy will not silently skip it
+ * @param {string} migrationsDir - Migrations directory path
+ * @param {string} namespace - TailorDB namespace (for error messages)
+ */
+function assertRequiredMigrationScripts(migrationsDir: string, namespace: string): void {
+  const missing: number[] = [];
+  for (const file of getMigrationFiles(migrationsDir)) {
+    if (file.type !== "diff") continue;
+    if (!loadDiff(file.path).requiresMigrationScript) continue;
+    if (!fs.existsSync(getMigrationFilePath(migrationsDir, file.number, "migrate"))) {
+      missing.push(file.number);
+    }
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `Migration(s) ${missing.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
+        "require a migration script but have no migrate.ts. " +
+        "Restore the script or recreate it with 'tailor-sdk tailordb migration script <number>'.",
+    );
+  }
 }
 
 /**
@@ -125,6 +153,7 @@ async function collectValidationReports(
       // Parse the whole history here so malformed snapshot/diff contents are
       // reported per namespace instead of aborting the run for every namespace.
       reconstructSnapshotFromMigrations(target.migrationsDir);
+      assertRequiredMigrationScripts(target.migrationsDir, target.namespace);
       checkableNamespaces.push(target);
     } catch (error) {
       migrationFileErrors.set(
@@ -226,8 +255,12 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
         `  Remote schema: ${styles.error("drift detected")} (remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)})`,
       );
       logger.log(formatSchemaDrifts(remote.drifts));
+    } else if (remote?.skipped === "not_deployed") {
+      logger.log(`  Remote schema: ${styles.dim("skipped (namespace not deployed)")}`);
     } else if (remote?.skipped === "no_migration_label") {
-      logger.log(`  Remote schema: ${styles.dim("skipped (no migration state on remote)")}`);
+      logger.log(
+        `  Remote schema: ${styles.dim("skipped (deployed namespace has no migration state)")}`,
+      );
     } else if (remote?.skipped === "no_snapshot") {
       logger.log(
         `  Remote schema: ${styles.dim(`skipped (no local snapshot for remote migration ${formatMigrationNumber(remote.remoteMigrationNumber)})`)}`,

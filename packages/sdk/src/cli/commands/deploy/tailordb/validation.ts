@@ -204,6 +204,37 @@ function deployComparableSnapshot(
   return { ...snapshot, types };
 }
 
+type RemoteMigrationNumberState = {
+  /** Whether the namespace metadata exists on the remote */
+  metadataExists: boolean;
+  /** Parsed migration number, or null when the label is unset or unparseable */
+  number: number | null;
+};
+
+async function getRemoteMigrationNumberState(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+): Promise<RemoteMigrationNumberState> {
+  // Only NotFound reads as "no migration state yet" (first apply); any other
+  // lookup failure propagates so it cannot silently skip remote verification.
+  const trn = resourceTrn(workspaceId, "tailordb", namespace);
+  const metadata = await getOrNull(async () => {
+    const { metadata } = await client.getMetadata({ trn });
+    return metadata;
+  });
+  if (!metadata) return { metadataExists: false, number: null };
+  const label = metadata.labels["sdk-migration"];
+  if (!label) return { metadataExists: true, number: null };
+  const match = label.match(/^m(\d+)$/);
+  return {
+    metadataExists: true,
+    number: match
+      ? parseInt(assertDefined(match[1], "migration label capture group missing"), 10)
+      : null,
+  };
+}
+
 /**
  * Get the current migration number from remote metadata
  * @param {OperatorClient} client - Operator client instance
@@ -216,19 +247,7 @@ export async function getRemoteMigrationNumber(
   workspaceId: string,
   namespace: string,
 ): Promise<number | null> {
-  // Only NotFound reads as "no migration state yet" (first apply); any other
-  // lookup failure propagates so it cannot silently skip remote verification.
-  const trn = resourceTrn(workspaceId, "tailordb", namespace);
-  const metadata = await getOrNull(async () => {
-    const { metadata } = await client.getMetadata({ trn });
-    return metadata;
-  });
-  const label = metadata?.labels["sdk-migration"];
-  if (!label) return null; // No migration label means first apply
-  const match = label.match(/^m(\d+)$/);
-  return match
-    ? parseInt(assertDefined(match[1], "migration label capture group missing"), 10)
-    : null;
+  return (await getRemoteMigrationNumberState(client, workspaceId, namespace)).number;
 }
 
 /**
@@ -251,7 +270,11 @@ export async function verifyRemoteSchema(
 
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     // Get current remote migration number
-    const remoteMigrationNumber = await getRemoteMigrationNumber(client, workspaceId, namespace);
+    const { metadataExists, number: remoteMigrationNumber } = await getRemoteMigrationNumberState(
+      client,
+      workspaceId,
+      namespace,
+    );
 
     // If no migration label exists, this is likely a first apply - skip verification
     // Remote verification only makes sense when there's an established migration history
@@ -261,7 +284,7 @@ export async function verifyRemoteSchema(
         remoteMigrationNumber: 0,
         drifts: [],
         hasDrift: false,
-        skipped: "no_migration_label",
+        skipped: metadataExists ? "no_migration_label" : "not_deployed",
       });
       continue;
     }

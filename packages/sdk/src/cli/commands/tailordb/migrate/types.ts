@@ -176,7 +176,10 @@ export interface SchemaDrift {
 /**
  * Reason why remote schema verification was skipped for a namespace
  */
-export type RemoteSchemaVerificationSkipReason = "no_migration_label" | "no_snapshot";
+export type RemoteSchemaVerificationSkipReason =
+  | "not_deployed"
+  | "no_migration_label"
+  | "no_snapshot";
 
 /**
  * Result of remote schema verification for a single namespace

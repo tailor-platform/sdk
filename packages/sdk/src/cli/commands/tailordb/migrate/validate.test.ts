@@ -112,7 +112,7 @@ function writeInitialSchema(types: Record<string, TailorDBSnapshotType>): void {
   fs.writeFileSync(path.join(dir, "schema.json"), JSON.stringify(snapshot));
 }
 
-function writeDiff(number: number, changes: unknown[]): void {
+function writeDiff(number: number, changes: unknown[], requiresMigrationScript = false): void {
   const dir = path.join(state.migrationsDir, number.toString().padStart(4, "0"));
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(
@@ -126,7 +126,7 @@ function writeDiff(number: number, changes: unknown[]): void {
       breakingChanges: [],
       hasWarnings: false,
       warnings: [],
-      requiresMigrationScript: false,
+      requiresMigrationScript,
     }),
   );
 }
@@ -313,6 +313,34 @@ describe("tailordb migration validate", () => {
     expect(report.valid).toBe(false);
     expect(report.migrationFiles.valid).toBe(false);
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+  });
+
+  test("skips remote verification for an undeployed namespace", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    state.getMetadata.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(true);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(true);
+    expect(report.remoteSchema.skipped).toBe("not_deployed");
+    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+  });
+
+  test("fails when a migration requiring a script has no migrate.ts", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(1, [], true);
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(false);
+    expect(report.migrationFiles.valid).toBe(false);
+    expect(report.migrationFiles.error).toMatch(/require a migration script/);
   });
 
   test("fails when the remote migration state cannot be read", async () => {
