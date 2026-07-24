@@ -1,9 +1,5 @@
 import { memberName, objectProperty, unwrapExpression } from "../lib/ast.js";
-import {
-  configureImportTracker,
-  SDK_CONFIGURE_MODULE,
-  variableInitializer,
-} from "../lib/sdk-bindings.js";
+import { configureImportTracker, resolveValue, SDK_CONFIGURE_MODULE } from "../lib/sdk-bindings.js";
 
 const UNSAFE_CONSTANTS = new Set([
   "unsafeAllowAllTypePermission",
@@ -27,18 +23,6 @@ function isValueReference(node) {
     default:
       return true;
   }
-}
-
-function resolveValue(context, node) {
-  let current = unwrapExpression(node);
-  const seen = new Set();
-  while (current?.type === "Identifier" && !seen.has(current.name)) {
-    seen.add(current.name);
-    const initializer = variableInitializer(context, current);
-    if (initializer === null) break;
-    current = unwrapExpression(initializer);
-  }
-  return current;
 }
 
 function isDbReference(imports, node) {

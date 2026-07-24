@@ -16,6 +16,7 @@
   "ignorePatterns": [".tailor/", "src/generated/", "src/seed/", "tailor.d.ts"],
   "rules": {
     "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
+    "tailor-sdk/no-execute-script-arg-stringify": "warn",
     "tailor-sdk/no-unconditional-permit": "warn",
     "no-case-declarations": "error",
     "no-empty": "error",
