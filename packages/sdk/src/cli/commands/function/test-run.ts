@@ -170,20 +170,15 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
 
     logger.info(`Executing on workspace ${styles.dim(workspaceId)}...`);
 
-    let parsedArg: Record<string, Jsonifiable> | undefined;
+    let parsedArg: Exclude<Jsonifiable, string> | undefined;
     if (args.arg !== undefined) {
-      let parsed: unknown;
       try {
-        parsed = JSON.parse(args.arg);
+        parsedArg = JSON.parse(args.arg);
       } catch (error) {
         throw new Error(`Invalid --arg JSON: ${error instanceof Error ? error.message : error}`, {
           cause: error,
         });
       }
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-        throw new Error(`--arg must be a JSON object, e.g. --arg '{"a":1}'`);
-      }
-      parsedArg = parsed as Record<string, Jsonifiable>;
     }
 
     const result = await executeScript({

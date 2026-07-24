@@ -202,6 +202,50 @@ describe("executeScript", () => {
     expect(client.testExecScript).toHaveBeenCalledWith(expect.objectContaining({ arg: "{}" }));
   });
 
+  test("accepts a top-level array arg (e.g. for workflow jobs with array input)", async () => {
+    const client = createExecScriptMockClient(execution(FunctionExecution_Status.SUCCESS, "", ""));
+
+    await executeScript({
+      client,
+      workspaceId: "workspace-1",
+      name: "test-script.js",
+      code: "code",
+      arg: [1, 2, 3],
+      invoker: mockAuthInvoker,
+    });
+
+    expect(client.testExecScript).toHaveBeenCalledWith(expect.objectContaining({ arg: "[1,2,3]" }));
+  });
+
+  test("accepts an object arg with an undefined-valued field", async () => {
+    const client = createExecScriptMockClient(execution(FunctionExecution_Status.SUCCESS, "", ""));
+    const cursor: string | undefined = undefined;
+
+    await executeScript({
+      client,
+      workspaceId: "workspace-1",
+      name: "test-script.js",
+      code: "code",
+      arg: { cursor },
+      invoker: mockAuthInvoker,
+    });
+
+    expect(client.testExecScript).toHaveBeenCalledWith(expect.objectContaining({ arg: "{}" }));
+  });
+
+  test("rejects a pre-stringified JSON string as arg (compile time)", () => {
+    const options: ScriptExecutionOptions = {
+      client: createMockClient(),
+      workspaceId: "workspace-1",
+      name: "test-script.js",
+      code: "code",
+      // @ts-expect-error - a bare string is excluded so `JSON.stringify(x)` can't be passed as arg
+      arg: JSON.stringify({ a: 1 }),
+      invoker: mockAuthInvoker,
+    };
+    expect(options).toBeDefined();
+  });
+
   test("accepts options typed as the bare ScriptExecutionOptions", async () => {
     const client = createMockClient({
       testExecScript: vi.fn().mockResolvedValue({ executionId: "exec-123" }),
@@ -211,7 +255,7 @@ describe("executeScript", () => {
     });
 
     // Regression: a typed-out options object must stay assignable to
-    // executeScript's parameter (arg is Record<string, Jsonifiable>, usable on its own).
+    // executeScript's parameter (arg is Exclude<Jsonifiable, string>, usable on its own).
     const options: ScriptExecutionOptions = {
       client,
       workspaceId: "workspace-1",

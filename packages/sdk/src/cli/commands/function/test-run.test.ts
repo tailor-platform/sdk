@@ -126,27 +126,13 @@ describe("function test-run --json", () => {
     );
   });
 
-  test("rejects a --arg value that is not a JSON object", async () => {
+  test("forwards a top-level array --arg value for workflow jobs with array input", async () => {
     using _stdout = captureStdout();
     using _stderr = captureStderr();
     using _json = jsonMode();
 
-    const callsBefore = vi.mocked(executeScript).mock.calls.length;
+    await runCommand(testRunCommand, [scriptPath, "--machine-user", "admin", "--arg", "[1,2,3]"]);
 
-    const result = await runCommand(testRunCommand, [
-      scriptPath,
-      "--machine-user",
-      "admin",
-      "--arg",
-      "[1,2,3]",
-    ]);
-
-    expect(result).toMatchObject({
-      success: false,
-      error: expect.objectContaining({
-        message: expect.stringContaining("--arg must be a JSON object"),
-      }),
-    });
-    expect(vi.mocked(executeScript).mock.calls.length).toBe(callsBefore);
+    expect(executeScript).toHaveBeenCalledWith(expect.objectContaining({ arg: [1, 2, 3] }));
   });
 });
