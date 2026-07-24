@@ -3,10 +3,6 @@
 // Enables Node's on-disk compile cache before dynamically importing the
 // real CLI entry (main.ts) — ESM static import graphs compile during the
 // link phase, before any code can run, so this can't happen in main.ts itself.
-//
-// PROGRAM_NAME matches the --program passed to generate-worker in
-// package.json's build script, so this shares the shell-completion
-// workers' cache directory.
 import * as nodeModule from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
