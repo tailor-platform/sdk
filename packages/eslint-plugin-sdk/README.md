@@ -25,6 +25,7 @@ Add the plugin and its rules to `.oxlintrc.json`:
   ],
   "rules": {
     "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
+    "tailor-sdk/no-execute-script-arg-stringify": "warn",
     "tailor-sdk/no-unconditional-permit": "warn"
   }
 }
@@ -64,6 +65,27 @@ export default createHttpAdapter({
   pathPattern: "/orders/*",
 });
 ```
+
+### `no-execute-script-arg-stringify` (warning)
+
+`executeScript`'s `arg` option is serialized internally, so passing an already-stringified value
+double-encodes it.
+
+Incorrect:
+
+```ts
+await executeScript({ ...opts, arg: JSON.stringify({ a: 1 }) });
+```
+
+Correct:
+
+```ts
+await executeScript({ ...opts, arg: { a: 1 } });
+```
+
+The rule follows `arg` through a `const` variable (including one holding the `JSON.stringify(...)`
+call itself) to catch indirect forms, and recognizes named and namespace imports of `executeScript`
+from `@tailor-platform/sdk/cli`.
 
 ### `no-unconditional-permit` (warning)
 

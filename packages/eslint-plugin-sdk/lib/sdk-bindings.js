@@ -1,6 +1,7 @@
 import { memberName, nodeStart, unwrapExpression } from "./ast.js";
 
 export const SDK_CONFIGURE_MODULE = "@tailor-platform/sdk";
+export const SDK_CLI_MODULE = "@tailor-platform/sdk/cli";
 
 function findVariable(sourceCode, node) {
   let scope = sourceCode.getScope(node);
@@ -31,6 +32,19 @@ export function variableInitializer(context, node) {
       entry.node.parent?.kind === "const",
   );
   return definition?.node.init ?? null;
+}
+
+/** Follows an identifier through its `const` initializer(s), unwrapping at each step. */
+export function resolveValue(context, node) {
+  let current = unwrapExpression(node);
+  const seen = new Set();
+  while (current?.type === "Identifier" && !seen.has(current.name)) {
+    seen.add(current.name);
+    const initializer = variableInitializer(context, current);
+    if (initializer === null) break;
+    current = unwrapExpression(initializer);
+  }
+  return current;
 }
 
 function createImportTracker(context, modules) {
@@ -84,4 +98,8 @@ function createImportTracker(context, modules) {
 
 export function configureImportTracker(context) {
   return createImportTracker(context, new Set([SDK_CONFIGURE_MODULE]));
+}
+
+export function cliImportTracker(context) {
+  return createImportTracker(context, new Set([SDK_CLI_MODULE]));
 }
