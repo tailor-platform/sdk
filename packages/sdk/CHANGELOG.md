@@ -1,5 +1,15 @@
 # @tailor-platform/sdk
 
+## 1.84.0
+
+### Minor Changes
+
+- [#1860](https://github.com/tailor-platform/sdk/pull/1860) [`50af713`](https://github.com/tailor-platform/sdk/commit/50af713d3b41fbe64fa2b53a2f2d027e6f7dbe9f) Thanks [@dqn](https://github.com/dqn)! - Fail `deploy` when a migration with breaking changes is missing its `migrate.ts` instead of silently leaving the migration unapplied while reporting success. Migration validation (missing scripts and schema checks) now runs while planning, so these failures also surface under `--dry-run` and before any resource is applied. Add `tailordb migration script <n> --no-script --reason "..."` to explicitly record that a migration needs no script; acknowledged migrations deploy their schema changes as usual and skip only the script step.
+
+### Patch Changes
+
+- [#1862](https://github.com/tailor-platform/sdk/pull/1862) [`7224091`](https://github.com/tailor-platform/sdk/commit/7224091b2a738f5daa0b38344c138854d64d0c4d) Thanks [@dqn](https://github.com/dqn)! - Classify decimal `scale` changes as breaking in `tailordb migration generate`: the change now prompts for confirmation and auto-generates a `migrate.ts` that re-saves existing rows so their stored values are re-serialized under the new scale. Decreasing scale rounds values half-up and can lose precision. The generated script also avoids overwriting concurrent changes to the same field and checks newly unique values after re-serialization.
+
 ## 1.83.0
 
 ### Minor Changes
