@@ -1,0 +1,7 @@
+name: "@tailor-platform/seed-exec-to-cli-plugin"
+version: "1.0.0"
+description: "Rewrite generated `node <distPath>/exec.mjs` seed runner invocations to the `tailor seed` CLI plugin commands"
+engine: jssg
+language: text
+since: "1.0.0"
+until: "2.0.0"

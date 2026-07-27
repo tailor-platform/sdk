@@ -146,4 +146,8 @@ describe("codemod transforms", () => {
   test("v2/workflow-trigger-rename transforms correctly", async () => {
     await expect(runFixtureCases("v2/workflow-trigger-rename")).resolves.toBeUndefined();
   });
+
+  test("v2/seed-exec-to-cli-plugin transforms correctly", async () => {
+    await expect(runFixtureCases("v2/seed-exec-to-cli-plugin")).resolves.toBeUndefined();
+  });
 });
