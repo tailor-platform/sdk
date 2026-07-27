@@ -45,6 +45,31 @@ const child = fork("seed/exec.mjs", [], { stdio: "inherit" });
     expect(reviewFindings(source, "setup.ts", "setup.ts")).toEqual([]);
   });
 
+  test("reports a fork() call whose runner path sits on a later line", () => {
+    const source = `import { fork } from "node:child_process";
+const child = fork(
+  "seed/exec.mjs",
+  [],
+);
+`;
+
+    expect(transform(source, "setup.ts")).toBeNull();
+    expect(reviewFindings(source, "setup.ts", "setup.ts")).toMatchObject([
+      { line: 2, excerpt: expect.stringContaining("fork(") },
+    ]);
+  });
+
+  test("reports only the seed runner fork when the file forks other scripts too", () => {
+    const source = `import { fork } from "node:child_process";
+fork("seed/exec.mjs");
+fork("tools/worker.mjs");
+`;
+
+    expect(reviewFindings(source, "setup.ts", "setup.ts")).toMatchObject([
+      { line: 2, excerpt: expect.stringContaining("seed/exec.mjs") },
+    ]);
+  });
+
   test("reports nothing once the seed runner call is migrated", () => {
     const source = `import { execSync } from "node:child_process";\nexecSync("pnpm tailor seed apply", { stdio: "inherit" });\n`;
 
