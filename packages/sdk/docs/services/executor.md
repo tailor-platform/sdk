@@ -587,3 +587,44 @@ interface AuthAccessTokenContext {
   userId: string; // The user associated with the token
 }
 ```
+
+### Workflow Execution Event Payload
+
+Workflow execution triggers receive execution context:
+
+```typescript
+interface WorkflowExecutionContext {
+  workspaceId: string; // Workspace identifier
+  workflowId: string; // Workflow resource ID
+  workflowName: string; // Workflow name
+  workflowExecutionId: string; // Workflow execution ID
+  event: "started" | "completed" | "retried" | "resumed" | "wait_started" | "wait_resolved";
+  rawEvent: string; // Full event type
+}
+```
+
+Completed events narrow on `success`. Failed executions include `error`; retried executions include `retryCount` and `retryAfter`.
+
+```typescript
+body: async (args) => {
+  if (args.event === "completed" && !args.success) {
+    console.error(args.error);
+  }
+};
+```
+
+### Workflow Job Execution Event Payload
+
+Workflow job execution triggers include the workflow execution context plus job-specific fields:
+
+```typescript
+interface WorkflowJobExecutionContext {
+  workflowJobExecutionId: string; // Job execution ID
+  jobFunctionName: string; // Name passed to createWorkflowJob
+  stackedJobName: string; // Job position in the execution stack
+  event: "started" | "completed" | "wait_started" | "wait_resolved";
+  rawEvent: string; // Full event type
+}
+```
+
+`wait_started` events include `waitKey` and JSON-serialized `waitPayload`; `wait_resolved` events include `waitKey`.
