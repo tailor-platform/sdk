@@ -8,16 +8,19 @@ import type { LlmReviewFinding } from "../../../../src/types";
 // project's own top-level `exec.mjs`.
 const NODE_BINARY = "(?<![\\w.-])node(?![\\w-])";
 const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
+// Horizontal whitespace only: a newline between tokens means separate lines
+// (YAML sequence items, markdown bullets), not one invocation to rewrite.
+const SPACE = "[^\\S\\n\\r]+";
 // Value-taking node flags must consume their value, or the value itself is read
 // as the next flag and the runner path stops matching.
 const VALUE_NODE_FLAG = "(?:--env-file|--env-file-if-exists|--import|--require|-r)";
 const BOOLEAN_NODE_FLAG = "(?:-[^\\s'\"`;&|=]*|--[^\\s'\"`;&|]*)";
-const NODE_FLAGS = `(?:(?:\\s+${VALUE_NODE_FLAG}(?:=${ARG_VALUE}|\\s+${ARG_VALUE}))|(?:\\s+${BOOLEAN_NODE_FLAG}))*`;
+const NODE_FLAGS = `(?:(?:${SPACE}${VALUE_NODE_FLAG}(?:=${ARG_VALUE}|${SPACE}${ARG_VALUE}))|(?:${SPACE}${BOOLEAN_NODE_FLAG}))*`;
 const RUNNER_PATH = `(?:[\\w.@~-]+/)+exec\\.mjs`;
 // The optional trailing group consumes the runner's own `validate` positional
 // so the replacement can pick the matching `tailor seed` subcommand in one pass.
 const RUNNER_PATTERN = new RegExp(
-  `${NODE_BINARY}(${NODE_FLAGS})\\s+(['"]?)(?:\\./)?${RUNNER_PATH}\\2(\\s+validate(?![-\\w]))?`,
+  `${NODE_BINARY}(${NODE_FLAGS})${SPACE}(['"]?)(?:\\./)?${RUNNER_PATH}\\2(${SPACE}validate(?![-\\w]))?`,
   "g",
 );
 
@@ -35,14 +38,20 @@ const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx",
 // Node's own env-file flags carry over to the CLI, which accepts both the `=`
 // and space-separated spellings. Every other node flag (loaders, memory limits)
 // belongs to running a script and has no CLI equivalent.
-const ENV_FILE_FLAG_PATTERN = new RegExp(
-  `(--env-file(?:-if-exists)?)(?:=(${ARG_VALUE})|\\s+(${ARG_VALUE}))`,
+// Anchored per flag so a value that itself looks like `--env-file` is consumed
+// as a value rather than re-read as a flag of its own.
+const NODE_FLAG_PATTERN = new RegExp(
+  `(${VALUE_NODE_FLAG})(?:=(${ARG_VALUE})|${SPACE}(${ARG_VALUE}))|(${BOOLEAN_NODE_FLAG})`,
   "g",
 );
+const ENV_FILE_FLAG = /^--env-file(?:-if-exists)?$/;
+// A package runner immediately before `node` already resolves project binaries.
+const RUNNER_PREFIX_PATTERN = new RegExp(`(?:pnpm|npm|yarn|bun|npx)(?:${SPACE}run)?${SPACE}$`);
 
 /** Translate the leading `node` flags into flags the CLI command accepts. */
 function carriedOverFlags(nodeFlags: string): string {
-  return [...nodeFlags.matchAll(ENV_FILE_FLAG_PATTERN)]
+  return [...nodeFlags.matchAll(NODE_FLAG_PATTERN)]
+    .filter((match) => match[1] != null && ENV_FILE_FLAG.test(match[1]))
     .map((match) => ` ${match[1]} ${match[2] ?? match[3]}`)
     .join("");
 }
@@ -52,10 +61,16 @@ function carriedOverFlags(nodeFlags: string): string {
  * positional argument, so a consumed `validate` selects the subcommand.
  */
 function rewrite(value: string, prefix = ""): string {
-  return value.replace(RUNNER_PATTERN, (_match, nodeFlags: string, _quote, validate?: string) => {
-    const command = validate ? "validate" : "apply";
-    return `${prefix}tailor seed ${command}${carriedOverFlags(nodeFlags)}`;
-  });
+  return value.replace(
+    RUNNER_PATTERN,
+    (_match, nodeFlags: string, _quote, validate: string | undefined, offset: number) => {
+      const command = validate ? "validate" : "apply";
+      // A package runner already in front of `node` stays; prefixing again
+      // would produce `pnpm pnpm tailor`.
+      const runner = RUNNER_PREFIX_PATTERN.test(value.slice(0, offset)) ? "" : prefix;
+      return `${runner}tailor seed ${command}${carriedOverFlags(nodeFlags)}`;
+    },
+  );
 }
 
 function transformText(source: string): string | null {
