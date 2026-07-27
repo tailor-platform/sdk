@@ -135,6 +135,45 @@ describe("planWorkflow", () => {
     await runTest();
   });
 
+  describe("workflow execution event publishing", () => {
+    test("enables publishing for a workflow with a matching executor subscription", async () => {
+      const workflow = createMockWorkflow("orders", "main-job");
+      const result = await planWorkflow(
+        createMockClient([]),
+        workspaceId,
+        appName,
+        undefined,
+        { orders: workflow },
+        { "main-job": ["main-job"] },
+        new Set(),
+        {
+          execution: { anyWorkflow: false, workflowNames: new Set(["orders"]) },
+        },
+      );
+
+      expect(result.changeSet.creates[0]!.workflow.publishEvents).toBe(true);
+    });
+
+    test("rejects an explicit opt-out with a matching executor subscription", async () => {
+      const workflow = { ...createMockWorkflow("orders", "main-job"), publishEvents: false };
+
+      await expect(
+        planWorkflow(
+          createMockClient([]),
+          workspaceId,
+          appName,
+          undefined,
+          { orders: workflow },
+          { "main-job": ["main-job"] },
+          new Set(),
+          {
+            execution: { anyWorkflow: false, workflowNames: new Set(["orders"]) },
+          },
+        ),
+      ).rejects.toThrow('Workflow "orders" has "publishEvents: false"');
+    });
+  });
+
   describe("rename scenarios", () => {
     test("old workflow is deleted when renamed", async () => {
       const client = createMockClient([{ id: "1", name: "old-workflow", label: appName }]);

@@ -13,6 +13,8 @@ import {
   resolverExecutedTrigger,
   idpUserTrigger,
   authAccessTokenTrigger,
+  workflowExecutionTrigger,
+  workflowJobExecutionTrigger,
 } from "./trigger/event";
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
@@ -75,6 +77,45 @@ describe("createExecutor", () => {
         kind: "function",
         body: (args) => {
           expectTypeOf(args).toEqualTypeOf<Args & { invoker?: TailorInvoker }>();
+        },
+      },
+    });
+  });
+});
+
+describe("workflow execution triggers", () => {
+  test("preserves workflow filters and event names", () => {
+    const job = createWorkflowJob({ name: "main", body: () => {} });
+    const workflow = createWorkflow({ name: "orders", mainJob: job });
+
+    expect(
+      workflowExecutionTrigger({
+        workflow,
+        events: ["started", "completed"],
+      }),
+    ).toMatchObject({
+      kind: "workflowExecution",
+      workflowName: "orders",
+      events: ["workflow.workflow_execution.started", "workflow.workflow_execution.completed"],
+    });
+    expect(workflowJobExecutionTrigger({ events: ["wait_started"] })).toMatchObject({
+      kind: "workflowJobExecution",
+      events: ["workflow.workflow_execution.job_execution.wait_started"],
+    });
+  });
+
+  test("infers completed event results as a discriminated union", () => {
+    createExecutor({
+      name: "on-workflow-completed",
+      trigger: workflowExecutionTrigger({ events: ["completed"] }),
+      operation: {
+        kind: "function",
+        body: (args) => {
+          if (args.success) {
+            expectTypeOf(args.error).toEqualTypeOf<undefined>();
+          } else {
+            expectTypeOf(args.error).toEqualTypeOf<string>();
+          }
         },
       },
     });

@@ -66,7 +66,11 @@ import { planSecretManager } from "./secret-manager";
 import { planStaticWebsite } from "./staticwebsite";
 import { formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
 import { validatePlan } from "./validate-plan";
-import { formatWorkflowChangeEntries, planWorkflow } from "./workflow";
+import {
+  formatWorkflowChangeEntries,
+  planWorkflow,
+  type WorkflowEventSubscribers,
+} from "./workflow";
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 import { resolveDeployWorkspace } from "./workspace";
 import type { PlanContext } from "./types";
@@ -187,6 +191,57 @@ function collectExecutorUsedResolvers(
     }
   }
   return usedResolvers;
+}
+
+/**
+ * Resolve which workflows executors subscribe to, per event granularity level.
+ *
+ * Workflows are workspace-scoped, so a trigger anywhere in the deploy run
+ * subscribes to a workflow of the same name regardless of which config declares
+ * it. A trigger that names no workflow matches every workflow in the workspace.
+ * @param targets - Deployment targets in the current run
+ * @returns Subscribers keyed by event granularity level
+ */
+function collectWorkflowEventSubscribers(targets: ReadonlyArray<BuiltDeploymentTarget>): {
+  execution: WorkflowEventSubscribers;
+  jobExecution: WorkflowEventSubscribers;
+} {
+  const execution = { anyWorkflow: false, workflowNames: new Set<string>() };
+  const jobExecution = { anyWorkflow: false, workflowNames: new Set<string>() };
+  for (const target of targets) {
+    for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
+      const { trigger } = executor;
+      if (trigger.kind !== "workflowExecution" && trigger.kind !== "workflowJobExecution") {
+        continue;
+      }
+      const subscribers = trigger.kind === "workflowExecution" ? execution : jobExecution;
+      if (trigger.workflowName == null) {
+        subscribers.anyWorkflow = true;
+      } else {
+        subscribers.workflowNames.add(trigger.workflowName);
+      }
+    }
+  }
+  return { execution, jobExecution };
+}
+
+/**
+ * Collect explicit `publishEvents` values declared on workflow jobs.
+ * @param targets - Deployment targets in the current run
+ * @returns Explicit flags keyed by job name
+ */
+function collectWorkflowJobPublishEvents(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): ReadonlyMap<string, boolean> {
+  const jobPublishEvents = new Map<string, boolean>();
+  for (const target of targets) {
+    for (const job of target.application.workflowService?.jobs ?? []) {
+      if (job.publishEvents !== undefined) {
+        jobPublishEvents.set(job.name, job.publishEvents);
+      }
+    }
+  }
+  return jobPublishEvents;
 }
 
 function collectExpectedLocalStaticWebsiteNames(
@@ -1239,6 +1294,10 @@ async function planDeploymentTarget(
           workflowService?.workflows ?? {},
           workflowBuildResult?.mainJobDeps ?? {},
           unchangedWorkflowJobs,
+          {
+            ...collectWorkflowEventSubscribers(targets),
+            jobPublishEvents: collectWorkflowJobPublishEvents(targets),
+          },
         ),
       ),
       withSpan("plan.workflowExecutionPolicy", () =>

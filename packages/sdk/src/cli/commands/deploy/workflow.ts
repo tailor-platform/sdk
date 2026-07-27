@@ -49,6 +49,7 @@ export async function applyWorkflow(
       appName,
       appId,
       result.unchangedWorkflowJobNames,
+      result.jobFunctionPublishEvents,
     );
 
     // Create and update workflows in parallel
@@ -67,6 +68,7 @@ export async function applyWorkflow(
           retryPolicy: shape.retryPolicy,
           concurrencyPolicy: shape.concurrencyPolicy,
           jobFunctions: filteredVersions,
+          publishExecutionEvents: shape.publishExecutionEvents,
         });
         await client.setMetadata(create.metaRequest);
       }),
@@ -83,6 +85,7 @@ export async function applyWorkflow(
           retryPolicy: shape.retryPolicy,
           concurrencyPolicy: shape.concurrencyPolicy,
           jobFunctions: filteredVersions,
+          publishExecutionEvents: shape.publishExecutionEvents,
         });
         await client.setMetadata(update.metaRequest);
       }),
@@ -175,6 +178,7 @@ function filterJobFunctionVersions(
  * @param appName - Application name
  * @param appId - Application ID used for job function metadata when available
  * @param unchangedWorkflowJobNames - Job function names used by unchanged workflows
+ * @param jobFunctionPublishEvents - Resolved `publishExecutionEvents` keyed by job function name
  * @returns Map of job function names to versions
  */
 async function registerJobFunctions(
@@ -183,6 +187,7 @@ async function registerJobFunctions(
   appName: string,
   appId: string | undefined,
   unchangedWorkflowJobNames: ReadonlySet<string> = new Set(),
+  jobFunctionPublishEvents: ReadonlyMap<string, boolean> = new Map(),
 ): Promise<{ [key: string]: bigint }> {
   const jobFunctionVersions: { [key: string]: bigint } = {};
 
@@ -219,17 +224,15 @@ async function registerJobFunctions(
     const results = await Promise.all(
       Array.from(allUsedJobNames).map(async (jobName) => {
         const isExisting = existingJobNamesSet.has(jobName);
+        const request = {
+          workspaceId,
+          jobFunctionName: jobName,
+          scriptRef: workflowJobFunctionName(jobName),
+          publishExecutionEvents: jobFunctionPublishEvents.get(jobName) ?? false,
+        };
         const response = isExisting
-          ? await client.updateWorkflowJobFunction({
-              workspaceId,
-              jobFunctionName: jobName,
-              scriptRef: workflowJobFunctionName(jobName),
-            })
-          : await client.createWorkflowJobFunction({
-              workspaceId,
-              jobFunctionName: jobName,
-              scriptRef: workflowJobFunctionName(jobName),
-            });
+          ? await client.updateWorkflowJobFunction(request)
+          : await client.createWorkflowJobFunction(request);
 
         // Set metadata to mark this JobFunction as owned by this app
         await client.setMetadata(
@@ -331,7 +334,94 @@ export function buildWorkflowValidationShape(
     ...(workflow.concurrencyPolicy && {
       concurrencyPolicy: toConcurrencyPolicy(workflow.concurrencyPolicy),
     }),
+    publishExecutionEvents: workflow.publishEvents ?? false,
   };
+}
+
+/** Executors subscribing to one granularity level of workflow execution events. */
+export type WorkflowEventSubscribers = {
+  /** True when a trigger names no workflow, matching every workflow in the workspace. */
+  anyWorkflow: boolean;
+  /** Workflow names named by executor triggers. */
+  workflowNames: ReadonlySet<string>;
+};
+
+/** Inputs deciding which workflows and job functions publish execution events. */
+export type WorkflowEventPublishing = {
+  /** Subscribers of `workflow.workflow_execution.*` events. */
+  execution?: WorkflowEventSubscribers;
+  /** Subscribers of `workflow.workflow_execution.job_execution.*` events. */
+  jobExecution?: WorkflowEventSubscribers;
+  /** `publishEvents` declared on jobs, keyed by job name. */
+  jobPublishEvents?: ReadonlyMap<string, boolean>;
+};
+
+const NO_EVENT_SUBSCRIBERS: WorkflowEventSubscribers = {
+  anyWorkflow: false,
+  workflowNames: new Set(),
+};
+
+function isSubscribed(subscribers: WorkflowEventSubscribers, workflowName: string): boolean {
+  return subscribers.anyWorkflow || subscribers.workflowNames.has(workflowName);
+}
+
+type ResolvePublishEventsParams = {
+  explicit: boolean | undefined;
+  subscribed: boolean;
+  conflictError: string;
+};
+
+function resolvePublishEvents(params: ResolvePublishEventsParams): boolean {
+  const { explicit, subscribed, conflictError } = params;
+  if (explicit === false && subscribed) {
+    throw new Error(conflictError);
+  }
+  return explicit ?? subscribed;
+}
+
+type AssertJobExecutionEventsEnabledParams = {
+  workflows: Record<string, Workflow>;
+  mainJobDeps: Record<string, string[]>;
+  subscribers: WorkflowEventSubscribers;
+  jobPublishEvents: ReadonlyMap<string, boolean>;
+};
+
+/**
+ * Reject job execution event triggers whose target workflow has no job opted in.
+ *
+ * Unlike the workflow-level flag, a job function's `publishExecutionEvents` is
+ * not readable back from the platform's job function listing, so it cannot be
+ * enabled on the user's behalf without re-asserting it on every deploy. Failing
+ * the plan turns a subscription that would never fire into a build error.
+ * @param params - Workflows, their job dependencies, subscribers, and explicit job flags
+ */
+function assertJobExecutionEventsEnabled(params: AssertJobExecutionEventsEnabledParams): void {
+  const { workflows, mainJobDeps, subscribers, jobPublishEvents } = params;
+  const publishingJobNames = new Set(
+    [...jobPublishEvents].filter(([, publish]) => publish).map(([jobName]) => jobName),
+  );
+
+  const hint = (target: string, jobNames: readonly string[]) =>
+    `Executors with a workflowJobExecution trigger subscribe to ${target}, but none of its jobs publish job execution events. ` +
+    `Set "publishEvents: true" on createWorkflowJob for the job(s) to observe (candidates: ${jobNames.join(", ")}).`;
+
+  if (subscribers.anyWorkflow && publishingJobNames.size === 0) {
+    const allJobNames = [...new Set(Object.values(mainJobDeps).flat())].toSorted();
+    if (allJobNames.length > 0) {
+      throw new Error(hint("every workflow in the workspace", allJobNames));
+    }
+  }
+
+  for (const workflow of Object.values(workflows)) {
+    const usedJobNames = mainJobDeps[workflow.mainJob.name];
+    // A missing entry gets a fuller diagnostic from planWorkflow's own loop.
+    if (!usedJobNames || !subscribers.workflowNames.has(workflow.name)) {
+      continue;
+    }
+    if (!usedJobNames.some((jobName) => publishingJobNames.has(jobName))) {
+      throw new Error(hint(`workflow "${workflow.name}"`, usedJobNames.toSorted()));
+    }
+  }
 }
 
 /**
@@ -343,6 +433,7 @@ export function buildWorkflowValidationShape(
  * @param workflows - Parsed workflows
  * @param mainJobDeps - Main job dependencies by workflow
  * @param unchangedJobFunctions - Job functions already proven unchanged by function registry plan
+ * @param eventPublishing - Executor subscriptions and explicit job flags driving execution event publishing
  * @returns Planned workflow changes
  */
 export async function planWorkflow(
@@ -353,6 +444,7 @@ export async function planWorkflow(
   workflows: Record<string, Workflow>,
   mainJobDeps: Record<string, string[]>,
   unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
+  eventPublishing: WorkflowEventPublishing = {},
 ) {
   const changeSet = createChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>("Workflows");
   const conflicts: OwnerConflict[] = [];
@@ -360,6 +452,15 @@ export async function planWorkflow(
   const resourceOwners = new Set<string>();
   const unchangedWorkflowJobNames = new Set<string>();
   const retainedWorkflowJobNames = new Set<string>();
+
+  const executionSubscribers = eventPublishing.execution ?? NO_EVENT_SUBSCRIBERS;
+  const jobFunctionPublishEvents = eventPublishing.jobPublishEvents ?? new Map<string, boolean>();
+  assertJobExecutionEventsEnabled({
+    workflows,
+    mainJobDeps,
+    subscribers: eventPublishing.jobExecution ?? NO_EVENT_SUBSCRIBERS,
+    jobPublishEvents: jobFunctionPublishEvents,
+  });
 
   const existingWorkflows = await fetchExistingResourcesWithLabels({
     client,
@@ -396,6 +497,17 @@ export async function planWorkflow(
     }
     usedJobNames.forEach((jobName) => retainedWorkflowJobNames.add(jobName));
 
+    const desiredWorkflow: Workflow = {
+      ...workflow,
+      publishEvents: resolvePublishEvents({
+        explicit: workflow.publishEvents,
+        subscribed: isSubscribed(executionSubscribers, workflow.name),
+        conflictError:
+          `Workflow "${workflow.name}" has "publishEvents: false", but executors with a workflowExecution trigger subscribe to it. ` +
+          `Either remove "publishEvents: false" or remove the matching executor triggers.`,
+      }),
+    };
+
     if (existing) {
       const owned = trackDesiredResourceOwnership({
         labels: existing.allLabels,
@@ -413,7 +525,7 @@ export async function planWorkflow(
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         canTreatWorkflowAsUnchanged(
           existing.resource,
-          workflow,
+          desiredWorkflow,
           usedJobNames,
           unchangedJobFunctions,
         )
@@ -426,7 +538,7 @@ export async function planWorkflow(
         changeSet.updates.push({
           name: workflow.name,
           workspaceId,
-          workflow,
+          workflow: desiredWorkflow,
           usedJobNames,
           metaRequest,
         });
@@ -436,7 +548,7 @@ export async function planWorkflow(
       changeSet.creates.push({
         name: workflow.name,
         workspaceId,
-        workflow,
+        workflow: desiredWorkflow,
         usedJobNames,
         metaRequest,
       });
@@ -496,6 +608,7 @@ export async function planWorkflow(
     appId,
     unchangedWorkflowJobNames,
     jobFunctionDeletes,
+    jobFunctionPublishEvents,
   };
 }
 
@@ -561,20 +674,23 @@ export function formatWorkflowChangeEntries(
   );
 }
 
+type ExistingWorkflowResource = {
+  mainJobFunctionName?: string;
+  retryPolicy?: {
+    maxRetries?: number;
+    backoffMultiplier?: number;
+    initialBackoff?: { seconds?: bigint; nanos?: number };
+    maxBackoff?: { seconds?: bigint; nanos?: number };
+  };
+  concurrencyPolicy?: {
+    maxConcurrentExecutions?: number;
+  };
+  jobFunctions?: Record<string, string | bigint>;
+  publishExecutionEvents?: boolean;
+};
+
 function canTreatWorkflowAsUnchanged(
-  existing: {
-    mainJobFunctionName?: string;
-    retryPolicy?: {
-      maxRetries?: number;
-      backoffMultiplier?: number;
-      initialBackoff?: { seconds?: bigint; nanos?: number };
-      maxBackoff?: { seconds?: bigint; nanos?: number };
-    };
-    concurrencyPolicy?: {
-      maxConcurrentExecutions?: number;
-    };
-    jobFunctions?: Record<string, string | bigint>;
-  },
+  existing: ExistingWorkflowResource,
   workflow: Workflow,
   usedJobNames: string[],
   unchangedJobFunctions: ReadonlySet<string>,
@@ -586,24 +702,13 @@ function canTreatWorkflowAsUnchanged(
 }
 
 function areWorkflowsEqual(
-  existing: {
-    mainJobFunctionName?: string;
-    retryPolicy?: {
-      maxRetries?: number;
-      backoffMultiplier?: number;
-      initialBackoff?: { seconds?: bigint; nanos?: number };
-      maxBackoff?: { seconds?: bigint; nanos?: number };
-    };
-    concurrencyPolicy?: {
-      maxConcurrentExecutions?: number;
-    };
-    jobFunctions?: Record<string, string | bigint>;
-  },
+  existing: ExistingWorkflowResource,
   workflow: Workflow,
   usedJobNames: readonly string[],
 ) {
   return (
     existing.mainJobFunctionName === workflow.mainJob.name &&
+    (existing.publishExecutionEvents ?? false) === (workflow.publishEvents ?? false) &&
     areNormalizedEqual(
       normalizeComparableExistingWorkflowRetryPolicy(existing.retryPolicy),
       normalizeComparableWorkflowRetryPolicy(workflow.retryPolicy),

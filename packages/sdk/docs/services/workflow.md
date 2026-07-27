@@ -201,6 +201,30 @@ export default createWorkflow({
 });
 ```
 
+## Execution Events
+
+Workflows can publish execution lifecycle events for executors. Set `publishEvents: true` to publish workflow-level events:
+
+```typescript
+export default createWorkflow({
+  name: "order-processing",
+  mainJob: processOrder,
+  publishEvents: true,
+});
+```
+
+Set `publishEvents: true` on a job to publish its execution events:
+
+```typescript
+export const processOrder = createWorkflowJob({
+  name: "process-order",
+  publishEvents: true,
+  body: async () => ({ processed: true }),
+});
+```
+
+When an executor subscribes to a workflow's execution events, the SDK enables workflow-level publishing automatically unless it is explicitly disabled. Job-level publishing remains explicit; enable it on each job whose events an executor should observe. See [Workflow Execution Triggers](./executor.md#workflow-execution-triggers).
+
 ## Wait Points
 
 Wait points allow a workflow job to suspend execution and wait for an external signal before resuming. This enables human-in-the-loop patterns such as approvals, reviews, and manual confirmations.

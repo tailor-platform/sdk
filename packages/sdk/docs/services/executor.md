@@ -152,6 +152,35 @@ Fire on auth access token lifecycle events:
 authAccessTokenIssuedTrigger();
 ```
 
+### Workflow Execution Triggers
+
+Fire when a workflow execution changes state. Use the single-event helpers or `workflowExecutionTrigger()` for multiple events:
+
+```typescript
+import { createExecutor, workflowExecutionTrigger } from "@tailor-platform/sdk";
+import orderWorkflow from "../workflows/order";
+
+export default createExecutor({
+  name: "order-workflow-finished",
+  trigger: workflowExecutionTrigger({
+    workflow: orderWorkflow,
+    events: ["completed", "retried"],
+  }),
+  operation: {
+    kind: "function",
+    body: async (args) => {
+      if (args.event === "completed" && !args.success) {
+        console.error(args.error);
+      }
+    },
+  },
+});
+```
+
+The available workflow events are `started`, `completed`, `retried`, `resumed`, `wait_started`, and `wait_resolved`. To observe job-level events, use `workflowJobExecutionStartedTrigger()`, `workflowJobExecutionCompletedTrigger()`, `workflowJobExecutionWaitStartedTrigger()`, `workflowJobExecutionWaitResolvedTrigger()`, or `workflowJobExecutionTrigger()`. Omit `workflow` to subscribe to matching events from every workflow in the workspace.
+
+`completed` events include `success`; when it is `false`, `error` contains the failure message. A job released from a wait point emits `wait_resolved` instead of `completed`.
+
 ### Multi-Event Triggers
 
 Handle multiple event types in a single executor using multi-event trigger factories. These accept an `events` array of short event names:
@@ -198,6 +227,13 @@ idpUserTrigger({ events: ["created", "deleted"], idp: "my-idp" });
 
 ```typescript
 authAccessTokenTrigger({ events: ["issued", "revoked"] });
+```
+
+#### `workflowExecutionTrigger()` and `workflowJobExecutionTrigger()`
+
+```typescript
+workflowExecutionTrigger({ workflow: orderWorkflow, events: ["started", "completed"] });
+workflowJobExecutionTrigger({ workflow: orderWorkflow, events: ["started", "wait_resolved"] });
 ```
 
 The `event` field on args matches the short event name (e.g., `"created"`, `"updated"`, `"deleted"`, `"issued"`, `"refreshed"`, `"revoked"`), enabling type narrowing. The `rawEvent` field contains the full event type string (e.g., `"tailordb.type_record.created"`).

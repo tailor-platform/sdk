@@ -255,17 +255,26 @@ function formatEventTriggerConfig(config: ExecutorTriggerEventConfig): Record<st
   const base = {
     kind: typedConfig.case,
     eventTypes: typedConfig.value.eventTypes,
-    namespaceName: typedConfig.value.namespaceName,
     condition: typedConfig.value.condition?.expr || "",
   };
 
   switch (typedConfig.case) {
     case "tailordb":
-      return { ...base, typeName: typedConfig.value.typeName };
+      return {
+        ...base,
+        namespaceName: typedConfig.value.namespaceName,
+        typeName: typedConfig.value.typeName,
+      };
     case "pipeline":
-      return { ...base, resolverName: typedConfig.value.resolverName };
+      return {
+        ...base,
+        namespaceName: typedConfig.value.namespaceName,
+        resolverName: typedConfig.value.resolverName,
+      };
+    case "workflow":
+      return { ...base, workflowName: typedConfig.value.workflowName };
     default:
-      return base;
+      return { ...base, namespaceName: typedConfig.value.namespaceName };
   }
 }
 
