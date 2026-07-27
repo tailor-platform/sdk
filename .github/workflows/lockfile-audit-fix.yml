@@ -148,6 +148,7 @@ jobs:
 
       - name: Add changeset
         if: steps.diff.outputs.changed == 'true' && steps.changeset_check.outputs.has-runtime-changes == 'true'
+        id: add_changeset
         run: |
           cat > .changeset/lockfile-audit-fix.md <<'EOF'
           ---
@@ -180,9 +181,8 @@ jobs:
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
           token: ${{ steps.get_access_token.outputs.token }}
+          sign-commits: true
           commit-message: "fix(deps): automated lockfile security fix"
-          author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
-          committer: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
           branch: chore/lockfile-audit-fix
           delete-branch: true
           title: "fix(deps): automated lockfile security fix"
@@ -190,10 +190,10 @@ jobs:
           add-paths: |
             pnpm-lock.yaml
             pnpm-workspace.yaml
-            ${{ steps.changeset_check.outputs.has-runtime-changes == 'true' && '.changeset/lockfile-audit-fix.md' || '' }}
+            ${{ steps.add_changeset.outcome == 'success' && '.changeset/lockfile-audit-fix.md' || '' }}
           labels: |
             security
-            ${{ steps.changeset_check.outputs.has-runtime-changes == 'false' && 'skip-changeset' || '' }}
+            ${{ steps.add_changeset.outcome != 'success' && 'skip-changeset' || '' }}
 
       - name: Notify Slack on failure
         if: failure()

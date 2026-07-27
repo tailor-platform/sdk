@@ -183,21 +183,14 @@ export { formatMigrationNumber };
 // with diff-calculator.ts). Re-exported here for backward compatibility.
 export { isSnapshotFieldRefOperand } from "./snapshot-types";
 export type {
-  SnapshotHook,
-  SnapshotValidation,
-  SnapshotSerial,
   SnapshotEnumValue,
   SnapshotFieldConfig,
   SnapshotIndexConfig,
   SnapshotRelationship,
-  SnapshotFieldRefOperand,
-  SnapshotValueOperand,
   SnapshotPermissionOperand,
-  SnapshotPermissionOperator,
   SnapshotPermissionCondition,
   SnapshotActionPermission,
   SnapshotRecordPermission,
-  SnapshotGqlAction,
   SnapshotGqlPermissionPolicy,
   SnapshotGqlPermission,
   SnapshotGqlOperations,

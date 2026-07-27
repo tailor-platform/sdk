@@ -31,7 +31,7 @@
     "date-fns": "4.4.0"
   },
   "devDependencies": {
-    "@bufbuild/protobuf": "2.12.1",
+    "@bufbuild/protobuf": "2.13.0",
     "@connectrpc/connect": "2.1.2",
     "@connectrpc/connect-node": "2.1.2",
     "@tailor-platform/sdk-plugin-seed": "workspace:^",
@@ -42,10 +42,10 @@
     "graphql": "17.0.2",
     "graphql-request": "7.4.0",
     "multiline-ts": "4.0.1",
-    "oxfmt": "0.59.0",
-    "oxlint": "1.74.0",
-    "oxlint-tsgolint": "0.25.0",
-    "tsdown": "0.22.12",
+    "oxfmt": "0.60.0",
+    "oxlint": "1.75.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "tsdown": "0.22.14",
     "tsx": "4.23.1",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
