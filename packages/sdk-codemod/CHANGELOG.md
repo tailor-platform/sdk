@@ -1,5 +1,11 @@
 # @tailor-platform/sdk-codemod
 
+## 0.4.0-next.9
+
+### Patch Changes
+
+- [#1837](https://github.com/tailor-platform/sdk/pull/1837) [`b74966b`](https://github.com/tailor-platform/sdk/commit/b74966bcefa499df1cbb5ef7e36ca76442658579) Thanks [@toiroakr](https://github.com/toiroakr)! - Update politty to v0.11.3
+
 ## 0.3.0-next.8
 
 ### Patch Changes
