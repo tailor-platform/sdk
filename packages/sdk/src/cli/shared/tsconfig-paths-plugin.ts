@@ -103,24 +103,25 @@ function getResolutionContext(
 function resolveCandidate(candidate: string, allowJs: boolean): string | null {
   for (const [jsExt, tsExt] of JS_TO_TS_EXT) {
     if (candidate.endsWith(jsExt)) {
-      const swapped = `${candidate.slice(0, -jsExt.length)}${tsExt}`;
-      return isFile(swapped) ? swapped : isFile(candidate) ? candidate : null;
+      const source = `${candidate.slice(0, -jsExt.length)}${tsExt}`;
+      return firstExistingFile([source, candidate]);
     }
   }
 
   if (TS_EXTENSIONS.some((ext) => candidate.endsWith(ext))) {
-    return isFile(candidate) ? candidate : null;
+    return firstExistingFile([candidate]);
   }
 
   // TypeScript resolves a file at the path before a directory's index file.
   const extensions = allowJs ? [...TS_EXTENSIONS, ...JS_EXTENSIONS] : TS_EXTENSIONS;
-  for (const suffix of ["", "/index"]) {
-    for (const ext of extensions) {
-      const withExt = `${candidate}${suffix}${ext}`;
-      if (isFile(withExt)) return withExt;
-    }
-  }
-  return isFile(candidate) ? candidate : null;
+  const withExtensions = ["", "/index"].flatMap((suffix) =>
+    extensions.map((ext) => `${candidate}${suffix}${ext}`),
+  );
+  return firstExistingFile([...withExtensions, candidate]);
+}
+
+function firstExistingFile(candidates: string[]): string | null {
+  return candidates.find(isFile) ?? null;
 }
 
 function isFile(candidate: string): boolean {
