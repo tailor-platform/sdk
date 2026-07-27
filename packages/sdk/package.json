@@ -198,7 +198,7 @@
     "chokidar": "5.0.0",
     "confbox": "0.2.4",
     "date-fns": "4.4.0",
-    "es-toolkit": "1.49.0",
+    "es-toolkit": "1.50.0",
     "find-up-simple": "1.0.1",
     "get-east-asian-width": "1.6.0",
     "get-tsconfig": "4.14.0",
