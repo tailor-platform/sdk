@@ -38,6 +38,14 @@ describe("no-execute-script-arg-stringify", () => {
     );
   });
 
+  test("rejects a stringified arg through a transitive const alias of the options object", () => {
+    expectViolation(
+      'import { executeScript } from "@tailor-platform/sdk/cli";\nconst base = { arg: JSON.stringify(payload) };\nconst options = base;\nexecuteScript(options);',
+      "no-execute-script-arg-stringify",
+      MESSAGE,
+    );
+  });
+
   test("supports namespace imports", () => {
     expectViolation(
       'import * as cli from "@tailor-platform/sdk/cli";\ncli.executeScript({ arg: JSON.stringify(payload) });',

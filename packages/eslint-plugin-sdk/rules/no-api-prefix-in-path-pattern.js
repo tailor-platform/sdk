@@ -1,5 +1,5 @@
 import { objectProperty, staticString } from "../lib/ast.js";
-import { configureImportTracker, variableInitializer } from "../lib/sdk-bindings.js";
+import { configureImportTracker, resolveValue } from "../lib/sdk-bindings.js";
 
 export default {
   meta: {
@@ -22,8 +22,7 @@ export default {
       "Program:exit"() {
         for (const call of calls) {
           if (imports.callName(call) !== "createHttpAdapter") continue;
-          let options = call.arguments[0];
-          if (options?.type === "Identifier") options = variableInitializer(context, options);
+          const options = resolveValue(context, call.arguments[0]);
           const property = objectProperty(options, "pathPattern");
           if (!property || property.type !== "Property") continue;
           const pattern = staticString(property.value);

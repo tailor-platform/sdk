@@ -7,9 +7,15 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, expect } from "vitest";
 
 const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const oxlintBin = resolve(packageDir, "../../node_modules/.bin/oxlint");
 const pluginUrl = pathToFileURL(resolve(packageDir, "index.js")).href;
 const tempDirs = [];
+
+// Invoke oxlint's JS bin script via `node` directly rather than the
+// platform-specific `.bin/` shim, which is `.cmd`/`.ps1` on Windows.
+const oxlintBinScript = resolve(
+  dirname(fileURLToPath(import.meta.resolve("oxlint/package.json"))),
+  "bin/oxlint",
+);
 
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
@@ -32,7 +38,7 @@ export function lint(source, rule, filename = "fixture.ts") {
     }),
   );
 
-  const result = spawnSync(oxlintBin, ["--config", config, file], {
+  const result = spawnSync(process.execPath, [oxlintBinScript, "--config", config, file], {
     cwd: dir,
     encoding: "utf8",
   });
