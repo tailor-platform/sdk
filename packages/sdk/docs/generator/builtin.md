@@ -248,9 +248,14 @@ node seed/exec.mjs -m admin
 
 # With other options
 node seed/exec.mjs -m admin --truncate --yes
+
+# Update rows that already exist instead of failing on duplicate ids
+node seed/exec.mjs --upsert
 ```
 
 The `--machine-user` option is required at runtime if `machineUserName` is not configured in the generator options.
+
+Without `--upsert`, a row whose id already exists fails the whole batch for that type, so nothing is written. Use `--upsert` to add only the new rows to a workspace that is already seeded; existing rows are updated from the seed data, and fields absent from a row keep their stored values.
 
 The generated files are compatible with gql-ingest for bulk data import.
 
