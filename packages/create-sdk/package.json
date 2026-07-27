@@ -30,14 +30,14 @@
     "execa": "10.0.0",
     "picocolors": "1.1.1",
     "pkg-types": "2.3.1",
-    "politty": "0.11.2",
+    "politty": "0.11.6",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
     "oxlint": "1.74.0",
     "oxlint-tsgolint": "0.25.0",
-    "tsdown": "0.22.12",
+    "tsdown": "0.22.14",
     "typescript": "6.0.3"
   }
 }

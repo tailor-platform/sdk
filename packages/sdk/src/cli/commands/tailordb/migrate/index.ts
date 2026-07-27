@@ -32,14 +32,8 @@ export const migrationCommand = defineCommand({
 });
 
 export { generateCommand } from "./generate";
-export type { GenerateOptions } from "./generate";
 export { scriptCommand } from "./script";
-export type { ScriptOptions } from "./script";
 export { setCommand } from "./set";
-export type { SetOptions } from "./set";
 export { statusCommand } from "./status";
-export type { StatusOptions } from "./status";
 export { syncCommand } from "./sync";
-export type { SyncOptions } from "./sync";
 export { validateCommand } from "./validate";
-export type { ValidateOptions } from "./validate";

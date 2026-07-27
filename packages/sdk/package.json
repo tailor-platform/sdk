@@ -175,7 +175,7 @@
   "dependencies": {
     "@0no-co/graphql.web": "1.3.2",
     "@badgateway/oauth2-client": "3.3.1",
-    "@bufbuild/protobuf": "2.12.1",
+    "@bufbuild/protobuf": "2.13.0",
     "@bufbuild/protovalidate": "1.2.0",
     "@connectrpc/connect": "2.1.2",
     "@connectrpc/connect-node": "2.1.2",
@@ -184,9 +184,9 @@
     "@jridgewell/trace-mapping": "0.3.31",
     "@napi-rs/keyring": "1.3.0",
     "@opentelemetry/api": "1.9.1",
-    "@opentelemetry/exporter-trace-otlp-proto": "0.220.0",
-    "@opentelemetry/resources": "2.9.0",
-    "@opentelemetry/sdk-trace-node": "2.9.0",
+    "@opentelemetry/exporter-trace-otlp-proto": "0.221.0",
+    "@opentelemetry/resources": "2.10.0",
+    "@opentelemetry/sdk-trace-node": "2.10.0",
     "@opentelemetry/semantic-conventions": "1.43.0",
     "@oxc-project/types": "0.140.0",
     "@standard-schema/spec": "1.1.0",
@@ -214,7 +214,7 @@
     "pathe": "2.0.3",
     "pgsql-ast-parser": "12.0.2",
     "pkg-types": "2.3.1",
-    "politty": "0.11.2",
+    "politty": "0.11.6",
     "rolldown": "1.2.0",
     "semver": "7.8.5",
     "sql-highlight": "6.1.0",
@@ -227,7 +227,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@opentelemetry/sdk-trace-base": "2.9.0",
+    "@opentelemetry/sdk-trace-base": "2.10.0",
     "@tailor-platform/tailor-proto": "workspace:^",
     "@types/madge": "5.0.3",
     "@types/mime-types": "3.0.1",
@@ -239,7 +239,7 @@
     "oxlint": "1.74.0",
     "oxlint-tsgolint": "0.25.0",
     "sonda": "0.14.0",
-    "tsdown": "0.22.12",
+    "tsdown": "0.22.14",
     "typescript": "6.0.3",
     "vitest": "4.1.10",
     "zinfer": "0.2.7"
