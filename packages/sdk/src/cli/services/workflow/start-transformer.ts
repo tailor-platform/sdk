@@ -386,7 +386,7 @@ export function transformStartCalls(
 export function createStartTransformPlugin(
   startContext: StartContext | undefined,
 ): Plugin | undefined {
-  if (!startContext) return undefined;
+  if (!startContext || startContext.modules.size === 0) return undefined;
 
   return {
     name: "start-transform",

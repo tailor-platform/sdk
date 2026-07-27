@@ -1,1 +1,1 @@
-export { AuthConnectionOAuth2ConfigSchema, AuthConnectionConfigSchema } from "./schema";
+export { AuthConnectionConfigSchema } from "./schema";

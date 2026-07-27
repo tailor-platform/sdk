@@ -11,6 +11,7 @@ import {
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
 import {
+  createStartTransformPlugin,
   hasStartCall,
   transformStartCalls as transformStartCallsWithContext,
 } from "./start-transformer";
@@ -1267,5 +1268,26 @@ describe("AST Transformer - hasStartCall", () => {
 
   test("returns false when there is no .start( call", () => {
     expect(hasStartCall("job.stop({ id: 1 });")).toBe(false);
+  });
+});
+
+describe("AST Transformer - createStartTransformPlugin", () => {
+  test("returns undefined when the start context has no workflow bindings", () => {
+    expect(createStartTransformPlugin({ modules: new Map() })).toBeUndefined();
+  });
+
+  test("returns undefined when no start context is provided", () => {
+    expect(createStartTransformPlugin(undefined)).toBeUndefined();
+  });
+
+  test("returns a plugin when the start context has workflow bindings", () => {
+    const modules = new Map([
+      [
+        normalizeFilePath(path.resolve("test.ts")),
+        { localBindings: new Map(), exports: new Map() } satisfies StartModuleBindings,
+      ],
+    ]);
+
+    expect(createStartTransformPlugin({ modules })).toBeDefined();
   });
 });

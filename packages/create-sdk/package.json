@@ -30,15 +30,15 @@
     "execa": "10.0.0",
     "picocolors": "1.1.1",
     "pkg-types": "2.3.1",
-    "politty": "0.11.3",
+    "politty": "0.11.6",
     "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "24.13.3",
     "eslint-plugin-zod": "4.7.0",
-    "oxlint": "1.74.0",
-    "oxlint-tsgolint": "0.25.0",
-    "tsdown": "0.22.12",
+    "oxlint": "1.75.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "tsdown": "0.22.14",
     "typescript": "6.0.3"
   }
 }
