@@ -7,12 +7,16 @@
  * state.
  */
 
+import { resourceTrn } from "#/cli/commands/deploy/label";
+import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
+import { logger } from "#/cli/shared/logger";
+import { assertDefined } from "#/utils/assert";
 import {
   hasChanges,
   formatMigrationDiff,
   formatDiffSummary,
   type MigrationDiff,
-} from "#/cli/commands/tailordb/migrate/diff-calculator";
+} from "./diff-calculator";
 import {
   reconstructSnapshotFromMigrations,
   compareLocalTypesWithSnapshot,
@@ -25,16 +29,12 @@ import {
   type SnapshotGqlOperations,
   type SnapshotSettings,
   type TailorDBSnapshotType,
-} from "#/cli/commands/tailordb/migrate/snapshot";
-import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
-import { logger } from "#/cli/shared/logger";
-import { assertDefined } from "#/utils/assert";
-import { resourceTrn } from "../label";
-import type { NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
-import type { RemoteSchemaVerificationResult } from "#/cli/commands/tailordb/migrate/types";
+} from "./snapshot";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
+import type { NamespaceWithMigrations } from "./config";
+import type { RemoteSchemaVerificationResult } from "./types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 /**

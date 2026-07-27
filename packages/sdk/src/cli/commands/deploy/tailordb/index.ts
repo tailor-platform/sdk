@@ -24,6 +24,16 @@ import {
   buildPreMigrationIndexChangesMap,
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
+  checkMigrationDiffs,
+  formatMigrationCheckResults,
+  formatRemoteVerificationResults,
+  getRemoteMigrationNumber,
+  logRemoteDriftGuidance,
+  toTailorDBDeployInput,
+  verifyRemoteSchema,
+  type TailorDBDeployInput,
+} from "#/cli/commands/tailordb/migrate/schema-checks";
+import {
   reconstructSnapshotFromMigrations,
   assertValidMigrationFiles,
   formatMigrationNumber,
@@ -57,16 +67,6 @@ import {
   updateMigrationLabel,
   type MigrationContext,
 } from "./migration";
-import {
-  checkMigrationDiffs,
-  formatMigrationCheckResults,
-  formatRemoteVerificationResults,
-  getRemoteMigrationNumber,
-  logRemoteDriftGuidance,
-  toTailorDBDeployInput,
-  verifyRemoteSchema,
-  type TailorDBDeployInput,
-} from "./validation";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";

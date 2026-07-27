@@ -2,12 +2,6 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import {
-  checkMigrationDiffs,
-  logRemoteDriftGuidance,
-  toTailorDBDeployInput,
-  verifyRemoteSchema,
-} from "#/cli/commands/deploy/tailordb/validation";
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
@@ -20,6 +14,12 @@ import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import { formatDiffSummary, formatMigrationDiff, type MigrationDiff } from "./diff-calculator";
+import {
+  checkMigrationDiffs,
+  logRemoteDriftGuidance,
+  toTailorDBDeployInput,
+  verifyRemoteSchema,
+} from "./schema-checks";
 import {
   assertValidMigrationFiles,
   formatMigrationNumber,
