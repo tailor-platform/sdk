@@ -2698,9 +2698,9 @@ packages:
   bl@4.1.0:
     resolution: {integrity: sha512-1W07cM9gS6DcLperZfFSj+bWLtaPGSOHWhPiGzXmvVJbRLdG82sH/Kn8EtW1VqWVA54AKf2h5k5BbnIbwF3h6w==}
 
-  brace-expansion@5.0.7:
-    resolution: {integrity: sha512-7oFy703dxfY3/NLxC1fh2SUCQ0H9rmAY+5EpDVfXjUTTs+HEwR2nYaqLv+GWcTsumwxPfiz6CzCNkwXwBUwqCA==}
-    engines: {node: 18 || 20 || >=22}
+  brace-expansion@5.0.8:
+    resolution: {integrity: sha512-JZyDyq3D4AUifKTPOB7DELf6XsB3WdPuNxCtob1vFXPsSXhdAiHBWJ/tJ8HAc9aH84BK+5JFZLNkJKx3G9kzQg==}
+    engines: {node: 20 || >=22}
 
   buffer@5.7.1:
     resolution: {integrity: sha512-EHcyIPBQ4BSGlvjB16k5KgAJ27CIsHY/2JBmCRReo48y9rQ3MaUzWX3KVlBa4U7MyX02HdVj0K7C3WaB3ju7FQ==}
@@ -3509,6 +3509,11 @@ packages:
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
 
+  nanoid@3.3.16:
+    resolution: {integrity: sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==}
+    engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
+    hasBin: true
+
   natural-compare@1.4.0:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
 
@@ -3676,6 +3681,10 @@ packages:
 
   postcss@8.5.16:
     resolution: {integrity: sha512-vuwillviilfKZsg0VGj5R/YwwcHx4SLsIOI/7K6mQkWx+l5cUHTjj5g0AasTBcyXsbfTgrwsUNmVUb5xVwyPwg==}
+    engines: {node: ^10 || ^12 || >=14}
+
+  postcss@8.5.22:
+    resolution: {integrity: sha512-KBDEIpLrvpv16pp3K0Fw+UCoZfopFjjgeB+0tA/aaThfEE74kKDLrgg603YvOWJyg3+WYtyq3xYsQWsIyZlPqQ==}
     engines: {node: ^10 || ^12 || >=14}
 
   powershell-utils@0.1.0:
@@ -5567,7 +5576,7 @@ snapshots:
       '@vue/shared': 3.5.39
       estree-walker: 2.0.2
       magic-string: 0.30.21
-      postcss: 8.5.16
+      postcss: 8.5.22
       source-map-js: 1.2.1
 
   '@vue/compiler-ssr@3.5.39':
@@ -5692,7 +5701,7 @@ snapshots:
       inherits: 2.0.4
       readable-stream: 3.6.2
 
-  brace-expansion@5.0.7:
+  brace-expansion@5.0.8:
     dependencies:
       balanced-match: 4.0.4
 
@@ -5817,11 +5826,11 @@ snapshots:
     dependencies:
       node-source-walk: 7.0.2
 
-  detective-postcss@8.0.4(postcss@8.5.16):
+  detective-postcss@8.0.4(postcss@8.5.22):
     dependencies:
       is-url-superb: 4.0.0
-      postcss: 8.5.16
-      postcss-values-parser: 6.0.2(postcss@8.5.16)
+      postcss: 8.5.22
+      postcss-values-parser: 6.0.2(postcss@8.5.22)
 
   detective-sass@6.0.2:
     dependencies:
@@ -6410,7 +6419,7 @@ snapshots:
 
   minimatch@10.2.5:
     dependencies:
-      brace-expansion: 5.0.7
+      brace-expansion: 5.0.8
 
   minimist@1.2.8: {}
 
@@ -6438,6 +6447,8 @@ snapshots:
   mute-stream@3.0.0: {}
 
   nanoid@3.3.15: {}
+
+  nanoid@3.3.16: {}
 
   natural-compare@1.4.0: {}
 
@@ -6683,16 +6694,22 @@ snapshots:
       '@clack/prompts': 1.7.0
       '@inquirer/prompts': 8.5.2(@types/node@24.13.3)
 
-  postcss-values-parser@6.0.2(postcss@8.5.16):
+  postcss-values-parser@6.0.2(postcss@8.5.22):
     dependencies:
       color-name: 1.1.4
       is-url-superb: 4.0.0
-      postcss: 8.5.16
+      postcss: 8.5.22
       quote-unquote: 1.0.0
 
   postcss@8.5.16:
     dependencies:
       nanoid: 3.3.15
+      picocolors: 1.1.1
+      source-map-js: 1.2.1
+
+  postcss@8.5.22:
+    dependencies:
+      nanoid: 3.3.16
       picocolors: 1.1.1
       source-map-js: 1.2.1
 
@@ -6705,7 +6722,7 @@ snapshots:
       detective-amd: 6.1.0
       detective-cjs: 6.1.1
       detective-es6: 5.0.2
-      detective-postcss: 8.0.4(postcss@8.5.16)
+      detective-postcss: 8.0.4(postcss@8.5.22)
       detective-sass: 6.0.2
       detective-scss: 5.0.2
       detective-stylus: 5.0.1
@@ -6713,7 +6730,7 @@ snapshots:
       detective-vue2: 2.3.0(supports-color@7.2.0)(typescript@5.9.3)
       module-definition: 6.0.2
       node-source-walk: 7.0.2
-      postcss: 8.5.16
+      postcss: 8.5.22
       typescript: 5.9.3
     transitivePeerDependencies:
       - supports-color
