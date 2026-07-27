@@ -236,7 +236,7 @@ workflowExecutionTrigger({ workflow: orderWorkflow, events: ["started", "complet
 workflowJobExecutionTrigger({ workflow: orderWorkflow, events: ["started", "wait_resolved"] });
 ```
 
-The `event` field on args matches the short event name (e.g., `"created"`, `"updated"`, `"deleted"`, `"issued"`, `"refreshed"`, `"revoked"`), enabling type narrowing. The `rawEvent` field contains the full event type string (e.g., `"tailordb.type_record.created"`).
+The `event` field on args matches the short event name, enabling type narrowing. Record triggers use names such as `"created"`, auth token triggers use `"issued"`, and workflow triggers use `"started"`, `"completed"`, and `"wait_resolved"`. The `rawEvent` field contains the full event type string (e.g., `"tailordb.type_record.created"`).
 
 ## Operation Types
 
