@@ -172,6 +172,48 @@ describe("planWorkflow", () => {
         ),
       ).rejects.toThrow('Workflow "orders" has "publishEvents: false"');
     });
+
+    test("rejects a job execution subscription when no job publishes events", async () => {
+      const workflow = createMockWorkflow("orders", "main-job");
+
+      await expect(
+        planWorkflow(
+          createMockClient([]),
+          workspaceId,
+          appName,
+          undefined,
+          { orders: workflow },
+          { "main-job": ["main-job"] },
+          new Set(),
+          {
+            jobExecution: { workflowNames: new Set(["orders"]) },
+            jobPublishEvents: new Map(),
+          },
+        ),
+      ).rejects.toThrow(
+        'Executors with a workflowJobExecution trigger subscribe to workflow "orders"',
+      );
+    });
+
+    test("allows a job execution subscription when a workflow job publishes events", async () => {
+      const workflow = createMockWorkflow("orders", "main-job");
+
+      await expect(
+        planWorkflow(
+          createMockClient([]),
+          workspaceId,
+          appName,
+          undefined,
+          { orders: workflow },
+          { "main-job": ["main-job"] },
+          new Set(),
+          {
+            jobExecution: { workflowNames: new Set(["orders"]) },
+            jobPublishEvents: new Map([["main-job", true]]),
+          },
+        ),
+      ).resolves.toBeDefined();
+    });
   });
 
   describe("rename scenarios", () => {
