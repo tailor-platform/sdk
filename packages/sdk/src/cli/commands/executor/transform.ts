@@ -272,7 +272,10 @@ function formatEventTriggerConfig(config: ExecutorTriggerEventConfig): Record<st
         resolverName: typedConfig.value.resolverName,
       };
     case "workflow":
-      return { ...base, workflowName: typedConfig.value.workflowName };
+      return {
+        ...base,
+        ...(typedConfig.value.workflowName && { workflowName: typedConfig.value.workflowName }),
+      };
     default:
       return { ...base, namespaceName: typedConfig.value.namespaceName };
   }

@@ -519,6 +519,36 @@ describe("transform", () => {
       });
     });
 
+    test("omits an empty workflow name from workflow event trigger details", () => {
+      const executor = baseExecutor({
+        name: "workflow-lifecycle",
+        triggerType: ExecutorTriggerType.EVENT,
+        triggerConfig: {
+          config: {
+            case: "event" as const,
+            value: {
+              eventType: "",
+              typedConfig: {
+                case: "workflow" as const,
+                value: {
+                  eventTypes: ["workflow.workflow_execution.started"],
+                  workflowName: "",
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const result = toExecutorInfo(executor);
+
+      expect(result.triggerConfig).toEqual({
+        kind: "workflow",
+        eventTypes: ["workflow.workflow_execution.started"],
+        condition: "",
+      });
+    });
+
     test("transforms ExecutorExecutor with incoming webhook trigger", () => {
       const executor = baseExecutor({
         name: "webhook-executor",
