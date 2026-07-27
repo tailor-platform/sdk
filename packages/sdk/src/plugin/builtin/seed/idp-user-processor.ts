@@ -58,10 +58,20 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
           } catch (createError) {
             // The IdP has no upsert primitive, so an existing user surfaces only
             // as a createUser failure; fall back to a name lookup and update.
+            // The fallback cannot tell "already exists" apart from an unrelated
+            // failure, so keep the original error when it does not succeed.
             if (!upsert) throw createError;
-            const existing = await client.userByName(input.users[i].name);
-            const { name, ...attributes } = input.users[i];
-            await client.updateUser({ id: existing.id, ...attributes });
+            const createMessage =
+              createError instanceof Error ? createError.message : String(createError);
+            try {
+              const existing = await client.userByName(input.users[i].name);
+              const { name, ...attributes } = input.users[i];
+              await client.updateUser({ id: existing.id, ...attributes });
+            } catch (updateError) {
+              const updateMessage =
+                updateError instanceof Error ? updateError.message : String(updateError);
+              throw new Error(\`create failed (\${createMessage}); upsert failed (\${updateMessage})\`);
+            }
           }
           processed++;
           console.log(\`[_User] \${i + 1}/\${input.users.length}: \${input.users[i].name}\`);

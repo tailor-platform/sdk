@@ -214,6 +214,10 @@ describe("generateIdpSeedScriptCode", () => {
 
     expect(result.success).toBe(false);
     expect(result.processed).toBe(0);
+    // Both causes must survive: the fallback cannot distinguish "already exists"
+    // from an unrelated createUser failure, so discarding either hides the reason.
+    expect(result.errors[0]).toContain("already exists");
+    expect(result.errors[0]).toContain("lookup exploded");
   });
 });
 
