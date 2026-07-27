@@ -37,7 +37,7 @@
     "@types/node": "24.13.3",
     "oxlint": "1.74.0",
     "oxlint-tsgolint": "0.25.0",
-    "tsdown": "0.22.12",
+    "tsdown": "0.22.14",
     "typescript": "6.0.3"
   }
 }
