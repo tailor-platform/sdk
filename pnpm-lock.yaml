@@ -145,8 +145,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.11.2
-        version: 0.11.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
+        specifier: 0.11.6
+        version: 0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
       zod:
         specifier: 4.4.3
         version: 4.4.3
@@ -549,8 +549,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.11.2
-        version: 0.11.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
+        specifier: 0.11.6
+        version: 0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
       rolldown:
         specifier: 1.2.0
         version: 1.2.0
@@ -655,8 +655,8 @@ importers:
         specifier: 2.3.1
         version: 2.3.1
       politty:
-        specifier: 0.11.2
-        version: 0.11.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
+        specifier: 0.11.6
+        version: 0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
       semver:
         specifier: 7.8.5
         version: 7.8.5
@@ -3654,8 +3654,8 @@ packages:
     resolution: {integrity: sha512-Nc3IT5yHzflTfbjgqWcCPpo7DaKy4FnpB0l/zCAW0Tc7jxAiuqSxHasntB3D7887LSrA93kDJ9IXovxJYxyLCA==}
     engines: {node: '>=4'}
 
-  politty@0.11.2:
-    resolution: {integrity: sha512-bPVWpt8b+TD6RfX04BZJxgFWIyH72Dgqi3cBqhNYzsIbdXxUdajIacimCYfb++Gf6FJ782yGbAQ0LwPjoFRSrA==}
+  politty@0.11.6:
+    resolution: {integrity: sha512-yX2vsYOeeY1+Dygir/7EOnVYJ4emByfWaegN/aYj5+t2yB1Q3ctSwEhHUzu6VK+1csXSGTJRjpJtI3ec0Zd9oA==}
     engines: {node: '>=20.12.0 <21.0.0 || >=21.7.0'}
     hasBin: true
     peerDependencies:
@@ -6676,7 +6676,7 @@ snapshots:
 
   pluralize@8.0.0: {}
 
-  politty@0.11.2(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3):
+  politty@0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3):
     dependencies:
       yaml: 2.9.0
       zod: 4.4.3
