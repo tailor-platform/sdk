@@ -595,6 +595,8 @@ Workflow execution triggers receive execution context:
 ```typescript
 interface WorkflowExecutionContext {
   workspaceId: string; // Workspace identifier
+  env: TailorEnv; // Environment variables from tailor.config.ts
+  actor: TailorActor | null; // Principal that triggered the workflow
   workflowId: string; // Workflow resource ID
   workflowName: string; // Workflow name
   workflowExecutionId: string; // Workflow execution ID
@@ -615,7 +617,7 @@ body: async (args) => {
 
 ### Workflow Job Execution Event Payload
 
-Workflow job execution triggers include the workflow execution context plus job-specific fields:
+Workflow job execution triggers include every `WorkflowExecutionContext` field above, plus job-specific fields:
 
 ```typescript
 interface WorkflowJobExecutionContext {
