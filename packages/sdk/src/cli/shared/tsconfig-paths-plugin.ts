@@ -24,15 +24,16 @@ type ResolutionContext = {
 
 export interface TsconfigPathsPluginOptions {
   /**
-   * Source file a bundler's virtual entry was built from. An entry that inlines
-   * user code carries the user's own import statements, so aliases in it must
-   * resolve against that file's project rather than be skipped as SDK-injected.
+   * Source file a bundler's virtual entry was built from. A virtual entry has no
+   * directory of its own to resolve against, so an entry that inlines the user's
+   * own import statements must name the file they came from.
    */
   virtualEntrySourceFile?: string;
   /**
-   * Called with each tsconfig.json the alias lookup reads. A cached bundler must
-   * treat these as inputs: they are never loaded as modules, so nothing else
-   * notices when an ancestor's `paths` table changes.
+   * Called with each tsconfig.json path the alias lookup depends on, including
+   * ones that do not exist yet. A cached bundler must treat these as inputs:
+   * tsconfigs are never loaded as modules, so nothing else notices when an
+   * ancestor's `paths` table changes or a nearer tsconfig.json appears.
    */
   onTsconfigRead?: (tsconfigPath: string) => void;
 }
@@ -64,6 +65,10 @@ export function createTsconfigPathsPlugin(
           : importer;
         if (!resolutionBasis) return null;
 
+        // Deliberately ahead of the resolvability check below: the lookup reports
+        // the tsconfigs this import depends on, and a caching bundler needs them
+        // even when the import resolves without any alias today. Editing those
+        // tsconfigs later can change the outcome.
         const resolution = getResolutionContext(
           path.dirname(resolutionBasis),
           tsconfigCache,

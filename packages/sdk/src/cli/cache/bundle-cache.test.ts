@@ -347,6 +347,35 @@ describe("withCache", () => {
     expect(second).toBe("built from lib-b");
   });
 
+  // A tracked file disappearing changes the hash rather than throwing, so it
+  // still has to land on a cache miss.
+  test("invalidates the entry when a tracked file is deleted", async () => {
+    const cache = createBundleCache(createCacheStore({ cacheDir }));
+    const sourceFile = writeFile("src/resolver.ts", "export default {}");
+    const tsconfig = writeFile("tsconfig.json", JSON.stringify({ compilerOptions: {} }));
+    const params = {
+      cache,
+      kind: "resolver" as const,
+      name: "myResolver",
+      sourceFile,
+      contextHash: undefined,
+    };
+
+    await withCache({
+      ...params,
+      build: async (_plugins, trackDependency) => {
+        trackDependency(tsconfig);
+        return "built with tsconfig";
+      },
+    });
+
+    fs.rmSync(tsconfig);
+
+    const rebuild = vi.fn(async () => "built without tsconfig");
+    expect(await withCache({ ...params, build: rebuild })).toBe("built without tsconfig");
+    expect(rebuild).toHaveBeenCalledOnce();
+  });
+
   // The walk reports directories it passed over as well, so a tsconfig.json
   // appearing in one later has to invalidate the entry even though the build
   // that saved it never read that file.

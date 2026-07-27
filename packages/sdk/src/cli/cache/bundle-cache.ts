@@ -152,8 +152,9 @@ function createBundleCache(store: CacheStore): BundleCache {
       return undefined;
     }
 
-    // Recompute hash of all stored dependency paths.
-    // If any file is missing or unreadable, treat as cache miss.
+    // Recompute hash of all stored dependency paths. A path that has appeared or
+    // disappeared since the entry was saved changes the hash, so it lands on the
+    // mismatch below rather than needing its own branch.
     let currentHash: string;
     try {
       currentHash = combineHash(hashFiles(entry.dependencyPaths), params.contextHash);
