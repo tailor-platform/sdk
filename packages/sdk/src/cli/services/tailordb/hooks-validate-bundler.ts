@@ -477,7 +477,11 @@ async function bundleScriptTarget(args: {
   );
 
   const buildResult = await rolldown.build({
-    plugins: [entry.plugin, createTsconfigPathsPlugin(), platformBundleDefinePlugin],
+    plugins: [
+      entry.plugin,
+      createTsconfigPathsPlugin({ virtualEntrySourceFile: sourceFilePath }),
+      platformBundleDefinePlugin,
+    ],
     input: entry.input,
     write: false,
     output: {
@@ -492,7 +496,7 @@ async function bundleScriptTarget(args: {
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    ...createBundleLogOptions({ tsconfig }),
+    ...createBundleLogOptions({ tsconfig, virtualEntrySourceFile: sourceFilePath }),
   } as rolldown.BuildOptions);
 
   const bundledCode = buildResult.output[0].code;

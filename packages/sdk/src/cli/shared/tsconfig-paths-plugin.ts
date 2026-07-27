@@ -11,12 +11,14 @@ import type * as rolldown from "rolldown";
 // This plugin re-derives the `paths` matcher from each importing file's own
 // directory, so an alias resolves against its own project's tsconfig.
 //
-// Runs as a fallback: `resolveId` returns null unless rolldown's own resolution
-// already failed, so a real package always wins over an alias pattern (a `"*"`
-// catch-all must not shadow node_modules).
+// Strictly a last resort. rolldown's `order: "post"` only orders this hook
+// against other plugins — it still runs ahead of the builtin resolver, and a
+// non-null return wins outright. So the handler asks rolldown to resolve the
+// specifier first and bails out when that succeeds, which keeps a real
+// node_modules package ahead of a `"*"` catch-all alias.
 
-const TS_EXTENSIONS = [".ts", ".tsx", ".mts"];
-const JS_EXTENSIONS = [".js", ".jsx", ".mjs"];
+const TS_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
+const JS_EXTENSIONS = [".js", ".jsx", ".mjs", ".cjs"];
 
 // A specifier already naming a JS-style output extension maps to the
 // corresponding TypeScript source rather than having an extension appended.
@@ -24,6 +26,7 @@ const JS_TO_TS_EXT = new Map([
   [".js", ".ts"],
   [".jsx", ".tsx"],
   [".mjs", ".mts"],
+  [".cjs", ".cts"],
 ]);
 
 type ResolutionContext = {
@@ -31,32 +34,51 @@ type ResolutionContext = {
   allowJs: boolean;
 };
 
+export interface TsconfigPathsPluginOptions {
+  /**
+   * Source file a bundler's virtual entry was built from. An entry that inlines
+   * user code carries the user's own import statements, so aliases in it must
+   * resolve against that file's project rather than be skipped as SDK-injected.
+   */
+  virtualEntrySourceFile?: string;
+}
+
 /**
  * Create the rolldown plugin that resolves tsconfig `paths` aliases against the
  * importing file's own nearest tsconfig.
+ * @param options - Resolution context for bundlers whose entry inlines user code
  * @returns Rolldown plugin to add to a bundler's plugin list
  */
-export function createTsconfigPathsPlugin(): rolldown.Plugin {
+export function createTsconfigPathsPlugin(
+  options: TsconfigPathsPluginOptions = {},
+): rolldown.Plugin {
   const tsconfigCache = new Map<string, TsConfigResult | null>();
   const contextCache = new Map<string, ResolutionContext | null>();
 
   return {
     name: "tailor-sdk-tsconfig-paths",
     resolveId: {
-      // `post` so this only runs after rolldown's own resolution came up empty.
       order: "post",
-      handler(source, importer) {
+      async handler(source, importer) {
         if (!importer) return null;
-        if (source.startsWith(".") || source.startsWith("/") || source.startsWith("\0"))
+        if (source.startsWith(".") || source.startsWith("/") || source.startsWith("\0")) {
           return null;
-        if (importer.startsWith("\0")) return null;
+        }
+
+        const resolutionBasis = importer.startsWith("\0")
+          ? options.virtualEntrySourceFile
+          : importer;
+        if (!resolutionBasis) return null;
 
         const resolution = getResolutionContext(
-          path.dirname(importer),
+          path.dirname(resolutionBasis),
           tsconfigCache,
           contextCache,
         );
         if (!resolution) return null;
+
+        const alreadyResolvable = await this.resolve(source, importer, { skipSelf: true });
+        if (alreadyResolvable) return null;
 
         for (const candidate of resolution.matcher(source)) {
           const resolved = resolveCandidate(candidate, resolution.allowJs);
@@ -69,8 +91,14 @@ export function createTsconfigPathsPlugin(): rolldown.Plugin {
 }
 
 // The nearest tsconfig.json is often the one that lacks `paths` — that is the
-// whole shadowing problem — so keep walking up past every tsconfig that
-// declares none until one yields a matcher.
+// whole shadowing problem — so keep walking up until one actually declares
+// `paths`. The walk cannot stop at the first tsconfig `createPathsMatcher`
+// accepts: it also accepts a `baseUrl`-only config, whose matcher maps every
+// bare specifier to a `baseUrl`-relative guess.
+//
+// `allowJs` stays bound to the importing file's own nearest tsconfig, since it
+// is a property of that file's project rather than of whichever ancestor
+// happens to own the alias table.
 function getResolutionContext(
   startDir: string,
   tsconfigCache: Map<string, TsConfigResult | null>,
@@ -80,15 +108,20 @@ function getResolutionContext(
   if (cached !== undefined) return cached;
 
   let searchDir = startDir;
+  let allowJs: boolean | undefined;
   let resolution: ResolutionContext | null = null;
   for (;;) {
     const tsconfig = getTsconfig(searchDir, "tsconfig.json", tsconfigCache);
     if (!tsconfig) break;
 
-    const matcher = createPathsMatcher(tsconfig);
-    if (matcher) {
-      resolution = { matcher, allowJs: tsconfig.config.compilerOptions?.allowJs ?? false };
-      break;
+    allowJs ??= tsconfig.config.compilerOptions?.allowJs ?? false;
+
+    if (tsconfig.config.compilerOptions?.paths) {
+      const matcher = createPathsMatcher(tsconfig);
+      if (matcher) {
+        resolution = { matcher, allowJs };
+        break;
+      }
     }
 
     const parentDir = path.dirname(path.dirname(tsconfig.path));

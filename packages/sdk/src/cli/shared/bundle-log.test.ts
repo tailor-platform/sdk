@@ -109,6 +109,35 @@ describe("createBundleLogOptions", () => {
     expect(result.output[0].code).toContain('from "@tailor-platform/sdk-not-installed-here"');
   });
 
+  // The `\0` skip must not swallow imports the user wrote: an entry that
+  // inlines user code names its source file, and misses there are real defects.
+  test("escalates an unresolved import in a virtual entry that inlines user code", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-inlined-")));
+    tmpDirs.push(dir);
+    fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
+    const sourceFile = path.join(dir, "user.ts");
+    fs.writeFileSync(sourceFile, "export const unused = 1;\n");
+    const entry = createVirtualEntry(
+      "tailordb-script:User:0",
+      'import { helper } from "@lib/helpers";\nexport function main() { return helper(); }\n',
+      "ts",
+    );
+
+    await expect(
+      rolldown.build({
+        input: entry.input,
+        write: false,
+        output: { format: "esm", codeSplitting: false },
+        tsconfig: path.join(dir, "tsconfig.json"),
+        plugins: [entry.plugin],
+        ...createBundleLogOptions({
+          tsconfig: path.join(dir, "tsconfig.json"),
+          virtualEntrySourceFile: sourceFile,
+        }),
+      } as rolldown.BuildOptions),
+    ).rejects.toThrow(/Could not resolve "@lib\/helpers"/);
+  });
+
   test("keeps non-escalated rolldown logs from failing the build", async () => {
     const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-circular-")));
     tmpDirs.push(dir);

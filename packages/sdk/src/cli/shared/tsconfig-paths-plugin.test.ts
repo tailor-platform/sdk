@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { afterEach, describe, expect, test } from "vitest";
+import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { createBundleLogOptions } from "./bundle-log";
 import { createTsconfigPathsPlugin } from "./tsconfig-paths-plugin";
 
@@ -130,30 +131,153 @@ describe("createTsconfigPathsPlugin", () => {
     ).rejects.toThrow(/Could not resolve "@nope\/missing"/);
   });
 
-  test("does not shadow a real node_modules package with an alias miss", async () => {
+  // A `"*"` catch-all alias whose target exists on disk must still lose to a
+  // real package, so the plugin cannot silently redirect a working import.
+  test("does not shadow a real node_modules package with an existing alias target", async () => {
     const dir = makeDir("tsconfig-paths-pkg-");
     fs.mkdirSync(path.join(dir, "node_modules", "real-pkg"), { recursive: true });
+    fs.mkdirSync(path.join(dir, "shims"));
+    fs.mkdirSync(path.join(dir, "services"));
     fs.writeFileSync(
       path.join(dir, "node_modules", "real-pkg", "package.json"),
       JSON.stringify({ name: "real-pkg", version: "1.0.0", main: "index.js" }),
     );
     fs.writeFileSync(
       path.join(dir, "node_modules", "real-pkg", "index.js"),
-      "export const fromPkg = 99;\n",
+      'export const origin = "FROM_NODE_MODULES";\n',
+    );
+    fs.writeFileSync(
+      path.join(dir, "shims", "real-pkg.ts"),
+      'export const origin = "FROM_SHIM";\n',
     );
     fs.writeFileSync(
       path.join(dir, "tsconfig.json"),
       JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "*": ["./shims/*"] } } }),
     );
+    fs.writeFileSync(path.join(dir, "services", "tsconfig.json"), JSON.stringify({}));
     fs.writeFileSync(
-      path.join(dir, "entry.ts"),
-      'import { fromPkg } from "real-pkg";\nexport const main = () => fromPkg;\n',
+      path.join(dir, "services", "entry.ts"),
+      'import { origin } from "real-pkg";\nexport const main = () => origin;\n',
     );
 
-    const result = await build(path.join(dir, "entry.ts"), path.join(dir, "tsconfig.json"), [
-      createTsconfigPathsPlugin(),
-    ]);
+    const result = await build(
+      path.join(dir, "services", "entry.ts"),
+      path.join(dir, "services", "tsconfig.json"),
+      [createTsconfigPathsPlugin()],
+    );
 
-    expect(result.output[0].code).toContain("99");
+    expect(result.output[0].code).toContain("FROM_NODE_MODULES");
+    expect(result.output[0].code).not.toContain("FROM_SHIM");
+  });
+
+  // `createPathsMatcher` also accepts a `baseUrl`-only tsconfig, so the walk
+  // must keep going until it finds one that really declares `paths`.
+  test("walks past a nested tsconfig that declares baseUrl but no paths", async () => {
+    const dir = makeDir("tsconfig-paths-baseurl-");
+    fs.mkdirSync(path.join(dir, "lib"));
+    fs.mkdirSync(path.join(dir, "services"));
+    fs.writeFileSync(
+      path.join(dir, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["./lib/*"] } } }),
+    );
+    fs.writeFileSync(
+      path.join(dir, "services", "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { baseUrl: "." } }),
+    );
+    fs.writeFileSync(path.join(dir, "lib", "helpers.ts"), "export const helper = () => 42;\n");
+    fs.writeFileSync(
+      path.join(dir, "services", "entry.ts"),
+      'import { helper } from "@lib/helpers";\nexport const main = () => helper();\n',
+    );
+
+    const result = await build(
+      path.join(dir, "services", "entry.ts"),
+      path.join(dir, "services", "tsconfig.json"),
+      [createTsconfigPathsPlugin()],
+    );
+
+    expect(result.output[0].code).toContain("42");
+  });
+
+  test("walks past more than one paths-less tsconfig", async () => {
+    const dir = makeDir("tsconfig-paths-deep-");
+    fs.mkdirSync(path.join(dir, "lib"));
+    fs.mkdirSync(path.join(dir, "a", "b"), { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["./lib/*"] } } }),
+    );
+    fs.writeFileSync(path.join(dir, "a", "tsconfig.json"), JSON.stringify({}));
+    fs.writeFileSync(path.join(dir, "a", "b", "tsconfig.json"), JSON.stringify({}));
+    fs.writeFileSync(path.join(dir, "lib", "helpers.ts"), "export const helper = () => 42;\n");
+    fs.writeFileSync(
+      path.join(dir, "a", "b", "entry.ts"),
+      'import { helper } from "@lib/helpers";\nexport const main = () => helper();\n',
+    );
+
+    const result = await build(
+      path.join(dir, "a", "b", "entry.ts"),
+      path.join(dir, "a", "b", "tsconfig.json"),
+      [createTsconfigPathsPlugin()],
+    );
+
+    expect(result.output[0].code).toContain("42");
+  });
+
+  test("resolves an alias whose target is a .cts source", async () => {
+    const dir = makeDir("tsconfig-paths-cts-");
+    fs.mkdirSync(path.join(dir, "lib"));
+    fs.mkdirSync(path.join(dir, "services"));
+    fs.writeFileSync(
+      path.join(dir, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["./lib/*"] } } }),
+    );
+    fs.writeFileSync(path.join(dir, "services", "tsconfig.json"), JSON.stringify({}));
+    fs.writeFileSync(path.join(dir, "lib", "helpers.cts"), "export const helper = () => 55;\n");
+    fs.writeFileSync(
+      path.join(dir, "services", "entry.ts"),
+      'import { helper } from "@lib/helpers";\nexport const main = () => helper();\n',
+    );
+
+    const result = await build(
+      path.join(dir, "services", "entry.ts"),
+      path.join(dir, "services", "tsconfig.json"),
+      [createTsconfigPathsPlugin()],
+    );
+
+    expect(result.output[0].code).toContain("55");
+  });
+
+  test("resolves a user alias inlined into a virtual entry when given its source file", async () => {
+    const dir = makeDir("tsconfig-paths-virtual-");
+    fs.mkdirSync(path.join(dir, "lib"));
+    fs.mkdirSync(path.join(dir, "tailordb"));
+    fs.writeFileSync(
+      path.join(dir, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["./lib/*"] } } }),
+    );
+    fs.writeFileSync(path.join(dir, "tailordb", "tsconfig.json"), JSON.stringify({}));
+    fs.writeFileSync(path.join(dir, "lib", "helpers.ts"), "export const helper = () => 77;\n");
+    const sourceFile = path.join(dir, "tailordb", "user.ts");
+    fs.writeFileSync(sourceFile, "export const unused = 1;\n");
+    const entry = createVirtualEntry(
+      "tailordb-script:User:0",
+      'import { helper } from "@lib/helpers";\nexport function main() { return helper(); }\n',
+      "ts",
+    );
+
+    const result = await rolldown.build({
+      input: entry.input,
+      write: false,
+      output: { format: "esm", codeSplitting: false },
+      tsconfig: path.join(dir, "tailordb", "tsconfig.json"),
+      plugins: [entry.plugin, createTsconfigPathsPlugin({ virtualEntrySourceFile: sourceFile })],
+      ...createBundleLogOptions({
+        tsconfig: path.join(dir, "tailordb", "tsconfig.json"),
+        virtualEntrySourceFile: sourceFile,
+      }),
+    } as rolldown.BuildOptions);
+
+    expect(result.output[0].code).toContain("77");
   });
 });

@@ -16,14 +16,24 @@ const ESCALATED_LOG_CODE = "UNRESOLVED_IMPORT";
 // Virtual modules carry rolldown's `\0` prefix on the resolved id.
 const VIRTUAL_MODULE_PREFIX = "\0";
 
-function isUserImport(log: rolldown.RollupLog): boolean {
+function isUserImport(log: rolldown.RollupLog, options: BundleLogOptions): boolean {
   const importer = log.id;
-  return importer !== undefined && !importer.startsWith(VIRTUAL_MODULE_PREFIX);
+  if (importer === undefined) return false;
+  if (!importer.startsWith(VIRTUAL_MODULE_PREFIX)) return true;
+  // An entry that inlines user code carries the user's own imports, so an
+  // unresolved one there is a real defect rather than an injected module.
+  return options.virtualEntrySourceFile !== undefined;
 }
 
 export interface BundleLogOptions {
   /** Absolute path of the tsconfig handed to rolldown, when one was resolved. */
   tsconfig?: string;
+  /**
+   * Source file a bundler's virtual entry was built from. Set it when the entry
+   * inlines user code, so an unresolved import the user wrote still fails the
+   * build instead of being treated as an SDK-injected platform module.
+   */
+  virtualEntrySourceFile?: string;
 }
 
 export interface BundleLogRolldownOptions {
@@ -41,7 +51,7 @@ export function createBundleLogOptions(options: BundleLogOptions = {}): BundleLo
   return {
     logLevel: "warn",
     onLog: (_level, log) => {
-      if (log.code !== ESCALATED_LOG_CODE || !isUserImport(log)) return;
+      if (log.code !== ESCALATED_LOG_CODE || !isUserImport(log, options)) return;
       throw unresolvedImportError(log, options.tsconfig);
     },
   };
