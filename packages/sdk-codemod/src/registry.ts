@@ -1283,10 +1283,14 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_9,
-    // No scriptPath: this is a codemod-less ("manual") migration.
+    scriptPath: "v2/seed-exec-to-cli-plugin/scripts/transform.js",
     filePatterns: ["**/package.json", "**/*.{sh,yml,yaml,md,mjs,ts}"],
-    suspiciousPatterns: ["exec.mjs"],
-    sourceStringSuspiciousPatterns: ["exec.mjs"],
+    // The transform declines `fork()` call sites, which need the surrounding
+    // async plumbing unwound; `reviewFindings` points at those exact lines.
+    // `exec.mjs` alone is a generic script name, so the directory-qualified
+    // path keeps an unrelated runner from being flagged after a clean run.
+    suspiciousPatterns: [/[\w./@~-]+\/exec\.mjs/],
+    sourceStringSuspiciousPatterns: [/[\w./@~-]+\/exec\.mjs/],
     examples: [
       {
         before: '"seed": "node ./seed/exec.mjs",\n"seed:validate": "node ./seed/exec.mjs validate"',
@@ -1305,8 +1309,19 @@ export const allCodemods: CodemodPackage[] = [
       "  --namespace/-n, --skip-idp, --truncate, --yes, and type-name arguments).",
       "- Replace `node <distPath>/exec.mjs validate [path]` with",
       "  `tailor seed validate [path]`.",
+      '- Rewrite `fork("<distPath>/exec.mjs", ...)` call sites (test setup files',
+      "  typically fork the runner and await a hand-rolled Promise around",
+      '  `child.on("close", ...)`). The plugin is a CLI-dispatched binary rather',
+      "  than a forkable JS module, so call it synchronously instead —",
+      '  `execSync("pnpm tailor seed apply", { env, stdio: "inherit" })` — keeping',
+      "  the original `env` and `stdio` forwarding, and unwind the surrounding",
+      "  Promise wrapper (drop the now-unused `await`, and the `async` keyword when",
+      "  nothing else in the function awaits). Note that `execSync` throws on a",
+      "  nonzero exit, replacing the wrapper's explicit reject.",
       "- Delete the stale generated `<distPath>/exec.mjs` file; keep the data/",
-      "  directory (JSONL data and generated schemas) as-is.",
+      "  directory (JSONL data and generated schemas) as-is. Nothing removes it",
+      "  automatically, and a leftover runner keeps working while no longer being",
+      "  regenerated.",
     ].join("\n"),
   },
   {
