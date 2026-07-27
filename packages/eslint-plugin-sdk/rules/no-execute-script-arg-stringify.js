@@ -1,5 +1,5 @@
 import { memberName, objectProperty, unwrapExpression } from "../lib/ast.js";
-import { cliImportTracker, resolveValue, variableInitializer } from "../lib/sdk-bindings.js";
+import { cliImportTracker, resolveValue } from "../lib/sdk-bindings.js";
 
 function isJsonStringifyCall(node) {
   if (node?.type !== "CallExpression") return false;
@@ -31,8 +31,7 @@ export default {
       "Program:exit"() {
         for (const call of calls) {
           if (imports.callName(call) !== "executeScript") continue;
-          let options = call.arguments[0];
-          if (options?.type === "Identifier") options = variableInitializer(context, options);
+          const options = resolveValue(context, call.arguments[0]);
           const property = objectProperty(options, "arg");
           if (!property || property.type !== "Property") continue;
           if (!isJsonStringifyCall(resolveValue(context, property.value))) continue;

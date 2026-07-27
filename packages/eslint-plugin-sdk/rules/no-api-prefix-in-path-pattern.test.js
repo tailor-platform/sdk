@@ -37,6 +37,14 @@ describe("no-api-prefix-in-path-pattern", () => {
     );
   });
 
+  test("rejects a prefixed path through a transitive const alias of the options object", () => {
+    expectViolation(
+      'import { createHttpAdapter } from "@tailor-platform/sdk";\nconst base = { pathPattern: "/api/users/*" };\nconst options = base;\nexport default createHttpAdapter(options);',
+      "no-api-prefix-in-path-pattern",
+      "pathPattern is matched after the /api prefix; remove the leading /api.",
+    );
+  });
+
   test("ignores same-named factories from other packages", () => {
     expectClean(
       'import { createHttpAdapter } from "another-sdk";\nexport default createHttpAdapter({ pathPattern: "/api/users/*" });',
