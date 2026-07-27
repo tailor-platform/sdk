@@ -151,6 +151,14 @@ fork("tools/worker.mjs");
     );
   });
 
+  test("decides the runner prefix per invocation, not per file", () => {
+    const source = 'execSync("pnpm node seed/exec.mjs");\nexecSync("node seed/exec.mjs");\n';
+
+    expect(transform(source, "setup.ts")).toBe(
+      'execSync("pnpm tailor seed apply");\nexecSync("pnpm tailor seed apply");\n',
+    );
+  });
+
   test("still prefixes when a runner name is only a token suffix", () => {
     expect(transform('execSync("mypnpm node seed/exec.mjs");\n', "setup.ts")).toBe(
       'execSync("mypnpm pnpm tailor seed apply");\n',

@@ -15,9 +15,7 @@ const SPACE = "[^\\S\\n\\r]+";
 // as the next flag and the runner path stops matching.
 const VALUE_NODE_FLAG = "(?:--env-file|--env-file-if-exists|--import|--require|-r)";
 // One alternative per leading-dash count, each requiring a body, so a flag token
-// has a single split point. Overlapping alternatives (a bare `-` plus a greedy
-// body) let the engine re-split every token and backtrack exponentially when the
-// runner path ahead does not match.
+// has a single split point; overlapping alternatives backtrack exponentially.
 const BOOLEAN_NODE_FLAG = "(?:--[^\\s'\"`;&|]+|-[^\\s'\"`;&|=-][^\\s'\"`;&|=]*)";
 const NODE_FLAGS = `(?:(?:${SPACE}${VALUE_NODE_FLAG}(?:=${ARG_VALUE}|${SPACE}${ARG_VALUE}))|(?:${SPACE}${BOOLEAN_NODE_FLAG}))*`;
 const RUNNER_PATH = `(?:[\\w.@~-]+/)+exec\\.mjs`;
@@ -39,11 +37,9 @@ const FORK_RUNNER_PATTERN = new RegExp(`${FORK_PATTERN.source}\\s*(['"\`])${RUNN
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 
-// Node's own env-file flags carry over to the CLI, which accepts both the `=`
-// and space-separated spellings. Every other node flag (loaders, memory limits)
-// belongs to running a script and has no CLI equivalent.
-// Anchored per flag so a value that itself looks like `--env-file` is consumed
-// as a value rather than re-read as a flag of its own.
+// Only node's env-file flags have a CLI equivalent; loaders and memory limits
+// belong to running a script. Matched per flag so a value that itself looks like
+// `--env-file` is consumed as a value rather than read as a flag.
 const NODE_FLAG_PATTERN = new RegExp(
   `(${VALUE_NODE_FLAG})(?:=(${ARG_VALUE})|${SPACE}(${ARG_VALUE}))|(${BOOLEAN_NODE_FLAG})`,
   "g",
@@ -53,6 +49,8 @@ const ENV_FILE_FLAG = /^--env-file(?:-if-exists)?$/;
 const RUNNER_PREFIX_PATTERN = new RegExp(
   `(?<![\\w.-])(?:pnpm|npm|yarn|bun|npx)(?:${SPACE}run)?${SPACE}$`,
 );
+// Keeps the lookbehind on a fixed slice instead of the whole preceding file.
+const RUNNER_PREFIX_WINDOW = 64;
 
 /** Translate the leading `node` flags into flags the CLI command accepts. */
 function carriedOverFlags(nodeFlags: string): string {
@@ -73,7 +71,8 @@ function rewrite(value: string, prefix = ""): string {
       const command = validate ? "validate" : "apply";
       // A package runner already in front of `node` stays; prefixing again
       // would produce `pnpm pnpm tailor`.
-      const runner = RUNNER_PREFIX_PATTERN.test(value.slice(0, offset)) ? "" : prefix;
+      const before = value.slice(Math.max(0, offset - RUNNER_PREFIX_WINDOW), offset);
+      const runner = RUNNER_PREFIX_PATTERN.test(before) ? "" : prefix;
       return `${runner}tailor seed ${command}${carriedOverFlags(nodeFlags)}`;
     },
   );
