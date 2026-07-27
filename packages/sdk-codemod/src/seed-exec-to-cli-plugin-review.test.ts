@@ -130,6 +130,27 @@ fork("tools/worker.mjs");
     expect(transform("node db/exec.mjs\n", "seed.sh")).toBe("tailor seed apply\n");
   });
 
+  test("does not span lines when tokens are separate list items", () => {
+    // A YAML sequence or markdown bullet puts each token on its own line;
+    // matching across the newline would delete the intervening items.
+    const yaml = "command:\n  - node\n  - --no-warnings\n  - seed/exec.mjs\n  - --yes\n";
+
+    expect(transform(yaml, "ci.yml")).toBeNull();
+    expect(transform("- node\n- seed/exec.mjs\n", "docs.md")).toBeNull();
+  });
+
+  test("treats a flag-shaped value as a value, not a carried-over flag", () => {
+    expect(transform("node --require --env-file=.evil seed/exec.mjs\n", "run.sh")).toBe(
+      "tailor seed apply\n",
+    );
+  });
+
+  test("does not prefix a package runner that is already present", () => {
+    expect(transform('execSync("pnpm node seed/exec.mjs");\n', "setup.ts")).toBe(
+      'execSync("pnpm tailor seed apply");\n',
+    );
+  });
+
   test("selects the validate subcommand with a trailing data path", () => {
     expect(transform("node seed/exec.mjs validate data/seed\n", "seed.sh")).toBe(
       "tailor seed validate data/seed\n",
