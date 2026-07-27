@@ -12,6 +12,7 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
@@ -170,7 +171,7 @@ async function bundleSingleExecutor(
       if (triggerPlugin) {
         plugins.push(triggerPlugin);
       }
-      plugins.push(platformBundleDefinePlugin, ...cachePlugins);
+      plugins.push(createTsconfigPathsPlugin(), platformBundleDefinePlugin, ...cachePlugins);
 
       const result = await rolldown.build({
         input: entry.input,

@@ -10,6 +10,7 @@ import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { HTTP_METHODS, type HttpMethodKey } from "#/parser/service/http-adapter/index";
 import type { LogLevel } from "#/configure/config/types";
@@ -148,6 +149,7 @@ async function bundleAdapterScript(
         entry.plugin,
         rejectNodeImports,
         stubSdkImports,
+        createTsconfigPathsPlugin(),
         ...cachePlugins,
       ];
 

@@ -20,6 +20,7 @@ import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { buildResolverPermissionAndInputCheckExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import type { LogLevelInput } from "#/configure/config/types";
@@ -88,7 +89,7 @@ export async function bundleForTestRun(
   const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
   const buildResult = await rolldown.build({
-    plugins: [platformBundleDefinePlugin],
+    plugins: [createTsconfigPathsPlugin(), platformBundleDefinePlugin],
     input: entryPath,
     write: false,
     output: {

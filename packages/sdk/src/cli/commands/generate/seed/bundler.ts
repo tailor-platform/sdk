@@ -11,6 +11,7 @@ import * as rolldown from "rolldown";
 import { createBundleLogOptions } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import ml from "#/utils/multiline";
 
 export type SeedBundleResult = {
@@ -133,7 +134,7 @@ export async function bundleSeedScript(
 
   // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
   const result = await rolldown.build({
-    plugins: [platformBundleDefinePlugin],
+    plugins: [createTsconfigPathsPlugin(), platformBundleDefinePlugin],
     input: entryPath,
     write: false,
     output: {

@@ -4,6 +4,7 @@ import { resolve } from "pathe";
 import * as rolldown from "rolldown";
 import { createBundleLogOptions } from "#/cli/shared/bundle-log";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { stringifyFunction, tailorUserMap } from "#/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
@@ -476,7 +477,7 @@ async function bundleScriptTarget(args: {
   );
 
   const buildResult = await rolldown.build({
-    plugins: [entry.plugin, platformBundleDefinePlugin],
+    plugins: [entry.plugin, createTsconfigPathsPlugin(), platformBundleDefinePlugin],
     input: entry.input,
     write: false,
     output: {
