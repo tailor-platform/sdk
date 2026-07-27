@@ -2,20 +2,22 @@ import * as path from "pathe";
 import type { LlmReviewFinding } from "../../../../src/types";
 
 // Match the generated seed runner invocation, anchored on `node` plus the
-// `<dir>/exec.mjs` path. A bare `exec.mjs` is too generic to rewrite: only an
-// invocation that runs it through node under a directory is the seed runner.
+// `<distPath>/exec.mjs` path. seedPlugin's `distPath` is a required, arbitrary
+// option, so the directory cannot be pattern-matched by name; requiring a
+// directory segment at all is what separates the generated runner from a
+// project's own top-level `exec.mjs`.
 const NODE_BINARY = "(?<![\\w.-])node(?![\\w-])";
-const NODE_FLAG = "(?:-[^\\s'\"`;&|]*|--[^\\s'\"`;&|]*)";
-// seedPlugin's `distPath` is user-configured, so the runner path varies
-// (`./seed`, `./src/seed`, `.tailor-sdk`). Requiring the parent segment to name
-// seed or a Tailor output directory keeps an unrelated `tools/exec.mjs` from
-// being rewritten, since `exec.mjs` on its own is a generic script name.
-const RUNNER_DIR = "(?:[\\w.@~/-]*/)?(?:[\\w.-]*seed[\\w.-]*|\\.tailor(?:-sdk)?)";
-const RUNNER_PATH = `${RUNNER_DIR}/exec\\.mjs`;
+const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
+// Value-taking node flags must consume their value, or the value itself is read
+// as the next flag and the runner path stops matching.
+const VALUE_NODE_FLAG = "(?:--env-file|--env-file-if-exists|--import|--require|-r)";
+const BOOLEAN_NODE_FLAG = "(?:-[^\\s'\"`;&|=]*|--[^\\s'\"`;&|]*)";
+const NODE_FLAGS = `(?:(?:\\s+${VALUE_NODE_FLAG}(?:=${ARG_VALUE}|\\s+${ARG_VALUE}))|(?:\\s+${BOOLEAN_NODE_FLAG}))*`;
+const RUNNER_PATH = `(?:[\\w.@~-]+/)+exec\\.mjs`;
 // The optional trailing group consumes the runner's own `validate` positional
 // so the replacement can pick the matching `tailor seed` subcommand in one pass.
 const RUNNER_PATTERN = new RegExp(
-  `${NODE_BINARY}((?:\\s+${NODE_FLAG})*)\\s+(['"]?)${RUNNER_PATH}\\2(\\s+validate(?![-\\w]))?`,
+  `${NODE_BINARY}(${NODE_FLAGS})\\s+(['"]?)(?:\\./)?${RUNNER_PATH}\\2(\\s+validate(?![-\\w]))?`,
   "g",
 );
 
@@ -30,19 +32,18 @@ const FORK_RUNNER_PATTERN = new RegExp(`${FORK_PATTERN.source}\\s*(['"\`])${RUNN
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 
-// Node's own env-file flags carry over to the CLI, which accepts the same names
-// but only in the space-separated form. Every other node flag (loaders, memory
-// limits) belongs to running a script and has no CLI equivalent.
-const ENV_FILE_FLAG_PATTERN = /^--(env-file|env-file-if-exists)=(.+)$/;
+// Node's own env-file flags carry over to the CLI, which accepts both the `=`
+// and space-separated spellings. Every other node flag (loaders, memory limits)
+// belongs to running a script and has no CLI equivalent.
+const ENV_FILE_FLAG_PATTERN = new RegExp(
+  `(--env-file(?:-if-exists)?)(?:=(${ARG_VALUE})|\\s+(${ARG_VALUE}))`,
+  "g",
+);
 
 /** Translate the leading `node` flags into flags the CLI command accepts. */
 function carriedOverFlags(nodeFlags: string): string {
-  return nodeFlags
-    .trim()
-    .split(/\s+/)
-    .map((flag) => ENV_FILE_FLAG_PATTERN.exec(flag))
-    .filter((match) => match != null)
-    .map((match) => ` --${match[1]} ${match[2]}`)
+  return [...nodeFlags.matchAll(ENV_FILE_FLAG_PATTERN)]
+    .map((match) => ` ${match[1]} ${match[2] ?? match[3]}`)
     .join("");
 }
 
