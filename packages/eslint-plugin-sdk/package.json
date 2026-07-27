@@ -11,8 +11,11 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "lib",
-    "rules",
+    "lib/ast.js",
+    "lib/sdk-bindings.js",
+    "rules/no-api-prefix-in-path-pattern.js",
+    "rules/no-execute-script-arg-stringify.js",
+    "rules/no-unconditional-permit.js",
     "README.md"
   ],
   "type": "module",
