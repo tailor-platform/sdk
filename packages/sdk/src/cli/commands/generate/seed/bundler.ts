@@ -8,6 +8,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
+import { createBundleLogOptions } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import ml from "#/utils/multiline";
@@ -154,7 +155,7 @@ export async function bundleSeedScript(
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    logLevel: "silent",
+    ...createBundleLogOptions({ tsconfig }),
   } as rolldown.BuildOptions);
 
   const bundledCode = result.output[0].code;

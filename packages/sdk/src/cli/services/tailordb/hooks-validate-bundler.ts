@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { parseSync } from "oxc-parser";
 import { resolve } from "pathe";
 import * as rolldown from "rolldown";
+import { createBundleLogOptions } from "#/cli/shared/bundle-log";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { stringifyFunction, tailorUserMap } from "#/parser/service/tailordb/field";
@@ -490,7 +491,7 @@ async function bundleScriptTarget(args: {
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    logLevel: "silent",
+    ...createBundleLogOptions({ tsconfig }),
   } as rolldown.BuildOptions);
 
   const bundledCode = buildResult.output[0].code;

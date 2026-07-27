@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
+import { createBundleLogOptions } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
@@ -116,7 +117,7 @@ export async function bundleQueryScript(engine: QueryEngine, baseDir: string): P
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    logLevel: "silent",
+    ...createBundleLogOptions({ tsconfig }),
   } as rolldown.BuildOptions);
 
   return result.output[0].code;

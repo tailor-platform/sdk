@@ -9,6 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
+import { createBundleLogOptions } from "#/cli/shared/bundle-log";
 import {
   createLogLevelTreeshakeOptions,
   resolveBundleLogLevel,
@@ -109,7 +110,7 @@ export async function bundleForTestRun(
     },
     tsconfig,
     treeshake: composeFunctionTreeshakeOptions([createLogLevelTreeshakeOptions(bundleLogLevel)]),
-    logLevel: "silent",
+    ...createBundleLogOptions({ tsconfig }),
   } as rolldown.BuildOptions);
 
   const bundledCode = buildResult.output[0].code;
