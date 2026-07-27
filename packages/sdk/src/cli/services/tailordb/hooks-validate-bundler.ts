@@ -496,7 +496,7 @@ async function bundleScriptTarget(args: {
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    ...createBundleLogOptions({ tsconfig, virtualEntrySourceFile: sourceFilePath }),
+    ...createBundleLogOptions({ tsconfig }),
   } as rolldown.BuildOptions);
 
   const bundledCode = buildResult.output[0].code;

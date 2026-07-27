@@ -88,35 +88,49 @@ describe("createBundleLogOptions", () => {
     expect(result.output[0].code).toContain("42");
   });
 
-  test("ignores an unresolved import injected by a bundler's own virtual entry", async () => {
-    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-virtual-")));
-    tmpDirs.push(dir);
-    fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
-    const entry = createVirtualEntry(
-      "resolver:demo",
-      'import { t } from "@tailor-platform/sdk-not-installed-here";\nexport const main = () => t;\n',
-    );
+  // Platform-supplied `@tailor-platform` modules stay unresolved wherever they
+  // are not installed, so they must never fail the build.
+  test.each([
+    ["a rolldown virtual entry", undefined],
+    ["a physical entry file", "entry"],
+  ])(
+    "ignores an unresolved platform import injected into %s",
+    async (_label, physicalEntryName) => {
+      const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-injected-")));
+      tmpDirs.push(dir);
+      fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
+      // Stands in for the injected `@tailor-platform/sdk/kysely` in a tree where
+      // it is not installed. A package that is absent here keeps the fixture
+      // independent of whether this repo happens to have the SDK built.
+      const code =
+        'import { Kysely } from "@tailor-platform/sdk-absent/kysely";\nexport const main = () => Kysely;\n';
 
-    const result = await rolldown.build({
-      input: entry.input,
-      write: false,
-      output: { format: "esm", codeSplitting: false },
-      plugins: [entry.plugin],
-      tsconfig: path.join(dir, "tsconfig.json"),
-      ...createBundleLogOptions({ tsconfig: path.join(dir, "tsconfig.json") }),
-    } as rolldown.BuildOptions);
+      const options: rolldown.InputOptions & { input: string } = physicalEntryName
+        ? { input: path.join(dir, `${physicalEntryName}.entry.ts`) }
+        : (() => {
+            const entry = createVirtualEntry("resolver:demo", code, "ts");
+            return { input: entry.input, plugins: [entry.plugin] };
+          })();
+      if (physicalEntryName) fs.writeFileSync(options.input, code);
 
-    expect(result.output[0].code).toContain('from "@tailor-platform/sdk-not-installed-here"');
-  });
+      const result = await rolldown.build({
+        ...options,
+        write: false,
+        output: { format: "esm", codeSplitting: false },
+        tsconfig: path.join(dir, "tsconfig.json"),
+        ...createBundleLogOptions({ tsconfig: path.join(dir, "tsconfig.json") }),
+      } as rolldown.BuildOptions);
 
-  // The `\0` skip must not swallow imports the user wrote: an entry that
-  // inlines user code names its source file, and misses there are real defects.
-  test("escalates an unresolved import in a virtual entry that inlines user code", async () => {
+      expect(result.output[0].code).toContain('from "@tailor-platform/sdk-absent/kysely"');
+    },
+  );
+
+  // Only `@tailor-platform` specifiers are exempt: an entry that inlines user
+  // code carries the user's imports too, and a miss there is a real defect.
+  test("escalates a non-platform unresolved import inside a generated entry", async () => {
     const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-inlined-")));
     tmpDirs.push(dir);
     fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
-    const sourceFile = path.join(dir, "user.ts");
-    fs.writeFileSync(sourceFile, "export const unused = 1;\n");
     const entry = createVirtualEntry(
       "tailordb-script:User:0",
       'import { helper } from "@lib/helpers";\nexport function main() { return helper(); }\n',
@@ -130,12 +144,36 @@ describe("createBundleLogOptions", () => {
         output: { format: "esm", codeSplitting: false },
         tsconfig: path.join(dir, "tsconfig.json"),
         plugins: [entry.plugin],
-        ...createBundleLogOptions({
-          tsconfig: path.join(dir, "tsconfig.json"),
-          virtualEntrySourceFile: sourceFile,
-        }),
+        ...createBundleLogOptions({ tsconfig: path.join(dir, "tsconfig.json") }),
       } as rolldown.BuildOptions),
     ).rejects.toThrow(/Could not resolve "@lib\/helpers"/);
+  });
+
+  test("names a generated entry without leaking its control-character prefix", async () => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-idlabel-")));
+    tmpDirs.push(dir);
+    fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
+    const entry = createVirtualEntry(
+      "tailordb-script:User:0",
+      'import "@lib/missing";\nexport const main = () => 1;\n',
+      "ts",
+    );
+
+    const build = rolldown.build({
+      input: entry.input,
+      write: false,
+      output: { format: "esm", codeSplitting: false },
+      tsconfig: path.join(dir, "tsconfig.json"),
+      plugins: [entry.plugin],
+      ...createBundleLogOptions({ tsconfig: path.join(dir, "tsconfig.json") }),
+    } as rolldown.BuildOptions);
+
+    await expect(build).rejects.toThrow(/a generated entry \(tailor-sdk-entry:/);
+    const message = await build.then(
+      () => "",
+      (error: Error) => error.message,
+    );
+    expect(message).not.toContain(String.fromCodePoint(0));
   });
 
   test("keeps non-escalated rolldown logs from failing the build", async () => {

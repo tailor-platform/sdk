@@ -272,10 +272,7 @@ describe("createTsconfigPathsPlugin", () => {
       output: { format: "esm", codeSplitting: false },
       tsconfig: path.join(dir, "tailordb", "tsconfig.json"),
       plugins: [entry.plugin, createTsconfigPathsPlugin({ virtualEntrySourceFile: sourceFile })],
-      ...createBundleLogOptions({
-        tsconfig: path.join(dir, "tailordb", "tsconfig.json"),
-        virtualEntrySourceFile: sourceFile,
-      }),
+      ...createBundleLogOptions({ tsconfig: path.join(dir, "tailordb", "tsconfig.json") }),
     } as rolldown.BuildOptions);
 
     expect(result.output[0].code).toContain("77");

@@ -9,31 +9,25 @@ import type * as rolldown from "rolldown";
 // Every other log stays suppressed by never delegating to `defaultHandler`.
 const ESCALATED_LOG_CODE = "UNRESOLVED_IMPORT";
 
-// Bundler entries inject `@tailor-platform/sdk` imports the platform runtime
-// supplies, and those are expected to stay unresolved when the bundle is built
-// outside a project that has the SDK installed. Only an import written in a
-// user file can indicate the broken bundle this escalation guards against.
-// Virtual modules carry rolldown's `\0` prefix on the resolved id.
-const VIRTUAL_MODULE_PREFIX = "\0";
+// Bundler entries import `@tailor-platform` packages for modules the platform
+// runtime supplies — `@tailor-platform/sdk/kysely` and the
+// `@tailor-platform/function-kysely-tailordb` it re-exports. Those legitimately
+// stay unresolved whenever the bundle is built where they are not installed: an
+// unbuilt checkout, or a global CLI invocation. They must never fail the build.
+//
+// Discriminating on the specifier rather than on the importing file covers every
+// entry kind: some bundlers inline their entry as a rolldown virtual module,
+// others write a physical `.entry` file, and hooks/validators copy the user's
+// own imports into the entry alongside the injected ones.
+const PLATFORM_SCOPE = "@tailor-platform/";
 
-function isUserImport(log: rolldown.RollupLog, options: BundleLogOptions): boolean {
-  const importer = log.id;
-  if (importer === undefined) return false;
-  if (!importer.startsWith(VIRTUAL_MODULE_PREFIX)) return true;
-  // An entry that inlines user code carries the user's own imports, so an
-  // unresolved one there is a real defect rather than an injected module.
-  return options.virtualEntrySourceFile !== undefined;
+function isPlatformSuppliedImport(log: rolldown.RollupLog): boolean {
+  return log.exporter?.startsWith(PLATFORM_SCOPE) ?? false;
 }
 
 export interface BundleLogOptions {
   /** Absolute path of the tsconfig handed to rolldown, when one was resolved. */
   tsconfig?: string;
-  /**
-   * Source file a bundler's virtual entry was built from. Set it when the entry
-   * inlines user code, so an unresolved import the user wrote still fails the
-   * build instead of being treated as an SDK-injected platform module.
-   */
-  virtualEntrySourceFile?: string;
 }
 
 export interface BundleLogRolldownOptions {
@@ -51,7 +45,7 @@ export function createBundleLogOptions(options: BundleLogOptions = {}): BundleLo
   return {
     logLevel: "warn",
     onLog: (_level, log) => {
-      if (log.code !== ESCALATED_LOG_CODE || !isUserImport(log, options)) return;
+      if (log.code !== ESCALATED_LOG_CODE || isPlatformSuppliedImport(log)) return;
       throw unresolvedImportError(log, options.tsconfig);
     },
   };
@@ -62,9 +56,17 @@ export function createBundleLogOptions(options: BundleLogOptions = {}): BundleLo
 // in CLIError's `details`/`suggestion` fields.
 function unresolvedImportError(log: rolldown.RollupLog, tsconfig: string | undefined): Error {
   const specifier = log.exporter ?? "an imported module";
-  const importer = log.id ? ` imported from "${log.id}"` : "";
+  // A virtual entry's id carries a leading `\0`, which renders as a stray
+  // control character; name the bundler's generated entry instead.
+  const importerId = log.id?.startsWith("\0")
+    ? `a generated entry (${log.id.slice(1)})`
+    : log.id && `"${log.id}"`;
+  const importer = importerId ? ` imported from ${importerId}` : "";
+  // The tsconfig named here is the build-level one. A `paths` alias is resolved
+  // against the importing file's own nearest tsconfig that declares `paths`,
+  // which may be an ancestor of this one, so the wording stays non-committal.
   const context = tsconfig
-    ? `Path aliases were resolved against "${tsconfig}". Check that the import path is correct and that this tsconfig declares a matching \`compilerOptions.paths\` entry — a tsconfig.json nearer to the importing file shadows the aliases declared in the project root.`
+    ? `Check that the import path is correct, and that a \`compilerOptions.paths\` entry covering it is declared in the importing file's own tsconfig.json or an ancestor. The build used "${tsconfig}".`
     : "No tsconfig.json was found, so `compilerOptions.paths` aliases were not applied. Add a tsconfig.json declaring the aliases this file imports.";
   return CLIError({
     code: "UNRESOLVED_IMPORT",
