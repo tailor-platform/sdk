@@ -347,6 +347,46 @@ describe("withCache", () => {
     expect(second).toBe("built from lib-b");
   });
 
+  // The walk reports directories it passed over as well, so a tsconfig.json
+  // appearing in one later has to invalidate the entry even though the build
+  // that saved it never read that file.
+  test("invalidates the entry when a tracked but absent file is created", async () => {
+    const cache = createBundleCache(createCacheStore({ cacheDir }));
+    const sourceFile = writeFile("src/resolver.ts", "export default {}");
+    const laterTsconfig = path.join(tmpDir, "src", "tsconfig.json");
+    const params = {
+      cache,
+      kind: "resolver" as const,
+      name: "myResolver",
+      sourceFile,
+      contextHash: undefined,
+    };
+
+    const first = await withCache({
+      ...params,
+      build: async (_plugins, trackDependency) => {
+        trackDependency(laterTsconfig);
+        return "built without nearer tsconfig";
+      },
+    });
+    expect(first).toBe("built without nearer tsconfig");
+
+    const cachedRebuild = vi.fn(async () => "should not run");
+    expect(await withCache({ ...params, build: cachedRebuild })).toBe(
+      "built without nearer tsconfig",
+    );
+    expect(cachedRebuild).not.toHaveBeenCalled();
+
+    fs.writeFileSync(
+      laterTsconfig,
+      JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./near/*"] } } }),
+    );
+
+    const rebuild = vi.fn(async () => "built with nearer tsconfig");
+    expect(await withCache({ ...params, build: rebuild })).toBe("built with nearer tsconfig");
+    expect(rebuild).toHaveBeenCalledOnce();
+  });
+
   test("skips build when cache restores successfully", async () => {
     const cache = createBundleCache(createCacheStore({ cacheDir }));
     const sourceFile = writeFile("src/resolver.ts", "export default {}");

@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { parseJSONC } from "confbox";
 import { createPathsMatcher, getTsconfig, type TsConfigResult } from "get-tsconfig";
 import * as path from "pathe";
 import type * as rolldown from "rolldown";
@@ -17,21 +18,8 @@ import type * as rolldown from "rolldown";
 // specifier first and bails out when that succeeds, which keeps a real
 // node_modules package ahead of a `"*"` catch-all alias.
 
-const TS_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts"];
-const JS_EXTENSIONS = [".js", ".jsx", ".mjs", ".cjs"];
-
-// A specifier already naming a JS-style output extension maps to the
-// corresponding TypeScript source rather than having an extension appended.
-const JS_TO_TS_EXT = new Map([
-  [".js", ".ts"],
-  [".jsx", ".tsx"],
-  [".mjs", ".mts"],
-  [".cjs", ".cts"],
-]);
-
 type ResolutionContext = {
   matcher: (specifier: string) => string[];
-  allowJs: boolean;
 };
 
 export interface TsconfigPathsPluginOptions {
@@ -87,8 +75,13 @@ export function createTsconfigPathsPlugin(
         const alreadyResolvable = await this.resolve(source, importer, { skipSelf: true });
         if (alreadyResolvable) return null;
 
+        // Each mapped candidate goes back through rolldown as an absolute
+        // specifier, so extension substitution, directory index files and
+        // `package.json` `main`/`exports` all behave exactly as they do for a
+        // relative import. Probing the filesystem here instead would have to
+        // restate those rules and would drift from them.
         for (const candidate of resolution.matcher(source)) {
-          const resolved = resolveCandidate(candidate, resolution.allowJs);
+          const resolved = await this.resolve(candidate, importer, { skipSelf: true });
           if (resolved) return resolved;
         }
         return null;
@@ -102,10 +95,6 @@ export function createTsconfigPathsPlugin(
 // `paths`. The walk cannot stop at the first tsconfig `createPathsMatcher`
 // accepts: it also accepts a `baseUrl`-only config, whose matcher maps every
 // bare specifier to a `baseUrl`-relative guess.
-//
-// `allowJs` stays bound to the importing file's own nearest tsconfig, since it
-// is a property of that file's project rather than of whichever ancestor
-// happens to own the alias table.
 function getResolutionContext(
   startDir: string,
   tsconfigCache: Map<string, TsConfigResult | null>,
@@ -116,19 +105,20 @@ function getResolutionContext(
   if (cached !== undefined) return cached;
 
   let searchDir = startDir;
-  let allowJs: boolean | undefined;
   let resolution: ResolutionContext | null = null;
   for (;;) {
     const tsconfig = getTsconfig(searchDir, "tsconfig.json", tsconfigCache);
     if (!tsconfig) break;
-    onTsconfigRead?.(tsconfig.path);
 
-    allowJs ??= tsconfig.config.compilerOptions?.allowJs ?? false;
+    // Report every directory the walk passed over, not just the tsconfig it
+    // landed on. A tsconfig.json added to a skipped directory later would
+    // change the outcome, so a cache key needs it as a negative dependency.
+    reportCandidatesBetween(searchDir, tsconfig.path, onTsconfigRead);
 
     if (tsconfig.config.compilerOptions?.paths) {
       const matcher = createPathsMatcher(tsconfig);
       if (matcher) {
-        resolution = { matcher, allowJs };
+        resolution = { matcher };
         break;
       }
     }
@@ -142,34 +132,73 @@ function getResolutionContext(
   return resolution;
 }
 
-function resolveCandidate(candidate: string, allowJs: boolean): string | null {
-  for (const [jsExt, tsExt] of JS_TO_TS_EXT) {
-    if (candidate.endsWith(jsExt)) {
-      const source = `${candidate.slice(0, -jsExt.length)}${tsExt}`;
-      return firstExistingFile([source, candidate]);
-    }
-  }
+// Every directory from `fromDir` up to the one holding `foundTsconfigPath` could
+// have held a tsconfig.json that the walk would have stopped at instead.
+function reportCandidatesBetween(
+  fromDir: string,
+  foundTsconfigPath: string,
+  onTsconfigRead?: (tsconfigPath: string) => void,
+): void {
+  if (!onTsconfigRead) return;
 
-  if (TS_EXTENSIONS.some((ext) => candidate.endsWith(ext))) {
-    return firstExistingFile([candidate]);
+  const foundDir = path.dirname(foundTsconfigPath);
+  let dir = fromDir;
+  for (;;) {
+    onTsconfigRead(path.join(dir, "tsconfig.json"));
+    if (dir === foundDir) break;
+    const parentDir = path.dirname(dir);
+    if (parentDir === dir) break;
+    dir = parentDir;
   }
-
-  // TypeScript resolves a file at the path before a directory's index file.
-  const extensions = allowJs ? [...TS_EXTENSIONS, ...JS_EXTENSIONS] : TS_EXTENSIONS;
-  const withExtensions = ["", "/index"].flatMap((suffix) =>
-    extensions.map((ext) => `${candidate}${suffix}${ext}`),
-  );
-  return firstExistingFile([...withExtensions, candidate]);
+  reportExtendsChain(foundTsconfigPath, onTsconfigRead, new Set());
 }
 
-function firstExistingFile(candidates: string[]): string | null {
-  return candidates.find(isFile) ?? null;
-}
+// `getTsconfig` merges `extends` into the config it returns but does not report
+// which files it read, so a `paths` table inherited from a base config would
+// otherwise leave that base out of the dependency set.
+function reportExtendsChain(
+  tsconfigPath: string,
+  onTsconfigRead: (tsconfigPath: string) => void,
+  seen: Set<string>,
+): void {
+  if (seen.has(tsconfigPath)) return;
+  seen.add(tsconfigPath);
 
-function isFile(candidate: string): boolean {
+  let raw: string;
   try {
-    return fs.statSync(candidate).isFile();
+    raw = fs.readFileSync(tsconfigPath, "utf8");
   } catch {
-    return false;
+    return;
   }
+
+  const extendsField = parseJsonc(raw)?.extends;
+  const bases =
+    typeof extendsField === "string"
+      ? [extendsField]
+      : Array.isArray(extendsField)
+        ? extendsField
+        : [];
+  for (const base of bases) {
+    if (typeof base !== "string") continue;
+    const basePath = resolveExtendsTarget(base, tsconfigPath);
+    if (!basePath) continue;
+    onTsconfigRead(basePath);
+    reportExtendsChain(basePath, onTsconfigRead, seen);
+  }
+}
+
+function parseJsonc(raw: string): { extends?: unknown } | undefined {
+  try {
+    return parseJSONC(raw) as { extends?: unknown };
+  } catch {
+    return undefined;
+  }
+}
+
+// A package-style `extends` target resolves through node resolution, which this
+// walk does not model; only relative targets are tracked.
+function resolveExtendsTarget(base: string, fromTsconfigPath: string): string | undefined {
+  if (!base.startsWith(".")) return undefined;
+  const resolved = path.resolve(path.dirname(fromTsconfigPath), base);
+  return path.extname(resolved) ? resolved : `${resolved}.json`;
 }
