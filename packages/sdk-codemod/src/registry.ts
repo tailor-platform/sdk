@@ -1287,10 +1287,13 @@ export const allCodemods: CodemodPackage[] = [
     filePatterns: ["**/package.json", "**/*.{sh,yml,yaml,md,mjs,ts}"],
     // The transform declines `fork()` call sites, which need the surrounding
     // async plumbing unwound; `reviewFindings` points at those exact lines.
-    // `exec.mjs` alone is a generic script name, so the directory-qualified
-    // path keeps an unrelated runner from being flagged after a clean run.
+    // Outside source files `exec.mjs` alone is a generic script name, so the
+    // directory-qualified path keeps unrelated runners from being flagged.
     suspiciousPatterns: [/[\w./@~-]+\/exec\.mjs/],
-    sourceStringSuspiciousPatterns: [/[\w./@~-]+\/exec\.mjs/],
+    // Source strings keep the bare filename: a forked runner is often assembled
+    // (`fork(path.join(distPath, "exec.mjs"))`), leaving no path to match, and
+    // `reviewFindings` only reports quoted literal paths.
+    sourceStringSuspiciousPatterns: ["exec.mjs"],
     examples: [
       {
         before: '"seed": "node ./seed/exec.mjs",\n"seed:validate": "node ./seed/exec.mjs validate"',

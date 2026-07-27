@@ -97,13 +97,55 @@ fork("tools/worker.mjs");
     );
   });
 
+  test("carries over env-file flags written in the space-separated form", () => {
+    expect(transform("node --env-file .env seed/exec.mjs --truncate\n", "seed.sh")).toBe(
+      "tailor seed apply --env-file .env --truncate\n",
+    );
+    expect(transform("node --env-file-if-exists .env seed/exec.mjs\n", "seed.sh")).toBe(
+      "tailor seed apply --env-file-if-exists .env\n",
+    );
+  });
+
+  test("carries over every env-file flag in one invocation", () => {
+    expect(
+      transform("node --env-file=.env --env-file-if-exists=.env.local seed/exec.mjs\n", "seed.sh"),
+    ).toBe("tailor seed apply --env-file .env --env-file-if-exists .env.local\n");
+  });
+
+  test("consumes loader flag values instead of reading them as the runner path", () => {
+    expect(transform("node --import tsx seed/exec.mjs validate\n", "seed.sh")).toBe(
+      "tailor seed validate\n",
+    );
+    expect(transform("node -r dotenv/config seed/exec.mjs\n", "seed.sh")).toBe(
+      "tailor seed apply\n",
+    );
+  });
+
+  test("rewrites runners under a distPath that is not named after seeding", () => {
+    // seedPlugin's distPath is a required, arbitrary option, so the directory
+    // name cannot be used to recognise the generated runner.
+    expect(transform("node generated/exec.mjs --yes\n", "seed.sh")).toBe(
+      "tailor seed apply --yes\n",
+    );
+    expect(transform("node db/exec.mjs\n", "seed.sh")).toBe("tailor seed apply\n");
+  });
+
+  test("selects the validate subcommand with a trailing data path", () => {
+    expect(transform("node seed/exec.mjs validate data/seed\n", "seed.sh")).toBe(
+      "tailor seed validate data/seed\n",
+    );
+  });
+
   test("selects the validate subcommand from the runner's positional argument", () => {
     expect(transform("node ./seed/exec.mjs validate\n", "seed.sh")).toBe("tailor seed validate\n");
   });
 
-  test("leaves unrelated exec.mjs scripts untouched", () => {
-    expect(transform("node tools/exec.mjs --flag\n", "run.sh")).toBeNull();
+  test("leaves invocations that are not the generated runner untouched", () => {
+    // A top-level exec.mjs is a project's own script: the generated runner
+    // always lives under the seedPlugin distPath directory.
     expect(transform("node exec.mjs\n", "run.sh")).toBeNull();
     expect(transform("nodemon seed/exec.mjs\n", "run.sh")).toBeNull();
+    expect(transform("./seed/exec.mjs\n", "run.sh")).toBeNull();
+    expect(transform("The generated seed/exec.mjs file\n", "README.md")).toBeNull();
   });
 });
