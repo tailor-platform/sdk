@@ -98,16 +98,20 @@ describe("workflow execution triggers", () => {
       workflowName: "orders",
       events: ["workflow.workflow_execution.started", "workflow.workflow_execution.completed"],
     });
-    expect(workflowJobExecutionTrigger({ events: ["wait_started"] })).toMatchObject({
+    expect(workflowJobExecutionTrigger({ workflow, events: ["wait_started"] })).toMatchObject({
       kind: "workflowJobExecution",
+      workflowName: "orders",
       events: ["workflow.workflow_execution.job_execution.wait_started"],
     });
   });
 
   test("infers completed event results as a discriminated union", () => {
+    const job = createWorkflowJob({ name: "completed-main", body: () => {} });
+    const workflow = createWorkflow({ name: "completed-orders", mainJob: job });
+
     createExecutor({
       name: "on-workflow-completed",
-      trigger: workflowExecutionTrigger({ events: ["completed"] }),
+      trigger: workflowExecutionTrigger({ workflow, events: ["completed"] }),
       operation: {
         kind: "function",
         body: (args) => {

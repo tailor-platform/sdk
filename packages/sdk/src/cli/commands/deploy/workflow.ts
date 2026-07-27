@@ -340,8 +340,6 @@ export function buildWorkflowValidationShape(
 
 /** Executors subscribing to one granularity level of workflow execution events. */
 export type WorkflowEventSubscribers = {
-  /** True when a trigger names no workflow, matching every workflow in the workspace. */
-  anyWorkflow: boolean;
   /** Workflow names named by executor triggers. */
   workflowNames: ReadonlySet<string>;
 };
@@ -357,12 +355,11 @@ export type WorkflowEventPublishing = {
 };
 
 const NO_EVENT_SUBSCRIBERS: WorkflowEventSubscribers = {
-  anyWorkflow: false,
   workflowNames: new Set(),
 };
 
 function isSubscribed(subscribers: WorkflowEventSubscribers, workflowName: string): boolean {
-  return subscribers.anyWorkflow || subscribers.workflowNames.has(workflowName);
+  return subscribers.workflowNames.has(workflowName);
 }
 
 type ResolvePublishEventsParams = {
@@ -404,13 +401,6 @@ function assertJobExecutionEventsEnabled(params: AssertJobExecutionEventsEnabled
   const hint = (target: string, jobNames: readonly string[]) =>
     `Executors with a workflowJobExecution trigger subscribe to ${target}, but none of its jobs publish job execution events. ` +
     `Set "publishEvents: true" on createWorkflowJob for the job(s) to observe (candidates: ${jobNames.join(", ")}).`;
-
-  if (subscribers.anyWorkflow && publishingJobNames.size === 0) {
-    const allJobNames = [...new Set(Object.values(mainJobDeps).flat())].toSorted();
-    if (allJobNames.length > 0) {
-      throw new Error(hint("every workflow in the workspace", allJobNames));
-    }
-  }
 
   for (const workflow of Object.values(workflows)) {
     const usedJobNames = mainJobDeps[workflow.mainJob.name];

@@ -611,23 +611,20 @@ export type WorkflowExecutionTrigger<Args> = ParserWorkflowExecutionTrigger & {
 };
 
 type WorkflowExecutionSingleTriggerOptions<Args> = {
-  /**
-   * Workflow to subscribe to. Omit to subscribe to the execution events of
-   * every workflow in the workspace.
-   */
-  workflow?: Workflow;
+  /** Workflow to subscribe to. */
+  workflow: Workflow;
   condition?: (args: Args) => boolean;
 };
 
 function workflowExecutionTriggerConfig<Args>(
   events: ParserWorkflowExecutionTrigger["events"],
-  options: WorkflowExecutionSingleTriggerOptions<Args> | undefined,
+  options: WorkflowExecutionSingleTriggerOptions<Args>,
 ): WorkflowExecutionTrigger<Args> {
   return {
     kind: "workflowExecution",
     events,
-    ...(options?.workflow ? { workflowName: options.workflow.name } : {}),
-    condition: options?.condition,
+    workflowName: options.workflow.name,
+    condition: options.condition,
     __args: {} as Args,
   };
 }
@@ -640,7 +637,7 @@ function workflowExecutionTriggerConfig<Args>(
  * @returns Workflow execution started trigger
  */
 export function workflowExecutionStartedTrigger(
-  options?: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionStartedArgs>,
+  options: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionStartedArgs>,
 ): WorkflowExecutionTrigger<WorkflowExecutionStartedArgs> {
   return workflowExecutionTriggerConfig(["workflow.workflow_execution.started"], options);
 }
@@ -653,7 +650,7 @@ export function workflowExecutionStartedTrigger(
  * @returns Workflow execution completed trigger
  */
 export function workflowExecutionCompletedTrigger(
-  options?: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionCompletedArgs>,
+  options: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionCompletedArgs>,
 ): WorkflowExecutionTrigger<WorkflowExecutionCompletedArgs> {
   return workflowExecutionTriggerConfig(["workflow.workflow_execution.completed"], options);
 }
@@ -666,7 +663,7 @@ export function workflowExecutionCompletedTrigger(
  * @returns Workflow execution retried trigger
  */
 export function workflowExecutionRetriedTrigger(
-  options?: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionRetriedArgs>,
+  options: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionRetriedArgs>,
 ): WorkflowExecutionTrigger<WorkflowExecutionRetriedArgs> {
   return workflowExecutionTriggerConfig(["workflow.workflow_execution.retried"], options);
 }
@@ -679,7 +676,7 @@ export function workflowExecutionRetriedTrigger(
  * @returns Workflow execution resumed trigger
  */
 export function workflowExecutionResumedTrigger(
-  options?: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionResumedArgs>,
+  options: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionResumedArgs>,
 ): WorkflowExecutionTrigger<WorkflowExecutionResumedArgs> {
   return workflowExecutionTriggerConfig(["workflow.workflow_execution.resumed"], options);
 }
@@ -692,7 +689,7 @@ export function workflowExecutionResumedTrigger(
  * @returns Workflow execution wait started trigger
  */
 export function workflowExecutionWaitStartedTrigger(
-  options?: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionWaitStartedArgs>,
+  options: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionWaitStartedArgs>,
 ): WorkflowExecutionTrigger<WorkflowExecutionWaitStartedArgs> {
   return workflowExecutionTriggerConfig(["workflow.workflow_execution.wait_started"], options);
 }
@@ -705,18 +702,15 @@ export function workflowExecutionWaitStartedTrigger(
  * @returns Workflow execution wait resolved trigger
  */
 export function workflowExecutionWaitResolvedTrigger(
-  options?: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionWaitResolvedArgs>,
+  options: WorkflowExecutionSingleTriggerOptions<WorkflowExecutionWaitResolvedArgs>,
 ): WorkflowExecutionTrigger<WorkflowExecutionWaitResolvedArgs> {
   return workflowExecutionTriggerConfig(["workflow.workflow_execution.wait_resolved"], options);
 }
 
 type WorkflowExecutionTriggerOptions<K extends WorkflowExecutionEventKind[]> = {
   events: K;
-  /**
-   * Workflow to subscribe to. Omit to subscribe to the execution events of
-   * every workflow in the workspace.
-   */
-  workflow?: Workflow;
+  /** Workflow to subscribe to. */
+  workflow: Workflow;
   condition?: (args: WorkflowExecutionMultiArgs<K>) => boolean;
 };
 
@@ -768,23 +762,20 @@ export type WorkflowJobExecutionTrigger<Args> = ParserWorkflowJobExecutionTrigge
 };
 
 type WorkflowJobExecutionSingleTriggerOptions<Args> = {
-  /**
-   * Workflow whose job executions to subscribe to. Omit to subscribe to the job
-   * execution events of every workflow in the workspace.
-   */
-  workflow?: Workflow;
+  /** Workflow whose job executions to subscribe to. */
+  workflow: Workflow;
   condition?: (args: Args) => boolean;
 };
 
 function workflowJobExecutionTriggerConfig<Args>(
   events: ParserWorkflowJobExecutionTrigger["events"],
-  options: WorkflowJobExecutionSingleTriggerOptions<Args> | undefined,
+  options: WorkflowJobExecutionSingleTriggerOptions<Args>,
 ): WorkflowJobExecutionTrigger<Args> {
   return {
     kind: "workflowJobExecution",
     events,
-    ...(options?.workflow ? { workflowName: options.workflow.name } : {}),
-    condition: options?.condition,
+    workflowName: options.workflow.name,
+    condition: options.condition,
     __args: {} as Args,
   };
 }
@@ -797,7 +788,7 @@ function workflowJobExecutionTriggerConfig<Args>(
  * @returns Workflow job execution started trigger
  */
 export function workflowJobExecutionStartedTrigger(
-  options?: WorkflowJobExecutionSingleTriggerOptions<WorkflowJobExecutionStartedArgs>,
+  options: WorkflowJobExecutionSingleTriggerOptions<WorkflowJobExecutionStartedArgs>,
 ): WorkflowJobExecutionTrigger<WorkflowJobExecutionStartedArgs> {
   return workflowJobExecutionTriggerConfig(
     ["workflow.workflow_execution.job_execution.started"],
@@ -816,7 +807,7 @@ export function workflowJobExecutionStartedTrigger(
  * @returns Workflow job execution completed trigger
  */
 export function workflowJobExecutionCompletedTrigger(
-  options?: WorkflowJobExecutionSingleTriggerOptions<WorkflowJobExecutionCompletedArgs>,
+  options: WorkflowJobExecutionSingleTriggerOptions<WorkflowJobExecutionCompletedArgs>,
 ): WorkflowJobExecutionTrigger<WorkflowJobExecutionCompletedArgs> {
   return workflowJobExecutionTriggerConfig(
     ["workflow.workflow_execution.job_execution.completed"],
@@ -832,7 +823,7 @@ export function workflowJobExecutionCompletedTrigger(
  * @returns Workflow job execution wait started trigger
  */
 export function workflowJobExecutionWaitStartedTrigger(
-  options?: WorkflowJobExecutionSingleTriggerOptions<WorkflowJobExecutionWaitStartedArgs>,
+  options: WorkflowJobExecutionSingleTriggerOptions<WorkflowJobExecutionWaitStartedArgs>,
 ): WorkflowJobExecutionTrigger<WorkflowJobExecutionWaitStartedArgs> {
   return workflowJobExecutionTriggerConfig(
     ["workflow.workflow_execution.job_execution.wait_started"],
@@ -848,7 +839,7 @@ export function workflowJobExecutionWaitStartedTrigger(
  * @returns Workflow job execution wait resolved trigger
  */
 export function workflowJobExecutionWaitResolvedTrigger(
-  options?: WorkflowJobExecutionSingleTriggerOptions<WorkflowJobExecutionWaitResolvedArgs>,
+  options: WorkflowJobExecutionSingleTriggerOptions<WorkflowJobExecutionWaitResolvedArgs>,
 ): WorkflowJobExecutionTrigger<WorkflowJobExecutionWaitResolvedArgs> {
   return workflowJobExecutionTriggerConfig(
     ["workflow.workflow_execution.job_execution.wait_resolved"],
@@ -858,11 +849,8 @@ export function workflowJobExecutionWaitResolvedTrigger(
 
 type WorkflowJobExecutionTriggerOptions<K extends WorkflowJobExecutionEventKind[]> = {
   events: K;
-  /**
-   * Workflow whose job executions to subscribe to. Omit to subscribe to the job
-   * execution events of every workflow in the workspace.
-   */
-  workflow?: Workflow;
+  /** Workflow whose job executions to subscribe to. */
+  workflow: Workflow;
   condition?: (args: WorkflowJobExecutionMultiArgs<K>) => boolean;
 };
 

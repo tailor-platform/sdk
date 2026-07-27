@@ -90,8 +90,8 @@ export type WorkflowExecutionTrigger = {
     | "workflow.workflow_execution.wait_started"
     | "workflow.workflow_execution.wait_resolved"
   )[];
-  /** Workflow name to subscribe to. If omitted, events published by any workflow in the workspace match. */
-  workflowName?: string | undefined;
+  /** Workflow name to subscribe to. */
+  workflowName: string;
   /** Condition function to filter events */
   condition?: Function | undefined;
 };
@@ -107,8 +107,8 @@ export type WorkflowJobExecutionTrigger = {
     | "workflow.workflow_execution.job_execution.wait_started"
     | "workflow.workflow_execution.job_execution.wait_resolved"
   )[];
-  /** Workflow name to subscribe to. If omitted, events published by any workflow in the workspace match. */
-  workflowName?: string | undefined;
+  /** Workflow name to subscribe to. */
+  workflowName: string;
   /** Condition function to filter events */
   condition?: Function | undefined;
 };

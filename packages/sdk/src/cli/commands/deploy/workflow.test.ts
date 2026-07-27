@@ -147,7 +147,7 @@ describe("planWorkflow", () => {
         { "main-job": ["main-job"] },
         new Set(),
         {
-          execution: { anyWorkflow: false, workflowNames: new Set(["orders"]) },
+          execution: { workflowNames: new Set(["orders"]) },
         },
       );
 
@@ -167,7 +167,7 @@ describe("planWorkflow", () => {
           { "main-job": ["main-job"] },
           new Set(),
           {
-            execution: { anyWorkflow: false, workflowNames: new Set(["orders"]) },
+            execution: { workflowNames: new Set(["orders"]) },
           },
         ),
       ).rejects.toThrow('Workflow "orders" has "publishEvents: false"');

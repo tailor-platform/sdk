@@ -177,7 +177,7 @@ export default createExecutor({
 });
 ```
 
-The available workflow events are `started`, `completed`, `retried`, `resumed`, `wait_started`, and `wait_resolved`. To observe job-level events, use `workflowJobExecutionStartedTrigger()`, `workflowJobExecutionCompletedTrigger()`, `workflowJobExecutionWaitStartedTrigger()`, `workflowJobExecutionWaitResolvedTrigger()`, or `workflowJobExecutionTrigger()`. Omit `workflow` to subscribe to matching events from every workflow in the workspace.
+The available workflow events are `started`, `completed`, `retried`, `resumed`, `wait_started`, and `wait_resolved`. To observe job-level events, use `workflowJobExecutionStartedTrigger()`, `workflowJobExecutionCompletedTrigger()`, `workflowJobExecutionWaitStartedTrigger()`, `workflowJobExecutionWaitResolvedTrigger()`, or `workflowJobExecutionTrigger()`.
 
 `completed` events include `success`; when it is `false`, `error` contains the failure message. A job released from a wait point emits `wait_resolved` instead of `completed`.
 

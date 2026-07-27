@@ -198,7 +198,7 @@ function collectExecutorUsedResolvers(
  *
  * Workflows are workspace-scoped, so a trigger anywhere in the deploy run
  * subscribes to a workflow of the same name regardless of which config declares
- * it. A trigger that names no workflow matches every workflow in the workspace.
+ * it.
  * @param targets - Deployment targets in the current run
  * @returns Subscribers keyed by event granularity level
  */
@@ -206,8 +206,8 @@ function collectWorkflowEventSubscribers(targets: ReadonlyArray<BuiltDeploymentT
   execution: WorkflowEventSubscribers;
   jobExecution: WorkflowEventSubscribers;
 } {
-  const execution = { anyWorkflow: false, workflowNames: new Set<string>() };
-  const jobExecution = { anyWorkflow: false, workflowNames: new Set<string>() };
+  const execution = { workflowNames: new Set<string>() };
+  const jobExecution = { workflowNames: new Set<string>() };
   for (const target of targets) {
     for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
       const { trigger } = executor;
@@ -215,11 +215,7 @@ function collectWorkflowEventSubscribers(targets: ReadonlyArray<BuiltDeploymentT
         continue;
       }
       const subscribers = trigger.kind === "workflowExecution" ? execution : jobExecution;
-      if (trigger.workflowName == null) {
-        subscribers.anyWorkflow = true;
-      } else {
-        subscribers.workflowNames.add(trigger.workflowName);
-      }
+      subscribers.workflowNames.add(trigger.workflowName);
     }
   }
   return { execution, jobExecution };

@@ -609,7 +609,7 @@ function protoExecutor(
         case: "workflow",
         value: {
           eventTypes: trigger.events,
-          ...(trigger.workflowName != null ? { workflowName: trigger.workflowName } : {}),
+          workflowName: trigger.workflowName,
           ...(trigger.condition
             ? { condition: { expr: `(${stringifyFunction(trigger.condition)})(${argsExpr})` } }
             : {}),
