@@ -4,8 +4,6 @@ import type { LlmReviewFinding } from "../../../../src/types";
 // Match the generated seed runner invocation, anchored on `node` plus the
 // `<dir>/exec.mjs` path. A bare `exec.mjs` is too generic to rewrite: only an
 // invocation that runs it through node under a directory is the seed runner.
-// The runner path is captured so the leading `node` flags can be replaced
-// wholesale by the CLI command.
 const NODE_BINARY = "(?<![\\w.-])node(?![\\w-])";
 const NODE_FLAG = "(?:-[^\\s'\"`;&|]*|--[^\\s'\"`;&|]*)";
 // seedPlugin's `distPath` is user-configured, so the runner path varies
@@ -26,6 +24,9 @@ const RUNNER_PATTERN = new RegExp(
 // binary is CLI-dispatched, so migrating those call sites also unwinds the
 // surrounding async plumbing — out of reach of a single-file text rewrite.
 const FORK_PATTERN = /(?<![\w.$])fork\s*\(/;
+// Matched against the whole source rather than per line, so a `fork(` call whose
+// runner path sits on a later line is still reported.
+const FORK_RUNNER_PATTERN = new RegExp(`${FORK_PATTERN.source}\\s*(['"\`])${RUNNER_PATH}\\1`, "gs");
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 
@@ -36,12 +37,13 @@ const ENV_FILE_FLAG_PATTERN = /^--(env-file|env-file-if-exists)=(.+)$/;
 
 /** Translate the leading `node` flags into flags the CLI command accepts. */
 function carriedOverFlags(nodeFlags: string): string {
-  const carried: string[] = [];
-  for (const flag of nodeFlags.trim().split(/\s+/).filter(Boolean)) {
-    const envFile = ENV_FILE_FLAG_PATTERN.exec(flag);
-    if (envFile) carried.push(`--${envFile[1]} ${envFile[2]}`);
-  }
-  return carried.map((flag) => ` ${flag}`).join("");
+  return nodeFlags
+    .trim()
+    .split(/\s+/)
+    .map((flag) => ENV_FILE_FLAG_PATTERN.exec(flag))
+    .filter((match) => match != null)
+    .map((match) => ` --${match[1]} ${match[2]}`)
+    .join("");
 }
 
 /**
@@ -129,15 +131,16 @@ export function reviewFindings(
   if (!SOURCE_EXTENSIONS.has(ext)) return [];
   if (!source.includes("exec.mjs") || !FORK_PATTERN.test(source)) return [];
 
-  return source
-    .split(/\r\n|\n|\r/)
-    .map((line, index) => ({ line, number: index + 1 }))
-    .filter(({ line }) => FORK_PATTERN.test(line))
-    .map(({ line, number }) => ({
+  const lines = source.split(/\r\n|\n|\r/);
+
+  return [...source.matchAll(FORK_RUNNER_PATTERN)].map((match) => {
+    const index = source.slice(0, match.index).split(/\r\n|\n|\r/).length - 1;
+    return {
       file: relativePath,
-      line: number,
+      line: index + 1,
       message:
         'Replace the fork()-based seed runner call with execSync("pnpm tailor seed apply"), forwarding env/stdio, and unwind the surrounding await/Promise plumbing.',
-      excerpt: line.trim(),
-    }));
+      excerpt: lines[index]!.trim(),
+    };
+  });
 }
