@@ -107,7 +107,7 @@ async function bundleAdapterScript(
     name: adapter.name,
     sourceFile: adapter.sourceFile,
     contextHash,
-    async build(cachePlugins) {
+    async build(cachePlugins, trackDependency) {
       const absoluteSourcePath = path.resolve(adapter.sourceFile);
       const entryContent =
         kind === "input"
@@ -149,7 +149,7 @@ async function bundleAdapterScript(
         entry.plugin,
         rejectNodeImports,
         stubSdkImports,
-        createTsconfigPathsPlugin(),
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
         ...cachePlugins,
       ];
 

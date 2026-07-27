@@ -92,7 +92,7 @@ export async function bundleAuthHooks(
     name: functionName,
     sourceFile: absoluteConfigPath,
     contextHash,
-    async build(cachePlugins) {
+    async build(cachePlugins, trackDependency) {
       const entryContent = ml /* js */ `
         import _config from "${absoluteConfigPath}";
         const __auth_hook_function = _config.${handlerAccessPath};
@@ -108,7 +108,11 @@ export async function bundleAuthHooks(
       if (triggerPlugin) {
         plugins.push(triggerPlugin);
       }
-      plugins.push(createTsconfigPathsPlugin(), platformBundleDefinePlugin, ...cachePlugins);
+      plugins.push(
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
+        platformBundleDefinePlugin,
+        ...cachePlugins,
+      );
 
       const result = await rolldown.build({
         input: entry.input,

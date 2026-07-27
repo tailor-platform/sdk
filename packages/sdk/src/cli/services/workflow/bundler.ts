@@ -277,7 +277,7 @@ async function bundleSingleJob(
     name: job.name,
     sourceFile: job.sourceFile,
     contextHash,
-    async build(cachePlugins) {
+    async build(cachePlugins, trackDependency) {
       const absoluteSourcePath = path.resolve(job.sourceFile);
 
       const entryContent = ml /* js */ `
@@ -352,7 +352,7 @@ async function bundleSingleJob(
       const plugins: rolldown.Plugin[] = [
         entry.plugin,
         transformPlugin,
-        createTsconfigPathsPlugin(),
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
         platformBundleDefinePlugin,
         ...cachePlugins,
       ];

@@ -41,6 +41,12 @@ export interface TsconfigPathsPluginOptions {
    * resolve against that file's project rather than be skipped as SDK-injected.
    */
   virtualEntrySourceFile?: string;
+  /**
+   * Called with each tsconfig.json the alias lookup reads. A cached bundler must
+   * treat these as inputs: they are never loaded as modules, so nothing else
+   * notices when an ancestor's `paths` table changes.
+   */
+  onTsconfigRead?: (tsconfigPath: string) => void;
 }
 
 /**
@@ -74,6 +80,7 @@ export function createTsconfigPathsPlugin(
           path.dirname(resolutionBasis),
           tsconfigCache,
           contextCache,
+          options.onTsconfigRead,
         );
         if (!resolution) return null;
 
@@ -103,6 +110,7 @@ function getResolutionContext(
   startDir: string,
   tsconfigCache: Map<string, TsConfigResult | null>,
   contextCache: Map<string, ResolutionContext | null>,
+  onTsconfigRead?: (tsconfigPath: string) => void,
 ): ResolutionContext | null {
   const cached = contextCache.get(startDir);
   if (cached !== undefined) return cached;
@@ -113,6 +121,7 @@ function getResolutionContext(
   for (;;) {
     const tsconfig = getTsconfig(searchDir, "tsconfig.json", tsconfigCache);
     if (!tsconfig) break;
+    onTsconfigRead?.(tsconfig.path);
 
     allowJs ??= tsconfig.config.compilerOptions?.allowJs ?? false;
 

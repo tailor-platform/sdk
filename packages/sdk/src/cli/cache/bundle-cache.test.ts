@@ -305,8 +305,46 @@ describe("withCache", () => {
     });
 
     expect(build).toHaveBeenCalledOnce();
-    expect(build).toHaveBeenCalledWith([]);
+    expect(build).toHaveBeenCalledWith([], expect.any(Function));
     expect(result).toBe("built output");
+  });
+
+  // tsconfigs consulted for path aliases are never loaded as modules, so only
+  // the explicit dependency registration can invalidate the entry.
+  test("invalidates the entry when a build-tracked non-module file changes", async () => {
+    const cache = createBundleCache(createCacheStore({ cacheDir }));
+    const sourceFile = writeFile("src/resolver.ts", "export default {}");
+    const ancestorTsconfig = writeFile(
+      "tsconfig.json",
+      JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./lib-a/*"] } } }),
+    );
+    const params = {
+      cache,
+      kind: "resolver" as const,
+      name: "myResolver",
+      sourceFile,
+      contextHash: undefined,
+    };
+
+    const first = await withCache({
+      ...params,
+      build: async (_plugins, trackDependency) => {
+        trackDependency(ancestorTsconfig);
+        return "built from lib-a";
+      },
+    });
+    expect(first).toBe("built from lib-a");
+
+    fs.writeFileSync(
+      ancestorTsconfig,
+      JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./lib-b/*"] } } }),
+    );
+
+    const rebuild = vi.fn(async () => "built from lib-b");
+    const second = await withCache({ ...params, build: rebuild });
+
+    expect(rebuild).toHaveBeenCalledOnce();
+    expect(second).toBe("built from lib-b");
   });
 
   test("skips build when cache restores successfully", async () => {

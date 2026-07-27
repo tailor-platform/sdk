@@ -130,7 +130,7 @@ async function bundleSingleResolver(
     name: resolver.name,
     sourceFile: resolver.sourceFile,
     contextHash,
-    async build(cachePlugins) {
+    async build(cachePlugins, trackDependency) {
       const absoluteSourcePath = path.resolve(resolver.sourceFile);
       const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr(resolver.permission);
 
@@ -153,7 +153,11 @@ async function bundleSingleResolver(
       if (triggerPlugin) {
         plugins.push(triggerPlugin);
       }
-      plugins.push(createTsconfigPathsPlugin(), platformBundleDefinePlugin, ...cachePlugins);
+      plugins.push(
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
+        platformBundleDefinePlugin,
+        ...cachePlugins,
+      );
 
       const result = await rolldown.build({
         input: entry.input,
