@@ -67,8 +67,20 @@ interface NamespaceValidationReport {
   migrationFiles: MigrationFilesReport;
   /** Omitted when the migration files are invalid (the check cannot run) */
   localSchema?: LocalSchemaReport;
-  /** Omitted when the migration files are invalid (the check cannot run) */
+  /** Omitted when the migration files are invalid or remote verification fails */
   remoteSchema?: RemoteSchemaReport;
+}
+
+interface BuildValidationReportsOptions {
+  targetNamespaces: NamespaceWithMigrations[];
+  migrationFileErrors: Map<string, string>;
+  localResults: Awaited<ReturnType<typeof checkMigrationDiffs>>;
+  remoteResults?: Awaited<ReturnType<typeof verifyRemoteSchema>>;
+}
+
+interface CollectedValidationReports {
+  reports: NamespaceValidationReport[];
+  remoteError?: unknown;
 }
 
 /**
@@ -98,13 +110,75 @@ function assertRequiredMigrationScripts(migrationsDir: string, namespace: string
 }
 
 /**
+ * Build per-namespace reports from the checks that completed
+ * @param {BuildValidationReportsOptions} options - Completed validation results
+ * @returns {NamespaceValidationReport[]} Validation reports per namespace
+ */
+function buildValidationReports(
+  options: BuildValidationReportsOptions,
+): NamespaceValidationReport[] {
+  const { targetNamespaces, migrationFileErrors, localResults, remoteResults } = options;
+
+  return targetNamespaces.map((target) => {
+    const fileError = migrationFileErrors.get(target.namespace);
+    if (fileError !== undefined) {
+      return {
+        namespace: target.namespace,
+        valid: false,
+        migrationFiles: { valid: false, error: fileError },
+      };
+    }
+
+    const local = assertDefined(
+      localResults.find((result) => result.namespace === target.namespace),
+      `local schema check result missing for namespace "${target.namespace}"`,
+    );
+    const localSchema: LocalSchemaReport = {
+      hasDiff: local.hasDiff,
+      ...(local.diff ? { diff: local.diff } : {}),
+    };
+    if (remoteResults === undefined) {
+      return {
+        namespace: target.namespace,
+        valid: false,
+        migrationFiles: { valid: true },
+        localSchema,
+      };
+    }
+
+    const remote = assertDefined(
+      remoteResults.find((result) => result.namespace === target.namespace),
+      `remote schema check result missing for namespace "${target.namespace}"`,
+    );
+    const checkpointMissingLocal =
+      !remote.skipped &&
+      remote.remoteMigrationNumber > getLatestMigrationNumber(target.migrationsDir);
+    const remoteSchema: RemoteSchemaReport = {
+      remoteMigrationNumber: remote.remoteMigrationNumber,
+      hasDrift: remote.hasDrift,
+      drifts: remote.drifts,
+      ...(remote.skipped ? { skipped: remote.skipped } : {}),
+      ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
+    };
+
+    return {
+      namespace: target.namespace,
+      valid: !localSchema.hasDiff && !remoteSchema.hasDrift && !checkpointMissingLocal,
+      migrationFiles: { valid: true },
+      localSchema,
+      remoteSchema,
+    };
+  });
+}
+
+/**
  * Run all migration validation checks and collect per-namespace reports
  * @param {ValidateOptions} options - Command options
- * @returns {Promise<NamespaceValidationReport[]>} Validation reports per namespace
+ * @returns {Promise<CollectedValidationReports>} Validation reports and any remote error
  */
 async function collectValidationReports(
   options: ValidateOptions,
-): Promise<NamespaceValidationReport[]> {
+): Promise<CollectedValidationReports> {
   const { config, plugins } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);
 
@@ -140,15 +214,6 @@ async function collectValidationReports(
   const tailorDBInputs = application.tailorDBServices.map(toTailorDBDeployInput);
   const typesByNamespace = new Map(tailorDBInputs.map((input) => [input.namespace, input.types]));
 
-  const accessToken = await loadAccessToken({
-    profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
-    workspaceId: options.workspaceId,
-    profile: options.profile,
-  });
-
   const migrationFileErrors = new Map<string, string>();
   const checkableNamespaces: NamespaceWithMigrations[] = [];
   for (const target of targetNamespaces) {
@@ -168,55 +233,39 @@ async function collectValidationReports(
   }
 
   const localResults = await checkMigrationDiffs(typesByNamespace, checkableNamespaces);
-  const remoteResults = await verifyRemoteSchema(
-    client,
-    workspaceId,
-    checkableNamespaces,
-    config,
-    tailorDBInputs,
-  );
+  const localReportOptions = {
+    targetNamespaces,
+    migrationFileErrors,
+    localResults,
+  };
 
-  return targetNamespaces.map((target) => {
-    const fileError = migrationFileErrors.get(target.namespace);
-    if (fileError !== undefined) {
-      return {
-        namespace: target.namespace,
-        valid: false,
-        migrationFiles: { valid: false, error: fileError },
-      };
-    }
-
-    const local = assertDefined(
-      localResults.find((r) => r.namespace === target.namespace),
-      `local schema check result missing for namespace "${target.namespace}"`,
+  let remoteResults: Awaited<ReturnType<typeof verifyRemoteSchema>>;
+  try {
+    const accessToken = await loadAccessToken({
+      profile: options.profile,
+    });
+    const client = await initOperatorClient(accessToken);
+    const workspaceId = await loadWorkspaceId({
+      workspaceId: options.workspaceId,
+      profile: options.profile,
+    });
+    remoteResults = await verifyRemoteSchema(
+      client,
+      workspaceId,
+      checkableNamespaces,
+      config,
+      tailorDBInputs,
     );
-    const remote = assertDefined(
-      remoteResults.find((r) => r.namespace === target.namespace),
-      `remote schema check result missing for namespace "${target.namespace}"`,
-    );
-    const localSchema: LocalSchemaReport = {
-      hasDiff: local.hasDiff,
-      ...(local.diff ? { diff: local.diff } : {}),
-    };
-    const checkpointMissingLocal =
-      !remote.skipped &&
-      remote.remoteMigrationNumber > getLatestMigrationNumber(target.migrationsDir);
-    const remoteSchema: RemoteSchemaReport = {
-      remoteMigrationNumber: remote.remoteMigrationNumber,
-      hasDrift: remote.hasDrift,
-      drifts: remote.drifts,
-      ...(remote.skipped ? { skipped: remote.skipped } : {}),
-      ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
-    };
-
+  } catch (remoteError) {
     return {
-      namespace: target.namespace,
-      valid: !localSchema.hasDiff && !remoteSchema.hasDrift && !checkpointMissingLocal,
-      migrationFiles: { valid: true },
-      localSchema,
-      remoteSchema,
+      reports: buildValidationReports(localReportOptions),
+      remoteError,
     };
-  });
+  }
+
+  return {
+    reports: buildValidationReports({ ...localReportOptions, remoteResults }),
+  };
 }
 
 function printValidationReports(reports: NamespaceValidationReport[]): void {
@@ -302,20 +351,24 @@ function printResolutionHints(reports: NamespaceValidationReport[]): void {
 async function validate(options: ValidateOptions): Promise<void> {
   logBetaWarning("tailordb migration");
 
-  const reports = await collectValidationReports(options);
+  const collected = await collectValidationReports(options);
+  const { reports } = collected;
   const invalidCount = reports.filter((r) => !r.valid).length;
 
   if (options.json) {
     logger.out(reports);
   } else {
     printValidationReports(reports);
-    if (invalidCount === 0) {
+    if (invalidCount === 0 && !("remoteError" in collected)) {
       logger.success("All migration validation checks passed.");
     } else {
       printResolutionHints(reports);
     }
   }
 
+  if ("remoteError" in collected) {
+    throw collected.remoteError;
+  }
   if (invalidCount > 0) {
     throw new Error(`Migration validation failed for ${invalidCount} namespace(s)`);
   }

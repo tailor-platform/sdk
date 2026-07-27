@@ -6,7 +6,8 @@ import { runCommand } from "politty";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import {
   parsedType,
@@ -123,6 +124,8 @@ describe("tailordb migration validate", () => {
       listTailorDBGQLPermissions: state.listTailorDBGQLPermissions,
       getMetadata: state.getMetadata,
     } as unknown as Awaited<ReturnType<typeof initOperatorClient>>);
+    vi.mocked(loadAccessToken).mockResolvedValue("mock-token");
+    vi.mocked(loadWorkspaceId).mockResolvedValue("12345678-1234-4abc-8def-123456789012");
   });
 
   afterEach(() => {
@@ -309,12 +312,77 @@ describe("tailordb migration validate", () => {
   });
 
   test("fails when the remote migration state cannot be read", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
     state.getMetadata.mockRejectedValue(new ConnectError("boom", Code.Internal));
 
     const result = await runCommand(validateCommand, []);
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/boom/);
+    const [report] = JSON.parse(stdout.output);
+    expect(report).toEqual({
+      namespace: "tailordb",
+      valid: false,
+      migrationFiles: { valid: true },
+      localSchema: { hasDiff: false },
+    });
+  });
+
+  test("reports invalid migration files before propagating credential failures", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 2, []);
+    vi.mocked(loadAccessToken).mockRejectedValue(new Error("Tailor Platform token not found."));
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/Tailor Platform token not found/);
+    expect(stdout.output).not.toBe("");
+    const [report] = JSON.parse(stdout.output);
+    expect(report).toEqual({
+      namespace: "tailordb",
+      valid: false,
+      migrationFiles: {
+        valid: false,
+        error: expect.stringMatching(/Migration file validation failed/),
+      },
+    });
+  });
+
+  test("reports local schema drift before propagating credential failures", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
+    vi.mocked(loadAccessToken).mockRejectedValue(new Error("Tailor Platform token not found."));
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/Tailor Platform token not found/);
+    expect(stdout.output).not.toBe("");
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(false);
+    expect(report.localSchema.hasDiff).toBe(true);
+    expect(report.localSchema.diff.changes).toEqual([
+      expect.objectContaining({ kind: "type_added", typeName: "Post" }),
+    ]);
+    expect(report.remoteSchema).toBeUndefined();
+  });
+
+  test("prints local findings before propagating credential failures", async () => {
+    using stderr = captureStderr();
+    state.localTypes = { User: parsedType("User"), Post: parsedType("Post") };
+    vi.mocked(loadAccessToken).mockRejectedValue(new Error("Tailor Platform token not found."));
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain("Migration files:");
+    expect(stderr.output).toContain("Local schema:");
+    expect(stderr.output).toContain("changes not in migration files");
+    expect(stderr.output).not.toContain("All migration validation checks passed.");
   });
 
   test("rejects duplicate type names across namespaces like deploy does", async () => {
