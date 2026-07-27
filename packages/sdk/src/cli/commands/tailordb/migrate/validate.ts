@@ -72,9 +72,8 @@ interface NamespaceValidationReport {
 }
 
 /**
- * Assert that every migration whose diff requires a data migration script has
- * a migrate.ts on disk or an explicit skip acknowledgment, matching the
- * contract deploy enforces for pending migrations
+ * Assert that every migration in the local history whose diff requires a data
+ * migration script has a migrate.ts on disk or an explicit skip acknowledgment
  * @param {string} migrationsDir - Migrations directory path
  * @param {string} namespace - TailorDB namespace (for error messages)
  */
@@ -325,7 +324,7 @@ async function validate(options: ValidateOptions): Promise<void> {
 export const validateCommand = defineAppCommand({
   name: "validate",
   description:
-    "Validate migration files and detect schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. Runs the same checks as 'deploy' and exits with a non-zero code when issues are found.",
+    "Validate the full migration history and detect schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
   args: z
     .object({
       ...deploymentArgs,
