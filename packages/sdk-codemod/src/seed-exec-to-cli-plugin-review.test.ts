@@ -151,6 +151,29 @@ fork("tools/worker.mjs");
     );
   });
 
+  test("still prefixes when a runner name is only a token suffix", () => {
+    expect(transform('execSync("mypnpm node seed/exec.mjs");\n', "setup.ts")).toBe(
+      'execSync("mypnpm pnpm tailor seed apply");\n',
+    );
+  });
+
+  test("keeps validate a subcommand only when it stands alone", () => {
+    expect(transform("node seed/exec.mjs validate=x\n", "run.sh")).toBe(
+      "tailor seed apply validate=x\n",
+    );
+  });
+
+  test("matches a long boolean flag run without backtracking", () => {
+    // Overlapping flag alternatives let the engine re-split every token, so a
+    // non-matching runner path ahead used to backtrack exponentially.
+    const flags = Array.from({ length: 40 }, (_, i) => `--flag${i}`).join(" ");
+    const source = `node ${flags} other/script.mjs\nnode seed/exec.mjs\n`;
+
+    const started = performance.now();
+    expect(transform(source, "run.sh")).toBe(`node ${flags} other/script.mjs\ntailor seed apply\n`);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
+
   test("selects the validate subcommand with a trailing data path", () => {
     expect(transform("node seed/exec.mjs validate data/seed\n", "seed.sh")).toBe(
       "tailor seed validate data/seed\n",

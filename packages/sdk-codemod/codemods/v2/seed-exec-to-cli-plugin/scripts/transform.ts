@@ -14,13 +14,17 @@ const SPACE = "[^\\S\\n\\r]+";
 // Value-taking node flags must consume their value, or the value itself is read
 // as the next flag and the runner path stops matching.
 const VALUE_NODE_FLAG = "(?:--env-file|--env-file-if-exists|--import|--require|-r)";
-const BOOLEAN_NODE_FLAG = "(?:-[^\\s'\"`;&|=]*|--[^\\s'\"`;&|]*)";
+// One alternative per leading-dash count, each requiring a body, so a flag token
+// has a single split point. Overlapping alternatives (a bare `-` plus a greedy
+// body) let the engine re-split every token and backtrack exponentially when the
+// runner path ahead does not match.
+const BOOLEAN_NODE_FLAG = "(?:--[^\\s'\"`;&|]+|-[^\\s'\"`;&|=-][^\\s'\"`;&|=]*)";
 const NODE_FLAGS = `(?:(?:${SPACE}${VALUE_NODE_FLAG}(?:=${ARG_VALUE}|${SPACE}${ARG_VALUE}))|(?:${SPACE}${BOOLEAN_NODE_FLAG}))*`;
 const RUNNER_PATH = `(?:[\\w.@~-]+/)+exec\\.mjs`;
 // The optional trailing group consumes the runner's own `validate` positional
 // so the replacement can pick the matching `tailor seed` subcommand in one pass.
 const RUNNER_PATTERN = new RegExp(
-  `${NODE_BINARY}(${NODE_FLAGS})${SPACE}(['"]?)(?:\\./)?${RUNNER_PATH}\\2(${SPACE}validate(?![-\\w]))?`,
+  `${NODE_BINARY}(${NODE_FLAGS})${SPACE}(['"]?)(?:\\./)?${RUNNER_PATH}\\2(${SPACE}validate(?![-\\w=.:/]))?`,
   "g",
 );
 
@@ -46,7 +50,9 @@ const NODE_FLAG_PATTERN = new RegExp(
 );
 const ENV_FILE_FLAG = /^--env-file(?:-if-exists)?$/;
 // A package runner immediately before `node` already resolves project binaries.
-const RUNNER_PREFIX_PATTERN = new RegExp(`(?:pnpm|npm|yarn|bun|npx)(?:${SPACE}run)?${SPACE}$`);
+const RUNNER_PREFIX_PATTERN = new RegExp(
+  `(?<![\\w.-])(?:pnpm|npm|yarn|bun|npx)(?:${SPACE}run)?${SPACE}$`,
+);
 
 /** Translate the leading `node` flags into flags the CLI command accepts. */
 function carriedOverFlags(nodeFlags: string): string {
