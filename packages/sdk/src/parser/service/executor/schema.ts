@@ -77,6 +77,7 @@ export const AuthAccessTokenTriggerSchema = z.object({
 
 const workflowNameSchema = z
   .string()
+  .refine((value) => value.trim().length > 0, "Workflow name cannot be blank")
   .optional()
   .describe(
     "Workflow name to subscribe to. If omitted, events published by any workflow in the workspace match.",
