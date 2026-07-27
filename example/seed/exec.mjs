@@ -77,6 +77,7 @@ const { values, positionals } = parseArgs({
     namespace: { type: "string", short: "n" },
     "skip-idp": { type: "boolean", default: false },
     truncate: { type: "boolean", default: false },
+    upsert: { type: "boolean", default: false },
     yes: { type: "boolean", default: false },
     profile: { type: "string", short: "p" },
     help: { type: "boolean", short: "h", default: false },
@@ -96,6 +97,7 @@ Options:
   -n, --namespace <ns>      Process all types in specified namespace (excludes _User)
   --skip-idp                Skip IdP user (_User) entity
   --truncate                Truncate tables before seeding
+  --upsert                  Update existing rows instead of failing on duplicate ids
   --yes                     Skip confirmation prompts (for truncate)
   -p, --profile <name>      Workspace profile name
   -h, --help                Show help
@@ -109,6 +111,7 @@ Examples:
   node exec.mjs --truncate --yes                    # Truncate all tables without confirmation, then seed all
   node exec.mjs --truncate --namespace <namespace>  # Truncate tailordb, then seed tailordb
   node exec.mjs --truncate User Order               # Truncate User and Order, then seed them
+  node exec.mjs --upsert                            # Seed all, updating rows whose id already exists
   node exec.mjs validate                            # Validate all seed data
   node exec.mjs validate ./data/User.jsonl          # Validate specific file
   `);
@@ -465,7 +468,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
     return { success: true, processed: {} };
   }
 
-  console.log(styleText("cyan", `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch insert...`));
+  console.log(styleText("cyan", `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch ${values.upsert ? "upsert" : "insert"}...`));
 
   // Bundle seed script
   const bundled = await bundleSeedScript(namespace, typesWithData);
@@ -501,7 +504,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
       workspaceId,
       name: `seed-${namespace}.ts`,
       code: bundled.bundledCode,
-      arg: JSON.stringify({ data: chunk.data, order: chunk.order, selfRefTypes }),
+      arg: JSON.stringify({ data: chunk.data, order: chunk.order, selfRefTypes, upsert: values.upsert }),
       invoker: {
         namespace: authNamespace,
         machineUserName,
@@ -531,7 +534,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
       const processed = parsed.processed || {};
       for (const [type, count] of Object.entries(processed)) {
         allProcessed[type] = (allProcessed[type] || 0) + count;
-        console.log(styleText("green", `    ✓ ${type}: ${count} rows inserted`));
+        console.log(styleText("green", `    ✓ ${type}: ${count} rows ${values.upsert ? "upserted" : "inserted"}`));
       }
 
       if (!parsed.success) {
@@ -571,10 +574,20 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
   const client = new tailor.idp.Client({ namespace: "my-idp" });
   const errors = [];
   let processed = 0;
+  const upsert = input.upsert === true;
 
   for (let i = 0; i < input.users.length; i++) {
     try {
-      await client.createUser(input.users[i]);
+      try {
+        await client.createUser(input.users[i]);
+      } catch (createError) {
+        // The IdP has no upsert primitive, so an existing user surfaces only
+        // as a createUser failure; fall back to a name lookup and update.
+        if (!upsert) throw createError;
+        const existing = await client.userByName(input.users[i].name);
+        const { name, ...attributes } = input.users[i];
+        await client.updateUser({ id: existing.id, ...attributes });
+      }
       processed++;
       console.log(\`[_User] \${i + 1}/\${input.users.length}: \${input.users[i].name}\`);
     } catch (error) {
@@ -596,7 +609,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
         workspaceId,
         name: "seed-idp-user.ts",
         code: idpSeedCode,
-        arg: JSON.stringify({ users: rows }),
+        arg: JSON.stringify({ users: rows, upsert: values.upsert }),
         invoker: {
           namespace: authNamespace,
           machineUserName,

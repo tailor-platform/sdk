@@ -1,5 +1,6 @@
 import { aroundEach, describe, expect, test } from "vitest";
 import {
+  generateIdpSeedScriptCode,
   generateIdpTruncateScriptCode,
   generateIdpUserSchemaFile,
   processIdpUser,
@@ -7,6 +8,10 @@ import {
 import type { GeneratorAuthInput } from "#/plugin/types";
 
 type TruncateResult = { success: boolean; deleted: number; total: number; errors: string[] };
+
+type SeedResult = { success: boolean; processed: number; errors: string[] };
+
+type SeedUser = { name: string; password?: string };
 
 type IdpUserPage = {
   users: Array<{ id: string; name: string }>;
@@ -23,6 +28,21 @@ type IdpUserPage = {
 async function loadGeneratedMain(code: string): Promise<() => Promise<TruncateResult>> {
   const url = `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
   const mod = (await import(/* @vite-ignore */ url)) as { main: () => Promise<TruncateResult> };
+  return mod.main;
+}
+
+/**
+ * Load the `main` function from a generated IdP seed script.
+ * @param code - Generated script source that exports `main`
+ * @returns The exported `main` function
+ */
+async function loadSeedMain(
+  code: string,
+): Promise<(input: { users: SeedUser[]; upsert?: boolean }) => Promise<SeedResult>> {
+  const url = `data:text/javascript;base64,${Buffer.from(code).toString("base64")}`;
+  const mod = (await import(/* @vite-ignore */ url)) as {
+    main: (input: { users: SeedUser[]; upsert?: boolean }) => Promise<SeedResult>;
+  };
   return mod.main;
 }
 
@@ -97,6 +117,103 @@ describe("generateIdpUserSchemaFile", () => {
     expect(output).not.toContain("foreignKeys");
     expect(output).toContain('primaryKey: "name"');
     expect(output).toContain("_user_name_unique_idx");
+  });
+});
+
+describe("generateIdpSeedScriptCode", () => {
+  type IdpCalls = {
+    created: SeedUser[];
+    updated: Array<{ id: string; password?: string }>;
+    lookups: string[];
+  };
+
+  const stubIdp = (existingByName: Record<string, { id: string }>): IdpCalls => {
+    const calls: IdpCalls = { created: [], updated: [], lookups: [] };
+    (globalThis as { tailor?: unknown }).tailor = {
+      idp: {
+        Client: class {
+          async createUser(input: SeedUser) {
+            if (existingByName[input.name]) {
+              throw new Error(`user already exists: ${input.name}`);
+            }
+            calls.created.push(input);
+            return { id: `new-${input.name}` };
+          }
+          async userByName(name: string) {
+            calls.lookups.push(name);
+            const found = existingByName[name];
+            if (!found) throw new Error(`not found: ${name}`);
+            return found;
+          }
+          async updateUser(input: { id: string; password?: string }) {
+            calls.updated.push(input);
+            return { id: input.id };
+          }
+        },
+      },
+    };
+    return calls;
+  };
+
+  aroundEach(async (runTest) => {
+    await runTest();
+    delete (globalThis as { tailor?: unknown }).tailor;
+  });
+
+  test("creates users and reports failure on duplicates when upsert is disabled", async () => {
+    const calls = stubIdp({ existing: { id: "existing-id" } });
+    const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+    const result = await main({
+      users: [
+        { name: "fresh", password: "p1" },
+        { name: "existing", password: "p2" },
+      ],
+    });
+
+    expect(calls.created).toEqual([{ name: "fresh", password: "p1" }]);
+    expect(calls.updated).toEqual([]);
+    expect(result.success).toBe(false);
+    expect(result.errors).toHaveLength(1);
+  });
+
+  test("updates existing users instead of failing when upsert is enabled", async () => {
+    const calls = stubIdp({ existing: { id: "existing-id" } });
+    const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+    const result = await main({
+      users: [
+        { name: "fresh", password: "p1" },
+        { name: "existing", password: "p2" },
+      ],
+      upsert: true,
+    });
+
+    expect(calls.created).toEqual([{ name: "fresh", password: "p1" }]);
+    expect(calls.updated).toEqual([{ id: "existing-id", password: "p2" }]);
+    expect(result).toMatchObject({ success: true, processed: 2, errors: [] });
+  });
+
+  test("reports an error when an upsert fallback cannot resolve the existing user", async () => {
+    stubIdp({});
+    const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+    (globalThis as { tailor?: unknown }).tailor = {
+      idp: {
+        Client: class {
+          async createUser() {
+            throw new Error("already exists");
+          }
+          async userByName() {
+            throw new Error("lookup exploded");
+          }
+        },
+      },
+    };
+
+    const result = await main({ users: [{ name: "ghost" }], upsert: true });
+
+    expect(result.success).toBe(false);
+    expect(result.processed).toBe(0);
   });
 });
 

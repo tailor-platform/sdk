@@ -100,7 +100,7 @@ function generateIdpUserSeedFunction(hasIdpUser: boolean, idpNamespace: string |
         workspaceId,
         name: "seed-idp-user.ts",
         code: idpSeedCode,
-        arg: JSON.stringify({ users: rows }),
+        arg: JSON.stringify({ users: rows, upsert: values.upsert }),
         invoker: {
           namespace: authNamespace,
           machineUserName,
@@ -373,6 +373,7 @@ function generateExecScript(
         namespace: { type: "string", short: "n" },
         "skip-idp": { type: "boolean", default: false },
         truncate: { type: "boolean", default: false },
+        upsert: { type: "boolean", default: false },
         yes: { type: "boolean", default: false },
         profile: { type: "string", short: "p" },
         help: { type: "boolean", short: "h", default: false },
@@ -392,6 +393,7 @@ function generateExecScript(
       -n, --namespace <ns>      Process all types in specified namespace (excludes _User)
       --skip-idp                Skip IdP user (_User) entity
       --truncate                Truncate tables before seeding
+      --upsert                  Update existing rows instead of failing on duplicate ids
       --yes                     Skip confirmation prompts (for truncate)
       -p, --profile <name>      Workspace profile name
       -h, --help                Show help
@@ -405,6 +407,7 @@ function generateExecScript(
       node exec.mjs --truncate --yes                    # Truncate all tables without confirmation, then seed all
       node exec.mjs --truncate --namespace <namespace>  # Truncate tailordb, then seed tailordb
       node exec.mjs --truncate User Order               # Truncate User and Order, then seed them
+      node exec.mjs --upsert                            # Seed all, updating rows whose id already exists
       node exec.mjs validate                            # Validate all seed data
       node exec.mjs validate ./data/User.jsonl          # Validate specific file
       \`);
@@ -638,7 +641,7 @@ ${namespaceSelfRefEntries}
         return { success: true, processed: {} };
       }
 
-      console.log(styleText("cyan", \`  [\${namespace}] Seeding \${typesWithData.length} types via Kysely batch insert...\`));
+      console.log(styleText("cyan", \`  [\${namespace}] Seeding \${typesWithData.length} types via Kysely batch \${values.upsert ? "upsert" : "insert"}...\`));
 
       // Bundle seed script
       const bundled = await bundleSeedScript(namespace, typesWithData);
@@ -674,7 +677,7 @@ ${namespaceSelfRefEntries}
           workspaceId,
           name: \`seed-\${namespace}.ts\`,
           code: bundled.bundledCode,
-          arg: JSON.stringify({ data: chunk.data, order: chunk.order, selfRefTypes }),
+          arg: JSON.stringify({ data: chunk.data, order: chunk.order, selfRefTypes, upsert: values.upsert }),
           invoker: {
             namespace: authNamespace,
             machineUserName,
@@ -704,7 +707,7 @@ ${namespaceSelfRefEntries}
           const processed = parsed.processed || {};
           for (const [type, count] of Object.entries(processed)) {
             allProcessed[type] = (allProcessed[type] || 0) + count;
-            console.log(styleText("green", \`    ✓ \${type}: \${count} rows inserted\`));
+            console.log(styleText("green", \`    ✓ \${type}: \${count} rows \${values.upsert ? "upserted" : "inserted"}\`));
           }
 
           if (!parsed.success) {

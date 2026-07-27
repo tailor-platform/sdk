@@ -49,10 +49,20 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
       const client = new tailor.idp.Client({ namespace: "${idpNamespace}" });
       const errors = [];
       let processed = 0;
+      const upsert = input.upsert === true;
 
       for (let i = 0; i < input.users.length; i++) {
         try {
-          await client.createUser(input.users[i]);
+          try {
+            await client.createUser(input.users[i]);
+          } catch (createError) {
+            // The IdP has no upsert primitive, so an existing user surfaces only
+            // as a createUser failure; fall back to a name lookup and update.
+            if (!upsert) throw createError;
+            const existing = await client.userByName(input.users[i].name);
+            const { name, ...attributes } = input.users[i];
+            await client.updateUser({ id: existing.id, ...attributes });
+          }
           processed++;
           console.log(\`[_User] \${i + 1}/\${input.users.length}: \${input.users[i].name}\`);
         } catch (error) {
