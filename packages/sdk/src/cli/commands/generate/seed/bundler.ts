@@ -56,6 +56,7 @@ function generateSeedScriptContent(namespace: string): string {
       const BATCH_SIZE = ${String(BATCH_SIZE)};
       const upsert = input.upsert === true;
 
+      // Rows must share one key set, which groupByColumns guarantees.
       // TailorDB restricts the ON CONFLICT target to a single column, so "id" is the only key.
       const write = (typeName: string, rows: Record<string, unknown>[]) => {
         const query = db.insertInto(typeName).values(rows);
