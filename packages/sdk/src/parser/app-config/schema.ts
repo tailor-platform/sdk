@@ -26,6 +26,14 @@ export const AppConfigSchema = z.strictObject({
   id: z.uuid({ message: "'id' must be a UUID." }).optional(),
   name: z.string().min(1, { message: "'name' must be a non-empty string." }),
   env: z.record(z.string(), envValueSchema).optional(),
+  allowEnvSecrets: z
+    .record(
+      z.string(),
+      z.string().min(1, {
+        message: "'allowEnvSecrets' entries must state why the value is safe to keep in 'env'.",
+      }),
+    )
+    .optional(),
   cors: z.array(z.string()).optional(),
   allowedIpAddresses: z.array(z.string()).optional(),
   disableIntrospection: z.boolean().optional(),

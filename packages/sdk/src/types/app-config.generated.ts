@@ -11,6 +11,11 @@ export type AppConfigParsed = {
         [x: string]: string | number | boolean;
       }
     | undefined;
+  allowEnvSecrets?:
+    | {
+        [x: string]: string;
+      }
+    | undefined;
   cors?: string[] | undefined;
   allowedIpAddresses?: string[] | undefined;
   disableIntrospection?: boolean | undefined;

@@ -72,6 +72,15 @@ export interface AppConfig<
   id?: string;
   /** Environment variables accessible via `context.env` in resolvers and via the second argument `{ env }` in workflow job bodies. */
   env?: Env;
+  /**
+   * `env` keys allowed to hold a value that `generate` and `deploy` would
+   * otherwise reject as a credential, mapped to why each one is safe to deploy
+   * as plaintext.
+   *
+   * Reach for this only when the detection is wrong about the value. Real
+   * credentials belong in `defineSecretManager()`.
+   */
+  allowEnvSecrets?: Record<string, string>;
   /** Allowed CORS origins. Must be an array of strings, e.g. `["https://example.com"]`. */
   cors?: string[];
   /** IP addresses allowed to access the application. */

@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { defineAuth } from "#/configure/services/auth/index";
@@ -5,6 +7,7 @@ import { t } from "#/configure/types/type";
 import {
   extractAttributesFromConfig,
   generateTypeDefinition,
+  generateUserTypes,
   resolveTypeDefinitionPath,
 } from "./type-generator";
 import type { AttributeListConfig, AttributesConfig } from "./type-generator";
@@ -231,6 +234,40 @@ describe("resolveTypeDefinitionPath", () => {
     process.env.TAILOR_DTS_PATH = "custom/types.d.ts";
     const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
     expect(result).toBe(path.resolve("custom/types.d.ts"));
+  });
+});
+
+describe("generateUserTypes", () => {
+  const originalEnv = process.env.TAILOR_DTS_PATH;
+
+  afterEach(() => {
+    if (originalEnv !== undefined) {
+      process.env.TAILOR_DTS_PATH = originalEnv;
+    } else {
+      delete process.env.TAILOR_DTS_PATH;
+    }
+  });
+
+  test("rejects a credential in env without writing the definition file", async () => {
+    const outputPath = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), "tailor-dts-")),
+      "tailor.d.ts",
+    );
+    process.env.TAILOR_DTS_PATH = outputPath;
+    // Assembled at runtime: spelled out in full, this fixture is indistinguishable
+    // from a live credential to the repository's own push protection.
+    const slackToken = ["xoxb", "123456789012", "1234567890123", "AbCdEfGhIjKlMnOpQrStUvWx"].join(
+      "-",
+    );
+
+    await expect(
+      generateUserTypes({
+        config: { name: "test-app", env: { SLACK_BOT_TOKEN: slackToken } },
+        configPath: "/project/tailor.config.ts",
+      }),
+    ).rejects.toThrow(/Secret detected in 'env'/);
+
+    expect(fs.existsSync(outputPath)).toBe(false);
   });
 });
 
