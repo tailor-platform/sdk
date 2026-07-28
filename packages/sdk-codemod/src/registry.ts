@@ -1327,6 +1327,15 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     notice: true,
   },
+  {
+    id: "v2/dts-env-value-types",
+    name: "tailor.d.ts Env uses value types instead of literal values",
+    description:
+      "The `Env` interface in `tailor.d.ts` is generated from the type of each `defineConfig({ env })` value (`string`, `number`, or `boolean`) instead of the value itself, so the generated file no longer carries whatever the config resolved to when it was generated. Run `tailor generate` to refresh the file. Most code needs no change, but code that relied on the literal narrowing — comparing `env.STAGE` against a literal union, for example — has to widen its own types. If a `tailor.d.ts` you already committed contains a sensitive value, treat that value as exposed and rotate it; keep secrets in Secret Manager rather than `env`.",
+    since: "1.0.0",
+    until: "2.0.0",
+    notice: true,
+  },
 ];
 
 /**
