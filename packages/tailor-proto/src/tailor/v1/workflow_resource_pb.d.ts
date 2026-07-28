@@ -91,6 +91,14 @@ export declare type WorkflowJobFunctionSummary = Message<"tailor.v1.WorkflowJobF
    * @generated from field: google.protobuf.Timestamp created_at = 5;
    */
   createdAt?: Timestamp;
+
+  /**
+   * Enable publishing job-execution events
+   * (workflow.workflow_execution.job_execution.*). Default false (opt-in).
+   *
+   * @generated from field: bool publish_execution_events = 7;
+   */
+  publishExecutionEvents: boolean;
 };
 
 /**
