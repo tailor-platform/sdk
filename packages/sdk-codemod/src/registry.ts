@@ -1284,7 +1284,12 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_9,
     scriptPath: "v2/seed-exec-to-cli-plugin/scripts/transform.js",
-    filePatterns: ["**/package.json", "**/*.{sh,yml,yaml,md,mjs,ts}"],
+    filePatterns: [
+      "**/package.json",
+      "**/*.{sh,bash,zsh,yml,yaml}",
+      "**/*.md",
+      "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}",
+    ],
     // The transform declines `fork()` call sites, which need the surrounding
     // async plumbing unwound; `reviewFindings` points at those exact lines.
     // Outside source files `exec.mjs` alone is a generic script name, so the
@@ -1316,7 +1321,7 @@ export const allCodemods: CodemodPackage[] = [
       "  typically fork the runner and await a hand-rolled Promise around",
       '  `child.on("close", ...)`). The plugin is a CLI-dispatched binary rather',
       "  than a forkable JS module, so call it synchronously instead —",
-      '  `execSync("pnpm tailor seed apply", { env, stdio: "inherit" })` — keeping',
+      '  `execSync("npx tailor seed apply", { env, stdio: "inherit" })` — keeping',
       "  the original `env` and `stdio` forwarding, and unwind the surrounding",
       "  Promise wrapper (drop the now-unused `await`, and the `async` keyword when",
       "  nothing else in the function awaits). Note that `execSync` throws on a",

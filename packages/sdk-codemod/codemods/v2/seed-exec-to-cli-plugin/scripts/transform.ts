@@ -8,9 +8,9 @@ import type { LlmReviewFinding } from "../../../../src/types";
 // project's own top-level `exec.mjs`.
 const NODE_BINARY = "(?<![\\w.-])node(?![\\w-])";
 const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
-// Horizontal whitespace only: a newline between tokens means separate lines
-// (YAML sequence items, markdown bullets), not one invocation to rewrite.
-const SPACE = "[^\\S\\n\\r]+";
+// Shell line continuations join one command; other newlines still separate YAML
+// sequence items and markdown bullets that must not be rewritten together.
+const SPACE = String.raw`(?:[^\S\n\r]|\\\r?\n)+`;
 // Value-taking node flags must consume their value, or the value itself is read
 // as the next flag and the runner path stops matching.
 const VALUE_NODE_FLAG = "(?:--env-file|--env-file-if-exists|--import|--require|-r)";
@@ -89,8 +89,8 @@ function transformText(source: string): string | null {
  * node_modules rather than the PATH.
  */
 function transformSourceText(source: string): string | null {
-  if (FORK_PATTERN.test(source)) return null;
-  const updated = rewrite(source, "pnpm ");
+  const updated = rewrite(source, "npx ");
+  if (FORK_PATTERN.test(source) && updated.includes("exec.mjs")) return null;
   return updated === source ? null : updated;
 }
 
@@ -160,7 +160,7 @@ export function reviewFindings(
       file: relativePath,
       line: index + 1,
       message:
-        'Replace the fork()-based seed runner call with execSync("pnpm tailor seed apply"), forwarding env/stdio, and unwind the surrounding await/Promise plumbing.',
+        'Replace the fork()-based seed runner call with execSync("npx tailor seed apply"), forwarding env/stdio, and unwind the surrounding await/Promise plumbing.',
       excerpt: lines[index]!.trim(),
     };
   });
