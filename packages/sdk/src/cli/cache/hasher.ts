@@ -44,8 +44,11 @@ function hashFiles(filePaths: string[]): string {
 function hashFileOrMissing(filePath: string): string {
   try {
     return hashFile(filePath);
-  } catch {
-    return MISSING_FILE_MARKER;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return MISSING_FILE_MARKER;
+    }
+    throw error;
   }
 }
 
