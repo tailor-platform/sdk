@@ -1,6 +1,4 @@
-import * as fs from "node:fs";
-import { parseJSONC } from "confbox";
-import { createPathsMatcher, getTsconfig, type TsConfigResult } from "get-tsconfig";
+import { type Cache, createPathsMatcher, getTsconfig } from "get-tsconfig";
 import * as path from "pathe";
 import type * as rolldown from "rolldown";
 
@@ -30,10 +28,11 @@ export interface TsconfigPathsPluginOptions {
    */
   virtualEntrySourceFile?: string;
   /**
-   * Called with each tsconfig.json path the alias lookup depends on, including
-   * ones that do not exist yet. A cached bundler must treat these as inputs:
-   * tsconfigs are never loaded as modules, so nothing else notices when an
-   * ancestor's `paths` table changes or a nearer tsconfig.json appears.
+   * Called with each file path the tsconfig lookup depends on, including config
+   * candidates that do not exist yet and package metadata used to resolve an
+   * `extends` target. A cached bundler must treat these as inputs: tsconfigs are
+   * never loaded as modules, so nothing else notices when an ancestor's `paths`
+   * table changes or a nearer tsconfig.json appears.
    */
   onTsconfigRead?: (tsconfigPath: string) => void;
 }
@@ -47,7 +46,7 @@ export interface TsconfigPathsPluginOptions {
 export function createTsconfigPathsPlugin(
   options: TsconfigPathsPluginOptions = {},
 ): rolldown.Plugin {
-  const tsconfigCache = new Map<string, TsConfigResult | null>();
+  const tsconfigCache: Cache = new Map();
   const contextCache = new Map<string, ResolutionContext | null>();
 
   return {
@@ -102,7 +101,7 @@ export function createTsconfigPathsPlugin(
 // bare specifier to a `baseUrl`-relative guess.
 function getResolutionContext(
   startDir: string,
-  tsconfigCache: Map<string, TsConfigResult | null>,
+  tsconfigCache: Cache,
   contextCache: Map<string, ResolutionContext | null>,
   onTsconfigRead?: (tsconfigPath: string) => void,
 ): ResolutionContext | null {
@@ -113,14 +112,11 @@ function getResolutionContext(
   let resolution: ResolutionContext | null = null;
   for (;;) {
     const tsconfig = getTsconfig(searchDir, "tsconfig.json", tsconfigCache);
+    reportTsconfigDependencies(tsconfigCache, onTsconfigRead);
     if (!tsconfig) break;
 
-    // Report every directory the walk passed over, not just the tsconfig it
-    // landed on. A tsconfig.json added to a skipped directory later would
-    // change the outcome, so a cache key needs it as a negative dependency.
-    reportCandidatesBetween(searchDir, tsconfig.path, onTsconfigRead);
-
-    if (tsconfig.config.compilerOptions?.paths) {
+    const paths = tsconfig.config.compilerOptions?.paths;
+    if (paths && Object.keys(paths).length > 0) {
       const matcher = createPathsMatcher(tsconfig);
       if (matcher) {
         resolution = { matcher };
@@ -137,73 +133,46 @@ function getResolutionContext(
   return resolution;
 }
 
-// Every directory from `fromDir` up to the one holding `foundTsconfigPath` could
-// have held a tsconfig.json that the walk would have stopped at instead.
-function reportCandidatesBetween(
-  fromDir: string,
-  foundTsconfigPath: string,
+function reportTsconfigDependencies(
+  cache: Cache,
   onTsconfigRead?: (tsconfigPath: string) => void,
 ): void {
   if (!onTsconfigRead) return;
 
-  const foundDir = path.dirname(foundTsconfigPath);
-  let dir = fromDir;
-  for (;;) {
-    onTsconfigRead(path.join(dir, "tsconfig.json"));
-    if (dir === foundDir) break;
-    const parentDir = path.dirname(dir);
-    if (parentDir === dir) break;
-    dir = parentDir;
+  const directories = new Set<string>();
+  const dependencies = new Set<string>();
+  for (const [key, value] of cache) {
+    const dependencyPath = dependencyPathFromCacheKey(key);
+    if (!dependencyPath) continue;
+    if (key.startsWith("statSync:") && isDirectoryStat(value)) {
+      directories.add(dependencyPath);
+    } else {
+      dependencies.add(dependencyPath);
+    }
   }
-  reportExtendsChain(foundTsconfigPath, onTsconfigRead, new Set());
-}
-
-// `getTsconfig` merges `extends` into the config it returns but does not report
-// which files it read, so a `paths` table inherited from a base config would
-// otherwise leave that base out of the dependency set.
-function reportExtendsChain(
-  tsconfigPath: string,
-  onTsconfigRead: (tsconfigPath: string) => void,
-  seen: Set<string>,
-): void {
-  if (seen.has(tsconfigPath)) return;
-  seen.add(tsconfigPath);
-
-  let raw: string;
-  try {
-    raw = fs.readFileSync(tsconfigPath, "utf8");
-  } catch {
-    return;
-  }
-
-  const extendsField = parseJsonc(raw)?.extends;
-  const bases =
-    typeof extendsField === "string"
-      ? [extendsField]
-      : Array.isArray(extendsField)
-        ? extendsField
-        : [];
-  for (const base of bases) {
-    if (typeof base !== "string") continue;
-    const basePath = resolveExtendsTarget(base, tsconfigPath);
-    if (!basePath) continue;
-    onTsconfigRead(basePath);
-    reportExtendsChain(basePath, onTsconfigRead, seen);
+  for (const dependencyPath of dependencies) {
+    if (!directories.has(dependencyPath)) onTsconfigRead(dependencyPath);
   }
 }
 
-function parseJsonc(raw: string): { extends?: unknown } | undefined {
-  try {
-    return parseJSONC(raw) as { extends?: unknown };
-  } catch {
-    return undefined;
+function dependencyPathFromCacheKey(key: string): string | undefined {
+  const readFilePrefix = "readFileSync:";
+  const readFileSuffix = ":utf8";
+  if (key.startsWith(readFilePrefix) && key.endsWith(readFileSuffix)) {
+    return key.slice(readFilePrefix.length, -readFileSuffix.length);
   }
+  for (const prefix of ["existsSync:", "statSync:"]) {
+    if (key.startsWith(prefix)) return key.slice(prefix.length);
+  }
+  return undefined;
 }
 
-// A package-style `extends` target resolves through node resolution, which this
-// walk does not model; only relative targets are tracked.
-function resolveExtendsTarget(base: string, fromTsconfigPath: string): string | undefined {
-  if (!base.startsWith(".")) return undefined;
-  const resolved = path.resolve(path.dirname(fromTsconfigPath), base);
-  return path.extname(resolved) ? resolved : `${resolved}.json`;
+function isDirectoryStat(value: unknown): boolean {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "isDirectory" in value &&
+    typeof value.isDirectory === "function" &&
+    value.isDirectory()
+  );
 }

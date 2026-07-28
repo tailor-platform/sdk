@@ -199,6 +199,33 @@ describe("createTsconfigPathsPlugin", () => {
     expect(result.output[0].code).toContain("42");
   });
 
+  test("walks past a nested tsconfig that declares an empty paths table", async () => {
+    const dir = makeDir("tsconfig-paths-empty-");
+    fs.mkdirSync(path.join(dir, "lib"));
+    fs.mkdirSync(path.join(dir, "services"));
+    fs.writeFileSync(
+      path.join(dir, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["./lib/*"] } } }),
+    );
+    fs.writeFileSync(
+      path.join(dir, "services", "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { paths: {} } }),
+    );
+    fs.writeFileSync(path.join(dir, "lib", "helpers.ts"), "export const helper = () => 42;\n");
+    fs.writeFileSync(
+      path.join(dir, "services", "entry.ts"),
+      'import { helper } from "@lib/helpers";\nexport const main = () => helper();\n',
+    );
+
+    const result = await build(
+      path.join(dir, "services", "entry.ts"),
+      path.join(dir, "services", "tsconfig.json"),
+      [createTsconfigPathsPlugin()],
+    );
+
+    expect(result.output[0].code).toContain("42");
+  });
+
   test("walks past more than one paths-less tsconfig", async () => {
     const dir = makeDir("tsconfig-paths-deep-");
     fs.mkdirSync(path.join(dir, "lib"));
@@ -304,12 +331,82 @@ describe("createTsconfigPathsPlugin", () => {
       createTsconfigPathsPlugin({ onTsconfigRead: (p) => reported.push(p) }),
     ]);
 
-    expect(reported).toContain(path.join(dir, "base.json"));
-    // Directories the walk passed over: a tsconfig.json appearing in one later
-    // would change which aliases apply.
-    expect(reported).toContain(path.join(dir, "a", "b", "tsconfig.json"));
-    expect(reported).toContain(path.join(dir, "a", "tsconfig.json"));
-    expect(reported).toContain(path.join(dir, "tsconfig.json"));
+    expect(new Set(reported)).toEqual(
+      new Set([
+        path.join(dir, "a", "b", "tsconfig.json"),
+        path.join(dir, "a", "tsconfig.json"),
+        path.join(dir, "tsconfig.json"),
+        path.join(dir, "base.json"),
+      ]),
+    );
+  });
+
+  test("reports both candidates when an extends target gains a .json suffix", async () => {
+    const dir = makeDir("tsconfig-paths-extends-suffix-");
+    fs.mkdirSync(path.join(dir, "lib"));
+    fs.writeFileSync(
+      path.join(dir, "tsconfig.base.json"),
+      JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["./lib/*"] } } }),
+    );
+    fs.writeFileSync(
+      path.join(dir, "tsconfig.json"),
+      JSON.stringify({ extends: "./tsconfig.base" }),
+    );
+    fs.writeFileSync(path.join(dir, "lib", "helpers.ts"), "export const helper = () => 42;\n");
+    fs.writeFileSync(
+      path.join(dir, "entry.ts"),
+      'import { helper } from "@lib/helpers";\nexport const main = () => helper();\n',
+    );
+
+    const reported: string[] = [];
+    await build(path.join(dir, "entry.ts"), path.join(dir, "tsconfig.json"), [
+      createTsconfigPathsPlugin({ onTsconfigRead: (p) => reported.push(p) }),
+    ]);
+
+    expect(new Set(reported)).toEqual(
+      new Set([
+        path.join(dir, "tsconfig.json"),
+        path.join(dir, "tsconfig.base"),
+        path.join(dir, "tsconfig.base.json"),
+      ]),
+    );
+  });
+
+  test("reports package metadata and config used by a package-style extends", async () => {
+    const dir = makeDir("tsconfig-paths-extends-package-");
+    const configPackageDir = path.join(dir, "node_modules", "shared-tsconfig");
+    fs.mkdirSync(path.join(dir, "lib"));
+    fs.mkdirSync(configPackageDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(configPackageDir, "package.json"),
+      JSON.stringify({ name: "shared-tsconfig", version: "1.0.0", main: "tsconfig.json" }),
+    );
+    fs.writeFileSync(
+      path.join(configPackageDir, "tsconfig.json"),
+      JSON.stringify({ compilerOptions: { baseUrl: "../..", paths: { "@lib/*": ["./lib/*"] } } }),
+    );
+    fs.writeFileSync(
+      path.join(dir, "tsconfig.json"),
+      JSON.stringify({ extends: "shared-tsconfig" }),
+    );
+    fs.writeFileSync(path.join(dir, "lib", "helpers.ts"), "export const helper = () => 42;\n");
+    fs.writeFileSync(
+      path.join(dir, "entry.ts"),
+      'import { helper } from "@lib/helpers";\nexport const main = () => helper();\n',
+    );
+
+    const reported: string[] = [];
+    await build(path.join(dir, "entry.ts"), path.join(dir, "tsconfig.json"), [
+      createTsconfigPathsPlugin({ onTsconfigRead: (p) => reported.push(p) }),
+    ]);
+
+    expect(new Set(reported)).toEqual(
+      new Set([
+        path.join(dir, "tsconfig.json"),
+        path.join(configPackageDir, "package.json"),
+        path.join(configPackageDir, "tsconfig.json"),
+      ]),
+    );
   });
 
   test("resolves a user alias inlined into a virtual entry when given its source file", async () => {
