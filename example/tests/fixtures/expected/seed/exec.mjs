@@ -468,7 +468,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
   console.log(styleText("cyan", `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch insert...`));
 
   // Bundle seed script
-  const bundled = await bundleSeedScript(namespace, typesWithData);
+  const bundled = await bundleSeedScript(namespace, typesWithData, configDir);
 
   // Chunk seed data to fit within gRPC message size limits
   const chunks = chunkSeedData({
