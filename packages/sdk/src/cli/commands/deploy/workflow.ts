@@ -376,42 +376,74 @@ function resolvePublishEvents(params: ResolvePublishEventsParams): boolean {
   return explicit ?? subscribed;
 }
 
-type AssertJobExecutionEventsEnabledParams = {
+type ResolveJobPublishEventsParams = {
   workflows: Record<string, Workflow>;
   mainJobDeps: Record<string, string[]>;
   subscribers: WorkflowEventSubscribers;
-  jobPublishEvents: ReadonlyMap<string, boolean>;
+  explicit: ReadonlyMap<string, boolean>;
 };
 
 /**
- * Reject job execution event triggers whose target workflow has no job opted in.
+ * Resolve `publishExecutionEvents` for every job function used by a workflow.
  *
- * Unlike the workflow-level flag, a job function's `publishExecutionEvents` is
- * not readable back from the platform's job function listing, so it cannot be
- * enabled on the user's behalf without re-asserting it on every deploy. Failing
- * the plan turns a subscription that would never fire into a build error.
+ * A job execution trigger names a workflow rather than a job, so a subscription
+ * opts in every job that workflow runs.
  * @param params - Workflows, their job dependencies, subscribers, and explicit job flags
+ * @returns Resolved flags keyed by job function name
  */
-function assertJobExecutionEventsEnabled(params: AssertJobExecutionEventsEnabledParams): void {
-  const { workflows, mainJobDeps, subscribers, jobPublishEvents } = params;
-  const publishingJobNames = new Set(
-    [...jobPublishEvents].filter(([, publish]) => publish).map(([jobName]) => jobName),
-  );
-
-  const hint = (target: string, jobNames: readonly string[]) =>
-    `Executors with a workflowJobExecution trigger subscribe to ${target}, but none of its jobs publish job execution events. ` +
-    `Set "publishEvents: true" on createWorkflowJob for the job(s) to observe (candidates: ${jobNames.join(", ")}).`;
-
+function resolveJobPublishEvents(params: ResolveJobPublishEventsParams): Map<string, boolean> {
+  const { workflows, mainJobDeps, subscribers, explicit } = params;
+  const usedJobNames = new Set<string>();
+  const subscribedJobNames = new Set<string>();
   for (const workflow of Object.values(workflows)) {
-    const usedJobNames = mainJobDeps[workflow.mainJob.name];
+    const jobNames = mainJobDeps[workflow.mainJob.name];
     // A missing entry gets a fuller diagnostic from planWorkflow's own loop.
-    if (!usedJobNames || !subscribers.workflowNames.has(workflow.name)) {
+    if (!jobNames) {
       continue;
     }
-    if (!usedJobNames.some((jobName) => publishingJobNames.has(jobName))) {
-      throw new Error(hint(`workflow "${workflow.name}"`, usedJobNames.toSorted()));
+    const subscribed = isSubscribed(subscribers, workflow.name);
+    for (const jobName of jobNames) {
+      usedJobNames.add(jobName);
+      if (subscribed) {
+        subscribedJobNames.add(jobName);
+      }
     }
   }
+
+  const resolved = new Map<string, boolean>();
+  for (const jobName of usedJobNames) {
+    resolved.set(
+      jobName,
+      resolvePublishEvents({
+        explicit: explicit.get(jobName),
+        subscribed: subscribedJobNames.has(jobName),
+        conflictError:
+          `Job "${jobName}" has "publishEvents: false", but executors with a workflowJobExecution trigger subscribe to a workflow that runs it. ` +
+          `Either remove "publishEvents: false" or remove the matching executor triggers.`,
+      }),
+    );
+  }
+  return resolved;
+}
+
+/**
+ * Collect job functions whose remote publishing flag no longer matches the plan.
+ * @param existing - Existing job functions keyed by name
+ * @param resolved - Resolved `publishExecutionEvents` keyed by job function name
+ * @returns Job function names needing re-registration
+ */
+function collectStaleJobFunctionNames(
+  existing: ReadonlyMap<string, ExistingJobFunction>,
+  resolved: ReadonlyMap<string, boolean>,
+): Set<string> {
+  const stale = new Set<string>();
+  for (const [jobName, publishEvents] of resolved) {
+    const remote = existing.get(jobName);
+    if (remote && (remote.publishExecutionEvents ?? false) !== publishEvents) {
+      stale.add(jobName);
+    }
+  }
+  return stale;
 }
 
 /**
@@ -444,13 +476,17 @@ export async function planWorkflow(
   const retainedWorkflowJobNames = new Set<string>();
 
   const executionSubscribers = eventPublishing.execution ?? NO_EVENT_SUBSCRIBERS;
-  const jobFunctionPublishEvents = eventPublishing.jobPublishEvents ?? new Map<string, boolean>();
-  assertJobExecutionEventsEnabled({
+  const existingJobFunctions = await fetchExistingJobFunctions(client, workspaceId);
+  const jobFunctionPublishEvents = resolveJobPublishEvents({
     workflows,
     mainJobDeps,
     subscribers: eventPublishing.jobExecution ?? NO_EVENT_SUBSCRIBERS,
-    jobPublishEvents: jobFunctionPublishEvents,
+    explicit: eventPublishing.jobPublishEvents ?? new Map<string, boolean>(),
   });
+  const staleJobFunctionNames = collectStaleJobFunctionNames(
+    existingJobFunctions,
+    jobFunctionPublishEvents,
+  );
 
   const existingWorkflows = await fetchExistingResourcesWithLabels({
     client,
@@ -513,12 +549,13 @@ export async function planWorkflow(
       if (
         owned &&
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
-        canTreatWorkflowAsUnchanged(
-          existing.resource,
-          desiredWorkflow,
+        canTreatWorkflowAsUnchanged({
+          existing: existing.resource,
+          workflow: desiredWorkflow,
           usedJobNames,
           unchangedJobFunctions,
-        )
+          staleJobFunctionNames,
+        })
       ) {
         changeSet.unchanged.push({ name: workflow.name });
         for (const jobName of usedJobNames) {
@@ -576,6 +613,7 @@ export async function planWorkflow(
     workspaceId,
     appName,
     appId,
+    existingJobFunctionNames: [...existingJobFunctions.keys()],
     retainedWorkflowJobNames,
   });
   const deletableJobNames = new Set(jobFunctionDeletes.map((del) => del.jobFunctionName));
@@ -602,27 +640,48 @@ export async function planWorkflow(
   };
 }
 
+/** Existing job function as reported by the platform's job function listing. */
+type ExistingJobFunction = {
+  name: string;
+  publishExecutionEvents?: boolean;
+};
+
+async function fetchExistingJobFunctions(
+  client: OperatorClient,
+  workspaceId: string,
+): Promise<ReadonlyMap<string, ExistingJobFunction>> {
+  const jobFunctions = await fetchAll(async (pageToken, maxPageSize) => {
+    const response = await client.listWorkflowJobFunctions({
+      workspaceId,
+      pageToken,
+      pageSize: maxPageSize,
+    });
+    return [response.jobFunctions, response.nextPageToken];
+  });
+  return new Map(jobFunctions.map((jobFunction) => [jobFunction.name, jobFunction]));
+}
+
 type PlanWorkflowJobFunctionDeletesParams = {
   client: OperatorClient;
   workspaceId: string;
   appName: string;
   appId: string | undefined;
+  existingJobFunctionNames: readonly string[];
   retainedWorkflowJobNames: ReadonlySet<string>;
 };
 
 async function planWorkflowJobFunctionDeletes(
   params: PlanWorkflowJobFunctionDeletesParams,
 ): Promise<DeleteWorkflowJobFunction[]> {
-  const { client, workspaceId, appName, appId, retainedWorkflowJobNames } = params;
-  const existingJobFunctions = await fetchAll(async (pageToken, maxPageSize) => {
-    const response = await client.listWorkflowJobFunctions({
-      workspaceId,
-      pageToken,
-      pageSize: maxPageSize,
-    });
-    return [response.jobFunctions.map((jobFunction) => jobFunction.name), response.nextPageToken];
-  });
-  const candidates = [...new Set(existingJobFunctions)].filter(
+  const {
+    client,
+    workspaceId,
+    appName,
+    appId,
+    existingJobFunctionNames,
+    retainedWorkflowJobNames,
+  } = params;
+  const candidates = existingJobFunctionNames.filter(
     (jobName) => !retainedWorkflowJobNames.has(jobName),
   );
   const owned = await Promise.all(
@@ -679,13 +738,21 @@ type ExistingWorkflowResource = {
   publishExecutionEvents?: boolean;
 };
 
-function canTreatWorkflowAsUnchanged(
-  existing: ExistingWorkflowResource,
-  workflow: Workflow,
-  usedJobNames: string[],
-  unchangedJobFunctions: ReadonlySet<string>,
-) {
+type CanTreatWorkflowAsUnchangedParams = {
+  existing: ExistingWorkflowResource;
+  workflow: Workflow;
+  usedJobNames: string[];
+  unchangedJobFunctions: ReadonlySet<string>;
+  staleJobFunctionNames: ReadonlySet<string>;
+};
+
+function canTreatWorkflowAsUnchanged(params: CanTreatWorkflowAsUnchangedParams) {
+  const { existing, workflow, usedJobNames, unchangedJobFunctions, staleJobFunctionNames } = params;
   if (!usedJobNames.every((jobName) => unchangedJobFunctions.has(jobName))) {
+    return false;
+  }
+  // Job functions are only re-registered while applying a workflow create/update.
+  if (usedJobNames.some((jobName) => staleJobFunctionNames.has(jobName))) {
     return false;
   }
   return areWorkflowsEqual(existing, workflow, usedJobNames);

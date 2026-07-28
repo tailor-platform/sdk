@@ -54,6 +54,12 @@ describe("planWorkflow", () => {
     };
   }
 
+  type MockJobFunction = {
+    label?: string;
+    sdkVersion?: string;
+    publishExecutionEvents?: boolean;
+  };
+
   function createMockClient(
     existingWorkflows: Array<{
       id: string;
@@ -62,9 +68,9 @@ describe("planWorkflow", () => {
       resource?: Record<string, unknown>;
       sdkVersion?: string;
     }>,
-    jobFunctionLabels?: Record<string, { label?: string; sdkVersion?: string }>,
+    jobFunctionLabels?: Record<string, MockJobFunction>,
   ): OperatorClient {
-    const inferredJobFunctionLabels: Record<string, { label?: string; sdkVersion?: string }> = {};
+    const inferredJobFunctionLabels: Record<string, MockJobFunction> = {};
     for (const workflow of existingWorkflows) {
       const resource = workflow.resource;
       if (!resource) {
@@ -124,7 +130,10 @@ describe("planWorkflow", () => {
         };
       }),
       listWorkflowJobFunctions: vi.fn().mockResolvedValue({
-        jobFunctions: Object.keys(labelsByJobFunction).map((name) => ({ name })),
+        jobFunctions: Object.entries(labelsByJobFunction).map(([name, jobFunction]) => ({
+          name,
+          publishExecutionEvents: jobFunction.publishExecutionEvents ?? false,
+        })),
         nextPageToken: "",
       }),
     } as unknown as OperatorClient;
@@ -173,29 +182,55 @@ describe("planWorkflow", () => {
       ).rejects.toThrow('Workflow "orders" has "publishEvents: false"');
     });
 
-    test("rejects a job execution subscription when no job publishes events", async () => {
+    test("enables publishing for every job of a workflow with a job execution subscription", async () => {
       const workflow = createMockWorkflow("orders", "main-job");
+      const result = await planWorkflow(
+        createMockClient([]),
+        workspaceId,
+        appName,
+        undefined,
+        { orders: workflow },
+        { "main-job": ["main-job", "child-job"] },
+        new Set(),
+        {
+          jobExecution: { workflowNames: new Set(["orders"]) },
+          jobPublishEvents: new Map(),
+        },
+      );
 
-      await expect(
-        planWorkflow(
-          createMockClient([]),
-          workspaceId,
-          appName,
-          undefined,
-          { orders: workflow },
-          { "main-job": ["main-job"] },
-          new Set(),
-          {
-            jobExecution: { workflowNames: new Set(["orders"]) },
-            jobPublishEvents: new Map(),
-          },
-        ),
-      ).rejects.toThrow(
-        'Executors with a workflowJobExecution trigger subscribe to workflow "orders"',
+      expect(result.jobFunctionPublishEvents).toEqual(
+        new Map([
+          ["main-job", true],
+          ["child-job", true],
+        ]),
       );
     });
 
-    test("allows a job execution subscription when a workflow job publishes events", async () => {
+    test("leaves jobs opted out when no executor subscribes to job execution events", async () => {
+      const workflow = createMockWorkflow("orders", "main-job");
+      const result = await planWorkflow(
+        createMockClient([]),
+        workspaceId,
+        appName,
+        undefined,
+        { orders: workflow },
+        { "main-job": ["main-job", "child-job"] },
+        new Set(),
+        {
+          execution: { workflowNames: new Set(["orders"]) },
+          jobPublishEvents: new Map([["child-job", true]]),
+        },
+      );
+
+      expect(result.jobFunctionPublishEvents).toEqual(
+        new Map([
+          ["main-job", false],
+          ["child-job", true],
+        ]),
+      );
+    });
+
+    test("rejects an explicit job opt-out with a matching job execution subscription", async () => {
       const workflow = createMockWorkflow("orders", "main-job");
 
       await expect(
@@ -209,10 +244,85 @@ describe("planWorkflow", () => {
           new Set(),
           {
             jobExecution: { workflowNames: new Set(["orders"]) },
-            jobPublishEvents: new Map([["main-job", true]]),
+            jobPublishEvents: new Map([["main-job", false]]),
           },
         ),
-      ).resolves.toBeDefined();
+      ).rejects.toThrow('Job "main-job" has "publishEvents: false"');
+    });
+
+    test("updates an otherwise unchanged workflow when a job's publishing flag drifts", async () => {
+      const client = createMockClient(
+        [
+          {
+            id: "1",
+            name: "orders",
+            label: appName,
+            resource: {
+              id: "1",
+              name: "orders",
+              mainJobFunctionName: "main-job",
+              jobFunctions: { "main-job": "1" },
+            },
+          },
+        ],
+        { "main-job": { label: appName, publishExecutionEvents: false } },
+      );
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: createMockWorkflow("orders", "main-job") },
+        { "main-job": ["main-job"] },
+        new Set(["main-job"]),
+        {
+          jobExecution: { workflowNames: new Set(["orders"]) },
+          jobPublishEvents: new Map(),
+        },
+      );
+
+      expect(result.changeSet.unchanged).toHaveLength(0);
+      expect(result.changeSet.updates).toHaveLength(1);
+      expect(result.jobFunctionPublishEvents.get("main-job")).toBe(true);
+    });
+
+    test("keeps a workflow unchanged when its jobs already publish the resolved events", async () => {
+      const client = createMockClient(
+        [
+          {
+            id: "1",
+            name: "orders",
+            label: appName,
+            resource: {
+              id: "1",
+              name: "orders",
+              mainJobFunctionName: "main-job",
+              jobFunctions: { "main-job": "1" },
+              publishExecutionEvents: true,
+            },
+          },
+        ],
+        { "main-job": { label: appName, publishExecutionEvents: true } },
+      );
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: createMockWorkflow("orders", "main-job") },
+        { "main-job": ["main-job"] },
+        new Set(["main-job"]),
+        {
+          execution: { workflowNames: new Set(["orders"]) },
+          jobExecution: { workflowNames: new Set(["orders"]) },
+          jobPublishEvents: new Map(),
+        },
+      );
+
+      expect(result.changeSet.unchanged).toHaveLength(1);
+      expect(result.changeSet.updates).toHaveLength(0);
     });
   });
 

@@ -70,8 +70,8 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
    * Enable publishing this job's execution events, letting executors with a
    * `workflowJobExecution*` trigger observe them.
    *
-   * Defaults to `false`; set to `true` for each job whose execution events
-   * should be observed.
+   * Left unset, it is enabled automatically when an executor in the project
+   * subscribes to the job execution events of a workflow that runs this job.
    */
   readonly publishEvents?: boolean;
 }
