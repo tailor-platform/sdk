@@ -138,7 +138,7 @@ idpUserCreatedTrigger({ idp: "my-idp" });
 
 Omitting `idp` is allowed only when the project has exactly one IdP; otherwise `apply` fails with an error listing the configured IdPs.
 
-These triggers require the IdP to publish user lifecycle events. The SDK enables `publishUserEvents` automatically during `apply` on each IdP that is targeted by an `idpUser` trigger; set the value explicitly on `defineIdp()` to override. See [IdP service - publishUserEvents](./idp.md#publishuserevents).
+These triggers require the IdP to publish user lifecycle events. The SDK enables `publishUserEvents` automatically during `deploy` on each IdP that is targeted by an `idpUser` trigger; set the value explicitly on `defineIdp()` to override. See [IdP service - publishUserEvents](./idp.md#publishuserevents).
 
 ### Auth Access Token Triggers
 
@@ -181,7 +181,7 @@ The available workflow events are `started`, `completed`, `retried`, `resumed`, 
 
 `completed` events include `success`; when it is `false`, `error` contains the failure message. A job released from a wait point emits `wait_resolved` instead of `completed`.
 
-These triggers require the workflow to publish execution events. The SDK enables `publishEvents` automatically during `apply` on each targeted workflow, and on every job of a workflow targeted by a `workflowJobExecution*` trigger; set the value explicitly to override. See [Workflow service - Execution Events](./workflow.md#execution-events).
+These triggers require the workflow to publish execution events. The SDK enables `publishEvents` automatically during `deploy` on each targeted workflow, and on every job of a workflow targeted by a `workflowJobExecution*` trigger; set the value explicitly to override. See [Workflow service - Execution Events](./workflow.md#execution-events).
 
 ### Multi-Event Triggers
 
