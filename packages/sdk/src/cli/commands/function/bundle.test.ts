@@ -166,9 +166,9 @@ export default {
       );
 
       expect(result.scriptName).toBe("test-run--add.js");
-      // Check bundled code structure (can't import because it references @tailor-platform/sdk)
       expect(result.bundledCode).toContain("main");
       expect(result.bundledCode).toContain("export");
+      expect(result.bundledCode).not.toContain("@tailor-platform/sdk");
       // Validation wrapper should be present
       expect(result.bundledCode).toContain("input");
     });

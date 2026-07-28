@@ -10,28 +10,6 @@ import type * as rolldown from "rolldown";
 // Every other log stays suppressed by never delegating to `defaultHandler`.
 const ESCALATED_LOG_CODE = "UNRESOLVED_IMPORT";
 
-// The exact specifiers bundler entries inject for modules the platform runtime
-// supplies. These legitimately stay unresolved whenever the bundle is built
-// where they are not installed — an unbuilt checkout, or a global CLI
-// invocation — so they must never fail the build.
-//
-// Matching exact specifiers rather than the `@tailor-platform/` scope keeps a
-// user's own unresolved import in that scope (a private package, or a typo of a
-// published one) failing the build as it should. Matching the specifier rather
-// than the importing file covers every entry kind: some bundlers inline their
-// entry as a rolldown virtual module, others write a physical `.entry` file, and
-// hooks/validators copy the user's own imports into the entry alongside the
-// injected ones.
-const PLATFORM_SUPPLIED_SPECIFIERS = new Set([
-  "@tailor-platform/sdk",
-  "@tailor-platform/sdk/kysely",
-  "@tailor-platform/function-kysely-tailordb",
-]);
-
-function isPlatformSuppliedImport(log: rolldown.RollupLog): boolean {
-  return log.exporter !== undefined && PLATFORM_SUPPLIED_SPECIFIERS.has(log.exporter);
-}
-
 export interface BundleLogOptions {
   /** Absolute path of the tsconfig handed to rolldown, when one was resolved. */
   tsconfig?: string;
@@ -58,7 +36,7 @@ export function createBundleLog(options: BundleLogOptions = {}): BundleLog {
     options: {
       logLevel: "warn",
       onLog: (_level, log) => {
-        if (log.code !== ESCALATED_LOG_CODE || isPlatformSuppliedImport(log)) return;
+        if (log.code !== ESCALATED_LOG_CODE) return;
         unresolvedImports.set(JSON.stringify([log.exporter, log.id]), log);
       },
     },

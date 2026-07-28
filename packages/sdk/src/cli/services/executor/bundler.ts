@@ -164,7 +164,12 @@ async function bundleSingleExecutor(
 
         export { __executor_function as main };
       `;
-      const entry = createVirtualEntry(`executor:${executor.name}`, entryContent);
+      const entry = createVirtualEntry(
+        `executor:${executor.name}`,
+        entryContent,
+        "js",
+        absoluteSourcePath,
+      );
 
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
       const plugins: rolldown.Plugin[] = [entry.plugin];

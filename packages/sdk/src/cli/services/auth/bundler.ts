@@ -101,7 +101,12 @@ export async function bundleAuthHooks(
           return await __auth_hook_function({ ...args, env });
         }
       `;
-      const entry = createVirtualEntry(`auth-hook:${functionName}`, entryContent);
+      const entry = createVirtualEntry(
+        `auth-hook:${functionName}`,
+        entryContent,
+        "js",
+        absoluteConfigPath,
+      );
 
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
       const plugins: rolldown.Plugin[] = [entry.plugin];

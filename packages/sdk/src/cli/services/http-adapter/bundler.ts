@@ -113,7 +113,12 @@ async function bundleAdapterScript(
         kind === "input"
           ? buildInputEntry(absoluteSourcePath, adapter.methods, GRAPHQL_WEB_MODULE)
           : buildOutputEntry(absoluteSourcePath);
-      const entry = createVirtualEntry(`http-adapter:${adapter.name}:${kind}`, entryContent);
+      const entry = createVirtualEntry(
+        `http-adapter:${adapter.name}:${kind}`,
+        entryContent,
+        "js",
+        absoluteSourcePath,
+      );
 
       const rejectNodeImports: rolldown.Plugin = {
         name: "http-adapter-reject-node-imports",

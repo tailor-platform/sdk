@@ -157,51 +157,27 @@ describe("createBundleLog", () => {
     expect(result.output[0].code).toContain("42");
   });
 
-  // Platform-supplied `@tailor-platform` modules stay unresolved wherever they
-  // are not installed, so they must never fail the build.
   test.each([
-    ["a rolldown virtual entry", undefined],
-    ["a physical entry file", "entry"],
-  ])(
-    "ignores an unresolved platform import injected into %s",
-    async (_label, physicalEntryName) => {
-      const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-injected-")));
-      tmpDirs.push(dir);
-      fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
-      // `function-kysely-tailordb` is what `@tailor-platform/sdk/kysely`
-      // re-exports, and it is absent from this fixture's tree, so it stands in
-      // for the injected imports of a project where the SDK is not installed.
-      const code =
-        'import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";\nexport const main = () => TailordbDialect;\n';
+    "@tailor-platform/sdk",
+    "@tailor-platform/sdk/kysely",
+    "@tailor-platform/function-kysely-tailordb",
+  ])("fails when the regular dependency %s cannot be resolved", async (specifier) => {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-dependency-")));
+    tmpDirs.push(dir);
+    const tsconfig = path.join(dir, "tsconfig.json");
+    const entry = path.join(dir, "entry.ts");
+    const emptyModules = path.join(dir, "empty-modules");
+    fs.writeFileSync(tsconfig, JSON.stringify({}));
+    fs.writeFileSync(entry, `import "${specifier}";\nexport const main = () => 1;\n`);
+    fs.mkdirSync(emptyModules);
 
-      const options: rolldown.InputOptions & { input: string } = physicalEntryName
-        ? { input: path.join(dir, `${physicalEntryName}.entry.ts`) }
-        : (() => {
-            const entry = createVirtualEntry("resolver:demo", code, "ts");
-            return { input: entry.input, plugins: [entry.plugin] };
-          })();
-      if (physicalEntryName) fs.writeFileSync(options.input, code);
+    await expect(
+      buildWithBundleLog(entry, tsconfig, {
+        resolve: { modules: [emptyModules] },
+      }),
+    ).rejects.toThrow(/Could not resolve/);
+  });
 
-      // An empty module directory makes the injected specifier unresolvable
-      // here, matching a project where the platform packages are not installed.
-      fs.mkdirSync(path.join(dir, "empty-modules"));
-      const bundleLog = createBundleLog({ tsconfig: path.join(dir, "tsconfig.json") });
-      const result = await rolldown.build({
-        ...options,
-        write: false,
-        output: { format: "esm", codeSplitting: false },
-        tsconfig: path.join(dir, "tsconfig.json"),
-        resolve: { modules: [path.join(dir, "empty-modules")] },
-        ...bundleLog.options,
-      } as rolldown.BuildOptions);
-      bundleLog.assertAllResolved();
-
-      expect(result.output[0].code).toContain('from "@tailor-platform/function-kysely-tailordb"');
-    },
-  );
-
-  // The exemption is an exact allowlist, not the `@tailor-platform/` scope: a
-  // user's private package or a typo of a published one must still fail.
   test.each([
     "@tailor-platform/my-private-utils",
     "@tailor-platform/sdk/no-such-subpath",
@@ -220,9 +196,7 @@ describe("createBundleLog", () => {
     ).rejects.toThrow(/Could not resolve/);
   });
 
-  // Only `@tailor-platform` specifiers are exempt: an entry that inlines user
-  // code carries the user's imports too, and a miss there is a real defect.
-  test("escalates a non-platform unresolved import inside a generated entry", async () => {
+  test("escalates an unresolved import inside a generated entry", async () => {
     const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-inlined-")));
     tmpDirs.push(dir);
     fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));

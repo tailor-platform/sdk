@@ -289,7 +289,12 @@ async function bundleSingleJob(
           return await ${job.exportName}.body(input, { env, invoker });
         }
       `;
-      const entry = createVirtualEntry(`workflow-job:${job.name}`, entryContent);
+      const entry = createVirtualEntry(
+        `workflow-job:${job.name}`,
+        entryContent,
+        "js",
+        absoluteSourcePath,
+      );
 
       // Pre-compute once to avoid redundant realpathSync calls per module
       const resolvedSourceFile = safeRealpath(job.sourceFile);

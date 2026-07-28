@@ -146,7 +146,12 @@ async function bundleSingleResolver(
 
         export { $tailor_resolver_body as main };
       `;
-      const entry = createVirtualEntry(`resolver:${resolver.name}`, entryContent);
+      const entry = createVirtualEntry(
+        `resolver:${resolver.name}`,
+        entryContent,
+        "js",
+        absoluteSourcePath,
+      );
 
       const triggerPlugin = createTriggerTransformPlugin(triggerContext);
       const plugins: rolldown.Plugin[] = [entry.plugin];

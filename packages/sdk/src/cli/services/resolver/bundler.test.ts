@@ -102,6 +102,19 @@ vi.mock("pkg-types", async (importOriginal) => {
   return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
 });
 
+function writeSdkDependency(projectDir: string): void {
+  const packageDir = path.join(projectDir, "node_modules", "@tailor-platform", "sdk");
+  fs.mkdirSync(packageDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(packageDir, "package.json"),
+    JSON.stringify({ name: "@tailor-platform/sdk", type: "module", exports: "./index.js" }),
+  );
+  fs.writeFileSync(
+    path.join(packageDir, "index.js"),
+    "export const t = { object: () => ({ parse: ({ value }) => value }) };\n",
+  );
+}
+
 describe("bundleResolvers", () => {
   test("does not throw when no resolver files match", async () => {
     using tmp = tempCwd("sdk-bundler-");
@@ -122,6 +135,7 @@ describe("bundleResolvers", () => {
 
   test("injects the permission guard into the entry file", async () => {
     using tmp = tempCwd("sdk-bundler-permission-");
+    writeSdkDependency(tmp.dir);
     const resolverDir = path.join(tmp.dir, "src/backend/permissioncheck/resolver");
     fs.mkdirSync(resolverDir, { recursive: true });
     fs.writeFileSync(
@@ -151,6 +165,7 @@ describe("bundleResolvers", () => {
 
   test("does not inject a guard when permission is omitted or allowAnonymous", async () => {
     using tmp = tempCwd("sdk-bundler-nopermission-");
+    writeSdkDependency(tmp.dir);
     const resolverDir = path.join(tmp.dir, "src/backend/nopermission/resolver");
     fs.mkdirSync(resolverDir, { recursive: true });
     fs.writeFileSync(
@@ -180,6 +195,7 @@ describe("bundleResolvers", () => {
     using _tmp = tempCwd("sdk-bundler-tsconfig-");
     const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-bundler-tsconfig-other-"));
     try {
+      writeSdkDependency(otherDir);
       const resolverDir = path.join(otherDir, "src/backend/tsconfig-test/resolver");
       fs.mkdirSync(resolverDir, { recursive: true });
       fs.writeFileSync(
@@ -206,6 +222,7 @@ describe("bundleResolvers", () => {
 
   test("produces deterministic bundles with inline sourcemaps", async () => {
     using tmp = tempCwd("sdk-bundler-sourcemap-");
+    writeSdkDependency(tmp.dir);
     const resolverDir = path.join(tmp.dir, "resolver");
     fs.mkdirSync(resolverDir, { recursive: true });
     fs.writeFileSync(

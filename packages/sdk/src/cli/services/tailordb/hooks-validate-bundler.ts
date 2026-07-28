@@ -474,6 +474,7 @@ async function bundleScriptTarget(args: {
     `tailordb-script:${typeName}:${targetIndex}`,
     entryContent,
     "ts",
+    sourceFilePath,
   );
 
   const bundleLog = createBundleLog({ tsconfig });
