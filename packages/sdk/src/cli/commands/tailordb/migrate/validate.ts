@@ -51,7 +51,7 @@ interface LocalSchemaReport {
   diff?: MigrationDiff;
 }
 
-interface RemoteSchemaReport {
+interface CompletedRemoteSchemaReport {
   remoteMigrationNumber: number;
   hasDrift: boolean;
   drifts: SchemaDrift[];
@@ -61,13 +61,23 @@ interface RemoteSchemaReport {
   checkpointMissingLocal?: boolean;
 }
 
+interface FailedRemoteSchemaReport {
+  skipped: "check_failed";
+  remoteMigrationNumber?: never;
+  hasDrift?: never;
+  drifts?: never;
+  checkpointMissingLocal?: never;
+}
+
+type RemoteSchemaReport = CompletedRemoteSchemaReport | FailedRemoteSchemaReport;
+
 interface NamespaceValidationReport {
   namespace: string;
   valid: boolean;
   migrationFiles: MigrationFilesReport;
   /** Omitted when the migration files are invalid (the check cannot run) */
   localSchema?: LocalSchemaReport;
-  /** Omitted when the migration files are invalid or remote verification fails */
+  /** Omitted when the migration files are invalid */
   remoteSchema?: RemoteSchemaReport;
 }
 
@@ -143,6 +153,7 @@ function buildValidationReports(
         valid: false,
         migrationFiles: { valid: true },
         localSchema,
+        remoteSchema: { skipped: "check_failed" },
       };
     }
 
@@ -239,6 +250,12 @@ async function collectValidationReports(
     localResults,
   };
 
+  if (checkableNamespaces.length === 0) {
+    return {
+      reports: buildValidationReports(localReportOptions),
+    };
+  }
+
   let remoteResults: Awaited<ReturnType<typeof verifyRemoteSchema>>;
   try {
     const accessToken = await loadAccessToken({
@@ -294,7 +311,9 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
     }
 
     const remote = report.remoteSchema;
-    if (remote?.checkpointMissingLocal) {
+    if (remote?.skipped === "check_failed") {
+      logger.log(`  Remote schema: ${styles.error("not checked")}`);
+    } else if (remote?.checkpointMissingLocal) {
       logger.log(
         `  Remote schema: ${styles.error(
           `remote migration ${formatMigrationNumber(remote.remoteMigrationNumber)} is not in the local migration history`,

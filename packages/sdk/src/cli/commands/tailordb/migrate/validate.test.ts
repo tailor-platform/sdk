@@ -326,10 +326,11 @@ describe("tailordb migration validate", () => {
       valid: false,
       migrationFiles: { valid: true },
       localSchema: { hasDiff: false },
+      remoteSchema: { skipped: "check_failed" },
     });
   });
 
-  test("reports invalid migration files before propagating credential failures", async () => {
+  test("does not load credentials when no namespaces can be checked", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     writeDiff(state.migrationsDir, 2, []);
@@ -338,7 +339,7 @@ describe("tailordb migration validate", () => {
     const result = await runCommand(validateCommand, []);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/Tailor Platform token not found/);
+    expect(String(result.error)).toMatch(/Migration validation failed for 1 namespace/);
     expect(stdout.output).not.toBe("");
     const [report] = JSON.parse(stdout.output);
     expect(report).toEqual({
@@ -349,6 +350,9 @@ describe("tailordb migration validate", () => {
         error: expect.stringMatching(/Migration file validation failed/),
       },
     });
+    expect(loadAccessToken).not.toHaveBeenCalled();
+    expect(loadWorkspaceId).not.toHaveBeenCalled();
+    expect(initOperatorClient).not.toHaveBeenCalled();
   });
 
   test("reports local schema drift before propagating credential failures", async () => {
@@ -368,7 +372,7 @@ describe("tailordb migration validate", () => {
     expect(report.localSchema.diff.changes).toEqual([
       expect.objectContaining({ kind: "type_added", typeName: "Post" }),
     ]);
-    expect(report.remoteSchema).toBeUndefined();
+    expect(report.remoteSchema).toEqual({ skipped: "check_failed" });
   });
 
   test("prints local findings before propagating credential failures", async () => {
@@ -382,6 +386,8 @@ describe("tailordb migration validate", () => {
     expect(stderr.output).toContain("Migration files:");
     expect(stderr.output).toContain("Local schema:");
     expect(stderr.output).toContain("changes not in migration files");
+    expect(stderr.output).toContain("Remote schema:");
+    expect(stderr.output).toContain("not checked");
     expect(stderr.output).not.toContain("All migration validation checks passed.");
   });
 
