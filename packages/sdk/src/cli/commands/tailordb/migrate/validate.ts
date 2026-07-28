@@ -164,10 +164,13 @@ function buildValidationReports(
     const checkpointMissingLocal =
       !remote.skipped &&
       remote.remoteMigrationNumber > getLatestMigrationNumber(target.migrationsDir);
+    // The remote result was compared against the latest available local
+    // snapshot, not the missing checkpoint, so its drift details are invalid.
+    const hasDrift = !checkpointMissingLocal && remote.hasDrift;
     const remoteSchema: RemoteSchemaReport = {
       remoteMigrationNumber: remote.remoteMigrationNumber,
-      hasDrift: remote.hasDrift,
-      drifts: remote.drifts,
+      hasDrift,
+      drifts: checkpointMissingLocal ? [] : remote.drifts,
       ...(remote.skipped ? { skipped: remote.skipped } : {}),
       ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
     };

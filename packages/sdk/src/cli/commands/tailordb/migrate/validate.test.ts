@@ -242,14 +242,52 @@ describe("tailordb migration validate", () => {
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
+    state.listTailorDBTypes.mockResolvedValue({
+      tailordbTypes: [remoteType("User", ["id", "name", "email"])],
+      nextPageToken: "",
+    });
 
     const result = await runCommand(validateCommand, []);
 
     expect(result.success).toBe(false);
     const [report] = JSON.parse(stdout.output);
     expect(report.valid).toBe(false);
-    expect(report.remoteSchema.remoteMigrationNumber).toBe(5);
-    expect(report.remoteSchema.checkpointMissingLocal).toBe(true);
+    expect(report.remoteSchema).toEqual({
+      remoteMigrationNumber: 5,
+      hasDrift: false,
+      drifts: [],
+      checkpointMissingLocal: true,
+    });
+  });
+
+  test("only suggests obtaining missing history when the remote checkpoint is ahead", async () => {
+    using stderr = captureStderr();
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0005" } },
+    });
+    state.listTailorDBTypes.mockResolvedValue({
+      tailordbTypes: [remoteType("User", ["id", "name", "email"])],
+      nextPageToken: "",
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain("Pull the latest migration files");
+    expect(stderr.output).not.toContain("migration sync");
+  });
+
+  test("retains drift guidance when the remote checkpoint is available locally", async () => {
+    using stderr = captureStderr();
+    state.listTailorDBTypes.mockResolvedValue({
+      tailordbTypes: [remoteType("User", ["id"])],
+      nextPageToken: "",
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain("migration sync");
   });
 
   test("reports malformed migration file contents per namespace", async () => {
