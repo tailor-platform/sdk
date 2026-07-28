@@ -1,7 +1,12 @@
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "pathe";
 import { describe, expect, test } from "vitest";
 import transform, {
   reviewFindings,
 } from "../codemods/v2/seed-exec-to-cli-plugin/scripts/transform";
+import { allCodemods } from "./registry";
+import { runCodemods } from "./runner";
 
 const FORK_SETUP = `import { fork } from "node:child_process";
 
@@ -37,6 +42,32 @@ const child = fork("seed/exec.mjs", [], { stdio: "inherit" });
     expect(reviewFindings(source, "setup.ts", "setup.ts")).toMatchObject([
       { line: 4, excerpt: expect.stringContaining("fork(") },
     ]);
+  });
+
+  test("rewrites a seed invocation when the same file only forks an unrelated script", () => {
+    const source = `import { execSync, fork } from "node:child_process";
+
+execSync("node seed/exec.mjs --truncate");
+fork("tools/worker.mjs");
+`;
+
+    expect(transform(source, "setup.ts")).toBe(`import { execSync, fork } from "node:child_process";
+
+execSync("npx tailor seed apply --truncate");
+fork("tools/worker.mjs");
+`);
+    expect(reviewFindings(source, "setup.ts", "setup.ts")).toEqual([]);
+  });
+
+  test("declines a mixed file when the forked seed runner path is assembled dynamically", () => {
+    const source = `import { execSync, fork } from "node:child_process";
+import * as path from "node:path";
+
+execSync("node seed/exec.mjs --truncate");
+fork(path.join(distPath, "exec.mjs"));
+`;
+
+    expect(transform(source, "setup.ts")).toBeNull();
   });
 
   test("ignores fork() calls unrelated to the seed runner", () => {
@@ -85,7 +116,7 @@ fork("tools/worker.mjs");
     const source = "execSync(`node seed/exec.mjs --skip-idp -m ${name}`);\n";
 
     expect(transform(source, "setup.ts")).toBe(
-      "execSync(`pnpm tailor seed apply --skip-idp -m ${name}`);\n",
+      "execSync(`npx tailor seed apply --skip-idp -m ${name}`);\n",
     );
   });
 
@@ -139,6 +170,14 @@ fork("tools/worker.mjs");
     expect(transform("- node\n- seed/exec.mjs\n", "docs.md")).toBeNull();
   });
 
+  test("rewrites shell commands split with a line continuation", () => {
+    const source = "node --env-file=.env \\\n  seed/exec.mjs --yes\n";
+    const windowsSource = "node --env-file=.env \\\r\n  seed/exec.mjs --yes\r\n";
+
+    expect(transform(source, "seed.sh")).toBe("tailor seed apply --env-file .env --yes\n");
+    expect(transform(windowsSource, "seed.sh")).toBe("tailor seed apply --env-file .env --yes\r\n");
+  });
+
   test("treats a flag-shaped value as a value, not a carried-over flag", () => {
     expect(transform("node --require --env-file=.evil seed/exec.mjs\n", "run.sh")).toBe(
       "tailor seed apply\n",
@@ -155,13 +194,13 @@ fork("tools/worker.mjs");
     const source = 'execSync("pnpm node seed/exec.mjs");\nexecSync("node seed/exec.mjs");\n';
 
     expect(transform(source, "setup.ts")).toBe(
-      'execSync("pnpm tailor seed apply");\nexecSync("pnpm tailor seed apply");\n',
+      'execSync("pnpm tailor seed apply");\nexecSync("npx tailor seed apply");\n',
     );
   });
 
   test("still prefixes when a runner name is only a token suffix", () => {
     expect(transform('execSync("mypnpm node seed/exec.mjs");\n', "setup.ts")).toBe(
-      'execSync("mypnpm pnpm tailor seed apply");\n',
+      'execSync("mypnpm npx tailor seed apply");\n',
     );
   });
 
@@ -199,5 +238,76 @@ fork("tools/worker.mjs");
     expect(transform("nodemon seed/exec.mjs\n", "run.sh")).toBeNull();
     expect(transform("./seed/exec.mjs\n", "run.sh")).toBeNull();
     expect(transform("The generated seed/exec.mjs file\n", "README.md")).toBeNull();
+  });
+
+  test("uses npx in the manual migration guidance", () => {
+    const codemod = allCodemods.find((entry) => entry.id === "v2/seed-exec-to-cli-plugin");
+
+    expect(codemod?.prompt).toContain(
+      'execSync("npx tailor seed apply", { env, stdio: "inherit" })',
+    );
+    expect(reviewFindings(FORK_SETUP, "setup.ts", "setup.ts")[0]?.message).toContain(
+      'execSync("npx tailor seed apply")',
+    );
+  });
+
+  test("runs the transform for every supported source and shell extension", async () => {
+    const codemod = allCodemods.find((entry) => entry.id === "v2/seed-exec-to-cli-plugin");
+    expect(codemod).toBeDefined();
+    if (!codemod) throw new Error("seed exec codemod is not registered");
+
+    const scriptPath = path.resolve(
+      __dirname,
+      "../codemods/v2/seed-exec-to-cli-plugin/scripts/transform.ts",
+    );
+    const projectDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), "seed-exec-patterns-"));
+    const sourceFiles = [
+      "setup.ts",
+      "setup.tsx",
+      "global-setup.mts",
+      "setup.cts",
+      "setup.js",
+      "setup.jsx",
+      "setup.mjs",
+      "setup.cjs",
+    ];
+    const shellFiles = ["seed.sh", "seed.bash", "seed.zsh"];
+
+    try {
+      await Promise.all([
+        ...sourceFiles.map((file) =>
+          fs.promises.writeFile(
+            path.join(projectDir, file),
+            'execSync("node seed/exec.mjs --yes");\n',
+            "utf-8",
+          ),
+        ),
+        ...shellFiles.map((file) =>
+          fs.promises.writeFile(path.join(projectDir, file), "node seed/exec.mjs --yes\n", "utf-8"),
+        ),
+      ]);
+
+      const result = await runCodemods([{ codemod, scriptPath }], projectDir, false);
+
+      expect(result.filesModified.map((file) => path.basename(file)).toSorted()).toEqual(
+        [...sourceFiles, ...shellFiles].toSorted(),
+      );
+      await Promise.all(
+        sourceFiles.map(async (file) => {
+          await expect(fs.promises.readFile(path.join(projectDir, file), "utf-8")).resolves.toBe(
+            'execSync("npx tailor seed apply --yes");\n',
+          );
+        }),
+      );
+      await Promise.all(
+        shellFiles.map(async (file) => {
+          await expect(fs.promises.readFile(path.join(projectDir, file), "utf-8")).resolves.toBe(
+            "tailor seed apply --yes\n",
+          );
+        }),
+      );
+    } finally {
+      await fs.promises.rm(projectDir, { recursive: true, force: true });
+    }
   });
 });
