@@ -12,6 +12,7 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 
 export interface MigrationBundleResult {
@@ -75,12 +76,17 @@ export async function bundleMigrationScript(
   `;
   fs.writeFileSync(entryPath, entryContent);
 
-  const tsconfig = await resolveTSConfigWithFallback(baseDir ?? path.dirname(absoluteSourcePath));
+  const projectDir = baseDir ?? path.dirname(absoluteSourcePath);
+  const tsconfig = await resolveTSConfigWithFallback(projectDir);
 
   // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
   const bundleLog = createBundleLog({ tsconfig });
   const result = await rolldown.build({
-    plugins: [createTsconfigPathsPlugin(), platformBundleDefinePlugin],
+    plugins: [
+      createGeneratedEntryResolverPlugin(entryPath, projectDir),
+      createTsconfigPathsPlugin(),
+      platformBundleDefinePlugin,
+    ],
     input: entryPath,
     write: false,
     output: {

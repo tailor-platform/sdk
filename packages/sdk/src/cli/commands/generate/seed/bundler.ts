@@ -12,6 +12,7 @@ import { createBundleLog } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 
 export type SeedBundleResult = {
@@ -108,11 +109,13 @@ function generateSeedScriptContent(namespace: string): string {
  * 4. Exports as main() for TestExecScript
  * @param namespace - TailorDB namespace
  * @param typeNames - List of type names to include in the seed
+ * @param baseDir - Directory whose dependencies and tsconfig the generated entry uses
  * @returns Bundled seed script result
  */
 export async function bundleSeedScript(
   namespace: string,
   typeNames: string[],
+  baseDir: string = process.cwd(),
 ): Promise<SeedBundleResult> {
   // Output directory in .tailor-sdk (relative to project root)
   const outputDir = path.resolve(getDistDir(), "seed");
@@ -127,7 +130,7 @@ export async function bundleSeedScript(
 
   let tsconfig: string | undefined;
   try {
-    tsconfig = await resolveTSConfig();
+    tsconfig = await resolveTSConfig(baseDir);
   } catch {
     tsconfig = undefined;
   }
@@ -135,7 +138,11 @@ export async function bundleSeedScript(
   // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
   const bundleLog = createBundleLog({ tsconfig });
   const result = await rolldown.build({
-    plugins: [createTsconfigPathsPlugin(), platformBundleDefinePlugin],
+    plugins: [
+      createGeneratedEntryResolverPlugin(entryPath, baseDir),
+      createTsconfigPathsPlugin(),
+      platformBundleDefinePlugin,
+    ],
     input: entryPath,
     write: false,
     output: {

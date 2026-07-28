@@ -6,6 +6,7 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import type { QueryEngine } from "#/cli/query/types";
 
@@ -97,7 +98,11 @@ export async function bundleQueryScript(engine: QueryEngine, baseDir: string): P
 
   const bundleLog = createBundleLog({ tsconfig });
   const result = await rolldown.build({
-    plugins: [createTsconfigPathsPlugin(), platformBundleDefinePlugin],
+    plugins: [
+      createGeneratedEntryResolverPlugin(entryPath, baseDir),
+      createTsconfigPathsPlugin(),
+      platformBundleDefinePlugin,
+    ],
     input: entryPath,
     write: false,
     output: {

@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import * as os from "node:os";
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
@@ -150,6 +151,48 @@ export function main() {
   });
 
   describe("resolver", () => {
+    test("resolves generated imports from the configured project directory", async () => {
+      const root = fs.realpathSync(
+        fs.mkdtempSync(path.join(os.tmpdir(), "function-bundler-cross-project-")),
+      );
+      try {
+        const projectDir = path.join(root, "project");
+        const dependencyDir = path.join(projectDir, "node_modules", "@tailor-platform", "sdk");
+        const outputDir = path.join(root, "invocation", ".tailor-sdk");
+        fs.mkdirSync(dependencyDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(dependencyDir, "package.json"),
+          JSON.stringify({
+            name: "@tailor-platform/sdk",
+            type: "module",
+            exports: { ".": "./index.js" },
+          }),
+        );
+        fs.writeFileSync(
+          path.join(dependencyDir, "index.js"),
+          "export const t = { object: () => ({ parse: ({ value }) => value }) };\n",
+        );
+        const sourceFile = path.join(projectDir, "resolver.ts");
+        fs.writeFileSync(
+          sourceFile,
+          "export default { body: ({ input }: { input: unknown }) => input };\n",
+        );
+        process.env.TAILOR_SDK_OUTPUT_DIR = outputDir;
+
+        const result = await bundleForTestRun({
+          detected: { type: "resolver", name: "cross-project" },
+          sourceFile,
+          baseDir: projectDir,
+          machineUser: defaultMachineUser,
+          workspaceId: defaultWorkspaceId,
+        });
+
+        expect(result.bundledCode).not.toContain("@tailor-platform/sdk");
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
+      }
+    });
+
     test("bundles a resolver with validation wrapper", async () => {
       const detected: DetectedFunction = { type: "resolver", name: "add" };
       const result = await bundle(
