@@ -88,13 +88,13 @@ ${attributeFields}
     __tuple?: ${listType};
   }`;
 
-  // Generate Env interface
+  // Generate Env interface.
+  // Emit the value's type, never the value itself: this file is generated from
+  // whatever the config resolved at generation time and is commonly committed,
+  // so a literal would leak the configured value into version control.
   const envFields = env
     ? Object.entries(env)
-        .map(([key, value]) => {
-          const valueType = typeof value === "string" ? `"${value}"` : String(value);
-          return `    ${key}: ${valueType};`;
-        })
+        .map(([key, value]) => `    ${key}: ${typeof value};`)
         .join("\n")
     : "";
 

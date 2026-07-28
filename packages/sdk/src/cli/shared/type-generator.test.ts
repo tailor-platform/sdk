@@ -45,9 +45,9 @@ describe("generateTypeDefinition", () => {
       ],
     },
     {
-      name: "generates Env interface with literal types",
+      name: "generates Env interface with value types",
       args: [undefined, undefined, { hoge: 1, fuga: "hello", piyo: true }],
-      expected: ["interface Env", "hoge: 1;", 'fuga: "hello";', "piyo: true;"],
+      expected: ["interface Env", "hoge: number;", "fuga: string;", "piyo: boolean;"],
     },
     {
       name: "generates empty Env interface when no env provided",
@@ -118,7 +118,7 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain("export {};");
   });
 
-  test("should generate Env interface with literal types", () => {
+  test("should generate Env interface with value types", () => {
     const env = {
       hoge: 1,
       fuga: "hello",
@@ -128,9 +128,21 @@ describe("generateTypeDefinition", () => {
     const result = generateTypeDefinition(undefined, undefined, env);
 
     expect(result).toContain("interface Env");
-    expect(result).toContain("hoge: 1;");
-    expect(result).toContain('fuga: "hello";');
-    expect(result).toContain("piyo: true;");
+    expect(result).toContain("hoge: number;");
+    expect(result).toContain("fuga: string;");
+    expect(result).toContain("piyo: boolean;");
+  });
+
+  test("should never emit env values into the generated file", () => {
+    const result = generateTypeDefinition(undefined, undefined, {
+      TOKEN: "xoxb-must-not-leak",
+      RETRIES: 3,
+      ENABLED: false,
+    });
+
+    expect(result).not.toContain("xoxb-must-not-leak");
+    expect(result).not.toContain("RETRIES: 3");
+    expect(result).not.toContain("ENABLED: false");
   });
 
   test("should generate empty Env interface when no env provided", () => {
