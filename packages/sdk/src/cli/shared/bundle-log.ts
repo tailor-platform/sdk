@@ -1,4 +1,5 @@
 import { CLIError } from "#/cli/shared/errors";
+import { getNodeBuiltinMessage, isNodeBuiltinImport } from "#/utils/node-builtins";
 import type * as rolldown from "rolldown";
 
 // rolldown externalizes an import it cannot resolve and reports it as a
@@ -76,15 +77,33 @@ function unresolvedImportError(logs: rolldown.RollupLog[], tsconfig: string | un
       ? `Could not resolve ${imports[0]}.`
       : `Could not resolve ${imports.length} imports.`;
   const details = imports.length === 1 ? undefined : imports.map((item) => `- ${item}`).join("\n");
-  const suggestion = tsconfig
-    ? `Check that each import path is correct, and that a \`compilerOptions.paths\` entry covering it is declared in the importing file's own tsconfig.json or an ancestor. The build used "${tsconfig}".`
-    : "No tsconfig.json was found, so `compilerOptions.paths` aliases were not applied. Add a tsconfig.json declaring the aliases these files import.";
+  const suggestion = unresolvedImportSuggestion(logs, tsconfig);
   return CLIError({
     code: "UNRESOLVED_IMPORT",
     message,
     details,
     suggestion,
   });
+}
+
+function unresolvedImportSuggestion(
+  logs: rolldown.RollupLog[],
+  tsconfig: string | undefined,
+): string {
+  const nodeSuggestions = logs
+    .map((log) => log.exporter)
+    .filter((specifier): specifier is string => specifier !== undefined)
+    .filter(isNodeBuiltinImport)
+    .map(getNodeBuiltinMessage);
+  const hasOtherImports = logs.some(
+    (log) => log.exporter === undefined || !isNodeBuiltinImport(log.exporter),
+  );
+  const pathSuggestion = tsconfig
+    ? `Check that each import path is correct, and that a \`compilerOptions.paths\` entry covering it is declared in the importing file's own tsconfig.json or an ancestor. The build used "${tsconfig}".`
+    : "No tsconfig.json was found, so `compilerOptions.paths` aliases were not applied. Add a tsconfig.json declaring the aliases these files import.";
+  return [...new Set([...nodeSuggestions, ...(hasOtherImports ? [pathSuggestion] : [])])].join(
+    "\n",
+  );
 }
 
 function formatUnresolvedImport(log: rolldown.RollupLog): string {

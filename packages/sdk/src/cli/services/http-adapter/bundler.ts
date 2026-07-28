@@ -3,7 +3,6 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
-import { isNodeBuiltinImport } from "#/cli/services/http-adapter/node-builtins";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
@@ -13,6 +12,7 @@ import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { HTTP_METHODS, type HttpMethodKey } from "#/parser/service/http-adapter/index";
+import { getNodeBuiltinMessage, isNodeBuiltinImport } from "#/utils/node-builtins";
 import type { LogLevel } from "#/configure/config/types";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
@@ -119,9 +119,7 @@ async function bundleAdapterScript(
         name: "http-adapter-reject-node-imports",
         resolveId(source) {
           if (isNodeBuiltinImport(source)) {
-            throw new Error(
-              `HTTP adapter "${adapter.name}" imports Node module "${source}", which is unavailable in the gateway runtime`,
-            );
+            throw new Error(`HTTP adapter "${adapter.name}": ${getNodeBuiltinMessage(source)}`);
           }
           return null;
         },

@@ -111,6 +111,28 @@ describe("createBundleLog", () => {
     expect(error.details).toContain("@lib/second");
   });
 
+  test.each(["node:crypto", "fs/promises"])(
+    "suggests Web Standard APIs for the Node built-in %s",
+    async (specifier) => {
+      const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bundle-log-node-")));
+      tmpDirs.push(dir);
+      const tsconfig = path.join(dir, "tsconfig.json");
+      const entry = path.join(dir, "entry.ts");
+      fs.writeFileSync(tsconfig, JSON.stringify({}));
+      fs.writeFileSync(entry, `import "${specifier}";\nexport const main = () => 1;\n`);
+
+      const error = await buildWithBundleLog(entry, tsconfig).then(
+        () => null,
+        (caught: unknown) => caught,
+      );
+
+      expect(isCLIError(error)).toBe(true);
+      if (!isCLIError(error)) return;
+      expect(error.format()).toMatch(/Web (Crypto|Standard) API|File system access/);
+      expect(error.format()).not.toContain("compilerOptions.paths");
+    },
+  );
+
   test("names the tsconfig the aliases were resolved against", async () => {
     const { entry, nestedTsconfig } = makeProject();
     const error = await buildWithBundleLog(entry, nestedTsconfig).then(
