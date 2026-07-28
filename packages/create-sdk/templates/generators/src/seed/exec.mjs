@@ -136,6 +136,57 @@ const promptConfirmation = (question) => {
 const configDir = import.meta.dirname;
 const configPath = join(configDir, "../../tailor.config.ts");
 
+const loadSeedData = (
+  dataDir,
+  typeNames,
+  { requireId = false, requiredFieldsByType = {} } = {},
+) => {
+  const data = {};
+  for (const typeName of typeNames) {
+    const jsonlPath = join(dataDir, `${typeName}.jsonl`);
+    try {
+      const lines = readFileSync(jsonlPath, "utf-8").split("\n");
+      const firstContentLine = lines.findIndex((line) => line.trim() !== "");
+      if (firstContentLine === -1) {
+        data[typeName] = [];
+        continue;
+      }
+
+      let lastContentLine = lines.length - 1;
+      while (lastContentLine > firstContentLine && lines[lastContentLine].trim() === "") {
+        lastContentLine--;
+      }
+
+      const records = [];
+      for (let lineIndex = firstContentLine; lineIndex <= lastContentLine; lineIndex++) {
+        const record = JSON.parse(lines[lineIndex]);
+        if (requireId && (record?.id === undefined || record?.id === null)) {
+          throw new Error(
+            `${jsonlPath}:${lineIndex + 1}: \`id\` is required with --upsert`,
+          );
+        }
+        const missingRequiredField = (requiredFieldsByType[typeName] || []).find(
+          (field) => record?.[field] === undefined || record?.[field] === null,
+        );
+        if (missingRequiredField) {
+          throw new Error(
+            `${jsonlPath}:${lineIndex + 1}: field \`${missingRequiredField}\` is required with --upsert`,
+          );
+        }
+        records.push(record);
+      }
+      data[typeName] = records;
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        data[typeName] = [];
+      } else {
+        throw error;
+      }
+    }
+  }
+  return data;
+};
+
 // Determine machine user name (CLI argument takes precedence over config default)
 const defaultMachineUser = "admin";
 const machineUserName = values["machine-user"] || defaultMachineUser;
@@ -149,22 +200,28 @@ if (!machineUserName) {
 // Entity configuration
 const namespaceEntities = {
   "main-db": [
-    "Category",
-    "Order",
-    "Product",
-    "User",
-  ]
+        "Category",
+        "Order",
+        "Product",
+        "User",
+      ]
 };
 const namespaceDeps = {
   "main-db": {
-    "Category": [],
-    "Order": ["Product", "User"],
-    "Product": ["Category"],
-    "User": []
-  }
+        "Category": [],
+        "Order": ["Product", "User"],
+        "Product": ["Category"],
+        "User": []
+      }
 };
 const namespaceSelfRefTypes = {
   "main-db": ["Category"]
+};
+const requiredFieldsByType = {
+  "Category": ["name","slug"],
+      "Order": ["productId","userId","quantity","totalPrice","status"],
+      "Product": ["name","price","status"],
+      "User": ["name","email","role"]
 };
 const entities = Object.values(namespaceEntities).flat();
 const hasIdpUser = false;
@@ -235,6 +292,16 @@ if (skipIdp) {
   }
 }
 
+if (values.upsert) {
+  const selectedTailorDbTypes = entities.filter(
+    (entity) => !entitiesToProcess || entitiesToProcess.includes(entity),
+  );
+  loadSeedData(join(configDir, "data"), selectedTailorDbTypes, {
+    requireId: true,
+    requiredFieldsByType,
+  });
+}
+
 // Get application info
 const appInfo = await show({ configPath, profile: values.profile });
 const authNamespace = appInfo.auth;
@@ -296,29 +363,6 @@ if (skipIdp) {
   console.log(styleText("dim", `  Skipping IdP user (_User)`));
 }
 
-// Load seed data from JSONL files
-const loadSeedData = (dataDir, typeNames) => {
-  const data = {};
-  for (const typeName of typeNames) {
-    const jsonlPath = join(dataDir, `${typeName}.jsonl`);
-    try {
-      const content = readFileSync(jsonlPath, "utf-8").trim();
-      if (content) {
-        data[typeName] = content.split("\n").map((line) => JSON.parse(line));
-      } else {
-        data[typeName] = [];
-      }
-    } catch (error) {
-      if (error.code === "ENOENT") {
-        data[typeName] = [];
-      } else {
-        throw error;
-      }
-    }
-  }
-  return data;
-};
-
 // Topological sort for dependency order
 const topologicalSort = (types, deps) => {
   const visited = new Set();
@@ -346,7 +390,10 @@ const topologicalSort = (types, deps) => {
 const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes) => {
   const dataDir = join(configDir, "data");
   const sortedTypes = topologicalSort(typesToSeed, deps);
-  const data = loadSeedData(dataDir, sortedTypes);
+  const data = loadSeedData(dataDir, sortedTypes, {
+    requireId: values.upsert,
+    requiredFieldsByType: values.upsert ? requiredFieldsByType : {},
+  });
 
   // Skip if no data
   const typesWithData = sortedTypes.filter((t) => data[t] && data[t].length > 0);
@@ -419,9 +466,20 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
       }
 
       const processed = parsed.processed || {};
-      for (const [type, count] of Object.entries(processed)) {
-        allProcessed[type] = (allProcessed[type] || 0) + count;
-        console.log(styleText("green", `    ✓ ${type}: ${count} rows ${values.upsert ? "upserted" : "inserted"}`));
+      for (const [type, counts] of Object.entries(processed)) {
+        const previous = allProcessed[type] || { inserted: 0, updated: 0 };
+        const current = {
+          inserted: Number(counts.inserted) || 0,
+          updated: Number(counts.updated) || 0,
+        };
+        allProcessed[type] = {
+          inserted: previous.inserted + current.inserted,
+          updated: previous.updated + current.updated,
+        };
+        const message = values.upsert
+          ? `${current.inserted} inserted, ${current.updated} updated`
+          : `${current.inserted} rows inserted`;
+        console.log(styleText("green", `    ✓ ${type}: ${message}`));
       }
 
       if (!parsed.success) {

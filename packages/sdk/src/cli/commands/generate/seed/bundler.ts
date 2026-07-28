@@ -38,7 +38,7 @@ function generateSeedScriptContent(namespace: string): string {
 
     type SeedResult = {
       success: boolean;
-      processed: Record<string, number>;
+      processed: Record<string, { inserted: number; updated: number }>;
       errors: string[];
     };
 
@@ -56,37 +56,6 @@ function generateSeedScriptContent(namespace: string): string {
       const BATCH_SIZE = ${String(BATCH_SIZE)};
       const upsert = input.upsert === true;
 
-      // Rows must share one key set, which groupByColumns guarantees.
-      // TailorDB restricts the ON CONFLICT target to a single column, so "id" is the only key.
-      const write = (typeName: string, rows: Record<string, unknown>[]) => {
-        const query = db.insertInto(typeName).values(rows);
-        if (!upsert) return query;
-
-        const columns = Object.keys(rows[0]).filter((column) => column !== "id");
-        if (columns.length === 0) {
-          return query.onConflict((oc) => oc.column("id").doNothing());
-        }
-        return query.onConflict((oc) =>
-          oc.column("id").doUpdateSet(
-            Object.fromEntries(columns.map((column) => [column, (eb) => eb.ref(\`excluded.\${column}\`)])),
-          ),
-        );
-      };
-
-      // Rows with differing key sets must not share a statement: Kysely fills the
-      // missing keys with \`default\`, which an upsert would write over the stored value.
-      const groupByColumns = (rows: Record<string, unknown>[]) => {
-        if (!upsert) return [rows];
-        const groups = new Map<string, Record<string, unknown>[]>();
-        for (const row of rows) {
-          const key = Object.keys(row).sort().join("\\u0000");
-          const group = groups.get(key);
-          if (group) group.push(row);
-          else groups.set(key, [row]);
-        }
-        return [...groups.values()];
-      };
-
       for (const typeName of input.order) {
         const records = input.data[typeName];
         if (!records || records.length === 0) {
@@ -94,26 +63,58 @@ function generateSeedScriptContent(namespace: string): string {
           continue;
         }
 
-        processed[typeName] = 0;
+        processed[typeName] = { inserted: 0, updated: 0 };
         const hasSelfRef = (input.selfRefTypes || []).includes(typeName);
 
         try {
+          let recordsToInsert = records;
+          let recordsToUpdate: Record<string, unknown>[] = [];
+          if (upsert) {
+            const existing = await db
+              .selectFrom(typeName)
+              .select("id")
+              .where(
+                "id",
+                "in",
+                records.map((record) => record.id),
+              )
+              .execute();
+            const existingIds = new Set(existing.map((record) => record.id));
+            recordsToInsert = records.filter((record) => !existingIds.has(record.id));
+            recordsToUpdate = records.filter((record) => existingIds.has(record.id));
+          }
+
           if (hasSelfRef) {
             // Insert one-by-one to respect self-referencing foreign key order
-            for (const record of records) {
-              await write(typeName, [record]).execute();
-              processed[typeName] += 1;
+            for (const record of recordsToInsert) {
+              await db.insertInto(typeName).values(record).execute();
+              processed[typeName].inserted += 1;
             }
-            console.log(\`[${namespace}] \${typeName}: \${processed[typeName]}/\${records.length} (one-by-one)\`);
           } else {
-            for (const group of groupByColumns(records)) {
-              for (let i = 0; i < group.length; i += BATCH_SIZE) {
-                const batch = group.slice(i, i + BATCH_SIZE);
-                await write(typeName, batch).execute();
-                processed[typeName] += batch.length;
-                console.log(\`[${namespace}] \${typeName}: \${processed[typeName]}/\${records.length}\`);
-              }
+            for (let i = 0; i < recordsToInsert.length; i += BATCH_SIZE) {
+              const batch = recordsToInsert.slice(i, i + BATCH_SIZE);
+              await db.insertInto(typeName).values(batch).execute();
+              processed[typeName].inserted += batch.length;
             }
+          }
+
+          for (const record of recordsToUpdate) {
+            const { id, ...values } = record;
+            if (Object.keys(values).length === 0) continue;
+            await db.updateTable(typeName).set(values).where("id", "=", id).execute();
+            processed[typeName].updated += 1;
+          }
+
+          const counts = processed[typeName];
+          if (upsert) {
+            console.log(
+              \`[${namespace}] \${typeName}: \${counts.inserted} inserted, \${counts.updated} updated\`,
+            );
+          } else {
+            const suffix = hasSelfRef ? " (one-by-one)" : "";
+            console.log(
+              \`[${namespace}] \${typeName}: \${counts.inserted}/\${records.length}\${suffix}\`,
+            );
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);

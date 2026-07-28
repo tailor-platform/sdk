@@ -255,7 +255,7 @@ node seed/exec.mjs --upsert
 
 The `--machine-user` option is required at runtime if `machineUserName` is not configured in the generator options.
 
-Without `--upsert`, a row whose id already exists fails the whole batch for that type, so nothing is written. Use `--upsert` to add only the new rows to a workspace that is already seeded; existing rows are updated from the seed data, and fields absent from a row keep their stored values.
+Without `--upsert`, a row whose id already exists fails the whole batch for that type, so nothing is written. With `--upsert`, every TailorDB row must include an `id`; rows with new ids are inserted and rows with existing ids are updated. Optional fields absent from an existing row keep their stored values, while required fields must still be present. Built-In IdP users are looked up by name, so new users are created and existing users are updated.
 
 The generated files are compatible with gql-ingest for bulk data import.
 

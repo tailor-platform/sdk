@@ -13,6 +13,7 @@ import {
   generateLinesDbSchemaFileWithPluginAPI,
   type PluginSchemaParams,
 } from "./lines-db-processor";
+import { generateSeedDataLoaderCode } from "./seed-data-loader";
 import { processSeedTypeInfo } from "./seed-type-processor";
 import { escapeSeedScriptCodeForTemplateLiteral } from "./template-literal";
 import type { Plugin, GeneratorResult, TailorDBReadyContext } from "#/plugin/types";
@@ -67,6 +68,7 @@ type NamespaceConfig = {
   types: string[];
   dependencies: Record<string, string[]>;
   selfRefTypes: string[];
+  requiredFields: Record<string, string[]>;
 };
 
 /**
@@ -122,9 +124,12 @@ function generateIdpUserSeedFunction(hasIdpUser: boolean, idpNamespace: string |
           return { success: false };
         }
 
-        if (parsed.processed) {
-          console.log(styleText("green", \`    ✓ _User: \${parsed.processed} rows processed\`));
-        }
+        console.log(
+          styleText(
+            "green",
+            \`    ✓ _User: \${parsed.created || 0} created, \${parsed.updated || 0} updated\`,
+          ),
+        );
 
         if (!parsed.success) {
           const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
@@ -292,6 +297,11 @@ function generateExecScript(
       return `      "${namespace}": [${formatted}]`;
     })
     .join(",\n");
+  const requiredFieldsEntries = namespaceConfigs
+    .flatMap(({ requiredFields }) => Object.entries(requiredFields))
+    .map(([type, fields]) => `      "${type}": ${JSON.stringify(fields)}`)
+    .join(",\n");
+  const seedDataLoaderCode = generateSeedDataLoaderCode();
 
   return ml /* js */ `
     /**
@@ -432,6 +442,8 @@ function generateExecScript(
     const configDir = import.meta.dirname;
     const configPath = join(configDir, "${relativeConfigPath}");
 
+    ${seedDataLoaderCode}
+
     // Determine machine user name (CLI argument takes precedence over config default)
     const defaultMachineUser = ${defaultMachineUserName ? `"${defaultMachineUserName}"` : "undefined"};
     const machineUserName = values["machine-user"] || defaultMachineUser;
@@ -451,6 +463,9 @@ ${namespaceDepsEntries}
     };
     const namespaceSelfRefTypes = {
 ${namespaceSelfRefEntries}
+    };
+    const requiredFieldsByType = {
+${requiredFieldsEntries}
     };
     const entities = Object.values(namespaceEntities).flat();
     const hasIdpUser = ${String(hasIdpUser)};
@@ -521,6 +536,16 @@ ${namespaceSelfRefEntries}
       }
     }
 
+    if (values.upsert) {
+      const selectedTailorDbTypes = entities.filter(
+        (entity) => !entitiesToProcess || entitiesToProcess.includes(entity),
+      );
+      loadSeedData(join(configDir, "data"), selectedTailorDbTypes, {
+        requireId: true,
+        requiredFieldsByType,
+      });
+    }
+
     // Get application info
     const appInfo = await show({ configPath, profile: values.profile });
     const authNamespace = appInfo.auth;
@@ -582,29 +607,6 @@ ${namespaceSelfRefEntries}
       console.log(styleText("dim", \`  Skipping IdP user (_User)\`));
     }
 
-    // Load seed data from JSONL files
-    const loadSeedData = (dataDir, typeNames) => {
-      const data = {};
-      for (const typeName of typeNames) {
-        const jsonlPath = join(dataDir, \`\${typeName}.jsonl\`);
-        try {
-          const content = readFileSync(jsonlPath, "utf-8").trim();
-          if (content) {
-            data[typeName] = content.split("\\n").map((line) => JSON.parse(line));
-          } else {
-            data[typeName] = [];
-          }
-        } catch (error) {
-          if (error.code === "ENOENT") {
-            data[typeName] = [];
-          } else {
-            throw error;
-          }
-        }
-      }
-      return data;
-    };
-
     // Topological sort for dependency order
     const topologicalSort = (types, deps) => {
       const visited = new Set();
@@ -632,7 +634,10 @@ ${namespaceSelfRefEntries}
     const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes) => {
       const dataDir = join(configDir, "data");
       const sortedTypes = topologicalSort(typesToSeed, deps);
-      const data = loadSeedData(dataDir, sortedTypes);
+      const data = loadSeedData(dataDir, sortedTypes, {
+        requireId: values.upsert,
+        requiredFieldsByType: values.upsert ? requiredFieldsByType : {},
+      });
 
       // Skip if no data
       const typesWithData = sortedTypes.filter((t) => data[t] && data[t].length > 0);
@@ -705,9 +710,20 @@ ${namespaceSelfRefEntries}
           }
 
           const processed = parsed.processed || {};
-          for (const [type, count] of Object.entries(processed)) {
-            allProcessed[type] = (allProcessed[type] || 0) + count;
-            console.log(styleText("green", \`    ✓ \${type}: \${count} rows \${values.upsert ? "upserted" : "inserted"}\`));
+          for (const [type, counts] of Object.entries(processed)) {
+            const previous = allProcessed[type] || { inserted: 0, updated: 0 };
+            const current = {
+              inserted: Number(counts.inserted) || 0,
+              updated: Number(counts.updated) || 0,
+            };
+            allProcessed[type] = {
+              inserted: previous.inserted + current.inserted,
+              updated: previous.updated + current.updated,
+            };
+            const message = values.upsert
+              ? \`\${current.inserted} inserted, \${current.updated} updated\`
+              : \`\${current.inserted} rows inserted\`;
+            console.log(styleText("green", \`    ✓ \${type}: \${message}\`));
           }
 
           if (!parsed.success) {
@@ -803,6 +819,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
         const types: string[] = [];
         const dependencies: Record<string, string[]> = {};
         const selfRefTypes: string[] = [];
+        const requiredFields: Record<string, string[]> = {};
 
         for (const [typeName, type] of Object.entries(ns.types)) {
           const source = assertDefined(
@@ -829,6 +846,14 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
 
           types.push(typeInfo.name);
           dependencies[typeInfo.name] = typeInfo.dependencies;
+          requiredFields[typeInfo.name] = Object.entries(type.fields)
+            .filter(
+              ([fieldName, field]) =>
+                field.config.required !== false &&
+                !linesDb.optionalFields.includes(fieldName) &&
+                !linesDb.omitFields.includes(fieldName),
+            )
+            .map(([fieldName]) => fieldName);
           if (typeInfo.selfRefFields.length > 0) {
             selfRefTypes.push(typeInfo.name);
           }
@@ -894,6 +919,7 @@ export function seedPlugin(options: SeedPluginOptions): Plugin<unknown, SeedPlug
           types,
           dependencies,
           selfRefTypes,
+          requiredFields,
         });
       }
 
