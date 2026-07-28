@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { assertEnvHasNoSecrets } from "#/cli/shared/env-secret-scan";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
 import type { AppConfig } from "#/configure/config/types";
@@ -330,11 +331,18 @@ interface GenerateUserTypesOptions {
 
 /**
  * Generate user type definitions from the app config and write them to disk.
+ *
+ * Generation failures are reported and swallowed so they cannot block the
+ * calling command. A credential in `env` is the exception: it is rejected
+ * before anything is written, since this is the boundary where an `env` value
+ * would otherwise be persisted.
  * @param options - Generation options
  * @returns Promise that resolves when types are generated
+ * @throws When `env` holds a value that the secret scan identifies as a credential
  */
 export async function generateUserTypes(options: GenerateUserTypesOptions): Promise<void> {
   const { config, configPath } = options;
+  await assertEnvHasNoSecrets({ env: config.env, allowEnvSecrets: config.allowEnvSecrets });
   try {
     const {
       attributes,

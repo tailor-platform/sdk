@@ -273,6 +273,35 @@ export async function main(trx: Transaction, { env }: MigrationContext): Promise
 }
 ```
 
+#### Secret Detection
+
+`env` values are deployed as plaintext, so `generate` and `deploy` scan them and fail when a value looks like a credential:
+
+```
+✖ Secret detected in 'env':
+    - env.SLACK_BOT_TOKEN (matched slack)
+```
+
+Move the value to [Secret Manager](./services/secret.md) to fix this. Detection covers the credential formats of common providers — Slack, GitHub, AWS, GCP, Stripe, OpenAI, npm, SendGrid and others.
+
+A value that is merely long and random-looking, with no recognizable provider format, is reported as a warning instead and does not fail the command.
+
+When detection is wrong about a value, exempt its key with `allowEnvSecrets` and record why the value is safe to deploy as plaintext:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  env: {
+    slackRelayUrl: process.env.SLACK_RELAY_URL ?? "",
+  },
+  allowEnvSecrets: {
+    slackRelayUrl: "Public relay endpoint; the token it proxies stays in Secret Manager.",
+  },
+});
+```
+
+Each exempted key must still exist in `env`, so a renamed or deleted key surfaces as an error rather than leaving a silently dead exemption behind.
+
 ### Workflow Service
 
 Configure Workflow service by specifying glob patterns for workflow files:
