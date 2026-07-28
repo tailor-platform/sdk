@@ -14,6 +14,27 @@ import type { LogLevelEnum } from "#/types/app-config.generated";
 export type LogLevel = LogLevelEnum;
 export type LogLevelInput = LogLevel | (string & {});
 
+/** Value an `env` entry resolves to at runtime. */
+export type EnvValue = string | number | boolean;
+
+/**
+ * An `env` value that the secret scan would reject, allowed through together
+ * with the reason it is safe to deploy as plaintext.
+ */
+export type AllowedSecretEnvValue = {
+  value: EnvValue;
+  /** Why this value is safe to deploy as plaintext even though it looks like a credential. */
+  allowSecret: string;
+};
+
+/** An entry of `defineConfig({ env })`. */
+export type EnvEntry = EnvValue | AllowedSecretEnvValue;
+
+/** An app config whose `env` entries have been resolved to the values that get deployed. */
+export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
+  env?: Record<string, EnvValue>;
+};
+
 /** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
 export type ExecutorServiceInput = ExecutorServiceConfig;
@@ -56,7 +77,7 @@ export interface AppConfig<
   Idp extends IdPConfig[] = IdPConfig[],
   StaticWebsites extends StaticWebsiteConfig[] = StaticWebsiteConfig[],
   AIGateways extends AIGatewayConfig[] = AIGatewayConfig[],
-  Env extends Record<string, string | number | boolean> = Record<string, string | number | boolean>,
+  Env extends Record<string, EnvEntry> = Record<string, EnvEntry>,
 > {
   /** Application name (required). */
   name: string;
@@ -70,17 +91,15 @@ export interface AppConfig<
    * data is preserved.
    */
   id?: string;
-  /** Environment variables accessible via `context.env` in resolvers and via the second argument `{ env }` in workflow job bodies. */
-  env?: Env;
   /**
-   * `env` keys allowed to hold a value that `generate` and `deploy` would
-   * otherwise reject as a credential, mapped to why each one is safe to deploy
-   * as plaintext.
+   * Environment variables accessible via `context.env` in resolvers and via the second argument `{ env }` in workflow job bodies.
    *
-   * Reach for this only when the detection is wrong about the value. Real
+   * A value that looks like a credential is rejected, since `env` is deployed
+   * as plaintext. When the detection is wrong about a value, wrap it as
+   * `{ value, allowSecret }` to allow it and record why it is safe. Real
    * credentials belong in `defineSecretManager()`.
    */
-  allowEnvSecrets?: Record<string, string>;
+  env?: Env;
   /** Allowed CORS origins. Must be an array of strings, e.g. `["https://example.com"]`. */
   cors?: string[];
   /** IP addresses allowed to access the application. */
