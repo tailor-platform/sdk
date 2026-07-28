@@ -1,4 +1,4 @@
-import { builtinModules } from "node:module";
+import { isBuiltin } from "node:module";
 
 const SUGGESTIONS: Record<string, string> = {
   crypto: "Use the Web Crypto API (globalThis.crypto) instead.",
@@ -18,11 +18,8 @@ const SUGGESTIONS: Record<string, string> = {
   string_decoder: "Use TextDecoder instead.",
 };
 
-const NODE_BUILTINS = new Set(builtinModules.map(normalizeNodeBuiltinSpecifier));
-
 export function isNodeBuiltinImport(specifier: string): boolean {
-  const bare = normalizeNodeBuiltinSpecifier(specifier);
-  return NODE_BUILTINS.has(bare);
+  return isBuiltin(specifier);
 }
 
 export function getNodeBuiltinMessage(specifier: string): string {
