@@ -18,16 +18,20 @@ const SUGGESTIONS: Record<string, string> = {
   string_decoder: "Use TextDecoder instead.",
 };
 
-const NODE_BUILTINS = new Set(builtinModules.filter((specifier) => !specifier.startsWith("_")));
+const NODE_BUILTINS = new Set(builtinModules.map(normalizeNodeBuiltinSpecifier));
 
 export function isNodeBuiltinImport(specifier: string): boolean {
-  const bare = specifier.startsWith("node:") ? specifier.slice(5) : specifier;
+  const bare = normalizeNodeBuiltinSpecifier(specifier);
   return NODE_BUILTINS.has(bare);
 }
 
 export function getNodeBuiltinMessage(specifier: string): string {
-  const bare = specifier.startsWith("node:") ? specifier.slice(5) : specifier;
+  const bare = normalizeNodeBuiltinSpecifier(specifier);
   const suggestion = SUGGESTIONS[bare];
   const base = `"${specifier}" is not available in the Tailor Platform runtime.`;
   return suggestion ? `${base} ${suggestion}` : base;
+}
+
+function normalizeNodeBuiltinSpecifier(specifier: string): string {
+  return specifier.startsWith("node:") ? specifier.slice(5) : specifier;
 }
