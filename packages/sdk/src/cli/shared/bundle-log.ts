@@ -41,26 +41,53 @@ export interface BundleLogRolldownOptions {
   onLog: NonNullable<rolldown.InputOptions["onLog"]>;
 }
 
+export interface BundleLog {
+  options: BundleLogRolldownOptions;
+  assertAllResolved(): void;
+}
+
 /**
- * Build the rolldown log options that turn an unresolved import into a build
- * failure while keeping every other rolldown log suppressed.
+ * Collect unresolved imports while keeping every other rolldown log suppressed.
  * @param options - Context used to explain which tsconfig was in effect
- * @returns rolldown `logLevel`/`onLog` options to spread into the build config
+ * @returns Rolldown options and a post-build assertion
  */
-export function createBundleLogOptions(options: BundleLogOptions = {}): BundleLogRolldownOptions {
+export function createBundleLog(options: BundleLogOptions = {}): BundleLog {
+  const unresolvedImports = new Map<string, rolldown.RollupLog>();
   return {
-    logLevel: "warn",
-    onLog: (_level, log) => {
-      if (log.code !== ESCALATED_LOG_CODE || isPlatformSuppliedImport(log)) return;
-      throw unresolvedImportError(log, options.tsconfig);
+    options: {
+      logLevel: "warn",
+      onLog: (_level, log) => {
+        if (log.code !== ESCALATED_LOG_CODE || isPlatformSuppliedImport(log)) return;
+        unresolvedImports.set(JSON.stringify([log.exporter, log.id]), log);
+      },
+    },
+    assertAllResolved() {
+      if (unresolvedImports.size > 0) {
+        throw unresolvedImportError([...unresolvedImports.values()], options.tsconfig);
+      }
     },
   };
 }
 
-// rolldown surfaces only `message` when an `onLog` handler throws, so the
-// tsconfig context and the fix have to live in the message itself rather than
-// in CLIError's `details`/`suggestion` fields.
-function unresolvedImportError(log: rolldown.RollupLog, tsconfig: string | undefined): Error {
+function unresolvedImportError(logs: rolldown.RollupLog[], tsconfig: string | undefined): Error {
+  const imports = logs.map(formatUnresolvedImport);
+  const message =
+    imports.length === 1
+      ? `Could not resolve ${imports[0]}.`
+      : `Could not resolve ${imports.length} imports.`;
+  const details = imports.length === 1 ? undefined : imports.map((item) => `- ${item}`).join("\n");
+  const suggestion = tsconfig
+    ? `Check that each import path is correct, and that a \`compilerOptions.paths\` entry covering it is declared in the importing file's own tsconfig.json or an ancestor. The build used "${tsconfig}".`
+    : "No tsconfig.json was found, so `compilerOptions.paths` aliases were not applied. Add a tsconfig.json declaring the aliases these files import.";
+  return CLIError({
+    code: "UNRESOLVED_IMPORT",
+    message,
+    details,
+    suggestion,
+  });
+}
+
+function formatUnresolvedImport(log: rolldown.RollupLog): string {
   const specifier = log.exporter ?? "an imported module";
   // A virtual entry's id carries a leading `\0`, which renders as a stray
   // control character; name the bundler's generated entry instead.
@@ -68,14 +95,5 @@ function unresolvedImportError(log: rolldown.RollupLog, tsconfig: string | undef
     ? `a generated entry (${log.id.slice(1)})`
     : log.id && `"${log.id}"`;
   const importer = importerId ? ` imported from ${importerId}` : "";
-  // The tsconfig named here is the build-level one. A `paths` alias is resolved
-  // against the importing file's own nearest tsconfig that declares `paths`,
-  // which may be an ancestor of this one, so the wording stays non-committal.
-  const context = tsconfig
-    ? `Check that the import path is correct, and that a \`compilerOptions.paths\` entry covering it is declared in the importing file's own tsconfig.json or an ancestor. The build used "${tsconfig}".`
-    : "No tsconfig.json was found, so `compilerOptions.paths` aliases were not applied. Add a tsconfig.json declaring the aliases this file imports.";
-  return CLIError({
-    code: "UNRESOLVED_IMPORT",
-    message: `Could not resolve "${specifier}"${importer}. ${context}`,
-  });
+  return `"${specifier}"${importer}`;
 }

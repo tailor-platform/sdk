@@ -8,7 +8,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import * as rolldown from "rolldown";
-import { createBundleLogOptions } from "#/cli/shared/bundle-log";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
@@ -133,6 +133,7 @@ export async function bundleSeedScript(
   }
 
   // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
+  const bundleLog = createBundleLog({ tsconfig });
   const result = await rolldown.build({
     plugins: [createTsconfigPathsPlugin(), platformBundleDefinePlugin],
     input: entryPath,
@@ -156,8 +157,9 @@ export async function bundleSeedScript(
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    ...createBundleLogOptions({ tsconfig }),
+    ...bundleLog.options,
   } as rolldown.BuildOptions);
+  bundleLog.assertAllResolved();
 
   const bundledCode = result.output[0].code;
 

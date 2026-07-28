@@ -7,7 +7,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
-import { createBundleLogOptions } from "#/cli/shared/bundle-log";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
@@ -78,6 +78,7 @@ export async function bundleMigrationScript(
   const tsconfig = await resolveTSConfigWithFallback(baseDir ?? path.dirname(absoluteSourcePath));
 
   // Bundle with tree-shaking (write: false to avoid unnecessary disk I/O)
+  const bundleLog = createBundleLog({ tsconfig });
   const result = await rolldown.build({
     plugins: [createTsconfigPathsPlugin(), platformBundleDefinePlugin],
     input: entryPath,
@@ -101,8 +102,9 @@ export async function bundleMigrationScript(
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    ...createBundleLogOptions({ tsconfig }),
+    ...bundleLog.options,
   } as rolldown.BuildOptions);
+  bundleLog.assertAllResolved();
 
   const bundledCode = result.output[0].code;
 

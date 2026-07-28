@@ -9,7 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
-import { createBundleLogOptions } from "#/cli/shared/bundle-log";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import {
   createLogLevelTreeshakeOptions,
   resolveBundleLogLevel,
@@ -88,6 +88,7 @@ export async function bundleForTestRun(
 
   const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
+  const bundleLog = createBundleLog({ tsconfig });
   const buildResult = await rolldown.build({
     plugins: [createTsconfigPathsPlugin(), platformBundleDefinePlugin],
     input: entryPath,
@@ -111,8 +112,9 @@ export async function bundleForTestRun(
     },
     tsconfig,
     treeshake: composeFunctionTreeshakeOptions([createLogLevelTreeshakeOptions(bundleLogLevel)]),
-    ...createBundleLogOptions({ tsconfig }),
+    ...bundleLog.options,
   } as rolldown.BuildOptions);
+  bundleLog.assertAllResolved();
 
   const bundledCode = buildResult.output[0].code;
 

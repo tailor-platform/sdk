@@ -5,7 +5,7 @@ import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { isNodeBuiltinImport } from "#/cli/services/http-adapter/node-builtins";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
-import { createBundleLogOptions } from "#/cli/shared/bundle-log";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
@@ -153,6 +153,7 @@ async function bundleAdapterScript(
         ...cachePlugins,
       ];
 
+      const bundleLog = createBundleLog({ tsconfig });
       const result = await rolldown.build({
         input: entry.input,
         write: false,
@@ -171,8 +172,9 @@ async function bundleAdapterScript(
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),
-        ...createBundleLogOptions({ tsconfig }),
+        ...bundleLog.options,
       } as rolldown.BuildOptions);
+      bundleLog.assertAllResolved();
       const bundled = result.output[0].code;
 
       const byteLength = Buffer.byteLength(bundled, "utf8");

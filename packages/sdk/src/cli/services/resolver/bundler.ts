@@ -4,7 +4,7 @@ import { type BundleCache, computeBundlerContextHash, withCache } from "#/cli/ca
 import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { createTriggerTransformPlugin } from "#/cli/services/workflow/trigger-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
-import { createBundleLogOptions } from "#/cli/shared/bundle-log";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
@@ -159,6 +159,7 @@ async function bundleSingleResolver(
         ...cachePlugins,
       );
 
+      const bundleLog = createBundleLog({ tsconfig });
       const result = await rolldown.build({
         input: entry.input,
         write: false,
@@ -179,8 +180,9 @@ async function bundleSingleResolver(
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),
-        ...createBundleLogOptions({ tsconfig }),
+        ...bundleLog.options,
       } as rolldown.BuildOptions);
+      bundleLog.assertAllResolved();
 
       return result.output[0].code;
     },

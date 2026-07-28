@@ -4,7 +4,7 @@ import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { afterEach, describe, expect, test } from "vitest";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
-import { createBundleLogOptions } from "./bundle-log";
+import { createBundleLog } from "./bundle-log";
 import { createTsconfigPathsPlugin } from "./tsconfig-paths-plugin";
 
 describe("createTsconfigPathsPlugin", () => {
@@ -45,15 +45,18 @@ describe("createTsconfigPathsPlugin", () => {
     };
   }
 
-  function build(entry: string, tsconfig: string, plugins: rolldown.Plugin[] = []) {
-    return rolldown.build({
+  async function build(entry: string, tsconfig: string, plugins: rolldown.Plugin[] = []) {
+    const bundleLog = createBundleLog({ tsconfig });
+    const result = await rolldown.build({
       input: entry,
       write: false,
       output: { format: "esm", codeSplitting: false },
       tsconfig,
       plugins,
-      ...createBundleLogOptions({ tsconfig }),
+      ...bundleLog.options,
     } as rolldown.BuildOptions);
+    bundleLog.assertAllResolved();
+    return result;
   }
 
   test("without the plugin the nested tsconfig shadows the root aliases", async () => {
@@ -427,14 +430,17 @@ describe("createTsconfigPathsPlugin", () => {
       "ts",
     );
 
+    const tsconfig = path.join(dir, "tailordb", "tsconfig.json");
+    const bundleLog = createBundleLog({ tsconfig });
     const result = await rolldown.build({
       input: entry.input,
       write: false,
       output: { format: "esm", codeSplitting: false },
-      tsconfig: path.join(dir, "tailordb", "tsconfig.json"),
+      tsconfig,
       plugins: [entry.plugin, createTsconfigPathsPlugin({ virtualEntrySourceFile: sourceFile })],
-      ...createBundleLogOptions({ tsconfig: path.join(dir, "tailordb", "tsconfig.json") }),
+      ...bundleLog.options,
     } as rolldown.BuildOptions);
+    bundleLog.assertAllResolved();
 
     expect(result.output[0].code).toContain("77");
   });

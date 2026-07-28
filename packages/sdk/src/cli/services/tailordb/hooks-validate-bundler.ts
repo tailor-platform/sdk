@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { parseSync } from "oxc-parser";
 import { resolve } from "pathe";
 import * as rolldown from "rolldown";
-import { createBundleLogOptions } from "#/cli/shared/bundle-log";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
@@ -476,6 +476,7 @@ async function bundleScriptTarget(args: {
     "ts",
   );
 
+  const bundleLog = createBundleLog({ tsconfig });
   const buildResult = await rolldown.build({
     plugins: [
       entry.plugin,
@@ -496,8 +497,9 @@ async function bundleScriptTarget(args: {
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    ...createBundleLogOptions({ tsconfig }),
+    ...bundleLog.options,
   } as rolldown.BuildOptions);
+  bundleLog.assertAllResolved();
 
   const bundledCode = buildResult.output[0].code;
   return assertParsableExpression(buildPrecompiledExpr(bundledCode), context);
