@@ -1,6 +1,5 @@
 import { logger, styles } from "./logger";
-
-type EnvValue = string | number | boolean;
+import type { EnvEntry, EnvValue } from "#/configure/config/types";
 
 const AWS_RULE_ID = "@secretlint/secretlint-rule-aws";
 const RULE_ID_PREFIX = "@secretlint/secretlint-rule-";
@@ -34,12 +33,10 @@ export interface EnvSecretFinding {
   readonly severity: EnvSecretSeverity;
 }
 
-/** Inputs for scanning an application's `env` values. */
+/** Inputs for scanning an application's `env` entries. */
 export interface EnvSecretScanInput {
-  /** Resolved `env` values. */
-  readonly env?: Readonly<Record<string, EnvValue>>;
-  /** Keys exempted from the scan, mapped to why each value is acceptable. */
-  readonly allowEnvSecrets?: Readonly<Record<string, string>>;
+  /** `env` entries as written in the config, before `{ value, allowSecret }` wrappers are resolved. */
+  readonly env?: Readonly<Record<string, EnvEntry>>;
 }
 
 type ScannedEntry = readonly [key: string, value: EnvValue];
@@ -51,16 +48,27 @@ type EntryRange = {
 };
 
 /**
+ * Resolve an `env` entry to the value that gets deployed.
+ * @param entry - Entry as written in the config
+ * @returns The entry's value, unwrapped when it carries an `allowSecret` reason
+ */
+export function resolveEnvValue(entry: EnvEntry): EnvValue {
+  return typeof entry === "object" ? entry.value : entry;
+}
+
+/**
  * Scan `env` values for credentials.
  *
- * Provider-specific matches are reported as errors; values that merely look
- * randomly generated are reported as warnings.
- * @param input - `env` values and exempted keys
+ * Entries wrapped as `{ value, allowSecret }` are skipped. Provider-specific
+ * matches are reported as errors; values that merely look randomly generated
+ * are reported as warnings.
+ * @param input - `env` entries as written in the config
  * @returns Provider matches first, then entropy warnings; empty when nothing matched
  */
 export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvSecretFinding[]> {
-  const exempted = new Set(Object.keys(input.allowEnvSecrets ?? {}));
-  const entries = Object.entries(input.env ?? {}).filter(([key]) => !exempted.has(key));
+  const entries: ScannedEntry[] = Object.entries(input.env ?? {})
+    .filter(([, entry]) => typeof entry !== "object")
+    .map(([key, entry]) => [key, resolveEnvValue(entry)]);
   if (entries.length === 0) {
     return [];
   }
@@ -82,19 +90,17 @@ export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvS
  * Report secret-looking `env` values, failing when a credential is identified.
  *
  * Warnings are logged and do not fail the command.
- * @param input - `env` values and exempted keys
- * @throws When an exempted key is missing from `env`, or a credential is found
+ * @param input - `env` entries as written in the config
+ * @throws When a value is identified as a credential
  */
 export async function assertEnvHasNoSecrets(input: EnvSecretScanInput): Promise<void> {
-  assertExemptedKeysExist(input);
-
   const findings = await scanEnvForSecrets(input);
 
   for (const finding of findings) {
     if (finding.severity !== "warning") continue;
     logger.warn(
       `env.${finding.key} looks like a randomly generated credential. ` +
-        `If it is one, move it to Secret Manager; otherwise exempt it with ${styles.bold("allowEnvSecrets")}.`,
+        `If it is one, move it to Secret Manager; otherwise allow it with ${styles.bold("allowSecret")}.`,
     );
   }
 
@@ -104,36 +110,13 @@ export async function assertEnvHasNoSecrets(input: EnvSecretScanInput): Promise<
   }
 
   const list = errors.map((error) => `  - env.${error.key} (matched ${error.detector})`).join("\n");
-  const exemption = errors.map((error) => `${error.key}: "<why this is safe>"`).join(", ");
+  const example = errors[0]?.key ?? "KEY";
   throw new Error(
     `Secret detected in 'env':\n${list}\n` +
       "'env' values are deployed as plaintext and are readable by anyone who can read the application's configuration. " +
       "Define these with defineSecretManager() instead, and read them through Secret Manager at runtime.\n" +
-      `If a value is genuinely safe to keep in 'env', exempt it in defineConfig: allowEnvSecrets: { ${exemption} }`,
-  );
-}
-
-/**
- * Reject exemptions that no longer match an `env` key, so a renamed or removed
- * key cannot leave a silently ineffective exemption behind.
- * @param input - `env` values and exempted keys
- * @throws When an exempted key is absent from `env`
- */
-function assertExemptedKeysExist(input: EnvSecretScanInput): void {
-  const exempted = Object.keys(input.allowEnvSecrets ?? {});
-  if (exempted.length === 0) {
-    return;
-  }
-
-  const envKeys = new Set(Object.keys(input.env ?? {}));
-  const unknown = exempted.filter((key) => !envKeys.has(key));
-  if (unknown.length === 0) {
-    return;
-  }
-
-  throw new Error(
-    `'allowEnvSecrets' exempts keys that 'env' does not define: ${unknown.join(", ")}. ` +
-      "Remove the exemption, or fix the key name to match the 'env' entry it should cover.",
+      "If a value is genuinely safe to keep in 'env', allow it where it is defined: " +
+      `${example}: { value: ..., allowSecret: "<why this is safe>" }`,
   );
 }
 

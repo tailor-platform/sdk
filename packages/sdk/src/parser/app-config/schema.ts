@@ -3,6 +3,16 @@ import { LOG_LEVELS } from "./log-level";
 
 const envValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 
+const envEntrySchema = z.union([
+  envValueSchema,
+  z.strictObject({
+    value: envValueSchema,
+    allowSecret: z.string().min(1, {
+      message: "'allowSecret' must state why the value is safe to keep in 'env'.",
+    }),
+  }),
+]);
+
 export const LogLevelSchema = z.enum(LOG_LEVELS);
 
 const logLevelSchema = z
@@ -25,15 +35,7 @@ const logLevelSchema = z
 export const AppConfigSchema = z.strictObject({
   id: z.uuid({ message: "'id' must be a UUID." }).optional(),
   name: z.string().min(1, { message: "'name' must be a non-empty string." }),
-  env: z.record(z.string(), envValueSchema).optional(),
-  allowEnvSecrets: z
-    .record(
-      z.string(),
-      z.string().min(1, {
-        message: "'allowEnvSecrets' entries must state why the value is safe to keep in 'env'.",
-      }),
-    )
-    .optional(),
+  env: z.record(z.string(), envEntrySchema).optional(),
   cors: z.array(z.string()).optional(),
   allowedIpAddresses: z.array(z.string()).optional(),
   disableIntrospection: z.boolean().optional(),

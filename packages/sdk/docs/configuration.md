@@ -275,7 +275,7 @@ export async function main(trx: Transaction, { env }: MigrationContext): Promise
 
 #### Secret Detection
 
-`env` values are deployed as plaintext, so `generate` and `deploy` scan them and fail when a value looks like a credential:
+`env` values are deployed as plaintext, so loading a config fails when one of them looks like a credential:
 
 ```
 ✖ Secret detected in 'env':
@@ -286,21 +286,21 @@ Move the value to [Secret Manager](./services/secret.md) to fix this. Detection 
 
 A value that is merely long and random-looking, with no recognizable provider format, is reported as a warning instead and does not fail the command.
 
-When detection is wrong about a value, exempt its key with `allowEnvSecrets` and record why the value is safe to deploy as plaintext:
+When detection is wrong about a value, allow it in place with `allowSecret`, stating why the value is safe to deploy as plaintext:
 
 ```typescript
 export default defineConfig({
   name: "my-app",
   env: {
-    slackRelayUrl: process.env.SLACK_RELAY_URL ?? "",
-  },
-  allowEnvSecrets: {
-    slackRelayUrl: "Public relay endpoint; the token it proxies stays in Secret Manager.",
+    slackRelayUrl: {
+      value: process.env.SLACK_RELAY_URL ?? "",
+      allowSecret: "Public relay endpoint; the token it proxies stays in Secret Manager.",
+    },
   },
 });
 ```
 
-Each exempted key must still exist in `env`, so a renamed or deleted key surfaces as an error rather than leaving a silently dead exemption behind.
+Application code still reads `env.slackRelayUrl` as the value itself — the wrapper only carries the reason and does not reach the deployed application.
 
 ### Workflow Service
 

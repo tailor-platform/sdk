@@ -2,7 +2,7 @@
 "@tailor-platform/sdk": major
 ---
 
-Fail `generate` and `deploy` when a `defineConfig({ env })` value looks like a credential. `env` values are deployed as plaintext, so a token left there is readable by anyone who can read the application's configuration.
+Reject `defineConfig({ env })` values that look like credentials. `env` values are deployed as plaintext, so a token left there is readable by anyone who can read the application's configuration.
 
 ```
 ✖ Secret detected in 'env':
@@ -11,18 +11,18 @@ Fail `generate` and `deploy` when a `defineConfig({ env })` value looks like a c
 
 Detection covers the credential formats of common providers (Slack, GitHub, AWS, GCP, Stripe, OpenAI, npm, SendGrid and others). Move such values to `defineSecretManager()`. A value that is only long and random-looking, with no recognizable provider format, is reported as a warning and does not fail the command.
 
-Projects that deliberately keep a matching value in `env` can exempt its key with the new `allowEnvSecrets`, which records why the value is safe to deploy as plaintext:
+When the detection is wrong about a value, allow it where it is defined and state why it is safe to deploy as plaintext:
 
 ```ts
 export default defineConfig({
   name: "my-app",
   env: {
-    slackRelayUrl: process.env.SLACK_RELAY_URL ?? "",
-  },
-  allowEnvSecrets: {
-    slackRelayUrl: "Public relay endpoint; the token it proxies stays in Secret Manager.",
+    slackRelayUrl: {
+      value: process.env.SLACK_RELAY_URL ?? "",
+      allowSecret: "Public relay endpoint; the token it proxies stays in Secret Manager.",
+    },
   },
 });
 ```
 
-Every exempted key must exist in `env`, so a renamed or deleted key fails instead of leaving a dead exemption behind.
+`env` entries therefore accept either a plain `string | number | boolean` or `{ value, allowSecret }`. Application code is unaffected: it still reads `env.slackRelayUrl` as the value itself, and the reason never reaches the deployed application.

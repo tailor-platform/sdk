@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { assertEnvHasNoSecrets, scanEnvForSecrets } from "./env-secret-scan";
+import { assertEnvHasNoSecrets, resolveEnvValue, scanEnvForSecrets } from "./env-secret-scan";
 import { logger } from "./logger";
 
 // Assembled at runtime: spelled out in full, these fixtures are indistinguishable
@@ -85,13 +85,28 @@ describe("scanEnvForSecrets", () => {
     expect(findings.filter((finding) => finding.severity === "warning")).toEqual([]);
   });
 
-  test("skips exempted keys entirely", async () => {
+  test("skips an entry that allows its own secret", async () => {
     const findings = await scanEnvForSecrets({
-      env: { SLACK_BOT_TOKEN: SLACK_TOKEN },
-      allowEnvSecrets: { SLACK_BOT_TOKEN: "public webhook for a demo workspace" },
+      env: {
+        SLACK_BOT_TOKEN: {
+          value: SLACK_TOKEN,
+          allowSecret: "public webhook for a demo workspace",
+        },
+      },
     });
 
     expect(findings).toEqual([]);
+  });
+
+  test("keeps scanning the entries around an allowed one", async () => {
+    const findings = await scanEnvForSecrets({
+      env: {
+        ALLOWED: { value: SLACK_TOKEN, allowSecret: "demo workspace" },
+        LEAKED: GITHUB_TOKEN,
+      },
+    });
+
+    expect(findings).toEqual([{ key: "LEAKED", detector: "github", severity: "error" }]);
   });
 
   test("returns nothing when env is absent or empty", async () => {
@@ -108,7 +123,9 @@ describe("assertEnvHasNoSecrets", () => {
 
     expect(error.message).toContain("env.SLACK_BOT_TOKEN (matched slack)");
     expect(error.message).toContain("defineSecretManager()");
-    expect(error.message).toContain("allowEnvSecrets");
+    expect(error.message).toContain(
+      'SLACK_BOT_TOKEN: { value: ..., allowSecret: "<why this is safe>" }',
+    );
   });
 
   test("never repeats the detected value", async () => {
@@ -131,16 +148,18 @@ describe("assertEnvHasNoSecrets", () => {
     expect(warnSpy.mock.calls[0]?.[0]).toContain("env.LEGACY_TOKEN");
   });
 
-  test("rejects an exemption for a key env does not define", async () => {
-    await expect(
-      assertEnvHasNoSecrets({
-        env: { API_BASE: "https://api.example.com" },
-        allowEnvSecrets: { RENAMED_TOKEN: "no longer present" },
-      }),
-    ).rejects.toThrow(/'allowEnvSecrets' exempts keys that 'env' does not define: RENAMED_TOKEN/);
-  });
-
   test("passes for an application without env", async () => {
     await expect(assertEnvHasNoSecrets({})).resolves.toBeUndefined();
+  });
+});
+
+describe("resolveEnvValue", () => {
+  test("passes plain values through and unwraps allowed ones", () => {
+    expect(resolveEnvValue("hello")).toBe("hello");
+    expect(resolveEnvValue(3)).toBe(3);
+    expect(resolveEnvValue(false)).toBe(false);
+    expect(resolveEnvValue({ value: SLACK_TOKEN, allowSecret: "demo workspace" })).toBe(
+      SLACK_TOKEN,
+    );
   });
 });
