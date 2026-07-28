@@ -96,7 +96,7 @@ Available triggers beyond record CRUD (`recordCreatedTrigger`, `recordUpdatedTri
 - `idpUserCreatedTrigger` / `idpUserUpdatedTrigger` / `idpUserDeletedTrigger` - IdP user events. Pass `{ idp: "my-idp" }` to target a specific IdP when the project defines multiple IdPs
 - `authAccessTokenIssuedTrigger` / `authAccessTokenRefreshedTrigger` / `authAccessTokenRevokedTrigger` - Auth token events
 - `workflowExecutionStartedTrigger` / `workflowExecutionCompletedTrigger` / `workflowExecutionRetriedTrigger` / `workflowExecutionResumedTrigger` / `workflowExecutionWaitStartedTrigger` / `workflowExecutionWaitResolvedTrigger` - Workflow execution lifecycle events. Pass `{ workflow: myWorkflow }` to target a workflow
-- `workflowJobExecutionStartedTrigger` / `workflowJobExecutionCompletedTrigger` / `workflowJobExecutionWaitStartedTrigger` / `workflowJobExecutionWaitResolvedTrigger` - Workflow job execution lifecycle events. Pass `{ workflow: myWorkflow }` to target a workflow's jobs. Set `publishEvents: true` on each observed job
+- `workflowJobExecutionStartedTrigger` / `workflowJobExecutionCompletedTrigger` / `workflowJobExecutionWaitStartedTrigger` / `workflowJobExecutionWaitResolvedTrigger` - Workflow job execution lifecycle events. Pass `{ workflow: myWorkflow }` to target a workflow's jobs
 - `scheduleTrigger` - CRON schedule
 - `incomingWebhookTrigger` - Webhook
 

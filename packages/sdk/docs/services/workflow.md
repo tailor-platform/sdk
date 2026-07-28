@@ -203,7 +203,9 @@ export default createWorkflow({
 
 ## Execution Events
 
-Workflows can publish execution lifecycle events for executors. Set `publishEvents: true` to publish workflow-level events:
+Workflows can publish execution lifecycle events for executors. When an executor subscribes to a workflow's events, the SDK enables publishing automatically. A `workflowExecution*` trigger enables it on the workflow, and a `workflowJobExecution*` trigger enables it on every job that workflow runs. See [Workflow Execution Triggers](./executor.md#workflow-execution-triggers).
+
+Set `publishEvents` explicitly to override that. Use `true` to publish workflow-level events with no subscribing executor:
 
 ```typescript
 export default createWorkflow({
@@ -213,7 +215,7 @@ export default createWorkflow({
 });
 ```
 
-Set `publishEvents: true` on a job to publish its execution events:
+A job takes the same field for its own execution events:
 
 ```typescript
 export const processOrder = createWorkflowJob({
@@ -223,7 +225,7 @@ export const processOrder = createWorkflowJob({
 });
 ```
 
-When an executor subscribes to a workflow's execution events, the SDK enables workflow-level publishing automatically unless it is explicitly disabled. Job-level publishing remains explicit; enable it on each job whose events an executor should observe. See [Workflow Execution Triggers](./executor.md#workflow-execution-triggers).
+Use `false` to keep publishing off. `deploy` fails if an executor subscribes to events the value opts out of, so the subscription cannot silently go unfulfilled.
 
 ## Wait Points
 
