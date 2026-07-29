@@ -3,6 +3,7 @@ import {
   PENDING_SINCE,
   checkDeprecationTags,
   findDeprecationTags,
+  findMisplacedDeprecationMentions,
   resolvePendingSince,
 } from "./deprecation-tags";
 
@@ -63,6 +64,24 @@ export const template = \`@deprecated\`;
 `;
 
     expect(findDeprecationTags(source)).toEqual([]);
+  });
+
+  test("ignores prose about the tag written as inline code", () => {
+    const source = `/**
+ * Fails a member marked \`@deprecated\` without a codemod.
+ * @param value - Ignored
+ */
+export function check(value: string): void {}
+`;
+
+    expect(findDeprecationTags(source)).toEqual([]);
+  });
+
+  test("does not read a mid-line mention as a tag", () => {
+    const source = "/** Kept for now. @deprecated since 1.0.0 codemod: v2/old-to-new */\n";
+
+    expect(findDeprecationTags(source)).toEqual([]);
+    expect(findMisplacedDeprecationMentions(source)).toEqual([1]);
   });
 
   test("reads a tag that follows a string containing the tag name", () => {
@@ -155,6 +174,25 @@ export const oldApi = 1;
   test("reads the id list without swallowing the prose that follows it", () => {
     const source =
       "/** @deprecated since 1.0.0 codemod: v2/old-to-new which also covers the option type. */\n";
+
+    expect(checkDeprecationTags(source, options)).toEqual([]);
+  });
+
+  test("reports a mid-line mention instead of silently skipping it", () => {
+    const source = "/** Kept for now. @deprecated since 1.0.0 codemod: v2/old-to-new */\n";
+
+    expect(checkDeprecationTags(source, options)).toEqual([
+      { line: 1, message: expect.stringContaining("must start its own JSDoc line") },
+    ]);
+  });
+
+  test("accepts prose about the tag written as inline code", () => {
+    const source = `/**
+ * Fails a member marked \`@deprecated\` without a codemod.
+ * @param value - Ignored
+ */
+export function check(value: string): void {}
+`;
 
     expect(checkDeprecationTags(source, options)).toEqual([]);
   });

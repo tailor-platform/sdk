@@ -24,6 +24,9 @@ check:deprecations` enforces the mechanical parts.
   above the current package version is rejected.
 - `codemod: <id>[, <id>]` names entries in `packages/sdk-codemod/src/registry.ts`.
 - Name the replacement in the same sentence. This text is what users read in their editor.
+- The tag starts its own JSDoc line, which is where JSDoc reads a block tag. When a comment only
+  talks _about_ deprecation, write the tag name as inline code (`` `@deprecated` ``) so it is not
+  read as one.
 - Non-exported code has no deprecation cycle: change it directly instead of tagging it. Any
   `@deprecated` under `packages/sdk/src` must still satisfy the format above.
 
