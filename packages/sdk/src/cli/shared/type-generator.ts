@@ -2,7 +2,8 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
-import type { AppConfig, ResolvedEnvAppConfig } from "#/configure/config/types";
+import type { ResolvedEnvAppConfig } from "#/cli/shared/config-loader";
+import type { AppConfig } from "#/configure/config/types";
 
 export interface AttributeTypeInfo {
   type: string;

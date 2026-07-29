@@ -7,8 +7,8 @@ const envEntrySchema = z.union([
   envValueSchema,
   z.strictObject({
     value: envValueSchema,
-    allowSecret: z.string().min(1, {
-      message: "'allowSecret' must state why the value is safe to keep in 'env'.",
+    allowSecretReason: z.string().min(1, {
+      message: "'allowSecretReason' must state why the value is safe to keep in 'env'.",
     }),
   }),
 ]);
