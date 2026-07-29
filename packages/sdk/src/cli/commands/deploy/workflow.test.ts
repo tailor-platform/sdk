@@ -762,7 +762,10 @@ describe("planWorkflow", () => {
 
     test("plans owned orphaned job functions for deletion even when remaining workflows are unchanged", async () => {
       const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
-        jobFunctions: [{ name: "keep-job" }, { name: "orphaned-job" }],
+        jobFunctions: [
+          { name: "keep-job", publishExecutionEvents: false },
+          { name: "orphaned-job", publishExecutionEvents: false },
+        ],
         nextPageToken: "",
       });
       const getMetadata = vi.fn().mockImplementation(({ trn }: { trn: string }) => {

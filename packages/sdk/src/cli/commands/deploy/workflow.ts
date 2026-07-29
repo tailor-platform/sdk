@@ -26,6 +26,7 @@ import type { CreateWorkflowRequestSchema } from "@tailor-platform/tailor-proto/
 import type {
   ConcurrencyPolicySchema,
   RetryPolicySchema,
+  WorkflowJobFunctionSummary,
 } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 /**
@@ -439,7 +440,7 @@ function collectStaleJobFunctionNames(
   const stale = new Set<string>();
   for (const [jobName, publishEvents] of resolved) {
     const remote = existing.get(jobName);
-    if (remote && (remote.publishExecutionEvents ?? false) !== publishEvents) {
+    if (remote && remote.publishExecutionEvents !== publishEvents) {
       stale.add(jobName);
     }
   }
@@ -641,10 +642,7 @@ export async function planWorkflow(
 }
 
 /** Existing job function as reported by the platform's job function listing. */
-type ExistingJobFunction = {
-  name: string;
-  publishExecutionEvents?: boolean;
-};
+type ExistingJobFunction = Pick<WorkflowJobFunctionSummary, "name" | "publishExecutionEvents">;
 
 async function fetchExistingJobFunctions(
   client: OperatorClient,
