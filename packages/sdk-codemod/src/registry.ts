@@ -1517,6 +1517,11 @@ function effectiveCodemodBoundary(codemod: CodemodPackage): string {
 
 function assertCodemodBoundaries(codemods: CodemodPackage[]): void {
   for (const codemod of codemods) {
+    if (valid(codemod.since) === null) {
+      throw new Error(
+        `Codemod ${codemod.id} since must be a valid semver version: ${codemod.since}`,
+      );
+    }
     const boundary = parse(codemod.until);
     if (boundary === null) {
       throw new Error(
@@ -1525,6 +1530,12 @@ function assertCodemodBoundaries(codemods: CodemodPackage[]): void {
     }
     if (boundary.prerelease.length > 0) {
       throw new Error(`Codemod ${codemod.id} until must be a stable version: ${codemod.until}`);
+    }
+    // An empty range matches nothing, so the codemod would silently never apply.
+    if (!lt(codemod.since, codemod.until)) {
+      throw new Error(
+        `Codemod ${codemod.id} since must be older than until: ${codemod.since} >= ${codemod.until}`,
+      );
     }
     if (codemod.prereleaseUntil === undefined || codemod.prereleaseUntil === V2_NEXT_PENDING) {
       continue;

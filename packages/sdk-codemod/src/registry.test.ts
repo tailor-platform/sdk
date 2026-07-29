@@ -102,6 +102,42 @@ describe("getApplicableCodemods", () => {
     expect(ids).not.toContain("v2/principal-unify");
   });
 
+  test("throws when since is not a semver version", () => {
+    allCodemods.push({
+      id: "v2/invalid-since",
+      name: "Invalid since",
+      description: "Invalid since",
+      since: "1.x",
+      until: "2.0.0",
+    });
+
+    try {
+      expect(() => getApplicableCodemods("1.0.0", "2.0.0")).toThrow(
+        "Codemod v2/invalid-since since must be a valid semver version: 1.x",
+      );
+    } finally {
+      allCodemods.pop();
+    }
+  });
+
+  test("throws when since is not older than until", () => {
+    allCodemods.push({
+      id: "v2/empty-range",
+      name: "Empty range",
+      description: "Empty range",
+      since: "2.0.0",
+      until: "2.0.0",
+    });
+
+    try {
+      expect(() => getApplicableCodemods("1.0.0", "2.0.0")).toThrow(
+        "Codemod v2/empty-range since must be older than until: 2.0.0 >= 2.0.0",
+      );
+    } finally {
+      allCodemods.pop();
+    }
+  });
+
   test("throws when a prerelease boundary is not a prerelease version", () => {
     allCodemods.push({
       id: "v2/invalid-prerelease-boundary",
