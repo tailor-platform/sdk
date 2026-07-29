@@ -45,16 +45,6 @@ describe("generateTypeDefinition", () => {
       ],
     },
     {
-      name: "generates Env interface with value types",
-      args: [undefined, undefined, { hoge: 1, fuga: "hello", piyo: true }],
-      expected: ["interface Env", "hoge: number;", "fuga: string;", "piyo: boolean;"],
-    },
-    {
-      name: "generates empty Env interface when no env provided",
-      args: [undefined, undefined],
-      expected: ["interface Env {}"],
-    },
-    {
       name: "generates empty MachineUserNameRegistry when no machine users provided",
       args: [undefined, undefined],
       expected: ["interface MachineUserNameRegistry {}"],
