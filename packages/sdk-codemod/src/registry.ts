@@ -1508,7 +1508,13 @@ function reachesCodemodBoundary(toVersion: string, codemod: CodemodPackage): boo
   );
 }
 
-function effectiveCodemodBoundary(codemod: CodemodPackage): string {
+/**
+ * The version a codemod's migration is due by: its `prereleaseUntil` while that
+ * names a concrete prerelease, and `until` otherwise.
+ * @param codemod - The registered codemod
+ * @returns The version its boundary sits at
+ */
+export function effectiveCodemodBoundary(codemod: CodemodPackage): string {
   if (codemod.prereleaseUntil === V2_NEXT_PENDING) {
     return codemod.until;
   }

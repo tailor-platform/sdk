@@ -8,7 +8,11 @@ import {
 } from "./deprecation-tags";
 
 const options = {
-  codemodIds: new Set(["v2/old-to-new", "v2/other"]),
+  // Both boundaries sit above the current version, so a well-formed tag passes.
+  codemodBoundaries: new Map([
+    ["v2/old-to-new", "3.0.0"],
+    ["v2/other", "3.0.0"],
+  ]),
   currentVersion: "2.0.0-next.10",
 };
 
@@ -176,6 +180,44 @@ export const oldApi = 1;
       "/** @deprecated since 1.0.0 codemod: v2/old-to-new which also covers the option type. */\n";
 
     expect(checkDeprecationTags(source, options)).toEqual([]);
+  });
+
+  test("rejects a declaration that outlived its codemod's boundary", () => {
+    const source = "/** @deprecated since 1.0.0 — use newApi. codemod: v2/removed-in-2 */\n";
+
+    expect(
+      checkDeprecationTags(source, {
+        codemodBoundaries: new Map([["v2/removed-in-2", "2.0.0"]]),
+        currentVersion: "2.0.0",
+      }),
+    ).toEqual([
+      {
+        line: 1,
+        message: expect.stringContaining("as of 2.0.0, which 2.0.0 has reached"),
+      },
+    ]);
+  });
+
+  test("rejects a declaration whose prerelease boundary has already shipped", () => {
+    const source = "/** @deprecated since 1.0.0 — use newApi. codemod: v2/removed-in-next-1 */\n";
+
+    expect(
+      checkDeprecationTags(source, {
+        codemodBoundaries: new Map([["v2/removed-in-next-1", "2.0.0-next.1"]]),
+        currentVersion: "2.0.0-next.10",
+      }),
+    ).toHaveLength(1);
+  });
+
+  test("accepts a declaration whose removal is still ahead", () => {
+    const source = "/** @deprecated since 2.1.0 — use newApi. codemod: v3/old-to-new */\n";
+
+    expect(
+      checkDeprecationTags(source, {
+        codemodBoundaries: new Map([["v3/old-to-new", "3.0.0"]]),
+        currentVersion: "2.1.0",
+      }),
+    ).toEqual([]);
   });
 
   test("reports a mid-line mention instead of silently skipping it", () => {
