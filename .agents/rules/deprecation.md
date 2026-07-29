@@ -33,18 +33,41 @@ check:deprecations` enforces the mechanical parts.
 
 - Add the registry entry in the same change as the `@deprecated` tag. A migration that cannot be
   automated still gets an entry: omit `scriptPath` and ship `suspiciousPatterns` + `prompt`.
-- The entry's `since` is the oldest source version the deprecated API exists in (`1.0.0` for anything
-  that predates the current major) — a different axis from the tag's `since`, which is a single
-  version rather than a range bound.
-- The entry's `until` is the version that ships the **deprecation**, not the one that removes the API.
-  `tailor upgrade` applies a codemod when the target version reaches `until`, so a deprecation removed
-  two releases later still needs `until` at the deprecating version — otherwise the migration is only
-  offered at the release that has already broken the caller.
+- The entry's `since` / `until` are a version **range**, a different axis from the tag's `since`, which
+  is one version. `tailor upgrade` offers a codemod when `since <= from < until <= to`: `since` is the
+  oldest source version the deprecated API exists in (`1.0.0` for anything predating the current
+  major), and `until` is the version that **removes** it — the boundary a caller must cross to be
+  offered the migration.
+- Do not put `until` at the deprecating version. A caller already on that version has `from == until`,
+  fails `from < until`, and is never offered the migration — including the upgrade to the release that
+  removes the API, which is exactly when their code breaks. When the removal version is not decided
+  yet, it is the next major, which the cycle below guarantees.
 - Use `prereleaseUntil: V2_NEXT_PENDING` while the prerelease that ships it is unknown; the same
   release step resolves it.
 - Run `pnpm codemod:docs:update` so the generated migration doc matches the registry.
 - Never rewrite user code onto a name that is itself deprecated. When deprecating a name, search the
   registry for codemods whose output produces it and retarget them.
+
+### Worked example
+
+`oldApi` exists in 1.x, 2.1.0 deprecates it, 3.0.0 removes it:
+
+```ts
+/** @deprecated since 2.1.0 — use {@link newApi} instead. codemod: v3/old-api-to-new */
+export const oldApi = newApi;
+
+// packages/sdk-codemod/src/registry.ts
+{ id: "v3/old-api-to-new", since: "1.0.0", until: "3.0.0", ... }
+```
+
+| upgrade          | offered | why                                                                        |
+| ---------------- | ------- | -------------------------------------------------------------------------- |
+| `1.83.0 → 3.0.0` | yes     | crosses the boundary into the release that removed `oldApi`                |
+| `2.1.0 → 3.0.0`  | yes     | `until: "2.1.0"` would have excluded this caller and broken it unwarned    |
+| `1.83.0 → 2.1.0` | no      | `oldApi` is deprecated but still works; the editor hint is the only signal |
+
+A deprecation that ships and is removed in the same major collapses to a single boundary — the v2
+removals use `since: "1.0.0"`, `until: "2.0.0"`, with the tag reading `since 2.0.0`.
 
 ## Removal
 
