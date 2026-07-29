@@ -19,6 +19,5 @@ export default {
       "duplicates",
     ],
   },
-  ignoreDependencies: ["undici", "vite"],
   ignoreBinaries: ["knip", "publint", "actionlint"],
 } satisfies KnipConfig;
