@@ -47,23 +47,33 @@ check:deprecations` enforces the mechanical parts.
   deprecated it. `--from` is whatever the caller passes, so a project can jump several majors in one
   run; a `since` set at the deprecating version drops every caller older than it, and their code breaks
   at the removal with nothing offered.
-- Getting `since` wrong is not symmetric, so let that decide the default. Too low only lists the
-  codemod for a project that cannot match it — a no-op transform. Too high drops callers whose code
-  breaks at the removal, silently. So `since` is `1.0.0` unless the introduction version is
-  **established**; tighten it only against evidence, never against a recollection.
-- Two things can serve as that evidence, and neither is conclusive on its own:
+- Establish that version — do not reach for the major's floor because looking it up is work. The
+  authoritative source is the published package itself, which no rename or missing release note can
+  distort: ask each candidate version whether it exported the symbol, and bisect.
+
+  ```sh
+  npm pack @tailor-platform/sdk@<version> --pack-destination "$dir"   # then:
+  tar -xzOf "$dir"/*.tgz | grep -c '<symbol>'                        # 0 = absent in that release
+  npm view @tailor-platform/sdk versions --json                       # the list to bisect over
+  ```
+
+  Confirm a hit lands in `package/dist/**/*.d.mts` rather than an internal chunk, so a symbol that was
+  only ever internal is not read as public. About eight probes cover the 140 published 1.x versions.
+
+- The textual shortcuts are worth trying first, but only as candidates the probe then confirms:
   - the release note naming the API in `packages/sdk/CHANGELOG.md` — the oldest mention's `##` heading
-  - `git log -S '<symbol>' --format=%h | tail -1`, whose commit should sit in that same release
+  - `git log -S '<symbol>' --format=%h | tail -1`, with **no pathspec** (history is not followed across
+    renames, so `-- packages/sdk/src` dates `loadAccessToken` to `chore: rename tailor-sdk to sdk`
+    rather than the feature two weeks earlier), reading that commit's diff to check the symbol was
+    added rather than moved.
 
-  Do not add a pathspec to that command. History is not followed across renames, so
-  `-- packages/sdk/src` reports a directory restructure as the introduction: it dates
-  `loadAccessToken` to `chore: rename tailor-sdk to sdk` rather than the feature two weeks earlier.
+  Both fail quietly. For `kyselyTypePlugin` the CHANGELOG never names it and the pickaxe lands on a
+  2026-02 refactor, while the published tarballs show it absent in 1.10.0 and present in 1.20.0.
 
-- Treat the version as not established — and stay at `1.0.0` — when the two disagree, when the commit
-  is a merge or squash whose sha is not in the CHANGELOG, or when no release note names the API at all
-  (`kyselyTypePlugin`, an exported plugin, is never mentioned in the CHANGELOG). `since` is
-  machine-checked only for being valid semver and older than `until`; which version it names is a
-  judgement, so record the evidence in the PR whenever it is not `1.0.0`.
+- Only once the probe cannot settle it — no published artifact covers the range, or the symbol never
+  reached `dist` — fall back to `1.0.0`, and say in the PR what was tried. Erring low costs a no-op
+  transform; erring high drops callers who break at the removal, which is why the floor is the
+  fallback and never the shortcut.
 
 - Do not put `until` at the deprecating version. A caller already on that version has `from == until`,
   fails `from < until`, and is never offered the migration — including the upgrade to the release that
@@ -95,11 +105,11 @@ export const oldApi = newApi;
 | `1.20.0 → 3.0.0` | no      | predates `oldApi`, so there is no reference to rewrite                     |
 
 Both bounds are read off the API's own life: `since` where it appeared, `until` where it disappears.
-`since: "1.40.0"` is only writable here because the release that introduced `oldApi` is established;
-falling back to `1.0.0` keeps the first three rows and merely lists the codemod for the 1.20.0 caller
-too. Moving `since` up to `2.0.0` or `2.1.0` is the one direction that is wrong outright — it drops the
-`1.83.0 → 3.0.0` caller and breaks them at the removal. The v2 entries use `since: "1.0.0"` because
-those APIs do span the whole 1.x line.
+`since: "1.40.0"` is writable here because the release that introduced `oldApi` was established;
+`1.0.0` would keep the first three rows and merely list the codemod for the 1.20.0 caller too, which is
+what makes it a safe fallback rather than a good answer. Moving `since` up to `2.0.0` or `2.1.0` is the
+one direction that is wrong outright — it drops the `1.83.0 → 3.0.0` caller and breaks them at the
+removal.
 
 A deprecation that ships and is removed in the same major collapses to a single boundary — the v2
 removals use `since: "1.0.0"`, `until: "2.0.0"`, with the tag reading `since 2.0.0`.
