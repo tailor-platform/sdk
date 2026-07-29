@@ -34,41 +34,89 @@ export interface CheckDeprecationTagsOptions {
 // A tag's text runs to the end of its JSDoc comment or to the next block tag,
 // whichever comes first.
 const JSDOC_BLOCK = /\/\*\*[\s\S]*?\*\//g;
-const NEXT_BLOCK_TAG = /^@\w/;
+const JSDOC_OPENER = /^[ \t]*\/\*\*/;
+const JSDOC_CLOSER = /\*\/[ \t]*$/;
 const JSDOC_LINE_PREFIX = /^\s*\*\s?/;
+const DEPRECATED_TAG_LINE = /^[ \t]*@deprecated\b(.*)$/;
+const NEXT_BLOCK_TAG = /^[ \t]*@\w/;
+const INLINE_CODE = /`[^`]*`/g;
 const SINCE = /^since\s+(\S+)/;
 // Bounded so the id list stops at the first token that cannot be an id, instead
 // of swallowing the prose that follows it.
 const CODEMOD_IDS = /codemod:\s*([a-z0-9][\w./-]*(?:\s*,\s*[a-z0-9][\w./-]*)*)/;
 const TRAILING_PUNCTUATION = /[.,;:—-]+$/;
 
+// One JSDoc block with its comment scaffolding removed, so a line is read the
+// same way whether it opens the block, continues it, or closes it.
+interface JsdocBlock {
+  /** One-based line of the block's first line. */
+  startLine: number;
+  /** Block lines without `/**`, the leading `*`, or the trailing `*&#47;`. */
+  lines: string[];
+}
+
+function jsdocBlocks(source: string): JsdocBlock[] {
+  // Scan inside JSDoc blocks only, so `@deprecated` in a string literal or a
+  // plain comment is not parsed as a tag.
+  return [...source.matchAll(JSDOC_BLOCK)].map((block) => ({
+    startLine: source.slice(0, block.index).split("\n").length,
+    lines: block[0]
+      .split("\n")
+      .map((line, index) =>
+        (index === 0
+          ? line.replace(JSDOC_OPENER, "")
+          : line.replace(JSDOC_LINE_PREFIX, "")
+        ).replace(JSDOC_CLOSER, ""),
+      ),
+  }));
+}
+
 /**
- * Collect every `@deprecated` tag in a source file with its text.
+ * Collect every `@deprecated` tag in a source file with its text. A tag is only
+ * read where JSDoc reads one: at the start of its own line in the comment.
  * @param source - File contents
  * @returns One entry per `@deprecated` tag, in source order
  */
 export function findDeprecationTags(source: string): DeprecationTag[] {
   const tags: DeprecationTag[] = [];
-  // Scan inside JSDoc blocks only, so `@deprecated` in a string literal or a
-  // plain comment is not parsed as a tag.
-  for (const block of source.matchAll(JSDOC_BLOCK)) {
-    const body = block[0].slice(0, -"*/".length);
-    for (const match of body.matchAll(/@deprecated\b/g)) {
-      const [firstLine = "", ...rest] = body.slice(match.index + match[0].length).split("\n");
-      const collected = [firstLine];
-      for (const line of rest) {
-        const stripped = line.replace(JSDOC_LINE_PREFIX, "");
-        if (NEXT_BLOCK_TAG.test(stripped)) break;
-        collected.push(stripped);
+  for (const { startLine, lines } of jsdocBlocks(source)) {
+    lines.forEach((line, index) => {
+      const tag = DEPRECATED_TAG_LINE.exec(line);
+      if (tag === null) return;
+
+      const collected = [tag[1]!];
+      for (const next of lines.slice(index + 1)) {
+        if (NEXT_BLOCK_TAG.test(next)) break;
+        collected.push(next);
       }
 
       tags.push({
-        line: source.slice(0, block.index + match.index).split("\n").length,
+        line: startLine + index,
         text: collected.join(" ").replace(/\s+/g, " ").trim(),
       });
-    }
+    });
   }
   return tags;
+}
+
+/**
+ * Find `@deprecated` written mid-line inside a JSDoc block, where JSDoc does
+ * not read it as a block tag. Reported rather than ignored: silently skipping it
+ * would let a real deprecation escape the check. Prose *about* the tag is
+ * excluded by writing it as inline code.
+ * @param source - File contents
+ * @returns One-based lines carrying a mention that is not a block tag
+ */
+export function findMisplacedDeprecationMentions(source: string): number[] {
+  const misplaced: number[] = [];
+  for (const { startLine, lines } of jsdocBlocks(source)) {
+    lines.forEach((line, index) => {
+      if (DEPRECATED_TAG_LINE.test(line)) return;
+      if (!line.replace(INLINE_CODE, "").includes("@deprecated")) return;
+      misplaced.push(startLine + index);
+    });
+  }
+  return misplaced;
 }
 
 /**
@@ -132,7 +180,15 @@ export function checkDeprecationTags(
     }
   }
 
-  return problems;
+  for (const line of findMisplacedDeprecationMentions(source)) {
+    problems.push({
+      line,
+      message:
+        "`@deprecated` must start its own JSDoc line to be read as a tag; write it as inline code (`` `@deprecated` ``) when the text is only prose about deprecation",
+    });
+  }
+
+  return problems.toSorted((left, right) => left.line - right.line);
 }
 
 /** Outcome of rewriting the pending `since` sentinel in one file. */
