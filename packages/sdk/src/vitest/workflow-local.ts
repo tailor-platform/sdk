@@ -110,7 +110,7 @@ export async function runWorkflowLocally<W extends AnyWorkflow>(
 
   root.tailor = {
     ...previousTailor,
-    workflow: createLocalWorkflowRuntime(previousTailor?.workflow, runner.startJobFunction),
+    workflow: createLocalWorkflowRuntime(previousTailor?.workflow, runner.execJobFunction),
   };
 
   try {
@@ -134,11 +134,11 @@ export async function runWorkflowLocally<W extends AnyWorkflow>(
 
 function createLocalJobRunner(): {
   runJob: (name: string, args?: unknown) => Promise<unknown>;
-  startJobFunction: (name: string, args?: unknown) => unknown;
+  execJobFunction: (name: string, args?: unknown) => unknown;
 } {
   let activeExecution: LocalExecution | undefined;
 
-  const startJobFunction = (jobName: string, args?: unknown): unknown => {
+  const execJobFunction = (jobName: string, args?: unknown): unknown => {
     if (!activeExecution) {
       throw new Error(
         `Cannot start workflow job "${jobName}" outside runWorkflowLocally() job execution.`,
@@ -204,7 +204,7 @@ function createLocalJobRunner(): {
     }
   };
 
-  return { runJob, startJobFunction };
+  return { runJob, execJobFunction };
 }
 
 async function settlePendingStart(
@@ -261,7 +261,6 @@ function createLocalWorkflowRuntime(
 
   return {
     execJobFunction,
-    startJobFunction: execJobFunction,
     startWorkflow,
     resumeWorkflowExecution,
     wait: (key, payload) => {

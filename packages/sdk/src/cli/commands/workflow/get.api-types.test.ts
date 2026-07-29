@@ -1,7 +1,7 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, test } from "vitest";
 import { createWorkflow, createWorkflowJob } from "#/configure/services/workflow/index";
-import { type GetWorkflowOptions, type GetWorkflowTypedOptions } from "./get";
+import { type GetWorkflowTypedOptions } from "./get";
 
 const mainJob = createWorkflowJob({
   name: "main",
@@ -46,25 +46,6 @@ describe("getWorkflow API types", () => {
     acceptsTypedOptions({
       // @ts-expect-error - typed overload requires workflow, not name
       name: "legacy-workflow",
-    });
-  });
-
-  test("keeps deprecated GetWorkflowOptions shape available", () => {
-    const acceptsDeprecatedOptions = (_options: GetWorkflowOptions): void => {};
-
-    acceptsDeprecatedOptions({
-      name: "legacy-workflow",
-    });
-
-    acceptsDeprecatedOptions({
-      name: "legacy-workflow",
-      workspaceId: "ws-1",
-      profile: "dev",
-    });
-
-    acceptsDeprecatedOptions({
-      // @ts-expect-error - deprecated options must keep legacy name shape
-      workflow: myWorkflow,
     });
   });
 });

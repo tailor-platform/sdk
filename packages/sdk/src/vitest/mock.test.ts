@@ -145,7 +145,7 @@ describe("mock", () => {
 
     test("records started jobs even when no handler is configured", () => {
       using wf = mockWorkflow();
-      const start = (globalThis as any).tailor.workflow.startJobFunction;
+      const start = (globalThis as any).tailor.workflow.execJobFunction;
       expect(() => start("my-job", { key: "value" })).toThrow(/No workflow job mock/);
 
       expect(wf.startedJobs).toEqual([{ jobName: "my-job", args: { key: "value" } }]);
@@ -158,7 +158,7 @@ describe("mock", () => {
         return null;
       });
 
-      const start = (globalThis as any).tailor.workflow.startJobFunction;
+      const start = (globalThis as any).tailor.workflow.execJobFunction;
       const result = start("validate", {});
 
       expect(result).toEqual({ valid: true });
@@ -168,7 +168,7 @@ describe("mock", () => {
       using wf = mockWorkflow();
       wf.enqueueResults({ step: 1 }, { step: 2 });
 
-      const start = (globalThis as any).tailor.workflow.startJobFunction;
+      const start = (globalThis as any).tailor.workflow.execJobFunction;
       expect(start("job1", {})).toEqual({ step: 1 });
       expect(start("job2", {})).toEqual({ step: 2 });
     });
@@ -178,14 +178,14 @@ describe("mock", () => {
       wf.setJobHandler(() => ({ fallback: true }));
       wf.enqueueResult({ queued: true });
 
-      const start = (globalThis as any).tailor.workflow.startJobFunction;
+      const start = (globalThis as any).tailor.workflow.execJobFunction;
       expect(start("job1", {})).toEqual({ queued: true });
       expect(start("job2", {})).toEqual({ fallback: true });
     });
 
     test("reset clears all state", () => {
       using wf = mockWorkflow();
-      const start = (globalThis as any).tailor.workflow.startJobFunction;
+      const start = (globalThis as any).tailor.workflow.execJobFunction;
       expect(() => start("job", {})).toThrow(/No workflow job mock/);
 
       wf.reset();
@@ -973,24 +973,6 @@ describe("mock", () => {
       expect(callbackRan).toBe(false);
       expect(wf.resolveCalls).toEqual([{ executionId: "exec-1", key: "approval" }]);
     });
-
-    describe("canonical aliases", () => {
-      test("execJobFunction and startJobFunction share the same call log", () => {
-        using wf = mockWorkflow();
-        wf.setJobHandler(() => ({ ok: true }));
-        // oxlint-disable-next-line no-explicit-any
-        const g = globalThis as any;
-
-        g.tailor.workflow.execJobFunction("job-a", { via: "canonical" });
-        g.tailor.workflow.startJobFunction("job-b", { via: "alias" });
-
-        expect(wf.startedJobs).toEqual([
-          { jobName: "job-a", args: { via: "canonical" } },
-          { jobName: "job-b", args: { via: "alias" } },
-        ]);
-        expect(wf.startJobFunction).toBe(wf.execJobFunction);
-      });
-    });
   });
 
   describe("injectMocks / cleanupMocks (base platform globals)", () => {
@@ -1014,11 +996,11 @@ describe("mock", () => {
 
     test("a mock overlays the default workflow runner and dispose restores it", () => {
       const base = (globalThis as any).tailor.workflow;
-      expect(base.startJobFunction).toBeTypeOf("function");
+      expect(base.execJobFunction).toBeTypeOf("function");
       {
         using _wf = mockWorkflow();
         expect((globalThis as any).tailor.workflow).not.toBe(base);
-        expect((globalThis as any).tailor.workflow.startJobFunction).toBeTypeOf("function");
+        expect((globalThis as any).tailor.workflow.execJobFunction).toBeTypeOf("function");
       }
       expect((globalThis as any).tailor.workflow).toBe(base);
     });

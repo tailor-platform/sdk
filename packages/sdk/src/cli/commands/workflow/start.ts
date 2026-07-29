@@ -57,10 +57,7 @@ type StartWorkflowArgOption<W extends WorkflowLike> = W extends WorkflowLike
   ? StartWorkflowArgOptionForSingleWorkflow<W>
   : never;
 
-/**
- * @deprecated Use StartWorkflowTypedOptions instead.
- */
-export interface StartWorkflowOptions {
+type StartWorkflowByNameOptions = {
   name: string;
   machineUser?: string;
   arg?: Jsonifiable;
@@ -68,9 +65,6 @@ export interface StartWorkflowOptions {
   profile?: string;
   configPath?: string;
   interval?: number;
-}
-
-type StartWorkflowByNameOptions = StartWorkflowOptions & {
   machineUserSource?: MachineUserInputSource;
 };
 
@@ -169,7 +163,14 @@ async function resolveApplicationAuthNamespace(options: {
   return authNamespace;
 }
 
-async function startWorkflowByName(
+/**
+ * Start a workflow looked up by name, resolving the machine user from the
+ * flag, environment, or profile default. Backs the `workflow start` command;
+ * programmatic callers use {@link startWorkflow} with a workflow definition.
+ * @param options - Start options keyed by workflow name
+ * @returns Start result with wait helper
+ */
+export async function startWorkflowByName(
   options: StartWorkflowByNameOptions,
 ): Promise<StartWorkflowResultWithWait> {
   const machineUser = await loadMachineUserName({
@@ -218,18 +219,7 @@ async function startWorkflowByName(
  */
 export async function startWorkflow<W extends WorkflowLike>(
   options: StartWorkflowTypedOptions<W>,
-): Promise<StartWorkflowResultWithWait>;
-export async function startWorkflow(
-  options: StartWorkflowOptions,
-): Promise<StartWorkflowResultWithWait>;
-export async function startWorkflow<W extends WorkflowLike>(
-  options: StartWorkflowOptions | StartWorkflowTypedOptions<W>,
 ): Promise<StartWorkflowResultWithWait> {
-  // Keep backward compatibility: if both legacy and typed keys are present, prefer legacy shape.
-  if ("name" in options) {
-    return await startWorkflowByName(options);
-  }
-
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });

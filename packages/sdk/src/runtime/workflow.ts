@@ -8,8 +8,7 @@
  * The canonical names (`startWorkflow`, `execJobFunction`,
  * `resumeWorkflowExecution`) mirror the public `tailor.v1` RPC vocabulary:
  * `Exec*` is a blocking call that returns the job's result, while `Start*`
- * returns only an execution ID. `startJobFunction` is kept as an alias of
- * `execJobFunction` for code written against earlier v2 prereleases.
+ * returns only an execution ID.
  * @example
  * import { workflow } from "@tailor-platform/sdk/runtime";
  *
@@ -55,12 +54,6 @@ export interface ExecJobFunctionOptions {
 }
 
 /**
- * Alias for {@link ExecJobFunctionOptions}. Kept for backward compatibility.
- * @deprecated Use {@link ExecJobFunctionOptions} instead.
- */
-export type StartJobFunctionOptions = ExecJobFunctionOptions;
-
-/**
  * Platform API surface for `tailor.workflow`. Describes the shape the platform
  * runtime injects on `globalThis.tailor.workflow`.
  */
@@ -86,24 +79,12 @@ export interface PlatformWorkflowAPI {
    *
    * Canonical name under the platform verb convention: `Exec*` blocks and
    * returns the job's result, while `Start*` returns only an execution ID.
-   * {@link startJobFunction} is an alias that resolves to the same platform
-   * implementation.
    * @param jobName - Job name as defined in the workflow
    * @param args - Arguments forwarded to the job
    * @param options - Optional execution options (e.g. `executionPolicyKey`)
    * @returns The job's return value
    */
   execJobFunction(jobName: string, args?: any, options?: ExecJobFunctionOptions): any;
-
-  /**
-   * Alias for {@link execJobFunction}. Kept for backward compatibility.
-   * @deprecated Use {@link execJobFunction} instead.
-   * @param jobName - Job name as defined in the workflow
-   * @param args - Arguments forwarded to the job
-   * @param options - Optional execution options (e.g. `executionPolicyKey`)
-   * @returns The job's return value
-   */
-  startJobFunction(jobName: string, args?: any, options?: StartJobFunctionOptions): any;
 
   /**
    * Suspends the current workflow execution and waits for an external signal to resume.
@@ -150,15 +131,6 @@ const resumeWorkflowExecution: PlatformWorkflowAPI["resumeWorkflowExecution"] = 
 const execJobFunction: PlatformWorkflowAPI["execJobFunction"] = (...args) =>
   api().execJobFunction(...args);
 
-/**
- * Alias for {@link execJobFunction}. Kept for backward compatibility.
- * @deprecated Use {@link execJobFunction} instead.
- * @param args - Forwarded to {@link PlatformWorkflowAPI.execJobFunction}
- * @returns The job's return value
- */
-const startJobFunction: PlatformWorkflowAPI["startJobFunction"] = (...args) =>
-  api().execJobFunction(...args);
-
 const wait: PlatformWorkflowAPI["wait"] = (...args) => api().wait(...args);
 
 const resolve: PlatformWorkflowAPI["resolve"] = (...args) => api().resolve(...args);
@@ -168,7 +140,6 @@ export const workflow = {
   startWorkflow,
   resumeWorkflowExecution,
   execJobFunction,
-  startJobFunction,
   wait,
   resolve,
 } as const satisfies PlatformWorkflowAPI;

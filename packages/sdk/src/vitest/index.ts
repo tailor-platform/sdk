@@ -33,8 +33,8 @@ import type { Plugin } from "vitest/config";
  *
  * - **`process`** and **`require`** are NOT removed or blocked. Vitest's internal
  *   runner depends on them. On the real Tailor Platform runtime, they do not exist.
- * - **Dynamic `import()`** of bundled files (via `createImportMain()`) bypasses
- *   the transform hook since those files are loaded through Node.js native loader.
+ * - **Dynamic `import()`** of bundled files bypasses the transform hook since
+ *   those files are loaded through Node.js native loader.
  * ## Options
  *
  * - **`config`** — Path to `tailor.config.ts`. Loads `defineSecretManager()` values

@@ -72,7 +72,7 @@ describe("watchExecutorJob", () => {
 
   test("retries retryable job polling failures", async () => {
     const result = await watchExecutorJob({
-      executorName: "my-executor",
+      executor: { name: "my-executor" },
       jobId: "job-1",
       interval: 1,
       timeout: 100,
@@ -98,7 +98,7 @@ describe("watchExecutorJob", () => {
     });
 
     const result = await watchExecutorJob({
-      executorName: "my-executor",
+      executor: { name: "my-executor" },
       jobId: "job-1",
       interval: 1,
       timeout: 5,
@@ -148,7 +148,7 @@ describe("watchExecutorJob", () => {
     });
 
     const result = await watchExecutorJob({
-      executorName: "my-executor",
+      executor: { name: "my-executor" },
       jobId: "job-1",
       interval: 1,
       timeout: 100,

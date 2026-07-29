@@ -84,7 +84,7 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 - `secretmanager` — secret-vault access (`getSecret`, `getSecrets`)
 - `authconnection` — OAuth-style connection tokens (`getConnectionToken`)
 - `idp` — IdP user management (`new Client({ namespace })`)
-- `workflow` — workflow & job control (`startWorkflow`, `resumeWorkflowExecution`, `execJobFunction`, `wait`, `resolve`; `startJobFunction` is kept as an alias of `execJobFunction`)
+- `workflow` — workflow & job control (`startWorkflow`, `resumeWorkflowExecution`, `execJobFunction`, `wait`, `resolve`)
 - `context` — execution context (`getInvoker`)
 - `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `downloadStream`, `uploadStream`)
 - `aigateway` — AI Gateway URL resolution (`get`)

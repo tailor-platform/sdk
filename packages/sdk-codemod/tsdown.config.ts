@@ -52,6 +52,8 @@ export default defineConfig([
       "v2/rename-bin/scripts/transform": "codemods/v2/rename-bin/scripts/transform.ts",
       "v2/wait-point-rename/scripts/transform":
         "codemods/v2/wait-point-rename/scripts/transform.ts",
+      "v2/exec-job-function-rename/scripts/transform":
+        "codemods/v2/exec-job-function-rename/scripts/transform.ts",
       "v2/workflow-trigger-rename/scripts/transform":
         "codemods/v2/workflow-trigger-rename/scripts/transform.ts",
     },

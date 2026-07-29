@@ -82,43 +82,6 @@ export type WatchExecutorJobTypedOptions<E extends ExecutorLike = ExecutorLike> 
   showProgress?: boolean;
 };
 
-/**
- * @deprecated Use ListExecutorJobsTypedOptions instead.
- */
-export interface ListExecutorJobsOptions {
-  executorName: string;
-  status?: string;
-  order?: Order;
-  limit?: number;
-  workspaceId?: string;
-  profile?: string;
-}
-
-/**
- * @deprecated Use GetExecutorJobTypedOptions instead.
- */
-export interface GetExecutorJobOptions {
-  executorName: string;
-  jobId: string;
-  attempts?: boolean;
-  workspaceId?: string;
-  profile?: string;
-}
-
-/**
- * @deprecated Use WatchExecutorJobTypedOptions instead.
- */
-export interface WatchExecutorJobOptions {
-  executorName: string;
-  jobId: string;
-  workspaceId?: string;
-  profile?: string;
-  interval?: number;
-  timeout?: number;
-  logs?: boolean;
-  showProgress?: boolean;
-}
-
 export interface ExecutorJobDetailInfo extends ExecutorJobInfo {
   attempts?: ExecutorJobAttemptInfo[];
 }
@@ -171,15 +134,8 @@ function createUnknownExecutorJob(executorName: string, jobId: string): Executor
  */
 export async function listExecutorJobs<E extends ExecutorLike>(
   options: ListExecutorJobsTypedOptions<E>,
-): Promise<ExecutorJobListInfo[]>;
-export async function listExecutorJobs(
-  options: ListExecutorJobsOptions,
-): Promise<ExecutorJobListInfo[]>;
-export async function listExecutorJobs<E extends ExecutorLike>(
-  options: ListExecutorJobsOptions | ListExecutorJobsTypedOptions<E>,
 ): Promise<ExecutorJobListInfo[]> {
-  // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
-  const executorName = "executorName" in options ? options.executorName : options.executor.name;
+  const executorName = options.executor.name;
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -240,15 +196,8 @@ export async function listExecutorJobs<E extends ExecutorLike>(
  */
 export async function getExecutorJob<E extends ExecutorLike>(
   options: GetExecutorJobTypedOptions<E>,
-): Promise<ExecutorJobDetailInfo>;
-export async function getExecutorJob(
-  options: GetExecutorJobOptions,
-): Promise<ExecutorJobDetailInfo>;
-export async function getExecutorJob<E extends ExecutorLike>(
-  options: GetExecutorJobOptions | GetExecutorJobTypedOptions<E>,
 ): Promise<ExecutorJobDetailInfo> {
-  // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
-  const executorName = "executorName" in options ? options.executorName : options.executor.name;
+  const executorName = options.executor.name;
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -307,15 +256,8 @@ export async function getExecutorJob<E extends ExecutorLike>(
  */
 export async function watchExecutorJob<E extends ExecutorLike>(
   options: WatchExecutorJobTypedOptions<E>,
-): Promise<WatchExecutorJobResult>;
-export async function watchExecutorJob(
-  options: WatchExecutorJobOptions,
-): Promise<WatchExecutorJobResult>;
-export async function watchExecutorJob<E extends ExecutorLike>(
-  options: WatchExecutorJobOptions | WatchExecutorJobTypedOptions<E>,
 ): Promise<WatchExecutorJobResult> {
-  // Discriminant: legacy options have top-level 'executorName', typed options use 'executor'.
-  const executorName = "executorName" in options ? options.executorName : options.executor.name;
+  const executorName = options.executor.name;
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -784,7 +726,7 @@ export const jobsCommand = defineAppCommand({
     if (args.jobId) {
       if (args.wait) {
         const result = await watchExecutorJob({
-          executorName: args.executorName,
+          executor: { name: args.executorName },
           jobId: args.jobId,
           workspaceId: args["workspace-id"],
           profile: args.profile,
@@ -852,7 +794,7 @@ export const jobsCommand = defineAppCommand({
       }
 
       const job = await getExecutorJob({
-        executorName: args.executorName,
+        executor: { name: args.executorName },
         jobId: args.jobId,
         attempts: args.attempts,
         workspaceId: args["workspace-id"],
@@ -868,7 +810,7 @@ export const jobsCommand = defineAppCommand({
         logger.warn("--wait flag is ignored in list mode. Specify a job ID to wait.");
       }
       const jobs = await listExecutorJobs({
-        executorName: args.executorName,
+        executor: { name: args.executorName },
         status: args.status,
         order: args.order,
         limit: args.limit,
