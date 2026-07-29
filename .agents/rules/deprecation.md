@@ -35,8 +35,14 @@ check:deprecations` enforces the mechanical parts.
   automated still gets an entry: omit `scriptPath` and ship `suspiciousPatterns` + `prompt`.
 - The entry's `since` / `until` are a version **range**, a different axis from the tag's `since`, which
   is one version. `tailor upgrade` offers a codemod when `since <= from < until <= to`: `since` bounds
-  the caller's current version and `until` is the version that **removes** the API — the boundary a
-  caller must cross to be offered the migration.
+  the caller's current version and `until` is the boundary they must cross to be offered the migration.
+- `until` is the **next major**, `<current major + 1>.0.0`. That is not a convention to weigh but where
+  the removal has to land: removing or renaming a public API is a `major` changeset (see
+  [docs/changeset.md](../../docs/changeset.md)), so the release that drops the API is the only boundary
+  worth pointing at. Every entry in the registry today reads `until: "2.0.0"`. On a prerelease line the
+  stable major stays in `until` and the `2.0.0-next.N` goes in `prereleaseUntil` — a `-next` version in
+  `until` is rejected. A codemod that only modernizes call sites without removing anything is outside
+  this cycle and may sit at a minor.
 - `since` is the version that **introduced** the API being migrated away from, not the version that
   deprecated it. `--from` is whatever the caller passes, so a project can jump several majors in one
   run; a `since` set at the deprecating version drops every caller older than it, and their code breaks
@@ -69,10 +75,9 @@ check:deprecations` enforces the mechanical parts.
   transform; erring high drops callers who break at the removal, which is why the floor is the
   fallback and never the shortcut.
 
-- Do not put `until` at the deprecating version. A caller already on that version has `from == until`,
-  fails `from < until`, and is never offered the migration — including the upgrade to the release that
-  removes the API, which is exactly when their code breaks. When the removal version is not decided
-  yet, it is the next major, which the cycle below guarantees.
+- The tempting mistake is `until` at the deprecating version. A caller already on it has
+  `from == until`, fails `from < until`, and is never offered the migration — including the upgrade to
+  the release that removes the API, which is exactly when their code breaks.
 - Use `prereleaseUntil: V2_NEXT_PENDING` while the prerelease that ships it is unknown; the same
   release step resolves it.
 - Run `pnpm codemod:docs:update` so the generated migration doc matches the registry.
