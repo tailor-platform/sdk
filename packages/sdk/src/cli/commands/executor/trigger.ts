@@ -70,10 +70,7 @@ type TriggerExecutorBaseOptions<E extends ManualTriggerExecutor> = {
   profile?: string;
 };
 
-/**
- * @deprecated Use TriggerExecutorTypedOptions instead.
- */
-export interface TriggerExecutorOptions {
+interface TriggerExecutorByNameOptions {
   executorName: string;
   payload?: JsonObject;
   workspaceId?: string;
@@ -90,7 +87,7 @@ export interface TriggerExecutorResult {
 }
 
 async function triggerExecutorByName(
-  options: TriggerExecutorOptions,
+  options: TriggerExecutorByNameOptions,
 ): Promise<TriggerExecutorResult> {
   const accessToken = await loadAccessToken({
     profile: options.profile,
@@ -127,18 +124,7 @@ async function triggerExecutorByName(
  */
 export async function triggerExecutor<E extends ManualTriggerExecutor>(
   options: TriggerExecutorTypedOptions<E>,
-): Promise<TriggerExecutorResult>;
-export async function triggerExecutor(
-  options: TriggerExecutorOptions,
-): Promise<TriggerExecutorResult>;
-export async function triggerExecutor<E extends ManualTriggerExecutor>(
-  options: TriggerExecutorOptions | TriggerExecutorTypedOptions<E>,
 ): Promise<TriggerExecutorResult> {
-  // Keep backward compatibility: if both legacy and typed keys are present, prefer legacy shape.
-  if ("executorName" in options) {
-    return await triggerExecutorByName(options);
-  }
-
   if (options.executor.trigger.kind !== "incomingWebhook" && options.payload !== undefined) {
     throw new Error(
       `Executor '${options.executor.name}' has '${options.executor.trigger.kind}' trigger type. ` +
@@ -294,7 +280,7 @@ The \`--logs\` option displays logs from the downstream execution when available
 
     if (args.wait) {
       const watchResult = await watchExecutorJob({
-        executorName: args.executorName,
+        executor: { name: args.executorName },
         jobId: result.jobId,
         workspaceId: args["workspace-id"],
         profile: args.profile,

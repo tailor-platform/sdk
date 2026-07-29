@@ -2,7 +2,7 @@ import { brandValue } from "#/utils/brand";
 import { dispatchStartJob, registerJob, type RegisteredJobBody } from "./registry";
 import { withWorkflowTestInvoker } from "./test-env-key";
 import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
-import type { StartJobFunctionOptions } from "#/runtime/workflow";
+import type { ExecJobFunctionOptions } from "#/runtime/workflow";
 import type { JsonCompatible, TypeLevelError } from "#/types/helpers";
 
 /**
@@ -56,8 +56,8 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
    * }
    */
   start: [Input] extends [undefined]
-    ? (input?: undefined, options?: StartJobFunctionOptions) => Awaited<Output>
-    : (input: Input, options?: StartJobFunctionOptions) => Awaited<Output>;
+    ? (input?: undefined, options?: ExecJobFunctionOptions) => Awaited<Output>
+    : (input: Input, options?: ExecJobFunctionOptions) => Awaited<Output>;
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
   publishEvents?: boolean;
 }
@@ -133,7 +133,7 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
       // the bundler rewrite, which forwards the literal `undefined` from the
       // AST as a third argument. Without this, local execution and bundled
       // workflows would hand mocks different call shapes.
-      function start(args?: unknown, options?: StartJobFunctionOptions) {
+      function start(args?: unknown, options?: ExecJobFunctionOptions) {
         // oxlint-disable-next-line prefer-rest-params
         return (
           arguments.length >= 2

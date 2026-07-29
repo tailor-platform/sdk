@@ -427,7 +427,7 @@ An exact-key policy applies to dispatches whose runtime key equals the policy ke
 
 ### Referencing a Policy from a Workflow
 
-Pass the runtime key through the `executionPolicyKey` option on `job.start()` or `tailor.workflow.execJobFunction()` (or its alias `startJobFunction`). For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`matchType: "prefix"`), there is no `<policy>.key` — call `<policy>.keyFor(suffix)` to build the concrete key. `keyFor` joins the prefix and suffix with `.` by default; override it with `separator` — the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group), or a `def` field on a single `defineWorkflowExecutionPolicy`.
+Pass the runtime key through the `executionPolicyKey` option on `job.start()` or `tailor.workflow.execJobFunction()`. For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`matchType: "prefix"`), there is no `<policy>.key` — call `<policy>.keyFor(suffix)` to build the concrete key. `keyFor` joins the prefix and suffix with `.` by default; override it with `separator` — the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group), or a `def` field on a single `defineWorkflowExecutionPolicy`.
 
 ```typescript
 import { createWorkflowJob } from "@tailor-platform/sdk";
@@ -453,7 +453,7 @@ export const mainJob = createWorkflowJob({
 });
 ```
 
-The same `executionPolicyKey` option is available on `tailor.workflow.execJobFunction(name, args, options)` (or its alias `tailor.workflow.startJobFunction`) for jobs invoked by name.
+The same `executionPolicyKey` option is available on `tailor.workflow.execJobFunction(name, args, options)` for jobs invoked by name.
 
 ## Starting a Workflow from a Resolver
 

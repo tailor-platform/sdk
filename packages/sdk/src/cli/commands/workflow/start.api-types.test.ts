@@ -1,7 +1,7 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, test, expectTypeOf } from "vitest";
 import { createWorkflow, createWorkflowJob } from "#/configure/services/workflow/index";
-import { type StartWorkflowOptions, type StartWorkflowTypedOptions } from "./start";
+import { type StartWorkflowTypedOptions } from "./start";
 
 // `invoker` is typed as `MachineUserName`, which falls back to `string` until
 // `tailor.d.ts` augments `MachineUserNameRegistry`. Narrowing to the registered
@@ -75,7 +75,6 @@ const acceptsNoInputWorkflowOptions = (
 ): void => {};
 
 const acceptsDefaultWorkflowOptions = (_options: StartWorkflowTypedOptions): void => {};
-const acceptsDeprecatedOptions = (_options: StartWorkflowOptions): void => {};
 const acceptsUnionWorkflowOptions = (
   _options: StartWorkflowTypedOptions<typeof calculationWorkflow | typeof noInputWorkflow>,
 ): void => {};
@@ -195,33 +194,5 @@ describe("startWorkflow API types", () => {
 
     type PlainUnionArg = StartWorkflowTypedOptions<PlainWorkflowA | PlainWorkflowB>["arg"];
     expectTypeOf<PlainUnionArg>().toEqualTypeOf<{ foo: number } | { bar: string }>();
-  });
-
-  test("keeps deprecated StartWorkflowOptions shape available", () => {
-    acceptsDeprecatedOptions({
-      name: "legacy-workflow",
-      machineUser: "admin",
-    });
-
-    acceptsDeprecatedOptions({
-      name: "legacy-workflow",
-      machineUser: "admin",
-      arg: { any: "value" },
-      configPath: "./tailor.config.ts",
-    });
-
-    acceptsDeprecatedOptions({
-      name: "legacy-workflow",
-      machineUser: "admin",
-      // @ts-expect-error - source tracking is internal to CLI commands
-      machineUserSource: "option",
-    });
-
-    acceptsDeprecatedOptions({
-      // @ts-expect-error - deprecated options must keep legacy name/machineUser shape
-      workflow: calculationWorkflow,
-      invoker: "admin",
-      arg: { a: 1, b: 2 },
-    });
   });
 });

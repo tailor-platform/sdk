@@ -143,6 +143,10 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/db-type-to-table")).resolves.toBeUndefined();
   });
 
+  test("v2/exec-job-function-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/exec-job-function-rename")).resolves.toBeUndefined();
+  });
+
   test("v2/workflow-trigger-rename transforms correctly", async () => {
     await expect(runFixtureCases("v2/workflow-trigger-rename")).resolves.toBeUndefined();
   });

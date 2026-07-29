@@ -42,10 +42,6 @@ describe("@tailor-platform/sdk/runtime/globals activates ambient globals", () =>
     expectTypeOf<typeof tailor.workflow.execJobFunction>().toBeFunction();
   });
 
-  test("tailor.workflow.startJobFunction is declared as a function", () => {
-    expectTypeOf<typeof tailor.workflow.startJobFunction>().toBeFunction();
-  });
-
   test("tailor.context.Invoker is exposed as a namespace type", () => {
     expectTypeOf<tailor.context.Invoker | null>().not.toBeAny();
   });

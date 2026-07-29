@@ -99,10 +99,7 @@ function replaceStart<Start extends ProcedureFn>(definition: {
 /**
  * Acquire a disposable mock for workflow operations (`tailor.workflow`).
  * Restored on dispose.
- *
- * The canonical `execJobFunction` and its `startJobFunction` alias share the
- * same underlying `vi.fn`, so calls through either name are recorded once and
- * handlers configured on either name apply to both.
+
  * @returns Disposable workflow mock control object
  * @example
  * ```typescript
@@ -176,10 +173,7 @@ export function mockWorkflow() {
       : startWorkflow(call[0], platformSerialize(call[1]));
   const resumeShim = (executionId: string) => resumeWorkflowExecution(executionId);
   root.workflow = {
-    // The canonical and alias names share a single shim so calls through
-    // either name are recorded on the same underlying vi.fn.
     execJobFunction: jobFunctionShim,
-    startJobFunction: jobFunctionShim,
     startWorkflow: workflowShim,
     resumeWorkflowExecution: resumeShim,
     wait: (key: string, payload?: unknown) => wait(key, platformSerialize(payload)),
@@ -195,11 +189,6 @@ export function mockWorkflow() {
   const facade = {
     /** The `execJobFunction` `vi.fn`. */
     execJobFunction,
-    /**
-     * Alias of `execJobFunction` (same `vi.fn` reference).
-     * @deprecated Use `execJobFunction` instead.
-     */
-    startJobFunction: execJobFunction,
     /** The `startWorkflow` `vi.fn`. */
     startWorkflow,
     /** The `resumeWorkflowExecution` `vi.fn`. */

@@ -48,18 +48,6 @@ export type ListWorkflowExecutionsTypedOptions<W extends WorkflowLike = Workflow
   limit?: number;
 };
 
-/**
- * @deprecated Use ListWorkflowExecutionsTypedOptions instead.
- */
-export interface ListWorkflowExecutionsOptions {
-  workspaceId?: string;
-  profile?: string;
-  workflowName?: string;
-  status?: string;
-  order?: Order;
-  limit?: number;
-}
-
 export interface GetWorkflowExecutionOptions {
   executionId: string;
   workspaceId?: string;
@@ -128,23 +116,8 @@ function parseStatus(status: string): WorkflowExecution_Status {
  */
 export async function listWorkflowExecutions<W extends WorkflowLike>(
   options?: ListWorkflowExecutionsTypedOptions<W>,
-): Promise<WorkflowExecutionInfo[]>;
-export async function listWorkflowExecutions(
-  options?: ListWorkflowExecutionsOptions,
-): Promise<WorkflowExecutionInfo[]>;
-export async function listWorkflowExecutions<W extends WorkflowLike>(
-  options?: ListWorkflowExecutionsOptions | ListWorkflowExecutionsTypedOptions<W>,
 ): Promise<WorkflowExecutionInfo[]> {
-  // Discriminant: legacy options have 'workflowName', typed options use 'workflow'.
-  // Note: since ListWorkflowExecutionsTypedOptions has all optional fields, TypeScript may
-  // resolve a legacy-typed variable to the typed overload (skipping excess property checks).
-  // Runtime behavior is correct regardless because the discriminant handles both shapes.
-  const workflowName =
-    options && "workflowName" in options
-      ? options.workflowName
-      : options && "workflow" in options
-        ? options.workflow?.name
-        : undefined;
+  const workflowName = options?.workflow?.name;
   const accessToken = await loadAccessToken({
     profile: options?.profile,
   });
@@ -452,7 +425,7 @@ export const executionsCommand = defineAppCommand({
       const executions = await listWorkflowExecutions({
         workspaceId: args["workspace-id"],
         profile: args.profile,
-        workflowName: args["workflow-name"],
+        workflow: args["workflow-name"] === undefined ? undefined : { name: args["workflow-name"] },
         status: args.status,
         order: args.order,
         limit: args.limit,

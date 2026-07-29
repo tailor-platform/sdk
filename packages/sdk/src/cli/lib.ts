@@ -39,15 +39,6 @@ export type {
 export type { Resolver } from "#/types/resolver.generated";
 export type { Executor } from "#/types/executor.generated";
 
-/** @deprecated Import from '@tailor-platform/sdk/plugin/kysely-type' instead */
-export { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
-/** @deprecated Import from '@tailor-platform/sdk/plugin/enum-constants' instead */
-export { enumConstantsPlugin } from "#/plugin/builtin/enum-constants/index";
-/** @deprecated Import from '@tailor-platform/sdk/plugin/file-utils' instead */
-export { fileUtilsPlugin } from "#/plugin/builtin/file-utils/index";
-/** @deprecated Import from '@tailor-platform/sdk/plugin/seed' instead */
-export { seedPlugin } from "#/plugin/builtin/seed/index";
-
 export {
   show,
   type ShowOptions,
@@ -93,15 +84,10 @@ export { getOAuth2Client, type GetOAuth2ClientOptions } from "./commands/oauth2c
 export { listOAuth2Clients, type ListOAuth2ClientsOptions } from "./commands/oauth2client/list";
 export type { OAuth2ClientInfo, OAuth2ClientCredentials } from "./commands/oauth2client/transform";
 export { listWorkflows, type ListWorkflowsOptions } from "./commands/workflow/list";
-export {
-  getWorkflow,
-  type GetWorkflowOptions,
-  type GetWorkflowTypedOptions,
-} from "./commands/workflow/get";
+export { getWorkflow, type GetWorkflowTypedOptions } from "./commands/workflow/get";
 export type { MachineUserName } from "@tailor-platform/sdk";
 export {
   startWorkflow,
-  type StartWorkflowOptions,
   type StartWorkflowTypedOptions,
   type StartWorkflowResultWithWait,
   type WaitOptions,
@@ -109,7 +95,6 @@ export {
 export {
   listWorkflowExecutions,
   getWorkflowExecution,
-  type ListWorkflowExecutionsOptions,
   type ListWorkflowExecutionsTypedOptions,
   type GetWorkflowExecutionOptions,
   type GetWorkflowExecutionResult,
@@ -130,7 +115,6 @@ export type {
 } from "./commands/workflow/transform";
 export {
   triggerExecutor,
-  type TriggerExecutorOptions,
   type TriggerExecutorTypedOptions,
   type TriggerExecutorResult,
 } from "./commands/executor/trigger";
@@ -139,21 +123,14 @@ export {
   getExecutorJob,
   getExecutorWaitFailureMessage,
   watchExecutorJob,
-  type ListExecutorJobsOptions,
   type ListExecutorJobsTypedOptions,
-  type GetExecutorJobOptions,
   type GetExecutorJobTypedOptions,
-  type WatchExecutorJobOptions,
   type WatchExecutorJobTypedOptions,
   type ExecutorJobDetailInfo,
   type WatchExecutorJobResult,
 } from "./commands/executor/jobs";
 export { listExecutors, type ListExecutorsOptions } from "./commands/executor/list";
-export {
-  getExecutor,
-  type GetExecutorOptions,
-  type GetExecutorTypedOptions,
-} from "./commands/executor/get";
+export { getExecutor, type GetExecutorTypedOptions } from "./commands/executor/get";
 export {
   listWebhookExecutors,
   type ListWebhookExecutorsOptions,

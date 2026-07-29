@@ -8,7 +8,7 @@ import type { Edit, SgNode } from "@ast-grep/napi";
 
 const RENAMES: Record<string, string> = {
   triggerWorkflow: "startWorkflow",
-  triggerJobFunction: "startJobFunction",
+  triggerJobFunction: "execJobFunction",
   resumeWorkflow: "resumeWorkflowExecution",
 };
 
@@ -119,7 +119,8 @@ function findInvokerOptionEdit(member: SgNode): Edit | null {
 
 /**
  * Rewrite `.triggerWorkflow(`, `.triggerJobFunction(`, and `.resumeWorkflow(`
- * member accesses to their canonical `start*`/`resumeWorkflowExecution` names,
+ * member accesses to their canonical `startWorkflow`/`execJobFunction`/
+ * `resumeWorkflowExecution` names,
  * either on the ambient `tailor.workflow` global or on a `workflow` value
  * imported from `@tailor-platform/sdk/runtime(/workflow)`.
  * @param source - File contents

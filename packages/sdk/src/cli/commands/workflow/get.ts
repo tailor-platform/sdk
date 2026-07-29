@@ -19,15 +19,6 @@ export type GetWorkflowTypedOptions<W extends WorkflowLike = WorkflowLike> = {
 };
 
 /**
- * @deprecated Use GetWorkflowTypedOptions instead.
- */
-export interface GetWorkflowOptions {
-  name: string;
-  workspaceId?: string;
-  profile?: string;
-}
-
-/**
  * Resolve a workflow definition by name.
  * @param client - Operator client
  * @param workspaceId - Workspace ID
@@ -56,15 +47,8 @@ export async function resolveWorkflow(
  */
 export async function getWorkflow<W extends WorkflowLike>(
   options: GetWorkflowTypedOptions<W>,
-): Promise<WorkflowInfo>;
-export async function getWorkflow(options: GetWorkflowOptions): Promise<WorkflowInfo>;
-export async function getWorkflow<W extends WorkflowLike>(
-  options: GetWorkflowOptions | GetWorkflowTypedOptions<W>,
 ): Promise<WorkflowInfo> {
-  // Discriminant: legacy options have top-level 'name', typed options use 'workflow'.
-  // Note: passing a workflow object directly (e.g., getWorkflow(myWorkflow)) would match
-  // the legacy branch due to structural typing, but still works correctly since it reads .name.
-  const name = "name" in options ? options.name : options.workflow.name;
+  const name = options.workflow.name;
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -94,7 +78,7 @@ export const getCommand = defineAppCommand({
   }),
   run: async (args) => {
     const workflow = await getWorkflow({
-      name: args.name,
+      workflow: { name: args.name },
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

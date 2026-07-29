@@ -16,7 +16,6 @@ const JOB_REGISTRY_KEY: unique symbol = Symbol.for("tailor-platform/sdk:job-regi
 type PlatformWorkflow = {
   startWorkflow: (name: string, args?: unknown, options?: StartWorkflowOptions) => Promise<string>;
   execJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
-  startJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
 };
 
 type GlobalWithRegistry = typeof globalThis & {

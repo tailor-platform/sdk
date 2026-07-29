@@ -7,7 +7,6 @@ import type { ExecJobFunctionOptions, StartWorkflowOptions } from "../runtime/wo
 
 export interface DefaultWorkflowRuntime {
   execJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
-  startJobFunction: (name: string, args?: unknown, options?: ExecJobFunctionOptions) => unknown;
   startWorkflow: (name: string, args?: unknown, options?: StartWorkflowOptions) => Promise<string>;
   resumeWorkflowExecution: (executionId: string) => Promise<string>;
   wait: (key: string, payload?: unknown) => unknown;
@@ -33,7 +32,6 @@ export function createDefaultWorkflowRuntime(): DefaultWorkflowRuntime {
   ) => executionId;
   return {
     execJobFunction,
-    startJobFunction: execJobFunction,
     startWorkflow,
     resumeWorkflowExecution,
     wait: (key: string): unknown => {
