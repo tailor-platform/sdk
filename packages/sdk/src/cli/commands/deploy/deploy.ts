@@ -69,7 +69,6 @@ import { validatePlan } from "./validate-plan";
 import {
   formatWorkflowChangeEntries,
   planWorkflow,
-  type WorkflowEventPublishing,
   type WorkflowEventSubscribers,
 } from "./workflow";
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
@@ -195,47 +194,44 @@ function collectExecutorUsedResolvers(
 }
 
 /**
- * Resolve which workflows executors subscribe to, per event granularity level.
+ * Resolve which workflows this target's executors subscribe to, per event
+ * granularity level.
  *
- * Workflows are workspace-scoped, so a trigger anywhere in the deploy run
- * subscribes to a workflow of the same name regardless of which config declares
- * it.
- * @param targets - Deployment targets in the current run
+ * Scoped to the owning target: unlike TailorDB, Auth and IdP, a workflow has no
+ * `external` declaration, so no supported configuration shares a workflow and a
+ * subscribing executor across configs.
+ * @param target - Deployment target being planned
  * @returns Subscribers keyed by event granularity level
  */
-function collectWorkflowEventSubscribers(targets: ReadonlyArray<BuiltDeploymentTarget>): {
+function collectWorkflowEventSubscribers(target: BuiltDeploymentTarget): {
   execution: WorkflowEventSubscribers;
   jobExecution: WorkflowEventSubscribers;
 } {
   const execution = { workflowNames: new Set<string>() };
   const jobExecution = { workflowNames: new Set<string>() };
-  for (const target of targets) {
-    for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
-      const { trigger } = executor;
-      if (trigger.kind !== "workflowExecution" && trigger.kind !== "workflowJobExecution") {
-        continue;
-      }
-      const subscribers = trigger.kind === "workflowExecution" ? execution : jobExecution;
-      subscribers.workflowNames.add(trigger.workflowName);
+  for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
+    const { trigger } = executor;
+    if (trigger.kind !== "workflowExecution" && trigger.kind !== "workflowJobExecution") {
+      continue;
     }
+    const subscribers = trigger.kind === "workflowExecution" ? execution : jobExecution;
+    subscribers.workflowNames.add(trigger.workflowName);
   }
   return { execution, jobExecution };
 }
 
 /**
- * Collect explicit `publishEvents` values declared on workflow jobs.
- * @param targets - Deployment targets in the current run
+ * Collect explicit `publishEvents` values declared on this target's workflow jobs.
+ * @param target - Deployment target being planned
  * @returns Explicit flags keyed by job name
  */
 function collectWorkflowJobPublishEvents(
-  targets: ReadonlyArray<BuiltDeploymentTarget>,
+  target: BuiltDeploymentTarget,
 ): ReadonlyMap<string, boolean> {
   const jobPublishEvents = new Map<string, boolean>();
-  for (const target of targets) {
-    for (const job of target.application.workflowService?.jobs ?? []) {
-      if (job.publishEvents !== undefined) {
-        jobPublishEvents.set(job.name, job.publishEvents);
-      }
+  for (const job of target.application.workflowService?.jobs ?? []) {
+    if (job.publishEvents !== undefined) {
+      jobPublishEvents.set(job.name, job.publishEvents);
     }
   }
   return jobPublishEvents;
@@ -521,10 +517,7 @@ type BuildDeploymentTargetsParams = Omit<
 type DeployRunPlanInputs = Pick<
   PlanContext,
   "idpUserTriggerTargets" | "expectedLocalStaticWebsiteNames" | "externalAuthIdpConfigNames"
-> & {
-  /** Executor subscriptions and explicit job flags driving workflow execution event publishing. */
-  workflowEventPublishing: WorkflowEventPublishing;
-};
+>;
 
 type PlanDeploymentTargetParams = {
   target: BuiltDeploymentTarget;
@@ -1206,10 +1199,6 @@ function collectDeployRunPlanInputs(
     idpUserTriggerTargets: collectDeployIdpUserTriggerTargets(targets),
     expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
     externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
-    workflowEventPublishing: {
-      ...collectWorkflowEventSubscribers(targets),
-      jobPublishEvents: collectWorkflowJobPublishEvents(targets),
-    },
   };
 }
 
@@ -1217,7 +1206,6 @@ async function planDeploymentTarget(
   params: PlanDeploymentTargetParams,
 ): Promise<PlannedDeployment> {
   const { target, targets, runInputs, client, workspaceId, noSchemaCheck } = params;
-  const { workflowEventPublishing, ...planContextInputs } = runInputs;
   const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
     target;
 
@@ -1254,7 +1242,7 @@ async function planDeploymentTarget(
       config,
       noSchemaCheck,
       forceApplyAll,
-      ...planContextInputs,
+      ...runInputs,
       executorUsedTailorDBTypes: collectExecutorUsedTailorDBTypes(target, targets),
       executorUsedResolvers: collectExecutorUsedResolvers(target, targets),
       tailorDBTypeNamespaces,
@@ -1299,7 +1287,10 @@ async function planDeploymentTarget(
           workflowService?.workflows ?? {},
           workflowBuildResult?.mainJobDeps ?? {},
           unchangedWorkflowJobs,
-          workflowEventPublishing,
+          {
+            ...collectWorkflowEventSubscribers(target),
+            jobPublishEvents: collectWorkflowJobPublishEvents(target),
+          },
         ),
       ),
       withSpan("plan.workflowExecutionPolicy", () =>
