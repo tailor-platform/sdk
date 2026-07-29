@@ -90,7 +90,7 @@ describe("scanEnvForSecrets", () => {
       env: {
         SLACK_BOT_TOKEN: {
           value: SLACK_TOKEN,
-          allowSecret: "public webhook for a demo workspace",
+          allowSecretReason: "public webhook for a demo workspace",
         },
       },
     });
@@ -101,7 +101,7 @@ describe("scanEnvForSecrets", () => {
   test("keeps scanning the entries around an allowed one", async () => {
     const findings = await scanEnvForSecrets({
       env: {
-        ALLOWED: { value: SLACK_TOKEN, allowSecret: "demo workspace" },
+        ALLOWED: { value: SLACK_TOKEN, allowSecretReason: "demo workspace" },
         LEAKED: GITHUB_TOKEN,
       },
     });
@@ -124,7 +124,7 @@ describe("assertEnvHasNoSecrets", () => {
     expect(error.message).toContain("env.SLACK_BOT_TOKEN (matched slack)");
     expect(error.message).toContain("defineSecretManager()");
     expect(error.message).toContain(
-      'SLACK_BOT_TOKEN: { value: ..., allowSecret: "<why this is safe>" }',
+      'SLACK_BOT_TOKEN: { value: ..., allowSecretReason: "<why this is safe>" }',
     );
   });
 
@@ -148,6 +148,30 @@ describe("assertEnvHasNoSecrets", () => {
     expect(warnSpy.mock.calls[0]?.[0]).toContain("env.LEGACY_TOKEN");
   });
 
+  test("names the config the entries came from", async () => {
+    const error = await captureFailure(
+      assertEnvHasNoSecrets({
+        env: { SLACK_BOT_TOKEN: SLACK_TOKEN },
+        configPath: "/project/tailor.config.ts",
+      }),
+    );
+
+    expect(error.message).toContain("Secret detected in 'env' in /project/tailor.config.ts");
+  });
+
+  test("warns once when the same entries are scanned repeatedly", async () => {
+    using warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    const input = {
+      env: { REPEATED_TOKEN: "Zk3xQ9pLmVn7WcT2bYr5JdHgSaEuIoPq8FvNzXwCkMj4" },
+      configPath: "/project/repeated.config.ts",
+    };
+
+    await assertEnvHasNoSecrets(input);
+    await assertEnvHasNoSecrets({ ...input });
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
   test("passes for an application without env", async () => {
     await expect(assertEnvHasNoSecrets({})).resolves.toBeUndefined();
   });
@@ -158,7 +182,7 @@ describe("resolveEnvValue", () => {
     expect(resolveEnvValue("hello")).toBe("hello");
     expect(resolveEnvValue(3)).toBe(3);
     expect(resolveEnvValue(false)).toBe(false);
-    expect(resolveEnvValue({ value: SLACK_TOKEN, allowSecret: "demo workspace" })).toBe(
+    expect(resolveEnvValue({ value: SLACK_TOKEN, allowSecretReason: "demo workspace" })).toBe(
       SLACK_TOKEN,
     );
   });

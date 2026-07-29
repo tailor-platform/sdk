@@ -6,16 +6,20 @@ import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { loadConfigPath } from "./context";
 import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
 import { installCliTailordbStub } from "./mock";
-import type { AppConfig, ResolvedEnvAppConfig } from "#/configure/config/types";
+import type { AppConfig, EnvValue } from "#/configure/config/types";
 import type { Plugin } from "#/plugin/types";
 
 /**
- * Loaded configuration with resolved path.
- *
- * `env` holds resolved values: the `{ value, allowSecret }` form accepted in
- * `defineConfig` is unwrapped here, so nothing downstream can deploy a wrapper
+ * App config whose `env` entries have been resolved to the values that get
+ * deployed: the `{ value, allowSecretReason }` form accepted in `defineConfig`
+ * is unwrapped during loading, so nothing downstream can deploy a wrapper
  * object or the reason string alongside the value.
  */
+export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
+  env?: Record<string, EnvValue>;
+};
+
+/** Loaded configuration with resolved path. */
 export type LoadedConfig = ResolvedEnvAppConfig & { path: string };
 
 export interface LoadConfigOptions {
@@ -64,7 +68,7 @@ export async function loadConfig(
   }
 
   const appConfig = configModule.default as AppConfig;
-  await assertEnvHasNoSecrets({ env: appConfig.env });
+  await assertEnvHasNoSecrets({ env: appConfig.env, configPath: resolvedPath });
   const env = appConfig.env
     ? Object.fromEntries(
         Object.entries(appConfig.env).map(([key, entry]) => [key, resolveEnvValue(entry)]),

@@ -278,15 +278,15 @@ export async function main(trx: Transaction, { env }: MigrationContext): Promise
 `env` values are deployed as plaintext, so loading a config fails when one of them looks like a credential:
 
 ```
-✖ Secret detected in 'env':
-    - env.SLACK_BOT_TOKEN (matched slack)
+✖ Secret detected in 'env' in /path/to/tailor.config.ts:
+  - env.SLACK_BOT_TOKEN (matched slack)
 ```
 
-Move the value to [Secret Manager](./services/secret.md) to fix this. Detection covers the credential formats of common providers — Slack, GitHub, AWS, GCP, Stripe, OpenAI, npm, SendGrid and others.
+Move the value to [Secret Manager](./services/secret.md) to fix this. Detection recognizes the credential formats published by common providers, such as Slack, GitHub and AWS.
 
 A value that is merely long and random-looking, with no recognizable provider format, is reported as a warning instead and does not fail the command.
 
-When detection is wrong about a value, allow it in place with `allowSecret`, stating why the value is safe to deploy as plaintext:
+When detection is wrong about a value, allow it in place with `allowSecretReason`, stating why the value is safe to deploy as plaintext:
 
 ```typescript
 export default defineConfig({
@@ -294,13 +294,15 @@ export default defineConfig({
   env: {
     slackRelayUrl: {
       value: process.env.SLACK_RELAY_URL ?? "",
-      allowSecret: "Public relay endpoint; the token it proxies stays in Secret Manager.",
+      allowSecretReason: "Public relay endpoint; the token it proxies stays in Secret Manager.",
     },
   },
 });
 ```
 
-Application code still reads `env.slackRelayUrl` as the value itself — the wrapper only carries the reason and does not reach the deployed application.
+This silences both the failure and the warning, so it also covers a value that is random-looking without being a credential — say so in the reason.
+
+Application code still reads `env.slackRelayUrl` as the value itself: the wrapper only carries the reason and does not reach the deployed application.
 
 ### Workflow Service
 

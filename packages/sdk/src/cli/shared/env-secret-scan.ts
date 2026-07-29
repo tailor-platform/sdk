@@ -20,23 +20,28 @@ const ENTROPY_MIN_LENGTH = 20;
 const ENTROPY_MIN_BITS_PER_CHAR = 4.2;
 const TOKEN_LIKE_VALUE = /^[A-Za-z0-9+/=_.-]+$/;
 
-/** Severity of a secret-scan finding. */
-export type EnvSecretSeverity = "error" | "warning";
+/**
+ * A single command can load the same config repeatedly — `setup generate`
+ * derives five separate answers, each through its own `loadConfig` — so results
+ * are memoized on the entries scanned. Without this the scanner would run, and
+ * warnings would print, once per load.
+ */
+const scans = new Map<string, Promise<void>>();
 
-/** A secret-looking value found in the application's `env`. */
-export interface EnvSecretFinding {
+interface EnvSecretFinding {
   /** `env` key holding the value. */
   readonly key: string;
   /** Short name of what matched, e.g. `slack`, `aws`, `high-entropy`. */
   readonly detector: string;
   /** `error` for provider-specific matches, `warning` for the entropy heuristic. */
-  readonly severity: EnvSecretSeverity;
+  readonly severity: "error" | "warning";
 }
 
-/** Inputs for scanning an application's `env` entries. */
-export interface EnvSecretScanInput {
-  /** `env` entries as written in the config, before `{ value, allowSecret }` wrappers are resolved. */
+interface EnvSecretScanInput {
+  /** `env` entries as written in the config, before `{ value, allowSecretReason }` wrappers are resolved. */
   readonly env?: Readonly<Record<string, EnvEntry>>;
+  /** Config file the entries came from, named in the failure so multi-config projects can tell which one. */
+  readonly configPath?: string;
 }
 
 type ScannedEntry = readonly [key: string, value: EnvValue];
@@ -50,24 +55,24 @@ type EntryRange = {
 /**
  * Resolve an `env` entry to the value that gets deployed.
  * @param entry - Entry as written in the config
- * @returns The entry's value, unwrapped when it carries an `allowSecret` reason
+ * @returns The entry's value, unwrapped when it carries an `allowSecretReason`
  */
 export function resolveEnvValue(entry: EnvEntry): EnvValue {
-  return typeof entry === "object" ? entry.value : entry;
+  return isAllowedSecret(entry) ? entry.value : entry;
 }
 
 /**
  * Scan `env` values for credentials.
  *
- * Entries wrapped as `{ value, allowSecret }` are skipped. Provider-specific
- * matches are reported as errors; values that merely look randomly generated
- * are reported as warnings.
+ * Entries wrapped as `{ value, allowSecretReason }` are skipped.
+ * Provider-specific matches are reported as errors; values that merely look
+ * randomly generated are reported as warnings.
  * @param input - `env` entries as written in the config
  * @returns Provider matches first, then entropy warnings; empty when nothing matched
  */
 export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvSecretFinding[]> {
   const entries: ScannedEntry[] = Object.entries(input.env ?? {})
-    .filter(([, entry]) => typeof entry !== "object")
+    .filter(([, entry]) => !isAllowedSecret(entry))
     .map(([key, entry]) => [key, resolveEnvValue(entry)]);
   if (entries.length === 0) {
     return [];
@@ -89,18 +94,37 @@ export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvS
 /**
  * Report secret-looking `env` values, failing when a credential is identified.
  *
- * Warnings are logged and do not fail the command.
+ * Warnings are logged and do not fail the command. Repeated calls for the same
+ * entries reuse the first result.
  * @param input - `env` entries as written in the config
+ * @returns Promise that resolves when the entries carry no credential
  * @throws When a value is identified as a credential
  */
 export async function assertEnvHasNoSecrets(input: EnvSecretScanInput): Promise<void> {
+  const key = JSON.stringify([input.configPath ?? "", input.env ?? {}]);
+  const pending = scans.get(key);
+  if (pending) {
+    return pending;
+  }
+
+  const scan = reportEnvSecrets(input);
+  scans.set(key, scan);
+  return scan;
+}
+
+/**
+ * Log warnings and throw on credentials found in `env`.
+ * @param input - `env` entries as written in the config
+ * @throws When a value is identified as a credential
+ */
+async function reportEnvSecrets(input: EnvSecretScanInput): Promise<void> {
   const findings = await scanEnvForSecrets(input);
 
   for (const finding of findings) {
     if (finding.severity !== "warning") continue;
     logger.warn(
       `env.${finding.key} looks like a randomly generated credential. ` +
-        `If it is one, move it to Secret Manager; otherwise allow it with ${styles.bold("allowSecret")}.`,
+        `If it is one, move it to Secret Manager; otherwise allow it with ${styles.bold("allowSecretReason")}.`,
     );
   }
 
@@ -109,14 +133,15 @@ export async function assertEnvHasNoSecrets(input: EnvSecretScanInput): Promise<
     return;
   }
 
+  const location = input.configPath ? ` in ${input.configPath}` : "";
   const list = errors.map((error) => `  - env.${error.key} (matched ${error.detector})`).join("\n");
   const example = errors[0]?.key ?? "KEY";
   throw new Error(
-    `Secret detected in 'env':\n${list}\n` +
+    `Secret detected in 'env'${location}:\n${list}\n` +
       "'env' values are deployed as plaintext and are readable by anyone who can read the application's configuration. " +
       "Define these with defineSecretManager() instead, and read them through Secret Manager at runtime.\n" +
       "If a value is genuinely safe to keep in 'env', allow it where it is defined: " +
-      `${example}: { value: ..., allowSecret: "<why this is safe>" }`,
+      `${example}: { value: ..., allowSecretReason: "<why this is safe>" }`,
   );
 }
 
@@ -187,6 +212,15 @@ async function scanWithProviderRules(
   return [...detectorsByKey].flatMap(([key, detectors]) =>
     [...detectors].map((detector) => ({ key, detector, severity: "error" as const })),
   );
+}
+
+/**
+ * Decide whether an entry carries its own allowance.
+ * @param entry - Entry as written in the config
+ * @returns True when the entry is the `{ value, allowSecretReason }` form
+ */
+function isAllowedSecret(entry: EnvEntry): entry is Exclude<EnvEntry, EnvValue> {
+  return typeof entry === "object";
 }
 
 /**

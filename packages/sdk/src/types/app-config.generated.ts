@@ -14,7 +14,7 @@ export type AppConfigParsed = {
           | boolean
           | {
               value: string | number | boolean;
-              allowSecret: string;
+              allowSecretReason: string;
             };
       }
     | undefined;

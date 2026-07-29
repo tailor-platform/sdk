@@ -18,22 +18,17 @@ export type LogLevelInput = LogLevel | (string & {});
 export type EnvValue = string | number | boolean;
 
 /**
- * An `env` value that the secret scan would reject, allowed through together
- * with the reason it is safe to deploy as plaintext.
+ * An `env` value that credential detection flags, allowed through together with
+ * the reason it is safe to deploy as plaintext.
  */
 export type AllowedSecretEnvValue = {
   value: EnvValue;
   /** Why this value is safe to deploy as plaintext even though it looks like a credential. */
-  allowSecret: string;
+  allowSecretReason: string;
 };
 
 /** An entry of `defineConfig({ env })`. */
 export type EnvEntry = EnvValue | AllowedSecretEnvValue;
-
-/** An app config whose `env` entries have been resolved to the values that get deployed. */
-export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
-  env?: Record<string, EnvValue>;
-};
 
 /** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
 export type ExecutorServiceConfig = { files: string[]; ignores?: string[] };
@@ -96,7 +91,7 @@ export interface AppConfig<
    *
    * A value that looks like a credential is rejected, since `env` is deployed
    * as plaintext. When the detection is wrong about a value, wrap it as
-   * `{ value, allowSecret }` to allow it and record why it is safe. Real
+   * `{ value, allowSecretReason }` to allow it and record why it is safe. Real
    * credentials belong in `defineSecretManager()`.
    */
   env?: Env;
