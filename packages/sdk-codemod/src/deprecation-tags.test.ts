@@ -54,6 +54,28 @@ export type B = string;
   test("returns nothing when the file has no deprecation", () => {
     expect(findDeprecationTags("export const a = 1;\n")).toEqual([]);
   });
+
+  test("ignores @deprecated outside a JSDoc block", () => {
+    const source = `// @deprecated in a line comment
+/* @deprecated in a block comment */
+export const message = "warn about @deprecated members";
+export const template = \`@deprecated\`;
+`;
+
+    expect(findDeprecationTags(source)).toEqual([]);
+  });
+
+  test("reads a tag that follows a string containing the tag name", () => {
+    const source = `const message = "@deprecated";
+
+/** @deprecated since 1.0.0 codemod: v2/old-to-new */
+export const oldApi = 1;
+`;
+
+    expect(findDeprecationTags(source)).toEqual([
+      { line: 3, text: "since 1.0.0 codemod: v2/old-to-new" },
+    ]);
+  });
 });
 
 describe("checkDeprecationTags", () => {
@@ -122,6 +144,12 @@ export const oldApi = 1;
     expect(checkDeprecationTags(source, options)).toEqual([
       { line: 1, message: expect.stringContaining("`v2/does-not-exist` is not registered") },
     ]);
+  });
+
+  test("accepts a codemod id that ends the sentence", () => {
+    const source = "/** @deprecated since 1.0.0 — use newApi. codemod: v2/old-to-new. */\n";
+
+    expect(checkDeprecationTags(source, options)).toEqual([]);
   });
 
   test("reads the id list without swallowing the prose that follows it", () => {
