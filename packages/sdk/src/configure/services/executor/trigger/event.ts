@@ -220,8 +220,8 @@ export interface WorkflowJobExecutionWaitStartedArgs extends WorkflowJobExecutio
   rawEvent: "workflow.workflow_execution.job_execution.wait_started";
   /** Wait point key the job is suspended on. */
   waitKey: string;
-  /** JSON-serialized payload recorded with the wait point. */
-  waitPayload: string;
+  /** JSON-serialized payload recorded with the wait point, absent when none was recorded. */
+  waitPayload?: string;
 }
 
 export interface WorkflowJobExecutionWaitResolvedArgs extends WorkflowJobExecutionEventArgs {

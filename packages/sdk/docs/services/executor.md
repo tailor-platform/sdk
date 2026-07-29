@@ -631,4 +631,4 @@ interface WorkflowJobExecutionContext {
 }
 ```
 
-`wait_started` events include `waitKey` and JSON-serialized `waitPayload`; `wait_resolved` events include `waitKey`.
+`wait_started` events include `waitKey`, plus JSON-serialized `waitPayload` when the wait point recorded one; `wait_resolved` events include `waitKey`.
