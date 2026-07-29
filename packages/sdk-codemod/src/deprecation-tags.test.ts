@@ -195,6 +195,30 @@ export const a = 1;
     );
   });
 
+  test("leaves the sentinel outside a JSDoc block alone", () => {
+    const source = `// @deprecated since ${PENDING_SINCE} — not a real tag
+const help = "write @deprecated since ${PENDING_SINCE} until the version is known";
+
+/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: v2/old-to-new */
+export const oldApi = 1;
+`;
+
+    const result = resolvePendingSince(source, "2.1.0");
+
+    expect(result.changed).toBe(true);
+    expect(result.source).toContain(`// @deprecated since ${PENDING_SINCE} — not a real tag`);
+    expect(result.source).toContain(
+      `const help = "write @deprecated since ${PENDING_SINCE} until the version is known";`,
+    );
+    expect(result.source).toContain("/** @deprecated since 2.1.0 — use newApi.");
+  });
+
+  test("is a no-op when the sentinel only appears outside JSDoc", () => {
+    const source = `const help = "@deprecated since ${PENDING_SINCE}";\n`;
+
+    expect(resolvePendingSince(source, "2.1.0")).toEqual({ changed: false, source });
+  });
+
   test("is a no-op without a pending marker", () => {
     const source = "/** @deprecated since 1.0.0 codemod: v2/old-to-new */\n";
 

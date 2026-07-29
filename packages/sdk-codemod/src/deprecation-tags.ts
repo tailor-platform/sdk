@@ -151,7 +151,9 @@ const PENDING_SINCE_PATTERN = new RegExp(
 );
 
 /**
- * Rewrite `@deprecated since NEXT_RELEASE` to a concrete version.
+ * Rewrite `@deprecated since NEXT_RELEASE` to a concrete version. Confined to
+ * JSDoc blocks, like {@link findDeprecationTags}, so the release workflow never
+ * edits the sentinel spelled out in a string literal or a plain comment.
  * @param source - File contents
  * @param resolvedVersion - Version the release PR bumped `@tailor-platform/sdk` to
  * @returns The (possibly) rewritten source and whether it changed
@@ -163,9 +165,14 @@ export function resolvePendingSince(
   if (valid(resolvedVersion) === null) {
     throw new Error(`resolvedVersion must be a valid semver version: ${resolvedVersion}`);
   }
-  if (!PENDING_SINCE_PATTERN.test(source)) {
-    return { changed: false, source };
-  }
-  PENDING_SINCE_PATTERN.lastIndex = 0;
-  return { changed: true, source: source.replace(PENDING_SINCE_PATTERN, `$1${resolvedVersion}`) };
+
+  let changed = false;
+  const updated = source.replace(JSDOC_BLOCK, (block) =>
+    block.replace(PENDING_SINCE_PATTERN, (_match, prefix: string) => {
+      changed = true;
+      return `${prefix}${resolvedVersion}`;
+    }),
+  );
+
+  return changed ? { changed, source: updated } : { changed: false, source };
 }
