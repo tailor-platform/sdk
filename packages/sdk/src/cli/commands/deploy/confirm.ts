@@ -209,3 +209,56 @@ export async function confirmImportantResourceDeletion(
     `);
   }
 }
+
+/** An application recorded as needing to take part in this deploy, but absent. */
+export interface MissingDependentApp {
+  /** Application whose resources are applied differently without the dependent. */
+  appName: string;
+  /** Stable id of the absent application. */
+  appId: string;
+  /** Why it has to take part in the same deploy. */
+  reason: string;
+}
+
+/**
+ * Confirm continuing without an application recorded as a dependency.
+ *
+ * A previous deploy recorded that another config's executors make this config's
+ * resources publish events. Applying this config alone resolves those flags from
+ * a smaller set of executors, which turns publishing off.
+ * @param missing - Recorded dependencies absent from this deploy
+ * @param yes - Whether `--yes` was passed
+ * @returns Promise that resolves when the deploy may continue
+ */
+export async function confirmMissingDependentApps(
+  missing: MissingDependentApp[],
+  yes: boolean,
+): Promise<void> {
+  if (missing.length === 0) return;
+
+  logger.warn("Configs recorded as part of this deploy are missing:");
+  for (const entry of missing) {
+    logger.log(
+      `    • ${styles.bold(entry.appName)} depends on application id ${styles.info(entry.appId)} (${entry.reason})`,
+    );
+  }
+  logger.newline();
+  logger.log("  Applying without them turns off event publishing they enabled.");
+  logger.log("  To keep it, add their configs to --config, or set publishEvents explicitly.");
+
+  if (yes) {
+    logger.warn("Continuing without them (--yes flag specified); event publishing may turn off.");
+    return;
+  }
+
+  const confirmed = await prompt.confirm({
+    message: "Continue without them?",
+    default: false,
+  });
+  if (!confirmed) {
+    throw new Error(ml`
+      Apply cancelled. Add the missing configs to --config, or set publishEvents
+      explicitly on the resources that should keep publishing.
+    `);
+  }
+}

@@ -12,16 +12,12 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { logger, styles } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
-import {
-  assertNoPublishEventsConflict,
-  publishEventsConflict,
-  type PublishEventsConflict,
-} from "#/cli/shared/publish-events";
+import { publishEventsConflict } from "#/cli/shared/publish-events";
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
 import { planAIGateway } from "./aigateway";
-import { planApplication } from "./application";
+import { fetchMissingDependentApps, planApplication } from "./application";
 import { applyDeploymentPlans, type PlannedDeployment } from "./apply-phases";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
 import {
@@ -33,17 +29,17 @@ import {
 import { ensureConfigIdForDeploy } from "./config-id-injector";
 import {
   confirmImportantResourceDeletion,
+  confirmMissingDependentApps,
   confirmOwnerConflict,
   confirmUnmanagedResources,
   type ImportantResourceDeletion,
+  type MissingDependentApp,
   type OwnerConflict,
   type UnmanagedResource,
 } from "./confirm";
 import {
   buildPlannedExecutorsByName,
   collectApplicationIdpNames,
-  findResolverNamespace,
-  findTailorDBNamespace,
   formatExecutorChangeEntries,
   planExecutor,
 } from "./executor";
@@ -77,6 +73,7 @@ import {
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 import { resolveDeployWorkspace } from "./workspace";
 import type { Executor } from "#/types/executor.generated";
+import type { DeployDependencyReason } from "./label";
 import type { PlanContext } from "./types";
 
 export interface DeployOptions {
@@ -129,90 +126,171 @@ function subscribedIdpName(
   return only;
 }
 
-/**
- * Resolve the set of IdP names that have at least one executor subscribed to
- * their user events.
- * @param application - Loaded application
- * @returns Set of IdP names targeted by idpUser triggers
- */
-function collectIdpUserTriggerTargets(application: Readonly<Application>): ReadonlySet<string> {
-  const targets = new Set<string>();
-  for (const executor of Object.values(application.executorService?.executors ?? {})) {
-    if (executor.trigger.kind !== "idpUser") {
-      continue;
-    }
-    const idpName = subscribedIdpName(application, executor.trigger);
-    if (idpName !== undefined) {
-      targets.add(idpName);
-    }
-  }
-  return targets;
-}
+/** What one executor's event trigger subscribes to, and who declares it. */
+type EventSubscription = {
+  /** Target declaring the executor. */
+  subscriber: BuiltDeploymentTarget;
+  /** Name of the subscribing executor, for error messages. */
+  executorName: string;
+  /** Target declaring the subscribed resource. */
+  owner: BuiltDeploymentTarget;
+  /** The executor's trigger, narrowed to a kind that names a publishing resource. */
+  trigger: PublishingTrigger;
+};
 
 /**
- * Collect TailorDB types this target's own executors subscribe to.
+ * Resolve every event subscription in the run to the config that declares the
+ * subscribed resource.
  *
- * Scoped to the owning target so that the resolved flag does not depend on which
- * configs `--config` names. An executor subscribing to a type owned by another
- * config needs that type to declare `publishEvents: true` itself.
- * @param owner - Deployment target being planned
- * @returns Type names subscribed to by the target's own executors
+ * Doing this once keeps the flags the planners resolve and the cross-config
+ * dependencies recorded on the application in agreement — both are read off the
+ * same list.
+ * @param targets - Built deployment targets in the run
+ * @returns One entry per executor whose trigger names a publishing resource
  */
-function collectExecutorUsedTailorDBTypes(owner: BuiltDeploymentTarget): ReadonlySet<string> {
-  const usedTypes = new Set<string>();
-  for (const executor of Object.values(owner.application.executorService?.executors ?? {})) {
-    if (
-      executor.trigger.kind === "tailordb" &&
-      findTailorDBNamespace(owner.application, executor.trigger.typeName)
-    ) {
-      usedTypes.add(executor.trigger.typeName);
+function collectEventSubscriptions(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): EventSubscription[] {
+  const subscriptions: EventSubscription[] = [];
+  for (const subscriber of targets) {
+    const executors = subscriber.application.executorService?.executors ?? {};
+    for (const executor of Object.values(executors)) {
+      const lookup = eventSourceLookup(executor, subscriber);
+      if (!lookup) {
+        continue;
+      }
+      const entry = { subscriber, executorName: executor.name, trigger: lookup.trigger };
+      if (lookup.declaredBy(subscriber)) {
+        subscriptions.push({ ...entry, owner: subscriber });
+        continue;
+      }
+      const owners = targets.filter(
+        (target) =>
+          target.config.path !== subscriber.config.path && lookup.declaredBy(target) !== undefined,
+      );
+      const [owner] = owners;
+      if (!owner) {
+        throw new Error(
+          `Executor "${executor.name}" subscribes to ${lookup.resource}, which no config in this deploy declares. ` +
+            `Add the config that owns it to --config so its "publishEvents" can be resolved.`,
+        );
+      }
+      // Several configs declare the name in different namespaces. Which one the
+      // trigger means is reported when the executor's namespace is resolved.
+      if (owners.length > 1) {
+        continue;
+      }
+      subscriptions.push({ ...entry, owner });
     }
   }
-  return usedTypes;
+  return subscriptions;
 }
 
 /**
- * Collect resolvers this target's own executors subscribe to.
- *
- * Scoped to the owning target for the same reason as
- * {@link collectExecutorUsedTailorDBTypes}.
+ * Select the subscriptions pointing at resources the given target declares.
+ * @param subscriptions - Subscriptions resolved across the run
  * @param owner - Deployment target being planned
- * @returns Resolver names subscribed to by the target's own executors
+ * @returns Subscriptions whose subscribed resource belongs to `owner`
  */
-function collectExecutorUsedResolvers(owner: BuiltDeploymentTarget): ReadonlySet<string> {
-  const usedResolvers = new Set<string>();
-  for (const executor of Object.values(owner.application.executorService?.executors ?? {})) {
-    if (
-      executor.trigger.kind === "resolverExecuted" &&
-      findResolverNamespace(owner.application, executor.trigger.resolverName)
-    ) {
-      usedResolvers.add(executor.trigger.resolverName);
-    }
-  }
-  return usedResolvers;
+function ownedSubscriptions(
+  subscriptions: ReadonlyArray<EventSubscription>,
+  owner: BuiltDeploymentTarget,
+): EventSubscription[] {
+  return subscriptions.filter(
+    (subscription) => subscription.owner.config.path === owner.config.path,
+  );
 }
 
 /**
- * Resolve which workflows this target's executors subscribe to, per event
- * granularity level.
- * @param target - Deployment target being planned
+ * Collect the TailorDB types subscribed to among the given subscriptions.
+ * @param subscriptions - Subscriptions owned by the target being planned
+ * @returns Subscribed type names
+ */
+function subscribedTailorDBTypes(
+  subscriptions: ReadonlyArray<EventSubscription>,
+): ReadonlySet<string> {
+  return new Set(
+    subscriptions.flatMap((subscription) =>
+      subscription.trigger.kind === "tailordb" ? [subscription.trigger.typeName] : [],
+    ),
+  );
+}
+
+/**
+ * Collect the resolvers subscribed to among the given subscriptions.
+ * @param subscriptions - Subscriptions owned by the target being planned
+ * @returns Subscribed resolver names
+ */
+function subscribedResolvers(subscriptions: ReadonlyArray<EventSubscription>): ReadonlySet<string> {
+  return new Set(
+    subscriptions.flatMap((subscription) =>
+      subscription.trigger.kind === "resolverExecuted" ? [subscription.trigger.resolverName] : [],
+    ),
+  );
+}
+
+/**
+ * Collect the IdPs subscribed to among the given subscriptions.
+ * @param subscriptions - Subscriptions owned by the target being planned
+ * @returns Subscribed IdP names
+ */
+function subscribedIdps(subscriptions: ReadonlyArray<EventSubscription>): ReadonlySet<string> {
+  return new Set(
+    subscriptions.flatMap((subscription) =>
+      subscription.trigger.kind === "idpUser"
+        ? [
+            subscribedIdpName(subscription.subscriber.application, subscription.trigger) ?? [],
+          ].flat()
+        : [],
+    ),
+  );
+}
+
+/**
+ * Collect the workflows subscribed to, per event granularity level.
+ * @param subscriptions - Subscriptions owned by the target being planned
  * @returns Subscribers keyed by event granularity level
  */
-function collectWorkflowEventSubscribers(target: BuiltDeploymentTarget): {
+function subscribedWorkflows(subscriptions: ReadonlyArray<EventSubscription>): {
   execution: WorkflowEventSubscribers;
   jobExecution: WorkflowEventSubscribers;
 } {
   const execution = { workflowNames: new Set<string>() };
   const jobExecution = { workflowNames: new Set<string>() };
-  for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
-    const { trigger } = executor;
-    if (trigger.kind !== "workflowExecution" && trigger.kind !== "workflowJobExecution") {
-      continue;
+  for (const { trigger } of subscriptions) {
+    if (trigger.kind === "workflowExecution") {
+      execution.workflowNames.add(trigger.workflowName);
+    } else if (trigger.kind === "workflowJobExecution") {
+      jobExecution.workflowNames.add(trigger.workflowName);
     }
-    const subscribers = trigger.kind === "workflowExecution" ? execution : jobExecution;
-    subscribers.workflowNames.add(trigger.workflowName);
   }
   return { execution, jobExecution };
+}
+
+/**
+ * Collect the applications that have to take part in the same deploy for this
+ * target's resources to be applied the same way.
+ *
+ * An executor in another config makes the resource it subscribes to publish
+ * events, so deploying this config without that one would resolve the flag from
+ * a smaller set of executors and turn publishing off.
+ * @param subscriptions - Subscriptions owned by the target being planned
+ * @returns Dependency reasons keyed by dependent application id
+ */
+function collectDependentApps(
+  subscriptions: ReadonlyArray<EventSubscription>,
+): ReadonlyMap<string, DeployDependencyReason> {
+  const dependents = new Map<string, DeployDependencyReason>();
+  for (const { subscriber, owner } of subscriptions) {
+    if (subscriber.config.path === owner.config.path) {
+      continue;
+    }
+    const appId = subscriber.application.id;
+    if (appId !== undefined) {
+      dependents.set(appId, "publish-events");
+    }
+  }
+  return dependents;
 }
 
 /**
@@ -511,8 +589,11 @@ type BuildDeploymentTargetsParams = Omit<
 
 type DeployRunPlanInputs = Pick<
   PlanContext,
-  "expectedLocalStaticWebsiteNames" | "externalAuthIdpConfigNames"
->;
+  "expectedLocalStaticWebsiteNames" | "externalAuthIdpConfigNames" | "runAppIds"
+> & {
+  /** Every event subscription in the run, resolved to its declaring config. */
+  eventSubscriptions: ReadonlyArray<EventSubscription>;
+};
 
 type PlanDeploymentTargetParams = {
   target: BuiltDeploymentTarget;
@@ -526,6 +607,8 @@ type PlanDeploymentTargetParams = {
 type ConfirmDeploymentPlansParams = {
   deployments: PlannedDeployment[];
   yes: boolean;
+  /** Applications recorded as dependencies but absent from this deploy. */
+  missingDependentApps?: MissingDependentApp[];
 };
 
 type PlanDeploymentTargetsParams = {
@@ -1148,68 +1231,59 @@ export function assertUniqueGlobalResourceNames(
   }
 }
 
-/** An event-publishing resource as one config declares it. */
-type EventSource = {
-  /** Config path of the target declaring the resource. */
-  configPath: string;
-  /** `publishEvents` declared on the resource, or undefined when unset. */
-  explicit: boolean | undefined;
-};
+/** Executor trigger kinds that name a resource which publishes events. */
+type PublishingTrigger = Extract<
+  Executor["trigger"],
+  {
+    kind:
+      | "tailordb"
+      | "resolverExecuted"
+      | "idpUser"
+      | "workflowExecution"
+      | "workflowJobExecution";
+  }
+>;
 
 /** How to find one event-publishing resource in a deployment target. */
 type EventSourceLookup = {
-  /** Resource and trigger named in messages about this subscription. */
-  conflict: PublishEventsConflict;
-  /**
-   * Whether a peer config declaring the resource can satisfy the subscription by
-   * opting in. False when the flag lives somewhere this check cannot read, so
-   * only the resource's presence in the run is verified.
-   */
-  optInIsVerifiable: boolean;
-  /** The resource as `target` declares it, or undefined when it does not. */
-  find: (target: BuiltDeploymentTarget) => EventSource | undefined;
+  /** Resource named in error messages, e.g. `TailorDB type "Order"`. */
+  resource: string;
+  /** The trigger, narrowed to a kind that names a publishing resource. */
+  trigger: PublishingTrigger;
+  /** Whether `target` declares the resource. */
+  declaredBy: (target: BuiltDeploymentTarget) => boolean | undefined;
 };
 
-function findTailorDBTypeSource(
+function declaresTailorDBType(
   target: BuiltDeploymentTarget,
   typeName: string,
-): EventSource | undefined {
-  for (const service of target.application.tailorDBServices) {
-    const type = service.types[typeName];
-    if (type) {
-      return { configPath: target.config.path, explicit: type.settings.publishEvents };
-    }
-  }
-  return undefined;
+): boolean | undefined {
+  return (
+    target.application.tailorDBServices.some((service) => service.types[typeName]) || undefined
+  );
 }
 
-function findResolverSource(
+function declaresResolver(
   target: BuiltDeploymentTarget,
   resolverName: string,
-): EventSource | undefined {
-  for (const service of target.application.resolverServices) {
-    const resolver = Object.values(service.resolvers).find((entry) => entry.name === resolverName);
-    if (resolver) {
-      return { configPath: target.config.path, explicit: resolver.publishEvents };
-    }
-  }
-  return undefined;
+): boolean | undefined {
+  return (
+    target.application.resolverServices.some((service) =>
+      Object.values(service.resolvers).some((resolver) => resolver.name === resolverName),
+    ) || undefined
+  );
 }
 
-function findIdpSource(target: BuiltDeploymentTarget, idpName: string): EventSource | undefined {
-  const idp = target.application.idpServices.find((entry) => entry.name === idpName);
-  return idp ? { configPath: target.config.path, explicit: idp.publishEvents } : undefined;
+function declaresIdp(target: BuiltDeploymentTarget, idpName: string): boolean | undefined {
+  return target.application.idpServices.some((entry) => entry.name === idpName) || undefined;
 }
 
-function findWorkflowSource(
+function declaresWorkflow(
   target: BuiltDeploymentTarget,
   workflowName: string,
-): EventSource | undefined {
+): boolean | undefined {
   const workflows = Object.values(target.application.workflowService?.workflows ?? {});
-  const workflow = workflows.find((entry) => entry.name === workflowName);
-  return workflow
-    ? { configPath: target.config.path, explicit: workflow.publishEvents }
-    : undefined;
+  return workflows.some((entry) => entry.name === workflowName) || undefined;
 }
 
 /**
@@ -1226,15 +1300,15 @@ function eventSourceLookup(
   switch (trigger.kind) {
     case "tailordb":
       return {
-        conflict: publishEventsConflict.tailorDBType(trigger.typeName),
-        optInIsVerifiable: true,
-        find: (target) => findTailorDBTypeSource(target, trigger.typeName),
+        resource: publishEventsConflict.tailorDBType(trigger.typeName).resource,
+        trigger,
+        declaredBy: (target) => declaresTailorDBType(target, trigger.typeName),
       };
     case "resolverExecuted":
       return {
-        conflict: publishEventsConflict.resolver(trigger.resolverName),
-        optInIsVerifiable: true,
-        find: (target) => findResolverSource(target, trigger.resolverName),
+        resource: publishEventsConflict.resolver(trigger.resolverName).resource,
+        trigger,
+        declaredBy: (target) => declaresResolver(target, trigger.resolverName),
       };
     case "idpUser": {
       const idpName = subscribedIdpName(subscriber.application, trigger);
@@ -1242,85 +1316,20 @@ function eventSourceLookup(
         return undefined;
       }
       return {
-        conflict: publishEventsConflict.idpService(idpName),
-        optInIsVerifiable: true,
-        find: (target) => findIdpSource(target, idpName),
+        resource: publishEventsConflict.idpService(idpName).resource,
+        trigger,
+        declaredBy: (target) => declaresIdp(target, idpName),
       };
     }
     case "workflowExecution":
-      return {
-        conflict: publishEventsConflict.workflow(trigger.workflowName),
-        optInIsVerifiable: true,
-        find: (target) => findWorkflowSource(target, trigger.workflowName),
-      };
     case "workflowJobExecution":
       return {
-        conflict: publishEventsConflict.workflow(trigger.workflowName),
-        // The flag lives on each job the workflow runs, and the job graph is
-        // only resolved while planning the workflow's own config.
-        optInIsVerifiable: false,
-        find: (target) => findWorkflowSource(target, trigger.workflowName),
+        resource: publishEventsConflict.workflow(trigger.workflowName).resource,
+        trigger,
+        declaredBy: (target) => declaresWorkflow(target, trigger.workflowName),
       };
     default:
       return undefined;
-  }
-}
-
-/**
- * Reject an executor that subscribes to events of a resource another config
- * declares.
- *
- * `publishEvents` is recomputed from the executors declared alongside the
- * resource, so the resolved value never depends on which configs `--config`
- * names. A subscription that reaches across configs therefore has to be
- * declared on the resource, and the config that declares it has to take part in
- * the run for `deploy` to be able to check that.
- *
- * Resource names are only unique within a namespace, so the subscriber's own
- * declaration is checked first: a config subscribing to its own resource is
- * never rejected because a peer happens to declare the same name elsewhere.
- * @param targets - Built deployment targets in the run
- */
-export function assertEventSubscriptionsAreDeclared(
-  targets: ReadonlyArray<BuiltDeploymentTarget>,
-): void {
-  for (const subscriber of targets) {
-    const executors = subscriber.application.executorService?.executors ?? {};
-    for (const executor of Object.values(executors)) {
-      const lookup = eventSourceLookup(executor, subscriber);
-      if (!lookup || lookup.find(subscriber)) {
-        continue;
-      }
-      const { resource } = lookup.conflict;
-      const owners = targets
-        .filter((target) => target.config.path !== subscriber.config.path)
-        .flatMap((target) => lookup.find(target) ?? []);
-      if (owners.length === 0) {
-        throw new Error(
-          `Executor "${executor.name}" subscribes to ${resource}, which no config in this deploy declares. ` +
-            `Add the config that owns it to --config so its "publishEvents" can be verified.`,
-        );
-      }
-      // Several configs declare the name in different namespaces. Which one the
-      // trigger means is reported when the executor's namespace is resolved.
-      const [owner] = owners;
-      if (owners.length > 1 || !owner || !lookup.optInIsVerifiable) {
-        continue;
-      }
-      // An explicit opt-out gets the same message it does within one config.
-      assertNoPublishEventsConflict({
-        explicit: owner.explicit,
-        subscribed: true,
-        conflict: lookup.conflict,
-      });
-      if (owner.explicit === true) {
-        continue;
-      }
-      throw new Error(
-        `Executor "${executor.name}" subscribes to ${resource}, declared by ${owner.configPath}. ` +
-          `Set "publishEvents: true" on ${resource}: publishing is auto-enabled only for executors in the same config.`,
-      );
-    }
   }
 }
 
@@ -1366,6 +1375,8 @@ function collectDeployRunPlanInputs(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): DeployRunPlanInputs {
   return {
+    eventSubscriptions: collectEventSubscriptions(targets),
+    runAppIds: new Set(targets.flatMap((target) => target.application.id ?? [])),
     expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
     externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
   };
@@ -1377,6 +1388,7 @@ async function planDeploymentTarget(
   const { target, targets, runInputs, client, workspaceId, noSchemaCheck } = params;
   const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
     target;
+  const owned = ownedSubscriptions(runInputs.eventSubscriptions, target);
 
   await withSpan("plan.validateTailorDBTypeNames", () =>
     assertUniqueTailorDBTypeNamesWithExternal({
@@ -1412,9 +1424,10 @@ async function planDeploymentTarget(
       noSchemaCheck,
       forceApplyAll,
       ...runInputs,
-      idpUserTriggerTargets: collectIdpUserTriggerTargets(application),
-      executorUsedTailorDBTypes: collectExecutorUsedTailorDBTypes(target),
-      executorUsedResolvers: collectExecutorUsedResolvers(target),
+      idpUserTriggerTargets: subscribedIdps(owned),
+      executorUsedTailorDBTypes: subscribedTailorDBTypes(owned),
+      executorUsedResolvers: subscribedResolvers(owned),
+      dependentApps: collectDependentApps(owned),
       tailorDBTypeNamespaces,
       resolverNamespaces,
       idpNames,
@@ -1458,7 +1471,7 @@ async function planDeploymentTarget(
           workflowBuildResult?.mainJobDeps ?? {},
           unchangedWorkflowJobs,
           {
-            ...collectWorkflowEventSubscribers(target),
+            ...subscribedWorkflows(owned),
             jobPublishEvents: collectWorkflowJobPublishEvents(target),
           },
         ),
@@ -1992,7 +2005,8 @@ function collectDeploymentResourceOwners(
 }
 
 export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Promise<void> {
-  const { deployments, yes } = params;
+  const { deployments, yes, missingDependentApps = [] } = params;
+  await confirmMissingDependentApps(missingDependentApps, yes);
   const targetAppNames = new Set(deployments.map((deployment) => deployment.application.name));
   const resourceOwners = collectDeploymentResourceOwners(deployments);
   const scheduledRenamedAppDeletes = new Set<string>();
@@ -2143,7 +2157,6 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
     }
 
     assertUniqueGlobalResourceNames(targets);
-    assertEventSubscriptionsAreDeclared(targets);
 
     // Note: the normal apply path intentionally skips writing bundle files to
     // .tailor/. Bundles are kept in memory and uploaded directly to the
@@ -2170,8 +2183,21 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
     dropCrossDeploymentManagedDeletes(deployments);
 
     // Phase 1b: Confirm
+    const missingDependentApps = (
+      await Promise.all(
+        targets.map((target) =>
+          fetchMissingDependentApps({
+            client,
+            workspaceId,
+            appName: target.application.name,
+            runAppIds: runInputs.runAppIds ?? new Set<string>(),
+          }),
+        ),
+      )
+    ).flat();
+
     await withSpan("confirm", async () => {
-      await confirmDeploymentPlans({ deployments, yes });
+      await confirmDeploymentPlans({ deployments, yes, missingDependentApps });
     });
 
     const planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });

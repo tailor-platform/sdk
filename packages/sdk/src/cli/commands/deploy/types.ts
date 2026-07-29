@@ -1,6 +1,7 @@
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { DeployDependencyReason } from "./label";
 import type { ApplyPhase } from "./phase";
 
 export type { ApplyPhase };
@@ -33,4 +34,11 @@ export interface PlanContext {
   resolverNamespaces?: ReadonlyMap<string, string | undefined>;
   /** IdP names known to the current deploy run. */
   idpNames?: ReadonlySet<string>;
+  /** Stable ids of every application taking part in the current deploy run. */
+  runAppIds?: ReadonlySet<string>;
+  /**
+   * Applications that have to take part in the same deploy for this config's
+   * resources to be applied the same way, keyed by application id.
+   */
+  dependentApps?: ReadonlyMap<string, DeployDependencyReason>;
 }

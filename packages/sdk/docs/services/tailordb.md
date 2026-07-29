@@ -515,7 +515,7 @@ db.table("User", {
 **Behavior:**
 
 - When `publishEvents: true`, record creation/update/deletion events are published
-- When not specified, `deploy` sets it from the executors in the **same config**: `true` while one of them uses this type with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
+- When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this type with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
 - When explicitly set to `false` while an executor in the same config uses this type, `deploy` fails
 
 **Use cases:**
@@ -555,7 +555,7 @@ db.table("User", {
    });
    ```
 
-**Sharing a type across configs:** auto-detection only looks at executors declared by the same config, so the resolved value stays the same no matter which configs `--config` selects. When the subscribing executor lives in another config, set `publishEvents: true` on the type itself, and include the config that owns the type in the same `deploy` — `deploy` fails otherwise rather than creating an executor whose events never arrive.
+**Sharing a type across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the type to keep it on regardless of which configs take part.
 
 #### GraphQL Operations
 

@@ -103,11 +103,58 @@ export function isOwnedByApp(
   return labels[sdkNameLabelKey] === appName;
 }
 
+// Records that another config must take part in the same deploy, because this
+// application's resources are applied differently when it does. The dependent
+// application's id goes in the key so several can be recorded at once — a label
+// value cannot hold a delimited list (values are `^$|^[a-z][a-z0-9_-]{0,62}$`).
+const dependedByAppLabelPrefix = "sdk-depended-by-app-";
+
+/** Why a dependent config has to take part in the same deploy. */
+export type DeployDependencyReason = "publish-events";
+
+// Label keys are `^[a-z][a-z0-9_-]{0,62}$`, so an id that is not a lowercase
+// UUID cannot be recorded. `ensureConfigIdForDeploy` writes canonical UUIDs;
+// this guards a hand-edited value rather than silently building an invalid key.
+const RECORDABLE_APP_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * Build the label key recording that an application depends on this deploy.
+ * @param appId - Stable id of the dependent application
+ * @returns Label key, or undefined when the id cannot form a valid key
+ */
+export function dependedByAppLabelKey(appId: string): string | undefined {
+  return RECORDABLE_APP_ID.test(appId) ? `${dependedByAppLabelPrefix}${appId}` : undefined;
+}
+
+/** An application recorded as depending on this deploy. */
+export type RecordedDependency = {
+  /** Stable id of the dependent application. */
+  appId: string;
+  /** Why it has to take part in the same deploy. */
+  reason: string;
+};
+
+/**
+ * Read the dependent applications recorded on a resource.
+ * @param labels - Labels currently stored on the remote resource
+ * @returns Recorded dependencies, in label-key order
+ */
+export function recordedDependencies(
+  labels: Record<string, string> | undefined,
+): RecordedDependency[] {
+  if (!labels) return [];
+  return Object.entries(labels)
+    .filter(([key]) => key.startsWith(dependedByAppLabelPrefix))
+    .map(([key, reason]) => ({ appId: key.slice(dependedByAppLabelPrefix.length), reason }));
+}
+
 export interface BuildMetaRequestParams {
   trn: string;
   appName: string;
   appId?: string;
   existingLabels?: Record<string, string>;
+  /** Extra labels written alongside the SDK labels. */
+  extraLabels?: Record<string, string>;
 }
 
 /**
@@ -117,12 +164,13 @@ export interface BuildMetaRequestParams {
  * @param params.appName - Application name label
  * @param params.appId - Stable application id label (when managed by SDK)
  * @param params.existingLabels - Existing labels to preserve (optional)
+ * @param params.extraLabels - Extra labels written alongside the SDK labels (optional)
  * @returns Metadata request
  */
 export async function buildMetaRequest(
   params: BuildMetaRequestParams,
 ): Promise<MessageInitShape<typeof SetMetadataRequestSchema>> {
-  const { trn, appName, appId, existingLabels } = params;
+  const { trn, appName, appId, existingLabels, extraLabels } = params;
   const packageJson = await readPackageJson();
   // Format version to be suitable for label value
   const sdkVersion = packageJson.version
@@ -136,6 +184,7 @@ export async function buildMetaRequest(
       [sdkNameLabelKey]: appName,
       [sdkVersionLabelKey]: sdkVersion,
       ...(appId ? { [sdkAppIdLabelKey]: toAppIdLabelValue(appId) } : {}),
+      ...extraLabels,
     },
   };
 }
