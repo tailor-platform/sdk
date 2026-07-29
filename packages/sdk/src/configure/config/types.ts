@@ -20,9 +20,12 @@ export type EnvValue = string | number | boolean;
 /**
  * An `env` value that credential detection flags, allowed through together with
  * the reason it is safe to deploy as plaintext.
+ *
+ * Booleans are excluded: `true` and `false` match no credential format and are
+ * far too short for the randomness heuristic, so they are never flagged.
  */
 export type AllowedSecretEnvValue = {
-  value: EnvValue;
+  value: Exclude<EnvValue, boolean>;
   /** Why this value is safe to deploy as plaintext even though it looks like a credential. */
   allowSecretReason: string;
 };

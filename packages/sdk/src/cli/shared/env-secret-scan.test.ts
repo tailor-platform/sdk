@@ -109,6 +109,25 @@ describe("scanEnvForSecrets", () => {
     expect(findings).toEqual([{ key: "LEAKED", detector: "github", severity: "error" }]);
   });
 
+  test("flags a numeric AWS account id, so numbers still need an allowance", async () => {
+    const findings = await scanEnvForSecrets({ env: { AWS_ACCOUNT_ID: 123456789012 } });
+
+    expect(findings).toEqual([{ key: "AWS_ACCOUNT_ID", detector: "aws", severity: "error" }]);
+    expect(
+      await scanEnvForSecrets({
+        env: { AWS_ACCOUNT_ID: { value: 123456789012, allowSecretReason: "public account id" } },
+      }),
+    ).toEqual([]);
+  });
+
+  test("never flags a boolean, whatever the key is called", async () => {
+    const findings = await scanEnvForSecrets({
+      env: { AWS_SECRET_ACCESS_KEY: true, SLACK_BOT_TOKEN: false },
+    });
+
+    expect(findings).toEqual([]);
+  });
+
   test("returns nothing when env is absent or empty", async () => {
     expect(await scanEnvForSecrets({})).toEqual([]);
     expect(await scanEnvForSecrets({ env: {} })).toEqual([]);

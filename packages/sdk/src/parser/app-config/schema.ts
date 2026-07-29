@@ -3,10 +3,13 @@ import { LOG_LEVELS } from "./log-level";
 
 const envValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 
+// A boolean is never detected as a credential, so it cannot need an allowance.
+const allowedSecretValueSchema = z.union([z.string(), z.number()]);
+
 const envEntrySchema = z.union([
   envValueSchema,
   z.strictObject({
-    value: envValueSchema,
+    value: allowedSecretValueSchema,
     allowSecretReason: z.string().min(1, {
       message: "'allowSecretReason' must state why the value is safe to keep in 'env'.",
     }),

@@ -25,4 +25,4 @@ export default defineConfig({
 });
 ```
 
-`env` entries therefore accept either a plain `string | number | boolean` or `{ value, allowSecretReason }`. Application code is unaffected: it still reads `env.slackRelayUrl` as the value itself, and the reason never reaches the deployed application.
+`env` entries therefore accept either a plain `string | number | boolean` or, for the string and number values detection can flag, `{ value, allowSecretReason }`. Application code is unaffected: it still reads `env.slackRelayUrl` as the value itself, and the reason never reaches the deployed application.

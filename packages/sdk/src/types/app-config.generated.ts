@@ -13,7 +13,7 @@ export type AppConfigParsed = {
           | number
           | boolean
           | {
-              value: string | number | boolean;
+              value: string | number;
               allowSecretReason: string;
             };
       }
