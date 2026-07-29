@@ -495,16 +495,16 @@ describe("IdPSchema validation", () => {
     [true, true],
     [false, false],
     [undefined, undefined],
-  ])("accepts publishUserEvents as %s", (publishUserEvents, expected) => {
+  ])("accepts publishEvents as %s", (publishEvents, expected) => {
     const config = {
       name: "test-idp",
       permission: TEST_PERMISSION,
       clients: ["client-1"],
-      ...(publishUserEvents !== undefined && { publishUserEvents }),
+      ...(publishEvents !== undefined && { publishEvents }),
     };
 
     const result = IdPSchema.parse(config);
-    expect(result.publishUserEvents).toBe(expected);
+    expect(result.publishEvents).toBe(expected);
   });
 
   test("accepts gqlOperations with all fields", () => {
@@ -1005,13 +1005,13 @@ describe("IdPSchema gqlOperations alias tests", () => {
       permission: TEST_PERMISSION,
       clients: ["client-1"],
       lang: "en" as const,
-      publishUserEvents: true,
+      publishEvents: true,
       gqlOperations: "query" as const,
     };
 
     const result = IdPSchema.parse(config);
     expect(result.lang).toBe("en");
-    expect(result.publishUserEvents).toBe(true);
+    expect(result.publishEvents).toBe(true);
     expect(result.gqlOperations?.read).toBe(true);
     expect(result.gqlOperations?.create).toBe(false);
     expect(result.gqlOperations?.requestMfaSettingsUrl).toBe(true);

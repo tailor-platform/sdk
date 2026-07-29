@@ -51,7 +51,7 @@ const defaultDisableGqlOperations = {
 type MockIdpServiceOpts = {
   name?: string;
   clients?: string[];
-  publishUserEvents?: boolean | undefined;
+  publishEvents?: boolean | undefined;
   gqlOperations?: Record<string, boolean | undefined>;
   omitUserAuthPolicy?: boolean;
 };
@@ -91,12 +91,12 @@ function createMockApplication(opts?: {
         },
         clients: service.clients ?? ["default-idp-client"],
       };
-      if ("publishUserEvents" in service) {
-        if (service.publishUserEvents !== undefined) {
-          result.publishUserEvents = service.publishUserEvents;
+      if ("publishEvents" in service) {
+        if (service.publishEvents !== undefined) {
+          result.publishEvents = service.publishEvents;
         }
       } else {
-        result.publishUserEvents = true;
+        result.publishEvents = true;
       }
       if (service.omitUserAuthPolicy) {
         delete result.userAuthPolicy;
@@ -109,7 +109,7 @@ function createMockApplication(opts?: {
 type MockRemoteService = {
   name: string;
   lang: IdPLang;
-  publishUserEvents: boolean;
+  publishEvents: boolean;
   userAuthPolicy?: Record<string, unknown>;
   disableGqlOperations?: Record<string, boolean>;
   permission?: Record<string, unknown>;
@@ -120,7 +120,7 @@ function createMatchingRemoteService(overrides?: Partial<MockRemoteService>): Mo
   return {
     name: "idp-a",
     lang: IdPLang.JA,
-    publishUserEvents: true,
+    publishEvents: true,
     userAuthPolicy: defaultUserAuthPolicy,
     disableGqlOperations: defaultDisableGqlOperations,
     label: appName,
@@ -141,7 +141,7 @@ function createMockClient(opts?: {
         namespace: { name: service.name },
         authorization: "",
         lang: service.lang,
-        publishUserEvents: service.publishUserEvents,
+        publishUserEvents: service.publishEvents,
         userAuthPolicy: service.userAuthPolicy,
         disableGqlOperations: service.disableGqlOperations,
         permission: service.permission,
@@ -212,7 +212,7 @@ describe("planIdP", () => {
 
   test("marks idp service updated when remote state differs", async () => {
     const client = createMockClient({
-      services: [{ name: "idp-a", lang: IdPLang.EN, publishUserEvents: false, label: appName }],
+      services: [{ name: "idp-a", lang: IdPLang.EN, publishEvents: false, label: appName }],
       clients: defaultIdpClientSecret,
     });
 
@@ -370,7 +370,7 @@ describe("planIdP", () => {
 
   test("creates idp client when it does not exist remotely", async () => {
     const client = createMockClient({
-      services: [{ name: "idp-a", lang: IdPLang.JA, publishUserEvents: true, label: appName }],
+      services: [{ name: "idp-a", lang: IdPLang.JA, publishEvents: true, label: appName }],
       clients: { "idp-a": [] },
     });
 
@@ -405,9 +405,9 @@ describe("planIdP / gqlOperations MFA mapping", () => {
   });
 });
 
-describe("planIdP / publishUserEvents auto-configuration", () => {
-  test("undefined publishUserEvents stays false when no executor uses idpUser trigger", async () => {
-    const app = createMockApplication({ idpServices: [{ publishUserEvents: undefined }] });
+describe("planIdP / publishEvents auto-configuration", () => {
+  test("undefined publishEvents stays false when no executor uses idpUser trigger", async () => {
+    const app = createMockApplication({ idpServices: [{ publishEvents: undefined }] });
     const client = createMockClient({ services: [], clients: { "idp-a": [] } });
 
     const result = await planIdP({
@@ -420,8 +420,8 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
     expect(result.changeSet.service.creates[0]!.request.publishUserEvents).toBe(false);
   });
 
-  test("undefined publishUserEvents is auto-enabled when the IdP is targeted by an idpUser trigger", async () => {
-    const app = createMockApplication({ idpServices: [{ publishUserEvents: undefined }] });
+  test("undefined publishEvents is auto-enabled when the IdP is targeted by an idpUser trigger", async () => {
+    const app = createMockApplication({ idpServices: [{ publishEvents: undefined }] });
     const client = createMockClient({ services: [], clients: { "idp-a": [] } });
 
     const result = await planIdP({
@@ -434,8 +434,8 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
     expect(result.changeSet.service.creates[0]!.request.publishUserEvents).toBe(true);
   });
 
-  test("explicit publishUserEvents:true stays true", async () => {
-    const app = createMockApplication({ idpServices: [{ publishUserEvents: true }] });
+  test("explicit publishEvents:true stays true", async () => {
+    const app = createMockApplication({ idpServices: [{ publishEvents: true }] });
     const client = createMockClient({ services: [], clients: { "idp-a": [] } });
 
     const result = await planIdP({
@@ -447,8 +447,8 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
     expect(result.changeSet.service.creates[0]!.request.publishUserEvents).toBe(true);
   });
 
-  test("explicit publishUserEvents:false throws when executor targets the IdP", async () => {
-    const app = createMockApplication({ idpServices: [{ publishUserEvents: false }] });
+  test("explicit publishEvents:false throws when executor targets the IdP", async () => {
+    const app = createMockApplication({ idpServices: [{ publishEvents: false }] });
     const client = createMockClient({ services: [], clients: { "idp-a": [] } });
 
     await expect(
@@ -457,14 +457,14 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
         application: app,
         idpUserTriggerTargets: new Set(["idp-a"]),
       }),
-    ).rejects.toThrow(/publishUserEvents.*false/);
+    ).rejects.toThrow(/publishEvents.*false/);
   });
 
-  test("publishUserEvents:false on a non-targeted IdP is honored when executors only target other IdPs", async () => {
+  test("publishEvents:false on a non-targeted IdP is honored when executors only target other IdPs", async () => {
     const app = createMockApplication({
       idpServices: [
-        { publishUserEvents: undefined },
-        { name: "idp-b", clients: ["client-b"], publishUserEvents: false },
+        { publishEvents: undefined },
+        { name: "idp-b", clients: ["client-b"], publishEvents: false },
       ],
     });
     const client = createMockClient({
@@ -486,11 +486,11 @@ describe("planIdP / publishUserEvents auto-configuration", () => {
     expect(byName.get("idp-b")?.publishUserEvents).toBe(false);
   });
 
-  test("auto-enables publishUserEvents only on IdPs targeted by idpUser triggers", async () => {
+  test("auto-enables publishEvents only on IdPs targeted by idpUser triggers", async () => {
     const app = createMockApplication({
       idpServices: [
-        { publishUserEvents: undefined },
-        { name: "idp-b", clients: ["client-b"], publishUserEvents: undefined },
+        { publishEvents: undefined },
+        { name: "idp-b", clients: ["client-b"], publishEvents: undefined },
       ],
     });
     const client = createMockClient({
