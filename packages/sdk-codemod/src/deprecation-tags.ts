@@ -33,6 +33,7 @@ export interface CheckDeprecationTagsOptions {
 
 // A tag's text runs to the end of its JSDoc comment or to the next block tag,
 // whichever comes first.
+const JSDOC_BLOCK = /\/\*\*[\s\S]*?\*\//g;
 const NEXT_BLOCK_TAG = /^@\w/;
 const JSDOC_LINE_PREFIX = /^\s*\*\s?/;
 const SINCE = /^since\s+(\S+)/;
@@ -48,26 +49,24 @@ const TRAILING_PUNCTUATION = /[.,;:—-]+$/;
  */
 export function findDeprecationTags(source: string): DeprecationTag[] {
   const tags: DeprecationTag[] = [];
-  for (const match of source.matchAll(/@deprecated\b/g)) {
-    const index = match.index;
-    const commentEnd = source.indexOf("*/", index);
-    const body = source.slice(
-      index + match[0].length,
-      commentEnd === -1 ? source.length : commentEnd,
-    );
+  // Scan inside JSDoc blocks only, so `@deprecated` in a string literal or a
+  // plain comment is not parsed as a tag.
+  for (const block of source.matchAll(JSDOC_BLOCK)) {
+    const body = block[0].slice(0, -"*/".length);
+    for (const match of body.matchAll(/@deprecated\b/g)) {
+      const [firstLine = "", ...rest] = body.slice(match.index + match[0].length).split("\n");
+      const collected = [firstLine];
+      for (const line of rest) {
+        const stripped = line.replace(JSDOC_LINE_PREFIX, "");
+        if (NEXT_BLOCK_TAG.test(stripped)) break;
+        collected.push(stripped);
+      }
 
-    const [firstLine = "", ...rest] = body.split("\n");
-    const collected = [firstLine];
-    for (const line of rest) {
-      const stripped = line.replace(JSDOC_LINE_PREFIX, "");
-      if (NEXT_BLOCK_TAG.test(stripped)) break;
-      collected.push(stripped);
+      tags.push({
+        line: source.slice(0, block.index + match.index).split("\n").length,
+        text: collected.join(" ").replace(/\s+/g, " ").trim(),
+      });
     }
-
-    tags.push({
-      line: source.slice(0, index).split("\n").length,
-      text: collected.join(" ").replace(/\s+/g, " ").trim(),
-    });
   }
   return tags;
 }
@@ -121,7 +120,9 @@ export function checkDeprecationTags(
       continue;
     }
 
-    for (const id of ids[1]!.split(",").map((value) => value.trim())) {
+    for (const id of ids[1]!
+      .split(",")
+      .map((value) => value.trim().replace(TRAILING_PUNCTUATION, ""))) {
       if (!options.codemodIds.has(id)) {
         problems.push({
           line: tag.line,
