@@ -95,3 +95,9 @@ jobs:
 
       - name: Check import cycles
         run: pnpm -r run check:import-cycles
+
+      # Also gates the release PR: once its version bump reaches a codemod's
+      # boundary, an API that was supposed to be removed there still carrying a
+      # `@deprecated` declaration fails here.
+      - name: Check deprecations
+        run: pnpm run check:deprecations

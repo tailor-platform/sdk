@@ -3,7 +3,7 @@ import { globSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PENDING_SINCE, checkDeprecationTags } from "../src/deprecation-tags";
-import { allCodemods } from "../src/registry";
+import { allCodemods, effectiveCodemodBoundary } from "../src/registry";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../../..");
@@ -12,7 +12,9 @@ const sdkRoot = resolve(repoRoot, "packages/sdk");
 const sdkPackageJson = JSON.parse(readFileSync(resolve(sdkRoot, "package.json"), "utf-8")) as {
   version: string;
 };
-const codemodIds = new Set(allCodemods.map((codemod) => codemod.id));
+const codemodBoundaries = new Map(
+  allCodemods.map((codemod) => [codemod.id, effectiveCodemodBoundary(codemod)]),
+);
 
 const isTestFile = (file: string): boolean =>
   file.endsWith(".test.ts") ||
@@ -25,7 +27,7 @@ for (const file of globSync("src/**/*.ts", { cwd: sdkRoot }).toSorted()) {
   if (isTestFile(file)) continue;
   const absolute = resolve(sdkRoot, file);
   const problems = checkDeprecationTags(readFileSync(absolute, "utf-8"), {
-    codemodIds,
+    codemodBoundaries,
     currentVersion: sdkPackageJson.version,
   });
   for (const problem of problems) {

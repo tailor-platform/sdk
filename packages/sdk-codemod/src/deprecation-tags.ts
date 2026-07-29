@@ -1,4 +1,4 @@
-import { lte, valid } from "semver";
+import { gte, lte, valid } from "semver";
 
 /**
  * Sentinel `since` value for a deprecation whose shipping version is not known
@@ -25,9 +25,15 @@ export interface DeprecationProblem {
 
 /** Inputs the tag rules are checked against. */
 export interface CheckDeprecationTagsOptions {
-  /** Codemod ids registered in registry.ts. */
-  codemodIds: ReadonlySet<string>;
-  /** Current `@tailor-platform/sdk` version; a concrete `since` may not exceed it. */
+  /**
+   * Registered codemod ids mapped to the version that removes what they migrate
+   * — `prereleaseUntil` when it names a concrete prerelease, `until` otherwise.
+   */
+  codemodBoundaries: ReadonlyMap<string, string>;
+  /**
+   * Current `@tailor-platform/sdk` version. A concrete `since` may not exceed it,
+   * and a codemod boundary at or below it means the API was already due for removal.
+   */
   currentVersion: string;
 }
 
@@ -171,10 +177,21 @@ export function checkDeprecationTags(
     for (const id of ids[1]!
       .split(",")
       .map((value) => value.trim().replace(TRAILING_PUNCTUATION, ""))) {
-      if (!options.codemodIds.has(id)) {
+      const boundary = options.codemodBoundaries.get(id);
+      if (boundary === undefined) {
         problems.push({
           line: tag.line,
           message: `codemod \`${id}\` is not registered in packages/sdk-codemod/src/registry.ts`,
+        });
+        continue;
+      }
+      // The codemod migrates callers off an API that this release no longer has,
+      // so the declaration should have gone with it. Catches a removal that was
+      // planned, automated, and then forgotten.
+      if (gte(options.currentVersion, boundary)) {
+        problems.push({
+          line: tag.line,
+          message: `\`${id}\` migrates callers off this API as of ${boundary}, which ${options.currentVersion} has reached; delete the deprecated declaration, or point the tag at the codemod for the release that removes it`,
         });
       }
     }

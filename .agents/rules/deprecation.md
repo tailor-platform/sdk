@@ -119,3 +119,9 @@ removals use `since: "1.0.0"`, `until: "2.0.0"`, with the tag reading `since 2.0
   cross a major boundary.
 - Removal is what the codemod exists for: confirm an entry covers the removed API, and add the
   missing coverage in the removal change itself when it does not.
+- Forgetting the removal is a check failure, not a discovery two releases later. `check:deprecations`
+  rejects a `@deprecated` declaration once the current version reaches its codemod's boundary, so the
+  release PR that bumps to the next major fails while the declaration is still there — the release PR
+  runs the same CI, and its version bump is what trips the rule. This is the drift the v2 plugin
+  re-exports lived in: `v2/plugin-cli-import` shipped in `2.0.0-next.1` and the aliases stayed until
+  they were deleted by hand.
