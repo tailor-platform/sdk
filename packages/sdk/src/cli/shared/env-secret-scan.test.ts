@@ -23,23 +23,50 @@ describe("scanEnvForSecrets", () => {
   test("reports a provider match as an error naming the env key", async () => {
     const findings = await scanEnvForSecrets({ env: { SLACK_BOT_TOKEN: SLACK_TOKEN } });
 
-    expect(findings).toEqual([{ key: "SLACK_BOT_TOKEN", detector: "slack", severity: "error" }]);
+    expect(findings).toEqual([
+      {
+        key: "SLACK_BOT_TOKEN",
+        detector: "slack",
+        rule: "SLACK_TOKEN",
+        docsUrl: expect.stringContaining("secretlint-rule-slack"),
+        severity: "error",
+      },
+    ]);
   });
 
   test("detects an AWS access key id, which the provider rule set skips by default", async () => {
     const findings = await scanEnvForSecrets({ env: { AWS_ACCESS_KEY_ID } });
 
-    expect(findings).toEqual([{ key: "AWS_ACCESS_KEY_ID", detector: "aws", severity: "error" }]);
+    expect(findings).toEqual([
+      expect.objectContaining({
+        key: "AWS_ACCESS_KEY_ID",
+        detector: "aws",
+        rule: "AWSAccessKeyID",
+        severity: "error",
+      }),
+    ]);
   });
 
   test("detects a secret whose rule needs the key name for context", async () => {
     const findings = await scanEnvForSecrets({ env: { AWS_SECRET_ACCESS_KEY: AWS_SECRET } });
 
-    expect(findings).toContainEqual({
-      key: "AWS_SECRET_ACCESS_KEY",
-      detector: "aws",
-      severity: "error",
-    });
+    expect(findings).toContainEqual(
+      expect.objectContaining({
+        key: "AWS_SECRET_ACCESS_KEY",
+        detector: "aws",
+        rule: "AWSSecretAccessKey",
+        severity: "error",
+      }),
+    );
+  });
+
+  test("distinguishes the AWS patterns the one detector covers", async () => {
+    const [accountId] = await scanEnvForSecrets({ env: { AWS_ACCOUNT_ID: 123456789012 } });
+    const [accessKeyId] = await scanEnvForSecrets({ env: { AWS_ACCESS_KEY_ID } });
+
+    expect(accountId?.detector).toBe(accessKeyId?.detector);
+    expect(accountId?.rule).toBe("AWSAccountID");
+    expect(accessKeyId?.rule).toBe("AWSAccessKeyID");
   });
 
   test("attributes a match inside a multi-line value to the right key", async () => {
@@ -50,7 +77,9 @@ describe("scanEnvForSecrets", () => {
       },
     });
 
-    expect(findings).toEqual([{ key: "BANNER", detector: "github", severity: "error" }]);
+    expect(findings).toEqual([
+      expect.objectContaining({ key: "BANNER", detector: "github", rule: "GITHUB_TOKEN" }),
+    ]);
   });
 
   test("leaves ordinary configuration values alone", async () => {
@@ -77,6 +106,7 @@ describe("scanEnvForSecrets", () => {
     expect(findings).toEqual([
       { key: "LEGACY_TOKEN", detector: "high-entropy", severity: "warning" },
     ]);
+    expect(findings[0]?.rule).toBeUndefined();
   });
 
   test("does not add an entropy warning for a value a provider rule already matched", async () => {
@@ -106,13 +136,17 @@ describe("scanEnvForSecrets", () => {
       },
     });
 
-    expect(findings).toEqual([{ key: "LEAKED", detector: "github", severity: "error" }]);
+    expect(findings).toEqual([
+      expect.objectContaining({ key: "LEAKED", detector: "github", rule: "GITHUB_TOKEN" }),
+    ]);
   });
 
   test("flags a numeric AWS account id, so numbers still need an allowance", async () => {
     const findings = await scanEnvForSecrets({ env: { AWS_ACCOUNT_ID: 123456789012 } });
 
-    expect(findings).toEqual([{ key: "AWS_ACCOUNT_ID", detector: "aws", severity: "error" }]);
+    expect(findings).toEqual([
+      expect.objectContaining({ key: "AWS_ACCOUNT_ID", detector: "aws", rule: "AWSAccountID" }),
+    ]);
     expect(
       await scanEnvForSecrets({
         env: { AWS_ACCOUNT_ID: { value: 123456789012, allowSecretReason: "public account id" } },
@@ -140,7 +174,8 @@ describe("assertEnvHasNoSecrets", () => {
       assertEnvHasNoSecrets({ env: { SLACK_BOT_TOKEN: SLACK_TOKEN } }),
     );
 
-    expect(error.message).toContain("env.SLACK_BOT_TOKEN (matched slack)");
+    expect(error.message).toContain("env.SLACK_BOT_TOKEN (matched slack: SLACK_TOKEN)");
+    expect(error.message).toContain("secretlint-rule-slack/README.md#SLACK_TOKEN");
     expect(error.message).toContain("defineSecretManager()");
     expect(error.message).toContain(
       'SLACK_BOT_TOKEN: { value: ..., allowSecretReason: "<why this is safe>" }',

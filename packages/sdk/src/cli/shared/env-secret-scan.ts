@@ -37,6 +37,15 @@ interface EnvSecretFinding {
   readonly key: string;
   /** Short name of what matched, e.g. `slack`, `aws`, `high-entropy`. */
   readonly detector: string;
+  /**
+   * Which of the detector's patterns matched, e.g. `AWSAccountID`. A detector
+   * can recognize several credential shapes — `aws` alone covers an account id,
+   * an access key id and a secret access key — and knowing which one fired is
+   * what tells the reader whether the value is actually sensitive.
+   */
+  readonly rule?: string;
+  /** Where the matched pattern is documented. */
+  readonly docsUrl?: string;
   /** `error` for provider-specific matches, `warning` for the entropy heuristic. */
   readonly severity: "error" | "warning";
 }
@@ -140,7 +149,13 @@ async function reportEnvSecrets(input: EnvSecretScanInput): Promise<void> {
   }
 
   const location = input.configPath ? ` in ${input.configPath}` : "";
-  const list = errors.map((error) => `  - env.${error.key} (matched ${error.detector})`).join("\n");
+  const list = errors
+    .map((error) => {
+      const matched = error.rule ? `${error.detector}: ${error.rule}` : error.detector;
+      const reference = error.docsUrl ? `\n    ${error.docsUrl}` : "";
+      return `  - env.${error.key} (matched ${matched})${reference}`;
+    })
+    .join("\n");
   const example = errors[0]?.key ?? "KEY";
   throw new Error(
     `Secret detected in 'env'${location}:\n${list}\n` +
@@ -197,7 +212,8 @@ async function scanWithProviderRules(
     },
   });
 
-  const detectorsByKey = new Map<string, Set<string>>();
+  const findings: EnvSecretFinding[] = [];
+  const seen = new Set<string>();
   for (const message of result.messages) {
     const entry = ranges.find(
       (range) => message.range[0] >= range.start && message.range[0] < range.end,
@@ -207,17 +223,21 @@ async function scanWithProviderRules(
     const detector = message.ruleId.startsWith(RULE_ID_PREFIX)
       ? message.ruleId.slice(RULE_ID_PREFIX.length)
       : message.ruleId;
-    const detectors = detectorsByKey.get(entry.key);
-    if (detectors) {
-      detectors.add(detector);
-    } else {
-      detectorsByKey.set(entry.key, new Set([detector]));
-    }
+    const dedupeKey = JSON.stringify([entry.key, detector, message.messageId]);
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    // The message text embeds the matched value; the identifiers do not.
+    findings.push({
+      key: entry.key,
+      detector,
+      rule: message.messageId,
+      ...(message.docsUrl ? { docsUrl: message.docsUrl } : {}),
+      severity: "error",
+    });
   }
 
-  return [...detectorsByKey].flatMap(([key, detectors]) =>
-    [...detectors].map((detector) => ({ key, detector, severity: "error" as const })),
-  );
+  return findings;
 }
 
 /**

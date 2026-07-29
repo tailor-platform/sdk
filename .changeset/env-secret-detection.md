@@ -6,8 +6,11 @@ Reject `defineConfig({ env })` values that look like credentials. `env` values a
 
 ```
 ✖ Secret detected in 'env' in /path/to/tailor.config.ts:
-  - env.SLACK_BOT_TOKEN (matched slack)
+  - env.SLACK_BOT_TOKEN (matched slack: SLACK_TOKEN)
+    https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
 ```
+
+Each finding names the pattern that matched and links to its description.
 
 Detection recognizes the credential formats published by common providers, such as Slack, GitHub and AWS. Move such values to `defineSecretManager()`. A value that is only long and random-looking, with no recognizable provider format, is reported as a warning and does not fail the command.
 

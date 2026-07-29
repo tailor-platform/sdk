@@ -279,8 +279,11 @@ export async function main(trx: Transaction, { env }: MigrationContext): Promise
 
 ```
 ✖ Secret detected in 'env' in /path/to/tailor.config.ts:
-  - env.SLACK_BOT_TOKEN (matched slack)
+  - env.SLACK_BOT_TOKEN (matched slack: SLACK_TOKEN)
+    https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
 ```
+
+Each finding names the pattern that matched and links to its description, so a value flagged as an AWS account id is distinguishable from one flagged as an AWS secret access key.
 
 Move the value to [Secret Manager](./services/secret.md) to fix this. Detection recognizes the credential formats published by common providers, such as Slack, GitHub and AWS.
 
