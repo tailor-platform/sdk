@@ -166,9 +166,9 @@ describe("defineIdp", () => {
     [true, true],
     [false, false],
     [undefined, undefined],
-  ] as const)("should preserve publishUserEvents config (%s)", (value, expected) => {
-    const idp = makeIdp(value === undefined ? {} : { publishUserEvents: value });
-    expect(idp.publishUserEvents).toBe(expected);
+  ] as const)("should preserve publishEvents config (%s)", (value, expected) => {
+    const idp = makeIdp(value === undefined ? {} : { publishEvents: value });
+    expect(idp.publishEvents).toBe(expected);
   });
 
   test("should preserve gqlOperations config", () => {
@@ -240,12 +240,12 @@ describe("defineIdp", () => {
   test("gqlOperations: 'query' works with other config options", () => {
     const idpWithQueryAndOtherOptions = makeIdp({
       lang: "en",
-      publishUserEvents: true,
+      publishEvents: true,
       gqlOperations: "query",
     });
 
     expect(idpWithQueryAndOtherOptions.lang).toBe("en");
-    expect(idpWithQueryAndOtherOptions.publishUserEvents).toBe(true);
+    expect(idpWithQueryAndOtherOptions.publishEvents).toBe(true);
     expect(idpWithQueryAndOtherOptions.gqlOperations).toBe("query");
   });
 });

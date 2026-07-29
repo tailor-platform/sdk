@@ -1386,7 +1386,7 @@ export type IdPInput = {
       }
     | undefined;
   /** Enable publishing user lifecycle events */
-  publishUserEvents?: boolean | undefined;
+  publishEvents?: boolean | undefined;
   /** Configure which GraphQL operations are enabled */
   gqlOperations?:
     | "query"
@@ -1466,7 +1466,7 @@ export type IdP = {
       }
     | undefined;
   /** Enable publishing user lifecycle events */
-  publishUserEvents?: boolean | undefined;
+  publishEvents?: boolean | undefined;
   /** Configure which GraphQL operations are enabled */
   gqlOperations?: IdPGqlOperations;
   /** Namespace-level email configuration defaults */
