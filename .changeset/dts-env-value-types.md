@@ -15,4 +15,6 @@ Generate the `Env` interface in `tailor.d.ts` from the type of each `defineConfi
  }
 ```
 
+`env` keys that aren't valid TypeScript identifiers (for example `"API-BASE"`) are now quoted as well; previously they were emitted bare and produced a `tailor.d.ts` that failed to parse.
+
 Run `tailor generate` after upgrading to refresh the file. Code that relied on the literal narrowing — comparing `env.STAGE` against a literal union, for example — has to widen its own types or read the value through a local narrowing check. If a `tailor.d.ts` you already committed contains a sensitive value, treat that value as exposed and rotate it; keep secrets in [Secret Manager](https://github.com/tailor-platform/sdk/blob/main/packages/sdk/docs/services/secret.md) rather than `env`.
