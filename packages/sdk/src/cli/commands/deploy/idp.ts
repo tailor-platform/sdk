@@ -268,7 +268,7 @@ type ComparableIdPService = {
   authorization: string | undefined;
   lang: IdPLang;
   userAuthPolicy: Record<string, unknown> | undefined;
-  publishUserEvents: boolean;
+  publishEvents: boolean;
   disableGqlOperations: Record<string, boolean> | undefined;
   emailConfig: Record<string, string> | undefined;
   permission: MessageInitShape<typeof ProtoIdPPermissionSchema> | undefined;
@@ -330,7 +330,7 @@ function normalizeComparableIdPService(
     | "authorization"
     | "lang"
     | "userAuthPolicy"
-    | "publishUserEvents"
+    | "publishEvents"
     | "disableGqlOperations"
     | "emailConfig"
     | "permission"
@@ -340,7 +340,7 @@ function normalizeComparableIdPService(
     authorization: input.authorization || undefined,
     lang: input.lang === IdPLang.UNSPECIFIED ? IdPLang.EN : input.lang,
     userAuthPolicy: input.userAuthPolicy,
-    publishUserEvents: input.publishUserEvents,
+    publishEvents: input.publishEvents,
     disableGqlOperations: input.disableGqlOperations,
     emailConfig: input.emailConfig,
     permission: input.permission,
@@ -389,7 +389,7 @@ function areIdPServicesEqual(existing: ProtoIdPService, desired: ComparableIdPSe
       authorization: existing.authorization,
       lang: existing.lang,
       userAuthPolicy: normalizeComparableUserAuthPolicy(existing.userAuthPolicy),
-      publishUserEvents: existing.publishUserEvents,
+      publishEvents: existing.publishUserEvents,
       disableGqlOperations: normalizeComparableDisableGqlOperations(existing.disableGqlOperations),
       emailConfig: normalizeComparableEmailConfig(existing.emailConfig),
       permission: normalizeComparablePermission(existing.permission),
@@ -453,13 +453,13 @@ async function planServices(
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
     const isIdpUserTriggerTarget = idpUserTriggerTargets.has(namespaceName);
-    if (isIdpUserTriggerTarget && idp.publishUserEvents === false) {
+    if (isIdpUserTriggerTarget && idp.publishEvents === false) {
       throw new Error(
-        `IdP service "${namespaceName}" has "publishUserEvents: false", but executors with idpUser triggers subscribe to it. ` +
-          `Either remove "publishUserEvents: false" or remove the matching executor triggers.`,
+        `IdP service "${namespaceName}" has "publishEvents: false", but executors with idpUser triggers subscribe to it. ` +
+          `Either remove "publishEvents: false" or remove the matching executor triggers.`,
       );
     }
-    const publishUserEvents = idp.publishUserEvents ?? isIdpUserTriggerTarget;
+    const publishEvents = idp.publishEvents ?? isIdpUserTriggerTarget;
     const emailConfig = idp.emailConfig;
     if (!idp.permission) {
       logger.warn(`IdP service "${namespaceName}" has no permission configured.`);
@@ -486,7 +486,7 @@ async function planServices(
       authorization,
       lang,
       userAuthPolicy: normalizeComparableUserAuthPolicy(userAuthPolicyForCompare),
-      publishUserEvents,
+      publishEvents,
       disableGqlOperations: normalizeComparableDisableGqlOperations(
         convertGqlOperationsToDisable(idp.gqlOperations),
       ),
@@ -499,7 +499,7 @@ async function planServices(
       authorization,
       lang,
       userAuthPolicy,
-      publishUserEvents,
+      publishUserEvents: publishEvents,
       disableGqlOperations: convertGqlOperationsToDisable(idp.gqlOperations),
       emailConfig,
       permission: protoPermission,
