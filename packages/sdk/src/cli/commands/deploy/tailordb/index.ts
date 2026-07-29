@@ -59,6 +59,7 @@ import { type TailorDBService } from "#/cli/services/tailordb/service";
 import { byName } from "#/cli/shared/apply-concurrency";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { assertNoPublishEventsConflict, publishEventsConflict } from "#/cli/shared/publish-events";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig, toComparableProtoJson } from "../compare";
@@ -998,7 +999,7 @@ function buildSnapshotTypeManifest(
   if (!snapshotType) return undefined;
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
   return generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-    publishRecordEvents: executorUsedTypes.has(snapshotType.name),
+    subscribed: executorUsedTypes.has(snapshotType.name),
     namespaceGqlOperations: input?.config.gqlOperations,
   });
 }
@@ -1363,7 +1364,7 @@ async function rollbackSingleMigrationPrePhase(
     try {
       if (priorType) {
         const manifest = generateTailorDBTypeManifestFromSnapshot(priorType, {
-          publishRecordEvents: executorUsedTypes.has(priorType.name),
+          subscribed: executorUsedTypes.has(priorType.name),
           namespaceGqlOperations: input?.config.gqlOperations,
         });
         await client.updateTailorDBType({
@@ -1778,16 +1779,15 @@ async function planTypes(
     });
   };
 
-  // Validate that types used by executors don't have publishEvents explicitly set to false
+  // Reject a conflicting opt-out before any request, not partway through.
   for (const tailordb of tailordbs) {
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
     for (const [typeName, type] of Object.entries(types)) {
-      if (executorUsedTypes.has(typeName) && type.settings?.publishEvents === false) {
-        throw new Error(
-          `Type "${typeName}" has publishEvents set to false, but it is used by an executor with a record trigger. ` +
-            `Either remove the publishEvents: false setting or remove the executor trigger for this type.`,
-        );
-      }
+      assertNoPublishEventsConflict({
+        explicit: type.settings?.publishEvents,
+        subscribed: executorUsedTypes.has(typeName),
+        conflict: publishEventsConflict.tailorDBType(typeName),
+      });
     }
   }
 
@@ -1800,7 +1800,7 @@ async function planTypes(
 
     for (const [typeName, tailordbTypeSnapshot] of Object.entries(types)) {
       const tailordbType = generateTailorDBTypeManifestFromSnapshot(tailordbTypeSnapshot, {
-        publishRecordEvents: executorUsedTypes.has(typeName),
+        subscribed: executorUsedTypes.has(typeName),
         namespaceGqlOperations: tailordb.config.gqlOperations,
       });
       const existingType = existingTypesMap.get(typeName);

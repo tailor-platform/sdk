@@ -230,7 +230,36 @@ describe("planWorkflow", () => {
       );
     });
 
-    test("keeps a remote workflow opt-in when nothing in the target subscribes", async () => {
+    test.each([
+      { publishEvents: true, subscribed: false, expected: true },
+      { publishEvents: true, subscribed: true, expected: true },
+      { publishEvents: false, subscribed: false, expected: false },
+      { publishEvents: undefined, subscribed: false, expected: false },
+      { publishEvents: undefined, subscribed: true, expected: true },
+    ])(
+      "resolves a workflow with publishEvents=$publishEvents subscribed=$subscribed to $expected",
+      async ({ publishEvents, subscribed, expected }) => {
+        const workflow = {
+          ...createMockWorkflow("orders", "main-job"),
+          ...(publishEvents === undefined ? {} : { publishEvents }),
+        };
+
+        const result = await planWorkflow(
+          createMockClient([]),
+          workspaceId,
+          appName,
+          undefined,
+          { orders: workflow },
+          { "main-job": ["main-job"] },
+          new Set(),
+          subscribed ? { execution: { workflowNames: new Set(["orders"]) } } : {},
+        );
+
+        expect(result.changeSet.creates[0]!.workflow.publishEvents).toBe(expected);
+      },
+    );
+
+    test("turns a remote workflow opt-in back off once nothing subscribes", async () => {
       const client = createMockClient([
         {
           id: "1",
@@ -258,10 +287,10 @@ describe("planWorkflow", () => {
         {},
       );
 
-      expect(result.changeSet.updates[0]!.workflow.publishEvents).toBe(true);
+      expect(result.changeSet.updates[0]!.workflow.publishEvents).toBe(false);
     });
 
-    test("keeps a remote job opt-in when nothing in the target subscribes", async () => {
+    test("turns a remote job opt-in back off once nothing subscribes", async () => {
       const client = createMockClient(
         [
           {
@@ -290,7 +319,7 @@ describe("planWorkflow", () => {
         {},
       );
 
-      expect(result.jobFunctionPublishEvents.get("main-job")).toBe(true);
+      expect(result.jobFunctionPublishEvents.get("main-job")).toBe(false);
     });
 
     test("honors an explicit opt-out over a remote opt-in", async () => {

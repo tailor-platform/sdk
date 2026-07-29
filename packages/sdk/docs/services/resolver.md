@@ -305,12 +305,12 @@ createResolver({
 **Behavior:**
 
 - When `publishEvents: true`, resolver execution events are published
-- When not specified, it is **automatically set to `true`** if an executor uses this resolver with `resolverExecutedTrigger`
-- When explicitly set to `false` while an executor uses this resolver, an error is thrown during `tailor deploy`
+- When not specified, `deploy` sets it from the executors in the **same config**: `true` while one of them uses this resolver with `resolverExecutedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
+- When explicitly set to `false` while an executor in the same config uses this resolver, `deploy` fails
 
 **Use cases:**
 
-1. **Auto-detection (recommended)**: Don't set `publishEvents` - the SDK automatically enables it when needed by executors
+1. **Auto-detection (recommended)**: Don't set `publishEvents` - `deploy` enables it while an executor in the same config needs it
 
    ```typescript
    // publishEvents is automatically enabled because an executor uses this resolver
@@ -339,7 +339,7 @@ createResolver({
    });
    ```
 
-3. **Explicit disable**: Disable event publishing for a resolver that doesn't need it (error if executor uses it)
+3. **Explicit disable**: Disable event publishing for a resolver that doesn't need it (error if an executor in the same config uses it)
 
    ```typescript
    createResolver({
@@ -349,6 +349,8 @@ createResolver({
      // ...
    });
    ```
+
+**Sharing a resolver across configs:** auto-detection only looks at executors declared by the same config, so the resolved value stays the same no matter which configs `--config` selects. When the subscribing executor lives in another config, set `publishEvents: true` on the resolver itself, and include the config that owns the resolver in the same `deploy` — `deploy` fails otherwise rather than creating an executor whose events never arrive.
 
 ## Permissions
 

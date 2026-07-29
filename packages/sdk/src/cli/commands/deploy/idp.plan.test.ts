@@ -447,6 +447,53 @@ describe("planIdP / publishEvents auto-configuration", () => {
     expect(result.changeSet.service.creates[0]!.request.publishUserEvents).toBe(true);
   });
 
+  test("explicit publishEvents:true stays true without a subscribing executor", async () => {
+    const app = createMockApplication({ idpServices: [{ publishEvents: true }] });
+    const client = createMockClient({ services: [], clients: { "idp-a": [] } });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(),
+    });
+
+    expect(result.changeSet.service.creates[0]!.request.publishUserEvents).toBe(true);
+  });
+
+  test("turns a remote opt-in back off once nothing subscribes", async () => {
+    const app = createMockApplication({ idpServices: [{ publishEvents: undefined }] });
+    const client = createMockClient({
+      services: [createMatchingRemoteService({ publishEvents: true })],
+      clients: defaultIdpClientSecret,
+    });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(),
+    });
+
+    expect(result.changeSet.service.updates).toHaveLength(1);
+    expect(result.changeSet.service.updates[0]!.request.publishUserEvents).toBe(false);
+  });
+
+  test("keeps a remote opt-in while an executor still subscribes", async () => {
+    const app = createMockApplication({ idpServices: [{ publishEvents: undefined }] });
+    const client = createMockClient({
+      services: [createMatchingRemoteService({ publishEvents: true })],
+      clients: defaultIdpClientSecret,
+    });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(["idp-a"]),
+    });
+
+    expect(result.changeSet.service.updates).toHaveLength(0);
+    expect(result.changeSet.service.unchanged).toHaveLength(1);
+  });
+
   test("explicit publishEvents:false throws when executor targets the IdP", async () => {
     const app = createMockApplication({ idpServices: [{ publishEvents: false }] });
     const client = createMockClient({ services: [], clients: { "idp-a": [] } });

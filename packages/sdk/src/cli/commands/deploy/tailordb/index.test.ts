@@ -379,6 +379,120 @@ describe("planTailorDB (service level)", () => {
       expect(createdType?.schema?.settings?.publishRecordEvents).toBe(true);
     });
 
+    describe("publishEvents", () => {
+      function createTypeWith(publishEvents: boolean | undefined): TailorDBType {
+        return {
+          name: "User",
+          pluralForm: "Users",
+          description: "User type",
+          fields: { name: { name: "name", config: { type: "string" } } },
+          forwardRelationships: {},
+          backwardRelationships: {},
+          settings: publishEvents === undefined ? {} : { publishEvents },
+          permissions: {},
+          files: {},
+        };
+      }
+
+      function createClientWithRemoteType(publishRecordEvents: boolean): OperatorClient {
+        const client = createMockClient([{ name: "shared-db", label: appName }]);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (client as any).listTailorDBTypes = vi.fn().mockResolvedValue({
+          tailordbTypes: [{ name: "User", schema: { settings: { publishRecordEvents } } }],
+          nextPageToken: "",
+        });
+        return client;
+      }
+
+      async function planWith(params: {
+        publishEvents: boolean | undefined;
+        subscribed: boolean;
+        remote?: boolean;
+      }) {
+        const { publishEvents, subscribed, remote } = params;
+        const tailorDBService = createMockTailorDBService("shared-db");
+        const userType = createTypeWith(publishEvents);
+        Object.defineProperty(tailorDBService, "types", {
+          value: { [userType.name]: userType },
+        });
+        return await planTailorDB({
+          client: remote === undefined ? createMockClient([]) : createClientWithRemoteType(remote),
+          workspaceId,
+          application: createMockApplication([tailorDBService]),
+          forRemoval: false,
+          config: mockConfig,
+          executorUsedTailorDBTypes: subscribed ? new Set(["User"]) : new Set<string>(),
+        });
+      }
+
+      function desiredPublishRecordEvents(
+        result: Awaited<ReturnType<typeof planTailorDB>>,
+      ): boolean | undefined {
+        const entry = result.changeSet.type.creates[0] ?? result.changeSet.type.updates[0];
+        expect(entry).toBeDefined();
+        return entry!.request.tailordbType?.schema?.settings?.publishRecordEvents;
+      }
+
+      test.each([
+        { publishEvents: undefined, subscribed: true, expected: true },
+        { publishEvents: undefined, subscribed: false, expected: false },
+        { publishEvents: true, subscribed: false, expected: true },
+        { publishEvents: true, subscribed: true, expected: true },
+        { publishEvents: false, subscribed: false, expected: false },
+      ])(
+        "resolves publishEvents=$publishEvents subscribed=$subscribed to $expected",
+        async ({ publishEvents, subscribed, expected }) => {
+          const result = await planWith({ publishEvents, subscribed });
+
+          expect(desiredPublishRecordEvents(result)).toBe(expected);
+        },
+      );
+
+      test("throws when an opt-out is combined with a subscribing executor", async () => {
+        await expect(planWith({ publishEvents: false, subscribed: true })).rejects.toThrow(
+          'TailorDB type "User" has "publishEvents: false", but executors with a record trigger subscribe to it.',
+        );
+      });
+
+      test("rejects a conflicting opt-out before listing remote types", async () => {
+        const client = createMockClient([{ name: "shared-db", label: appName }]);
+        const tailorDBService = createMockTailorDBService("shared-db");
+        const userType = createTypeWith(false);
+        Object.defineProperty(tailorDBService, "types", {
+          value: { [userType.name]: userType },
+        });
+
+        await expect(
+          planTailorDB({
+            client,
+            workspaceId,
+            application: createMockApplication([tailorDBService]),
+            forRemoval: false,
+            config: mockConfig,
+            executorUsedTailorDBTypes: new Set(["User"]),
+          }),
+        ).rejects.toThrow('TailorDB type "User" has "publishEvents: false"');
+
+        expect(client.listTailorDBTypes).not.toHaveBeenCalled();
+      });
+
+      test("turns a remote opt-in back off once nothing subscribes", async () => {
+        const result = await planWith({
+          publishEvents: undefined,
+          subscribed: false,
+          remote: true,
+        });
+
+        expect(desiredPublishRecordEvents(result)).toBe(false);
+      });
+
+      test("keeps a remote opt-in while an executor still subscribes", async () => {
+        const result = await planWith({ publishEvents: undefined, subscribed: true, remote: true });
+
+        expect(desiredPublishRecordEvents(result)).toBe(true);
+      });
+    });
+
     test("includes validate and hooks for nested fields", async () => {
       const client = createMockClient([]);
       const tailorDBService = createMockTailorDBService("test-tailordb");

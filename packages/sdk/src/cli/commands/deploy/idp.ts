@@ -24,6 +24,7 @@ import {
   type OperatorClient,
 } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp/permission";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
@@ -452,14 +453,11 @@ async function planServices(
 
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
-    const isIdpUserTriggerTarget = idpUserTriggerTargets.has(namespaceName);
-    if (isIdpUserTriggerTarget && idp.publishEvents === false) {
-      throw new Error(
-        `IdP service "${namespaceName}" has "publishEvents: false", but executors with idpUser triggers subscribe to it. ` +
-          `Either remove "publishEvents: false" or remove the matching executor triggers.`,
-      );
-    }
-    const publishEvents = idp.publishEvents ?? isIdpUserTriggerTarget;
+    const publishEvents = resolvePublishEvents({
+      explicit: idp.publishEvents,
+      subscribed: idpUserTriggerTargets.has(namespaceName),
+      conflict: publishEventsConflict.idpService(namespaceName),
+    });
     const emailConfig = idp.emailConfig;
     if (!idp.permission) {
       logger.warn(`IdP service "${namespaceName}" has no permission configured.`);

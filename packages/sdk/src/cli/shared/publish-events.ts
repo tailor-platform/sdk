@@ -1,0 +1,96 @@
+/** Resource and trigger named in a `publishEvents` opt-out conflict error. */
+export type PublishEventsConflict = {
+  /** Resource named in the error, e.g. `TailorDB type "Order"`. */
+  resource: string;
+  /** Executor trigger family named in the error, e.g. `recordCreated`. */
+  trigger: string;
+  /** What the subscribing executors subscribe to. Defaults to `"it"`. */
+  subscribesTo?: string;
+};
+
+/** How each event-publishing resource is named in user-facing messages. */
+const eventSourceLabel = {
+  tailorDBType: (name: string) => `TailorDB type "${name}"`,
+  resolver: (name: string) => `Resolver "${name}"`,
+  idpService: (name: string) => `IdP service "${name}"`,
+  workflow: (name: string) => `Workflow "${name}"`,
+  workflowJob: (name: string) => `Job "${name}"`,
+} as const;
+
+/** Opt-out conflict details per event-publishing resource. */
+export const publishEventsConflict = {
+  tailorDBType: (name: string): PublishEventsConflict => ({
+    resource: eventSourceLabel.tailorDBType(name),
+    trigger: "record",
+  }),
+  resolver: (name: string): PublishEventsConflict => ({
+    resource: eventSourceLabel.resolver(name),
+    trigger: "resolverExecuted",
+  }),
+  idpService: (name: string): PublishEventsConflict => ({
+    resource: eventSourceLabel.idpService(name),
+    trigger: "idpUser",
+  }),
+  workflow: (name: string): PublishEventsConflict => ({
+    resource: eventSourceLabel.workflow(name),
+    trigger: "workflowExecution",
+  }),
+  workflowJob: (name: string): PublishEventsConflict => ({
+    resource: eventSourceLabel.workflowJob(name),
+    trigger: "workflowJobExecution",
+    subscribesTo: "a workflow that runs it",
+  }),
+} as const;
+
+/**
+ * Build the error raised when a resource opts out of publishing that a
+ * subscribing executor needs.
+ * @param conflict - Resource, trigger, and subscription target named in the error
+ * @returns Error message
+ */
+function publishEventsConflictError(conflict: PublishEventsConflict): string {
+  const { resource, trigger, subscribesTo = "it" } = conflict;
+  return (
+    `${resource} has "publishEvents: false", but executors with a ${trigger} trigger subscribe to ${subscribesTo}. ` +
+    `Either remove "publishEvents: false" or remove the matching executor triggers.`
+  );
+}
+
+/** Inputs deciding whether a resource publishes events. */
+export type ResolvePublishEventsParams = {
+  /** `publishEvents` declared on the resource, or undefined when unset. */
+  explicit: boolean | undefined;
+  /** Whether an executor declared by the resource's own config subscribes to it. */
+  subscribed: boolean;
+  /** Resource and trigger named when an opt-out conflicts with a subscriber. */
+  conflict: PublishEventsConflict;
+};
+
+/**
+ * Reject an opt-out that a subscribing executor contradicts.
+ *
+ * Separate from {@link resolvePublishEvents} so a planner can reject the whole
+ * config before issuing any request, rather than partway through.
+ * @param params - Declared value, subscriber presence, and conflict error details
+ */
+export function assertNoPublishEventsConflict(params: ResolvePublishEventsParams): void {
+  const { explicit, subscribed, conflict } = params;
+  if (explicit === false && subscribed) {
+    throw new Error(publishEventsConflictError(conflict));
+  }
+}
+
+/**
+ * Resolve whether a resource publishes events.
+ *
+ * An unset value is recomputed from the executors declared by the resource's own
+ * config, so removing the last subscribing trigger turns publishing back off.
+ * Sharing a resource with executors in another config therefore needs
+ * `publishEvents: true` declared on the resource itself.
+ * @param params - Declared value, subscriber presence, and conflict error details
+ * @returns Whether the resource publishes events
+ */
+export function resolvePublishEvents(params: ResolvePublishEventsParams): boolean {
+  assertNoPublishEventsConflict(params);
+  return params.explicit ?? params.subscribed;
+}
