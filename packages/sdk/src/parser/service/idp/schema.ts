@@ -331,7 +331,7 @@ export const IdPSchema = z
     )
       .optional()
       .describe("User authentication policy configuration"),
-    publishUserEvents: z.boolean().optional().describe("Enable publishing user lifecycle events"),
+    publishEvents: z.boolean().optional().describe("Enable publishing user lifecycle events"),
     gqlOperations: IdPGqlOperationsSchema.optional().describe(
       "Configure which GraphQL operations are enabled",
     ),
