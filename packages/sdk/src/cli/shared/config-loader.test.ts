@@ -30,7 +30,9 @@ describe("loadConfig", () => {
       `export default { name: "test-app", env: { SLACK_BOT_TOKEN: ${JSON.stringify(SLACK_TOKEN)} } };`,
     );
 
-    await expect(loadConfig(configPath)).rejects.toThrow(/env\.SLACK_BOT_TOKEN \(matched slack\)/);
+    await expect(loadConfig(configPath)).rejects.toThrow(
+      /env\.SLACK_BOT_TOKEN \(matched slack: SLACK_TOKEN\)/,
+    );
     await expect(loadConfig(configPath)).rejects.toThrow(configPath);
   });
 
