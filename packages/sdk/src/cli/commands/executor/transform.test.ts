@@ -549,6 +549,40 @@ describe("transform", () => {
       });
     });
 
+    test("keeps namespaced trigger details in their documented key order", () => {
+      const executor = baseExecutor({
+        name: "order-audit",
+        triggerType: ExecutorTriggerType.EVENT,
+        triggerConfig: {
+          config: {
+            case: "event" as const,
+            value: {
+              eventType: "",
+              typedConfig: {
+                case: "tailordb" as const,
+                value: {
+                  eventTypes: ["tailordb.type_record.created"],
+                  namespaceName: "sales",
+                  typeName: "SalesOrder",
+                  condition: { expr: "true" },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const result = toExecutorInfo(executor);
+
+      expect(Object.keys(result.triggerConfig)).toEqual([
+        "kind",
+        "eventTypes",
+        "namespaceName",
+        "condition",
+        "typeName",
+      ]);
+    });
+
     test("transforms ExecutorExecutor with incoming webhook trigger", () => {
       const executor = baseExecutor({
         name: "webhook-executor",

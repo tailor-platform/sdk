@@ -252,32 +252,32 @@ function formatEventTriggerConfig(config: ExecutorTriggerEventConfig): Record<st
     };
   }
 
+  // Workflows are workspace-scoped, so this is the only case with no namespace.
+  // Returning early keeps `namespaceName` in the key position every other case
+  // has always emitted it in.
+  if (typedConfig.case === "workflow") {
+    return {
+      kind: typedConfig.case,
+      eventTypes: typedConfig.value.eventTypes,
+      condition: typedConfig.value.condition?.expr || "",
+      ...(typedConfig.value.workflowName && { workflowName: typedConfig.value.workflowName }),
+    };
+  }
+
   const base = {
     kind: typedConfig.case,
     eventTypes: typedConfig.value.eventTypes,
+    namespaceName: typedConfig.value.namespaceName,
     condition: typedConfig.value.condition?.expr || "",
   };
 
   switch (typedConfig.case) {
     case "tailordb":
-      return {
-        ...base,
-        namespaceName: typedConfig.value.namespaceName,
-        typeName: typedConfig.value.typeName,
-      };
+      return { ...base, typeName: typedConfig.value.typeName };
     case "pipeline":
-      return {
-        ...base,
-        namespaceName: typedConfig.value.namespaceName,
-        resolverName: typedConfig.value.resolverName,
-      };
-    case "workflow":
-      return {
-        ...base,
-        ...(typedConfig.value.workflowName && { workflowName: typedConfig.value.workflowName }),
-      };
+      return { ...base, resolverName: typedConfig.value.resolverName };
     default:
-      return { ...base, namespaceName: typedConfig.value.namespaceName };
+      return base;
   }
 }
 
