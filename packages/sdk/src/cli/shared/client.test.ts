@@ -793,11 +793,15 @@ describe("closeConnectionPool", () => {
 
   aroundEach(async (runTest) => {
     const originals = [currentGeneration, legacyGeneration].map(
-      (key) => [key, globals[key]] as const,
+      (key) => [key, Object.hasOwn(globals, key), globals[key]] as const,
     );
     await runTest();
-    for (const [key, value] of originals) {
-      globals[key] = value;
+    for (const [key, existed, value] of originals) {
+      if (existed) {
+        globals[key] = value;
+      } else {
+        delete globals[key];
+      }
     }
   });
 
@@ -825,6 +829,13 @@ describe("closeConnectionPool", () => {
 
   test("resolves when no dispatcher is installed", async () => {
     setDispatcher(currentGeneration, undefined);
+    setDispatcher(legacyGeneration, undefined);
+
+    await expect(closeConnectionPool()).resolves.toBeUndefined();
+  });
+
+  test("resolves when the dispatcher exposes a non-callable close", async () => {
+    setDispatcher(currentGeneration, { close: "not a function" });
     setDispatcher(legacyGeneration, undefined);
 
     await expect(closeConnectionPool()).resolves.toBeUndefined();

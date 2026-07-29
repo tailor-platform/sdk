@@ -805,5 +805,7 @@ export async function closeConnectionPool() {
   const dispatcher =
     globals[Symbol.for("undici.globalDispatcher.2")] ??
     globals[Symbol.for("undici.globalDispatcher.1")];
-  await dispatcher?.close?.();
+  if (typeof dispatcher?.close === "function") {
+    await dispatcher.close();
+  }
 }
