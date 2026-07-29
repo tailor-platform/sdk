@@ -29,6 +29,7 @@ import {
   type TailorDBTypeSchema,
 } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as inflection from "inflection";
+import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { buildTypeScripts } from "#/parser/service/tailordb/type-script";
 import { isSnapshotFieldRefOperand } from "./snapshot";
 import type {
@@ -50,8 +51,8 @@ import type {
  * Options for generating TailorDB type manifest from snapshot
  */
 export interface GenerateManifestOptions {
-  /** Whether to enable publishRecordEvents (default: false) */
-  publishRecordEvents?: boolean;
+  /** Whether an executor declared by the type's own config subscribes to its record events */
+  subscribed?: boolean;
   /** Default gqlOperations for the namespace */
   namespaceGqlOperations?: {
     create?: boolean;
@@ -95,9 +96,11 @@ export function generateTailorDBTypeManifestFromSnapshot(
     defaultQueryLimitSize: 100n,
     maxBulkUpsertSize: 1000n,
     pluralForm,
-    // Read publishEvents from snapshot settings first, then fall back to options
-    publishRecordEvents:
-      snapshotType.settings?.publishEvents ?? options.publishRecordEvents ?? false,
+    publishRecordEvents: resolvePublishEvents({
+      explicit: snapshotType.settings?.publishEvents,
+      subscribed: options.subscribed ?? false,
+      conflict: publishEventsConflict.tailorDBType(snapshotType.name),
+    }),
   };
 
   // Apply gqlOperations from snapshot settings or namespace default
@@ -483,29 +486,9 @@ export function generateAllTypeManifestsFromSnapshot(
   const { executorUsedTypes, ...baseOptions } = options;
 
   for (const [typeName, snapshotType] of Object.entries(snapshot.types)) {
-    // Validate: if executor uses this type, publishEvents must not be explicitly false
-    if (executorUsedTypes?.has(typeName) && snapshotType.settings?.publishEvents === false) {
-      throw new Error(
-        `Type "${typeName}" has publishEvents set to false, but it is used by an executor with a record trigger. ` +
-          `Either remove the publishEvents: false setting or remove the executor trigger for this type.`,
-      );
-    }
-
-    // Determine publishRecordEvents:
-    // - If user explicitly sets a value (true or false), respect that (validation above ensures no executor conflict)
-    // - If not set, check if executor uses this type (true if yes)
-    // - Fall back to base options or default to false
-    let publishRecordEvents: boolean;
-    if (snapshotType.settings?.publishEvents !== undefined) {
-      publishRecordEvents = snapshotType.settings.publishEvents;
-    } else if (executorUsedTypes?.has(typeName)) {
-      publishRecordEvents = true;
-    } else {
-      publishRecordEvents = baseOptions.publishRecordEvents ?? false;
-    }
     const typeOptions: GenerateManifestOptions = {
       ...baseOptions,
-      publishRecordEvents,
+      subscribed: executorUsedTypes?.has(typeName) ?? false,
     };
     manifests.set(typeName, generateTailorDBTypeManifestFromSnapshot(snapshotType, typeOptions));
   }

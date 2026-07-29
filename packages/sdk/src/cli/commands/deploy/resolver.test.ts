@@ -148,39 +148,109 @@ describe("planPipeline (resolver service level)", () => {
     });
   });
 
-  test("enables publishExecutionEvents when a peer executor targets the resolver", async () => {
-    const client = createMockClient([]);
-    const resolverService = {
-      namespace: "shared-pipeline",
-      config: {},
-      resolvers: {
-        myResolver: {
-          name: "myResolver",
-          operation: "query",
-          body: () => "hello",
-          output: { type: "string", metadata: {}, fields: {} },
+  describe("publishEvents", () => {
+    function createResolverServiceWith(publishEvents: boolean | undefined): ResolverService {
+      return {
+        namespace: "shared-pipeline",
+        config: {},
+        resolvers: {
+          myResolver: {
+            name: "myResolver",
+            operation: "query",
+            body: () => "hello",
+            output: { type: "string", metadata: {}, fields: {} },
+            ...(publishEvents === undefined ? {} : { publishEvents }),
+          },
         },
+        loadResolvers: vi.fn().mockResolvedValue(undefined),
+      } as unknown as ResolverService;
+    }
+
+    async function planWith(params: {
+      publishEvents: boolean | undefined;
+      subscribed: boolean;
+      remote?: boolean;
+    }) {
+      const { publishEvents, subscribed, remote } = params;
+      const client =
+        remote === undefined
+          ? createMockClient([])
+          : createMockClient(
+              [{ name: "shared-pipeline", label: appName }],
+              {
+                "shared-pipeline": [{ name: "myResolver", publishExecutionEvents: remote }],
+              },
+              {},
+            );
+      return await planPipeline({
+        client,
+        workspaceId,
+        application: createMockApplication([createResolverServiceWith(publishEvents)]),
+        forRemoval: false,
+        config: mockConfig,
+        executorUsedResolvers: subscribed ? new Set(["myResolver"]) : new Set<string>(),
+      });
+    }
+
+    function desiredPublishExecutionEvents(
+      result: Awaited<ReturnType<typeof planPipeline>>,
+    ): boolean | undefined {
+      const entry = result.changeSet.resolver.creates[0] ?? result.changeSet.resolver.updates[0];
+      expect(entry).toBeDefined();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (entry as any).request.pipelineResolver.publishExecutionEvents;
+    }
+
+    test.each([
+      { publishEvents: undefined, subscribed: true, expected: true },
+      { publishEvents: undefined, subscribed: false, expected: false },
+      { publishEvents: true, subscribed: false, expected: true },
+      { publishEvents: true, subscribed: true, expected: true },
+      { publishEvents: false, subscribed: false, expected: false },
+    ])(
+      "resolves publishEvents=$publishEvents subscribed=$subscribed to $expected",
+      async ({ publishEvents, subscribed, expected }) => {
+        const result = await planWith({ publishEvents, subscribed });
+
+        expect(desiredPublishExecutionEvents(result)).toBe(expected);
       },
-      loadResolvers: vi.fn().mockResolvedValue(undefined),
-    } as unknown as ResolverService;
-    const application = createMockApplication([resolverService]);
+    );
 
-    const ctx: PlanContext = {
-      client,
-      workspaceId,
-      application,
-      forRemoval: false,
-      config: mockConfig,
-      executorUsedResolvers: new Set(["myResolver"]),
-    };
+    test("throws when an opt-out is combined with a subscribing executor", async () => {
+      await expect(planWith({ publishEvents: false, subscribed: true })).rejects.toThrow(
+        'Resolver "myResolver" has "publishEvents: false", but executors with a resolverExecuted trigger subscribe to it.',
+      );
+    });
 
-    const result = await planPipeline(ctx);
+    test("rejects a conflicting opt-out before listing remote resolvers", async () => {
+      const client = createMockClient([{ name: "shared-pipeline", label: appName }]);
 
-    const resolverCreate = result.changeSet.resolver.creates[0];
-    expect(resolverCreate).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const proto = (resolverCreate as any).request.pipelineResolver;
-    expect(proto.publishExecutionEvents).toBe(true);
+      await expect(
+        planPipeline({
+          client,
+          workspaceId,
+          application: createMockApplication([createResolverServiceWith(false)]),
+          forRemoval: false,
+          config: mockConfig,
+          executorUsedResolvers: new Set(["myResolver"]),
+        }),
+      ).rejects.toThrow('Resolver "myResolver" has "publishEvents: false"');
+
+      expect(client.listPipelineResolvers).not.toHaveBeenCalled();
+    });
+
+    test("turns a remote opt-in back off once nothing subscribes", async () => {
+      const result = await planWith({ publishEvents: undefined, subscribed: false, remote: true });
+
+      expect(desiredPublishExecutionEvents(result)).toBe(false);
+      expect(result.changeSet.resolver.updates).toHaveLength(1);
+    });
+
+    test("keeps a remote opt-in while an executor still subscribes", async () => {
+      const result = await planWith({ publishEvents: undefined, subscribed: true, remote: true });
+
+      expect(desiredPublishExecutionEvents(result)).toBe(true);
+    });
   });
 
   describe("delete scenarios (service level)", () => {

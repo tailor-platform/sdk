@@ -12,6 +12,11 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { logger, styles } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
+import {
+  assertNoPublishEventsConflict,
+  publishEventsConflict,
+  type PublishEventsConflict,
+} from "#/cli/shared/publish-events";
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
@@ -41,7 +46,6 @@ import {
   findTailorDBNamespace,
   formatExecutorChangeEntries,
   planExecutor,
-  resolveSameRunNamespace,
 } from "./executor";
 import {
   collectFunctionEntries,
@@ -72,6 +76,7 @@ import {
 } from "./workflow";
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 import { resolveDeployWorkspace } from "./workspace";
+import type { Executor } from "#/types/executor.generated";
 import type { PlanContext } from "./types";
 
 export interface DeployOptions {
@@ -102,91 +107,86 @@ interface DeployCLIContext {
 }
 
 /**
+ * Resolve which IdP an `idpUser` trigger subscribes to. A trigger that omits the
+ * `idp` option means the only configured IdP; when several exist the target is
+ * ambiguous and the apply pipeline throws a clearer error for it later.
+ * @param application - Application declaring the executor
+ * @param trigger - The executor's `idpUser` trigger
+ * @returns The subscribed IdP name, or undefined when ambiguous
+ */
+function subscribedIdpName(
+  application: Readonly<Application>,
+  trigger: { idp?: string | undefined },
+): string | undefined {
+  if (trigger.idp != null) {
+    return trigger.idp;
+  }
+  const idps = collectApplicationIdpNames(application);
+  if (idps.size !== 1) {
+    return undefined;
+  }
+  const [only] = idps;
+  return only;
+}
+
+/**
  * Resolve the set of IdP names that have at least one executor subscribed to
- * their user events. When an executor's idpUser trigger omits the `idp` option
- * and exactly one IdP is configured, that IdP is implicitly the target.
- * Executors that omit `idp` while multiple IdPs exist are skipped here; the
- * apply pipeline throws a clearer error for them later.
+ * their user events.
  * @param application - Loaded application
  * @returns Set of IdP names targeted by idpUser triggers
  */
 function collectIdpUserTriggerTargets(application: Readonly<Application>): ReadonlySet<string> {
   const targets = new Set<string>();
-  const idps = collectApplicationIdpNames(application);
   for (const executor of Object.values(application.executorService?.executors ?? {})) {
     if (executor.trigger.kind !== "idpUser") {
       continue;
     }
-    if (executor.trigger.idp != null) {
-      targets.add(executor.trigger.idp);
-    } else if (idps.size === 1) {
-      const [idp] = idps;
-      if (idp) targets.add(idp);
+    const idpName = subscribedIdpName(application, executor.trigger);
+    if (idpName !== undefined) {
+      targets.add(idpName);
     }
   }
   return targets;
 }
 
-function collectDeployIdpUserTriggerTargets(
-  targets: ReadonlyArray<BuiltDeploymentTarget>,
-): ReadonlySet<string> {
-  const triggerTargets = new Set<string>();
-  for (const target of targets) {
-    for (const idpName of collectIdpUserTriggerTargets(target.application)) {
-      triggerTargets.add(idpName);
-    }
-  }
-  return triggerTargets;
-}
-
-function collectExecutorUsedTailorDBTypes(
-  owner: BuiltDeploymentTarget,
-  targets: ReadonlyArray<BuiltDeploymentTarget>,
-): ReadonlySet<string> {
+/**
+ * Collect TailorDB types this target's own executors subscribe to.
+ *
+ * Scoped to the owning target so that the resolved flag does not depend on which
+ * configs `--config` names. An executor subscribing to a type owned by another
+ * config needs that type to declare `publishEvents: true` itself.
+ * @param owner - Deployment target being planned
+ * @returns Type names subscribed to by the target's own executors
+ */
+function collectExecutorUsedTailorDBTypes(owner: BuiltDeploymentTarget): ReadonlySet<string> {
   const usedTypes = new Set<string>();
-  const ownerNamespaces = new Set(
-    owner.application.tailorDBServices.map((service) => service.namespace),
-  );
-  const applications = targets.map((target) => target.application);
-  for (const target of targets) {
-    const visibleNamespaces = collectVisibleTailorDBTypeNamespaces(
-      target.application,
-      applications,
-    );
-    for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
-      if (executor.trigger.kind === "tailordb") {
-        const namespace =
-          findTailorDBNamespace(target.application, executor.trigger.typeName) ??
-          resolveSameRunNamespace(visibleNamespaces, executor.trigger.typeName, "TailorDB type");
-        if (namespace && ownerNamespaces.has(namespace)) {
-          usedTypes.add(executor.trigger.typeName);
-        }
-      }
+  for (const executor of Object.values(owner.application.executorService?.executors ?? {})) {
+    if (
+      executor.trigger.kind === "tailordb" &&
+      findTailorDBNamespace(owner.application, executor.trigger.typeName)
+    ) {
+      usedTypes.add(executor.trigger.typeName);
     }
   }
   return usedTypes;
 }
 
-function collectExecutorUsedResolvers(
-  owner: BuiltDeploymentTarget,
-  targets: ReadonlyArray<BuiltDeploymentTarget>,
-): ReadonlySet<string> {
+/**
+ * Collect resolvers this target's own executors subscribe to.
+ *
+ * Scoped to the owning target for the same reason as
+ * {@link collectExecutorUsedTailorDBTypes}.
+ * @param owner - Deployment target being planned
+ * @returns Resolver names subscribed to by the target's own executors
+ */
+function collectExecutorUsedResolvers(owner: BuiltDeploymentTarget): ReadonlySet<string> {
   const usedResolvers = new Set<string>();
-  const ownerNamespaces = new Set(
-    owner.application.resolverServices.map((service) => service.namespace),
-  );
-  const applications = targets.map((target) => target.application);
-  for (const target of targets) {
-    const visibleNamespaces = collectVisibleResolverNamespaces(target.application, applications);
-    for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
-      if (executor.trigger.kind === "resolverExecuted") {
-        const namespace =
-          findResolverNamespace(target.application, executor.trigger.resolverName) ??
-          resolveSameRunNamespace(visibleNamespaces, executor.trigger.resolverName, "Resolver");
-        if (namespace && ownerNamespaces.has(namespace)) {
-          usedResolvers.add(executor.trigger.resolverName);
-        }
-      }
+  for (const executor of Object.values(owner.application.executorService?.executors ?? {})) {
+    if (
+      executor.trigger.kind === "resolverExecuted" &&
+      findResolverNamespace(owner.application, executor.trigger.resolverName)
+    ) {
+      usedResolvers.add(executor.trigger.resolverName);
     }
   }
   return usedResolvers;
@@ -195,10 +195,6 @@ function collectExecutorUsedResolvers(
 /**
  * Resolve which workflows this target's executors subscribe to, per event
  * granularity level.
- *
- * Scoped to the owning target: unlike TailorDB, Auth and IdP, a workflow has no
- * `external` declaration, so no supported configuration shares a workflow and a
- * subscribing executor across configs.
  * @param target - Deployment target being planned
  * @returns Subscribers keyed by event granularity level
  */
@@ -515,7 +511,7 @@ type BuildDeploymentTargetsParams = Omit<
 
 type DeployRunPlanInputs = Pick<
   PlanContext,
-  "idpUserTriggerTargets" | "expectedLocalStaticWebsiteNames" | "externalAuthIdpConfigNames"
+  "expectedLocalStaticWebsiteNames" | "externalAuthIdpConfigNames"
 >;
 
 type PlanDeploymentTargetParams = {
@@ -1152,6 +1148,182 @@ export function assertUniqueGlobalResourceNames(
   }
 }
 
+/** An event-publishing resource as one config declares it. */
+type EventSource = {
+  /** Config path of the target declaring the resource. */
+  configPath: string;
+  /** `publishEvents` declared on the resource, or undefined when unset. */
+  explicit: boolean | undefined;
+};
+
+/** How to find one event-publishing resource in a deployment target. */
+type EventSourceLookup = {
+  /** Resource and trigger named in messages about this subscription. */
+  conflict: PublishEventsConflict;
+  /**
+   * Whether a peer config declaring the resource can satisfy the subscription by
+   * opting in. False when the flag lives somewhere this check cannot read, so
+   * only the resource's presence in the run is verified.
+   */
+  optInIsVerifiable: boolean;
+  /** The resource as `target` declares it, or undefined when it does not. */
+  find: (target: BuiltDeploymentTarget) => EventSource | undefined;
+};
+
+function findTailorDBTypeSource(
+  target: BuiltDeploymentTarget,
+  typeName: string,
+): EventSource | undefined {
+  for (const service of target.application.tailorDBServices) {
+    const type = service.types[typeName];
+    if (type) {
+      return { configPath: target.config.path, explicit: type.settings.publishEvents };
+    }
+  }
+  return undefined;
+}
+
+function findResolverSource(
+  target: BuiltDeploymentTarget,
+  resolverName: string,
+): EventSource | undefined {
+  for (const service of target.application.resolverServices) {
+    const resolver = Object.values(service.resolvers).find((entry) => entry.name === resolverName);
+    if (resolver) {
+      return { configPath: target.config.path, explicit: resolver.publishEvents };
+    }
+  }
+  return undefined;
+}
+
+function findIdpSource(target: BuiltDeploymentTarget, idpName: string): EventSource | undefined {
+  const idp = target.application.idpServices.find((entry) => entry.name === idpName);
+  return idp ? { configPath: target.config.path, explicit: idp.publishEvents } : undefined;
+}
+
+function findWorkflowSource(
+  target: BuiltDeploymentTarget,
+  workflowName: string,
+): EventSource | undefined {
+  const workflows = Object.values(target.application.workflowService?.workflows ?? {});
+  const workflow = workflows.find((entry) => entry.name === workflowName);
+  return workflow
+    ? { configPath: target.config.path, explicit: workflow.publishEvents }
+    : undefined;
+}
+
+/**
+ * Resolve how to find the resource an executor's event trigger subscribes to.
+ * @param executor - Executor declared by the subscribing config
+ * @param subscriber - Deployment target declaring the executor
+ * @returns The lookup, or undefined for triggers with no publishing resource
+ */
+function eventSourceLookup(
+  executor: Executor,
+  subscriber: BuiltDeploymentTarget,
+): EventSourceLookup | undefined {
+  const { trigger } = executor;
+  switch (trigger.kind) {
+    case "tailordb":
+      return {
+        conflict: publishEventsConflict.tailorDBType(trigger.typeName),
+        optInIsVerifiable: true,
+        find: (target) => findTailorDBTypeSource(target, trigger.typeName),
+      };
+    case "resolverExecuted":
+      return {
+        conflict: publishEventsConflict.resolver(trigger.resolverName),
+        optInIsVerifiable: true,
+        find: (target) => findResolverSource(target, trigger.resolverName),
+      };
+    case "idpUser": {
+      const idpName = subscribedIdpName(subscriber.application, trigger);
+      if (idpName === undefined) {
+        return undefined;
+      }
+      return {
+        conflict: publishEventsConflict.idpService(idpName),
+        optInIsVerifiable: true,
+        find: (target) => findIdpSource(target, idpName),
+      };
+    }
+    case "workflowExecution":
+      return {
+        conflict: publishEventsConflict.workflow(trigger.workflowName),
+        optInIsVerifiable: true,
+        find: (target) => findWorkflowSource(target, trigger.workflowName),
+      };
+    case "workflowJobExecution":
+      return {
+        conflict: publishEventsConflict.workflow(trigger.workflowName),
+        // The flag lives on each job the workflow runs, and the job graph is
+        // only resolved while planning the workflow's own config.
+        optInIsVerifiable: false,
+        find: (target) => findWorkflowSource(target, trigger.workflowName),
+      };
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Reject an executor that subscribes to events of a resource another config
+ * declares.
+ *
+ * `publishEvents` is recomputed from the executors declared alongside the
+ * resource, so the resolved value never depends on which configs `--config`
+ * names. A subscription that reaches across configs therefore has to be
+ * declared on the resource, and the config that declares it has to take part in
+ * the run for `deploy` to be able to check that.
+ *
+ * Resource names are only unique within a namespace, so the subscriber's own
+ * declaration is checked first: a config subscribing to its own resource is
+ * never rejected because a peer happens to declare the same name elsewhere.
+ * @param targets - Built deployment targets in the run
+ */
+export function assertEventSubscriptionsAreDeclared(
+  targets: ReadonlyArray<BuiltDeploymentTarget>,
+): void {
+  for (const subscriber of targets) {
+    const executors = subscriber.application.executorService?.executors ?? {};
+    for (const executor of Object.values(executors)) {
+      const lookup = eventSourceLookup(executor, subscriber);
+      if (!lookup || lookup.find(subscriber)) {
+        continue;
+      }
+      const { resource } = lookup.conflict;
+      const owners = targets
+        .filter((target) => target.config.path !== subscriber.config.path)
+        .flatMap((target) => lookup.find(target) ?? []);
+      if (owners.length === 0) {
+        throw new Error(
+          `Executor "${executor.name}" subscribes to ${resource}, which no config in this deploy declares. ` +
+            `Add the config that owns it to --config so its "publishEvents" can be verified.`,
+        );
+      }
+      // Several configs declare the name in different namespaces. Which one the
+      // trigger means is reported when the executor's namespace is resolved.
+      const [owner] = owners;
+      if (owners.length > 1 || !owner || !lookup.optInIsVerifiable) {
+        continue;
+      }
+      // An explicit opt-out gets the same message it does within one config.
+      assertNoPublishEventsConflict({
+        explicit: owner.explicit,
+        subscribed: true,
+        conflict: lookup.conflict,
+      });
+      if (owner.explicit === true) {
+        continue;
+      }
+      throw new Error(
+        `Executor "${executor.name}" subscribes to ${resource}, declared by ${owner.configPath}. ` +
+          `Set "publishEvents: true" on ${resource}: publishing is auto-enabled only for executors in the same config.`,
+      );
+    }
+  }
+}
+
 function collectPlannedExternalTailorDBServices(
   target: BuiltDeploymentTarget,
   targets: ReadonlyArray<BuiltDeploymentTarget>,
@@ -1194,7 +1366,6 @@ function collectDeployRunPlanInputs(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): DeployRunPlanInputs {
   return {
-    idpUserTriggerTargets: collectDeployIdpUserTriggerTargets(targets),
     expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
     externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
   };
@@ -1241,8 +1412,9 @@ async function planDeploymentTarget(
       noSchemaCheck,
       forceApplyAll,
       ...runInputs,
-      executorUsedTailorDBTypes: collectExecutorUsedTailorDBTypes(target, targets),
-      executorUsedResolvers: collectExecutorUsedResolvers(target, targets),
+      idpUserTriggerTargets: collectIdpUserTriggerTargets(application),
+      executorUsedTailorDBTypes: collectExecutorUsedTailorDBTypes(target),
+      executorUsedResolvers: collectExecutorUsedResolvers(target),
       tailorDBTypeNamespaces,
       resolverNamespaces,
       idpNames,
@@ -1971,6 +2143,7 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
     }
 
     assertUniqueGlobalResourceNames(targets);
+    assertEventSubscriptionsAreDeclared(targets);
 
     // Note: the normal apply path intentionally skips writing bundle files to
     // .tailor/. Bundles are kept in memory and uploaded directly to the

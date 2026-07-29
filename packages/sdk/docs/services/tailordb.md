@@ -515,12 +515,12 @@ db.table("User", {
 **Behavior:**
 
 - When `publishEvents: true`, record creation/update/deletion events are published
-- When not specified, it is **automatically set to `true`** if an executor uses this type with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`
-- When explicitly set to `false` while an executor uses this type, an error is thrown during `tailor deploy`
+- When not specified, `deploy` sets it from the executors in the **same config**: `true` while one of them uses this type with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
+- When explicitly set to `false` while an executor in the same config uses this type, `deploy` fails
 
 **Use cases:**
 
-1. **Auto-detection (recommended)**: Don't set `publishEvents` - the SDK automatically enables it when needed by executors
+1. **Auto-detection (recommended)**: Don't set `publishEvents` - `deploy` enables it while an executor in the same config needs it
 
    ```typescript
    // publishEvents is automatically enabled because an executor uses this type
@@ -545,7 +545,7 @@ db.table("User", {
    });
    ```
 
-3. **Explicit disable**: Disable event publishing for a type that doesn't need it (error if executor uses it)
+3. **Explicit disable**: Disable event publishing for a type that doesn't need it (error if an executor in the same config uses it)
 
    ```typescript
    db.table("TempData", {
@@ -554,6 +554,8 @@ db.table("User", {
      publishEvents: false, // Explicitly disable
    });
    ```
+
+**Sharing a type across configs:** auto-detection only looks at executors declared by the same config, so the resolved value stays the same no matter which configs `--config` selects. When the subscribing executor lives in another config, set `publishEvents: true` on the type itself, and include the config that owns the type in the same `deploy` — `deploy` fails otherwise rather than creating an executor whose events never arrive.
 
 #### GraphQL Operations
 

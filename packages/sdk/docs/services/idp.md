@@ -330,10 +330,12 @@ defineIdp("my-idp", {
 });
 ```
 
-**Auto-configuration:** When `publishEvents` is omitted, the SDK enables it automatically during `deploy` for each IdP that is targeted by an executor's `idpUser` trigger. Targeting is per-IdP: an executor specifies which IdP it subscribes to via the trigger's `idp` option (required in multi-IdP projects). Set the value explicitly to override:
+**Auto-configuration:** When `publishEvents` is omitted, `deploy` sets it from the executors declared by the same config: `true` while one of their `idpUser` triggers targets this IdP, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`. Targeting is per-IdP: an executor specifies which IdP it subscribes to via the trigger's `idp` option (required in multi-IdP projects). Set the value explicitly to override:
 
 - `publishEvents: true`: always publish events.
-- `publishEvents: false`: never publish events. `deploy` rejects this with an error if any executor's `idpUser` trigger targets this IdP — either remove `publishEvents: false` or remove the matching trigger.
+- `publishEvents: false`: never publish events. `deploy` rejects this with an error if an `idpUser` trigger in the same config targets this IdP — either remove `publishEvents: false` or remove the matching trigger.
+
+**Sharing an IdP across configs:** auto-configuration only looks at executors declared by the same config, so the resolved value stays the same no matter which configs `--config` selects. When the subscribing executor lives in another config, set `publishEvents: true` on the IdP itself, and include the config that owns the IdP in the same `deploy` — `deploy` fails otherwise rather than creating an executor whose events never arrive.
 
 ## Using idp.provider()
 
