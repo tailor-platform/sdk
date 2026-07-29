@@ -69,6 +69,7 @@ import { validatePlan } from "./validate-plan";
 import {
   formatWorkflowChangeEntries,
   planWorkflow,
+  type WorkflowEventPublishing,
   type WorkflowEventSubscribers,
 } from "./workflow";
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
@@ -520,7 +521,10 @@ type BuildDeploymentTargetsParams = Omit<
 type DeployRunPlanInputs = Pick<
   PlanContext,
   "idpUserTriggerTargets" | "expectedLocalStaticWebsiteNames" | "externalAuthIdpConfigNames"
->;
+> & {
+  /** Executor subscriptions and explicit job flags driving workflow execution event publishing. */
+  workflowEventPublishing: WorkflowEventPublishing;
+};
 
 type PlanDeploymentTargetParams = {
   target: BuiltDeploymentTarget;
@@ -1202,6 +1206,10 @@ function collectDeployRunPlanInputs(
     idpUserTriggerTargets: collectDeployIdpUserTriggerTargets(targets),
     expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
     externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
+    workflowEventPublishing: {
+      ...collectWorkflowEventSubscribers(targets),
+      jobPublishEvents: collectWorkflowJobPublishEvents(targets),
+    },
   };
 }
 
@@ -1209,6 +1217,7 @@ async function planDeploymentTarget(
   params: PlanDeploymentTargetParams,
 ): Promise<PlannedDeployment> {
   const { target, targets, runInputs, client, workspaceId, noSchemaCheck } = params;
+  const { workflowEventPublishing, ...planContextInputs } = runInputs;
   const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
     target;
 
@@ -1245,7 +1254,7 @@ async function planDeploymentTarget(
       config,
       noSchemaCheck,
       forceApplyAll,
-      ...runInputs,
+      ...planContextInputs,
       executorUsedTailorDBTypes: collectExecutorUsedTailorDBTypes(target, targets),
       executorUsedResolvers: collectExecutorUsedResolvers(target, targets),
       tailorDBTypeNamespaces,
@@ -1290,10 +1299,7 @@ async function planDeploymentTarget(
           workflowService?.workflows ?? {},
           workflowBuildResult?.mainJobDeps ?? {},
           unchangedWorkflowJobs,
-          {
-            ...collectWorkflowEventSubscribers(targets),
-            jobPublishEvents: collectWorkflowJobPublishEvents(targets),
-          },
+          workflowEventPublishing,
         ),
       ),
       withSpan("plan.workflowExecutionPolicy", () =>
