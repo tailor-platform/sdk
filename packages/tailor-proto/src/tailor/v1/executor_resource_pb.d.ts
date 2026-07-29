@@ -158,6 +158,12 @@ export declare type ExecutorTriggerEventConfig = Message<"tailor.v1.ExecutorTrig
      */
     value: ExecutorPipelineEventConfig;
     case: "pipeline";
+  } | {
+    /**
+     * @generated from field: tailor.v1.ExecutorWorkflowEventConfig workflow = 7;
+     */
+    value: ExecutorWorkflowEventConfig;
+    case: "workflow";
   } | { case: undefined; value?: undefined };
 };
 
@@ -280,6 +286,32 @@ export declare type ExecutorPipelineEventConfig = Message<"tailor.v1.ExecutorPip
  * Use `create(ExecutorPipelineEventConfigSchema)` to create a new message.
  */
 export declare const ExecutorPipelineEventConfigSchema: GenMessage<ExecutorPipelineEventConfig>;
+
+/**
+ * @generated from message tailor.v1.ExecutorWorkflowEventConfig
+ */
+export declare type ExecutorWorkflowEventConfig = Message<"tailor.v1.ExecutorWorkflowEventConfig"> & {
+  /**
+   * @generated from field: repeated string event_types = 1;
+   */
+  eventTypes: string[];
+
+  /**
+   * @generated from field: string workflow_name = 2;
+   */
+  workflowName: string;
+
+  /**
+   * @generated from field: tailor.v1.Script condition = 3;
+   */
+  condition?: Script;
+};
+
+/**
+ * Describes the message tailor.v1.ExecutorWorkflowEventConfig.
+ * Use `create(ExecutorWorkflowEventConfigSchema)` to create a new message.
+ */
+export declare const ExecutorWorkflowEventConfigSchema: GenMessage<ExecutorWorkflowEventConfig>;
 
 /**
  * @generated from message tailor.v1.ExecutorTriggerIncomingWebhookConfig

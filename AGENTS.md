@@ -95,6 +95,8 @@ Available triggers beyond record CRUD (`recordCreatedTrigger`, `recordUpdatedTri
 - `resolverExecutedTrigger` - Resolver execution
 - `idpUserCreatedTrigger` / `idpUserUpdatedTrigger` / `idpUserDeletedTrigger` - IdP user events. Pass `{ idp: "my-idp" }` to target a specific IdP when the project defines multiple IdPs
 - `authAccessTokenIssuedTrigger` / `authAccessTokenRefreshedTrigger` / `authAccessTokenRevokedTrigger` - Auth token events
+- `workflowExecutionStartedTrigger` / `workflowExecutionCompletedTrigger` / `workflowExecutionRetriedTrigger` / `workflowExecutionResumedTrigger` / `workflowExecutionWaitStartedTrigger` / `workflowExecutionWaitResolvedTrigger` - Workflow execution lifecycle events. Pass `{ workflow: myWorkflow }` to target a workflow
+- `workflowJobExecutionStartedTrigger` / `workflowJobExecutionCompletedTrigger` / `workflowJobExecutionWaitStartedTrigger` / `workflowJobExecutionWaitResolvedTrigger` - Workflow job execution lifecycle events. Pass `{ workflow: myWorkflow }` to target a workflow's jobs
 - `scheduleTrigger` - CRON schedule
 - `incomingWebhookTrigger` - Webhook
 
@@ -103,6 +105,8 @@ Multi-event trigger variants handle multiple events in one executor:
 - `recordTrigger({ type, events: ["created", "updated"] })` - Multiple record events
 - `idpUserTrigger({ events: ["created", "deleted"] })` - Multiple IdP user events. Add `idp: "my-idp"` to target a specific IdP in multi-IdP projects
 - `authAccessTokenTrigger({ events: ["issued", "revoked"] })` - Multiple auth token events
+- `workflowExecutionTrigger({ workflow: myWorkflow, events: ["started", "completed"] })` - Multiple workflow execution events
+- `workflowJobExecutionTrigger({ workflow: myWorkflow, events: ["started", "wait_resolved"] })` - Multiple workflow job execution events
 
 Args include `event` (short name like `"created"`) and `rawEvent` (full event type like `"tailordb.type_record.created"`) for runtime type narrowing.
 

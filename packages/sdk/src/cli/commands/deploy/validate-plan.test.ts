@@ -117,6 +117,7 @@ function emptyInput(): ValidatePlanInput {
       changeSet: createChangeSet("Workflows"),
       unchangedWorkflowJobNames: new Set(),
       jobFunctionDeletes: [],
+      jobFunctionPublishEvents: new Map<string, boolean>(),
       conflicts: [],
       unmanaged: [],
       resourceOwners: new Set(),

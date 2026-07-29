@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { ExecutorSchema, GqlOperationSchema, WorkflowOperationSchema } from "./schema";
+import {
+  ExecutorSchema,
+  GqlOperationSchema,
+  WorkflowExecutionTriggerSchema,
+  WorkflowJobExecutionTriggerSchema,
+  WorkflowOperationSchema,
+} from "./schema";
 
 function expectParseSuccess<T>(
   result: { success: true; data: T } | { success: false; error: unknown },
@@ -50,6 +56,26 @@ describe("WorkflowOperationSchema", () => {
 
     const data = expectParseSuccess(result);
     expect(data.workflowName).toBe("my-workflow");
+  });
+});
+
+describe("workflow execution trigger schemas", () => {
+  test.each([
+    ["workflow execution", WorkflowExecutionTriggerSchema, "workflow.workflow_execution.started"],
+    [
+      "workflow job execution",
+      WorkflowJobExecutionTriggerSchema,
+      "workflow.workflow_execution.job_execution.started",
+    ],
+  ] as const)("rejects blank workflow names for %s triggers", (_description, schema, event) => {
+    expect(
+      schema.safeParse({ kind: schema.shape.kind.value, events: [event], workflowName: "" })
+        .success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({ kind: schema.shape.kind.value, events: [event], workflowName: "  " })
+        .success,
+    ).toBe(false);
   });
 });
 

@@ -519,6 +519,70 @@ describe("transform", () => {
       });
     });
 
+    test("omits an empty workflow name from workflow event trigger details", () => {
+      const executor = baseExecutor({
+        name: "workflow-lifecycle",
+        triggerType: ExecutorTriggerType.EVENT,
+        triggerConfig: {
+          config: {
+            case: "event" as const,
+            value: {
+              eventType: "",
+              typedConfig: {
+                case: "workflow" as const,
+                value: {
+                  eventTypes: ["workflow.workflow_execution.started"],
+                  workflowName: "",
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const result = toExecutorInfo(executor);
+
+      expect(result.triggerConfig).toEqual({
+        kind: "workflow",
+        eventTypes: ["workflow.workflow_execution.started"],
+        condition: "",
+      });
+    });
+
+    test("keeps namespaced trigger details in their documented key order", () => {
+      const executor = baseExecutor({
+        name: "order-audit",
+        triggerType: ExecutorTriggerType.EVENT,
+        triggerConfig: {
+          config: {
+            case: "event" as const,
+            value: {
+              eventType: "",
+              typedConfig: {
+                case: "tailordb" as const,
+                value: {
+                  eventTypes: ["tailordb.type_record.created"],
+                  namespaceName: "sales",
+                  typeName: "SalesOrder",
+                  condition: { expr: "true" },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      const result = toExecutorInfo(executor);
+
+      expect(Object.keys(result.triggerConfig)).toEqual([
+        "kind",
+        "eventTypes",
+        "namespaceName",
+        "condition",
+        "typeName",
+      ]);
+    });
+
     test("transforms ExecutorExecutor with incoming webhook trigger", () => {
       const executor = baseExecutor({
         name: "webhook-executor",
