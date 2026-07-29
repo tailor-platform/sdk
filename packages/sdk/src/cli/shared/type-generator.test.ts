@@ -135,6 +135,18 @@ describe("generateTypeDefinition", () => {
     expect(result).not.toContain("ENABLED: false");
   });
 
+  test("should quote env keys that are not valid identifiers", () => {
+    const result = generateTypeDefinition(undefined, undefined, {
+      "API-BASE": "https://example.com",
+      appName: "my-app",
+    });
+
+    expect(result).toContain('"API-BASE": string;');
+    // Valid identifiers stay unquoted (matches formatter output)
+    expect(result).toContain("appName: string;");
+    expect(result).not.toContain('"appName"');
+  });
+
   test("should generate empty Env interface when no env provided", () => {
     const result = generateTypeDefinition(undefined, undefined);
 
