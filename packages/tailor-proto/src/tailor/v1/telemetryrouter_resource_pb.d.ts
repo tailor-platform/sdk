@@ -115,9 +115,21 @@ export declare const MetricsConfigSchema: GenMessage<MetricsConfig>;
  */
 export declare type LogsConfig = Message<"tailor.v1.LogsConfig"> & {
   /**
+   * enabled toggles the logs signal for this exporter. Function logs are the
+   * default content of the logs signal.
+   *
    * @generated from field: bool enabled = 1;
    */
   enabled: boolean;
+
+  /**
+   * access_logs opts this exporter into API request access logs, an additional
+   * category of the logs signal. Subordinate to enabled: an exporter receives
+   * access logs iff OTLPExporter.enabled && logs.enabled && logs.access_logs.include.
+   *
+   * @generated from field: tailor.v1.AccessLogsConfig access_logs = 2;
+   */
+  accessLogs?: AccessLogsConfig;
 };
 
 /**
@@ -125,6 +137,27 @@ export declare type LogsConfig = Message<"tailor.v1.LogsConfig"> & {
  * Use `create(LogsConfigSchema)` to create a new message.
  */
 export declare const LogsConfigSchema: GenMessage<LogsConfig>;
+
+/**
+ * @generated from message tailor.v1.AccessLogsConfig
+ */
+export declare type AccessLogsConfig = Message<"tailor.v1.AccessLogsConfig"> & {
+  /**
+   * include defaults to false; API request access logs are always collected at
+   * the gateway and streamed to the router, so this flag selects whether this
+   * exporter's destination receives them. Strictly opt-in because they carry a
+   * per-request ingest cost in the customer's backend.
+   *
+   * @generated from field: bool include = 1;
+   */
+  include: boolean;
+};
+
+/**
+ * Describes the message tailor.v1.AccessLogsConfig.
+ * Use `create(AccessLogsConfigSchema)` to create a new message.
+ */
+export declare const AccessLogsConfigSchema: GenMessage<AccessLogsConfig>;
 
 /**
  * @generated from message tailor.v1.OTLPExporterAuthConfig

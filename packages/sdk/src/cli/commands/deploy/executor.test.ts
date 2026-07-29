@@ -837,6 +837,32 @@ describe("planExecutor", () => {
       expect((typedConfig.value.condition as { expr: string }).expr).not.toContain("args.typeName");
     });
 
+    test("workflow execution emits workflow typed config and normalizes result args", async () => {
+      const executor: Executor = {
+        name: "on-workflow-completed",
+        description: "test",
+        disabled: false,
+        trigger: {
+          kind: "workflowExecution",
+          events: ["workflow.workflow_execution.completed"],
+          workflowName: "orders",
+          condition: ({ success }: { success: boolean }) => success,
+        },
+        operation: { kind: "function", body: () => {} },
+      };
+      const result = await planExecutor(buildPlanContext(createMockApplication([executor])));
+
+      const typedConfig = getEventConfig(result);
+      expect(typedConfig.case).toBe("workflow");
+      expect(typedConfig.value.eventTypes).toEqual(["workflow.workflow_execution.completed"]);
+      expect(typedConfig.value.workflowName).toBe("orders");
+      expect((typedConfig.value.condition as { expr: string }).expr).toContain("success: true");
+      expect((typedConfig.value.condition as { expr: string }).expr).toContain(
+        'error: args.failed.error ?? ""',
+      );
+      expect((typedConfig.value.condition as { expr: string }).expr).not.toContain("appNamespace:");
+    });
+
     test("recordCreated resolves same-run peer TailorDB namespaces", async () => {
       const client = createMockClient([]);
       const executor: Executor = {

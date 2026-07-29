@@ -59,11 +59,20 @@ export interface WorkflowJob<Name extends string = string, Input = undefined, Ou
     ? (input?: undefined, options?: StartJobFunctionOptions) => Awaited<Output>
     : (input: Input, options?: StartJobFunctionOptions) => Awaited<Output>;
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
+  publishEvents?: boolean;
 }
 
 interface CreateWorkflowJobConfig<Name extends string, I, O> {
   readonly name: Name;
   readonly body: JobBody<I, O>;
+  /**
+   * Enable publishing this job's execution events, letting executors with a
+   * `workflowJobExecution*` trigger observe them.
+   *
+   * Left unset, it is enabled automatically when an executor in the project
+   * subscribes to the job execution events of a workflow that runs this job.
+   */
+  readonly publishEvents?: boolean;
 }
 
 /**
@@ -134,7 +143,12 @@ export function createWorkflowJob<const Name extends string, I = undefined, O = 
       };
 
   return brandValue(
-    { name: config.name, start, body } as WorkflowJob<Name, I, Awaited<O>>,
+    {
+      name: config.name,
+      start,
+      body,
+      ...(config.publishEvents !== undefined ? { publishEvents: config.publishEvents } : {}),
+    } as WorkflowJob<Name, I, Awaited<O>>,
     "workflow-job",
   );
 }

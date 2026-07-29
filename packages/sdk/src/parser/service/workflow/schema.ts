@@ -5,6 +5,10 @@ export const WorkflowJobSchema = z.strictObject({
   name: z.string().describe("Job name (must be unique across the project)"),
   start: functionSchema.describe("Start function that initiates the job"),
   body: functionSchema.describe("Job implementation function"),
+  publishEvents: z
+    .boolean()
+    .optional()
+    .describe("Enable publishing job execution events for this job"),
 });
 
 const durationUnits = ["ms", "s", "m"] as const;
@@ -94,4 +98,8 @@ export const WorkflowSchema = z.strictObject({
   concurrencyPolicy: ConcurrencyPolicySchema.optional().describe(
     "Concurrency policy for the workflow",
   ),
+  publishEvents: z
+    .boolean()
+    .optional()
+    .describe("Enable publishing workflow execution events for this workflow"),
 });

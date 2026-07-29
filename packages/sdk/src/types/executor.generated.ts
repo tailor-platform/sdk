@@ -78,13 +78,51 @@ export type AuthAccessTokenTrigger = {
 };
 export type AuthAccessTokenTriggerInput = AuthAccessTokenTrigger;
 
+export type WorkflowExecutionTrigger = {
+  /** Workflow execution event trigger */
+  kind: "workflowExecution";
+  /** Workflow execution event types to trigger on */
+  events: (
+    | "workflow.workflow_execution.started"
+    | "workflow.workflow_execution.completed"
+    | "workflow.workflow_execution.retried"
+    | "workflow.workflow_execution.resumed"
+    | "workflow.workflow_execution.wait_started"
+    | "workflow.workflow_execution.wait_resolved"
+  )[];
+  /** Workflow name to subscribe to. */
+  workflowName: string;
+  /** Condition function to filter events */
+  condition?: Function | undefined;
+};
+export type WorkflowExecutionTriggerInput = WorkflowExecutionTrigger;
+
+export type WorkflowJobExecutionTrigger = {
+  /** Workflow job execution event trigger */
+  kind: "workflowJobExecution";
+  /** Workflow job execution event types to trigger on */
+  events: (
+    | "workflow.workflow_execution.job_execution.started"
+    | "workflow.workflow_execution.job_execution.completed"
+    | "workflow.workflow_execution.job_execution.wait_started"
+    | "workflow.workflow_execution.job_execution.wait_resolved"
+  )[];
+  /** Workflow name to subscribe to. */
+  workflowName: string;
+  /** Condition function to filter events */
+  condition?: Function | undefined;
+};
+export type WorkflowJobExecutionTriggerInput = WorkflowJobExecutionTrigger;
+
 export type TriggerInput =
   | TailorDBTrigger
   | ResolverExecutedTrigger
   | ScheduleTriggerInput
   | IncomingWebhookTrigger
   | IdpUserTrigger
-  | AuthAccessTokenTrigger;
+  | AuthAccessTokenTrigger
+  | WorkflowExecutionTrigger
+  | WorkflowJobExecutionTrigger;
 
 export type Trigger =
   | TailorDBTrigger
@@ -92,7 +130,9 @@ export type Trigger =
   | ScheduleTrigger
   | IncomingWebhookTrigger
   | IdpUserTrigger
-  | AuthAccessTokenTrigger;
+  | AuthAccessTokenTrigger
+  | WorkflowExecutionTrigger
+  | WorkflowJobExecutionTrigger;
 
 export type FunctionOperation = {
   kind: "function" | "jobFunction";

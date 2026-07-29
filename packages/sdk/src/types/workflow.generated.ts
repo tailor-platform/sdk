@@ -7,6 +7,8 @@ export type WorkflowJob = {
   start: Function;
   /** Job implementation function */
   body: Function;
+  /** Enable publishing job execution events for this job */
+  publishEvents?: boolean | undefined;
 };
 export type WorkflowJobInput = WorkflowJob;
 
@@ -59,5 +61,7 @@ export type Workflow = {
   retryPolicy?: RetryPolicy;
   /** Concurrency policy for the workflow */
   concurrencyPolicy?: ConcurrencyPolicy;
+  /** Enable publishing workflow execution events for this workflow */
+  publishEvents?: boolean | undefined;
 };
 export type WorkflowInput = Workflow;
