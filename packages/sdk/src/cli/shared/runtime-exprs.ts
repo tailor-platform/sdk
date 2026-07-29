@@ -77,6 +77,13 @@ export function buildExecutorArgsExpr(
     case "incomingWebhook":
       return `({ ...args, appNamespace: args.namespaceName, rawBody: args.raw_body, ${envExpr} })`;
 
+    // Workflow events carry no namespace, and a single trigger can mix events
+    // that report an outcome with events that do not, so `success` is derived
+    // only when the delivered event actually has a result.
+    case "workflowExecution":
+    case "workflowJobExecution":
+      return `({ ...args, event: args.eventType?.split(".").pop(), rawEvent: args.eventType, ${ACTOR_TRANSFORM_EXPR}, ...(args.succeeded ? { success: true } : args.failed ? { success: false, error: args.failed.error ?? "" } : {}), ${envExpr} })`;
+
     default:
       // All event triggers: inject event (short name) and rawEvent (full event type) from server-side eventType
       return `({ ...args, event: args.eventType?.split(".").pop(), rawEvent: args.eventType, appNamespace: args.namespaceName, ${ACTOR_TRANSFORM_EXPR}, ${envExpr} })`;

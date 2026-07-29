@@ -15,6 +15,7 @@ export interface WorkflowConfig<
   mainJob: Job;
   retryPolicy?: RetryPolicy;
   concurrencyPolicy?: ConcurrencyPolicy;
+  publishEvents?: boolean;
 }
 
 export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<any, any, any>> {
@@ -22,6 +23,7 @@ export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<a
   mainJob: Job;
   retryPolicy?: RetryPolicy;
   concurrencyPolicy?: ConcurrencyPolicy;
+  publishEvents?: boolean;
   trigger: (
     args: Parameters<Job["trigger"]>[0],
     options?: { authInvoker: AuthInvoker<string> | MachineUserName },
@@ -33,6 +35,14 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
   mainJob: Job;
   retryPolicy?: RetryPolicy;
   concurrencyPolicy?: ConcurrencyPolicy;
+  /**
+   * Enable publishing this workflow's execution events, letting executors with
+   * a `workflowExecution*` trigger observe them.
+   *
+   * Left unset, it is enabled automatically when an executor in the project
+   * subscribes to this workflow's execution events.
+   */
+  publishEvents?: boolean;
 }
 
 /**

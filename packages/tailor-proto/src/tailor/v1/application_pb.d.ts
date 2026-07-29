@@ -382,3 +382,132 @@ export enum GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus {
  */
 export declare const GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatusSchema: GenEnum<GetApplicationSchemaHealthResponse_ApplicationSchemaHealthStatus>;
 
+/**
+ * @generated from message tailor.v1.CloneApplicationDataRequest
+ */
+export declare type CloneApplicationDataRequest = Message<"tailor.v1.CloneApplicationDataRequest"> & {
+  /**
+   * @generated from field: string source_workspace_id = 1;
+   */
+  sourceWorkspaceId: string;
+
+  /**
+   * @generated from field: string source_application_name = 2;
+   */
+  sourceApplicationName: string;
+
+  /**
+   * @generated from field: string target_workspace_id = 3;
+   */
+  targetWorkspaceId: string;
+
+  /**
+   * @generated from field: string target_application_name = 4;
+   */
+  targetApplicationName: string;
+};
+
+/**
+ * Describes the message tailor.v1.CloneApplicationDataRequest.
+ * Use `create(CloneApplicationDataRequestSchema)` to create a new message.
+ */
+export declare const CloneApplicationDataRequestSchema: GenMessage<CloneApplicationDataRequest>;
+
+/**
+ * @generated from message tailor.v1.CloneApplicationDataResponse
+ */
+export declare type CloneApplicationDataResponse = Message<"tailor.v1.CloneApplicationDataResponse"> & {
+  /**
+   * @generated from field: string operation_id = 1;
+   */
+  operationId: string;
+};
+
+/**
+ * Describes the message tailor.v1.CloneApplicationDataResponse.
+ * Use `create(CloneApplicationDataResponseSchema)` to create a new message.
+ */
+export declare const CloneApplicationDataResponseSchema: GenMessage<CloneApplicationDataResponse>;
+
+/**
+ * @generated from message tailor.v1.GetCloneApplicationDataOperationRequest
+ */
+export declare type GetCloneApplicationDataOperationRequest = Message<"tailor.v1.GetCloneApplicationDataOperationRequest"> & {
+  /**
+   * @generated from field: string source_workspace_id = 1;
+   */
+  sourceWorkspaceId: string;
+
+  /**
+   * @generated from field: string target_workspace_id = 2;
+   */
+  targetWorkspaceId: string;
+
+  /**
+   * @generated from field: string operation_id = 3;
+   */
+  operationId: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetCloneApplicationDataOperationRequest.
+ * Use `create(GetCloneApplicationDataOperationRequestSchema)` to create a new message.
+ */
+export declare const GetCloneApplicationDataOperationRequestSchema: GenMessage<GetCloneApplicationDataOperationRequest>;
+
+/**
+ * @generated from message tailor.v1.GetCloneApplicationDataOperationResponse
+ */
+export declare type GetCloneApplicationDataOperationResponse = Message<"tailor.v1.GetCloneApplicationDataOperationResponse"> & {
+  /**
+   * @generated from field: tailor.v1.CloneOperationStatus status = 1;
+   */
+  status: CloneOperationStatus;
+
+  /**
+   * @generated from field: string error_message = 2;
+   */
+  errorMessage: string;
+};
+
+/**
+ * Describes the message tailor.v1.GetCloneApplicationDataOperationResponse.
+ * Use `create(GetCloneApplicationDataOperationResponseSchema)` to create a new message.
+ */
+export declare const GetCloneApplicationDataOperationResponseSchema: GenMessage<GetCloneApplicationDataOperationResponse>;
+
+/**
+ * @generated from enum tailor.v1.CloneOperationStatus
+ */
+export enum CloneOperationStatus {
+  /**
+   * @generated from enum value: CLONE_OPERATION_STATUS_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: CLONE_OPERATION_STATUS_PENDING = 1;
+   */
+  PENDING = 1,
+
+  /**
+   * @generated from enum value: CLONE_OPERATION_STATUS_PROCESSING = 2;
+   */
+  PROCESSING = 2,
+
+  /**
+   * @generated from enum value: CLONE_OPERATION_STATUS_COMPLETED = 3;
+   */
+  COMPLETED = 3,
+
+  /**
+   * @generated from enum value: CLONE_OPERATION_STATUS_FAILED = 4;
+   */
+  FAILED = 4,
+}
+
+/**
+ * Describes the enum tailor.v1.CloneOperationStatus.
+ */
+export declare const CloneOperationStatusSchema: GenEnum<CloneOperationStatus>;
+
