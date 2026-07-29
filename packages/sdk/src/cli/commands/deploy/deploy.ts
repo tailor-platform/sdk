@@ -148,7 +148,7 @@ type EventSubscription = {
  * @param targets - Built deployment targets in the run
  * @returns One entry per executor whose trigger names a publishing resource
  */
-function collectEventSubscriptions(
+export function collectEventSubscriptions(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): EventSubscription[] {
   const subscriptions: EventSubscription[] = [];
@@ -277,7 +277,7 @@ function subscribedWorkflows(subscriptions: ReadonlyArray<EventSubscription>): {
  * @param subscriptions - Subscriptions owned by the target being planned
  * @returns Dependency reasons keyed by dependent application id
  */
-function collectDependentApps(
+export function collectDependentApps(
   subscriptions: ReadonlyArray<EventSubscription>,
 ): ReadonlyMap<string, DeployDependencyReason> {
   const dependents = new Map<string, DeployDependencyReason>();
