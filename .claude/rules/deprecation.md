@@ -18,10 +18,15 @@ check:deprecations` enforces the mechanical parts.
  */
 ```
 
-- `since <version>` comes first. Write the literal `NEXT_RELEASE` while the version that ships the
-  deprecation is undecided; the release workflow rewrites it on the release PR (see
+- `since <version>` comes first, and it is the version that **ships the deprecation** — not the
+  version the API was introduced in, and not the version that removes it. JSDoc's own `@since` means
+  the opposite, so do not carry that reading over.
+- Write the literal `NEXT_RELEASE` while that version is undecided, which is the normal case for a
+  deprecation you are writing now: the release workflow rewrites it on the release PR (see
   `.github/scripts/resolve-pending-release-versions.sh`). Never guess a future version — a version
-  above the current package version is rejected.
+  above the current package version is rejected. A concrete version belongs in the tag only when
+  back-filling an already-released deprecation, and then it comes from `git log -S '@deprecated'` and
+  the CHANGELOG, not from an estimate.
 - `codemod: <id>[, <id>]` names entries in `packages/sdk-codemod/src/registry.ts`.
 - Name the replacement in the same sentence. This text is what users read in their editor.
 - The tag starts its own JSDoc line, which is where JSDoc reads a block tag. When a comment only
@@ -34,6 +39,13 @@ check:deprecations` enforces the mechanical parts.
 
 - Add the registry entry in the same change as the `@deprecated` tag. A migration that cannot be
   automated still gets an entry: omit `scriptPath` and ship `suspiciousPatterns` + `prompt`.
+- The entry's `since` is the oldest source version the deprecated API exists in (`1.0.0` for anything
+  that predates the current major) — a different axis from the tag's `since`, which is a single
+  version rather than a range bound.
+- The entry's `until` is the version that ships the **deprecation**, not the one that removes the API.
+  `tailor upgrade` applies a codemod when the target version reaches `until`, so a deprecation removed
+  two releases later still needs `until` at the deprecating version — otherwise the migration is only
+  offered at the release that has already broken the caller.
 - Use `prereleaseUntil: V2_NEXT_PENDING` while the prerelease that ships it is unknown; the same
   release step resolves it.
 - Run `pnpm codemod:docs:update` so the generated migration doc matches the registry.
