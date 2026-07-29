@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { logger, styles } from "./logger";
 import type { EnvEntry, EnvValue } from "#/configure/config/types";
 
@@ -25,6 +26,9 @@ const TOKEN_LIKE_VALUE = /^[A-Za-z0-9+/=_.-]+$/;
  * derives five separate answers, each through its own `loadConfig` — so results
  * are memoized on the entries scanned. Without this the scanner would run, and
  * warnings would print, once per load.
+ *
+ * Keys are digests rather than the serialized entries, so the cache does not
+ * hold the values it was asked to judge for the life of the process.
  */
 const scans = new Map<string, Promise<void>>();
 
@@ -101,7 +105,9 @@ export async function scanEnvForSecrets(input: EnvSecretScanInput): Promise<EnvS
  * @throws When a value is identified as a credential
  */
 export async function assertEnvHasNoSecrets(input: EnvSecretScanInput): Promise<void> {
-  const key = JSON.stringify([input.configPath ?? "", input.env ?? {}]);
+  const key = createHash("sha256")
+    .update(JSON.stringify([input.configPath ?? "", input.env ?? {}]))
+    .digest("hex");
   const pending = scans.get(key);
   if (pending) {
     return pending;
