@@ -63,6 +63,17 @@ describe("loadConfig", () => {
     );
   });
 
+  test("rejects an allowance on a boolean, which is never detected", async () => {
+    const configPath = writeConfig(
+      `export default {
+        name: "test-app",
+        env: { FEATURE: { value: true, allowSecretReason: "not a credential" } },
+      };`,
+    );
+
+    await expect(loadConfig(configPath)).rejects.toThrow(/env\.FEATURE/);
+  });
+
   test("leaves a config without env alone", async () => {
     const configPath = writeConfig(`export default { name: "test-app" };`);
 

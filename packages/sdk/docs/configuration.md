@@ -300,7 +300,7 @@ export default defineConfig({
 });
 ```
 
-This silences both the failure and the warning, so it also covers a value that is random-looking without being a credential — say so in the reason.
+This silences both the failure and the warning, so it also covers a value that is random-looking without being a credential — say so in the reason. Only string and number values accept an allowance: a boolean is never flagged, so it never needs one.
 
 Application code still reads `env.slackRelayUrl` as the value itself: the wrapper only carries the reason and does not reach the deployed application.
 
