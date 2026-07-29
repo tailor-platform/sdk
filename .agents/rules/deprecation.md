@@ -45,6 +45,18 @@ check:deprecations` enforces the mechanical parts.
   older than it cannot hold a reference to migrate, so listing the codemod for them is noise in
   `tailor upgrade`. `1.0.0` is right only for an API that exists across the whole 1.x line, which is
   why the v2 entries use it.
+- Read the introduction version out of history, not memory. The oldest commit that changed the
+  symbol's occurrence count is the one that added it, and its short sha appears in the
+  `packages/sdk/CHANGELOG.md` entry sitting under the `##` heading of the release that shipped it:
+
+  ```sh
+  sha=$(git log -S '<symbol>' --format=%h -- packages/sdk/src | tail -1)
+  awk -v s="$sha" '/^## /{v=$2} index($0,s){print v; exit}' packages/sdk/CHANGELOG.md
+  ```
+
+  `since` is machine-checked only for being valid semver and older than `until`. Which version it
+  names is not, so record how it was established in the PR whenever it is not `1.0.0`.
+
 - Do not put `until` at the deprecating version. A caller already on that version has `from == until`,
   fails `from < until`, and is never offered the migration — including the upgrade to the release that
   removes the API, which is exactly when their code breaks. When the removal version is not decided
