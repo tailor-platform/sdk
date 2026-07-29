@@ -136,7 +136,7 @@ When the project defines multiple IdPs, pass `idp` to target a specific one. The
 idpUserCreatedTrigger({ idp: "my-idp" });
 ```
 
-Omitting `idp` is allowed only when the project has exactly one IdP; otherwise `apply` fails with an error listing the configured IdPs.
+Omitting `idp` is allowed only when the project has exactly one IdP; otherwise `deploy` fails with an error listing the configured IdPs.
 
 These triggers require the IdP to publish user lifecycle events. The SDK enables `publishUserEvents` automatically during `deploy` on each IdP that is targeted by an `idpUser` trigger; set the value explicitly on `defineIdp()` to override. See [IdP service - publishUserEvents](./idp.md#publishuserevents).
 
