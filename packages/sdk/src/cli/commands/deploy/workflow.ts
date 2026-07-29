@@ -366,15 +366,21 @@ function isSubscribed(subscribers: WorkflowEventSubscribers, workflowName: strin
 type ResolvePublishEventsParams = {
   explicit: boolean | undefined;
   subscribed: boolean;
+  remote: boolean | undefined;
   conflictError: string;
 };
 
 function resolvePublishEvents(params: ResolvePublishEventsParams): boolean {
-  const { explicit, subscribed, conflictError } = params;
+  const { explicit, subscribed, remote, conflictError } = params;
   if (explicit === false && subscribed) {
     throw new Error(conflictError);
   }
-  return explicit ?? subscribed;
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  // Subscriptions only cover this target, so a remote opt-in is kept rather than
+  // flipped off when the subscribing executor lives in a config outside the run.
+  return subscribed || (remote ?? false);
 }
 
 type ResolveJobPublishEventsParams = {
@@ -382,6 +388,7 @@ type ResolveJobPublishEventsParams = {
   mainJobDeps: Record<string, string[]>;
   subscribers: WorkflowEventSubscribers;
   explicit: ReadonlyMap<string, boolean>;
+  existing: ReadonlyMap<string, ExistingJobFunction>;
 };
 
 /**
@@ -389,11 +396,11 @@ type ResolveJobPublishEventsParams = {
  *
  * A job execution trigger names a workflow rather than a job, so a subscription
  * opts in every job that workflow runs.
- * @param params - Workflows, their job dependencies, subscribers, and explicit job flags
+ * @param params - Workflows, their job dependencies, subscribers, explicit job flags, and existing job functions
  * @returns Resolved flags keyed by job function name
  */
 function resolveJobPublishEvents(params: ResolveJobPublishEventsParams): Map<string, boolean> {
-  const { workflows, mainJobDeps, subscribers, explicit } = params;
+  const { workflows, mainJobDeps, subscribers, explicit, existing } = params;
   const usedJobNames = new Set<string>();
   const subscribedJobNames = new Set<string>();
   for (const workflow of Object.values(workflows)) {
@@ -418,6 +425,7 @@ function resolveJobPublishEvents(params: ResolveJobPublishEventsParams): Map<str
       resolvePublishEvents({
         explicit: explicit.get(jobName),
         subscribed: subscribedJobNames.has(jobName),
+        remote: existing.get(jobName)?.publishExecutionEvents,
         conflictError:
           `Job "${jobName}" has "publishEvents: false", but executors with a workflowJobExecution trigger subscribe to a workflow that runs it. ` +
           `Either remove "publishEvents: false" or remove the matching executor triggers.`,
@@ -483,6 +491,7 @@ export async function planWorkflow(
     mainJobDeps,
     subscribers: eventPublishing.jobExecution ?? NO_EVENT_SUBSCRIBERS,
     explicit: eventPublishing.jobPublishEvents ?? new Map<string, boolean>(),
+    existing: existingJobFunctions,
   });
   const staleJobFunctionNames = collectStaleJobFunctionNames(
     existingJobFunctions,
@@ -529,6 +538,7 @@ export async function planWorkflow(
       publishEvents: resolvePublishEvents({
         explicit: workflow.publishEvents,
         subscribed: isSubscribed(executionSubscribers, workflow.name),
+        remote: existing?.resource.publishExecutionEvents,
         conflictError:
           `Workflow "${workflow.name}" has "publishEvents: false", but executors with a workflowExecution trigger subscribe to it. ` +
           `Either remove "publishEvents: false" or remove the matching executor triggers.`,

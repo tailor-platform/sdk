@@ -230,6 +230,104 @@ describe("planWorkflow", () => {
       );
     });
 
+    test("keeps a remote workflow opt-in when nothing in the target subscribes", async () => {
+      const client = createMockClient([
+        {
+          id: "1",
+          name: "orders",
+          label: appName,
+          sdkVersion: "v0-9-0",
+          resource: {
+            id: "1",
+            name: "orders",
+            mainJobFunctionName: "main-job",
+            jobFunctions: { "main-job": "1" },
+            publishExecutionEvents: true,
+          },
+        },
+      ]);
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: createMockWorkflow("orders", "main-job") },
+        { "main-job": ["main-job"] },
+        new Set(["main-job"]),
+        {},
+      );
+
+      expect(result.changeSet.updates[0]!.workflow.publishEvents).toBe(true);
+    });
+
+    test("keeps a remote job opt-in when nothing in the target subscribes", async () => {
+      const client = createMockClient(
+        [
+          {
+            id: "1",
+            name: "orders",
+            label: appName,
+            resource: {
+              id: "1",
+              name: "orders",
+              mainJobFunctionName: "main-job",
+              jobFunctions: { "main-job": "1" },
+            },
+          },
+        ],
+        { "main-job": { label: appName, publishExecutionEvents: true } },
+      );
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: createMockWorkflow("orders", "main-job") },
+        { "main-job": ["main-job"] },
+        new Set(["main-job"]),
+        {},
+      );
+
+      expect(result.jobFunctionPublishEvents.get("main-job")).toBe(true);
+    });
+
+    test("honors an explicit opt-out over a remote opt-in", async () => {
+      const client = createMockClient(
+        [
+          {
+            id: "1",
+            name: "orders",
+            label: appName,
+            sdkVersion: "v0-9-0",
+            resource: {
+              id: "1",
+              name: "orders",
+              mainJobFunctionName: "main-job",
+              jobFunctions: { "main-job": "1" },
+              publishExecutionEvents: true,
+            },
+          },
+        ],
+        { "main-job": { label: appName, publishExecutionEvents: true } },
+      );
+
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: { ...createMockWorkflow("orders", "main-job"), publishEvents: false } },
+        { "main-job": ["main-job"] },
+        new Set(["main-job"]),
+        { jobPublishEvents: new Map([["main-job", false]]) },
+      );
+
+      expect(result.changeSet.updates[0]!.workflow.publishEvents).toBe(false);
+      expect(result.jobFunctionPublishEvents.get("main-job")).toBe(false);
+    });
+
     test("rejects an explicit job opt-out with a matching job execution subscription", async () => {
       const workflow = createMockWorkflow("orders", "main-job");
 
