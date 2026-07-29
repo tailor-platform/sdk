@@ -34,10 +34,17 @@ check:deprecations` enforces the mechanical parts.
 - Add the registry entry in the same change as the `@deprecated` tag. A migration that cannot be
   automated still gets an entry: omit `scriptPath` and ship `suspiciousPatterns` + `prompt`.
 - The entry's `since` / `until` are a version **range**, a different axis from the tag's `since`, which
-  is one version. `tailor upgrade` offers a codemod when `since <= from < until <= to`: `since` is the
-  oldest source version the deprecated API exists in (`1.0.0` for anything predating the current
-  major), and `until` is the version that **removes** it — the boundary a caller must cross to be
-  offered the migration.
+  is one version. `tailor upgrade` offers a codemod when `since <= from < until <= to`: `since` bounds
+  the caller's current version and `until` is the version that **removes** the API — the boundary a
+  caller must cross to be offered the migration.
+- `since` is the version that **introduced** the API being migrated away from, not the version that
+  deprecated it. `--from` is whatever the caller passes, so a project can jump several majors in one
+  run; a `since` set at the deprecating version drops every caller older than it, and their code breaks
+  at the removal with nothing offered.
+- Establish that introduction version rather than rounding down to the current major's floor: a caller
+  older than it cannot hold a reference to migrate, so listing the codemod for them is noise in
+  `tailor upgrade`. `1.0.0` is right only for an API that exists across the whole 1.x line, which is
+  why the v2 entries use it.
 - Do not put `until` at the deprecating version. A caller already on that version has `from == until`,
   fails `from < until`, and is never offered the migration — including the upgrade to the release that
   removes the API, which is exactly when their code breaks. When the removal version is not decided
@@ -50,14 +57,14 @@ check:deprecations` enforces the mechanical parts.
 
 ### Worked example
 
-`oldApi` exists in 1.x, 2.1.0 deprecates it, 3.0.0 removes it:
+`oldApi` arrives in 1.40.0, 2.1.0 deprecates it, 3.0.0 removes it:
 
 ```ts
 /** @deprecated since 2.1.0 — use {@link newApi} instead. codemod: v3/old-api-to-new */
 export const oldApi = newApi;
 
 // packages/sdk-codemod/src/registry.ts
-{ id: "v3/old-api-to-new", since: "1.0.0", until: "3.0.0", ... }
+{ id: "v3/old-api-to-new", since: "1.40.0", until: "3.0.0", ... }
 ```
 
 | upgrade          | offered | why                                                                        |
@@ -65,6 +72,13 @@ export const oldApi = newApi;
 | `1.83.0 → 3.0.0` | yes     | crosses the boundary into the release that removed `oldApi`                |
 | `2.1.0 → 3.0.0`  | yes     | `until: "2.1.0"` would have excluded this caller and broken it unwarned    |
 | `1.83.0 → 2.1.0` | no      | `oldApi` is deprecated but still works; the editor hint is the only signal |
+| `1.20.0 → 3.0.0` | no      | predates `oldApi`, so there is no reference to rewrite                     |
+
+Both bounds are read off the API's own life: `since` where it appeared, `until` where it disappears.
+Rounding `since` down to `1.0.0` would keep the first three rows but put the codemod in front of the
+1.20.0 caller too; moving it up to `2.0.0` or `2.1.0` would drop the `1.83.0 → 3.0.0` caller and break
+them at the removal. The v2 entries use `since: "1.0.0"` because those APIs do span the whole 1.x
+line.
 
 A deprecation that ships and is removed in the same major collapses to a single boundary — the v2
 removals use `since: "1.0.0"`, `until: "2.0.0"`, with the tag reading `since 2.0.0`.
