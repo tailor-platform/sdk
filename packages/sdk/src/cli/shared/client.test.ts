@@ -5,6 +5,7 @@ import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { aroundEach, describe, test, expect, vi } from "vitest";
 import { reportCrash } from "#/cli/crashreport/index";
 import {
+  closeConnectionPool,
   concurrencyLimitInterceptor,
   createTransport,
   fetchAll,
@@ -779,5 +780,53 @@ describe("fetchMachineUserToken", () => {
     await expect(
       fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
     ).rejects.toThrow("Failed to fetch machine user token: 500 Internal Server Error");
+  });
+});
+
+describe("closeConnectionPool", () => {
+  const currentGeneration = Symbol.for("undici.globalDispatcher.2");
+  const legacyGeneration = Symbol.for("undici.globalDispatcher.1");
+  const globals = globalThis as Record<symbol, unknown>;
+  const setDispatcher = (key: symbol, value: unknown) => {
+    globals[key] = value;
+  };
+
+  aroundEach(async (runTest) => {
+    const originals = [currentGeneration, legacyGeneration].map(
+      (key) => [key, globals[key]] as const,
+    );
+    await runTest();
+    for (const [key, value] of originals) {
+      globals[key] = value;
+    }
+  });
+
+  test("closes only the newest dispatcher generation", async () => {
+    const closeCurrent = vi.fn().mockResolvedValue(undefined);
+    const closeLegacy = vi.fn().mockResolvedValue(undefined);
+    setDispatcher(currentGeneration, { close: closeCurrent });
+    setDispatcher(legacyGeneration, { close: closeLegacy });
+
+    await closeConnectionPool();
+
+    expect(closeCurrent).toHaveBeenCalledTimes(1);
+    expect(closeLegacy).not.toHaveBeenCalled();
+  });
+
+  test("falls back to the legacy dispatcher generation", async () => {
+    const closeLegacy = vi.fn().mockResolvedValue(undefined);
+    setDispatcher(currentGeneration, undefined);
+    setDispatcher(legacyGeneration, { close: closeLegacy });
+
+    await closeConnectionPool();
+
+    expect(closeLegacy).toHaveBeenCalledTimes(1);
+  });
+
+  test("resolves when no dispatcher is installed", async () => {
+    setDispatcher(currentGeneration, undefined);
+    setDispatcher(legacyGeneration, undefined);
+
+    await expect(closeConnectionPool()).resolves.toBeUndefined();
   });
 });

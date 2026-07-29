@@ -10,7 +10,6 @@ import {
   type Transport,
   type UnaryResponse,
 } from "@connectrpc/connect";
-import { getGlobalDispatcher } from "undici";
 import { z } from "zod";
 import { createApplyLimiter } from "./apply-concurrency";
 import { logger } from "./logger";
@@ -791,10 +790,20 @@ export async function fetchPlatformMachineUserToken(
 }
 
 /**
- * Close undici's global HTTP connection pool to prevent libuv UV_HANDLE_CLOSING
+ * Close the global HTTP connection pool to prevent libuv UV_HANDLE_CLOSING
  * assertion failure on Windows at process exit (Node.js 23.x+).
  * See: https://github.com/nodejs/node/issues/56645
+ *
+ * The pool is reached through the global dispatcher symbol rather than the `undici`
+ * package: importing that package installs its own Agent over these same globals,
+ * replacing the HTTP stack Node's `fetch` already uses. The symbol is versioned per
+ * Dispatcher API generation, and the newest one wins because older symbols hold a
+ * wrapper around that same pool — closing both would destroy it twice.
  */
 export async function closeConnectionPool() {
-  await getGlobalDispatcher().close();
+  const globals = globalThis as Record<symbol, { close?: () => Promise<void> } | undefined>;
+  const dispatcher =
+    globals[Symbol.for("undici.globalDispatcher.2")] ??
+    globals[Symbol.for("undici.globalDispatcher.1")];
+  await dispatcher?.close?.();
 }
