@@ -201,8 +201,6 @@ interface WorkflowJobExecutionEventArgs extends WorkflowExecutionEventArgs {
   workflowJobExecutionId: string;
   /** Name of the job, as passed to `createWorkflowJob({ name })`. */
   jobFunctionName: string;
-  /** Name identifying the job's position in the execution stack. */
-  stackedJobName: string;
 }
 
 export interface WorkflowJobExecutionStartedArgs extends WorkflowJobExecutionEventArgs {

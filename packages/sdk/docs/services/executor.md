@@ -625,7 +625,6 @@ Workflow job execution triggers include every `WorkflowExecutionContext` field a
 interface WorkflowJobExecutionContext {
   workflowJobExecutionId: string; // Job execution ID
   jobFunctionName: string; // Name passed to createWorkflowJob
-  stackedJobName: string; // Job position in the execution stack
   event: "started" | "completed" | "wait_started" | "wait_resolved";
   rawEvent: string; // Full event type
 }
