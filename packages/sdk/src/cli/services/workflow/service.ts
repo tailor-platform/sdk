@@ -11,6 +11,8 @@ export interface CollectedJob {
   name: string;
   exportName: string;
   sourceFile: string;
+  /** Explicit `publishEvents` from `createWorkflowJob`, when the job set one. */
+  publishEvents?: boolean;
 }
 
 function stripRuntimeStart(workflow: unknown): unknown {
@@ -135,7 +137,7 @@ async function loadAndCollectJobs(
   const fileCount = workflowFiles.length;
 
   // Maps for collecting data
-  const allJobsMap = new Map<string, { name: string; exportName: string; sourceFile: string }>();
+  const allJobsMap = new Map<string, CollectedJob>();
 
   // Load all files in parallel and collect jobs and workflows
   const loadResults = await Promise.all(
@@ -180,14 +182,10 @@ async function loadAndCollectJobs(
  * @returns Extracted jobs and workflow
  */
 async function loadFileContent(filePath: string): Promise<{
-  jobs: Array<{ name: string; exportName: string; sourceFile: string }>;
+  jobs: CollectedJob[];
   workflow: Workflow | null;
 }> {
-  const jobs: Array<{
-    name: string;
-    exportName: string;
-    sourceFile: string;
-  }> = [];
+  const jobs: CollectedJob[] = [];
   let workflow: Workflow | null = null;
 
   try {
@@ -211,6 +209,9 @@ async function loadFileContent(filePath: string): Promise<{
           name: jobResult.data.name,
           exportName,
           sourceFile: filePath,
+          ...(jobResult.data.publishEvents !== undefined
+            ? { publishEvents: jobResult.data.publishEvents }
+            : {}),
         });
       } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {
         throw jobResult.error;

@@ -83,6 +83,38 @@
   
   Run the `v2/workflow-trigger-rename` codemod to migrate call sites automatically.
 
+## 1.84.0
+
+### Minor Changes
+
+- [#1860](https://github.com/tailor-platform/sdk/pull/1860) [`50af713`](https://github.com/tailor-platform/sdk/commit/50af713d3b41fbe64fa2b53a2f2d027e6f7dbe9f) Thanks [@dqn](https://github.com/dqn)! - Fail `deploy` when a migration with breaking changes is missing its `migrate.ts` instead of silently leaving the migration unapplied while reporting success. Migration validation (missing scripts and schema checks) now runs while planning, so these failures also surface under `--dry-run` and before any resource is applied. Add `tailordb migration script <n> --no-script --reason "..."` to explicitly record that a migration needs no script; acknowledged migrations deploy their schema changes as usual and skip only the script step.
+
+- [#1906](https://github.com/tailor-platform/sdk/pull/1906) [`db21d8f`](https://github.com/tailor-platform/sdk/commit/db21d8f4bb9e130773a2e6b08959d36751f0819a) Thanks [@k1LoW](https://github.com/k1LoW)! - Add Executor triggers for workflow and workflow job execution lifecycle events, with typed event arguments. Subscribing to these events is enough to receive them. `deploy` enables `publishEvents` on each targeted workflow, and on every job of a workflow targeted by a `workflowJobExecution*` trigger. Set `publishEvents` on `createWorkflow` / `createWorkflowJob` to publish without a subscribing executor, or to keep publishing off.
+
+### Patch Changes
+
+- [#1862](https://github.com/tailor-platform/sdk/pull/1862) [`7224091`](https://github.com/tailor-platform/sdk/commit/7224091b2a738f5daa0b38344c138854d64d0c4d) Thanks [@dqn](https://github.com/dqn)! - Classify decimal `scale` changes as breaking in `tailordb migration generate`: the change now prompts for confirmation and auto-generates a `migrate.ts` that re-saves existing rows so their stored values are re-serialized under the new scale. Decreasing scale rounds values half-up and can lose precision. The generated script also avoids overwriting concurrent changes to the same field and checks newly unique values after re-serialization.
+
+- [#1879](https://github.com/tailor-platform/sdk/pull/1879) [`07c6eba`](https://github.com/tailor-platform/sdk/commit/07c6eba4e04bcf37bda5cc6f8051bd14a950702c) Thanks [@toiroakr](https://github.com/toiroakr)! - Skip the workflow trigger-call AST scan entirely for bundles from projects with no workflow definitions
+
+- [#1882](https://github.com/tailor-platform/sdk/pull/1882) [`ca804f2`](https://github.com/tailor-platform/sdk/commit/ca804f24ad9506995757e81422d8b6df5316b6c7) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency p-limit to v7.3.1
+
+- [#1887](https://github.com/tailor-platform/sdk/pull/1887) [`f1ca847`](https://github.com/tailor-platform/sdk/commit/f1ca847e683ecff8bbb634b3cf7a67ec18429d59) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8.8.0
+
+- [#1892](https://github.com/tailor-platform/sdk/pull/1892) [`1273c13`](https://github.com/tailor-platform/sdk/commit/1273c13ab7d649998a3b365df5b779087772e317) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): lock file maintenance
+
+- [#1901](https://github.com/tailor-platform/sdk/pull/1901) [`7d1974f`](https://github.com/tailor-platform/sdk/commit/7d1974f52952a8f39a7adfc06644404b2510f1c3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.6
+
+- [#1902](https://github.com/tailor-platform/sdk/pull/1902) [`09605e7`](https://github.com/tailor-platform/sdk/commit/09605e7e6d2942ed494771e655da6d4e0dc19b87) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update @opentelemetry
+
+- [#1904](https://github.com/tailor-platform/sdk/pull/1904) [`a3850fc`](https://github.com/tailor-platform/sdk/commit/a3850fcc47d9387d3f4c38aa4fc74d72f81c5981) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @bufbuild/protobuf to v2.13.0
+
+- [#1907](https://github.com/tailor-platform/sdk/pull/1907) [`09d2a6c`](https://github.com/tailor-platform/sdk/commit/09d2a6c5f23794c55da052d27ff2d6963279768a) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency es-toolkit to v1.50.0
+
+- [#1908](https://github.com/tailor-platform/sdk/pull/1908) [`bff8a53`](https://github.com/tailor-platform/sdk/commit/bff8a5351d0e1082beb2b73ab961507584e0e2bf) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
+- [#1917](https://github.com/tailor-platform/sdk/pull/1917) [`a2f2886`](https://github.com/tailor-platform/sdk/commit/a2f2886fd966195bf815ca9f21e5d4f922ccf111) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency undici to v8.9.0
+
 ## 1.83.0
 
 ### Minor Changes

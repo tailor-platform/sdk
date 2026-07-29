@@ -195,7 +195,7 @@ defineIdp("my-idp", {
 
 - `enableMfa` - Make TOTP MFA available for users in this namespace. Default `false`. When enabled, users can register an authenticator app (Google Authenticator, 1Password, etc.) from the IdP self-service page.
 - `requireMfa` - Force password-authenticated users to enroll and pass an MFA challenge on each sign-in. Default `false`. Social sign-in (`allowGoogleOauth` / `allowMicrosoftOauth`) is not affected; the upstream provider's MFA covers those sessions.
-- `allowedReturnOrigins` - Origins the IdP self-service pages (such as `/mfa/settings`) are allowed to redirect back to. Each entry is either a literal origin (`https://app.example.com`, scheme + host + optional port, no path/query/fragment) or a static-website placeholder `<name>:url` (e.g. `website.url`) that the CLI resolves to the deployed website's URL at apply time. Required when `enableMfa` is `true`.
+- `allowedReturnOrigins` - Origins the IdP self-service pages (such as `/mfa/settings`) are allowed to redirect back to. Each entry is either a literal origin (`https://app.example.com`, scheme + host + optional port, no path/query/fragment) or a static-website placeholder `<name>:url` (e.g. `website.url`) that the CLI resolves to the deployed website's URL at deployment time. Required when `enableMfa` is `true`.
 - `mfaIssuer` - Label shown next to the user account in authenticator apps when TOTP is enrolled. Up to 64 characters. Falls back to `"Tailor Platform IdP"` when empty.
 
 **Constraints:** the following combinations are rejected at parse time.
@@ -330,10 +330,10 @@ defineIdp("my-idp", {
 });
 ```
 
-**Auto-configuration:** When `publishUserEvents` is omitted, the SDK enables it automatically during `apply` for each IdP that is targeted by an executor's `idpUser` trigger. Targeting is per-IdP: an executor specifies which IdP it subscribes to via the trigger's `idp` option (required in multi-IdP projects). Set the value explicitly to override:
+**Auto-configuration:** When `publishUserEvents` is omitted, the SDK enables it automatically during `deploy` for each IdP that is targeted by an executor's `idpUser` trigger. Targeting is per-IdP: an executor specifies which IdP it subscribes to via the trigger's `idp` option (required in multi-IdP projects). Set the value explicitly to override:
 
 - `publishUserEvents: true`: always publish events.
-- `publishUserEvents: false`: never publish events. `apply` rejects this with an error if any executor's `idpUser` trigger targets this IdP — either remove `publishUserEvents: false` or remove the matching trigger.
+- `publishUserEvents: false`: never publish events. `deploy` rejects this with an error if any executor's `idpUser` trigger targets this IdP — either remove `publishUserEvents: false` or remove the matching trigger.
 
 ## Using idp.provider()
 

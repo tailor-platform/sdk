@@ -3,6 +3,8 @@ import {
   ExecutorSchema,
   FunctionOperationSchema,
   GqlOperationSchema,
+  WorkflowExecutionTriggerSchema,
+  WorkflowJobExecutionTriggerSchema,
   WorkflowOperationSchema,
 } from "./schema";
 import type { Executor, ExecutorInput, WorkflowOperationArgs } from "#/types/executor.generated";
@@ -268,6 +270,26 @@ describe("WorkflowOperationSchema", () => {
     void invalidExecutor;
 
     expect(executor.operation.kind).toBe("workflow");
+  });
+});
+
+describe("workflow execution trigger schemas", () => {
+  test.each([
+    ["workflow execution", WorkflowExecutionTriggerSchema, "workflow.workflow_execution.started"],
+    [
+      "workflow job execution",
+      WorkflowJobExecutionTriggerSchema,
+      "workflow.workflow_execution.job_execution.started",
+    ],
+  ] as const)("rejects blank workflow names for %s triggers", (_description, schema, event) => {
+    expect(
+      schema.safeParse({ kind: schema.shape.kind.value, events: [event], workflowName: "" })
+        .success,
+    ).toBe(false);
+    expect(
+      schema.safeParse({ kind: schema.shape.kind.value, events: [event], workflowName: "  " })
+        .success,
+    ).toBe(false);
   });
 });
 
