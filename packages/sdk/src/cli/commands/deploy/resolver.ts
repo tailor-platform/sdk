@@ -329,14 +329,15 @@ async function planResolvers(
       existingResolvers.map((resolver) => [resolver.name, resolver]),
     );
     for (const resolver of Object.values(pipeline.resolvers)) {
+      const existingResolver = existingResolversMap.get(resolver.name);
       const desiredResolver = processResolver(
         pipeline.namespace,
         resolver,
         executorUsedResolvers,
         env,
         authNamespace,
+        existingResolver?.publishExecutionEvents,
       );
-      const existingResolver = existingResolversMap.get(resolver.name);
       if (existingResolver) {
         const { pipelineResolver: existingResolverDetail } = await client.getPipelineResolver({
           workspaceId,
@@ -540,6 +541,7 @@ function processResolver(
   executorUsedResolvers: ReadonlySet<string>,
   env: Record<string, string | number | boolean>,
   authNamespace: string | undefined,
+  remotePublishExecutionEvents: boolean | undefined,
 ): MessageInitShape<typeof PipelineResolverSchema> {
   const pipelines: MessageInitShape<typeof PipelineResolver_PipelineSchema>[] = [
     {
@@ -583,10 +585,14 @@ function processResolver(
   // Determine publishExecutionEvents (user-facing name: publishEvents):
   // - If user explicitly sets a value (true or false), respect that (validation already ensures no executor conflict)
   // - If not set, use executor detection (true if executor uses this resolver)
+  // - Detection only sees executors in this deploy run, so a remote opt-in is
+  //   kept rather than flipped off when the subscribing config is not deployed
   let publishExecutionEvents = false;
   if (resolver.publishEvents !== undefined) {
     publishExecutionEvents = resolver.publishEvents;
   } else if (executorUsedResolvers.has(resolver.name)) {
+    publishExecutionEvents = true;
+  } else if (remotePublishExecutionEvents) {
     publishExecutionEvents = true;
   }
 

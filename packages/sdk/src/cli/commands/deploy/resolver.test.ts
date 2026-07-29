@@ -183,6 +183,63 @@ describe("planPipeline (resolver service level)", () => {
     expect(proto.publishExecutionEvents).toBe(true);
   });
 
+  test("keeps a remote publishExecutionEvents opt-in when no executor targets the resolver", async () => {
+    const client = createMockClient([{ name: "shared-pipeline", label: appName }], {
+      "shared-pipeline": [{ name: "myResolver", publishExecutionEvents: true }],
+    });
+    const resolverService = {
+      namespace: "shared-pipeline",
+      config: {},
+      resolvers: {
+        myResolver: {
+          name: "myResolver",
+          operation: "query",
+          body: () => "hello",
+          output: { type: "string", metadata: {}, fields: {} },
+        },
+      },
+      loadResolvers: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ResolverService;
+    const application = createMockApplication([resolverService]);
+
+    const result = await planPipeline(buildCtx({ client, application }));
+
+    const resolverUpdate = result.changeSet.resolver.updates[0];
+    expect(resolverUpdate).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const proto = (resolverUpdate as any).request.pipelineResolver;
+    expect(proto.publishExecutionEvents).toBe(true);
+  });
+
+  test("honors an explicit publishEvents opt-out over a remote opt-in", async () => {
+    const client = createMockClient([{ name: "shared-pipeline", label: appName }], {
+      "shared-pipeline": [{ name: "myResolver", publishExecutionEvents: true }],
+    });
+    const resolverService = {
+      namespace: "shared-pipeline",
+      config: {},
+      resolvers: {
+        myResolver: {
+          name: "myResolver",
+          operation: "query",
+          publishEvents: false,
+          body: () => "hello",
+          output: { type: "string", metadata: {}, fields: {} },
+        },
+      },
+      loadResolvers: vi.fn().mockResolvedValue(undefined),
+    } as unknown as ResolverService;
+    const application = createMockApplication([resolverService]);
+
+    const result = await planPipeline(buildCtx({ client, application }));
+
+    const resolverUpdate = result.changeSet.resolver.updates[0];
+    expect(resolverUpdate).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const proto = (resolverUpdate as any).request.pipelineResolver;
+    expect(proto.publishExecutionEvents).toBe(false);
+  });
+
   describe("delete scenarios (service level)", () => {
     test("service is deleted when removed from config", async () => {
       const client = createMockClient([
