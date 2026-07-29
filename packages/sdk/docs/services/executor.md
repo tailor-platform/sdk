@@ -138,7 +138,7 @@ idpUserCreatedTrigger({ idp: "my-idp" });
 
 Omitting `idp` is allowed only when the project has exactly one IdP; otherwise `deploy` fails with an error listing the configured IdPs.
 
-These triggers require the IdP to publish user lifecycle events. `deploy` enables `publishEvents` automatically on each IdP targeted by an `idpUser` trigger **in the same config**, and turns it back off once no such trigger remains; set the value explicitly on `defineIdp()` to pin it. An IdP owned by another config needs `publishEvents: true` declared on it. See [IdP service - publishEvents](./idp.md#publishevents).
+These triggers require the IdP to publish user lifecycle events. `deploy` enables `publishEvents` automatically on each IdP targeted by an `idpUser` trigger taking part in the same run, and turns it back off once no such trigger remains; set the value explicitly on `defineIdp()` to pin it. See [IdP service - publishEvents](./idp.md#publishevents).
 
 ### Auth Access Token Triggers
 

@@ -229,7 +229,7 @@ export const processOrder = createWorkflowJob({
 
 Use `false` to keep publishing off. `deploy` fails if an executor subscribes to events the value opts out of, so the subscription cannot silently go unfulfilled.
 
-**Subscribing from another config:** auto-detection only looks at executors declared by the same config, so the resolved value stays the same no matter which configs `--config` selects. The workflow a `workflowExecution*` or `workflowJobExecution*` trigger names must be declared by a config in the same `deploy`, and when that config is not the executor's own, set `publishEvents: true` on the workflow — or on each job it runs, for a job-level subscription. `deploy` fails otherwise rather than creating an executor whose events never arrive.
+**Subscribing from another config:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). The workflow a `workflowExecution*` or `workflowJobExecution*` trigger names must be declared by a config in the run; `deploy` fails otherwise rather than creating an executor whose events never arrive. `deploy` records the dependency, so deploying the workflow's config alone later asks for confirmation instead of silently turning publishing off.
 
 ## Wait Points
 

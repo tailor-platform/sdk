@@ -15,11 +15,19 @@ import { HTTP_METHODS } from "#/parser/service/http-adapter/index";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  dependedByAppLabelKey,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  recordedDependencies,
+  resourceTrn,
+} from "./label";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { HttpAdapterBundleResult } from "#/cli/services/http-adapter/bundler";
+import type { MissingDependentApp } from "./confirm";
 import type {
   DeleteApplicationRequestSchema,
   CreateApplicationRequestSchema,
@@ -331,6 +339,10 @@ export async function planApplication(
     trn: resourceTrn(workspaceId, "application", application.name),
     appName: application.name,
     appId: application.id,
+    extraLabels: dependencyLabels(
+      await fetchAppLabels(client, workspaceId, application.name),
+      context,
+    ),
   });
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
@@ -416,6 +428,60 @@ export async function planApplication(
   }
 
   return changeSet;
+}
+
+/**
+ * Read the applications recorded as dependencies of this one but absent from the
+ * current deploy.
+ * @param params - Client, workspace, application name, and the run's app ids
+ * @param params.client - Operator client instance
+ * @param params.workspaceId - Workspace being deployed to
+ * @param params.appName - Application whose records are read
+ * @param params.runAppIds - Stable ids of every application in the run
+ * @returns Recorded dependencies missing from the run
+ */
+export async function fetchMissingDependentApps(params: {
+  client: OperatorClient;
+  workspaceId: string;
+  appName: string;
+  runAppIds: ReadonlySet<string>;
+}): Promise<MissingDependentApp[]> {
+  const { client, workspaceId, appName, runAppIds } = params;
+  const labels = await fetchAppLabels(client, workspaceId, appName);
+  return recordedDependencies(labels)
+    .filter((dependency) => !runAppIds.has(dependency.appId))
+    .map((dependency) => ({ appName, appId: dependency.appId, reason: dependency.reason }));
+}
+
+/**
+ * Build the labels recording which applications must take part in the same
+ * deploy as this one.
+ *
+ * A record for an application outside the run is preserved: it was written when
+ * both took part, and dropping it here would lose the only signal that a later
+ * partial deploy is about to change how this config's resources are applied.
+ * Records for applications in the run are recomputed, so a dependency that no
+ * longer exists disappears on the next deploy that includes both.
+ * @param existingLabels - Labels currently stored on the application
+ * @param context - Plan context carrying the run's dependency inputs
+ * @returns Labels to write alongside the SDK labels
+ */
+function dependencyLabels(
+  existingLabels: Record<string, string> | undefined,
+  context: PlanContext,
+): Record<string, string> {
+  const runAppIds = context.runAppIds ?? new Set<string>();
+  const labels: Record<string, string> = {};
+  for (const { appId, reason } of recordedDependencies(existingLabels)) {
+    if (runAppIds.has(appId)) continue;
+    const key = dependedByAppLabelKey(appId);
+    if (key) labels[key] = reason;
+  }
+  for (const [appId, reason] of context.dependentApps ?? []) {
+    const key = dependedByAppLabelKey(appId);
+    if (key) labels[key] = reason;
+  }
+  return labels;
 }
 
 async function fetchAppLabels(
