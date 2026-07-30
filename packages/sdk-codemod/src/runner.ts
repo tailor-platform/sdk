@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as url from "node:url";
+import { styleText } from "node:util";
 import { parse, Lang } from "@ast-grep/napi";
-import chalk from "chalk";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
@@ -128,18 +128,18 @@ function printDiff(filePath: string, before: string, after: string): void {
   const patch = structuredPatch(filePath, filePath, before, after, "", "", { context: 3 });
   if (patch.hunks.length === 0) return;
 
-  process.stderr.write(`\n${chalk.bold(`--- ${filePath}`)}\n`);
-  process.stderr.write(`${chalk.bold(`+++ ${filePath}`)}\n`);
+  process.stderr.write(`\n${styleText("bold", `--- ${filePath}`)}\n`);
+  process.stderr.write(`${styleText("bold", `+++ ${filePath}`)}\n`);
 
   for (const hunk of patch.hunks) {
     process.stderr.write(
-      chalk.cyan(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@\n`),
+      `${styleText("cyan", `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`)}\n`,
     );
     for (const line of hunk.lines) {
       if (line.startsWith("+")) {
-        process.stderr.write(`${chalk.green(line)}\n`);
+        process.stderr.write(`${styleText("green", line)}\n`);
       } else if (line.startsWith("-")) {
-        process.stderr.write(`${chalk.red(line)}\n`);
+        process.stderr.write(`${styleText("red", line)}\n`);
       } else {
         process.stderr.write(`${line}\n`);
       }

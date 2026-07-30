@@ -1,5 +1,4 @@
-import { formatWithOptions, type InspectOptions } from "node:util";
-import chalk from "chalk";
+import { formatWithOptions, type InspectOptions, styleText } from "node:util";
 import { formatDistanceToNowStrict } from "date-fns";
 import { renderTable } from "./ascii-table";
 import { parseBoolean } from "./parse-boolean";
@@ -17,55 +16,68 @@ export class CIPromptError extends Error {
   }
 }
 
+type StyleFormat = Parameters<typeof styleText>[0];
+
+/**
+ * Creates a style function. Styling is dropped when stdout has no color support.
+ * @param format - Style name, or names to combine
+ * @returns Style function for the given format
+ */
+const color =
+  (format: StyleFormat) =>
+  (text: string): string =>
+    styleText(format, text);
+
 /**
  * Semantic style functions for inline text styling
  */
 export const styles = {
   // Status colors
-  success: chalk.green,
-  error: chalk.red,
-  warning: chalk.yellow,
-  info: chalk.cyan,
+  success: color("green"),
+  error: color("red"),
+  warning: color("yellow"),
+  info: color("cyan"),
 
   // Action colors (for change sets)
-  create: chalk.green,
-  update: chalk.yellow,
-  delete: chalk.red,
-  unchanged: chalk.gray,
+  create: color("green"),
+  update: color("yellow"),
+  delete: color("red"),
+  replace: color("magenta"),
+  unchanged: color("gray"),
 
   // Emphasis
-  bold: chalk.bold,
-  dim: chalk.gray,
-  highlight: chalk.cyanBright,
-  successBright: chalk.greenBright,
-  errorBright: chalk.redBright,
+  bold: color("bold"),
+  dim: color("gray"),
+  highlight: color("cyanBright"),
+  successBright: color("greenBright"),
+  errorBright: color("redBright"),
 
   // Resource types
-  resourceType: chalk.bold,
-  resourceName: chalk.cyan,
+  resourceType: color("bold"),
+  resourceName: color("cyan"),
 
   // File paths
-  path: chalk.cyan,
+  path: color("cyan"),
 
   // Values
-  value: chalk.white,
-  placeholder: chalk.gray.italic,
+  value: color("white"),
+  placeholder: color(["gray", "italic"]),
 };
 
 /**
  * Standardized symbols for CLI output
  */
 export const symbols = {
-  success: chalk.green("\u2713"),
-  error: chalk.red("\u2716"),
-  warning: chalk.yellow("\u26a0"),
-  info: chalk.cyan("i"),
-  create: chalk.green("+"),
-  update: chalk.yellow("~"),
-  delete: chalk.red("-"),
-  replace: chalk.magenta("\u00b1"),
-  bullet: chalk.gray("\u2022"),
-  arrow: chalk.gray("\u2192"),
+  success: styles.success("\u2713"),
+  error: styles.error("\u2716"),
+  warning: styles.warning("\u26a0"),
+  info: styles.info("i"),
+  create: styles.create("+"),
+  update: styles.update("~"),
+  delete: styles.delete("-"),
+  replace: styles.replace("\u00b1"),
+  bullet: styles.dim("\u2022"),
+  arrow: styles.dim("\u2192"),
 };
 
 /**
@@ -107,12 +119,12 @@ const TYPE_ICONS: Record<string, string> = {
 
 // Color functions for icon and message text
 const TYPE_COLORS: Record<string, (text: string) => string> = {
-  info: chalk.cyan,
-  success: chalk.green,
-  warn: chalk.yellow,
-  error: chalk.red,
-  debug: chalk.gray,
-  trace: chalk.gray,
+  info: styles.info,
+  success: styles.success,
+  warn: styles.warning,
+  error: styles.error,
+  debug: styles.dim,
+  trace: styles.dim,
   log: (text) => text,
 };
 

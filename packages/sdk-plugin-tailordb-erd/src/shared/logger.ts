@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { styleText } from "node:util";
 
 export type LogMode = "default" | "stream" | "plain";
 
@@ -15,11 +15,21 @@ const TYPE_ICONS: Record<string, string> = {
   log: "",
 };
 
+type StyleFormat = Parameters<typeof styleText>[0];
+
+// Styling is dropped when stdout has no color support.
+const color =
+  (format: StyleFormat) =>
+  (text: string): string =>
+    styleText(format, text);
+
+const gray = color("gray");
+
 const TYPE_COLORS: Record<string, (text: string) => string> = {
-  info: chalk.cyan,
-  success: chalk.green,
-  warn: chalk.yellow,
-  error: chalk.red,
+  info: color("cyan"),
+  success: color("green"),
+  warn: color("yellow"),
+  error: color("red"),
   log: (text) => text,
 };
 
@@ -83,7 +93,7 @@ export const logger = {
 
   debug(message: string): void {
     if (_verbose) {
-      writeLog("log", chalk.gray(message), { mode: "plain" });
+      writeLog("log", gray(message), { mode: "plain" });
     }
   },
 

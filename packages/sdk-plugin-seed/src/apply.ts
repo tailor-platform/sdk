@@ -10,7 +10,6 @@ import {
   show,
   truncate,
 } from "@tailor-platform/sdk/cli";
-import chalk from "chalk";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
@@ -18,7 +17,7 @@ import { selectEntities } from "./entities";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import { deploymentArgs } from "./shared/args";
 import { defineAppCommand } from "./shared/command";
-import { logger } from "./shared/logger";
+import { logger, styles } from "./shared/logger";
 import { topologicalSort } from "./topo-sort";
 import type { OperatorClient, ScriptExecutionResult, SeedData } from "@tailor-platform/sdk/cli";
 
@@ -48,7 +47,7 @@ function promptConfirmation(question: string): Promise<boolean> {
   }
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
-    rl.question(chalk.yellow(question), (answer) => {
+    rl.question(styles.warning(question), (answer) => {
       rl.close();
       resolve(answer.toLowerCase().trim() === "y");
     });
@@ -58,7 +57,7 @@ function promptConfirmation(question: string): Promise<boolean> {
 function logExecutionLogs(logs: string | undefined, indent: string): void {
   if (!logs) return;
   for (const line of logs.split("\n").filter(Boolean)) {
-    logger.log(chalk.dim(`${indent}${line}`));
+    logger.log(styles.dim(`${indent}${line}`));
   }
 }
 
@@ -130,7 +129,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
 
   const typesWithData = sortedTypes.filter((type) => data[type] && data[type].length > 0);
   if (typesWithData.length === 0) {
-    logger.log(chalk.dim(`  [${namespace}] No data to seed`));
+    logger.log(styles.dim(`  [${namespace}] No data to seed`));
     return { success: true, processed: processedTotals };
   }
 
@@ -147,18 +146,18 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
   });
 
   if (chunks.length === 0) {
-    logger.log(chalk.dim(`  [${namespace}] No data to seed`));
+    logger.log(styles.dim(`  [${namespace}] No data to seed`));
     return { success: true, processed: processedTotals };
   }
   if (chunks.length > 1) {
-    logger.log(chalk.dim(`    Split into ${chunks.length} chunks`));
+    logger.log(styles.dim(`    Split into ${chunks.length} chunks`));
   }
 
   let success = true;
   for (const chunk of chunks) {
     if (chunks.length > 1) {
       logger.log(
-        chalk.dim(`    Chunk ${chunk.index + 1}/${chunk.total}: ${chunk.order.join(", ")}`),
+        styles.dim(`    Chunk ${chunk.index + 1}/${chunk.total}: ${chunk.order.join(", ")}`),
       );
     }
 
@@ -185,7 +184,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
       const message = upsert
         ? `${counts.inserted} inserted, ${counts.updated} updated${skippedSuffix}`
         : `${counts.inserted} rows inserted`;
-      logger.log(chalk.green(`    ✓ ${type}: ${message}`));
+      logger.log(styles.success(`    ✓ ${type}: ${message}`));
     }
     if (!chunkSuccess) {
       logger.error(`  Seed failed:\n      ${errors.join("\n      ")}`, {
@@ -242,10 +241,10 @@ async function seedIdpUser(
 
   const rows = loadSeedData(execution.dataDir, ["_User"])._User ?? [];
   if (rows.length === 0) {
-    logger.log(chalk.dim("    No _User data to seed"));
+    logger.log(styles.dim("    No _User data to seed"));
     return { success: true, processed: 0 };
   }
-  logger.log(chalk.dim(`    Processing ${rows.length} _User records...`));
+  logger.log(styles.dim(`    Processing ${rows.length} _User records...`));
 
   const { success, parsed } = await runIdpScript({
     execution,
@@ -265,7 +264,7 @@ async function seedIdpUser(
       const message = upsert
         ? `${created} created, ${updated} updated${skippedSuffix}`
         : `${processed} rows processed`;
-      logger.log(chalk.green(`    ✓ _User: ${message}`));
+      logger.log(styles.success(`    ✓ _User: ${message}`));
     },
   });
   return {
@@ -287,7 +286,7 @@ async function truncateIdpUser(
     indent: "  ",
     reportSuccess: (result) => {
       if (typeof result.deleted === "number") {
-        logger.log(chalk.green(`  ✓ _User: ${result.deleted} users deleted`));
+        logger.log(styles.success(`  ✓ _User: ${result.deleted} users deleted`));
       }
     },
   });
@@ -345,7 +344,7 @@ export const seedApplyCommand = defineAppCommand({
     }
     if (args.namespace) {
       logger.info(`Filtering by namespace: ${args.namespace}`);
-      logger.log(chalk.dim(`Entities: ${(selection.entitiesToProcess ?? []).join(", ")}`));
+      logger.log(styles.dim(`Entities: ${(selection.entitiesToProcess ?? []).join(", ")}`));
     } else if (args.types.length > 0) {
       logger.info(`Filtering by types: ${(selection.entitiesToProcess ?? []).join(", ")}`);
     }
@@ -415,7 +414,7 @@ export const seedApplyCommand = defineAppCommand({
             types: typesToTruncate,
           });
         } else {
-          logger.log(chalk.dim("No TailorDB types to truncate (only _User was specified)."));
+          logger.log(styles.dim("No TailorDB types to truncate (only _User was specified)."));
         }
       } else {
         await truncate({
@@ -443,7 +442,7 @@ export const seedApplyCommand = defineAppCommand({
     logger.newline();
     logger.info("Starting seed data generation...");
     if (args["skip-idp"]) {
-      logger.log(chalk.dim("  Skipping IdP user (_User)"));
+      logger.log(styles.dim("  Skipping IdP user (_User)"));
     }
 
     let allSuccess = true;
