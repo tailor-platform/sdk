@@ -189,7 +189,14 @@ export function dependencyLabelWrite(
   const labels: Record<string, string> = {};
   for (const [appId, reason] of dependents) {
     const key = dependedByAppLabelKey(appId);
-    if (key) labels[key] = reason;
+    if (!key) {
+      throw new Error(
+        `Application id "${appId}" cannot be recorded as a dependency of this deploy. ` +
+          `Ids are written by deploy as lowercase UUIDs; restore the generated value in the ` +
+          `config's "id", or set publishEvents explicitly on the resources it subscribes to.`,
+      );
+    }
+    labels[key] = reason;
   }
 
   const remove = recordedDependencies(existingLabels).flatMap(({ appId }) => {

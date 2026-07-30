@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { resolvePublishEvents } from "./publish-events";
+import { publishEventsConflict, resolvePublishEvents } from "./publish-events";
 
-const conflict = { resource: 'Resolver "processOrder"', trigger: "resolverExecuted" };
+// Built by the same helper deploy uses, so the expected messages below pin the
+// resource labels as well as the sentence around them.
+const conflict = publishEventsConflict.resolver("processOrder");
 
 describe("resolvePublishEvents", () => {
   test.each([
@@ -29,11 +31,7 @@ describe("resolvePublishEvents", () => {
       resolvePublishEvents({
         explicit: false,
         subscribed: true,
-        conflict: {
-          resource: 'Job "process-order"',
-          trigger: "workflowJobExecution",
-          subscribesTo: "a workflow that runs it",
-        },
+        conflict: publishEventsConflict.workflowJob("process-order"),
       }),
     ).toThrow(
       'Job "process-order" has "publishEvents: false", but executors with workflowJobExecution triggers subscribe to a workflow that runs it.',
