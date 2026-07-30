@@ -229,8 +229,8 @@ export const removeCommand = defineAppCommand({
 
     if (leftBehind) {
       logger.warn(ml`
-        Resources tagged with "${application.name}" were left in place: they carry an application id this config does not have.
-        Restore the 'id' in your config and run remove again to delete them.
+        Resources tagged with "${application.name}" were left in place: they carry an application id this config does not match.
+        Put that id in your config, or run deploy to take them over first, then remove again.
       `);
       return;
     }
