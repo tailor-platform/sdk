@@ -713,6 +713,48 @@ export const allCodemods: CodemodPackage[] = [
     ],
   },
   {
+    id: "v2/idp-publish-events-rename",
+    name: "defineIdp publishUserEvents → publishEvents",
+    description:
+      "Rename the `defineIdp` option `publishUserEvents` to `publishEvents`, matching the field name TailorDB types, resolvers, and workflows already use.",
+    since: "1.5.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_PENDING,
+    // No legacyPatterns: a shorthand rewrite keeps `publishUserEvents` as the
+    // value identifier, so the token survives a successful migration. What the
+    // transform cannot reach is reported by reviewFindings instead.
+    scriptPath: "v2/idp-publish-events-rename/scripts/transform.js",
+    examples: [
+      {
+        before:
+          'import { defineIdp } from "@tailor-platform/sdk";\n\nexport const idp = defineIdp("my-idp", {\n  clients: ["my-client"],\n  publishUserEvents: true,\n});',
+        after:
+          'import { defineIdp } from "@tailor-platform/sdk";\n\nexport const idp = defineIdp("my-idp", {\n  clients: ["my-client"],\n  publishEvents: true,\n});',
+      },
+      {
+        caption: "A shorthand option keeps reading the same local:",
+        before: 'defineIdp("my-idp", { clients, publishUserEvents });',
+        after: 'defineIdp("my-idp", { clients, publishEvents: publishUserEvents });',
+      },
+    ],
+    prompt: [
+      "In Tailor SDK v2, the IdP option `publishUserEvents` is renamed to",
+      "`publishEvents`, so all four services that publish events use one field name.",
+      "The codemod rewrites the option key on `defineIdp` calls whose callee resolves",
+      "to the SDK export, including aliased and namespace imports, and rewrites a",
+      "shorthand `{ publishUserEvents }` to `{ publishEvents: publishUserEvents }` so",
+      "it keeps reading the same local.",
+      "",
+      "Also review, and migrate by hand:",
+      "- An options object built in a variable or spread into the call — the codemod",
+      "  only rewrites object literals passed directly to `defineIdp`.",
+      "- A computed key (e.g. `[key]: value`) that resolves to `publishUserEvents`.",
+      "- Type annotations or interfaces that declare the option themselves.",
+      "- A file where a local declaration shadows the `defineIdp` import; the codemod",
+      "  skips it because the call may not be the SDK export.",
+    ].join("\n"),
+  },
+  {
     id: "v2/wait-point-rename",
     name: "defineWaitPoint/defineWaitPoints → createWaitPoint/createWaitPoints",
     description:
