@@ -19,6 +19,7 @@ import {
   logRemoteDriftGuidance,
   toTailorDBDeployInput,
   verifyRemoteSchema,
+  type MigrationCheckResult,
 } from "./schema-checks";
 import {
   assertValidMigrationFiles,
@@ -29,7 +30,11 @@ import {
   loadDiff,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
-import type { RemoteSchemaVerificationSkipReason, SchemaDrift } from "./types";
+import type {
+  RemoteSchemaVerificationResult,
+  RemoteSchemaVerificationSkipReason,
+  SchemaDrift,
+} from "./types";
 
 export interface ValidateOptions {
   configPath?: string;
@@ -83,8 +88,8 @@ interface NamespaceValidationReport {
 interface BuildValidationReportsOptions {
   targetNamespaces: NamespaceWithMigrations[];
   migrationFileErrors: Map<string, string>;
-  localResults: Awaited<ReturnType<typeof checkMigrationDiffs>>;
-  remoteResults?: Awaited<ReturnType<typeof verifyRemoteSchema>>;
+  localResults: MigrationCheckResult[];
+  remoteResults?: RemoteSchemaVerificationResult[];
 }
 
 interface CollectedValidationReports {
@@ -253,7 +258,7 @@ async function collectValidationReports(
     };
   }
 
-  let remoteResults: Awaited<ReturnType<typeof verifyRemoteSchema>>;
+  let remoteResults: RemoteSchemaVerificationResult[];
   try {
     const accessToken = await loadAccessToken({
       profile: options.profile,
