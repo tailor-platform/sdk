@@ -8,4 +8,4 @@ Writing labels replaces the whole label map on the platform, so every write the 
 
 A write that would leave the labels exactly as they are is skipped, so deploying an unchanged project no longer rewrites the label map of every resource it manages.
 
-Releasing ownership of a managed vault (`secret create` / `update` / `delete` on a vault declared in `defineSecretManager()`) still removes only the two ownership labels, and now keeps any label added since the check ran.
+Releasing ownership of a managed vault (`secret create` / `update` / `delete` on a vault declared in `defineSecretManager()`) now also drops the application id label, and keeps any label added since the check ran. Previously the id was left behind, so the vault stayed owned by the config: removing it from `defineSecretManager()` and deploying deleted the vault together with every secret in it, which is exactly what releasing ownership is supposed to prevent.

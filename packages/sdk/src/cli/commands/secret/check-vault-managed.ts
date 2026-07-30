@@ -1,5 +1,6 @@
 import {
   resourceTrn,
+  sdkAppIdLabelKey,
   sdkNameLabelKey,
   sdkVersionLabelKey,
   writeMetadataLabels,
@@ -60,6 +61,10 @@ export async function checkVaultManaged(
  * The labels are read again at write time, so the caller does not pass the ones
  * `checkVaultManaged` saw: anything written since then is kept, and only the
  * ownership labels are removed.
+ *
+ * That includes the app id, which decides ownership on its own: leaving it
+ * behind would keep the vault SDK-owned, and the next deploy of a config that
+ * no longer declares it would delete the vault and every secret in it.
  * @param params - Client and TRN from the checkVaultManaged result
  * @param params.client - Operator client used to update vault metadata
  * @param params.trn - TRN of the vault resource
@@ -71,7 +76,7 @@ export async function releaseVaultOwnership(params: {
   const { client, trn } = params;
   await writeMetadataLabels(client, {
     trn,
-    remove: [sdkNameLabelKey, sdkVersionLabelKey],
+    remove: [sdkNameLabelKey, sdkVersionLabelKey, sdkAppIdLabelKey],
   });
   logger.info(
     "Config ownership has been removed from this vault. " +
