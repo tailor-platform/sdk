@@ -106,7 +106,11 @@ function emptyInput(): ValidatePlanInput {
       unmanaged: [],
       resourceOwners: new Set(),
     },
-    app: createChangeSet("Applications"),
+    app: Object.assign(createChangeSet("Applications"), {
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set<string>(),
+    }) as unknown as ValidatePlanInput["app"],
     executor: {
       changeSet: createChangeSet("Executors"),
       conflicts: [],

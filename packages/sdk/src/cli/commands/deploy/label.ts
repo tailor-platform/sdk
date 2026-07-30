@@ -115,6 +115,11 @@ export interface BuildMetaRequestParams {
  *
  * Sets only the SDK's own labels; {@link writeMetadataLabels} keeps the rest
  * from the labels it reads at write time.
+ *
+ * Without an app id the id label is removed rather than merely left unset,
+ * because {@link isOwnedByApp} decides ownership by that label alone: one left
+ * over from an earlier deploy would keep reading as another app's, and every
+ * later deploy would ask to re-tag the same resources again.
  * @param params - Parameters for building the metadata request
  * @param params.trn - Target TRN
  * @param params.appName - Application name label
@@ -138,6 +143,7 @@ export async function buildMetaRequest(
       [sdkVersionLabelKey]: sdkVersion,
       ...(appId ? { [sdkAppIdLabelKey]: toAppIdLabelValue(appId) } : {}),
     },
+    remove: appId ? undefined : [sdkAppIdLabelKey],
   };
 }
 

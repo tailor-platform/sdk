@@ -1,7 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { describe, expect, test, vi } from "vitest";
-import { hasMatchingSdkVersion, isOwnedByApp, writeMetadataLabels } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  writeMetadataLabels,
+} from "./label";
 import type { MetadataLabelClient } from "./label";
 
 describe("isOwnedByApp", () => {
@@ -51,6 +56,47 @@ describe("hasMatchingSdkVersion", () => {
   test("returns false when one side is missing the label", () => {
     expect(hasMatchingSdkVersion(undefined, { "sdk-version": "v1-0-0" })).toBe(false);
     expect(hasMatchingSdkVersion({ "sdk-version": "v1-0-0" }, undefined)).toBe(false);
+  });
+});
+
+describe("buildMetaRequest", () => {
+  function createClient(labels: Record<string, string>) {
+    return {
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels } }),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } satisfies MetadataLabelClient & {
+      getMetadata: ReturnType<typeof vi.fn>;
+      setMetadata: ReturnType<typeof vi.fn>;
+    };
+  }
+
+  test("drops an app id left over from a previous deploy when the config has none", async () => {
+    // sdk-app-id decides ownership on its own, so a stale one left in place
+    // makes every later deploy ask to re-tag the resource again.
+    const client = createClient({
+      "sdk-app-id": "app-id-1",
+      "sdk-name": "my-app",
+      "sdk-version": "v1-0-0",
+      team: "billing",
+    });
+
+    const write = await buildMetaRequest({ trn: "trn:x", appName: "my-app" });
+    await writeMetadataLabels(client, write);
+
+    const written = client.setMetadata.mock.calls[0]?.[0].labels;
+    expect(written).not.toHaveProperty("sdk-app-id");
+    expect(written).toMatchObject({ "sdk-name": "my-app", team: "billing" });
+  });
+
+  test("replaces an app id from a previous deploy with the current one", async () => {
+    const client = createClient({ "sdk-app-id": "app-id-1", "sdk-name": "my-app" });
+
+    const write = await buildMetaRequest({ trn: "trn:x", appName: "my-app", appId: "id-2" });
+    await writeMetadataLabels(client, write);
+
+    expect(client.setMetadata.mock.calls[0]?.[0].labels).toMatchObject({
+      "sdk-app-id": "app-id-2",
+    });
   });
 });
 

@@ -14,9 +14,9 @@ import {
 import {
   buildMetaRequest,
   hasMatchingSdkVersion,
-  isOwnedByApp,
   type MetadataLabelWrite,
   resourceTrn,
+  sdkNameLabelKey,
   writeMetadataLabels,
 } from "./label";
 import {
@@ -633,6 +633,7 @@ export async function planWorkflow(
     appId,
     existingJobFunctionNames: [...existingJobFunctions.keys()],
     retainedWorkflowJobNames,
+    resourceOwners,
   });
   const deletableJobNames = new Set(jobFunctionDeletes.map((del) => del.jobFunctionName));
 
@@ -683,6 +684,7 @@ type PlanWorkflowJobFunctionDeletesParams = {
   appId: string | undefined;
   existingJobFunctionNames: readonly string[];
   retainedWorkflowJobNames: ReadonlySet<string>;
+  resourceOwners: Set<string>;
 };
 
 async function planWorkflowJobFunctionDeletes(
@@ -695,6 +697,7 @@ async function planWorkflowJobFunctionDeletes(
     appId,
     existingJobFunctionNames,
     retainedWorkflowJobNames,
+    resourceOwners,
   } = params;
   const candidates = existingJobFunctionNames.filter(
     (jobName) => !retainedWorkflowJobNames.has(jobName),
@@ -704,7 +707,15 @@ async function planWorkflowJobFunctionDeletes(
       const { metadata } = await client.getMetadata({
         trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
       });
-      return isOwnedByApp(metadata?.labels, appName, appId)
+      // Record the owner of what is skipped, so remove can say it left something
+      // behind instead of reporting that it deleted everything.
+      return trackRemainingResourceOwner({
+        labels: metadata?.labels,
+        ownerLabel: metadata?.labels[sdkNameLabelKey],
+        appName,
+        appId,
+        resourceOwners,
+      })
         ? { workspaceId, jobFunctionName }
         : undefined;
     }),
