@@ -9,6 +9,13 @@ import type { SgNode } from "@ast-grep/napi";
  */
 export const PENDING_SINCE = "NEXT_RELEASE";
 
+/**
+ * SDK source files the tag rules cover. Not just `.ts`: the CLI ships its
+ * TypeScript loader hook as `.mjs` with a hand-written `.d.mts`, and a
+ * deprecation declared there is as public as one in a `.ts` file.
+ */
+export const SDK_SOURCE_GLOB = "src/**/*.{ts,mts,cts,js,mjs,cjs}";
+
 /** A single `@deprecated` JSDoc tag found in a source file. */
 export interface DeprecationTag {
   /** One-based line of the `@deprecated` tag. */

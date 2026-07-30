@@ -2,7 +2,7 @@
 import { globSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PENDING_SINCE, resolvePendingSince } from "../src/deprecation-tags";
+import { PENDING_SINCE, SDK_SOURCE_GLOB, resolvePendingSince } from "../src/deprecation-tags";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../../..");
@@ -13,7 +13,7 @@ const sdkPackageJson = JSON.parse(readFileSync(resolve(sdkRoot, "package.json"),
 };
 
 const resolved: string[] = [];
-for (const file of globSync("src/**/*.ts", { cwd: sdkRoot }).toSorted()) {
+for (const file of globSync(SDK_SOURCE_GLOB, { cwd: sdkRoot }).toSorted()) {
   const absolute = resolve(sdkRoot, file);
   const result = resolvePendingSince(readFileSync(absolute, "utf-8"), sdkPackageJson.version);
   if (!result.changed) continue;
