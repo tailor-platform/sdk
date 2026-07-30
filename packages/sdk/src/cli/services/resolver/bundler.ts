@@ -4,6 +4,7 @@ import { type BundleCache, computeBundlerContextHash, withCache } from "#/cli/ca
 import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
@@ -11,6 +12,7 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { buildResolverPermissionAndInputCheckExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
@@ -128,7 +130,7 @@ async function bundleSingleResolver(
     name: resolver.name,
     sourceFile: resolver.sourceFile,
     contextHash,
-    async build(cachePlugins) {
+    async build(cachePlugins, trackDependency) {
       const absoluteSourcePath = path.resolve(resolver.sourceFile);
       const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr(resolver.permission);
 
@@ -144,15 +146,25 @@ async function bundleSingleResolver(
 
         export { $tailor_resolver_body as main };
       `;
-      const entry = createVirtualEntry(`resolver:${resolver.name}`, entryContent);
+      const entry = createVirtualEntry(
+        `resolver:${resolver.name}`,
+        entryContent,
+        "js",
+        absoluteSourcePath,
+      );
 
       const startPlugin = createStartTransformPlugin(startContext);
       const plugins: rolldown.Plugin[] = [entry.plugin];
       if (startPlugin) {
         plugins.push(startPlugin);
       }
-      plugins.push(platformBundleDefinePlugin, ...cachePlugins);
+      plugins.push(
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
+        platformBundleDefinePlugin,
+        ...cachePlugins,
+      );
 
+      const bundleLog = createBundleLog({ tsconfig });
       const result = await rolldown.build({
         input: entry.input,
         write: false,
@@ -173,8 +185,9 @@ async function bundleSingleResolver(
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),
-        logLevel: "silent",
+        ...bundleLog.options,
       } as rolldown.BuildOptions);
+      bundleLog.assertAllResolved();
 
       return result.output[0].code;
     },
