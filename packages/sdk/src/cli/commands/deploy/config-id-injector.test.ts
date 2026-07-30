@@ -1,8 +1,13 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { aroundEach, describe, expect, test } from "vitest";
-import { ensureConfigId } from "./config-id-injector";
+import { aroundEach, describe, expect, test, vi } from "vitest";
+import { ensureConfigId, warnMissingAppId } from "./config-id-injector";
+
+vi.mock("#/cli/shared/logger", () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), log: vi.fn() },
+  styles: { dim: (s: string) => s },
+}));
 
 const THROW_CASES = [
   {
@@ -197,5 +202,26 @@ export default defineConfig({
     const nameLineIndex = lines.findIndex((line) => line.includes("name:"));
     expect(idLineIndex).toBeGreaterThan(-1);
     expect(nameLineIndex).toBeGreaterThan(idLineIndex);
+  });
+});
+
+describe("warnMissingAppId", () => {
+  async function warnCalls(id: string | undefined): Promise<string[]> {
+    const { logger } = await import("#/cli/shared/logger");
+    vi.mocked(logger.warn).mockClear();
+    warnMissingAppId(id);
+    return vi.mocked(logger.warn).mock.calls.map((call) => String(call[0]));
+  }
+
+  test("warns when the config resolved without an id", async () => {
+    // A config that re-exports defineConfig() from another file gets no id
+    // injected, and used to reach the platform without saying so.
+    const calls = await warnCalls(undefined);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("id");
+  });
+
+  test("stays quiet when the config resolved with an id", async () => {
+    expect(await warnCalls("3f2ac91d-0000-4000-8000-000000000000")).toEqual([]);
   });
 });

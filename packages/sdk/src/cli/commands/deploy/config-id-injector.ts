@@ -11,6 +11,27 @@ export interface EnsureConfigIdResult {
   injected: boolean;
 }
 
+/**
+ * Warn when a command that decides resource ownership resolved a config
+ * without an app id.
+ *
+ * Injection only reaches an inline `defineConfig({...})` call, so a config
+ * that re-exports one from another file resolves without an id and nothing
+ * says so. Ownership then falls back to the application name, and resources
+ * tagged with an id from an earlier deploy read as another application's.
+ * @param appId - Application id from the resolved config, when it has one
+ */
+export function warnMissingAppId(appId: string | undefined): void {
+  if (appId) return;
+  logger.warn("The config resolved without an 'id'.");
+  logger.log(
+    "  Resources are owned by application name instead, and any still tagged with an id\n" +
+      "  from an earlier deploy read as another application's. Add an 'id' to the object\n" +
+      "  passed to defineConfig() — one that re-exports it from another file cannot have\n" +
+      "  an id injected automatically. 'tailor setup' can add it for you.",
+  );
+}
+
 type ASTNode = Record<string, unknown>;
 
 // The user-facing id is a plain UUID. A label-compatible prefix is added

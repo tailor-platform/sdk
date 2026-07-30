@@ -2,6 +2,7 @@ import { z } from "zod";
 import { applyAIGateway, planAIGateway } from "#/cli/commands/deploy/aigateway";
 import { applyApplication, planApplication } from "#/cli/commands/deploy/application";
 import { applyAuth, planAuth } from "#/cli/commands/deploy/auth";
+import { warnMissingAppId } from "#/cli/commands/deploy/config-id-injector";
 import { applyExecutor, planExecutor } from "#/cli/commands/deploy/executor";
 import {
   applyFunctionRegistry,
@@ -47,6 +48,7 @@ async function loadOptions(options?: RemoveOptions) {
   });
   const { config } = await loadConfig(options?.configPath);
   const application = defineApplication({ config });
+  warnMissingAppId(application.id);
   return {
     client,
     workspaceId,
@@ -99,6 +101,12 @@ async function execRemove(
     secretManager: await planSecretManager(ctx),
   } satisfies Omit<PlannedDeployment, "application">;
 
+  // Resources carrying this application's name that it does not own — it holds
+  // a different id, or none. They are skipped, so removal is not complete.
+  const leftBehind = Object.values(plans).some(
+    (plan) => "resourceOwners" in plan && plan.resourceOwners.has(application.name),
+  );
+
   // Print planned deletions (same order as apply dry-run)
   const removeLines = [
     ...plans.functionRegistry.changeSet.lines(),
@@ -145,7 +153,7 @@ async function execRemove(
     plans.secretManager.vaultChangeSet.deletes.length === 0 &&
     plans.secretManager.secretChangeSet.deletes.length === 0
   ) {
-    return;
+    return { leftBehind };
   }
 
   // Confirm deletion
@@ -170,6 +178,8 @@ async function execRemove(
   await applyTailorDB(client, plans.tailorDB, "delete-services");
   await applyFunctionRegistry(client, workspaceId, plans.functionRegistry, "delete");
   await applySecretManager(client, plans.secretManager, "delete");
+
+  return { leftBehind };
 }
 
 /**
@@ -200,7 +210,7 @@ export const removeCommand = defineAppCommand({
     logger.info(`Planning removal of resources managed by "${application.name}"...`);
     logger.newline();
 
-    await execRemove(client, workspaceId, application, config, async () => {
+    const { leftBehind } = await execRemove(client, workspaceId, application, config, async () => {
       if (!args.yes) {
         const confirmed = await prompt.confirm({
           message: "Are you sure you want to remove all resources?",
@@ -217,6 +227,13 @@ export const removeCommand = defineAppCommand({
       }
     });
 
+    if (leftBehind) {
+      logger.warn(ml`
+        Resources tagged with "${application.name}" were left in place: they carry an application id this config does not have.
+        Restore the 'id' in your config and run remove again to delete them.
+      `);
+      return;
+    }
     logger.success(`Successfully removed all resources managed by "${application.name}".`);
   },
 });
