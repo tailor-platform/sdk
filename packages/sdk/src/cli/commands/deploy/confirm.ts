@@ -15,9 +15,11 @@ export interface UnmanagedResource {
 
 /**
  * Confirm reassignment of resources when owner conflicts are detected.
- * Splits into two scenarios: id regeneration (same sdk-name, different
- * sdk-app-id) and name mismatch (different sdk-name). Each gets its own
- * prompt because the user-facing meaning is different.
+ * Splits into three scenarios, each with its own prompt because the
+ * user-facing meaning is different: the resource carries the same sdk-name and
+ * an sdk-app-id the config does not match, either because the config now holds
+ * a different id (regeneration) or because it holds none at all; or the
+ * resource carries a different sdk-name (name mismatch).
  * @param conflicts - Detected owner conflicts
  * @param appName - Target application name
  * @param yes - Whether to auto-confirm without prompting

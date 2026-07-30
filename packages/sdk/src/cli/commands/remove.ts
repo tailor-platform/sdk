@@ -101,8 +101,9 @@ async function execRemove(
     secretManager: await planSecretManager(ctx),
   } satisfies Omit<PlannedDeployment, "application">;
 
-  // Resources carrying this application's name that it does not own — it holds
-  // a different id, or none. They are skipped, so removal is not complete.
+  // Resources carrying this application's sdk-name whose sdk-app-id the config
+  // does not match, because it holds a different id or none. They are skipped,
+  // so removal is not complete.
   const leftBehind = Object.values(plans).some(
     (plan) => "resourceOwners" in plan && plan.resourceOwners.has(application.name),
   );
