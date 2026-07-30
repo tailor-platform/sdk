@@ -24,7 +24,6 @@ import {
   assertValidMigrationFiles,
   formatMigrationNumber,
   formatSchemaDrifts,
-  getLatestMigrationNumber,
   getMigrationFilePath,
   getMigrationFiles,
   loadDiff,
@@ -161,16 +160,11 @@ function buildValidationReports(
       remoteResults.find((result) => result.namespace === target.namespace),
       `remote schema check result missing for namespace "${target.namespace}"`,
     );
-    const checkpointMissingLocal =
-      !remote.skipped &&
-      remote.remoteMigrationNumber > getLatestMigrationNumber(target.migrationsDir);
-    // The remote result was compared against the latest available local
-    // snapshot, not the missing checkpoint, so its drift details are invalid.
-    const hasDrift = !checkpointMissingLocal && remote.hasDrift;
+    const checkpointMissingLocal = remote.checkpointMissingLocal === true;
     const remoteSchema: RemoteSchemaReport = {
       remoteMigrationNumber: remote.remoteMigrationNumber,
-      hasDrift,
-      drifts: checkpointMissingLocal ? [] : remote.drifts,
+      hasDrift: remote.hasDrift,
+      drifts: remote.drifts,
       ...(remote.skipped ? { skipped: remote.skipped } : {}),
       ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
     };

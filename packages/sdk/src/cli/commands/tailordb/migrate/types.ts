@@ -189,6 +189,8 @@ export interface RemoteSchemaVerificationResult {
   remoteMigrationNumber: number;
   drifts: SchemaDrift[];
   hasDrift: boolean;
+  /** Set when the remote migration checkpoint does not exist in the local migration history */
+  checkpointMissingLocal?: boolean;
   /** Set when verification could not run (no remote migration label, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
 }

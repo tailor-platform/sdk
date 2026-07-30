@@ -24,6 +24,7 @@ import {
   formatMigrationNumber,
   formatSchemaDrifts,
   createSnapshotType,
+  getLatestMigrationNumber,
   type RemoteGqlPermission,
   type SchemaSnapshot,
   type SnapshotGqlOperations,
@@ -285,6 +286,17 @@ export async function verifyRemoteSchema(
         drifts: [],
         hasDrift: false,
         skipped: metadataExists ? "no_migration_label" : "not_deployed",
+      });
+      continue;
+    }
+
+    if (remoteMigrationNumber > getLatestMigrationNumber(migrationsDir)) {
+      results.push({
+        namespace,
+        remoteMigrationNumber,
+        drifts: [],
+        hasDrift: false,
+        checkpointMissingLocal: true,
       });
       continue;
     }

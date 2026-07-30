@@ -188,6 +188,22 @@ export async function validateAndDetectMigrations(
         config,
         tailorDBInputs,
       );
+      const missingCheckpointResults = remoteVerificationResults.filter(
+        (result) => result.checkpointMissingLocal,
+      );
+      if (missingCheckpointResults.length > 0) {
+        logger.error("Remote migration checkpoint is not in the local migration history:");
+        for (const result of missingCheckpointResults) {
+          logger.log(
+            `  ${result.namespace}: ${formatMigrationNumber(result.remoteMigrationNumber)}`,
+          );
+        }
+        logger.newline();
+        logger.info(
+          "Pull the latest migration files, or run 'tailor-sdk tailordb migration status' to compare.",
+        );
+        throw new Error("Remote migration checkpoint verification failed");
+      }
       const hasRemoteDrift = remoteVerificationResults.some((r) => r.hasDrift);
 
       if (hasRemoteDrift) {
