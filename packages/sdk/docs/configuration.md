@@ -86,6 +86,21 @@ export default defineConfig({
 
 **Pattern resolution**: `files` and `ignores` patterns are resolved relative to the directory of the `tailor.config.ts` file that declares them, not the directory you run the command from. This matters when deploying [multiple configs](./cli/application.md#deploy) together — each config's patterns only match files under its own directory. If a config's _relative_ patterns match nothing under its own directory, the SDK falls back to resolving them from the directory you ran the command from and logs a warning (this fallback doesn't apply to already-absolute patterns, since their resolution can't change). Update such patterns to be relative to the config's own directory — this fallback will be removed in v2.
 
+### Bundling
+
+Resolvers, executors, workflow jobs, auth hooks, HTTP adapters, TailorDB hooks and validators, functions, seeds, queries, and migration scripts are all bundled before running locally or deploying. Bundling honors `compilerOptions.paths` aliases declared in a `tsconfig.json`, resolved against the importing file's own nearest `tsconfig.json` (the first one found walking up from that file's directory, following its `extends` chain) — so a path alias works the same whether it is imported directly or through another aliased import.
+
+An import that cannot be resolved fails the command instead of shipping a broken bundle, naming the specifier, the importing file, and the tsconfig the build used:
+
+```
+Error [UNRESOLVED_IMPORT]: Could not resolve "@lib/missing" imported from "/path/to/resolver.ts".
+  Suggestion: Check that each import path is correct, and that a `compilerOptions.paths`
+  entry covering it is declared in the importing file's own tsconfig.json or an ancestor.
+  The build used "/path/to/tsconfig.json".
+```
+
+If the unresolved specifier is a Node.js built-in (e.g. `fs`, `crypto`, `path`), the suggestion explains that it is not available in the Tailor Platform runtime and, where one exists, names a Web-standard replacement (e.g. the Fetch API instead of `http`/`https`).
+
 ### External Resources
 
 You can reference resources managed by Terraform or other SDK projects to include them in your application's subgraph. External resources are not deployed by this project but can be used for shared access across multiple applications.

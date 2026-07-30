@@ -9,7 +9,10 @@ import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
-import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import type { LogLevel } from "#/configure/config/types";
@@ -36,6 +39,8 @@ export interface BundleAuthHooksOptions {
   bundleLogLevel?: LogLevel;
   /** Directory the tsconfig is resolved against */
   baseDir: string;
+  /** Optional tsconfig lookup cache shared across bundles in this CLI run */
+  tsconfigCache?: TsconfigLookupCache;
 }
 
 /**
@@ -60,6 +65,7 @@ export async function bundleAuthHooks(
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
     baseDir,
+    tsconfigCache,
   } = options;
 
   logger.newline();
@@ -114,7 +120,7 @@ export async function bundleAuthHooks(
         plugins.push(startPlugin);
       }
       plugins.push(
-        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
         platformBundleDefinePlugin,
         ...cachePlugins,
       );

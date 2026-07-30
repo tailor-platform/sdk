@@ -12,7 +12,10 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { buildResolverPermissionAndInputCheckExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
-import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
@@ -39,6 +42,7 @@ interface ResolverInfo {
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
+ * @param tsconfigCache - Optional tsconfig lookup cache shared across bundles in this CLI run
  * @returns Map of resolver name to bundled code
  */
 export async function bundleResolvers(
@@ -49,6 +53,7 @@ export async function bundleResolvers(
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<Map<string, string>> {
   const bundledCode = new Map<string, string>();
   const files = loadFilesWithIgnores(config, baseDir);
@@ -92,6 +97,7 @@ export async function bundleResolvers(
       cache,
       inlineSourcemap,
       bundleLogLevel,
+      tsconfigCache,
     ),
   );
 
@@ -112,6 +118,7 @@ async function bundleSingleResolver(
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -159,7 +166,7 @@ async function bundleSingleResolver(
         plugins.push(startPlugin);
       }
       plugins.push(
-        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
         platformBundleDefinePlugin,
         ...cachePlugins,
       );
