@@ -133,13 +133,13 @@ This writes `migrations/0002/migrate.ts` and `migrations/0002/db.ts` next to the
 
 ### Breaking changes without a script
 
-Breaking changes require `migrate.ts`. If it is missing at deploy time (for example, the generated script was deleted), `tailor-sdk deploy` fails before applying the migration or anything after it. When there is genuinely nothing to migrate — say, the affected type holds no data yet — record an explicit acknowledgment instead of keeping an empty script:
+Breaking changes require `migrate.ts`. If it is missing at deploy time (for example, the generated script was deleted), `tailor deploy` fails before applying the migration or anything after it. When there is genuinely nothing to migrate — say, the affected type holds no data yet — record an explicit acknowledgment instead of keeping an empty script:
 
 ```bash
-tailor-sdk tailordb migration script 0002 --no-script --reason "no data yet, safe to skip"
+tailor tailordb migration script 0002 --no-script --reason "no data yet, safe to skip"
 ```
 
-This stores the reason in `migrations/0002/diff.json` (commit the change). The next `tailor-sdk deploy` applies the schema change as usual, skips only the script step, and logs the recorded reason. The command refuses to record a skip while `migrate.ts` exists — delete the script first. If `migrate.ts` is added back later, the script takes precedence over the acknowledgment and runs.
+This stores the reason in `migrations/0002/diff.json` (commit the change). The next `tailor deploy` applies the schema change as usual, skips only the script step, and logs the recorded reason. The command refuses to record a skip while `migrate.ts` exists — delete the script first. If `migrate.ts` is added back later, the script takes precedence over the acknowledgment and runs.
 
 ## Configuration
 
@@ -492,4 +492,4 @@ For genuinely different schemas across environments, prefer separate workspaces 
 
 **Cause:** `diff.requiresMigrationScript` is true but `migrate.ts` is missing from the migration directory.
 
-**Resolution:** Restore the file from version control, or create it with `tailor-sdk tailordb migration script <N> --namespace <namespace>`. If the migration intentionally needs no data transformation, record that decision with `tailor-sdk tailordb migration script <N> --namespace <namespace> --no-script --reason "<why no data migration is needed>"` instead.
+**Resolution:** Restore the file from version control, or create it with `tailor tailordb migration script <N> --namespace <namespace>`. If the migration intentionally needs no data transformation, record that decision with `tailor tailordb migration script <N> --namespace <namespace> --no-script --reason "<why no data migration is needed>"` instead.
