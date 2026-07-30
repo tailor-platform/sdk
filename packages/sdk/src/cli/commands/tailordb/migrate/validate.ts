@@ -322,9 +322,6 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
           `remote migration ${formatMigrationNumber(remote.remoteMigrationNumber)} is not in the local migration history`,
         )}`,
       );
-      if (remote.hasDrift) {
-        logger.log(formatSchemaDrifts(remote.drifts));
-      }
     } else if (remote?.hasDrift) {
       logger.log(
         `  Remote schema: ${styles.error("drift detected")} (remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)})`,
