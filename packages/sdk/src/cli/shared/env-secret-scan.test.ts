@@ -162,6 +162,22 @@ describe("scanEnvForSecrets", () => {
     expect(findings).toEqual([]);
   });
 
+  test.each([
+    "secretlint-disable",
+    "secretlint-disable @secretlint/secretlint-rule-slack",
+    "secretlint-disable-next-line",
+    "# secretlint-disable",
+    "// secretlint-disable",
+  ])("does not let the value %j suppress a later finding", async (suppressor) => {
+    const findings = await scanEnvForSecrets({
+      env: { NOTE: suppressor, SLACK_BOT_TOKEN: SLACK_TOKEN },
+    });
+
+    expect(findings).toEqual([
+      expect.objectContaining({ key: "SLACK_BOT_TOKEN", detector: "slack" }),
+    ]);
+  });
+
   test("returns nothing when env is absent or empty", async () => {
     expect(await scanEnvForSecrets({})).toEqual([]);
     expect(await scanEnvForSecrets({ env: {} })).toEqual([]);
