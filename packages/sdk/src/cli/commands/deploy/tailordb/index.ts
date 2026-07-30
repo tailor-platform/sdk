@@ -205,7 +205,7 @@ export async function validateAndDetectMigrations(
         }
         logger.newline();
         logger.info(
-          "Pull the latest migration files, or run 'tailor-sdk tailordb migration status' to compare.",
+          "Pull the latest migration files, or run 'tailor tailordb migration status' to compare.",
         );
         throw new Error("Remote migration checkpoint verification failed");
       }
