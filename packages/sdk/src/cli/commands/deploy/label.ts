@@ -137,6 +137,10 @@ export type RecordedDependency = {
 
 /**
  * Read the dependent applications recorded on a resource.
+ *
+ * Only keys {@link dependedByAppLabelKey} could have written are read back, so a
+ * label the SDK could not have produced cannot raise a confirmation prompt that
+ * naming no config in the run makes unanswerable.
  * @param labels - Labels currently stored on the remote resource
  * @returns Recorded dependencies, in label-key order
  */
@@ -145,9 +149,12 @@ export function recordedDependencies(
 ): RecordedDependency[] {
   if (!labels) return [];
   return Object.entries(labels)
-    .filter(([key]) => key.startsWith(dependedByAppLabelPrefix))
     .toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([key, reason]) => ({ appId: key.slice(dependedByAppLabelPrefix.length), reason }));
+    .flatMap(([key, reason]) => {
+      if (!key.startsWith(dependedByAppLabelPrefix)) return [];
+      const appId = key.slice(dependedByAppLabelPrefix.length);
+      return RECORDABLE_APP_ID.test(appId) ? [{ appId, reason }] : [];
+    });
 }
 
 /** Inputs deciding which dependency records a deploy writes and drops. */

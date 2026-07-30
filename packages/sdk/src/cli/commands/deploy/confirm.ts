@@ -236,10 +236,10 @@ export async function confirmMissingDependentApps(
 ): Promise<void> {
   if (missing.length === 0) return;
 
-  logger.warn("Configs recorded as part of this deploy are missing:");
+  logger.warn("Configs recorded as depending on this deploy are missing:");
   for (const entry of missing) {
     logger.log(
-      `    • ${styles.bold(entry.appName)} depends on application id ${styles.info(entry.appId)} (${entry.reason})`,
+      `    • application id ${styles.info(entry.appId)} depends on ${styles.bold(entry.appName)} (${entry.reason})`,
     );
   }
   logger.newline();

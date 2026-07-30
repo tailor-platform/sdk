@@ -516,11 +516,11 @@ db.table("User", {
 
 - When `publishEvents: true`, record creation/update/deletion events are published
 - When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this type with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
-- When explicitly set to `false` while an executor in the same config uses this type, `deploy` fails
+- When explicitly set to `false` while an executor taking part in the same run uses this type, `deploy` fails
 
 **Use cases:**
 
-1. **Auto-detection (recommended)**: Don't set `publishEvents` - `deploy` enables it while an executor in the same config needs it
+1. **Auto-detection (recommended)**: Don't set `publishEvents` - `deploy` enables it while an executor taking part in the same run needs it
 
    ```typescript
    // publishEvents is automatically enabled because an executor uses this type
@@ -545,7 +545,7 @@ db.table("User", {
    });
    ```
 
-3. **Explicit disable**: Disable event publishing for a type that doesn't need it (error if an executor in the same config uses it)
+3. **Explicit disable**: Disable event publishing for a type that doesn't need it (error if an executor taking part in the same run uses it)
 
    ```typescript
    db.table("TempData", {

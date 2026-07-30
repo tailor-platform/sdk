@@ -148,6 +148,18 @@ describe("confirmMissingDependentApps", () => {
     expect(prompt.confirm).toHaveBeenCalledTimes(1);
   });
 
+  test("names the missing application as the one that depends on this deploy", async () => {
+    const { logger } = await import("#/cli/shared/logger");
+
+    await confirmMissingDependentApps(missing, false);
+
+    // The record lives on `supplier` and names its dependent, so stating it the
+    // other way round tells the reader to keep the wrong config in `--config`.
+    expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(
+      "application id 0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81 depends on supplier",
+    );
+  });
+
   test("cancels the deploy when the answer is no", async () => {
     vi.mocked(prompt.confirm).mockResolvedValue(false);
 

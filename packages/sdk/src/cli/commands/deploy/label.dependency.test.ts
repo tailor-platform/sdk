@@ -51,6 +51,17 @@ describe("recordedDependencies", () => {
     expect(recordedDependencies({ "sdk-name": "buyer", "sdk-version": "v1-0-0" })).toEqual([]);
     expect(recordedDependencies(undefined)).toEqual([]);
   });
+
+  test("ignores a record whose id this SDK could not have written", () => {
+    // Reading one back would prompt about a dependent that no config can supply,
+    // leaving the deploy with a question the user cannot answer.
+    expect(
+      recordedDependencies({
+        "sdk-depended-by-app-not-a-uuid": "publish-events",
+        [buyerKey]: "publish-events",
+      }),
+    ).toEqual([{ appId: buyer, reason: "publish-events" }]);
+  });
 });
 
 describe("dependencyLabelWrite", () => {
