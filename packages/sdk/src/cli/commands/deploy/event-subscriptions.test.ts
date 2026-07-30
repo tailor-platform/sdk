@@ -13,6 +13,10 @@ type TargetSpec = {
   resolvers?: string[];
   idps?: string[];
   workflows?: string[];
+  /** Workflows that declare `publishEvents`, pinning the value. */
+  pinnedWorkflows?: string[];
+  /** TailorDB types that declare `publishEvents`, pinning the value. */
+  pinnedTypes?: string[];
   externalTailorDBNamespaces?: string[];
   externalResolverNamespaces?: string[];
   externalIdps?: string[];
@@ -31,7 +35,16 @@ function target(spec: TargetSpec): Target {
       tailorDBServices: [
         {
           namespace: `db${suffix}`,
-          types: Object.fromEntries((spec.types ?? []).map((name) => [name, { name }])),
+          // settings is a required field on TailorDBType, so the fixture carries it.
+          types: Object.fromEntries(
+            (spec.types ?? []).map((name) => [
+              name,
+              {
+                name,
+                settings: (spec.pinnedTypes ?? []).includes(name) ? { publishEvents: true } : {},
+              },
+            ]),
+          ),
         },
       ],
       resolverServices: [
@@ -42,7 +55,12 @@ function target(spec: TargetSpec): Target {
       ],
       idpServices: (spec.idps ?? []).map((name) => ({ name })),
       workflowService: {
-        workflows: Object.fromEntries((spec.workflows ?? []).map((name) => [name, { name }])),
+        workflows: Object.fromEntries(
+          (spec.workflows ?? []).map((name) => [
+            name,
+            (spec.pinnedWorkflows ?? []).includes(name) ? { name, publishEvents: true } : { name },
+          ]),
+        ),
       },
       externalTailorDBNamespaces: spec.externalTailorDBNamespaces ?? [],
       // Mirrors defineTailorDB/defineResolver/defineIdp: only these contribute a
@@ -346,7 +364,7 @@ describe("assertRecordableDependencies", () => {
       /no application to record the dependency on/,
     );
     expect(() => assertRecordableDependencies(subscriptions, true)).toThrow(
-      /Set "publishEvents: true" on Workflow "nightly"/,
+      /Declare "publishEvents" on Workflow "nightly"/,
     );
   });
 
@@ -413,6 +431,67 @@ describe("assertRecordableDependencies id requirement", () => {
         configPath: "wrapper/tailor.config.ts",
         types: ["Order"],
         executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+      }),
+    ]);
+
+    expect(() => assertRecordableDependencies(subscriptions, true)).not.toThrow();
+  });
+});
+
+describe("assertRecordableDependencies escape hatch", () => {
+  // The messages tell the reader to declare publishEvents. Rejecting the
+  // subscription anyway would leave them with an error they cannot clear.
+  function subscriptionsTo(pinned: boolean) {
+    return collectEventSubscriptions([
+      target({
+        configPath: "runner/tailor.config.ts",
+        workflows: ["nightly"],
+        pinnedWorkflows: pinned ? ["nightly"] : [],
+      }),
+      target({
+        configPath: "buyer/tailor.config.ts",
+        appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82",
+        types: ["Order"],
+        executors: { "watch-nightly": { kind: "workflowExecution", workflowName: "nightly" } },
+      }),
+    ]);
+  }
+
+  test("accepts the subscription once the workflow declares publishEvents", () => {
+    expect(() => assertRecordableDependencies(subscriptionsTo(true), true)).not.toThrow();
+  });
+
+  test("still rejects it while the workflow leaves the value unset", () => {
+    expect(() => assertRecordableDependencies(subscriptionsTo(false), true)).toThrow(
+      /no application to record the dependency on/,
+    );
+  });
+
+  test("accepts an id-less subscriber whose subscribed TailorDB type pins the value", () => {
+    const subscriptions = collectEventSubscriptions([
+      target({ configPath: "supplier/tailor.config.ts", types: ["Order"], pinnedTypes: ["Order"] }),
+      target({
+        configPath: "wrapper/tailor.config.ts",
+        namespace: "wrapper",
+        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+      }),
+    ]);
+
+    expect(() => assertRecordableDependencies(subscriptions, true)).not.toThrow();
+  });
+
+  test("accepts an id-less subscriber when the owner pins the value", () => {
+    const subscriptions = collectEventSubscriptions([
+      target({
+        configPath: "supplier/tailor.config.ts",
+        workflows: ["nightly"],
+        pinnedWorkflows: ["nightly"],
+        types: ["Order"],
+      }),
+      target({
+        configPath: "wrapper/tailor.config.ts",
+        namespace: "wrapper",
+        executors: { "watch-nightly": { kind: "workflowExecution", workflowName: "nightly" } },
       }),
     ]);
 
