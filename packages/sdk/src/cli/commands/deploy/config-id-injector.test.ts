@@ -209,16 +209,22 @@ describe("warnMissingAppId", () => {
   async function warnCalls(id: string | undefined): Promise<string[]> {
     const { logger } = await import("#/cli/shared/logger");
     vi.mocked(logger.warn).mockClear();
+    vi.mocked(logger.log).mockClear();
     warnMissingAppId(id);
-    return vi.mocked(logger.warn).mock.calls.map((call) => String(call[0]));
+    return [...vi.mocked(logger.warn).mock.calls, ...vi.mocked(logger.log).mock.calls].map((call) =>
+      String(call[0]),
+    );
   }
 
   test("warns when the config resolved without an id", async () => {
     // A config that re-exports defineConfig() from another file gets no id
     // injected, and used to reach the platform without saying so.
-    const calls = await warnCalls(undefined);
-    expect(calls).toHaveLength(1);
-    expect(calls[0]).toContain("id");
+    const said = (await warnCalls(undefined)).join("\n");
+    expect(said).toContain("without an 'id'");
+    // Name-based ownership covers only the resources carrying no id; the ones
+    // that carry one read as another application's, which is the opposite.
+    expect(said).toContain("another application's");
+    expect(said).toContain("carrying no id");
   });
 
   test("stays quiet when the config resolved with an id", async () => {

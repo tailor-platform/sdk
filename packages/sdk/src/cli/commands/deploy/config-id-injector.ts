@@ -25,10 +25,11 @@ export function warnMissingAppId(appId: string | undefined): void {
   if (appId) return;
   logger.warn("The config resolved without an 'id'.");
   logger.log(
-    "  Resources are owned by application name instead, and any still tagged with an id\n" +
-      "  from an earlier deploy read as another application's. Add an 'id' to the object\n" +
-      "  passed to defineConfig() — one that re-exports it from another file cannot have\n" +
-      "  an id injected automatically. 'tailor setup' can add it for you.",
+    "  Resources tagged with an id from an earlier deploy read as another application's:\n" +
+      "  deploy asks before taking them over, and remove leaves them in place. Only resources\n" +
+      "  carrying no id are matched by application name.\n" +
+      "  Add an 'id' to the object passed to defineConfig() — a config that re-exports it from\n" +
+      "  another file cannot have one injected automatically. 'tailor setup' can add it for you.",
   );
 }
 
