@@ -31,6 +31,7 @@ for (const file of globSync(SDK_SOURCE_GLOB, { cwd: sdkRoot }).toSorted()) {
   const problems = checkDeprecationTags(readFileSync(absolute, "utf-8"), {
     codemodBoundaries,
     currentVersion: sdkPackageJson.version,
+    filePath: absolute,
   });
   for (const problem of problems) {
     failures.push(`${relative(repoRoot, absolute)}:${problem.line}: ${problem.message}`);
