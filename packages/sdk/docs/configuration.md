@@ -273,6 +273,40 @@ export async function main(trx: Transaction, { env }: MigrationContext): Promise
 }
 ```
 
+#### Secret Detection
+
+`env` values are deployed as plaintext, so loading a config fails when one of them looks like a credential:
+
+```
+✖ Secret detected in 'env' in /path/to/tailor.config.ts:
+  - env.SLACK_BOT_TOKEN (matched slack: SLACK_TOKEN)
+    https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
+```
+
+Each finding names the pattern that matched and links to its description, so a value flagged as an AWS account id is distinguishable from one flagged as an AWS secret access key.
+
+Move the value to [Secret Manager](./services/secret.md) to fix this. Detection recognizes the credential formats published by common providers, such as Slack, GitHub and AWS.
+
+A value that is merely long and random-looking, with no recognizable provider format, is reported as a warning instead and does not fail the command.
+
+When detection is wrong about a value, allow it in place with `allowSecretReason`, stating why the value is safe to deploy as plaintext:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  env: {
+    slackRelayUrl: {
+      value: process.env.SLACK_RELAY_URL ?? "",
+      allowSecretReason: "Public relay endpoint; the token it proxies stays in Secret Manager.",
+    },
+  },
+});
+```
+
+This silences both the failure and the warning, so it also covers a value that is random-looking without being a credential — say so in the reason. Only string and number values accept an allowance: a boolean is never flagged, so it never needs one.
+
+Application code still reads `env.slackRelayUrl` as the value itself: the wrapper only carries the reason and does not reach the deployed application.
+
 ### Workflow Service
 
 Configure Workflow service by specifying glob patterns for workflow files:

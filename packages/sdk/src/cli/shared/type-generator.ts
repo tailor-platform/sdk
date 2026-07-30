@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
+import type { ResolvedEnvAppConfig } from "#/cli/shared/config-loader";
 import type { AppConfig } from "#/configure/config/types";
 
 export interface AttributeTypeInfo {
@@ -325,8 +326,8 @@ export function resolveTypeDefinitionPath(configPath: string): string {
  * Options for generating user type definitions
  */
 interface GenerateUserTypesOptions {
-  /** Application config */
-  config: AppConfig;
+  /** Application config with resolved `env` values */
+  config: ResolvedEnvAppConfig;
   /** Path to Tailor config file */
   configPath: string;
 }

@@ -8,7 +8,14 @@ export type AppConfigParsed = {
   id?: string | undefined;
   env?:
     | {
-        [x: string]: string | number | boolean;
+        [x: string]:
+          | string
+          | number
+          | boolean
+          | {
+              value: string | number;
+              allowSecretReason: string;
+            };
       }
     | undefined;
   cors?: string[] | undefined;
