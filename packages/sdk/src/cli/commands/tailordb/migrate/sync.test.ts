@@ -7,10 +7,13 @@ import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { prompt } from "#/cli/shared/prompt";
-import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import { syncCommand } from "./sync";
-import type { TailorDBType } from "#/parser/service/tailordb/types";
-import type { SchemaSnapshot, TailorDBSnapshotType } from "./snapshot";
+import {
+  parsedType,
+  snapshotType,
+  writeDiff,
+  writeInitialSchema,
+} from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
@@ -79,65 +82,6 @@ vi.mock("#/cli/services/application", () => ({
   generatePluginFilesIfNeeded: vi.fn(() => state.pluginExecutorFiles),
 }));
 
-// Parsed-type shape consumed by createSnapshotFromLocalTypes; produces the
-// same snapshot type as snapshotType() below.
-function parsedType(name: string): TailorDBType {
-  return {
-    name,
-    pluralForm: `${name}s`,
-    fields: {
-      id: { name: "id", config: { type: "uuid", required: true } },
-      name: { name: "name", config: { type: "string", required: true } },
-    },
-    settings: {},
-    forwardRelationships: {},
-    backwardRelationships: {},
-    permissions: {},
-  };
-}
-
-function snapshotType(name: string): TailorDBSnapshotType {
-  return {
-    name,
-    pluralForm: `${name}s`,
-    fields: {
-      id: { type: "uuid", required: true },
-      name: { type: "string", required: true },
-    },
-  };
-}
-
-function writeInitialSchema(types: Record<string, TailorDBSnapshotType>): void {
-  const snapshot: SchemaSnapshot = {
-    version: SCHEMA_SNAPSHOT_VERSION,
-    namespace: "tailordb",
-    createdAt: "2026-01-01T00:00:00.000Z",
-    types,
-  };
-  const dir = path.join(state.migrationsDir, "0000");
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "schema.json"), JSON.stringify(snapshot));
-}
-
-function writeDiff(number: number, changes: unknown[]): void {
-  const dir = path.join(state.migrationsDir, number.toString().padStart(4, "0"));
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, "diff.json"),
-    JSON.stringify({
-      version: SCHEMA_SNAPSHOT_VERSION,
-      namespace: "tailordb",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      changes,
-      hasBreakingChanges: false,
-      breakingChanges: [],
-      hasWarnings: false,
-      warnings: [],
-      requiresMigrationScript: false,
-    }),
-  );
-}
-
 function mockConfig(namespaces: string[] = ["tailordb"]): void {
   const db: Record<string, unknown> = {};
   for (const namespace of namespaces) {
@@ -158,9 +102,11 @@ describe("tailordb migration sync", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-sync-test-"));
     state.migrationsDir = path.join(tmpDir, "migrations");
 
-    writeInitialSchema({ User: snapshotType("User") });
-    writeDiff(1, [{ kind: "type_added", typeName: "Post", after: snapshotType("Post") }]);
-    writeDiff(2, []);
+    writeInitialSchema(state.migrationsDir, { User: snapshotType("User") });
+    writeDiff(state.migrationsDir, 1, [
+      { kind: "type_added", typeName: "Post", after: snapshotType("Post") },
+    ]);
+    writeDiff(state.migrationsDir, 2, []);
     mockConfig();
     // Local types matching reconstruct(latest) so the pre-apply consistency
     // check passes by default.
@@ -249,7 +195,7 @@ describe("tailordb migration sync", () => {
 
   test("reconciles GQL permissions with the snapshot", async () => {
     const gqlPolicy = { conditions: [], actions: ["read"], permit: "allow" };
-    writeInitialSchema({
+    writeInitialSchema(state.migrationsDir, {
       User: { ...snapshotType("User"), permissions: { gql: [gqlPolicy] } } as ReturnType<
         typeof snapshotType
       >,

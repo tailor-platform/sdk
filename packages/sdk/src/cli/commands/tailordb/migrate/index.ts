@@ -7,6 +7,7 @@
  * - set:      Set migration checkpoint to a specific number
  * - status:   Show migration status for TailorDB namespaces
  * - sync:     Sync remote TailorDB schema to a specific migration snapshot
+ * - validate: Validate migration files and detect schema drift without deploying
  */
 
 import { defineCommand } from "politty";
@@ -15,6 +16,7 @@ import { scriptCommand } from "./script";
 import { setCommand } from "./set";
 import { statusCommand } from "./status";
 import { syncCommand } from "./sync";
+import { validateCommand } from "./validate";
 
 export const migrationCommand = defineCommand({
   name: "migration",
@@ -25,6 +27,7 @@ export const migrationCommand = defineCommand({
     set: setCommand,
     status: statusCommand,
     sync: syncCommand,
+    validate: validateCommand,
   },
 });
 
@@ -33,3 +36,4 @@ export { scriptCommand } from "./script";
 export { setCommand } from "./set";
 export { statusCommand } from "./status";
 export { syncCommand } from "./sync";
+export { validateCommand } from "./validate";
