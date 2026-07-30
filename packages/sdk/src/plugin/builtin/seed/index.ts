@@ -124,10 +124,13 @@ function generateIdpUserSeedFunction(hasIdpUser: boolean, idpNamespace: string |
           return { success: false };
         }
 
+        const message = values.upsert
+          ? \`\${parsed.created || 0} created, \${parsed.updated || 0} updated\`
+          : \`\${parsed.processed || 0} rows processed\`;
         console.log(
           styleText(
             "green",
-            \`    ✓ _User: \${parsed.created || 0} created, \${parsed.updated || 0} updated\`,
+            \`    ✓ _User: \${message}\`,
           ),
         );
 
@@ -301,7 +304,7 @@ function generateExecScript(
     .flatMap(({ requiredFields }) => Object.entries(requiredFields))
     .map(([type, fields]) => `      "${type}": ${JSON.stringify(fields)}`)
     .join(",\n");
-  const seedDataLoaderCode = generateSeedDataLoaderCode();
+  const seedDataLoaderCode = generateSeedDataLoaderCode().replace(/^/gm, "    ");
 
   return ml /* js */ `
     /**
@@ -442,7 +445,7 @@ function generateExecScript(
     const configDir = import.meta.dirname;
     const configPath = join(configDir, "${relativeConfigPath}");
 
-    ${seedDataLoaderCode}
+${seedDataLoaderCode}
 
     // Determine machine user name (CLI argument takes precedence over config default)
     const defaultMachineUser = ${defaultMachineUserName ? `"${defaultMachineUserName}"` : "undefined"};
@@ -536,14 +539,23 @@ ${requiredFieldsEntries}
       }
     }
 
-    if (values.upsert) {
-      const selectedTailorDbTypes = entities.filter(
-        (entity) => !entitiesToProcess || entitiesToProcess.includes(entity),
-      );
+    const selectedTailorDbTypes = entities.filter(
+      (entity) => !entitiesToProcess || entitiesToProcess.includes(entity),
+    );
+    const loadSelectedTailorDbSeedData = () =>
       loadSeedData(join(configDir, "data"), selectedTailorDbTypes, {
-        requireId: true,
-        requiredFieldsByType,
+        requireId: values.upsert,
+        requiredFieldsByType: values.upsert ? requiredFieldsByType : {},
       });
+    let tailorDbSeedData;
+    if (values.upsert) {
+      try {
+        tailorDbSeedData = loadSelectedTailorDbSeedData();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(styleText("red", \`\\n✗ Seed data generation failed: \${message}\`));
+        process.exit(1);
+      }
     }
 
     // Get application info
@@ -631,13 +643,17 @@ ${requiredFieldsEntries}
     };
 
     // Seed TailorDB types via testExecScript
-    const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes) => {
-      const dataDir = join(configDir, "data");
+    const seedViaTestExecScript = async (
+      namespace,
+      typesToSeed,
+      deps,
+      selfRefTypes,
+      seedDataByType,
+    ) => {
       const sortedTypes = topologicalSort(typesToSeed, deps);
-      const data = loadSeedData(dataDir, sortedTypes, {
-        requireId: values.upsert,
-        requiredFieldsByType: values.upsert ? requiredFieldsByType : {},
-      });
+      const data = Object.fromEntries(
+        sortedTypes.map((type) => [type, seedDataByType[type] || []]),
+      );
 
       // Skip if no data
       const typesWithData = sortedTypes.filter((t) => data[t] && data[t].length > 0);
@@ -711,17 +727,20 @@ ${requiredFieldsEntries}
 
           const processed = parsed.processed || {};
           for (const [type, counts] of Object.entries(processed)) {
-            const previous = allProcessed[type] || { inserted: 0, updated: 0 };
+            const previous = allProcessed[type] || { inserted: 0, updated: 0, skipped: 0 };
             const current = {
               inserted: Number(counts.inserted) || 0,
               updated: Number(counts.updated) || 0,
+              skipped: Number(counts.skipped) || 0,
             };
             allProcessed[type] = {
               inserted: previous.inserted + current.inserted,
               updated: previous.updated + current.updated,
+              skipped: previous.skipped + current.skipped,
             };
+            const skipped = current.skipped > 0 ? \`, \${current.skipped} skipped\` : "";
             const message = values.upsert
-              ? \`\${current.inserted} inserted, \${current.updated} updated\`
+              ? \`\${current.inserted} inserted, \${current.updated} updated\${skipped}\`
               : \`\${current.inserted} rows inserted\`;
             console.log(styleText("green", \`    ✓ \${type}: \${message}\`));
           }
@@ -752,6 +771,7 @@ ${requiredFieldsEntries}
     // Main execution
     try {
       let allSuccess = true;
+      tailorDbSeedData ??= loadSelectedTailorDbSeedData();
 
       // Determine which namespaces and types to process
       const namespacesToProcess = hasNamespace
@@ -770,7 +790,13 @@ ${requiredFieldsEntries}
 
         if (typesToSeed.length === 0) continue;
 
-        const result = await seedViaTestExecScript(namespace, typesToSeed, nsDeps, nsSelfRefTypes);
+        const result = await seedViaTestExecScript(
+          namespace,
+          typesToSeed,
+          nsDeps,
+          nsSelfRefTypes,
+          tailorDbSeedData,
+        );
         if (!result.success) {
           allSuccess = false;
         }

@@ -16,19 +16,9 @@ export function generateSeedDataLoaderCode(): string {
         const jsonlPath = join(dataDir, \`\${typeName}.jsonl\`);
         try {
           const lines = readFileSync(jsonlPath, "utf-8").split("\\n");
-          const firstContentLine = lines.findIndex((line) => line.trim() !== "");
-          if (firstContentLine === -1) {
-            data[typeName] = [];
-            continue;
-          }
-
-          let lastContentLine = lines.length - 1;
-          while (lastContentLine > firstContentLine && lines[lastContentLine].trim() === "") {
-            lastContentLine--;
-          }
-
           const records = [];
-          for (let lineIndex = firstContentLine; lineIndex <= lastContentLine; lineIndex++) {
+          for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            if (lines[lineIndex].trim() === "") continue;
             const record = JSON.parse(lines[lineIndex]);
             if (requireId && (record?.id === undefined || record?.id === null)) {
               throw new Error(

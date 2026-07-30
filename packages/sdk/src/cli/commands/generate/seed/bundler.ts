@@ -38,7 +38,7 @@ function generateSeedScriptContent(namespace: string): string {
 
     type SeedResult = {
       success: boolean;
-      processed: Record<string, { inserted: number; updated: number }>;
+      processed: Record<string, { inserted: number; updated: number; skipped: number }>;
       errors: string[];
     };
 
@@ -51,7 +51,10 @@ function generateSeedScriptContent(namespace: string): string {
 
     export async function main(input: SeedInput): Promise<SeedResult> {
       const db = getDB("${namespace}");
-      const processed: Record<string, number> = {};
+      const processed: Record<
+        string,
+        { inserted: number; updated: number; skipped: number }
+      > = {};
       const errors: string[] = [];
       const BATCH_SIZE = ${String(BATCH_SIZE)};
       const upsert = input.upsert === true;
@@ -63,7 +66,7 @@ function generateSeedScriptContent(namespace: string): string {
           continue;
         }
 
-        processed[typeName] = { inserted: 0, updated: 0 };
+        processed[typeName] = { inserted: 0, updated: 0, skipped: 0 };
         const hasSelfRef = (input.selfRefTypes || []).includes(typeName);
 
         try {
@@ -90,30 +93,39 @@ function generateSeedScriptContent(namespace: string): string {
               await db.insertInto(typeName).values(record).execute();
               processed[typeName].inserted += 1;
             }
+            if (!upsert) {
+              console.log(
+                \`[${namespace}] \${typeName}: \${processed[typeName].inserted}/\${records.length} (one-by-one)\`,
+              );
+            }
           } else {
             for (let i = 0; i < recordsToInsert.length; i += BATCH_SIZE) {
               const batch = recordsToInsert.slice(i, i + BATCH_SIZE);
               await db.insertInto(typeName).values(batch).execute();
               processed[typeName].inserted += batch.length;
+              if (!upsert) {
+                console.log(
+                  \`[${namespace}] \${typeName}: \${processed[typeName].inserted}/\${records.length}\`,
+                );
+              }
             }
           }
 
           for (const record of recordsToUpdate) {
             const { id, ...values } = record;
-            if (Object.keys(values).length === 0) continue;
+            if (Object.keys(values).length === 0) {
+              processed[typeName].skipped += 1;
+              continue;
+            }
             await db.updateTable(typeName).set(values).where("id", "=", id).execute();
             processed[typeName].updated += 1;
           }
 
           const counts = processed[typeName];
           if (upsert) {
+            const skipped = counts.skipped > 0 ? \`, \${counts.skipped} skipped\` : "";
             console.log(
-              \`[${namespace}] \${typeName}: \${counts.inserted} inserted, \${counts.updated} updated\`,
-            );
-          } else {
-            const suffix = hasSelfRef ? " (one-by-one)" : "";
-            console.log(
-              \`[${namespace}] \${typeName}: \${counts.inserted}/\${records.length}\${suffix}\`,
+              \`[${namespace}] \${typeName}: \${counts.inserted} inserted, \${counts.updated} updated\${skipped}\`,
             );
           }
         } catch (error) {

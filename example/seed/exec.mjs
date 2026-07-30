@@ -146,19 +146,9 @@ const loadSeedData = (
     const jsonlPath = join(dataDir, `${typeName}.jsonl`);
     try {
       const lines = readFileSync(jsonlPath, "utf-8").split("\n");
-      const firstContentLine = lines.findIndex((line) => line.trim() !== "");
-      if (firstContentLine === -1) {
-        data[typeName] = [];
-        continue;
-      }
-
-      let lastContentLine = lines.length - 1;
-      while (lastContentLine > firstContentLine && lines[lastContentLine].trim() === "") {
-        lastContentLine--;
-      }
-
       const records = [];
-      for (let lineIndex = firstContentLine; lineIndex <= lastContentLine; lineIndex++) {
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        if (lines[lineIndex].trim() === "") continue;
         const record = JSON.parse(lines[lineIndex]);
         if (requireId && (record?.id === undefined || record?.id === null)) {
           throw new Error(
@@ -200,57 +190,57 @@ if (!machineUserName) {
 // Entity configuration
 const namespaceEntities = {
   "tailordb": [
-        "Customer",
-        "Invoice",
-        "NestedProfile",
-        "PurchaseOrder",
-        "SalesOrder",
-        "SalesOrderCreated",
-        "Selfie",
-        "Supplier",
-        "User",
-        "UserLog",
-        "UserSetting",
-      ],
-      "analyticsdb": [
-        "Event",
-      ]
+    "Customer",
+    "Invoice",
+    "NestedProfile",
+    "PurchaseOrder",
+    "SalesOrder",
+    "SalesOrderCreated",
+    "Selfie",
+    "Supplier",
+    "User",
+    "UserLog",
+    "UserSetting",
+  ],
+  "analyticsdb": [
+    "Event",
+  ]
 };
 const namespaceDeps = {
   "tailordb": {
-        "Customer": [],
-        "Invoice": ["SalesOrder"],
-        "NestedProfile": [],
-        "PurchaseOrder": ["Supplier"],
-        "SalesOrder": ["Customer", "User"],
-        "SalesOrderCreated": [],
-        "Selfie": [],
-        "Supplier": [],
-        "User": [],
-        "UserLog": ["User"],
-        "UserSetting": ["User"]
-      },
-      "analyticsdb": {
-        "Event": []
-      }
+    "Customer": [],
+    "Invoice": ["SalesOrder"],
+    "NestedProfile": [],
+    "PurchaseOrder": ["Supplier"],
+    "SalesOrder": ["Customer", "User"],
+    "SalesOrderCreated": [],
+    "Selfie": [],
+    "Supplier": [],
+    "User": [],
+    "UserLog": ["User"],
+    "UserSetting": ["User"]
+  },
+  "analyticsdb": {
+    "Event": []
+  }
 };
 const namespaceSelfRefTypes = {
   "tailordb": ["Selfie"],
-      "analyticsdb": []
+  "analyticsdb": []
 };
 const requiredFieldsByType = {
   "Customer": ["name","email","country","postalCode","state"],
-      "Invoice": ["salesOrderID"],
-      "NestedProfile": ["userInfo","metadata"],
-      "PurchaseOrder": ["supplierID","totalPrice","status","attachedFiles"],
-      "SalesOrder": ["customerID"],
-      "SalesOrderCreated": ["salesOrderID","customerID"],
-      "Selfie": ["name"],
-      "Supplier": ["name","phone","postalCode","country","state","city"],
-      "User": ["name","email","role"],
-      "UserLog": ["userID","message"],
-      "UserSetting": ["language","userID"],
-      "Event": ["name"]
+  "Invoice": ["salesOrderID"],
+  "NestedProfile": ["userInfo","metadata"],
+  "PurchaseOrder": ["supplierID","totalPrice","status","attachedFiles"],
+  "SalesOrder": ["customerID"],
+  "SalesOrderCreated": ["salesOrderID","customerID"],
+  "Selfie": ["name"],
+  "Supplier": ["name","phone","postalCode","country","state","city"],
+  "User": ["name","email","role"],
+  "UserLog": ["userID","message"],
+  "UserSetting": ["language","userID"],
+  "Event": ["name"]
 };
 const entities = Object.values(namespaceEntities).flat();
 const hasIdpUser = true;
@@ -321,14 +311,23 @@ if (skipIdp) {
   }
 }
 
-if (values.upsert) {
-  const selectedTailorDbTypes = entities.filter(
-    (entity) => !entitiesToProcess || entitiesToProcess.includes(entity),
-  );
+const selectedTailorDbTypes = entities.filter(
+  (entity) => !entitiesToProcess || entitiesToProcess.includes(entity),
+);
+const loadSelectedTailorDbSeedData = () =>
   loadSeedData(join(configDir, "data"), selectedTailorDbTypes, {
-    requireId: true,
-    requiredFieldsByType,
+    requireId: values.upsert,
+    requiredFieldsByType: values.upsert ? requiredFieldsByType : {},
   });
+let tailorDbSeedData;
+if (values.upsert) {
+  try {
+    tailorDbSeedData = loadSelectedTailorDbSeedData();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(styleText("red", `\n✗ Seed data generation failed: ${message}`));
+    process.exit(1);
+  }
 }
 
 // Get application info
@@ -508,13 +507,17 @@ const topologicalSort = (types, deps) => {
 };
 
 // Seed TailorDB types via testExecScript
-const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes) => {
-  const dataDir = join(configDir, "data");
+const seedViaTestExecScript = async (
+  namespace,
+  typesToSeed,
+  deps,
+  selfRefTypes,
+  seedDataByType,
+) => {
   const sortedTypes = topologicalSort(typesToSeed, deps);
-  const data = loadSeedData(dataDir, sortedTypes, {
-    requireId: values.upsert,
-    requiredFieldsByType: values.upsert ? requiredFieldsByType : {},
-  });
+  const data = Object.fromEntries(
+    sortedTypes.map((type) => [type, seedDataByType[type] || []]),
+  );
 
   // Skip if no data
   const typesWithData = sortedTypes.filter((t) => data[t] && data[t].length > 0);
@@ -588,17 +591,20 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
 
       const processed = parsed.processed || {};
       for (const [type, counts] of Object.entries(processed)) {
-        const previous = allProcessed[type] || { inserted: 0, updated: 0 };
+        const previous = allProcessed[type] || { inserted: 0, updated: 0, skipped: 0 };
         const current = {
           inserted: Number(counts.inserted) || 0,
           updated: Number(counts.updated) || 0,
+          skipped: Number(counts.skipped) || 0,
         };
         allProcessed[type] = {
           inserted: previous.inserted + current.inserted,
           updated: previous.updated + current.updated,
+          skipped: previous.skipped + current.skipped,
         };
+        const skipped = current.skipped > 0 ? `, ${current.skipped} skipped` : "";
         const message = values.upsert
-          ? `${current.inserted} inserted, ${current.updated} updated`
+          ? `${current.inserted} inserted, ${current.updated} updated${skipped}`
           : `${current.inserted} rows inserted`;
         console.log(styleText("green", `    ✓ ${type}: ${message}`));
       }
@@ -711,10 +717,13 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
           return { success: false };
         }
 
+        const message = values.upsert
+          ? `${parsed.created || 0} created, ${parsed.updated || 0} updated`
+          : `${parsed.processed || 0} rows processed`;
         console.log(
           styleText(
             "green",
-            `    ✓ _User: ${parsed.created || 0} created, ${parsed.updated || 0} updated`,
+            `    ✓ _User: ${message}`,
           ),
         );
 
@@ -736,6 +745,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
 // Main execution
 try {
   let allSuccess = true;
+  tailorDbSeedData ??= loadSelectedTailorDbSeedData();
 
   // Determine which namespaces and types to process
   const namespacesToProcess = hasNamespace
@@ -754,7 +764,13 @@ try {
 
     if (typesToSeed.length === 0) continue;
 
-    const result = await seedViaTestExecScript(namespace, typesToSeed, nsDeps, nsSelfRefTypes);
+    const result = await seedViaTestExecScript(
+      namespace,
+      typesToSeed,
+      nsDeps,
+      nsSelfRefTypes,
+      tailorDbSeedData,
+    );
     if (!result.success) {
       allSuccess = false;
     }

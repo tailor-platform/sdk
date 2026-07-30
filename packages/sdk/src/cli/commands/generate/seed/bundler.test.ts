@@ -14,7 +14,7 @@ type SeedInput = {
 
 type SeedResult = {
   success: boolean;
-  processed: Record<string, { inserted: number; updated: number }>;
+  processed: Record<string, { inserted: number; updated: number; skipped: number }>;
   errors: string[];
 };
 
@@ -170,7 +170,7 @@ describe("seed script upsert behavior", () => {
     expect(queries[1]?.parameters).not.toContain("u2");
     expect(queries[2]?.parameters).toContain("u2");
     expect(queries.every(({ sql }) => !sql.includes("on conflict"))).toBe(true);
-    expect(result.processed.User).toEqual({ inserted: 1, updated: 1 });
+    expect(result.processed.User).toEqual({ inserted: 1, updated: 1, skipped: 0 });
   });
 
   test("does not probe or update when upsert is disabled", async () => {
@@ -186,28 +186,29 @@ describe("seed script upsert behavior", () => {
 
     expect(queries).toHaveLength(1);
     expect(queries[0]?.sql).toMatch(/^insert /);
-    expect(result.processed.User).toEqual({ inserted: 1, updated: 0 });
+    expect(result.processed.User).toEqual({ inserted: 1, updated: 0, skipped: 0 });
   });
 
-  test("never inserts an existing row, so upsert does not consume its serial values", async () => {
-    const queries = stubTailordb(["invoice-1"]);
+  test("reports progress after each batch when upsert is disabled", async () => {
+    const queries = stubTailordb();
     const { main } = await loadMain("tailordb", ["User"]);
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const records = Array.from({ length: 101 }, (_, index) => ({
+      id: `u${index + 1}`,
+      name: `User ${index + 1}`,
+    }));
 
-    await main({
-      data: {
-        User: [
-          { id: "invoice-1", amount: 100 },
-          { id: "invoice-2", amount: 200 },
-        ],
-      },
+    const result = await main({
+      data: { User: records },
       order: ["User"],
       selfRefTypes: [],
-      upsert: true,
+      upsert: false,
     });
 
-    const insert = queries.find(({ sql }) => sql.startsWith("insert"));
-    expect(insert?.parameters).toContain("invoice-2");
-    expect(insert?.parameters).not.toContain("invoice-1");
+    expect(queries).toHaveLength(2);
+    expect(logSpy).toHaveBeenNthCalledWith(1, "[tailordb] User: 100/101");
+    expect(logSpy).toHaveBeenNthCalledWith(2, "[tailordb] User: 101/101");
+    expect(result.processed.User).toEqual({ inserted: 101, updated: 0, skipped: 0 });
   });
 
   test("updates only columns present in an existing row", async () => {
@@ -230,9 +231,10 @@ describe("seed script upsert behavior", () => {
     expect(setClause).not.toContain('"email" =');
   });
 
-  test("does not count an id-only existing row as updated", async () => {
+  test("counts an id-only existing row as skipped", async () => {
     const queries = stubTailordb(["u1"]);
     const { main } = await loadMain("tailordb", ["User"]);
+    using logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
 
     const result = await main({
       data: { User: [{ id: "u1" }] },
@@ -243,7 +245,8 @@ describe("seed script upsert behavior", () => {
 
     expect(queries).toHaveLength(1);
     expect(queries[0]?.sql).toMatch(/^select /);
-    expect(result.processed.User).toEqual({ inserted: 0, updated: 0 });
+    expect(result.processed.User).toEqual({ inserted: 0, updated: 0, skipped: 1 });
+    expect(logSpy).toHaveBeenCalledWith("[tailordb] User: 0 inserted, 0 updated, 1 skipped");
   });
 
   test("inserts self-referencing types one-by-one after the id probe", async () => {
@@ -262,7 +265,7 @@ describe("seed script upsert behavior", () => {
       upsert: true,
     });
 
-    expect(result.processed.Category).toEqual({ inserted: 2, updated: 0 });
+    expect(result.processed.Category).toEqual({ inserted: 2, updated: 0, skipped: 0 });
     expect(queries).toHaveLength(3);
     expect(queries[0]?.sql).toMatch(/^select /);
     expect(queries.slice(1).every(({ sql }) => sql.startsWith("insert"))).toBe(true);

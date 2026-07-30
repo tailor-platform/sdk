@@ -63,6 +63,20 @@ describe("generateSeedDataLoaderCode", () => {
     });
   });
 
+  test("skips blank lines between records", async () => {
+    const loadSeedData = await loadGeneratedSeedDataLoader();
+    const { dataDir } = createDataDir(
+      '\n{"id":"customer-1","name":"Alice"}\n\n{"id":"customer-2","name":"Bob"}\n\n',
+    );
+
+    expect(loadSeedData(dataDir, ["Customer"])).toEqual({
+      Customer: [
+        { id: "customer-1", name: "Alice" },
+        { id: "customer-2", name: "Bob" },
+      ],
+    });
+  });
+
   test("rejects a missing required field before an upsert", async () => {
     const loadSeedData = await loadGeneratedSeedDataLoader();
     const { dataDir, jsonlPath } = createDataDir(
