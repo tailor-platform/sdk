@@ -90,7 +90,7 @@ type WithCacheParams = {
   name: string;
   sourceFile: string;
   contextHash: string | undefined;
-  build: (plugins: Plugin[]) => Promise<string>;
+  build: (plugins: Plugin[], trackDependency: (filePath: string) => void) => Promise<string>;
 };
 
 /**
@@ -104,7 +104,7 @@ async function withCache(params: WithCacheParams): Promise<string> {
   const { cache, kind, namespace, name, sourceFile, contextHash, build } = params;
 
   if (!cache) {
-    return await build([]);
+    return await build([], () => {});
   }
 
   const content = cache.tryRestore({ kind, namespace, name, contextHash });
@@ -113,8 +113,11 @@ async function withCache(params: WithCacheParams): Promise<string> {
     return content;
   }
 
+  // Files a build reads without rolldown loading them as modules — tsconfigs
+  // consulted for path aliases — still have to invalidate the entry.
+  const extraDependencies = new Set<string>();
   const { plugin, getResult } = createDepCollectorPlugin();
-  const code = await build([plugin]);
+  const code = await build([plugin], (filePath) => extraDependencies.add(filePath));
 
   cache.save({
     kind,
@@ -122,7 +125,7 @@ async function withCache(params: WithCacheParams): Promise<string> {
     name,
     sourceFile,
     content: code,
-    dependencyPaths: getResult(),
+    dependencyPaths: [...getResult(), ...extraDependencies],
     contextHash,
   });
 
@@ -143,8 +146,9 @@ function createBundleCache(store: CacheStore): BundleCache {
       return undefined;
     }
 
-    // Recompute hash of all stored dependency paths.
-    // If any file is missing or unreadable, treat as cache miss.
+    // Recompute hash of all stored dependency paths. A path that has appeared or
+    // disappeared since the entry was saved changes the hash, so it lands on the
+    // mismatch below rather than needing its own branch.
     let currentHash: string;
     try {
       currentHash = combineHash(hashFiles(entry.dependencyPaths), params.contextHash);

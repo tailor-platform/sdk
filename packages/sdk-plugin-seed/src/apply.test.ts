@@ -39,6 +39,7 @@ vi.mock("./shared/logger", () => ({ logger }));
 beforeEach(() => {
   vi.resetAllMocks();
   sdk.loadSeedContext.mockResolvedValue({
+    config: { path: "/workspace/tailor.config.ts" },
     distPath: "/seed",
     idpUser: {
       seedScriptCode: "seed-user-code",

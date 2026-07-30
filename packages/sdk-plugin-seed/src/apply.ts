@@ -36,6 +36,7 @@ interface SeedNamespaceParams {
   typesToSeed: string[];
   dependencies: Record<string, string[]>;
   selfRefTypes: string[];
+  configDir: string;
 }
 
 function promptConfirmation(question: string): Promise<boolean> {
@@ -100,7 +101,7 @@ interface SeedResult {
 }
 
 async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
-  const { execution, namespace, typesToSeed, dependencies, selfRefTypes } = params;
+  const { execution, namespace, typesToSeed, dependencies, selfRefTypes, configDir } = params;
   const sortedTypes = topologicalSort(typesToSeed, dependencies);
   const data = loadSeedData(execution.dataDir, sortedTypes);
   const processedTotals: Record<string, number> = {};
@@ -115,7 +116,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     mode: "plain",
   });
 
-  const bundled = await bundleSeedScript(namespace, typesWithData);
+  const bundled = await bundleSeedScript(namespace, typesWithData, configDir);
   const chunks = chunkSeedData({
     data,
     order: sortedTypes,
@@ -418,6 +419,7 @@ export const seedApplyCommand = defineAppCommand({
         typesToSeed,
         dependencies: nsConfig.dependencies,
         selfRefTypes: nsConfig.selfRefTypes,
+        configDir: path.dirname(context.config.path),
       });
       for (const [type, count] of Object.entries(seeded.processed)) {
         allProcessed[type] = (allProcessed[type] ?? 0) + count;

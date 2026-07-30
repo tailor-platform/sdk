@@ -305,8 +305,115 @@ describe("withCache", () => {
     });
 
     expect(build).toHaveBeenCalledOnce();
-    expect(build).toHaveBeenCalledWith([]);
+    expect(build).toHaveBeenCalledWith([], expect.any(Function));
     expect(result).toBe("built output");
+  });
+
+  // tsconfigs consulted for path aliases are never loaded as modules, so only
+  // the explicit dependency registration can invalidate the entry.
+  test("invalidates the entry when a build-tracked non-module file changes", async () => {
+    const cache = createBundleCache(createCacheStore({ cacheDir }));
+    const sourceFile = writeFile("src/resolver.ts", "export default {}");
+    const ancestorTsconfig = writeFile(
+      "tsconfig.json",
+      JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./lib-a/*"] } } }),
+    );
+    const params = {
+      cache,
+      kind: "resolver" as const,
+      name: "myResolver",
+      sourceFile,
+      contextHash: undefined,
+    };
+
+    const first = await withCache({
+      ...params,
+      build: async (_plugins, trackDependency) => {
+        trackDependency(ancestorTsconfig);
+        return "built from lib-a";
+      },
+    });
+    expect(first).toBe("built from lib-a");
+
+    fs.writeFileSync(
+      ancestorTsconfig,
+      JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./lib-b/*"] } } }),
+    );
+
+    const rebuild = vi.fn(async () => "built from lib-b");
+    const second = await withCache({ ...params, build: rebuild });
+
+    expect(rebuild).toHaveBeenCalledOnce();
+    expect(second).toBe("built from lib-b");
+  });
+
+  // A tracked file disappearing changes the hash rather than throwing, so it
+  // still has to land on a cache miss.
+  test("invalidates the entry when a tracked file is deleted", async () => {
+    const cache = createBundleCache(createCacheStore({ cacheDir }));
+    const sourceFile = writeFile("src/resolver.ts", "export default {}");
+    const tsconfig = writeFile("tsconfig.json", JSON.stringify({ compilerOptions: {} }));
+    const params = {
+      cache,
+      kind: "resolver" as const,
+      name: "myResolver",
+      sourceFile,
+      contextHash: undefined,
+    };
+
+    await withCache({
+      ...params,
+      build: async (_plugins, trackDependency) => {
+        trackDependency(tsconfig);
+        return "built with tsconfig";
+      },
+    });
+
+    fs.rmSync(tsconfig);
+
+    const rebuild = vi.fn(async () => "built without tsconfig");
+    expect(await withCache({ ...params, build: rebuild })).toBe("built without tsconfig");
+    expect(rebuild).toHaveBeenCalledOnce();
+  });
+
+  // The walk reports directories it passed over as well, so a tsconfig.json
+  // appearing in one later has to invalidate the entry even though the build
+  // that saved it never read that file.
+  test("invalidates the entry when a tracked but absent file is created", async () => {
+    const cache = createBundleCache(createCacheStore({ cacheDir }));
+    const sourceFile = writeFile("src/resolver.ts", "export default {}");
+    const laterTsconfig = path.join(tmpDir, "src", "tsconfig.json");
+    const params = {
+      cache,
+      kind: "resolver" as const,
+      name: "myResolver",
+      sourceFile,
+      contextHash: undefined,
+    };
+
+    const first = await withCache({
+      ...params,
+      build: async (_plugins, trackDependency) => {
+        trackDependency(laterTsconfig);
+        return "built without nearer tsconfig";
+      },
+    });
+    expect(first).toBe("built without nearer tsconfig");
+
+    const cachedRebuild = vi.fn(async () => "should not run");
+    expect(await withCache({ ...params, build: cachedRebuild })).toBe(
+      "built without nearer tsconfig",
+    );
+    expect(cachedRebuild).not.toHaveBeenCalled();
+
+    fs.writeFileSync(
+      laterTsconfig,
+      JSON.stringify({ compilerOptions: { paths: { "@lib/*": ["./near/*"] } } }),
+    );
+
+    const rebuild = vi.fn(async () => "built with nearer tsconfig");
+    expect(await withCache({ ...params, build: rebuild })).toBe("built with nearer tsconfig");
+    expect(rebuild).toHaveBeenCalledOnce();
   });
 
   test("skips build when cache restores successfully", async () => {
