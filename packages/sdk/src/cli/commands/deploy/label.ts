@@ -172,6 +172,9 @@ export interface MetadataLabelWrite {
  * Concurrent writers are still not safe in the strict sense — that needs
  * server-side conditional writes — but a write can no longer be built from
  * state this process read at an unrelated point in time.
+ *
+ * A write that changes nothing does nothing: writing back what was just read
+ * would still overwrite whatever landed in between, for no gain.
  * @param client - Operator client instance
  * @param write - TRN, labels to set, and label keys to delete
  * @returns Promise that resolves when the labels are written
@@ -181,6 +184,7 @@ export async function writeMetadataLabels(
   write: MetadataLabelWrite,
 ): Promise<void> {
   const { trn, labels, remove } = write;
+  if (!Object.keys(labels ?? {}).length && !(remove ?? []).length) return;
   const current = await getOrNull(() => client.getMetadata({ trn }));
   const merged: Record<string, string> = { ...current?.metadata?.labels, ...labels };
   for (const key of remove ?? []) {
