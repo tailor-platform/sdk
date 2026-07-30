@@ -35,14 +35,26 @@ const color =
     styleText(format, text, { validateStream: false });
 
 // Ask styleText whether each stream gets colors, so the TTY / NO_COLOR /
-// FORCE_COLOR rules stay Node's rather than being reimplemented here.
+// FORCE_COLOR rules stay Node's rather than being reimplemented here. styleText
+// returns the text unchanged when the stream has no color support.
+const PROBE = "?";
 const colorSupport = {
-  stdout: styleText("red", "", { stream: process.stdout }) !== "",
-  stderr: styleText("red", "", { stream: process.stderr }) !== "",
+  stdout: styleText("red", PROBE, { stream: process.stdout }) !== PROBE,
+  stderr: styleText("red", PROBE, { stream: process.stderr }) !== PROBE,
 };
 
 /** Stream a rendered string is written to */
 export type OutputTarget = "stdout" | "stderr";
+
+/**
+ * Resolves whose color support applies to a stream. Streams other than
+ * `process.stdout` follow stderr's rules, which is where diagnostics go.
+ * @param stream - Stream the text is written to
+ * @returns Output target for the stream
+ */
+export function outputTarget(stream: NodeJS.WriteStream): OutputTarget {
+  return stream === process.stdout ? "stdout" : "stderr";
+}
 
 /**
  * Prepares styled text for the stream it is written to.

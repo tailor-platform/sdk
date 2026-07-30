@@ -119,8 +119,10 @@ async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string
 }
 
 // Ask styleText whether stderr gets colors, so the TTY / NO_COLOR / FORCE_COLOR
-// rules stay Node's rather than being reimplemented here.
-const stderrHasColors = styleText("red", "", { stream: process.stderr }) !== "";
+// rules stay Node's rather than being reimplemented here. styleText returns the
+// text unchanged when the stream has no color support.
+const PROBE = "?";
+const stderrHasColors = styleText("red", PROBE, { stream: process.stderr }) !== PROBE;
 
 const style = (format: "bold" | "cyan" | "green" | "red", text: string): string =>
   styleText(format, text, { validateStream: false });
