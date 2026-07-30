@@ -146,6 +146,7 @@ export function recordedDependencies(
   if (!labels) return [];
   return Object.entries(labels)
     .filter(([key]) => key.startsWith(dependedByAppLabelPrefix))
+    .toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([key, reason]) => ({ appId: key.slice(dependedByAppLabelPrefix.length), reason }));
 }
 

@@ -577,7 +577,7 @@ describe("snapshot-manifest", () => {
           executorUsedTypes: new Set(["User"]),
         }),
       ).toThrow(
-        'TailorDB type "User" has "publishEvents: false", but executors with a record trigger subscribe to it.',
+        'TailorDB type "User" has "publishEvents: false", but executors with record triggers subscribe to it.',
       );
     });
 
