@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
-# Resolves `prereleaseUntil: V2_NEXT_PENDING` codemod boundaries (see
-# packages/sdk-codemod/src/registry.ts) against the version the release PR
-# just bumped `@tailor-platform/sdk` to. A codemod's exact `2.0.0-next.N`
-# boundary is only known once changesets/action resolves the real next
-# version here, so codemods added while that version is still unknown are
-# registered against the V2_NEXT_PENDING sentinel and fixed up in this step.
+# Resolves the version placeholders that can only be filled in once
+# changesets/action has decided the next release version, against the version
+# the release PR just bumped `@tailor-platform/sdk` to:
+#
+#   - `prereleaseUntil: V2_NEXT_PENDING` codemod boundaries
+#     (packages/sdk-codemod/src/registry.ts)
+#   - `@deprecated since NEXT_RELEASE` markers (packages/sdk/src/**)
+#
+# Both describe the version a change ships in, which is unknown while the
+# change is being written, so they are authored against a sentinel and fixed
+# up here. See .agents/rules/deprecation.md.
 #
 # Pushes the fixup straight to the release PR branch through the GitHub
 # Contents API (like ensure-github-releases.sh) rather than a local git
@@ -17,7 +22,7 @@
 set -euo pipefail
 
 original_ref="$(git rev-parse HEAD)"
-# --hard: codemod:resolve-pending and oxfmt below leave registry.ts modified, and a
+# --hard: the resolvers and oxfmt below leave tracked files modified, and a
 # plain `git checkout` refuses to switch away from a dirty tracked file.
 trap 'git reset --hard --quiet "$original_ref"' EXIT
 
@@ -38,22 +43,28 @@ gh pr checkout "$PR_NUMBER"
 git checkout --quiet --detach
 
 pnpm codemod:resolve-pending
+pnpm deprecations:resolve-pending
 
-registry_path="packages/sdk-codemod/src/registry.ts"
-if git diff --quiet -- "$registry_path"; then
+mapfile -t resolved_paths < <(git diff --name-only)
+if [ "${#resolved_paths[@]}" -eq 0 ]; then
   exit 0
 fi
 
-pnpm exec oxfmt --write "$registry_path"
+pnpm exec oxfmt --write "${resolved_paths[@]}"
 
-content_b64="$(base64 <"$registry_path" | tr -d '\n')"
-sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${registry_path}?ref=${PR_BRANCH}" -q .sha)"
+# One Contents API call per file: each creates its own commit on the release PR
+# branch, and the blob sha is re-read per file so a preceding push in this loop
+# does not invalidate the next one.
+for path in "${resolved_paths[@]}"; do
+  content_b64="$(base64 <"$path" | tr -d '\n')"
+  sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${path}?ref=${PR_BRANCH}" -q .sha)"
 
-gh api "repos/${GITHUB_REPOSITORY}/contents/${registry_path}" \
-  -X PUT \
-  -f message="chore(codemod): resolve pending prerelease boundary" \
-  -f content="${content_b64}" \
-  -f sha="${sha}" \
-  -f branch="${PR_BRANCH}"
+  gh api "repos/${GITHUB_REPOSITORY}/contents/${path}" \
+    -X PUT \
+    -f message="chore: resolve pending release version in ${path}" \
+    -f content="${content_b64}" \
+    -f sha="${sha}" \
+    -f branch="${PR_BRANCH}"
+done
 
-echo "Resolved pending codemod boundaries on ${PR_BRANCH}."
+echo "Resolved ${#resolved_paths[@]} pending version placeholder(s) on ${PR_BRANCH}."

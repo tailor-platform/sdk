@@ -1568,7 +1568,13 @@ function reachesCodemodBoundary(toVersion: string, codemod: CodemodPackage): boo
   );
 }
 
-function effectiveCodemodBoundary(codemod: CodemodPackage): string {
+/**
+ * The version a codemod's migration is due by: its `prereleaseUntil` while that
+ * names a concrete prerelease, and `until` otherwise.
+ * @param codemod - The registered codemod
+ * @returns The version its boundary sits at
+ */
+export function effectiveCodemodBoundary(codemod: CodemodPackage): string {
   if (codemod.prereleaseUntil === V2_NEXT_PENDING) {
     return codemod.until;
   }
@@ -1577,6 +1583,11 @@ function effectiveCodemodBoundary(codemod: CodemodPackage): string {
 
 function assertCodemodBoundaries(codemods: CodemodPackage[]): void {
   for (const codemod of codemods) {
+    if (valid(codemod.since) === null) {
+      throw new Error(
+        `Codemod ${codemod.id} since must be a valid semver version: ${codemod.since}`,
+      );
+    }
     const boundary = parse(codemod.until);
     if (boundary === null) {
       throw new Error(
@@ -1587,6 +1598,7 @@ function assertCodemodBoundaries(codemods: CodemodPackage[]): void {
       throw new Error(`Codemod ${codemod.id} until must be a stable version: ${codemod.until}`);
     }
     if (codemod.prereleaseUntil === undefined || codemod.prereleaseUntil === V2_NEXT_PENDING) {
+      assertNonEmptyRange(codemod);
       continue;
     }
 
@@ -1610,6 +1622,23 @@ function assertCodemodBoundaries(codemods: CodemodPackage[]): void {
         `Codemod ${codemod.id} prereleaseUntil must target the same version as until: ${codemod.prereleaseUntil}`,
       );
     }
+    assertNonEmptyRange(codemod);
+  }
+}
+
+/**
+ * A codemod applies while `since <= from < boundary`, so a `since` at or past the
+ * boundary leaves an empty range and the codemod can never apply. The boundary is
+ * `prereleaseUntil` once that names a concrete prerelease, which is earlier than
+ * `until` — comparing against `until` alone would let that case through.
+ * @param codemod - The registered codemod, with its boundaries already validated
+ */
+function assertNonEmptyRange(codemod: CodemodPackage): void {
+  const boundary = effectiveCodemodBoundary(codemod);
+  if (!lt(codemod.since, boundary)) {
+    throw new Error(
+      `Codemod ${codemod.id} since must be older than the boundary it applies up to: ${codemod.since} >= ${boundary}`,
+    );
   }
 }
 
