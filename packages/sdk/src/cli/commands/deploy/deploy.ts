@@ -139,6 +139,39 @@ type EventSubscription = {
 };
 
 /**
+ * Build the error for a subscription whose resource no config in the run declares.
+ *
+ * The advice differs by cause: a config that declares the resource as owned
+ * elsewhere is missing its peer from `--config`, while one that declares nothing
+ * external is naming a resource that does not exist.
+ * @param executorName - Name of the subscribing executor
+ * @param lookup - How the subscribed resource is found
+ * @param subscriber - Deployment target declaring the executor
+ * @returns Error message
+ */
+function missingOwnerMessage(
+  executorName: string,
+  lookup: EventSourceLookup,
+  subscriber: BuiltDeploymentTarget,
+): string {
+  const subject = `Executor "${executorName}" subscribes to ${lookup.resource}, which no config in this deploy declares.`;
+  const external = lookup.externalHint(subscriber);
+  if (external) {
+    return `${subject} This config declares ${external}, so add the config that owns it to --config.`;
+  }
+  if (
+    lookup.trigger.kind === "workflowExecution" ||
+    lookup.trigger.kind === "workflowJobExecution"
+  ) {
+    return (
+      `${subject} A workflow cannot be declared as owned by another config, so the one named here has to be ` +
+      `declared by a config in this deploy. Check the name, or add the config that declares it to --config.`
+    );
+  }
+  return `${subject} This config declares nothing external that could hold it, so check the name.`;
+}
+
+/**
  * Resolve every event subscription in the run to the config that declares the
  * subscribed resource.
  *
@@ -170,10 +203,7 @@ export function collectEventSubscriptions(
       );
       const [owner] = owners;
       if (!owner) {
-        throw new Error(
-          `Executor "${executor.name}" subscribes to ${lookup.resource}, which no config in this deploy declares. ` +
-            `Add the config that owns it to --config so its "publishEvents" can be resolved.`,
-        );
+        throw new Error(missingOwnerMessage(executor.name, lookup, subscriber));
       }
       // Several configs declare the name in different namespaces. Which one the
       // trigger means is reported when the executor's namespace is resolved.
@@ -1252,7 +1282,56 @@ type EventSourceLookup = {
   trigger: PublishingTrigger;
   /** Whether `target` declares the resource. */
   declaredBy: (target: BuiltDeploymentTarget) => boolean | undefined;
+  /**
+   * What `target` declares as owned elsewhere that could hold this resource,
+   * described for an error message. Undefined for a resource kind that cannot be
+   * referenced from another config at all.
+   */
+  externalHint: (target: BuiltDeploymentTarget) => string | undefined;
 };
+
+/**
+ * TailorDB namespaces the config declares as owned elsewhere.
+ * @param target - Deployment target declaring the executor
+ * @returns Namespace names declared with `external: true`
+ */
+function externalTailorDBNamespaces(target: BuiltDeploymentTarget): ReadonlyArray<string> {
+  return target.application.externalTailorDBNamespaces;
+}
+
+function externalSubgraphNames(
+  target: BuiltDeploymentTarget,
+  subgraphType: string,
+  localNames: ReadonlySet<string>,
+): string[] {
+  return target.application.subgraphs
+    .filter((subgraph) => subgraph.Type === subgraphType && !localNames.has(subgraph.Name))
+    .map((subgraph) => subgraph.Name);
+}
+
+function externalResolverNamespaces(target: BuiltDeploymentTarget): string[] {
+  const local = new Set(target.application.resolverServices.map((service) => service.namespace));
+  return externalSubgraphNames(target, "pipeline", local);
+}
+
+function externalIdpNames(target: BuiltDeploymentTarget): string[] {
+  const local = new Set(target.application.idpServices.map((idp) => idp.name));
+  return externalSubgraphNames(target, "idp", local);
+}
+
+/**
+ * Describe the external declarations that could hold a missing resource.
+ * @param kind - Resource kind named in the message, e.g. `TailorDB namespace`
+ * @param names - External names the subscribing config declares
+ * @returns A phrase for the error message, or undefined when it declares none
+ */
+function describeExternal(kind: string, names: ReadonlyArray<string>): string | undefined {
+  if (names.length === 0) {
+    return undefined;
+  }
+  const plural = names.length === 1 ? kind : `${kind}s`;
+  return `external ${plural} ${names.map((name) => `"${name}"`).join(", ")}`;
+}
 
 function declaresTailorDBType(
   target: BuiltDeploymentTarget,
@@ -1303,12 +1382,16 @@ function eventSourceLookup(
         resource: publishEventsConflict.tailorDBType(trigger.typeName).resource,
         trigger,
         declaredBy: (target) => declaresTailorDBType(target, trigger.typeName),
+        externalHint: (target) =>
+          describeExternal("TailorDB namespace", externalTailorDBNamespaces(target)),
       };
     case "resolverExecuted":
       return {
         resource: publishEventsConflict.resolver(trigger.resolverName).resource,
         trigger,
         declaredBy: (target) => declaresResolver(target, trigger.resolverName),
+        externalHint: (target) =>
+          describeExternal("resolver namespace", externalResolverNamespaces(target)),
       };
     case "idpUser": {
       const idpName = subscribedIdpName(subscriber.application, trigger);
@@ -1319,6 +1402,12 @@ function eventSourceLookup(
         resource: publishEventsConflict.idpService(idpName).resource,
         trigger,
         declaredBy: (target) => declaresIdp(target, idpName),
+        // The trigger names the IdP, so the hint can be exact rather than a list.
+        externalHint: (target) =>
+          describeExternal(
+            "IdP",
+            externalIdpNames(target).filter((name) => name === idpName),
+          ),
       };
     }
     case "workflowExecution":
@@ -1327,6 +1416,8 @@ function eventSourceLookup(
         resource: publishEventsConflict.workflow(trigger.workflowName).resource,
         trigger,
         declaredBy: (target) => declaresWorkflow(target, trigger.workflowName),
+        // A workflow has no `external` declaration to check.
+        externalHint: () => undefined,
       };
     default:
       return undefined;
