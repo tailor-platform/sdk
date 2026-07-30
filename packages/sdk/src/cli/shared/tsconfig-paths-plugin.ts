@@ -3,12 +3,10 @@ import * as path from "pathe";
 import type * as rolldown from "rolldown";
 
 // A bundler hands rolldown a single tsconfig, so rolldown applies one `paths`
-// table to every module in the graph. When a project nests a tsconfig.json
-// without `paths` nearer to an imported file, that nested tsconfig wins and the
-// aliases declared in the project root stop resolving — the bundle-time twin of
-// the runtime gap `cli/tsconfig-paths-hook.mjs` closes for dynamic imports.
-// This plugin re-derives the `paths` matcher from each importing file's own
-// directory, so an alias resolves against its own project's tsconfig.
+// table to every module in the graph. An imported file that belongs to another
+// TypeScript project can therefore be resolved with the entry project's aliases
+// instead of its own. This plugin re-derives the matcher from each importing
+// file's nearest tsconfig, matching the lookup used by the runtime hook.
 //
 // Strictly a last resort. rolldown's `order: "post"` only orders this hook
 // against other plugins — it still runs ahead of the builtin resolver, and a
@@ -76,6 +74,9 @@ export function createTsconfigPathsPlugin(
         );
         if (!resolution) return null;
 
+        const candidates = resolution.matcher(source);
+        if (candidates.length === 0) return null;
+
         const alreadyResolvable = await this.resolve(source, importer, { skipSelf: true });
         if (alreadyResolvable) return null;
 
@@ -84,7 +85,7 @@ export function createTsconfigPathsPlugin(
         // `package.json` `main`/`exports` all behave exactly as they do for a
         // relative import. Probing the filesystem here instead would have to
         // restate those rules and would drift from them.
-        for (const candidate of resolution.matcher(source)) {
+        for (const candidate of candidates) {
           const resolved = await this.resolve(candidate, importer, { skipSelf: true });
           if (resolved) return resolved;
         }
@@ -94,11 +95,6 @@ export function createTsconfigPathsPlugin(
   };
 }
 
-// The nearest tsconfig.json is often the one that lacks `paths` — that is the
-// whole shadowing problem — so keep walking up until one actually declares
-// `paths`. The walk cannot stop at the first tsconfig `createPathsMatcher`
-// accepts: it also accepts a `baseUrl`-only config, whose matcher maps every
-// bare specifier to a `baseUrl`-relative guess.
 function getResolutionContext(
   startDir: string,
   tsconfigCache: Cache,
@@ -108,26 +104,11 @@ function getResolutionContext(
   const cached = contextCache.get(startDir);
   if (cached !== undefined) return cached;
 
-  let searchDir = startDir;
-  let resolution: ResolutionContext | null = null;
-  for (;;) {
-    const tsconfig = getTsconfig(searchDir, "tsconfig.json", tsconfigCache);
-    reportTsconfigDependencies(tsconfigCache, onTsconfigRead);
-    if (!tsconfig) break;
-
-    const paths = tsconfig.config.compilerOptions?.paths;
-    if (paths && Object.keys(paths).length > 0) {
-      const matcher = createPathsMatcher(tsconfig);
-      if (matcher) {
-        resolution = { matcher };
-        break;
-      }
-    }
-
-    const parentDir = path.dirname(path.dirname(tsconfig.path));
-    if (parentDir === searchDir) break;
-    searchDir = parentDir;
-  }
+  const tsconfig = getTsconfig(startDir, "tsconfig.json", tsconfigCache);
+  reportTsconfigDependencies(tsconfigCache, onTsconfigRead);
+  const paths = tsconfig?.config.compilerOptions?.paths;
+  const matcher = paths && Object.keys(paths).length > 0 ? createPathsMatcher(tsconfig) : null;
+  const resolution = matcher ? { matcher } : null;
 
   contextCache.set(startDir, resolution);
   return resolution;
