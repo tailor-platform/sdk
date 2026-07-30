@@ -342,10 +342,10 @@ describe("assertRecordableDependencies", () => {
       }),
     ]);
 
-    expect(() => assertRecordableDependencies(subscriptions)).toThrow(
+    expect(() => assertRecordableDependencies(subscriptions, true)).toThrow(
       /no application to record the dependency on/,
     );
-    expect(() => assertRecordableDependencies(subscriptions)).toThrow(
+    expect(() => assertRecordableDependencies(subscriptions, true)).toThrow(
       /Set "publishEvents: true" on Workflow "nightly"/,
     );
   });
@@ -363,7 +363,7 @@ describe("assertRecordableDependencies", () => {
       }),
     ]);
 
-    expect(() => assertRecordableDependencies(subscriptions)).not.toThrow();
+    expect(() => assertRecordableDependencies(subscriptions, true)).not.toThrow();
   });
 
   test("accepts a subscription the owning config declares itself", () => {
@@ -379,6 +379,43 @@ describe("assertRecordableDependencies", () => {
       }),
     ]);
 
-    expect(() => assertRecordableDependencies(subscriptions)).not.toThrow();
+    expect(() => assertRecordableDependencies(subscriptions, true)).not.toThrow();
+  });
+});
+
+describe("assertRecordableDependencies id requirement", () => {
+  // A config that re-exports defineConfig() from another file never gets an id,
+  // on any path, so the record could not name which config depends on the owner.
+  const idless = () => [
+    target({ configPath: "supplier/tailor.config.ts", types: ["Order"] }),
+    target({
+      configPath: "wrapper/tailor.config.ts",
+      namespace: "wrapper",
+      executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+    }),
+  ];
+
+  test("rejects a cross-config subscriber that resolves without an id", () => {
+    expect(() => assertRecordableDependencies(collectEventSubscriptions(idless()), true)).toThrow(
+      /resolves without an "id"/,
+    );
+  });
+
+  test("accepts it on a run that only reports, where no id is injected yet", () => {
+    expect(() =>
+      assertRecordableDependencies(collectEventSubscriptions(idless()), false),
+    ).not.toThrow();
+  });
+
+  test("accepts a same-config subscription from an id-less config", () => {
+    const subscriptions = collectEventSubscriptions([
+      target({
+        configPath: "wrapper/tailor.config.ts",
+        types: ["Order"],
+        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+      }),
+    ]);
+
+    expect(() => assertRecordableDependencies(subscriptions, true)).not.toThrow();
   });
 });
