@@ -6,12 +6,15 @@ describe("isBlockedModule", () => {
     expect(isBlockedModule("node:crypto")).toBe(true);
     expect(isBlockedModule("node:fs")).toBe(true);
     expect(isBlockedModule("node:fs/promises")).toBe(true);
+    expect(isBlockedModule("node:test")).toBe(true);
+    expect(isBlockedModule("node:test/reporters")).toBe(true);
     expect(isBlockedModule("node:url")).toBe(true);
   });
 
   test("recognizes bare builtins (without node: prefix)", () => {
     expect(isBlockedModule("crypto")).toBe(true);
     expect(isBlockedModule("fs")).toBe(true);
+    expect(isBlockedModule("_http_agent")).toBe(true);
     expect(isBlockedModule("path")).toBe(true);
   });
 
