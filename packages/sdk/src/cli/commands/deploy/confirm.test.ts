@@ -94,16 +94,30 @@ describe("confirmOwnerConflict", () => {
     expect(vi.mocked(prompt.confirm).mock.calls[1]![0]!.message).toContain("Update");
   });
 
+  // The reported action pins which branch ran: asserting only that nothing was
+  // prompted would pass even if the wrong one handled the conflict.
   test.each([
-    ["id regeneration", "my-app", "my-app"],
-    ["name mismatch", "old-app", "new-app"],
-  ])("does not prompt when yes is true (%s)", async (_label, currentOwner, appName) => {
-    const conflicts: OwnerConflict[] = [
-      { resourceType: "Executor", resourceName: "ex-1", currentOwner },
-    ];
-    await confirmOwnerConflict(conflicts, appName, true);
-    expect(prompt.confirm).not.toHaveBeenCalled();
-  });
+    ["id regeneration", "my-app", "my-app", "id-2", "Re-tagging resources with the new id"],
+    ["missing config id", "my-app", "my-app", undefined, "Managing these resources by name"],
+    ["name mismatch", "old-app", "new-app", undefined, "Updating resources"],
+  ])(
+    "reports the action without prompting when yes is true (%s)",
+    async (_label, currentOwner, appName, appId, reported) => {
+      const { logger } = await import("#/cli/shared/logger");
+      const conflicts: OwnerConflict[] = [
+        { resourceType: "Executor", resourceName: "ex-1", currentOwner },
+      ];
+      await confirmOwnerConflict(conflicts, appName, true, appId);
+
+      expect(prompt.confirm).not.toHaveBeenCalled();
+      expect(
+        vi
+          .mocked(logger.success)
+          .mock.calls.map((call) => String(call[0]))
+          .join("\n"),
+      ).toContain(reported);
+    },
+  );
 
   test("throws when the id-regeneration prompt is declined", async () => {
     vi.mocked(prompt.confirm).mockResolvedValueOnce(false);
