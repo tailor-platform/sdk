@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { parseSync } from "oxc-parser";
 import { resolve } from "pathe";
 import * as rolldown from "rolldown";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { stringifyFunction, tailorPrincipalMap } from "#/parser/service/tailordb/field";
 import { setPrecompiledScriptExpr } from "#/parser/service/tailordb/hooks-validate-precompiled-expr";
@@ -499,10 +501,16 @@ async function bundleScriptTarget(args: {
     `tailordb-script:${typeName}:${targetIndex}`,
     entryContent,
     "ts",
+    sourceFilePath,
   );
 
+  const bundleLog = createBundleLog({ tsconfig });
   const buildResult = await rolldown.build({
-    plugins: [entry.plugin, platformBundleDefinePlugin],
+    plugins: [
+      entry.plugin,
+      createTsconfigPathsPlugin({ virtualEntrySourceFile: sourceFilePath }),
+      platformBundleDefinePlugin,
+    ],
     input: entry.input,
     write: false,
     output: {
@@ -517,8 +525,9 @@ async function bundleScriptTarget(args: {
       annotations: true,
       unknownGlobalSideEffects: false,
     },
-    logLevel: "silent",
+    ...bundleLog.options,
   } as rolldown.BuildOptions);
+  bundleLog.assertAllResolved();
 
   const bundledCode = buildResult.output[0].code;
   return assertParsableExpression(buildPrecompiledExpr(bundledCode, argsObject), context);

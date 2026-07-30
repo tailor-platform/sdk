@@ -14,7 +14,7 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations } from "./config";
 import { formatMigrationNumber, isValidMigrationNumber } from "./snapshot";
-import { parseMigrationLabelNumber } from "./types";
+import { MIGRATION_LABEL_KEY, parseMigrationLabelNumber } from "./types";
 
 export interface SetOptions {
   configPath?: string;
@@ -94,7 +94,7 @@ async function set(options: SetOptions): Promise<void> {
   let currentMigration: number;
   try {
     const { metadata } = await client.getMetadata({ trn });
-    const label = metadata?.labels["sdk-migration"];
+    const label = metadata?.labels[MIGRATION_LABEL_KEY];
     currentMigration = label ? (parseMigrationLabelNumber(label) ?? 0) : 0;
   } catch {
     currentMigration = 0;
@@ -137,7 +137,7 @@ async function set(options: SetOptions): Promise<void> {
   // 9. Update migration label
   await writeMetadataLabels(client, {
     trn,
-    labels: { "sdk-migration": `m${formatMigrationNumber(migrationNumber)}` },
+    labels: { [MIGRATION_LABEL_KEY]: `m${formatMigrationNumber(migrationNumber)}` },
   });
 
   logger.success(

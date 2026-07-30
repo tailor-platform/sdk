@@ -27,6 +27,7 @@ import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { buildStartContext } from "#/cli/shared/start-context";
+import { createTsconfigLookupCache } from "#/cli/shared/tsconfig-paths-plugin";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -552,6 +553,9 @@ export async function loadApplication(
   // 8. Resolve bundle settings
   const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(config.logLevel);
+  // Shared across every bundle below so a project with many resolvers/executors/etc.
+  // reads and parses each ancestor tsconfig once instead of once per item.
+  const tsconfigCache = createTsconfigLookupCache();
 
   // Collect in-memory bundled scripts
   const bundledScripts: BundledScripts = {
@@ -571,6 +575,7 @@ export async function loadApplication(
       bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      tsconfigCache,
     );
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
@@ -587,6 +592,7 @@ export async function loadApplication(
       inlineSourcemap,
       bundleLogLevel,
       baseDir,
+      tsconfigCache,
     });
   }
 
@@ -603,6 +609,7 @@ export async function loadApplication(
       bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      tsconfigCache,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -620,6 +627,7 @@ export async function loadApplication(
       baseDir,
       bundleCache,
       bundleLogLevel,
+      tsconfigCache,
     );
   }
 
@@ -636,6 +644,7 @@ export async function loadApplication(
       inlineSourcemap,
       bundleLogLevel,
       baseDir,
+      tsconfigCache,
     });
   }
 

@@ -72,5 +72,9 @@ describe("hasher", () => {
       const hashAfter = hashFiles([fileA, fileB]);
       expect(hashBefore).not.toBe(hashAfter);
     });
+
+    test("rethrows file read errors other than a missing path", () => {
+      expect(() => hashFiles([tmpDir])).toThrow(/EISDIR/);
+    });
   });
 });

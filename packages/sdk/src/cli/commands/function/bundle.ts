@@ -9,6 +9,7 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import {
   createLogLevelTreeshakeOptions,
   resolveBundleLogLevel,
@@ -19,6 +20,8 @@ import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { buildResolverPermissionAndInputCheckExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import type { LogLevelInput } from "#/configure/config/types";
@@ -86,8 +89,13 @@ export async function bundleForTestRun(
 
   const tsconfig = await resolveTSConfigWithFallback(baseDir);
 
+  const bundleLog = createBundleLog({ tsconfig });
   const buildResult = await rolldown.build({
-    plugins: [platformBundleDefinePlugin],
+    plugins: [
+      createGeneratedEntryResolverPlugin(entryPath, baseDir),
+      createTsconfigPathsPlugin(),
+      platformBundleDefinePlugin,
+    ],
     input: entryPath,
     write: false,
     output: {
@@ -109,8 +117,9 @@ export async function bundleForTestRun(
     },
     tsconfig,
     treeshake: composeFunctionTreeshakeOptions([createLogLevelTreeshakeOptions(bundleLogLevel)]),
-    logLevel: "silent",
+    ...bundleLog.options,
   } as rolldown.BuildOptions);
+  bundleLog.assertAllResolved();
 
   const bundledCode = buildResult.output[0].code;
 
