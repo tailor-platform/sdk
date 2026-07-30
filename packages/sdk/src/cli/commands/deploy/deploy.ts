@@ -316,6 +316,11 @@ function subscribedWorkflows(subscriptions: ReadonlyArray<EventSubscription>): {
  * An executor in another config makes the resource it subscribes to publish
  * events, so deploying this config without that one would resolve the flag from
  * a smaller set of executors and turn publishing off.
+ *
+ * A resource that declares `publishEvents` keeps its value either way, so
+ * recording a dependency for it would ask about a partial deploy that changes
+ * nothing — and `prompt.confirm` rejects outright where it cannot ask, failing a
+ * deploy that was never at risk.
  * @param subscriptions - Subscriptions owned by the target being planned
  * @returns Dependency reasons keyed by dependent application id
  */
@@ -323,8 +328,8 @@ export function collectDependentApps(
   subscriptions: ReadonlyArray<EventSubscription>,
 ): ReadonlyMap<string, DeployDependencyReason> {
   const dependents = new Map<string, DeployDependencyReason>();
-  for (const { subscriber, owner } of subscriptions) {
-    if (subscriber.config.path === owner.config.path) {
+  for (const { subscriber, owner, pinned } of subscriptions) {
+    if (subscriber.config.path === owner.config.path || pinned) {
       continue;
     }
     const appId = subscriber.application.id;
