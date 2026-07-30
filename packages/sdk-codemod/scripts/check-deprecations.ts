@@ -2,7 +2,7 @@
 import { globSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PENDING_SINCE, checkDeprecationTags } from "../src/deprecation-tags";
+import { PENDING_SINCE, SDK_SOURCE_GLOB, checkDeprecationTags } from "../src/deprecation-tags";
 import { allCodemods, effectiveCodemodBoundary } from "../src/registry";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -23,7 +23,9 @@ const isTestFile = (file: string): boolean =>
   file.includes("__test_fixtures__");
 
 const failures: string[] = [];
-for (const file of globSync("src/**/*.ts", { cwd: sdkRoot }).toSorted()) {
+// `.mts` / `.mjs` are part of the published surface too (the CLI ships its TS
+// loader hook that way), so a deprecation there must not slip past the check.
+for (const file of globSync(SDK_SOURCE_GLOB, { cwd: sdkRoot }).toSorted()) {
   if (isTestFile(file)) continue;
   const absolute = resolve(sdkRoot, file);
   const problems = checkDeprecationTags(readFileSync(absolute, "utf-8"), {
