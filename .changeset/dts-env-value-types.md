@@ -1,5 +1,7 @@
 ---
 "@tailor-platform/sdk": major
+"@tailor-platform/create-sdk": patch
+"@tailor-platform/sdk-codemod": patch
 ---
 
 Generate the `Env` interface in `tailor.d.ts` from the type of each `defineConfig({ env })` value instead of the value itself. The resolved value used to be written in as a literal type, so running `generate` or `deploy` with real environment variables loaded stamped those values into a file that is normally committed.
