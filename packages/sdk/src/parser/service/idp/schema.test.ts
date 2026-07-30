@@ -507,7 +507,7 @@ describe("IdPSchema validation", () => {
     expect(result.publishEvents).toBe(expected);
   });
 
-  test("rejects the renamed publishUserEvents key", () => {
+  test("rejects the legacy publishUserEvents key", () => {
     const config = {
       name: "test-idp",
       permission: TEST_PERMISSION,
