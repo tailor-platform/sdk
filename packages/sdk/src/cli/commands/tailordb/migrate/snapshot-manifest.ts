@@ -51,7 +51,7 @@ import type {
  * Options for generating TailorDB type manifest from snapshot
  */
 export interface GenerateManifestOptions {
-  /** Whether an executor declared by the type's own config subscribes to its record events */
+  /** Whether an executor in the config being migrated subscribes to its record events */
   subscribed?: boolean;
   /** Default gqlOperations for the namespace */
   namespaceGqlOperations?: {
