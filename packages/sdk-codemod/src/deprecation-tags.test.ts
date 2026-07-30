@@ -108,6 +108,18 @@ export const oldApi = 1;
     expect(findDeprecationTags(source)).toEqual([]);
   });
 
+  test("reads a tag next to a type assertion the TSX grammar would reject", () => {
+    // `<string>value` is a cast in .ts and JSX in .tsx; parsing this with the
+    // TSX grammar loses the comment that follows it.
+    const source = `const cast = <string>value;
+
+/** @deprecated since 1.0.0 codemod: v2/old-to-new */
+export const oldApi = 1;
+`;
+
+    expect(findDeprecationTags(source, "src/cast.ts").map((tag) => tag.line)).toEqual([3]);
+  });
+
   test("reads a tag that follows a string containing the tag name", () => {
     const source = `const message = "@deprecated";
 
@@ -238,6 +250,23 @@ export const oldApi = 1;
         currentVersion: "2.1.0",
       }),
     ).toEqual([]);
+  });
+
+  test("reports a tag the grammar could not read instead of passing silently", () => {
+    // Parsed as .tsx, `<string>value` opens a JSX element and swallows the
+    // comment that follows, so the tag would otherwise go unchecked.
+    const source = `const cast = <string>value;
+
+/** @deprecated no since, no codemod */
+export const oldApi = 1;
+`;
+
+    const problems = checkDeprecationTags(source, { ...options, filePath: "src/cast.tsx" });
+
+    expect(findDeprecationTags(source, "src/cast.tsx")).toEqual([]);
+    expect(problems).toEqual([
+      { line: 3, message: expect.stringContaining("the parser could not read this part") },
+    ]);
   });
 
   test("reports a mid-line mention instead of silently skipping it", () => {

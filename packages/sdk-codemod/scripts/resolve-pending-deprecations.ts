@@ -15,7 +15,11 @@ const sdkPackageJson = JSON.parse(readFileSync(resolve(sdkRoot, "package.json"),
 const resolved: string[] = [];
 for (const file of globSync(SDK_SOURCE_GLOB, { cwd: sdkRoot }).toSorted()) {
   const absolute = resolve(sdkRoot, file);
-  const result = resolvePendingSince(readFileSync(absolute, "utf-8"), sdkPackageJson.version);
+  const result = resolvePendingSince(
+    readFileSync(absolute, "utf-8"),
+    sdkPackageJson.version,
+    absolute,
+  );
   if (!result.changed) continue;
   writeFileSync(absolute, result.source, "utf-8");
   resolved.push(relative(repoRoot, absolute));
