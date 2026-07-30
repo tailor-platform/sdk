@@ -134,6 +134,8 @@ type EventSubscription = {
   executorName: string;
   /** Target declaring the subscribed resource. */
   owner: BuiltDeploymentTarget;
+  /** The subscribed resource, named as error messages name it. */
+  resource: string;
   /** The executor's trigger, narrowed to a kind that names a publishing resource. */
   trigger: PublishingTrigger;
 };
@@ -192,7 +194,12 @@ export function collectEventSubscriptions(
       if (!lookup) {
         continue;
       }
-      const entry = { subscriber, executorName: executor.name, trigger: lookup.trigger };
+      const entry = {
+        subscriber,
+        executorName: executor.name,
+        resource: lookup.resource,
+        trigger: lookup.trigger,
+      };
       if (lookup.declaredBy(subscriber)) {
         subscriptions.push({ ...entry, owner: subscriber });
         continue;
@@ -1465,11 +1472,43 @@ export function collectExternalAuthIdpConfigNames(
   return idpConfigNames;
 }
 
+/**
+ * Reject a cross-config subscription whose dependency cannot be recorded.
+ *
+ * The record lives on the owner's application, and `deploy` creates one only for
+ * a config that contributes a subgraph — a TailorDB, resolver, IdP, or auth
+ * namespace. Writing to the application TRN of a config with none of those is
+ * rejected as `not found`, so the dependency would go unrecorded and the next
+ * deploy of the owner alone would turn publishing off without asking. Workflows
+ * are the one publishing resource that contributes no subgraph, so this is the
+ * only shape that reaches it.
+ * @param subscriptions - Every event subscription resolved for the run
+ */
+export function assertRecordableDependencies(
+  subscriptions: ReadonlyArray<EventSubscription>,
+): void {
+  for (const { subscriber, owner, executorName, resource } of subscriptions) {
+    if (subscriber.config.path === owner.config.path) continue;
+    if (owner.application.subgraphs.length > 0) continue;
+    throw new Error(
+      `Executor "${executorName}" in ${subscriber.config.path} subscribes to ${resource} in ` +
+        `${owner.config.path}, which would enable event publishing on it for this deploy only. ` +
+        `${owner.config.path} defines no TailorDB type, resolver, IdP, or auth namespace, so ` +
+        `deploy has no application to record the dependency on, and deploying it alone later ` +
+        `would turn publishing back off without asking.\n\n` +
+        `Set "publishEvents: true" on ${resource} so it does not depend on which configs are ` +
+        `deployed together.`,
+    );
+  }
+}
+
 function collectDeployRunPlanInputs(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): DeployRunPlanInputs {
+  const eventSubscriptions = collectEventSubscriptions(targets);
+  assertRecordableDependencies(eventSubscriptions);
   return {
-    eventSubscriptions: collectEventSubscriptions(targets),
+    eventSubscriptions,
     runAppIds: new Set(targets.flatMap((target) => target.application.id ?? [])),
     expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
     externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),

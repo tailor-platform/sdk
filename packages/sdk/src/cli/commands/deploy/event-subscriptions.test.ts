@@ -1,5 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { collectDependentApps, collectEventSubscriptions } from "./deploy";
+import {
+  assertRecordableDependencies,
+  collectDependentApps,
+  collectEventSubscriptions,
+} from "./deploy";
 
 type TargetSpec = {
   configPath: string;
@@ -41,7 +45,12 @@ function target(spec: TargetSpec): Target {
         workflows: Object.fromEntries((spec.workflows ?? []).map((name) => [name, { name }])),
       },
       externalTailorDBNamespaces: spec.externalTailorDBNamespaces ?? [],
+      // Mirrors defineTailorDB/defineResolver/defineIdp: only these contribute a
+      // subgraph, so a workflow-only config has none and gets no application.
       subgraphs: [
+        ...((spec.types ?? []).length ? [{ Type: "tailordb", Name: `db${suffix}` }] : []),
+        ...((spec.resolvers ?? []).length ? [{ Type: "pipeline", Name: `pipeline${suffix}` }] : []),
+        ...(spec.idps ?? []).map((Name) => ({ Type: "idp", Name })),
         ...(spec.externalResolverNamespaces ?? []).map((Name) => ({ Type: "pipeline", Name })),
         ...(spec.externalIdps ?? []).map((Name) => ({ Type: "idp", Name })),
       ],
@@ -312,5 +321,64 @@ describe("collectDependentApps", () => {
     ]);
 
     expect(collectDependentApps(subscriptions)).toEqual(new Map());
+  });
+});
+
+describe("assertRecordableDependencies", () => {
+  const dependentId = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82";
+
+  test("rejects a cross-config subscription to a config that gets no application", () => {
+    // A workflow is the one publishing resource that contributes no subgraph, so
+    // a workflow-only config has no application to carry the record.
+    const subscriptions = collectEventSubscriptions([
+      target({ configPath: "runner/tailor.config.ts", workflows: ["nightly"] }),
+      target({
+        configPath: "buyer/tailor.config.ts",
+        appId: dependentId,
+        types: ["Order"],
+        executors: {
+          "watch-nightly": { kind: "workflowExecution", workflowName: "nightly" },
+        },
+      }),
+    ]);
+
+    expect(() => assertRecordableDependencies(subscriptions)).toThrow(
+      /no application to record the dependency on/,
+    );
+    expect(() => assertRecordableDependencies(subscriptions)).toThrow(
+      /Set "publishEvents: true" on Workflow "nightly"/,
+    );
+  });
+
+  test("accepts the same subscription once the owning config contributes a subgraph", () => {
+    const subscriptions = collectEventSubscriptions([
+      target({ configPath: "runner/tailor.config.ts", types: ["Run"], workflows: ["nightly"] }),
+      target({
+        configPath: "buyer/tailor.config.ts",
+        appId: dependentId,
+        namespace: "buyer",
+        executors: {
+          "watch-nightly": { kind: "workflowExecution", workflowName: "nightly" },
+        },
+      }),
+    ]);
+
+    expect(() => assertRecordableDependencies(subscriptions)).not.toThrow();
+  });
+
+  test("accepts a subscription the owning config declares itself", () => {
+    // Nothing is recorded for a same-config subscription, so the absence of an
+    // application does not matter.
+    const subscriptions = collectEventSubscriptions([
+      target({
+        configPath: "runner/tailor.config.ts",
+        workflows: ["nightly"],
+        executors: {
+          "watch-nightly": { kind: "workflowExecution", workflowName: "nightly" },
+        },
+      }),
+    ]);
+
+    expect(() => assertRecordableDependencies(subscriptions)).not.toThrow();
   });
 });
