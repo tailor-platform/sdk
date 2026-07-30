@@ -25,7 +25,7 @@ import {
   type HasName,
   type PlanSummary,
 } from "./change-set";
-import { ensureConfigIdForDeploy } from "./config-id-injector";
+import { ensureConfigIdForDeploy, warnMissingAppId } from "./config-id-injector";
 import {
   confirmImportantResourceDeletion,
   confirmOwnerConflict,
@@ -1002,7 +1002,10 @@ async function loadDeployConfig(params: {
         await ensureConfigIdForDeploy({ configPath: resolvedPath, dryRun, buildOnly });
       }
     }
-    return loadConfig(configPath);
+    const loaded = await loadConfig(configPath);
+    // build-only never reaches the platform, so ownership does not apply.
+    if (!buildOnly) warnMissingAppId(loaded.config.id);
+    return loaded;
   });
 }
 
@@ -1829,7 +1832,12 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
   for (const deployment of deployments) {
     const results = deploymentPlanResults(deployment);
     const conflicts = collectOwnerConflicts(results);
-    await confirmOwnerConflict(conflicts, deployment.application.name, yes);
+    await confirmOwnerConflict(
+      conflicts,
+      deployment.application.name,
+      yes,
+      deployment.application.id,
+    );
 
     const unmanaged = collectUnmanagedResources(results);
     await confirmUnmanagedResources(unmanaged, deployment.application.name, yes);

@@ -137,6 +137,7 @@ vi.mock("#/cli/shared/logger", () => ({
   logger: {
     info: vi.fn(),
     success: vi.fn(),
+    warn: vi.fn(),
     log: vi.fn(),
     newline: vi.fn(),
   },
@@ -194,5 +195,35 @@ describe("remove command", () => {
       2,
       'Successfully removed all resources managed by "my-app".',
     );
+  });
+  test("does not claim success when same-name resources were left behind", async () => {
+    // A resource tagged with this application's name that it does not own by id
+    // is skipped. Reporting success would say the workspace is clean when it is not.
+    const client = {
+      listWorkflowJobFunctionExecutionPolicies: vi.fn(async () => ({
+        policies: [],
+        nextPageToken: "",
+      })),
+      getMetadata: vi.fn(async () => ({ metadata: { labels: {} } })),
+    };
+    vi.mocked(initOperatorClient).mockResolvedValue(client as never);
+    mocks.planExecutor.mockResolvedValueOnce({
+      changeSet: mocks.changeSet(),
+      conflicts: [],
+      unmanaged: [],
+      resourceOwners: new Set(["my-app"]),
+    });
+
+    await runCommand(removeCommand, ["--yes"]);
+
+    expect(logger.success).not.toHaveBeenCalledWith(
+      'Successfully removed all resources managed by "my-app".',
+    );
+    expect(
+      vi
+        .mocked(logger.warn)
+        .mock.calls.map((call) => String(call[0]))
+        .join("\n"),
+    ).toContain("my-app");
   });
 });
