@@ -717,7 +717,7 @@ export const allCodemods: CodemodPackage[] = [
     name: "defineIdp publishUserEvents → publishEvents",
     description:
       "Rename the `defineIdp` option `publishUserEvents` to `publishEvents`, matching the field name TailorDB types, resolvers, and workflows already use.",
-    since: "1.0.0",
+    since: "1.5.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_PENDING,
     // No legacyPatterns: a shorthand rewrite keeps `publishUserEvents` as the
