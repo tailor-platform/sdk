@@ -219,11 +219,14 @@ describe("remove command", () => {
     expect(logger.success).not.toHaveBeenCalledWith(
       'Successfully removed all resources managed by "my-app".',
     );
-    expect(
-      vi
-        .mocked(logger.warn)
-        .mock.calls.map((call) => String(call[0]))
-        .join("\n"),
-    ).toContain("my-app");
+    // The mismatch happens both when the config has no id and when it carries a
+    // different one, so the message must not presuppose a missing id.
+    const warned = vi
+      .mocked(logger.warn)
+      .mock.calls.map((call) => String(call[0]))
+      .join("\n");
+    expect(warned).toContain("my-app");
+    expect(warned).toContain("does not match");
+    expect(warned).toContain("deploy");
   });
 });
