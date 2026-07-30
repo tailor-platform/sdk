@@ -4,6 +4,7 @@ import { type BundleCache, computeBundlerContextHash, withCache } from "#/cli/ca
 import { type FileLoadConfig, loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
@@ -11,6 +12,10 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { buildResolverPermissionAndInputCheckExpr, INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadResolver } from "./loader";
@@ -37,6 +42,7 @@ interface ResolverInfo {
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
+ * @param tsconfigCache - Optional tsconfig lookup cache shared across bundles in this CLI run
  * @returns Map of resolver name to bundled code
  */
 export async function bundleResolvers(
@@ -47,6 +53,7 @@ export async function bundleResolvers(
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<Map<string, string>> {
   const bundledCode = new Map<string, string>();
   const files = loadFilesWithIgnores(config, baseDir);
@@ -90,6 +97,7 @@ export async function bundleResolvers(
       cache,
       inlineSourcemap,
       bundleLogLevel,
+      tsconfigCache,
     ),
   );
 
@@ -110,6 +118,7 @@ async function bundleSingleResolver(
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -128,7 +137,7 @@ async function bundleSingleResolver(
     name: resolver.name,
     sourceFile: resolver.sourceFile,
     contextHash,
-    async build(cachePlugins) {
+    async build(cachePlugins, trackDependency) {
       const absoluteSourcePath = path.resolve(resolver.sourceFile);
       const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr(resolver.permission);
 
@@ -144,15 +153,25 @@ async function bundleSingleResolver(
 
         export { $tailor_resolver_body as main };
       `;
-      const entry = createVirtualEntry(`resolver:${resolver.name}`, entryContent);
+      const entry = createVirtualEntry(
+        `resolver:${resolver.name}`,
+        entryContent,
+        "js",
+        absoluteSourcePath,
+      );
 
       const startPlugin = createStartTransformPlugin(startContext);
       const plugins: rolldown.Plugin[] = [entry.plugin];
       if (startPlugin) {
         plugins.push(startPlugin);
       }
-      plugins.push(platformBundleDefinePlugin, ...cachePlugins);
+      plugins.push(
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
+        platformBundleDefinePlugin,
+        ...cachePlugins,
+      );
 
+      const bundleLog = createBundleLog({ tsconfig });
       const result = await rolldown.build({
         input: entry.input,
         write: false,
@@ -173,8 +192,9 @@ async function bundleSingleResolver(
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),
-        logLevel: "silent",
+        ...bundleLog.options,
       } as rolldown.BuildOptions);
+      bundleLog.assertAllResolved();
 
       return result.output[0].code;
     },

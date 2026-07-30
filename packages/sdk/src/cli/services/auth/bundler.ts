@@ -2,12 +2,17 @@ import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import type { LogLevel } from "#/configure/config/types";
@@ -34,6 +39,8 @@ export interface BundleAuthHooksOptions {
   bundleLogLevel?: LogLevel;
   /** Directory the tsconfig is resolved against */
   baseDir: string;
+  /** Optional tsconfig lookup cache shared across bundles in this CLI run */
+  tsconfigCache?: TsconfigLookupCache;
 }
 
 /**
@@ -58,6 +65,7 @@ export async function bundleAuthHooks(
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
     baseDir,
+    tsconfigCache,
   } = options;
 
   logger.newline();
@@ -90,7 +98,7 @@ export async function bundleAuthHooks(
     name: functionName,
     sourceFile: absoluteConfigPath,
     contextHash,
-    async build(cachePlugins) {
+    async build(cachePlugins, trackDependency) {
       const entryContent = ml /* js */ `
         import _config from "${absoluteConfigPath}";
         const __auth_hook_function = _config.${handlerAccessPath};
@@ -99,15 +107,25 @@ export async function bundleAuthHooks(
           return await __auth_hook_function({ ...args, env });
         }
       `;
-      const entry = createVirtualEntry(`auth-hook:${functionName}`, entryContent);
+      const entry = createVirtualEntry(
+        `auth-hook:${functionName}`,
+        entryContent,
+        "js",
+        absoluteConfigPath,
+      );
 
       const startPlugin = createStartTransformPlugin(startContext);
       const plugins: rolldown.Plugin[] = [entry.plugin];
       if (startPlugin) {
         plugins.push(startPlugin);
       }
-      plugins.push(platformBundleDefinePlugin, ...cachePlugins);
+      plugins.push(
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
+        platformBundleDefinePlugin,
+        ...cachePlugins,
+      );
 
+      const bundleLog = createBundleLog({ tsconfig });
       const result = await rolldown.build({
         input: entry.input,
         write: false,
@@ -133,8 +151,9 @@ export async function bundleAuthHooks(
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),
-        logLevel: "silent",
+        ...bundleLog.options,
       } as rolldown.BuildOptions);
+      bundleLog.assertAllResolved();
 
       return result.output[0].code;
     },

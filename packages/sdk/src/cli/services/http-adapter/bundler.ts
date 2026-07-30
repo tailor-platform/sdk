@@ -3,14 +3,19 @@ import { parseSync } from "oxc-parser";
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
-import { isNodeBuiltinImport } from "#/cli/services/http-adapter/node-builtins";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { HTTP_METHODS, type HttpMethodKey } from "#/parser/service/http-adapter/index";
+import { getNodeBuiltinMessage, isNodeBuiltinImport } from "#/utils/node-builtins";
 import type { LogLevel } from "#/configure/config/types";
 
 const ADAPTER_BUNDLE_WARN_BYTES = 64 * 1024;
@@ -40,6 +45,7 @@ export interface HttpAdapterBundleResult {
  * @param baseDir - Directory the owning config's tsconfig is resolved against
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
+ * @param tsconfigCache - Optional tsconfig lookup cache shared across bundles in this CLI run
  * @returns Bundled scripts keyed by adapter name
  */
 export async function bundleHttpAdapters(
@@ -47,6 +53,7 @@ export async function bundleHttpAdapters(
   baseDir: string,
   cache?: BundleCache,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<HttpAdapterBundleResult> {
   if (adapters.length === 0) {
     return { bundledInputs: new Map(), bundledOutputs: new Map() };
@@ -65,7 +72,7 @@ export async function bundleHttpAdapters(
     return kinds.map((kind) => ({ adapter, kind }));
   });
   const results = await withBundleConcurrency(tasks, ({ adapter, kind }) =>
-    bundleAdapterScript(adapter, kind, tsconfig, cache, bundleLogLevel),
+    bundleAdapterScript(adapter, kind, tsconfig, cache, bundleLogLevel, tsconfigCache),
   );
 
   const bundledInputs = new Map<string, string>();
@@ -89,6 +96,7 @@ async function bundleAdapterScript(
   tsconfig: string | undefined,
   cache: BundleCache | undefined,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<[string, "input" | "output", string]> {
   const contextHash = computeBundlerContextHash({
     sourceFile: adapter.sourceFile,
@@ -105,21 +113,24 @@ async function bundleAdapterScript(
     name: adapter.name,
     sourceFile: adapter.sourceFile,
     contextHash,
-    async build(cachePlugins) {
+    async build(cachePlugins, trackDependency) {
       const absoluteSourcePath = path.resolve(adapter.sourceFile);
       const entryContent =
         kind === "input"
           ? buildInputEntry(absoluteSourcePath, adapter.methods, GRAPHQL_WEB_MODULE)
           : buildOutputEntry(absoluteSourcePath);
-      const entry = createVirtualEntry(`http-adapter:${adapter.name}:${kind}`, entryContent);
+      const entry = createVirtualEntry(
+        `http-adapter:${adapter.name}:${kind}`,
+        entryContent,
+        "js",
+        absoluteSourcePath,
+      );
 
       const rejectNodeImports: rolldown.Plugin = {
         name: "http-adapter-reject-node-imports",
         resolveId(source) {
           if (isNodeBuiltinImport(source)) {
-            throw new Error(
-              `HTTP adapter "${adapter.name}" imports Node module "${source}", which is unavailable in the gateway runtime`,
-            );
+            throw new Error(`HTTP adapter "${adapter.name}": ${getNodeBuiltinMessage(source)}`);
           }
           return null;
         },
@@ -147,9 +158,11 @@ async function bundleAdapterScript(
         entry.plugin,
         rejectNodeImports,
         stubSdkImports,
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
         ...cachePlugins,
       ];
 
+      const bundleLog = createBundleLog({ tsconfig });
       const result = await rolldown.build({
         input: entry.input,
         write: false,
@@ -168,8 +181,9 @@ async function bundleAdapterScript(
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),
-        logLevel: "silent",
+        ...bundleLog.options,
       } as rolldown.BuildOptions);
+      bundleLog.assertAllResolved();
       const bundled = result.output[0].code;
 
       const byteLength = Buffer.byteLength(bundled, "utf8");

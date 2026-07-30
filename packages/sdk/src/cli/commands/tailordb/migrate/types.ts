@@ -175,6 +175,14 @@ export interface SchemaDrift {
 }
 
 /**
+ * Reason why remote schema verification was skipped for a namespace
+ */
+export type RemoteSchemaVerificationSkipReason =
+  | "not_deployed"
+  | "no_migration_label"
+  | "no_snapshot";
+
+/**
  * Result of remote schema verification for a single namespace
  */
 export interface RemoteSchemaVerificationResult {
@@ -182,4 +190,8 @@ export interface RemoteSchemaVerificationResult {
   remoteMigrationNumber: number;
   drifts: SchemaDrift[];
   hasDrift: boolean;
+  /** Set when the remote migration checkpoint does not exist in the local migration history */
+  checkpointMissingLocal?: boolean;
+  /** Set when verification could not run (no remote migration label, or no snapshot at the remote migration number) */
+  skipped?: RemoteSchemaVerificationSkipReason;
 }
