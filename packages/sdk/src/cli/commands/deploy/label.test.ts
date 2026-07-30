@@ -121,12 +121,16 @@ describe("writeMetadataLabels", () => {
     expect(client.setMetadata).toHaveBeenCalledWith({ trn: "trn:x", labels: { mine: "value" } });
   });
 
-  test("writes the labels it found when the caller asks for no change", async () => {
+  test.each([
+    ["nothing is requested", {}],
+    ["the requested change is empty", { labels: {}, remove: [] }],
+  ])("does not touch the resource when %s", async (_name, change) => {
     const client = createClient({ keep: "yes" });
 
-    await writeMetadataLabels(client, { trn: "trn:x" });
+    await writeMetadataLabels(client, { trn: "trn:x", ...change });
 
-    expect(client.setMetadata).toHaveBeenCalledWith({ trn: "trn:x", labels: { keep: "yes" } });
+    expect(client.getMetadata).not.toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 });
 

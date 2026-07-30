@@ -380,14 +380,14 @@ describe("applyFunctionRegistry phase separation", () => {
           {
             name: "resolver/ns/create-test",
             entry,
-            metaRequest: { trn: "trn:test", labels: {} },
+            metaRequest: { trn: "trn:test", labels: { "sdk-name": "test-app" } },
           },
         ],
         updates: [
           {
             name: "resolver/ns/update-test",
             entry,
-            metaRequest: { trn: "trn:test", labels: {} },
+            metaRequest: { trn: "trn:test", labels: { "sdk-name": "test-app" } },
           },
         ],
         deletes: [
@@ -462,7 +462,7 @@ describe("applyFunctionRegistry phase separation", () => {
         contentHash: `hash-${name}`,
         description: `Function: ${name}`,
       },
-      metaRequest: { trn: `trn:${name}`, labels: {} },
+      metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
     });
     const planResult = {
       changeSet: {
@@ -512,7 +512,7 @@ describe("applyFunctionRegistry phase separation", () => {
         contentHash: `hash-${name}`,
         description: `Function: ${name}`,
       },
-      metaRequest: { trn: `trn:${name}`, labels: {} },
+      metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
     });
     const planResult = {
       changeSet: {
@@ -574,7 +574,7 @@ describe("applyFunctionRegistry phase separation", () => {
           contentHash: `hash-${name}`,
           description: `Function: ${name}`,
         },
-        metaRequest: { trn: `trn:${name}`, labels: {} },
+        metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
       });
       const planResult = {
         changeSet: {
