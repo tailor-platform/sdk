@@ -23,13 +23,15 @@ import {
   type MetadataLabelWrite,
   recordedDependencies,
   resourceTrn,
+  sdkNameLabelKey,
   writeMetadataLabels,
 } from "./label";
+import { trackDesiredResourceOwnership, trackRemainingResourceOwner } from "./owned-resource";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { HttpAdapterBundleResult } from "#/cli/services/http-adapter/bundler";
-import type { MissingDependentApp } from "./confirm";
+import type { MissingDependentApp, OwnerConflict, UnmanagedResource } from "./confirm";
 import type {
   DeleteApplicationRequestSchema,
   CreateApplicationRequestSchema,
@@ -251,6 +253,9 @@ export async function planApplication(
   httpAdapterBuildResult?: HttpAdapterBundleResult,
 ) {
   const { client, workspaceId, application, forRemoval } = context;
+  const conflicts: OwnerConflict[] = [];
+  const unmanaged: UnmanagedResource[] = [];
+  const resourceOwners = new Set<string>();
   const changeSet = createChangeSet<
     CreateApplication,
     UpdateApplication,
@@ -278,7 +283,15 @@ export async function planApplication(
     const owned = await Promise.all(
       candidates.map(async (app) => {
         const labels = await fetchAppLabels(client, workspaceId, app.name);
-        return isOwnedByApp(labels, application.name, application.id) ? app.name : null;
+        return trackRemainingResourceOwner({
+          labels,
+          ownerLabel: labels?.[sdkNameLabelKey],
+          appName: application.name,
+          appId: application.id,
+          resourceOwners,
+        })
+          ? app.name
+          : null;
       }),
     );
     for (const name of owned) {
@@ -292,13 +305,13 @@ export async function planApplication(
         });
       }
     }
-    return changeSet;
+    return withOwnership(changeSet, conflicts, unmanaged, resourceOwners);
   }
 
   // Skip application create/update when there are no subgraphs
   // (e.g. deploying only static web hosting)
   if (application.subgraphs.length === 0) {
-    return changeSet;
+    return withOwnership(changeSet, conflicts, unmanaged, resourceOwners);
   }
 
   let authNamespace: string | undefined;
@@ -402,13 +415,23 @@ export async function planApplication(
 
   if (existing) {
     const labels = await fetchAppLabels(client, workspaceId, application.name);
+    const owned = trackDesiredResourceOwnership({
+      labels,
+      ownerLabel: labels?.[sdkNameLabelKey],
+      appName: application.name,
+      appId: application.id,
+      resourceType: "Application",
+      resourceName: application.name,
+      conflicts,
+      unmanaged,
+    });
     const update: UpdateApplication = {
       name: application.name,
       request,
       metaRequest,
     };
     if (
-      isOwnedByApp(labels, application.name, application.id) &&
+      owned &&
       hasMatchingSdkVersion(labels, metaRequest.labels) &&
       areApplicationsEqual(existing, desired)
     ) {
@@ -431,7 +454,30 @@ export async function planApplication(
     });
   }
 
-  return changeSet;
+  return withOwnership(changeSet, conflicts, unmanaged, resourceOwners);
+}
+
+/**
+ * Attach the ownership-tracking fields to the plan's change set.
+ *
+ * The other resource plans return `{ changeSet, conflicts, ... }`; this one
+ * returns the change set itself, so the fields are attached to it. Without
+ * them the application is the one managed resource that never reaches
+ * `confirmOwnerConflict`, which would let a deploy re-tag — or a `remove`
+ * silently skip — an application this config does not own.
+ * @param changeSet - The application change set
+ * @param conflicts - Resources owned by another application
+ * @param unmanaged - Resources carrying no SDK label
+ * @param resourceOwners - Owners of the resources that were skipped
+ * @returns The change set, with the ownership-tracking fields attached
+ */
+function withOwnership<T extends object>(
+  changeSet: T,
+  conflicts: OwnerConflict[],
+  unmanaged: UnmanagedResource[],
+  resourceOwners: Set<string>,
+): T & { conflicts: OwnerConflict[]; unmanaged: UnmanagedResource[]; resourceOwners: Set<string> } {
+  return Object.assign(changeSet, { conflicts, unmanaged, resourceOwners });
 }
 
 /**
