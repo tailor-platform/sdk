@@ -720,8 +720,10 @@ export const allCodemods: CodemodPackage[] = [
     since: "1.0.0",
     until: "2.0.0",
     prereleaseUntil: V2_NEXT_PENDING,
+    // No legacyPatterns: a shorthand rewrite keeps `publishUserEvents` as the
+    // value identifier, so the token survives a successful migration. What the
+    // transform cannot reach is reported by reviewFindings instead.
     scriptPath: "v2/idp-publish-events-rename/scripts/transform.js",
-    legacyPatterns: ["publishUserEvents"],
     examples: [
       {
         before:
