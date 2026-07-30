@@ -4,14 +4,23 @@ import * as path from "pathe";
 import { AppConfigSchema } from "#/parser/app-config/schema";
 import { PluginConfigSchema } from "#/parser/plugin-config/index";
 import { loadConfigPath } from "./context";
+import { assertEnvHasNoSecrets, resolveEnvValue } from "./env-secret-scan";
 import { installCliTailordbStub } from "./mock";
-import type { AppConfig } from "#/configure/config/types";
+import type { AppConfig, EnvValue } from "#/configure/config/types";
 import type { Plugin } from "#/plugin/types";
 
 /**
- * Loaded configuration with resolved path
+ * App config whose `env` entries have been resolved to the values that get
+ * deployed: the `{ value, allowSecretReason }` form accepted in `defineConfig`
+ * is unwrapped during loading, so nothing downstream can deploy a wrapper
+ * object or the reason string alongside the value.
  */
-export type LoadedConfig = AppConfig & { path: string };
+export type ResolvedEnvAppConfig = Omit<AppConfig, "env"> & {
+  env?: Record<string, EnvValue>;
+};
+
+/** Loaded configuration with resolved path. */
+export type LoadedConfig = ResolvedEnvAppConfig & { path: string };
 
 export interface LoadConfigOptions {
   /** Import cache-busting value for callers that reload the config module after a rebuild. */
@@ -58,6 +67,14 @@ export async function loadConfig(
     throw new Error(`Invalid Tailor config in ${resolvedPath}:\n${issues}`);
   }
 
+  const appConfig = configModule.default as AppConfig;
+  await assertEnvHasNoSecrets({ env: appConfig.env, configPath: resolvedPath });
+  const env = appConfig.env
+    ? Object.fromEntries(
+        Object.entries(appConfig.env).map(([key, entry]) => [key, resolveEnvValue(entry)]),
+      )
+    : undefined;
+
   // Collect all plugin exports (plugins, plugins2, etc.)
   const allPlugins: Plugin[] = [];
 
@@ -84,7 +101,11 @@ export async function loadConfig(
   }
 
   return {
-    config: { ...configModule.default, path: resolvedPath } as LoadedConfig,
+    config: {
+      ...configModule.default,
+      ...(env ? { env } : {}),
+      path: resolvedPath,
+    } as LoadedConfig,
     plugins: allPlugins,
   };
 }
