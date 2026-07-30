@@ -2,7 +2,7 @@
 export type PublishEventsConflict = {
   /** Resource named in the error, e.g. `TailorDB type "Order"`. */
   resource: string;
-  /** Executor trigger family named in the error, e.g. `recordCreated`. */
+  /** Executor trigger family named in the error, e.g. `record`. */
   trigger: string;
   /** What the subscribing executors subscribe to. Defaults to `"it"`. */
   subscribesTo?: string;

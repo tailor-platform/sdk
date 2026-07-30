@@ -1482,13 +1482,30 @@ export function collectExternalAuthIdpConfigNames(
  * deploy of the owner alone would turn publishing off without asking. Workflows
  * are the one publishing resource that contributes no subgraph, so this is the
  * only shape that reaches it.
+ * A subscriber that resolves without an `id` cannot be named in a record either.
+ * That check applies only to a run that writes: `--dry-run` leaves every id
+ * uninjected, so demanding one there would reject configs a real deploy gives one.
  * @param subscriptions - Every event subscription resolved for the run
+ * @param writes - Whether this run applies changes rather than only reporting them
  */
 export function assertRecordableDependencies(
   subscriptions: ReadonlyArray<EventSubscription>,
+  writes: boolean,
 ): void {
   for (const { subscriber, owner, executorName, resource } of subscriptions) {
     if (subscriber.config.path === owner.config.path) continue;
+    if (writes && subscriber.application.id === undefined) {
+      throw new Error(
+        `Executor "${executorName}" in ${subscriber.config.path} subscribes to ${resource} in ` +
+          `${owner.config.path}, which would enable event publishing on it for this deploy only. ` +
+          `${subscriber.config.path} resolves without an "id" — a config that re-exports ` +
+          `defineConfig() from another file never gets one — so deploy cannot record which config ` +
+          `the dependency belongs to, and deploying ${owner.config.path} alone later would turn ` +
+          `publishing back off without asking.\n\n` +
+          `Call defineConfig() inline in ${subscriber.config.path} so deploy can manage its "id", ` +
+          `or set "publishEvents: true" on ${resource}.`,
+      );
+    }
     if (owner.application.subgraphs.length > 0) continue;
     throw new Error(
       `Executor "${executorName}" in ${subscriber.config.path} subscribes to ${resource} in ` +
@@ -1504,9 +1521,10 @@ export function assertRecordableDependencies(
 
 function collectDeployRunPlanInputs(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
+  writes: boolean,
 ): DeployRunPlanInputs {
   const eventSubscriptions = collectEventSubscriptions(targets);
-  assertRecordableDependencies(eventSubscriptions);
+  assertRecordableDependencies(eventSubscriptions, writes);
   return {
     eventSubscriptions,
     runAppIds: new Set(
@@ -2308,7 +2326,7 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
     rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
     rootSpan.setAttribute("workspace.id", workspaceId);
 
-    const runInputs = collectDeployRunPlanInputs(targets);
+    const runInputs = collectDeployRunPlanInputs(targets, !options?.dryRun);
     const deployments = await planDeploymentTargets({
       targets,
       runInputs,
