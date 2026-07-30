@@ -67,6 +67,13 @@ describe("releaseVaultOwnership", () => {
       { "sdk-name": "my-app", "sdk-version": "v1-0-0" },
       {},
     ],
+    [
+      // Ownership is decided by sdk-app-id alone, so a vault that kept it would
+      // still be deleted by the next deploy of a config that dropped it.
+      "removes sdk-app-id, which decides ownership on its own",
+      { "sdk-name": "my-app", "sdk-version": "v1-0-0", "sdk-app-id": "app-uuid", custom: "value" },
+      { custom: "value" },
+    ],
   ])("%s", async (_name, remoteLabels, expectedLabels) => {
     const client = {
       getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: remoteLabels } }),
