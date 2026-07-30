@@ -9,6 +9,9 @@ type TargetSpec = {
   resolvers?: string[];
   idps?: string[];
   workflows?: string[];
+  externalTailorDBNamespaces?: string[];
+  externalResolverNamespaces?: string[];
+  externalIdps?: string[];
   executors?: Record<string, Record<string, unknown>>;
 };
 
@@ -37,7 +40,11 @@ function target(spec: TargetSpec): Target {
       workflowService: {
         workflows: Object.fromEntries((spec.workflows ?? []).map((name) => [name, { name }])),
       },
-      subgraphs: [],
+      externalTailorDBNamespaces: spec.externalTailorDBNamespaces ?? [],
+      subgraphs: [
+        ...(spec.externalResolverNamespaces ?? []).map((Name) => ({ Type: "pipeline", Name })),
+        ...(spec.externalIdps ?? []).map((Name) => ({ Type: "idp", Name })),
+      ],
       executorService: {
         executors: Object.fromEntries(
           Object.entries(spec.executors ?? {}).map(([name, trigger]) => [
@@ -86,6 +93,80 @@ describe("collectEventSubscriptions", () => {
       ]),
     ).toThrow(/which no config in this deploy declares/);
   });
+
+  test.each([
+    {
+      kind: "TailorDB type",
+      trigger: { kind: "tailordb", typeName: "Order" },
+      external: { externalTailorDBNamespaces: ["shared-db"] },
+      expected:
+        'declares external TailorDB namespace "shared-db", so add the config that owns it to --config',
+    },
+    {
+      kind: "Resolver",
+      trigger: { kind: "resolverExecuted", resolverName: "processOrder" },
+      external: { externalResolverNamespaces: ["shared-pipeline"] },
+      expected:
+        'declares external resolver namespace "shared-pipeline", so add the config that owns it to --config',
+    },
+    {
+      kind: "IdP service",
+      trigger: { kind: "idpUser", idp: "shared-idp" },
+      external: { externalIdps: ["shared-idp"] },
+      expected: 'declares external IdP "shared-idp", so add the config that owns it to --config',
+    },
+  ])(
+    "points at the missing peer config when the resource is declared external ($kind)",
+    ({ trigger, external, expected }) => {
+      expect(() =>
+        collectEventSubscriptions([
+          target({
+            configPath: "buyer/tailor.config.ts",
+            ...external,
+            executors: { "sync-it": trigger },
+          }),
+        ]),
+      ).toThrow(expected);
+    },
+  );
+
+  test("points at the name when the config declares nothing external", () => {
+    expect(() =>
+      collectEventSubscriptions([
+        target({
+          configPath: "buyer/tailor.config.ts",
+          executors: { "sync-order": { kind: "tailordb", typeName: "Odrer" } },
+        }),
+      ]),
+    ).toThrow("declares nothing external that could hold it, so check the name");
+  });
+
+  test("does not point at an unrelated external IdP", () => {
+    expect(() =>
+      collectEventSubscriptions([
+        target({
+          configPath: "buyer/tailor.config.ts",
+          externalIdps: ["other-idp"],
+          executors: { "sync-user": { kind: "idpUser", idp: "shared-idp" } },
+        }),
+      ]),
+    ).toThrow("declares nothing external that could hold it, so check the name");
+  });
+
+  test.each([{ kind: "workflowExecution" }, { kind: "workflowJobExecution" }])(
+    "says a workflow cannot be declared external ($kind)",
+    ({ kind }) => {
+      expect(() =>
+        collectEventSubscriptions([
+          target({
+            configPath: "buyer/tailor.config.ts",
+            externalTailorDBNamespaces: ["shared-db"],
+            executors: { "sync-orders": { kind, workflowName: "orders" } },
+          }),
+        ]),
+      ).toThrow("A workflow cannot be declared as owned by another config");
+    },
+  );
 
   test.each([
     {
