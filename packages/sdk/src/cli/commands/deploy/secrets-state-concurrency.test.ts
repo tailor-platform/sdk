@@ -149,6 +149,7 @@ describe("concurrent deploys to the same target", () => {
         return {};
       }),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     } as unknown as OperatorClient;
 
     const clientB = {
@@ -157,6 +158,7 @@ describe("concurrent deploys to the same target", () => {
         return {};
       }),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     } as unknown as OperatorClient;
 
     const applyA = applyAuthConnections(

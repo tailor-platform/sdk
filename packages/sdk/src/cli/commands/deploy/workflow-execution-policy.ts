@@ -2,7 +2,13 @@ import { type OperatorClient } from "#/cli/shared/client";
 import { WorkflowJobFunctionExecutionPolicySchema } from "#/parser/service/workflow/schema";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -12,21 +18,20 @@ import type { ExecutionPolicyInstance } from "#/configure/services/workflow/exec
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 import type { ConcurrencyPolicySchema } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 type CreatePolicy = {
   name: string;
   workspaceId: string;
   policy: ExecutionPolicyInstance;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdatePolicy = {
   name: string;
   workspaceId: string;
   policy: ExecutionPolicyInstance;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeletePolicy = {
@@ -38,7 +43,7 @@ type ReplacePolicy = {
   name: string;
   workspaceId: string;
   policy: ExecutionPolicyInstance;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 function toConcurrencyPolicyInit(
@@ -253,7 +258,7 @@ export async function applyWorkflowJobFunctionExecutionPolicy(
           executionPolicyKey: toPlatformExecutionPolicyKey(replace.policy),
           concurrencyPolicy: toConcurrencyPolicyInit(replace.policy.concurrencyPolicy),
         });
-        await client.setMetadata(replace.metaRequest);
+        await writeMetadataLabels(client, replace.metaRequest);
       }),
       ...changeSet.creates.map(async (create) => {
         await client.createWorkflowJobFunctionExecutionPolicy({
@@ -262,7 +267,7 @@ export async function applyWorkflowJobFunctionExecutionPolicy(
           executionPolicyKey: toPlatformExecutionPolicyKey(create.policy),
           concurrencyPolicy: toConcurrencyPolicyInit(create.policy.concurrencyPolicy),
         });
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
         await client.updateWorkflowJobFunctionExecutionPolicy({
@@ -270,7 +275,7 @@ export async function applyWorkflowJobFunctionExecutionPolicy(
           executionPolicyName: update.policy.name,
           concurrencyPolicy: toConcurrencyPolicyInit(update.policy.concurrencyPolicy),
         });
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
   } else {

@@ -15,7 +15,14 @@ import { HTTP_METHODS } from "#/parser/service/http-adapter/index";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
@@ -26,7 +33,6 @@ import type {
   UpdateApplicationRequestSchema,
 } from "@tailor-platform/tailor-proto/application_pb";
 import type { HttpAdapterSchema } from "@tailor-platform/tailor-proto/http_adapter_resource_pb";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply application changes for the given phase.
@@ -53,7 +59,7 @@ export async function applyApplication(
           "CORS",
         );
         await client.createApplication(create.request);
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
@@ -63,7 +69,7 @@ export async function applyApplication(
           "CORS",
         );
         await client.updateApplication(update.request);
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
   } else {
@@ -80,7 +86,7 @@ export async function applyApplication(
 type CreateApplication = {
   name: string;
   request: MessageInitShape<typeof CreateApplicationRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
   /** Per-adapter diff lines shown indented beneath the application entry. */
   details?: string[];
 };
@@ -88,7 +94,7 @@ type CreateApplication = {
 type UpdateApplication = {
   name: string;
   request: MessageInitShape<typeof UpdateApplicationRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
   /** Per-adapter diff lines shown indented beneath the application entry. */
   details?: string[];
 };

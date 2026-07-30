@@ -67,11 +67,27 @@ describe("releaseVaultOwnership", () => {
       { "sdk-name": "my-app", "sdk-version": "v1-0-0" },
       {},
     ],
-  ])("%s", async (_name, existingLabels, expectedLabels) => {
-    const client = { setMetadata: vi.fn().mockResolvedValue({}) } as unknown as OperatorClient;
+  ])("%s", async (_name, remoteLabels, expectedLabels) => {
+    const client = {
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: remoteLabels } }),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
 
-    await releaseVaultOwnership({ client, trn: TRN, existingLabels });
+    await releaseVaultOwnership({ client, trn: TRN });
 
     expect(client.setMetadata).toHaveBeenCalledWith({ trn: TRN, labels: expectedLabels });
+  });
+
+  test("keeps a label written after checkVaultManaged read the metadata", async () => {
+    const client = {
+      getMetadata: vi.fn().mockResolvedValue({
+        metadata: { labels: { "sdk-name": "my-app", "sdk-version": "v1-0-0", added: "later" } },
+      }),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+
+    await releaseVaultOwnership({ client, trn: TRN });
+
+    expect(client.setMetadata).toHaveBeenCalledWith({ trn: TRN, labels: { added: "later" } });
   });
 });
