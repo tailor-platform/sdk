@@ -498,3 +498,21 @@ describe("assertRecordableDependencies escape hatch", () => {
     expect(() => assertRecordableDependencies(subscriptions, true)).not.toThrow();
   });
 });
+
+describe("collectDependentApps and a declared publishEvents", () => {
+  test("records nothing when the subscribed resource declares the value", () => {
+    // Recording it would ask about a partial deploy that changes nothing, and
+    // prompt.confirm rejects where it cannot ask — failing a safe deploy in CI.
+    const subscriptions = collectEventSubscriptions([
+      target({ configPath: "supplier/tailor.config.ts", types: ["Order"], pinnedTypes: ["Order"] }),
+      target({
+        configPath: "buyer/tailor.config.ts",
+        appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82",
+        namespace: "buyer",
+        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+      }),
+    ]);
+
+    expect(collectDependentApps(subscriptions)).toEqual(new Map());
+  });
+});
