@@ -17,7 +17,7 @@ import {
   getMigrationFilePath,
   formatMigrationNumber,
 } from "./snapshot";
-import { parseMigrationLabelNumber } from "./types";
+import { MIGRATION_LABEL_KEY, parseMigrationLabelNumber } from "./types";
 
 export interface StatusOptions {
   configPath?: string;
@@ -76,7 +76,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     let currentMigration: number;
     try {
       const { metadata } = await client.getMetadata({ trn });
-      const label = metadata?.labels["sdk-migration"];
+      const label = metadata?.labels[MIGRATION_LABEL_KEY];
       currentMigration = label ? (parseMigrationLabelNumber(label) ?? 0) : 0;
     } catch {
       currentMigration = 0;
