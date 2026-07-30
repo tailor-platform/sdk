@@ -1,4 +1,6 @@
+import { Lang, parse } from "@ast-grep/napi";
 import { gte, lte, valid } from "semver";
+import type { SgNode } from "@ast-grep/napi";
 
 /**
  * Sentinel `since` value for a deprecation whose shipping version is not known
@@ -39,7 +41,6 @@ export interface CheckDeprecationTagsOptions {
 
 // A tag's text runs to the end of its JSDoc comment or to the next block tag,
 // whichever comes first.
-const JSDOC_BLOCK = /\/\*\*[\s\S]*?\*\//g;
 const JSDOC_OPENER = /^[ \t]*\/\*\*/;
 const JSDOC_CLOSER = /\*\/[ \t]*$/;
 const JSDOC_LINE_PREFIX = /^\s*\*\s?/;
@@ -52,29 +53,74 @@ const SINCE = /^since\s+(\S+)/;
 const CODEMOD_IDS = /codemod:\s*([a-z0-9][\w./-]*(?:\s*,\s*[a-z0-9][\w./-]*)*)/;
 const TRAILING_PUNCTUATION = /[.,;:—-]+$/;
 
-// One JSDoc block with its comment scaffolding removed, so a line is read the
-// same way whether it opens the block, continues it, or closes it.
+/** One JSDoc comment, as raw lines plus the same lines with the scaffolding removed. */
 interface JsdocBlock {
-  /** One-based line of the block's first line. */
+  /** One-based line of the comment's first line. */
   startLine: number;
-  /** Block lines without `/**`, the leading `*`, or the trailing `*&#47;`. */
+  /** Character offset of the comment in the file. */
+  startIndex: number;
+  /** Comment text exactly as it appears in the file. */
+  raw: string;
+  /** `raw` split by line, without `/**`, the leading `*`, or the trailing `*&#47;`. */
   lines: string[];
 }
 
-function jsdocBlocks(source: string): JsdocBlock[] {
-  // Scan inside JSDoc blocks only, so `@deprecated` in a string literal or a
-  // plain comment is not parsed as a tag.
-  return [...source.matchAll(JSDOC_BLOCK)].map((block) => ({
-    startLine: source.slice(0, block.index).split("\n").length,
-    lines: block[0]
-      .split("\n")
-      .map((line, index) =>
-        (index === 0
-          ? line.replace(JSDOC_OPENER, "")
-          : line.replace(JSDOC_LINE_PREFIX, "")
-        ).replace(JSDOC_CLOSER, ""),
+function stripScaffolding(raw: string): string[] {
+  return raw
+    .split("\n")
+    .map((line, index) =>
+      (index === 0 ? line.replace(JSDOC_OPENER, "") : line.replace(JSDOC_LINE_PREFIX, "")).replace(
+        JSDOC_CLOSER,
+        "",
       ),
-  }));
+    );
+}
+
+/**
+ * Collect the JSDoc comments of a file. Comments come from the parser rather than
+ * a text scan, so a `/** … *&#47;` that only exists inside a string or template
+ * literal — the SDK emits generated code that way — is not read as a tag, and the
+ * release resolver cannot rewrite runtime string contents.
+ * @param source - File contents
+ * @returns One entry per JSDoc comment, in source order
+ */
+function jsdocBlocks(source: string): JsdocBlock[] {
+  let comments: SgNode[];
+  try {
+    comments = parse(Lang.Tsx, source)
+      .root()
+      .findAll({ rule: { kind: "comment" } })
+      .filter((node) => node.text().startsWith("/**"));
+  } catch {
+    return [];
+  }
+
+  return comments.map((node) => {
+    const raw = node.text();
+    const start = node.range().start;
+    return {
+      startLine: start.line + 1,
+      startIndex: start.index,
+      raw,
+      lines: stripScaffolding(raw),
+    };
+  });
+}
+
+/** Line indexes (within a block) that start a `@deprecated` tag, with its text. */
+function deprecationTagsInBlock(block: JsdocBlock): Array<{ index: number; text: string }> {
+  const tags: Array<{ index: number; text: string }> = [];
+  block.lines.forEach((line, index) => {
+    const tag = DEPRECATED_TAG_LINE.exec(line);
+    if (tag === null) return;
+    const collected = [tag[1]!];
+    for (const next of block.lines.slice(index + 1)) {
+      if (NEXT_BLOCK_TAG.test(next)) break;
+      collected.push(next);
+    }
+    tags.push({ index, text: collected.join(" ").replace(/\s+/g, " ").trim() });
+  });
+  return tags;
 }
 
 /**
@@ -85,22 +131,10 @@ function jsdocBlocks(source: string): JsdocBlock[] {
  */
 export function findDeprecationTags(source: string): DeprecationTag[] {
   const tags: DeprecationTag[] = [];
-  for (const { startLine, lines } of jsdocBlocks(source)) {
-    lines.forEach((line, index) => {
-      const tag = DEPRECATED_TAG_LINE.exec(line);
-      if (tag === null) return;
-
-      const collected = [tag[1]!];
-      for (const next of lines.slice(index + 1)) {
-        if (NEXT_BLOCK_TAG.test(next)) break;
-        collected.push(next);
-      }
-
-      tags.push({
-        line: startLine + index,
-        text: collected.join(" ").replace(/\s+/g, " ").trim(),
-      });
-    });
+  for (const block of jsdocBlocks(source)) {
+    for (const tag of deprecationTagsInBlock(block)) {
+      tags.push({ line: block.startLine + tag.index, text: tag.text });
+    }
   }
   return tags;
 }
@@ -216,17 +250,42 @@ export interface ResolvePendingSinceResult {
   source: string;
 }
 
-// Tolerates a JSDoc continuation between the tag and `since`, so an unusually
-// wrapped comment still resolves instead of silently shipping the sentinel.
-const PENDING_SINCE_PATTERN = new RegExp(
-  `(@deprecated\\s+(?:\\*\\s*)?since\\s+)${PENDING_SINCE}\\b`,
-  "g",
-);
+const PENDING_SINCE_VALUE = new RegExp(`^since\\s+${PENDING_SINCE}\\b`);
 
 /**
- * Rewrite `@deprecated since NEXT_RELEASE` to a concrete version. Confined to
- * JSDoc blocks, like {@link findDeprecationTags}, so the release workflow never
- * edits the sentinel spelled out in a string literal or a plain comment.
+ * Rewrite one JSDoc comment's pending sentinels, or return null when it has none.
+ * Which tags to touch comes from the same parse the checker uses, so a tag the
+ * checker accepts cannot be one the resolver silently skips — the sentinel is then
+ * replaced in the tag's own lines, wherever the wrapping happens to have put it.
+ * @param block - The JSDoc comment
+ * @param resolvedVersion - Version to write in place of the sentinel
+ * @returns The rewritten comment text, or null when nothing matched
+ */
+function rewriteBlock(block: JsdocBlock, resolvedVersion: string): string | null {
+  const rawLines = block.raw.split("\n");
+  let changed = false;
+
+  for (const tag of deprecationTagsInBlock(block)) {
+    if (!PENDING_SINCE_VALUE.test(tag.text)) continue;
+    const lastLine = block.lines.findIndex(
+      (line, index) => index > tag.index && NEXT_BLOCK_TAG.test(line),
+    );
+    const end = lastLine === -1 ? rawLines.length : lastLine;
+    for (let index = tag.index; index < end; index += 1) {
+      if (!rawLines[index]!.includes(PENDING_SINCE)) continue;
+      rawLines[index] = rawLines[index]!.replace(PENDING_SINCE, resolvedVersion);
+      changed = true;
+      break;
+    }
+  }
+
+  return changed ? rawLines.join("\n") : null;
+}
+
+/**
+ * Rewrite `@deprecated since NEXT_RELEASE` to a concrete version, in JSDoc
+ * comments only, so the release workflow never edits a sentinel that is part of a
+ * string literal or a plain comment.
  * @param source - File contents
  * @param resolvedVersion - Version the release PR bumped `@tailor-platform/sdk` to
  * @returns The (possibly) rewritten source and whether it changed
@@ -239,13 +298,17 @@ export function resolvePendingSince(
     throw new Error(`resolvedVersion must be a valid semver version: ${resolvedVersion}`);
   }
 
-  let changed = false;
-  const updated = source.replace(JSDOC_BLOCK, (block) =>
-    block.replace(PENDING_SINCE_PATTERN, (_match, prefix: string) => {
-      changed = true;
-      return `${prefix}${resolvedVersion}`;
-    }),
-  );
+  let updated = "";
+  let cursor = 0;
+  for (const block of jsdocBlocks(source)) {
+    const rewritten = rewriteBlock(block, resolvedVersion);
+    if (rewritten === null) continue;
+    updated += source.slice(cursor, block.startIndex) + rewritten;
+    cursor = block.startIndex + block.raw.length;
+  }
 
-  return changed ? { changed, source: updated } : { changed: false, source };
+  if (cursor === 0) {
+    return { changed: false, source };
+  }
+  return { changed: true, source: updated + source.slice(cursor) };
 }

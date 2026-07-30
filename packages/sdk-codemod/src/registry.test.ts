@@ -120,7 +120,7 @@ describe("getApplicableCodemods", () => {
     }
   });
 
-  test("throws when since is not older than until", () => {
+  test("throws when since is not older than the stable boundary", () => {
     allCodemods.push({
       id: "v2/empty-range",
       name: "Empty range",
@@ -131,7 +131,26 @@ describe("getApplicableCodemods", () => {
 
     try {
       expect(() => getApplicableCodemods("1.0.0", "2.0.0")).toThrow(
-        "Codemod v2/empty-range since must be older than until: 2.0.0 >= 2.0.0",
+        "Codemod v2/empty-range since must be older than the boundary it applies up to: 2.0.0 >= 2.0.0",
+      );
+    } finally {
+      allCodemods.pop();
+    }
+  });
+
+  test("throws when since is not older than a concrete prereleaseUntil", () => {
+    allCodemods.push({
+      id: "v2/empty-prerelease-range",
+      name: "Empty prerelease range",
+      description: "Empty prerelease range",
+      since: "2.0.0-next.5",
+      until: "2.0.0",
+      prereleaseUntil: "2.0.0-next.3",
+    });
+
+    try {
+      expect(() => getApplicableCodemods("1.0.0", "2.0.0")).toThrow(
+        "Codemod v2/empty-prerelease-range since must be older than the boundary it applies up to: 2.0.0-next.5 >= 2.0.0-next.3",
       );
     } finally {
       allCodemods.pop();
