@@ -4,6 +4,17 @@ import type { EnvEntry, EnvValue } from "#/configure/config/types";
 
 const AWS_RULE_ID = "@secretlint/secretlint-rule-aws";
 const RULE_ID_PREFIX = "@secretlint/secretlint-rule-";
+/**
+ * Honors `secretlint-disable` comments found in the scanned text. `env` values
+ * are author-controlled text, so leaving this rule in let a value act as a
+ * directive and suppress the findings of the entries after it — defeating the
+ * check without the explicit allowance.
+ *
+ * Matched by id on purpose: the rule declares itself a `scanner`, so it cannot
+ * be told apart by `meta.type`, and the preset's `disabled` option has no
+ * effect on it.
+ */
+const COMMENT_DIRECTIVE_RULE_ID = "@secretlint/secretlint-rule-filter-comments";
 const HIGH_ENTROPY_DETECTOR = "high-entropy";
 
 /**
@@ -179,7 +190,7 @@ async function reportEnvSecrets(input: EnvSecretScanInput): Promise<void> {
 async function scanWithProviderRules(
   entries: ReadonlyArray<ScannedEntry>,
 ): Promise<EnvSecretFinding[]> {
-  const [{ lintSource }, { creator }] = await Promise.all([
+  const [{ lintSource }, { rules }] = await Promise.all([
     import("@secretlint/core"),
     import("@secretlint/secretlint-rule-preset-recommend"),
   ]);
@@ -200,14 +211,16 @@ async function scanWithProviderRules(
       maskSecrets: true,
       noPhysicFilePath: true,
       config: {
-        rules: [
-          {
-            id: creator.meta.id,
-            rule: creator,
+        // Registered individually rather than through the preset so the
+        // comment-directive rule can be left out (see its id above).
+        rules: rules
+          .filter((rule) => rule.meta.id !== COMMENT_DIRECTIVE_RULE_ID)
+          .map((rule) => ({
+            id: rule.meta.id,
+            rule,
             // Off by default, and the only way to catch a bare access key id.
-            rules: [{ id: AWS_RULE_ID, options: { enableIDScanRule: true } }],
-          },
-        ],
+            ...(rule.meta.id === AWS_RULE_ID ? { options: { enableIDScanRule: true } } : {}),
+          })),
       },
     },
   });
