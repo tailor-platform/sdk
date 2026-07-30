@@ -122,6 +122,18 @@ describe("writeMetadataLabels", () => {
   });
 
   test.each([
+    ["the labels are already set to the requested values", { labels: { keep: "yes" } }],
+    ["the keys to remove are not there", { remove: ["gone"] }],
+  ])("does not write when %s", async (_name, change) => {
+    const client = createClient({ keep: "yes" });
+
+    await writeMetadataLabels(client, { trn: "trn:x", ...change });
+
+    expect(client.getMetadata).toHaveBeenCalledWith({ trn: "trn:x" });
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test.each([
     ["nothing is requested", {}],
     ["the requested change is empty", { labels: {}, remove: [] }],
   ])("does not touch the resource when %s", async (_name, change) => {

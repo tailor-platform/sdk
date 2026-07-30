@@ -173,8 +173,10 @@ export interface MetadataLabelWrite {
  * server-side conditional writes — but a write can no longer be built from
  * state this process read at an unrelated point in time.
  *
- * A write that changes nothing does nothing: writing back what was just read
- * would still overwrite whatever landed in between, for no gain.
+ * A write that changes nothing does nothing — whether the caller requested no
+ * change or the change turns out to already hold. Writing back what was just
+ * read would still overwrite whatever landed in between, for no gain, and the
+ * labels the SDK sets are unchanged on most deploys.
  * @param client - Operator client instance
  * @param write - TRN, labels to set, and label keys to delete
  * @returns Promise that resolves when the labels are written
@@ -186,9 +188,16 @@ export async function writeMetadataLabels(
   const { trn, labels, remove } = write;
   if (!Object.keys(labels ?? {}).length && !(remove ?? []).length) return;
   const current = await getOrNull(() => client.getMetadata({ trn }));
-  const merged: Record<string, string> = { ...current?.metadata?.labels, ...labels };
+  const currentLabels = current?.metadata?.labels ?? {};
+  const merged: Record<string, string> = { ...currentLabels, ...labels };
   for (const key of remove ?? []) {
     delete merged[key];
   }
+  if (areSameLabels(currentLabels, merged)) return;
   await client.setMetadata({ trn, labels: merged });
+}
+
+function areSameLabels(a: Record<string, string>, b: Record<string, string>): boolean {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => a[key] === b[key]);
 }
