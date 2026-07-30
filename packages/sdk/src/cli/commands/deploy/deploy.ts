@@ -193,10 +193,12 @@ export function collectEventSubscriptions(
   targets: ReadonlyArray<BuiltDeploymentTarget>,
 ): EventSubscription[] {
   const subscriptions: EventSubscription[] = [];
+  const applications = targets.map((target) => target.application);
   for (const subscriber of targets) {
     const executors = subscriber.application.executorService?.executors ?? {};
+    const visibility = collectSubscriberVisibility(subscriber, applications);
     for (const executor of Object.values(executors)) {
-      const lookup = eventSourceLookup(executor, subscriber);
+      const lookup = eventSourceLookup(executor, subscriber, visibility);
       if (!lookup) {
         continue;
       }
@@ -210,17 +212,18 @@ export function collectEventSubscriptions(
         subscriptions.push({ ...entry, owner: subscriber, pinned: lookup.pinned(subscriber) });
         continue;
       }
-      const owners = targets.filter(
+      const peers = targets.filter(
         (target) => target.config.path !== subscriber.config.path && lookup.declaredBy(target),
       );
+      const owners = lookup.narrowOwners(peers);
+      // The subscriber sees the name in more than one namespace. Which one the
+      // trigger means is reported when the executor's namespace is resolved.
+      if (owners === "ambiguous") {
+        continue;
+      }
       const [owner] = owners;
       if (!owner) {
         throw new Error(missingOwnerMessage(executor.name, lookup, subscriber));
-      }
-      // Several configs declare the name in different namespaces. Which one the
-      // trigger means is reported when the executor's namespace is resolved.
-      if (owners.length > 1) {
-        continue;
       }
       subscriptions.push({ ...entry, owner, pinned: lookup.pinned(owner) });
     }
@@ -1294,6 +1297,31 @@ type PublishingTrigger = Extract<
   }
 >;
 
+/**
+ * What one subscribing config can see, in the same terms the executor's own
+ * namespace resolution uses. A namespace maps to `undefined` when the subscriber
+ * sees the name in more than one place.
+ */
+type SubscriberVisibility = {
+  tailorDBTypes: ReadonlyMap<string, string | undefined>;
+  resolvers: ReadonlyMap<string, string | undefined>;
+  idps: ReadonlySet<string>;
+};
+
+function collectSubscriberVisibility(
+  subscriber: BuiltDeploymentTarget,
+  applications: ReadonlyArray<Readonly<Application>>,
+): SubscriberVisibility {
+  return {
+    tailorDBTypes: collectVisibleTailorDBTypeNamespaces(subscriber.application, applications),
+    resolvers: collectVisibleResolverNamespaces(subscriber.application, applications),
+    idps: collectVisibleIdpNames(subscriber.application, applications),
+  };
+}
+
+/** Candidate owners the subscriber's view leaves, or that it cannot tell apart. */
+type OwnerCandidates = BuiltDeploymentTarget[] | "ambiguous";
+
 /** How to find one event-publishing resource in a deployment target. */
 type EventSourceLookup = {
   /** Resource named in error messages, e.g. `TailorDB type "Order"`. */
@@ -1307,6 +1335,14 @@ type EventSourceLookup = {
    * not depend on which configs the run covers.
    */
   pinned: (target: BuiltDeploymentTarget) => boolean;
+  /**
+   * Narrow peer configs to the ones the subscriber's own view resolves to.
+   *
+   * Matching on the name alone would count a same-named resource in a namespace
+   * the subscriber cannot see, and drop the subscription as ambiguous even though
+   * the executor resolves it to exactly one owner.
+   */
+  narrowOwners: (candidates: ReadonlyArray<BuiltDeploymentTarget>) => OwnerCandidates;
   /**
    * What `target` declares as owned elsewhere that could hold this resource,
    * described for an error message. Undefined for a resource kind that cannot be
@@ -1429,15 +1465,55 @@ function pinsEveryWorkflowJob(target: BuiltDeploymentTarget): boolean {
   return jobs.length > 0 && jobs.every((job) => job.publishEvents !== undefined);
 }
 
+// A namespaced resource is owned by whichever config declares it in the one
+// namespace the subscriber sees it through. An absent key means the subscriber
+// cannot see the name at all, which the missing-owner error explains.
+function narrowByVisibleNamespace(params: {
+  candidates: ReadonlyArray<BuiltDeploymentTarget>;
+  visible: ReadonlyMap<string, string | undefined>;
+  resourceKey: string;
+  declaresIn: (target: BuiltDeploymentTarget, namespace: string) => boolean;
+}): OwnerCandidates {
+  const { candidates, visible, resourceKey, declaresIn } = params;
+  if (!visible.has(resourceKey)) return [];
+  const namespace = visible.get(resourceKey);
+  if (namespace === undefined) return "ambiguous";
+  return candidates.filter((target) => declaresIn(target, namespace));
+}
+
+function declaresTailorDBTypeIn(
+  target: BuiltDeploymentTarget,
+  namespace: string,
+  typeName: string,
+): boolean {
+  return target.application.tailorDBServices.some(
+    (service) => service.namespace === namespace && Boolean(service.types[typeName]),
+  );
+}
+
+function declaresResolverIn(
+  target: BuiltDeploymentTarget,
+  namespace: string,
+  resolverName: string,
+): boolean {
+  return target.application.resolverServices.some(
+    (service) =>
+      service.namespace === namespace &&
+      Object.values(service.resolvers).some((resolver) => resolver.name === resolverName),
+  );
+}
+
 /**
  * Resolve how to find the resource an executor's event trigger subscribes to.
  * @param executor - Executor declared by the subscribing config
  * @param subscriber - Deployment target declaring the executor
+ * @param visibility - What the subscribing config can see, by resource kind
  * @returns The lookup, or undefined for triggers with no publishing resource
  */
 function eventSourceLookup(
   executor: Executor,
   subscriber: BuiltDeploymentTarget,
+  visibility: SubscriberVisibility,
 ): EventSourceLookup | undefined {
   const { trigger } = executor;
   switch (trigger.kind) {
@@ -1447,6 +1523,14 @@ function eventSourceLookup(
         trigger,
         declaredBy: (target) => declaresTailorDBType(target, trigger.typeName),
         pinned: (target) => pinsTailorDBType(target, trigger.typeName),
+        narrowOwners: (candidates) =>
+          narrowByVisibleNamespace({
+            candidates,
+            visible: visibility.tailorDBTypes,
+            resourceKey: trigger.typeName,
+            declaresIn: (target, namespace) =>
+              declaresTailorDBTypeIn(target, namespace, trigger.typeName),
+          }),
         externalHint: (target) =>
           describeExternal("TailorDB namespace", externalTailorDBNamespaces(target)),
       };
@@ -1456,6 +1540,14 @@ function eventSourceLookup(
         trigger,
         declaredBy: (target) => declaresResolver(target, trigger.resolverName),
         pinned: (target) => pinsResolver(target, trigger.resolverName),
+        narrowOwners: (candidates) =>
+          narrowByVisibleNamespace({
+            candidates,
+            visible: visibility.resolvers,
+            resourceKey: trigger.resolverName,
+            declaresIn: (target, namespace) =>
+              declaresResolverIn(target, namespace, trigger.resolverName),
+          }),
         externalHint: (target) =>
           describeExternal("resolver namespace", externalResolverNamespaces(target)),
       };
@@ -1469,6 +1561,12 @@ function eventSourceLookup(
         trigger,
         declaredBy: (target) => declaresIdp(target, idpName),
         pinned: (target) => pinsIdp(target, idpName),
+        // IdP namespace names are unique across a run, so there is nothing to
+        // tell apart once the subscriber can see the name.
+        narrowOwners: (candidates) =>
+          visibility.idps.has(idpName)
+            ? candidates.filter((target) => declaresIdp(target, idpName))
+            : [],
         // The trigger names the IdP, so the hint can be exact rather than a list.
         externalHint: (target) =>
           describeExternal(
@@ -1487,6 +1585,8 @@ function eventSourceLookup(
           trigger.kind === "workflowExecution"
             ? pinsWorkflow(target, trigger.workflowName)
             : pinsEveryWorkflowJob(target),
+        narrowOwners: (candidates) =>
+          candidates.filter((target) => declaresWorkflow(target, trigger.workflowName)),
         // A workflow has no `external` declaration to check.
         externalHint: () => undefined,
       };

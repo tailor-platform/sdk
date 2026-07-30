@@ -205,11 +205,13 @@ describe("collectEventSubscriptions", () => {
       kind: "resolverExecuted",
       trigger: { kind: "resolverExecuted", resolverName: "processOrder" },
       owns: { resolvers: ["processOrder"] },
+      sees: { externalResolverNamespaces: ["pipeline"] },
     },
     {
       kind: "idpUser",
       trigger: { kind: "idpUser", idp: "shared-idp" },
       owns: { idps: ["shared-idp"] },
+      sees: { externalIdps: ["shared-idp"] },
     },
     {
       kind: "workflowExecution",
@@ -218,12 +220,13 @@ describe("collectEventSubscriptions", () => {
     },
   ])(
     "resolves a cross-config subscription to the declaring config ($kind)",
-    ({ trigger, owns }) => {
+    ({ trigger, owns, sees }) => {
       const owner = target({ configPath: "supplier/tailor.config.ts", appId: supplierId, ...owns });
       const subscriber = target({
         configPath: "buyer/tailor.config.ts",
         appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82",
         executors: { "sync-it": trigger },
+        ...sees,
       });
 
       const subscriptions = collectEventSubscriptions([owner, subscriber]);
@@ -276,6 +279,7 @@ describe("collectEventSubscriptions", () => {
       target({ configPath: "vendor/tailor.config.ts", namespace: "vendor", types: ["Order"] }),
       target({
         configPath: "shell/tailor.config.ts",
+        externalTailorDBNamespaces: ["db-supplier", "db-vendor"],
         executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
       }),
     ]);
@@ -409,6 +413,7 @@ describe("assertRecordableDependencies id requirement", () => {
     target({
       configPath: "wrapper/tailor.config.ts",
       namespace: "wrapper",
+      externalTailorDBNamespaces: ["db"],
       executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
     }),
   ];
@@ -473,6 +478,7 @@ describe("assertRecordableDependencies escape hatch", () => {
       target({
         configPath: "wrapper/tailor.config.ts",
         namespace: "wrapper",
+        externalTailorDBNamespaces: ["db"],
         executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
       }),
     ]);
@@ -509,10 +515,47 @@ describe("collectDependentApps and a declared publishEvents", () => {
         configPath: "buyer/tailor.config.ts",
         appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82",
         namespace: "buyer",
+        externalTailorDBNamespaces: ["db"],
         executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
       }),
     ]);
 
     expect(collectDependentApps(subscriptions)).toEqual(new Map());
+  });
+});
+
+describe("collectEventSubscriptions and namespace visibility", () => {
+  // The executor resolves a cross-config type through the namespaces its config
+  // can see, so matching on the bare name would call this ambiguous and drop a
+  // subscription the executor resolves to exactly one owner.
+  const peersSharingATypeName = [
+    target({ configPath: "supplier/tailor.config.ts", namespace: "supplier", types: ["Order"] }),
+    target({ configPath: "vendor/tailor.config.ts", namespace: "vendor", types: ["Order"] }),
+  ];
+
+  test("resolves the owner the subscriber's own namespaces single out", () => {
+    const subscriptions = collectEventSubscriptions([
+      ...peersSharingATypeName,
+      target({
+        configPath: "shell/tailor.config.ts",
+        externalTailorDBNamespaces: ["db-vendor"],
+        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+      }),
+    ]);
+
+    expect(subscriptions).toHaveLength(1);
+    expect(subscriptions[0]?.owner.config.path).toBe("vendor/tailor.config.ts");
+  });
+
+  test("reports a resource no namespace the subscriber sees declares", () => {
+    expect(() =>
+      collectEventSubscriptions([
+        ...peersSharingATypeName,
+        target({
+          configPath: "shell/tailor.config.ts",
+          executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+        }),
+      ]),
+    ).toThrow(/which no config in this deploy declares/);
   });
 });
