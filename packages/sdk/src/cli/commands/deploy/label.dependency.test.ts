@@ -107,6 +107,19 @@ describe("dependencyLabelWrite", () => {
     ).toEqual({ labels: { [buyerKey]: "publish-events" }, remove: [shellKey] });
   });
 
+  test("reports a dependent whose id cannot be recorded instead of skipping it", () => {
+    // Skipping it would leave the dependency unrecorded, so the next deploy of the
+    // owner alone would turn publishing off without asking — the failure this
+    // whole mechanism exists to prevent.
+    expect(() =>
+      dependencyLabelWrite({
+        existingLabels: undefined,
+        dependentApps: new Map([["MY-APP-ID", "publish-events" as const]]),
+        runAppIds: new Set(["MY-APP-ID"]),
+      }),
+    ).toThrow(/Application id "MY-APP-ID" cannot be recorded/);
+  });
+
   test("writes nothing when the run found no dependents and none are recorded", () => {
     expect(
       dependencyLabelWrite({
