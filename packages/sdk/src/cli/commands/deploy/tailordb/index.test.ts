@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { create } from "@bufbuild/protobuf";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import { describe, test, expect, vi, aroundEach } from "vitest";
@@ -14,6 +15,7 @@ import {
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
+import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { sdkNameLabelKey } from "../label";
 import {
@@ -1289,7 +1291,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         ? { listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }) }
         : {}),
     } as unknown as OperatorClient;
-    return { client, setMetadata };
+    return { client, getMetadata, setMetadata };
   }
 
   function addSentinelTypeCreate(planResult: Awaited<ReturnType<typeof planTailorDB>>): void {
@@ -1317,6 +1319,23 @@ describe("applyTailorDB migration label reconciliation", () => {
 
   test("forces migration label even when remote has no prior label (--no-schema-check)", async () => {
     const { client, setMetadata } = createMigrationClient({});
+
+    await applyTailorDB(client, makePlanResult(true), "create-update");
+
+    expect(setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.objectContaining({ "sdk-migration": "m0000" }),
+      }),
+    );
+  });
+
+  test("reconciles the migration label after a transient metadata read failure", async () => {
+    const { client, getMetadata, setMetadata } = createMigrationClient({
+      "sdk-migration": "m0002",
+    });
+    getMetadata
+      .mockResolvedValueOnce({ metadata: { labels: { "sdk-migration": "m0002" } } })
+      .mockRejectedValueOnce(new ConnectError("transient metadata read failure", Code.Internal));
 
     await applyTailorDB(client, makePlanResult(true), "create-update");
 
@@ -1552,6 +1571,24 @@ describe("applyTailorDB migration label reconciliation", () => {
       "Remote schema verification failed",
     );
     expect(client.createTailorDBType).not.toHaveBeenCalled();
+  });
+
+  test("rejects a remote migration checkpoint missing from local history", async () => {
+    using stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0005" } },
+    } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote migration checkpoint verification failed",
+    );
+    expect(stderr.output).toContain("Pull the latest migration files");
+    expect(stderr.output).not.toContain("migration sync");
+    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
   test("sets the migration label to 0000 on the first apply (no prior label, schema check enabled)", async () => {
