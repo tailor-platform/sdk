@@ -191,7 +191,7 @@ describe("collectEventSubscriptions", () => {
             executors: { "sync-orders": { kind, workflowName: "orders" } },
           }),
         ]),
-      ).toThrow("A workflow cannot be declared as owned by another config");
+      ).toThrow('A workflow has no "external" declaration');
     },
   );
 

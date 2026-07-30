@@ -171,8 +171,9 @@ function missingOwnerMessage(
     lookup.trigger.kind === "workflowJobExecution"
   ) {
     return (
-      `${subject} A workflow cannot be declared as owned by another config, so the one named here has to be ` +
-      `declared by a config in this deploy. Check the name, or add the config that declares it to --config.`
+      `${subject} A workflow has no "external" declaration, unlike a TailorDB namespace or resolver, so ` +
+      `nothing in this config points at the one that owns it. Check the name, or add the config that ` +
+      `declares the workflow to --config.`
     );
   }
   return `${subject} This config declares nothing external that could hold it, so check the name.`;
@@ -210,8 +211,7 @@ export function collectEventSubscriptions(
         continue;
       }
       const owners = targets.filter(
-        (target) =>
-          target.config.path !== subscriber.config.path && lookup.declaredBy(target) !== undefined,
+        (target) => target.config.path !== subscriber.config.path && lookup.declaredBy(target),
       );
       const [owner] = owners;
       if (!owner) {
