@@ -359,8 +359,10 @@ export async function planApplication(
     dependentApps: context.dependentApps,
     runAppIds: context.runAppIds,
   });
+  // Add to what buildMetaRequest asked for rather than replacing it — it drops
+  // sdk-app-id for a config that no longer carries an id.
   metaRequest.labels = { ...metaRequest.labels, ...dependencies.labels };
-  metaRequest.remove = dependencies.remove;
+  metaRequest.remove = [...(metaRequest.remove ?? []), ...dependencies.remove];
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,

@@ -21,6 +21,9 @@ vi.mock("./label", async (importOriginal) => {
             "sdk-version": "v1-0-0",
             ...(appId ? { "sdk-app-id": `app-${appId}` } : {}),
           },
+          // Mirrors the real buildMetaRequest: a config with no id asks for the
+          // stale sdk-app-id to be dropped.
+          remove: appId ? undefined : ["sdk-app-id"],
         }),
       ),
   };
@@ -80,6 +83,7 @@ function createMockClient(
     sdkVersion?: string;
     label?: string;
     sdkAppId?: string;
+    extraLabels?: Record<string, string>;
   }>,
 ): OperatorClient {
   return {
@@ -102,6 +106,7 @@ function createMockClient(
                 "sdk-name": application.label ?? appName,
                 "sdk-version": application.sdkVersion ?? "v1-0-0",
                 ...(application.sdkAppId ? { "sdk-app-id": `app-${application.sdkAppId}` } : {}),
+                ...application.extraLabels,
               }
             : {},
         },
@@ -125,6 +130,41 @@ async function planForRemoval(client: OperatorClient, application: Application) 
 }
 
 describe("planApplication", () => {
+  test("keeps the sdk-app-id removal while adding the dependency records", async () => {
+    const dependent = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
+    const stale = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82";
+    const client = createMockClient([
+      {
+        name: appName,
+        authNamespace: "auth-a",
+        authIdpConfigName: "idp-a",
+        cors: ["https://a.example.com", "https://b.example.com"],
+        allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+        disableIntrospection: true,
+        disabled: false,
+        subgraphs: matchingSubgraphs,
+        extraLabels: { [`sdk-depended-by-app-${stale}`]: "publish-events" },
+      },
+    ]);
+
+    // The application has no id, so buildMetaRequest asks for sdk-app-id to be
+    // dropped. Replacing its remove list instead of adding to it leaves the
+    // stale id label behind for good.
+    const result = await planApplication({
+      ...createContext(client, createMockApplication({ id: undefined })),
+      dependentApps: new Map([[dependent, "publish-events" as const]]),
+      runAppIds: new Set([dependent, stale]),
+    });
+
+    const [entry] = [...result.updates, ...result.unchanged];
+    expect(entry?.metaRequest.remove).toContain("sdk-app-id");
+    expect(entry?.metaRequest.remove).toContain(`sdk-depended-by-app-${stale}`);
+    expect(entry?.metaRequest.labels).toHaveProperty(
+      `sdk-depended-by-app-${dependent}`,
+      "publish-events",
+    );
+  });
+
   test("marks application unchanged when remote state matches desired state", async () => {
     const client = createMockClient([
       {
