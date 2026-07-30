@@ -363,6 +363,7 @@ describe("applyFunctionRegistry phase separation", () => {
       updateFunctionRegistry: vi.fn().mockResolvedValue({}),
       deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     } as unknown as OperatorClient;
   }
 
@@ -450,6 +451,7 @@ describe("applyFunctionRegistry phase separation", () => {
       updateFunctionRegistry: vi.fn().mockImplementation(probe.run),
       deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     } as unknown as OperatorClient;
 
     const changeOf = (name: string) => ({
@@ -500,6 +502,7 @@ describe("applyFunctionRegistry phase separation", () => {
       updateFunctionRegistry,
       deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     } as unknown as OperatorClient;
     const changeOf = (name: string) => ({
       name,
@@ -555,6 +558,12 @@ describe("applyFunctionRegistry phase separation", () => {
         updateFunctionRegistry: vi.fn().mockImplementation(probe.run),
         deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
         setMetadata: vi.fn().mockImplementation(probe.run),
+        // The real client limits every RPC, reads included, so the label
+        // re-read has to count towards the cap this asserts.
+        getMetadata: vi.fn().mockImplementation(async () => {
+          await probe.run();
+          return { metadata: { labels: {} } };
+        }),
       } as unknown as OperatorClient;
 
       const changeOf = (name: string) => ({

@@ -1,3 +1,4 @@
+import { getOrNull } from "#/cli/shared/client";
 import { readPackageJson } from "#/cli/shared/package-json";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
@@ -121,7 +122,7 @@ export interface BuildMetaRequestParams {
  */
 export async function buildMetaRequest(
   params: BuildMetaRequestParams,
-): Promise<MessageInitShape<typeof SetMetadataRequestSchema>> {
+): Promise<MetadataLabelWrite> {
   const { trn, appName, appId, existingLabels } = params;
   const packageJson = await readPackageJson();
   // Format version to be suitable for label value
@@ -138,4 +139,52 @@ export async function buildMetaRequest(
       ...(appId ? { [sdkAppIdLabelKey]: toAppIdLabelValue(appId) } : {}),
     },
   };
+}
+
+/**
+ * The client surface {@link writeMetadataLabels} needs. Narrower than the full
+ * operator client so tests can pass a stub and the module stays decoupled.
+ */
+export interface MetadataLabelClient {
+  getMetadata(request: { trn: string }): Promise<{ metadata?: { labels: Record<string, string> } }>;
+  setMetadata(request: MessageInitShape<typeof SetMetadataRequestSchema>): Promise<unknown>;
+}
+
+/** A metadata label write, expressed as a change rather than a whole map. */
+export interface MetadataLabelWrite {
+  /** Target TRN. */
+  trn: string;
+  /** Labels to set. Keys absent here keep whatever the resource already has. */
+  labels?: Record<string, string>;
+  /** Label keys to delete. Absent keys are ignored. */
+  remove?: ReadonlyArray<string>;
+}
+
+/**
+ * Write metadata labels as a change against the resource's current labels.
+ *
+ * `SetMetadata` replaces the whole label map, so a request built from labels
+ * read earlier deletes anything written in between. This re-reads immediately
+ * before writing and applies `labels` and `remove` to what it finds, which is
+ * why every label write in the SDK goes through here rather than calling
+ * `client.setMetadata` directly.
+ *
+ * Concurrent writers are still not safe in the strict sense — that needs
+ * server-side conditional writes — but a write can no longer be built from
+ * state this process read at an unrelated point in time.
+ * @param client - Operator client instance
+ * @param write - TRN, labels to set, and label keys to delete
+ * @returns Promise that resolves when the labels are written
+ */
+export async function writeMetadataLabels(
+  client: MetadataLabelClient,
+  write: MetadataLabelWrite,
+): Promise<void> {
+  const { trn, labels, remove } = write;
+  const current = await getOrNull(() => client.getMetadata({ trn }));
+  const merged: Record<string, string> = { ...current?.metadata?.labels, ...labels };
+  for (const key of remove ?? []) {
+    delete merged[key];
+  }
+  await client.setMetadata({ trn, labels: merged });
 }

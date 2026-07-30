@@ -26,7 +26,9 @@ import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { OperatorClient } from "#/cli/shared/client";
 
 // Mock label.ts for resourceTrn
-vi.mock("../label", () => ({
+vi.mock("../label", async (importOriginal) => ({
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+  ...((await importOriginal()) as typeof import("../label")),
   resourceTrn: (workspaceId: string, kind: string, name: string) =>
     `trn:v1:workspace:${workspaceId}:${kind}:${name}`,
 }));
