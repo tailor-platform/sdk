@@ -47,7 +47,7 @@ const NODE_FLAG_PATTERN = new RegExp(
 const ENV_FILE_FLAG = /^--env-file(?:-if-exists)?$/;
 // A package runner immediately before `node` already resolves project binaries.
 const RUNNER_PREFIX_PATTERN = new RegExp(
-  `(?<![\\w.-])(?:pnpm|npm|yarn|bun|npx)(?:${SPACE}run)?${SPACE}$`,
+  `(?<![\\w.-])(?:pnpm|npm|yarn|bunx|bun|npx)(?:${SPACE}(?:run|exec|dlx))?${SPACE}$`,
 );
 // Keeps the lookbehind on a fixed slice instead of the whole preceding file.
 const RUNNER_PREFIX_WINDOW = 64;

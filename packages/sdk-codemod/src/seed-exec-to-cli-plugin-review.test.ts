@@ -190,6 +190,21 @@ fork("tools/worker.mjs");
     );
   });
 
+  test("does not prefix compound package runner commands", () => {
+    expect(transform('execSync("pnpm exec node seed/exec.mjs");\n', "setup.ts")).toBe(
+      'execSync("pnpm exec tailor seed apply");\n',
+    );
+    expect(transform('execSync("npm exec node seed/exec.mjs");\n', "setup.ts")).toBe(
+      'execSync("npm exec tailor seed apply");\n',
+    );
+    expect(transform('execSync("yarn dlx node seed/exec.mjs");\n', "setup.ts")).toBe(
+      'execSync("yarn dlx tailor seed apply");\n',
+    );
+    expect(transform('execSync("bunx node seed/exec.mjs");\n', "setup.ts")).toBe(
+      'execSync("bunx tailor seed apply");\n',
+    );
+  });
+
   test("decides the runner prefix per invocation, not per file", () => {
     const source = 'execSync("pnpm node seed/exec.mjs");\nexecSync("node seed/exec.mjs");\n';
 
