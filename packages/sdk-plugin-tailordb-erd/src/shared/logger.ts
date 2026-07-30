@@ -1,3 +1,4 @@
+import { Stream } from "node:stream";
 import { stripVTControlCharacters, styleText } from "node:util";
 
 export type LogMode = "default" | "stream" | "plain";
@@ -24,17 +25,16 @@ const color =
   (text: string): string =>
     styleText(format, text, { validateStream: false });
 
-// Ask styleText whether each stream gets colors, so the TTY / NO_COLOR /
+// Ask styleText whether the destination gets colors, so the TTY / NO_COLOR /
 // FORCE_COLOR rules stay Node's rather than being reimplemented here. styleText
-// returns the text unchanged when the stream has no color support.
+// returns the text unchanged for streams without color support, and rejects
+// values that are not streams at all, such as test doubles.
 const PROBE = "?";
-const colorSupport = {
-  stdout: styleText("red", PROBE, { stream: process.stdout }) !== PROBE,
-  stderr: styleText("red", PROBE, { stream: process.stderr }) !== PROBE,
-};
+const supportsColor = (stream: NodeJS.WriteStream): boolean =>
+  stream instanceof Stream && styleText("red", PROBE, { stream }) !== PROBE;
 
-function renderFor(target: "stdout" | "stderr", text: string): string {
-  return colorSupport[target] ? text : stripVTControlCharacters(text);
+function renderFor(stream: NodeJS.WriteStream, text: string): string {
+  return supportsColor(stream) ? text : stripVTControlCharacters(text);
 }
 
 const gray = color("gray");
@@ -56,14 +56,16 @@ function writeLog(type: string, message: string, opts?: LogOptions): void {
   const colorFn = TYPE_COLORS[type] ?? ((text: string) => text);
 
   if (mode === "plain") {
-    process.stderr.write(renderFor("stderr", `${colorFn(message)}\n`));
+    process.stderr.write(renderFor(process.stderr, `${colorFn(message)}\n`));
     return;
   }
 
   const icon = TYPE_ICONS[type] ?? "";
   const prefix = icon ? `${icon} ` : "";
   const timestamp = mode === "stream" ? `${new Date().toLocaleTimeString()} ` : "";
-  process.stderr.write(renderFor("stderr", `${timestamp}${colorFn(`${prefix}${message}`)}\n`));
+  process.stderr.write(
+    renderFor(process.stderr, `${timestamp}${colorFn(`${prefix}${message}`)}\n`),
+  );
 }
 
 export const logger = {
@@ -113,7 +115,7 @@ export const logger = {
 
   out(data: string | object | object[]): void {
     if (typeof data === "string") {
-      process.stdout.write(renderFor("stdout", data.endsWith("\n") ? data : `${data}\n`));
+      process.stdout.write(renderFor(process.stdout, data.endsWith("\n") ? data : `${data}\n`));
       return;
     }
     process.stdout.write(`${JSON.stringify(data)}\n`);

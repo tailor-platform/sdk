@@ -1,3 +1,4 @@
+import { Stream } from "node:stream";
 import {
   formatWithOptions,
   type InspectOptions,
@@ -34,36 +35,22 @@ const color =
   (text: string): string =>
     styleText(format, text, { validateStream: false });
 
-// Ask styleText whether each stream gets colors, so the TTY / NO_COLOR /
+// Ask styleText whether the destination gets colors, so the TTY / NO_COLOR /
 // FORCE_COLOR rules stay Node's rather than being reimplemented here. styleText
-// returns the text unchanged when the stream has no color support.
+// returns the text unchanged for streams without color support, and rejects
+// values that are not streams at all, such as test doubles.
 const PROBE = "?";
-const colorSupport = {
-  stdout: styleText("red", PROBE, { stream: process.stdout }) !== PROBE,
-  stderr: styleText("red", PROBE, { stream: process.stderr }) !== PROBE,
-};
-
-/** Stream a rendered string is written to */
-export type OutputTarget = "stdout" | "stderr";
-
-/**
- * Resolves whose color support applies to a stream. Streams other than
- * `process.stdout` follow stderr's rules, which is where diagnostics go.
- * @param stream - Stream the text is written to
- * @returns Output target for the stream
- */
-export function outputTarget(stream: NodeJS.WriteStream): OutputTarget {
-  return stream === process.stdout ? "stdout" : "stderr";
-}
+const supportsColor = (stream: NodeJS.WriteStream): boolean =>
+  stream instanceof Stream && styleText("red", PROBE, { stream }) !== PROBE;
 
 /**
  * Prepares styled text for the stream it is written to.
- * @param target - Stream the text is written to
+ * @param stream - Stream the text is written to
  * @param text - Styled text
- * @returns Text with styling removed when the target has no color support
+ * @returns Text with styling removed when the stream has no color support
  */
-export function renderFor(target: OutputTarget, text: string): string {
-  return colorSupport[target] ? text : stripVTControlCharacters(text);
+export function renderFor(stream: NodeJS.WriteStream, text: string): string {
+  return supportsColor(stream) ? text : stripVTControlCharacters(text);
 }
 
 /**
@@ -213,7 +200,7 @@ function writeLog(type: string, message: string, opts?: LogOptions): void {
   const formattedMessage = formatWithOptions(inspectOpts, message);
   const timestamp = mode === "stream" ? `${new Date().toLocaleTimeString()} ` : "";
   const output = formatLogLine({ mode, indent, type, message: formattedMessage, timestamp });
-  process.stderr.write(renderFor("stderr", output));
+  process.stderr.write(renderFor(process.stderr, output));
 }
 
 export const logger = {
@@ -256,7 +243,7 @@ export const logger = {
 
   out(data: string | object | object[], options?: OutOptions): void {
     if (typeof data === "string") {
-      process.stdout.write(renderFor("stdout", data.endsWith("\n") ? data : data + "\n"));
+      process.stdout.write(renderFor(process.stdout, data.endsWith("\n") ? data : data + "\n"));
       return;
     }
 
@@ -304,7 +291,7 @@ export const logger = {
         transformValue(key, value, data, true),
       ]);
       const t = renderTable(formattedEntries, { singleLine: false });
-      process.stdout.write(renderFor("stdout", t));
+      process.stdout.write(renderFor(process.stdout, t));
       return;
     }
 
@@ -328,6 +315,6 @@ export const logger = {
         return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount;
       },
     });
-    process.stdout.write(renderFor("stdout", t));
+    process.stdout.write(renderFor(process.stdout, t));
   },
 };

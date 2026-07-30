@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { Stream } from "node:stream";
 import * as url from "node:url";
 import { stripVTControlCharacters, styleText } from "node:util";
 import { parse, Lang } from "@ast-grep/napi";
@@ -118,17 +119,20 @@ async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string
   }
 }
 
-// Ask styleText whether stderr gets colors, so the TTY / NO_COLOR / FORCE_COLOR
-// rules stay Node's rather than being reimplemented here. styleText returns the
-// text unchanged when the stream has no color support.
+// Ask styleText whether the destination gets colors, so the TTY / NO_COLOR /
+// FORCE_COLOR rules stay Node's rather than being reimplemented here. styleText
+// returns the text unchanged for streams without color support, and rejects
+// values that are not streams at all.
 const PROBE = "?";
-const stderrHasColors = styleText("red", PROBE, { stream: process.stderr }) !== PROBE;
+const supportsColor = (stream: NodeJS.WriteStream): boolean =>
+  stream instanceof Stream && styleText("red", PROBE, { stream }) !== PROBE;
 
 const style = (format: "bold" | "cyan" | "green" | "red", text: string): string =>
   styleText(format, text, { validateStream: false });
 
 function writeDiffLine(line: string): void {
-  process.stderr.write(`${stderrHasColors ? line : stripVTControlCharacters(line)}\n`);
+  const rendered = supportsColor(process.stderr) ? line : stripVTControlCharacters(line);
+  process.stderr.write(`${rendered}\n`);
 }
 
 /**

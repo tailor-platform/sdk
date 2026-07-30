@@ -1,5 +1,5 @@
 import { assertDefined } from "#/utils/assert";
-import { outputTarget, type OutputTarget, renderFor, styles, symbols } from "./logger";
+import { renderFor, styles, symbols } from "./logger";
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const FRAME_INTERVAL_MS = 80;
@@ -68,7 +68,6 @@ export class Spinner {
   text: string;
   readonly #indent: number;
   readonly #stream: NodeJS.WriteStream;
-  readonly #target: OutputTarget;
   readonly #isEnabled: boolean;
   #frame = 0;
   #timer?: NodeJS.Timeout;
@@ -79,7 +78,6 @@ export class Spinner {
     this.text = "";
     this.#indent = options.indent ?? 0;
     this.#stream = options.stream ?? process.stderr;
-    this.#target = outputTarget(this.#stream);
     this.#isEnabled = Boolean(this.#stream.isTTY);
   }
 
@@ -175,7 +173,7 @@ export class Spinner {
     this.#frame = (this.#frame + 1) % FRAMES.length;
     const indent = " ".repeat(this.#indent);
     const line = `${indent}${frame} ${this.text}`;
-    this.#stream.write(renderFor(this.#target, line));
+    this.#stream.write(renderFor(this.#stream, line));
     this.#stream.write(SYNC_END);
     const cols = this.#stream.columns || 80;
     this.#linesDrawn = Math.max(1, Math.ceil(visibleLength(line) / cols));
@@ -194,7 +192,7 @@ export class Spinner {
 
   #writeLine(content: string): void {
     const indent = " ".repeat(this.#indent);
-    this.#stream.write(renderFor(this.#target, `${indent}${content}\n`));
+    this.#stream.write(renderFor(this.#stream, `${indent}${content}\n`));
   }
 }
 

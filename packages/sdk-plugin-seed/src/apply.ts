@@ -47,7 +47,7 @@ function promptConfirmation(question: string): Promise<boolean> {
   }
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
-    rl.question(renderFor("stdout", styles.warning(question)), (answer) => {
+    rl.question(renderFor(process.stdout, styles.warning(question)), (answer) => {
       rl.close();
       resolve(answer.toLowerCase().trim() === "y");
     });
