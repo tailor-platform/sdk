@@ -3,6 +3,8 @@ import * as os from "node:os";
 import * as path from "pathe";
 import { resolveTSConfig } from "pkg-types";
 import { aroundEach, describe, expect, test, vi } from "vitest";
+import { createBundleCache } from "#/cli/cache/bundle-cache";
+import { createCacheStore } from "#/cli/cache/store";
 import { tempCwd } from "#/cli/shared/test-helpers/temp-cwd";
 import { bundleResolvers } from "./bundler";
 import type * as pkgTypes from "pkg-types";
@@ -218,6 +220,58 @@ describe("bundleResolvers", () => {
     } finally {
       fs.rmSync(otherDir, { recursive: true, force: true });
     }
+  });
+
+  test("rebuilds a cached resolver when its imported project's tsconfig paths change", async () => {
+    using tmp = tempCwd("sdk-bundler-tsconfig-cache-");
+    writeSdkDependency(tmp.dir);
+    const rootTsconfig = path.join(tmp.dir, "tsconfig.json");
+    const importedTsconfig = path.join(tmp.dir, "feature", "tsconfig.json");
+    fs.mkdirSync(path.join(tmp.dir, "feature"), { recursive: true });
+    fs.mkdirSync(path.join(tmp.dir, "lib-a"), { recursive: true });
+    fs.mkdirSync(path.join(tmp.dir, "lib-b"), { recursive: true });
+    fs.writeFileSync(rootTsconfig, JSON.stringify({}));
+    fs.writeFileSync(
+      importedTsconfig,
+      JSON.stringify({
+        compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["../lib-a/*"] } },
+      }),
+    );
+    fs.writeFileSync(path.join(tmp.dir, "lib-a", "value.ts"), 'export const value = "LIB_A";\n');
+    fs.writeFileSync(path.join(tmp.dir, "lib-b", "value.ts"), 'export const value = "LIB_B";\n');
+    fs.writeFileSync(
+      path.join(tmp.dir, "feature", "entry.ts"),
+      'export { value } from "@lib/value";\n',
+    );
+    fs.writeFileSync(
+      path.join(tmp.dir, "resolver.ts"),
+      `export default {
+        operation: "query",
+        name: "cached",
+        body: async () => (await import("./feature/entry")).value,
+        output: { type: "string", metadata: {}, fields: {} },
+      };\n`,
+    );
+    const cache = createBundleCache(createCacheStore({ cacheDir: path.join(tmp.dir, ".cache") }));
+    const bundle = () =>
+      bundleResolvers("cache", { files: ["./resolver.ts"] }, tmp.dir, undefined, cache);
+    vi.mocked(resolveTSConfig)
+      .mockResolvedValueOnce(rootTsconfig)
+      .mockResolvedValueOnce(rootTsconfig);
+
+    const first = await bundle();
+    expect(first.get("cached")).toContain("LIB_A");
+
+    fs.writeFileSync(
+      importedTsconfig,
+      JSON.stringify({
+        compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["../lib-b/*"] } },
+      }),
+    );
+
+    const second = await bundle();
+    expect(second.get("cached")).toContain("LIB_B");
+    expect(second.get("cached")).not.toContain("LIB_A");
   });
 
   test("produces deterministic bundles with inline sourcemaps", async () => {
