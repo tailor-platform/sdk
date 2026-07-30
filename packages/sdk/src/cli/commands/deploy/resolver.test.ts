@@ -218,7 +218,7 @@ describe("planPipeline (resolver service level)", () => {
 
     test("throws when an opt-out is combined with a subscribing executor", async () => {
       await expect(planWith({ publishEvents: false, subscribed: true })).rejects.toThrow(
-        'Resolver "myResolver" has "publishEvents: false", but executors with a resolverExecuted trigger subscribe to it.',
+        'Resolver "myResolver" has "publishEvents: false", but executors with resolverExecuted triggers subscribe to it.',
       );
     });
 

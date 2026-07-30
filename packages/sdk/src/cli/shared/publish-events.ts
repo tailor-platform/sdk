@@ -51,7 +51,7 @@ export const publishEventsConflict = {
 function publishEventsConflictError(conflict: PublishEventsConflict): string {
   const { resource, trigger, subscribesTo = "it" } = conflict;
   return (
-    `${resource} has "publishEvents: false", but executors with a ${trigger} trigger subscribe to ${subscribesTo}. ` +
+    `${resource} has "publishEvents: false", but executors with ${trigger} triggers subscribe to ${subscribesTo}. ` +
     `Either remove "publishEvents: false" or remove the matching executor triggers.`
   );
 }
@@ -60,7 +60,7 @@ function publishEventsConflictError(conflict: PublishEventsConflict): string {
 export type ResolvePublishEventsParams = {
   /** `publishEvents` declared on the resource, or undefined when unset. */
   explicit: boolean | undefined;
-  /** Whether an executor declared by the resource's own config subscribes to it. */
+  /** Whether an executor taking part in the same run subscribes to it. */
   subscribed: boolean;
   /** Resource and trigger named when an opt-out conflicts with a subscriber. */
   conflict: PublishEventsConflict;
@@ -83,10 +83,11 @@ export function assertNoPublishEventsConflict(params: ResolvePublishEventsParams
 /**
  * Resolve whether a resource publishes events.
  *
- * An unset value is recomputed from the executors declared by the resource's own
- * config, so removing the last subscribing trigger turns publishing back off.
- * Sharing a resource with executors in another config therefore needs
- * `publishEvents: true` declared on the resource itself.
+ * An unset value is recomputed from the executors taking part in the run, so
+ * removing the last subscribing trigger turns publishing back off. A `deploy`
+ * covering several configs counts a subscriber in any of them, so a resource
+ * shared across configs needs `publishEvents: true` on the resource itself only
+ * to keep publishing when the subscribing config is deployed on its own.
  * @param params - Declared value, subscriber presence, and conflict error details
  * @returns Whether the resource publishes events
  */

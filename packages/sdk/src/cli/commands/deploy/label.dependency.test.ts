@@ -39,6 +39,14 @@ describe("recordedDependencies", () => {
     ]);
   });
 
+  test("sorts by label key so the order does not follow how the labels were read", () => {
+    expect(
+      recordedDependencies({ [shellKey]: "publish-events", [buyerKey]: "publish-events" }).map(
+        (dependency) => dependency.appId,
+      ),
+    ).toEqual([buyer, shell]);
+  });
+
   test("ignores labels that are not dependency records", () => {
     expect(recordedDependencies({ "sdk-name": "buyer", "sdk-version": "v1-0-0" })).toEqual([]);
     expect(recordedDependencies(undefined)).toEqual([]);

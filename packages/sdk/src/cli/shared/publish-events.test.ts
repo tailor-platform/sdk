@@ -19,7 +19,7 @@ describe("resolvePublishEvents", () => {
 
   test("throws when an opt-out is combined with a subscriber", () => {
     expect(() => resolvePublishEvents({ explicit: false, subscribed: true, conflict })).toThrow(
-      'Resolver "processOrder" has "publishEvents: false", but executors with a resolverExecuted trigger subscribe to it. ' +
+      'Resolver "processOrder" has "publishEvents: false", but executors with resolverExecuted triggers subscribe to it. ' +
         'Either remove "publishEvents: false" or remove the matching executor triggers.',
     );
   });
@@ -36,7 +36,7 @@ describe("resolvePublishEvents", () => {
         },
       }),
     ).toThrow(
-      'Job "process-order" has "publishEvents: false", but executors with a workflowJobExecution trigger subscribe to a workflow that runs it.',
+      'Job "process-order" has "publishEvents: false", but executors with workflowJobExecution triggers subscribe to a workflow that runs it.',
     );
   });
 });
