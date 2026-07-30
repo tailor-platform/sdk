@@ -63,7 +63,13 @@ import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig, toComparableProtoJson } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "../label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "../label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -83,7 +89,6 @@ import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { ApplyPhase, PlanContext } from "../types";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 // ============================================================================
 // Remote Schema Verification
@@ -814,9 +819,11 @@ export async function applyTailorDB(
       await Promise.all([
         ...changeSet.service.creates.map(async (create) => {
           await client.createTailorDBService(create.request);
-          await client.setMetadata(create.metaRequest);
+          await writeMetadataLabels(client, create.metaRequest);
         }),
-        ...changeSet.service.updates.map((update) => client.setMetadata(update.metaRequest)),
+        ...changeSet.service.updates.map((update) =>
+          writeMetadataLabels(client, update.metaRequest),
+        ),
       ]);
 
       // Types
@@ -934,9 +941,9 @@ async function executeServicesCreation(
   await Promise.all([
     ...changeSet.service.creates.map(async (create) => {
       await client.createTailorDBService(create.request);
-      await client.setMetadata(create.metaRequest);
+      await writeMetadataLabels(client, create.metaRequest);
     }),
-    ...changeSet.service.updates.map((update) => client.setMetadata(update.metaRequest)),
+    ...changeSet.service.updates.map((update) => writeMetadataLabels(client, update.metaRequest)),
   ]);
 }
 
@@ -1601,12 +1608,12 @@ export function formatTailorDBResourceChangeEntries(
 type CreateService = {
   name: string;
   request: MessageInitShape<typeof CreateTailorDBServiceRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateService = {
   name: string;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteService = {
@@ -1677,7 +1684,6 @@ async function planServices(
       trn: resourceTrn(workspaceId, "tailordb", tailordb.namespace),
       appName,
       appId,
-      existingLabels: existing?.allLabels,
     });
     if (existing) {
       const owned = trackDesiredResourceOwnership({

@@ -2,7 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
-import { resourceTrn } from "#/cli/commands/deploy/label";
+import { resourceTrn, writeMetadataLabels } from "#/cli/commands/deploy/label";
 import { confirmationArgs, deploymentArgs } from "#/cli/shared/args";
 import { logBetaWarning } from "#/cli/shared/beta";
 import {
@@ -480,10 +480,9 @@ async function sync(options: SyncOptions): Promise<void> {
     ),
   );
 
-  await client.setMetadata({
+  await writeMetadataLabels(client, {
     trn,
     labels: {
-      ...remoteState.labels,
       [MIGRATION_LABEL_KEY]: `${MIGRATION_LABEL_PREFIX}${formatMigrationNumber(targetVersion)}`,
     },
   });

@@ -363,6 +363,7 @@ describe("applyFunctionRegistry phase separation", () => {
       updateFunctionRegistry: vi.fn().mockResolvedValue({}),
       deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     } as unknown as OperatorClient;
   }
 
@@ -379,14 +380,14 @@ describe("applyFunctionRegistry phase separation", () => {
           {
             name: "resolver/ns/create-test",
             entry,
-            metaRequest: { trn: "trn:test", labels: {} },
+            metaRequest: { trn: "trn:test", labels: { "sdk-name": "test-app" } },
           },
         ],
         updates: [
           {
             name: "resolver/ns/update-test",
             entry,
-            metaRequest: { trn: "trn:test", labels: {} },
+            metaRequest: { trn: "trn:test", labels: { "sdk-name": "test-app" } },
           },
         ],
         deletes: [
@@ -450,6 +451,7 @@ describe("applyFunctionRegistry phase separation", () => {
       updateFunctionRegistry: vi.fn().mockImplementation(probe.run),
       deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     } as unknown as OperatorClient;
 
     const changeOf = (name: string) => ({
@@ -460,7 +462,7 @@ describe("applyFunctionRegistry phase separation", () => {
         contentHash: `hash-${name}`,
         description: `Function: ${name}`,
       },
-      metaRequest: { trn: `trn:${name}`, labels: {} },
+      metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
     });
     const planResult = {
       changeSet: {
@@ -500,6 +502,7 @@ describe("applyFunctionRegistry phase separation", () => {
       updateFunctionRegistry,
       deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     } as unknown as OperatorClient;
     const changeOf = (name: string) => ({
       name,
@@ -509,7 +512,7 @@ describe("applyFunctionRegistry phase separation", () => {
         contentHash: `hash-${name}`,
         description: `Function: ${name}`,
       },
-      metaRequest: { trn: `trn:${name}`, labels: {} },
+      metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
     });
     const planResult = {
       changeSet: {
@@ -555,6 +558,12 @@ describe("applyFunctionRegistry phase separation", () => {
         updateFunctionRegistry: vi.fn().mockImplementation(probe.run),
         deleteFunctionRegistry: vi.fn().mockResolvedValue({}),
         setMetadata: vi.fn().mockImplementation(probe.run),
+        // The real client limits every RPC, reads included, so the label
+        // re-read has to count towards the cap this asserts.
+        getMetadata: vi.fn().mockImplementation(async () => {
+          await probe.run();
+          return { metadata: { labels: {} } };
+        }),
       } as unknown as OperatorClient;
 
       const changeOf = (name: string) => ({
@@ -565,7 +574,7 @@ describe("applyFunctionRegistry phase separation", () => {
           contentHash: `hash-${name}`,
           description: `Function: ${name}`,
         },
-        metaRequest: { trn: `trn:${name}`, labels: {} },
+        metaRequest: { trn: `trn:${name}`, labels: { "sdk-name": "test-app" } },
       });
       const planResult = {
         changeSet: {

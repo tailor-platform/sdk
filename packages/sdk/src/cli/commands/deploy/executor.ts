@@ -27,7 +27,13 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { normalizeInvoker } from "./invoker";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -37,7 +43,6 @@ import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { Executor } from "#/types/executor.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply executor-related changes for the given phase.
@@ -57,11 +62,11 @@ export async function applyExecutor(
     await Promise.all([
       ...changeSet.creates.map(async (create) => {
         await client.createExecutorExecutor(create.request);
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
         await client.updateExecutorExecutor(update.request);
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
   } else {
@@ -74,13 +79,13 @@ export async function applyExecutor(
 type CreateExecutor = {
   name: string;
   request: MessageInitShape<typeof CreateExecutorExecutorRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateExecutor = {
   name: string;
   request: MessageInitShape<typeof UpdateExecutorExecutorRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteExecutor = {
