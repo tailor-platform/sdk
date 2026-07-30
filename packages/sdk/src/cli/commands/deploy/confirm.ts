@@ -15,28 +15,34 @@ export interface UnmanagedResource {
 
 /**
  * Confirm reassignment of resources when owner conflicts are detected.
- * Splits into two scenarios: id regeneration (same sdk-name, different
- * sdk-app-id) and name mismatch (different sdk-name). Each gets its own
- * prompt because the user-facing meaning is different.
+ * Splits into three scenarios, each with its own prompt because the
+ * user-facing meaning is different: the resource carries the same sdk-name and
+ * an sdk-app-id the config does not match, either because the config now holds
+ * a different id (regeneration) or because it holds none at all; or the
+ * resource carries a different sdk-name (name mismatch).
  * @param conflicts - Detected owner conflicts
  * @param appName - Target application name
  * @param yes - Whether to auto-confirm without prompting
+ * @param appId - Target application id, when the config resolves to one
  * @returns Promise that resolves when confirmation completes
  */
 export async function confirmOwnerConflict(
   conflicts: OwnerConflict[],
   appName: string,
   yes: boolean,
+  appId?: string,
 ): Promise<void> {
   if (conflicts.length === 0) return;
 
-  // Same sdk-name as the target app -> the app's id was regenerated
-  // (typically because the user deleted the id from tailor.config.ts).
-  const idRegenerated = conflicts.filter((c) => c.currentOwner === appName);
+  // Same sdk-name as the target app -> the resources carry an id this config
+  // does not: either a new one replaced it, or the config has none at all.
+  const idMismatches = conflicts.filter((c) => c.currentOwner === appName);
   const nameMismatches = conflicts.filter((c) => c.currentOwner !== appName);
 
-  if (idRegenerated.length > 0) {
-    await confirmIdRegeneration(idRegenerated, appName, yes);
+  if (idMismatches.length > 0) {
+    await (appId
+      ? confirmIdRegeneration(idMismatches, appName, yes)
+      : confirmMissingConfigId(idMismatches, appName, yes));
   }
   if (nameMismatches.length > 0) {
     await confirmNameMismatch(nameMismatches, appName, yes);
@@ -48,13 +54,7 @@ async function confirmIdRegeneration(
   appName: string,
   yes: boolean,
 ): Promise<void> {
-  logger.warn(`Application id was regenerated for "${appName}":`);
-  logger.log("  These resources still carry the previous id.");
-  logger.newline();
-  logger.log(`  ${styles.info("Resources")}:`);
-  for (const c of conflicts) {
-    logger.log(`    • ${styles.bold(c.resourceType)} ${styles.info(`"${c.resourceName}"`)}`);
-  }
+  logIdMismatch(`Application id was regenerated for "${appName}":`, conflicts);
 
   if (yes) {
     logger.success("Re-tagging resources with the new id (--yes flag specified)...", {
@@ -71,6 +71,40 @@ async function confirmIdRegeneration(
     throw new Error(ml`
       Apply cancelled. Resources remain tagged with the previous id.
       To override, run again and confirm, or use --yes flag.
+    `);
+  }
+}
+
+function logIdMismatch(heading: string, conflicts: OwnerConflict[]): void {
+  logger.warn(heading);
+  logger.log("  These resources are tagged with an id from an earlier deploy.");
+  logger.newline();
+  logger.log(`  ${styles.info("Resources")}:`);
+  for (const c of conflicts) {
+    logger.log(`    • ${styles.bold(c.resourceType)} ${styles.info(`"${c.resourceName}"`)}`);
+  }
+}
+
+async function confirmMissingConfigId(
+  conflicts: OwnerConflict[],
+  appName: string,
+  yes: boolean,
+): Promise<void> {
+  logIdMismatch(`No application id resolved for "${appName}":`, conflicts);
+
+  if (yes) {
+    logger.success("Managing these resources by name (--yes flag specified)...", { mode: "plain" });
+    return;
+  }
+
+  const confirmed = await prompt.confirm({
+    message: `Drop that id and manage these resources by name for "${appName}"?\n${styles.dim("(the config resolves without an 'id', so ownership falls back to the application name)")}`,
+    default: false,
+  });
+  if (!confirmed) {
+    throw new Error(ml`
+      Apply cancelled. Resources remain tagged with their current id.
+      Restore the 'id' in your config to keep owning them by id, or run again and confirm to own them by name.
     `);
   }
 }
