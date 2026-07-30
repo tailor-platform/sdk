@@ -88,6 +88,26 @@ export function check(value: string): void {}
     expect(findMisplacedDeprecationMentions(source)).toEqual([1]);
   });
 
+  test("ignores a JSDoc comment that only exists inside a template literal", () => {
+    const source = `export const generated = \`
+/**
+ * @deprecated since 1.0.0 — use newApi. codemod: v2/old-to-new
+ */
+export const oldApi = 1;
+\`;
+`;
+
+    expect(findDeprecationTags(source)).toEqual([]);
+    expect(findMisplacedDeprecationMentions(source)).toEqual([]);
+  });
+
+  test("ignores a JSDoc comment inside a plain string literal", () => {
+    const source =
+      'export const snippet = "/** @deprecated since 1.0.0 codemod: v2/old-to-new */";\n';
+
+    expect(findDeprecationTags(source)).toEqual([]);
+  });
+
   test("reads a tag that follows a string containing the tag name", () => {
     const source = `const message = "@deprecated";
 
@@ -291,6 +311,39 @@ export const oldApi = 1;
       `const help = "write @deprecated since ${PENDING_SINCE} until the version is known";`,
     );
     expect(result.source).toContain("/** @deprecated since 2.1.0 — use newApi.");
+  });
+
+  test("resolves a tag whose sentinel sits on a continuation line", () => {
+    const source = `/**
+ * @deprecated since
+ *   ${PENDING_SINCE} — use newApi. codemod: v2/old-to-new
+ */
+export const oldApi = 1;
+`;
+
+    const result = resolvePendingSince(source, "2.1.0");
+
+    expect(result.changed).toBe(true);
+    expect(result.source).not.toContain(PENDING_SINCE);
+    expect(result.source).toContain(" *   2.1.0 — use newApi.");
+  });
+
+  test("leaves a sentinel inside a template literal alone", () => {
+    const source = `export const generated = \`
+/**
+ * @deprecated since ${PENDING_SINCE} — use newApi. codemod: v2/old-to-new
+ */
+\`;
+
+/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: v2/old-to-new */
+export const oldApi = 1;
+`;
+
+    const result = resolvePendingSince(source, "2.1.0");
+
+    expect(result.changed).toBe(true);
+    expect(result.source.match(new RegExp(PENDING_SINCE, "g"))).toHaveLength(1);
+    expect(result.source).toContain(`/** @deprecated since 2.1.0 — use newApi.`);
   });
 
   test("is a no-op when the sentinel only appears outside JSDoc", () => {
