@@ -2,11 +2,10 @@ import { type Cache, createPathsMatcher, getTsconfig } from "get-tsconfig";
 import * as path from "pathe";
 import type * as rolldown from "rolldown";
 
-// A bundler hands rolldown a single tsconfig, so rolldown applies one `paths`
-// table to every module in the graph. An imported file that belongs to another
-// TypeScript project can therefore be resolved with the entry project's aliases
-// instead of its own. This plugin re-derives the matcher from each importing
-// file's nearest tsconfig, matching the lookup used by the runtime hook.
+// A bundler hands rolldown a single tsconfig, so its normal resolution applies
+// one `paths` table to every module in the graph. When that resolution misses an
+// import from another TypeScript project, this plugin retries it against the
+// importing file's nearest tsconfig, matching the runtime hook's lookup.
 //
 // Strictly a last resort. rolldown's `order: "post"` only orders this hook
 // against other plugins — it still runs ahead of the builtin resolver, and a
@@ -36,8 +35,8 @@ export interface TsconfigPathsPluginOptions {
 }
 
 /**
- * Create the rolldown plugin that resolves tsconfig `paths` aliases against the
- * importing file's own nearest tsconfig.
+ * Create the rolldown plugin that falls back to tsconfig `paths` aliases from
+ * the importing file's own nearest tsconfig.
  * @param options - Resolution context for bundlers whose entry inlines user code
  * @returns Rolldown plugin to add to a bundler's plugin list
  */
