@@ -17,7 +17,7 @@ import { selectEntities } from "./entities";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import { deploymentArgs } from "./shared/args";
 import { defineAppCommand } from "./shared/command";
-import { logger, styles } from "./shared/logger";
+import { logger, renderFor, styles } from "./shared/logger";
 import { topologicalSort } from "./topo-sort";
 import type { OperatorClient, ScriptExecutionResult, SeedData } from "@tailor-platform/sdk/cli";
 
@@ -47,7 +47,7 @@ function promptConfirmation(question: string): Promise<boolean> {
   }
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
-    rl.question(styles.warning(question), (answer) => {
+    rl.question(renderFor("stdout", styles.warning(question)), (answer) => {
       rl.close();
       resolve(answer.toLowerCase().trim() === "y");
     });

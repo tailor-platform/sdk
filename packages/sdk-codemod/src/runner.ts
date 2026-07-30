@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as url from "node:url";
-import { styleText } from "node:util";
+import { stripVTControlCharacters, styleText } from "node:util";
 import { parse, Lang } from "@ast-grep/napi";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
@@ -118,6 +118,17 @@ async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string
   }
 }
 
+// Ask styleText whether stderr gets colors, so the TTY / NO_COLOR / FORCE_COLOR
+// rules stay Node's rather than being reimplemented here.
+const stderrHasColors = styleText("red", "", { stream: process.stderr }) !== "";
+
+const style = (format: "bold" | "cyan" | "green" | "red", text: string): string =>
+  styleText(format, text, { validateStream: false });
+
+function writeDiffLine(line: string): void {
+  process.stderr.write(`${stderrHasColors ? line : stripVTControlCharacters(line)}\n`);
+}
+
 /**
  * Print a colorized unified diff for a single file to stderr.
  * @param filePath - Absolute path to the file
@@ -128,20 +139,20 @@ function printDiff(filePath: string, before: string, after: string): void {
   const patch = structuredPatch(filePath, filePath, before, after, "", "", { context: 3 });
   if (patch.hunks.length === 0) return;
 
-  process.stderr.write(`\n${styleText("bold", `--- ${filePath}`)}\n`);
-  process.stderr.write(`${styleText("bold", `+++ ${filePath}`)}\n`);
+  writeDiffLine(`\n${style("bold", `--- ${filePath}`)}`);
+  writeDiffLine(style("bold", `+++ ${filePath}`));
 
   for (const hunk of patch.hunks) {
-    process.stderr.write(
-      `${styleText("cyan", `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`)}\n`,
+    writeDiffLine(
+      style("cyan", `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`),
     );
     for (const line of hunk.lines) {
       if (line.startsWith("+")) {
-        process.stderr.write(`${styleText("green", line)}\n`);
+        writeDiffLine(style("green", line));
       } else if (line.startsWith("-")) {
-        process.stderr.write(`${styleText("red", line)}\n`);
+        writeDiffLine(style("red", line));
       } else {
-        process.stderr.write(`${line}\n`);
+        writeDiffLine(line);
       }
     }
   }

@@ -1,4 +1,9 @@
-import { formatWithOptions, type InspectOptions, styleText } from "node:util";
+import {
+  formatWithOptions,
+  type InspectOptions,
+  stripVTControlCharacters,
+  styleText,
+} from "node:util";
 import { formatDistanceToNowStrict } from "date-fns";
 import { renderTable } from "./ascii-table";
 import { parseBoolean } from "./parse-boolean";
@@ -19,14 +24,35 @@ export class CIPromptError extends Error {
 type StyleFormat = Parameters<typeof styleText>[0];
 
 /**
- * Creates a style function. Styling is dropped when stdout has no color support.
+ * Creates a style function. Styling is always applied; `renderFor` drops it again
+ * when the destination stream has no color support.
  * @param format - Style name, or names to combine
  * @returns Style function for the given format
  */
 const color =
   (format: StyleFormat) =>
   (text: string): string =>
-    styleText(format, text);
+    styleText(format, text, { validateStream: false });
+
+// Ask styleText whether each stream gets colors, so the TTY / NO_COLOR /
+// FORCE_COLOR rules stay Node's rather than being reimplemented here.
+const colorSupport = {
+  stdout: styleText("red", "", { stream: process.stdout }) !== "",
+  stderr: styleText("red", "", { stream: process.stderr }) !== "",
+};
+
+/** Stream a rendered string is written to */
+export type OutputTarget = "stdout" | "stderr";
+
+/**
+ * Prepares styled text for the stream it is written to.
+ * @param target - Stream the text is written to
+ * @param text - Styled text
+ * @returns Text with styling removed when the target has no color support
+ */
+export function renderFor(target: OutputTarget, text: string): string {
+  return colorSupport[target] ? text : stripVTControlCharacters(text);
+}
 
 /**
  * Semantic style functions for inline text styling
@@ -175,7 +201,7 @@ function writeLog(type: string, message: string, opts?: LogOptions): void {
   const formattedMessage = formatWithOptions(inspectOpts, message);
   const timestamp = mode === "stream" ? `${new Date().toLocaleTimeString()} ` : "";
   const output = formatLogLine({ mode, indent, type, message: formattedMessage, timestamp });
-  process.stderr.write(output);
+  process.stderr.write(renderFor("stderr", output));
 }
 
 export const logger = {
@@ -218,7 +244,7 @@ export const logger = {
 
   out(data: string | object | object[], options?: OutOptions): void {
     if (typeof data === "string") {
-      process.stdout.write(data.endsWith("\n") ? data : data + "\n");
+      process.stdout.write(renderFor("stdout", data.endsWith("\n") ? data : data + "\n"));
       return;
     }
 
@@ -266,7 +292,7 @@ export const logger = {
         transformValue(key, value, data, true),
       ]);
       const t = renderTable(formattedEntries, { singleLine: false });
-      process.stdout.write(t);
+      process.stdout.write(renderFor("stdout", t));
       return;
     }
 
@@ -290,6 +316,6 @@ export const logger = {
         return lineIndex === 0 || lineIndex === 1 || lineIndex === rowCount;
       },
     });
-    process.stdout.write(t);
+    process.stdout.write(renderFor("stdout", t));
   },
 };
