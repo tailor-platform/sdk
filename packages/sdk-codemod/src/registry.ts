@@ -1497,6 +1497,43 @@ export const allCodemods: CodemodPackage[] = [
     until: "2.0.0",
     notice: true,
   },
+  {
+    id: "v2/dts-env-value-types",
+    name: "tailor.d.ts Env uses value types instead of literal values",
+    description:
+      "The `Env` interface in `tailor.d.ts` is generated from the type of each `defineConfig({ env })` value (`string`, `number`, or `boolean`) instead of the value itself, so the generated file no longer carries whatever the config resolved to when it was generated. Keys that aren't valid TypeScript identifiers are quoted, which previously produced a file that failed to parse. Run `tailor generate` to refresh the file, then widen any code that depended on the old literal types. If a `tailor.d.ts` you already committed contains a sensitive value, treat that value as exposed and rotate it; keep secrets in Secret Manager rather than `env`.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_PENDING,
+    examples: [
+      {
+        lang: "ts",
+        caption: "An env value can no longer stand in for a literal union; narrow it explicitly:",
+        before: 'const stage: "production" | "staging" = env.STAGE;',
+        after: 'const stage = env.STAGE === "staging" ? "staging" : "production";',
+      },
+    ],
+    prompt: [
+      "Tailor SDK v2 generates the `Env` interface in `tailor.d.ts` from the type of",
+      "each `defineConfig({ env })` value (`string`, `number`, `boolean`) instead of",
+      "the resolved value, so `Env` properties no longer carry literal types.",
+      "",
+      "Run `tailor generate` first to refresh `tailor.d.ts`, then review the places",
+      "that depended on the old literal types:",
+      "",
+      "- An env value assigned or passed where a literal union is required, e.g.",
+      '  `const stage: "production" | "staging" = env.STAGE`. Narrow it with a',
+      "  comparison or a validation helper instead of relying on the declared type.",
+      "- A generic argument, conditional type, or template-literal type parameterized",
+      "  by an env value.",
+      "- `as const` / `satisfies` assertions that assumed one specific literal.",
+      "",
+      'Plain comparisons (`env.STAGE === "production"`) and arithmetic on numeric env',
+      "values keep working and need no change. Do not restore the old behavior by",
+      "editing `tailor.d.ts`: it is generated and will be overwritten, and embedding",
+      "env values there is what leaked configured secrets into version control.",
+    ].join("\n"),
+  },
 ];
 
 /**

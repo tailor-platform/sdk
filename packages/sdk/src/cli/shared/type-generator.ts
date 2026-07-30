@@ -44,6 +44,10 @@ export function extractAttributesFromConfig(config: AppConfig): ExtractedAttribu
   return collectAttributesFromConfig(config);
 }
 
+// Quote generated keys only when they aren't valid TypeScript identifiers — matches
+// the formatter (oxfmt) output so subsequent format passes are no-ops.
+const isValidIdentifier = (s: string): boolean => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(s);
+
 /**
  * Generate the contents of the user-defined type definition file.
  * @param attributes - Attribute configuration
@@ -88,13 +92,15 @@ ${attributeFields}
     __tuple?: ${listType};
   }`;
 
-  // Generate Env interface
+  // Generate Env interface.
+  // Emit the value's type, never the value itself — a literal would leak the
+  // configured value into this generated file.
   const envFields = env
     ? Object.entries(env)
-        .map(([key, value]) => {
-          const valueType = typeof value === "string" ? `"${value}"` : String(value);
-          return `    ${key}: ${valueType};`;
-        })
+        .map(
+          ([key, value]) =>
+            `    ${isValidIdentifier(key) ? key : JSON.stringify(key)}: ${typeof value};`,
+        )
         .join("\n")
     : "";
 
@@ -106,9 +112,6 @@ ${envFields}
   }`;
 
   // Generate MachineUserNameRegistry interface.
-  // Quote keys only when they aren't valid TypeScript identifiers — matches
-  // the formatter (oxfmt) output so subsequent format passes are no-ops.
-  const isValidIdentifier = (s: string): boolean => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(s);
   const machineUserFields = machineUserNames?.length
     ? machineUserNames
         .map((name) => `    ${isValidIdentifier(name) ? name : JSON.stringify(name)}: true;`)
