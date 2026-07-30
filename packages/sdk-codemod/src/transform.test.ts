@@ -151,6 +151,10 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/workflow-trigger-rename")).resolves.toBeUndefined();
   });
 
+  test("v2/seed-exec-to-cli-plugin transforms correctly", async () => {
+    await expect(runFixtureCases("v2/seed-exec-to-cli-plugin")).resolves.toBeUndefined();
+  });
+
   test("v2/idp-publish-events-rename transforms correctly", async () => {
     await expect(runFixtureCases("v2/idp-publish-events-rename")).resolves.toBeUndefined();
   });

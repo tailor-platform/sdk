@@ -45,16 +45,6 @@ describe("generateTypeDefinition", () => {
       ],
     },
     {
-      name: "generates Env interface with literal types",
-      args: [undefined, undefined, { hoge: 1, fuga: "hello", piyo: true }],
-      expected: ["interface Env", "hoge: 1;", 'fuga: "hello";', "piyo: true;"],
-    },
-    {
-      name: "generates empty Env interface when no env provided",
-      args: [undefined, undefined],
-      expected: ["interface Env {}"],
-    },
-    {
       name: "generates empty MachineUserNameRegistry when no machine users provided",
       args: [undefined, undefined],
       expected: ["interface MachineUserNameRegistry {}"],
@@ -118,7 +108,7 @@ describe("generateTypeDefinition", () => {
     expect(result).toContain("export {};");
   });
 
-  test("should generate Env interface with literal types", () => {
+  test("should generate Env interface with value types", () => {
     const env = {
       hoge: 1,
       fuga: "hello",
@@ -128,9 +118,33 @@ describe("generateTypeDefinition", () => {
     const result = generateTypeDefinition(undefined, undefined, env);
 
     expect(result).toContain("interface Env");
-    expect(result).toContain("hoge: 1;");
-    expect(result).toContain('fuga: "hello";');
-    expect(result).toContain("piyo: true;");
+    expect(result).toContain("hoge: number;");
+    expect(result).toContain("fuga: string;");
+    expect(result).toContain("piyo: boolean;");
+  });
+
+  test("should never emit env values into the generated file", () => {
+    const result = generateTypeDefinition(undefined, undefined, {
+      TOKEN: "xoxb-must-not-leak",
+      RETRIES: 3,
+      ENABLED: false,
+    });
+
+    expect(result).not.toContain("xoxb-must-not-leak");
+    expect(result).not.toContain("RETRIES: 3");
+    expect(result).not.toContain("ENABLED: false");
+  });
+
+  test("should quote env keys that are not valid identifiers", () => {
+    const result = generateTypeDefinition(undefined, undefined, {
+      "API-BASE": "https://example.com",
+      appName: "my-app",
+    });
+
+    expect(result).toContain('"API-BASE": string;');
+    // Valid identifiers stay unquoted (matches formatter output)
+    expect(result).toContain("appName: string;");
+    expect(result).not.toContain('"appName"');
   });
 
   test("should generate empty Env interface when no env provided", () => {

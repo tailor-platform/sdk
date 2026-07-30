@@ -1,7 +1,7 @@
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, writeMetadataLabels } from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -333,7 +333,7 @@ export async function applySecretManager(
             appName: application.name,
             appId: application.id,
           });
-          await client.setMetadata(metaRequest);
+          await writeMetadataLabels(client, metaRequest);
         }
       }),
     );
@@ -347,7 +347,7 @@ export async function applySecretManager(
             appName: application.name,
             appId: application.id,
           });
-          await client.setMetadata(metaRequest);
+          await writeMetadataLabels(client, metaRequest);
         }),
       );
     }

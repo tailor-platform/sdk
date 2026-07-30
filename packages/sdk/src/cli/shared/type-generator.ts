@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "pathe";
 import { logger } from "#/cli/shared/logger";
 import ml from "#/utils/multiline";
+import type { ResolvedEnvAppConfig } from "#/cli/shared/config-loader";
 import type { AppConfig } from "#/configure/config/types";
 
 export interface AttributeTypeInfo {
@@ -43,6 +44,10 @@ type AttributeFieldLike = {
 export function extractAttributesFromConfig(config: AppConfig): ExtractedAttributes {
   return collectAttributesFromConfig(config);
 }
+
+// Quote generated keys only when they aren't valid TypeScript identifiers — matches
+// the formatter (oxfmt) output so subsequent format passes are no-ops.
+const isValidIdentifier = (s: string): boolean => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(s);
 
 /**
  * Generate the contents of the user-defined type definition file.
@@ -88,13 +93,15 @@ ${attributeFields}
     __tuple?: ${listType};
   }`;
 
-  // Generate Env interface
+  // Generate Env interface.
+  // Emit the value's type, never the value itself — a literal would leak the
+  // configured value into this generated file.
   const envFields = env
     ? Object.entries(env)
-        .map(([key, value]) => {
-          const valueType = typeof value === "string" ? `"${value}"` : String(value);
-          return `    ${key}: ${valueType};`;
-        })
+        .map(
+          ([key, value]) =>
+            `    ${isValidIdentifier(key) ? key : JSON.stringify(key)}: ${typeof value};`,
+        )
         .join("\n")
     : "";
 
@@ -106,9 +113,6 @@ ${envFields}
   }`;
 
   // Generate MachineUserNameRegistry interface.
-  // Quote keys only when they aren't valid TypeScript identifiers — matches
-  // the formatter (oxfmt) output so subsequent format passes are no-ops.
-  const isValidIdentifier = (s: string): boolean => /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(s);
   const machineUserFields = machineUserNames?.length
     ? machineUserNames
         .map((name) => `    ${isValidIdentifier(name) ? name : JSON.stringify(name)}: true;`)
@@ -322,8 +326,8 @@ export function resolveTypeDefinitionPath(configPath: string): string {
  * Options for generating user type definitions
  */
 interface GenerateUserTypesOptions {
-  /** Application config */
-  config: AppConfig;
+  /** Application config with resolved `env` values */
+  config: ResolvedEnvAppConfig;
   /** Path to Tailor config file */
   configPath: string;
 }

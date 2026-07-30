@@ -1,0 +1,4 @@
+jobs:
+  seed:
+    steps:
+      - run: node seed/exec.mjs --yes
