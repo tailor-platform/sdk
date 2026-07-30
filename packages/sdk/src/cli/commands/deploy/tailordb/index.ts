@@ -1684,7 +1684,6 @@ async function planServices(
       trn: resourceTrn(workspaceId, "tailordb", tailordb.namespace),
       appName,
       appId,
-      existingLabels: existing?.allLabels,
     });
     if (existing) {
       const owned = trackDesiredResourceOwnership({

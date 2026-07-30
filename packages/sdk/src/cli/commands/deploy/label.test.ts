@@ -146,7 +146,8 @@ describe("setMetadata call sites", () => {
 
   function callsSetMetadata(file: string): boolean {
     try {
-      return /\.setMetadata\(/.test(fs.readFileSync(file, "utf-8"));
+      // \s so a call the formatter wrapped across lines still counts.
+      return /\.\s*setMetadata\s*\(/.test(fs.readFileSync(file, "utf-8"));
     } catch {
       // Raced with a test that removed its own fixture; nothing to check.
       return false;
@@ -160,7 +161,7 @@ describe("setMetadata call sites", () => {
     const offenders = sourceFiles(srcDir)
       .filter(callsSetMetadata)
       .map((file) => path.relative(srcDir, file))
-      .filter((file) => file !== "cli/commands/deploy/label.ts" && file !== "cli/shared/client.ts");
+      .filter((file) => file !== "cli/commands/deploy/label.ts");
 
     expect(offenders).toEqual([]);
   });
