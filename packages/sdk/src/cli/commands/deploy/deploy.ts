@@ -26,7 +26,7 @@ import {
   type HasName,
   type PlanSummary,
 } from "./change-set";
-import { ensureConfigIdForDeploy } from "./config-id-injector";
+import { ensureConfigIdForDeploy, warnMissingAppId } from "./config-id-injector";
 import {
   confirmImportantResourceDeletion,
   confirmMissingDependentApps,
@@ -1111,7 +1111,10 @@ async function loadDeployConfig(params: {
         await ensureConfigIdForDeploy({ configPath: resolvedPath, dryRun, buildOnly });
       }
     }
-    return loadConfig(configPath);
+    const loaded = await loadConfig(configPath);
+    // build-only never reaches the platform, so ownership does not apply.
+    if (!buildOnly) warnMissingAppId(loaded.config.id);
+    return loaded;
   });
 }
 
@@ -1624,15 +1627,14 @@ type OwnershipTrackedPlan = {
 };
 
 /**
- * Every `PlanResults` entry except `app` carries ownership-tracking fields;
- * deriving the list from `results` itself (instead of naming each key) keeps
- * these collectors in sync with `PlannedDeployment` as resource types are added.
+ * Every `PlanResults` entry carries ownership-tracking fields; deriving the
+ * list from `results` itself (instead of naming each key) keeps these
+ * collectors in sync with `PlannedDeployment` as resource types are added.
  * @param results - Plan results for a single deployment
- * @returns The ownership-tracking plan entries, `app` excluded
+ * @returns The ownership-tracking plan entries
  */
 function ownershipTrackedPlans(results: PlanResults): ReadonlyArray<OwnershipTrackedPlan> {
-  const { app: _app, ...rest } = results;
-  return Object.values(rest);
+  return Object.values(results);
 }
 
 function collectOwnerConflicts(results: PlanResults): OwnerConflict[] {
@@ -2106,7 +2108,12 @@ export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParam
   for (const deployment of deployments) {
     const results = deploymentPlanResults(deployment);
     const conflicts = collectOwnerConflicts(results);
-    await confirmOwnerConflict(conflicts, deployment.application.name, yes);
+    await confirmOwnerConflict(
+      conflicts,
+      deployment.application.name,
+      yes,
+      deployment.application.id,
+    );
 
     const unmanaged = collectUnmanagedResources(results);
     await confirmUnmanagedResources(unmanaged, deployment.application.name, yes);
