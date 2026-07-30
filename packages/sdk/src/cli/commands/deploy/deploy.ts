@@ -1509,7 +1509,9 @@ function collectDeployRunPlanInputs(
   assertRecordableDependencies(eventSubscriptions);
   return {
     eventSubscriptions,
-    runAppIds: new Set(targets.flatMap((target) => target.application.id ?? [])),
+    runAppIds: new Set(
+      targets.map((target) => target.application.id).filter((id) => id !== undefined),
+    ),
     expectedLocalStaticWebsiteNames: collectExpectedLocalStaticWebsiteNames(targets),
     externalAuthIdpConfigNames: collectExternalAuthIdpConfigNames(targets),
   };
