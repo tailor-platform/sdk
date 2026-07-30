@@ -106,7 +106,10 @@ function emptyResults(): PlanResults {
       },
       ...emptyOwnership(),
     },
-    app: createChangeSet("Applications"),
+    app: Object.assign(
+      createChangeSet("Applications"),
+      emptyOwnership(),
+    ) as unknown as PlanResults["app"],
     executor: {
       changeSet: createChangeSet("Executors"),
       ...emptyOwnership(),

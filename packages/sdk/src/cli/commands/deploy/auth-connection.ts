@@ -180,7 +180,7 @@ export async function planAuthConnections(
     });
 
     if (existing) {
-      trackDesiredResourceOwnership({
+      const owned = trackDesiredResourceOwnership({
         labels: existing.allLabels,
         ownerLabel: existing.label,
         appName,
@@ -205,11 +205,13 @@ export async function planAuthConnections(
           } as MessageInitShape<typeof UpdateAuthConnectionRequestSchema>,
           metaRequest,
         });
-      } else if (!existing.label) {
-        // The connection itself is unchanged, but it carries no SDK label
-        // (e.g. it was just adopted via the unmanaged-resource confirmation,
-        // or created by an older SDK that predates ownership labels). Write
-        // the label now so the next deploy recognizes it as owned.
+      } else if (!owned) {
+        // The connection itself is unchanged, but this application does not own
+        // it yet: it carries no SDK label (just adopted, or created by an SDK
+        // that predates ownership labels), or it carries an id this config does
+        // not match. Either way the labels have to be written, or the take-over
+        // the user just confirmed would not happen and the next deploy would ask
+        // the same question again.
         changeSet.updates.push({ name, metaRequest });
       } else {
         changeSet.unchanged.push({ name });

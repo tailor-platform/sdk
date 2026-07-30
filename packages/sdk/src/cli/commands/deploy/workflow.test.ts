@@ -917,6 +917,30 @@ describe("planWorkflow", () => {
       });
       expect(result.jobFunctionDeletes).toEqual([{ workspaceId, jobFunctionName: "orphaned-job" }]);
     });
+
+    test("records the owner of an orphaned job function it cannot claim", async () => {
+      // Skipping it silently lets remove report that it deleted everything the
+      // application manages while this one is still there.
+      const listWorkflowJobFunctions = vi.fn().mockResolvedValue({
+        jobFunctions: [{ name: "orphaned-job", publishExecutionEvents: false }],
+        nextPageToken: "",
+      });
+      const getMetadata = vi.fn().mockResolvedValue({
+        metadata: {
+          labels: { [sdkNameLabelKey]: appName, "sdk-app-id": "app-id-1" },
+        },
+      });
+      const client = {
+        listWorkflows: vi.fn().mockResolvedValue({ workflows: [], nextPageToken: "" }),
+        listWorkflowJobFunctions,
+        getMetadata,
+      } as unknown as OperatorClient;
+
+      const result = await planWorkflow(client, workspaceId, appName, "id-2", {}, {}, new Set());
+
+      expect(result.jobFunctionDeletes).toEqual([]);
+      expect(result.resourceOwners.has(appName)).toBe(true);
+    });
   });
 
   describe("apply phase separation", () => {

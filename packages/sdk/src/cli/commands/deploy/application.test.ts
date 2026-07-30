@@ -283,6 +283,27 @@ describe("planApplication", () => {
     expect(result.unchanged).toHaveLength(0);
   });
 
+  test("reports a conflict for a same-name application this config does not own", async () => {
+    // Without a conflict the take-over is never confirmed, and the id label is
+    // rewritten (or dropped) on an application that belongs to someone else.
+    const client = createMockClient([
+      {
+        name: appName,
+        authNamespace: "auth-a",
+        authIdpConfigName: "idp-a",
+        subgraphs: matchingSubgraphs,
+        sdkAppId: "id-1",
+      },
+    ]);
+
+    const result = await planApplication(
+      createContext(client, createMockApplication({ name: appName, id: "id-2" })),
+    );
+
+    expect(result.conflicts.map((c) => c.resourceName)).toEqual([appName]);
+    expect(result.updates.map((u) => u.name)).toEqual([appName]);
+  });
+
   describe("rename detection via sdk-app-id", () => {
     test("creates new app and deletes old when name changed but id matches", async () => {
       const appId = "stable-id";
