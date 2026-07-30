@@ -46,6 +46,14 @@ export declare type WorkflowJobFunction = Message<"tailor.v1.WorkflowJobFunction
    * @generated from field: optional string script_ref = 6;
    */
   scriptRef?: string;
+
+  /**
+   * Enable publishing job-execution events
+   * (workflow.workflow_execution.job_execution.*). Default false (opt-in).
+   *
+   * @generated from field: bool publish_execution_events = 7;
+   */
+  publishExecutionEvents: boolean;
 };
 
 /**
@@ -83,6 +91,14 @@ export declare type WorkflowJobFunctionSummary = Message<"tailor.v1.WorkflowJobF
    * @generated from field: google.protobuf.Timestamp created_at = 5;
    */
   createdAt?: Timestamp;
+
+  /**
+   * Enable publishing job-execution events
+   * (workflow.workflow_execution.job_execution.*). Default false (opt-in).
+   *
+   * @generated from field: bool publish_execution_events = 7;
+   */
+  publishExecutionEvents: boolean;
 };
 
 /**
@@ -183,6 +199,14 @@ export declare type Workflow = Message<"tailor.v1.Workflow"> & {
    * @generated from field: optional tailor.v1.ConcurrencyPolicy concurrency_policy = 8;
    */
   concurrencyPolicy?: ConcurrencyPolicy;
+
+  /**
+   * Enable publishing workflow-execution events
+   * (workflow.workflow_execution.*). Default false (opt-in).
+   *
+   * @generated from field: bool publish_execution_events = 9;
+   */
+  publishExecutionEvents: boolean;
 };
 
 /**
@@ -194,7 +218,7 @@ export declare const WorkflowSchema: GenMessage<Workflow>;
 /**
  * WorkflowJobFunctionExecutionPolicy defines a runtime concurrency limit shared by
  * any job function invocation that specifies a matching execution_policy_key in
- * triggerJobFunction(). The same key can be referenced by multiple job functions
+ * execJobFunction(). The same key can be referenced by multiple job functions
  * across different workflows; they all share the same concurrency pool within the workspace.
  *
  * @generated from message tailor.v1.WorkflowJobFunctionExecutionPolicy

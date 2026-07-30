@@ -136,9 +136,9 @@ When the project defines multiple IdPs, pass `idp` to target a specific one. The
 idpUserCreatedTrigger({ idp: "my-idp" });
 ```
 
-Omitting `idp` is allowed only when the project has exactly one IdP; otherwise `apply` fails with an error listing the configured IdPs.
+Omitting `idp` is allowed only when the project has exactly one IdP; otherwise `deploy` fails with an error listing the configured IdPs.
 
-These triggers require the IdP to publish user lifecycle events. The SDK enables `publishUserEvents` automatically during `apply` on each IdP that is targeted by an `idpUser` trigger; set the value explicitly on `defineIdp()` to override. See [IdP service - publishUserEvents](./idp.md#publishuserevents).
+These triggers require the IdP to publish user lifecycle events. The SDK enables `publishUserEvents` automatically during `deploy` on each IdP that is targeted by an `idpUser` trigger; set the value explicitly on `defineIdp()` to override. See [IdP service - publishUserEvents](./idp.md#publishuserevents).
 
 ### Auth Access Token Triggers
 
@@ -151,6 +151,37 @@ Fire on auth access token lifecycle events:
 ```typescript
 authAccessTokenIssuedTrigger();
 ```
+
+### Workflow Execution Triggers
+
+Fire when a workflow execution changes state. Use the single-event helpers or `workflowExecutionTrigger()` for multiple events:
+
+```typescript
+import { createExecutor, workflowExecutionTrigger } from "@tailor-platform/sdk";
+import orderWorkflow from "../workflows/order";
+
+export default createExecutor({
+  name: "order-workflow-finished",
+  trigger: workflowExecutionTrigger({
+    workflow: orderWorkflow,
+    events: ["completed", "retried"],
+  }),
+  operation: {
+    kind: "function",
+    body: async (args) => {
+      if (args.event === "completed" && !args.success) {
+        console.error(args.error);
+      }
+    },
+  },
+});
+```
+
+The available workflow events are `started`, `completed`, `retried`, `resumed`, `wait_started`, and `wait_resolved`. To observe job-level events, use `workflowJobExecutionStartedTrigger()`, `workflowJobExecutionCompletedTrigger()`, `workflowJobExecutionWaitStartedTrigger()`, `workflowJobExecutionWaitResolvedTrigger()`, or `workflowJobExecutionTrigger()`.
+
+`completed` events include `success`; when it is `false`, `error` contains the failure message. A job released from a wait point emits `wait_resolved` instead of `completed`.
+
+These triggers require the workflow to publish execution events. The SDK enables `publishEvents` automatically during `deploy` on each targeted workflow, and on every job of a workflow targeted by a `workflowJobExecution*` trigger; set the value explicitly to override. See [Workflow service - Execution Events](./workflow.md#execution-events).
 
 ### Multi-Event Triggers
 
@@ -200,7 +231,14 @@ idpUserTrigger({ events: ["created", "deleted"], idp: "my-idp" });
 authAccessTokenTrigger({ events: ["issued", "revoked"] });
 ```
 
-The `event` field on args matches the short event name (e.g., `"created"`, `"updated"`, `"deleted"`, `"issued"`, `"refreshed"`, `"revoked"`), enabling type narrowing. The `rawEvent` field contains the full event type string (e.g., `"tailordb.type_record.created"`).
+#### `workflowExecutionTrigger()` and `workflowJobExecutionTrigger()`
+
+```typescript
+workflowExecutionTrigger({ workflow: orderWorkflow, events: ["started", "completed"] });
+workflowJobExecutionTrigger({ workflow: orderWorkflow, events: ["started", "wait_resolved"] });
+```
+
+The `event` field on args matches the short event name, enabling type narrowing. Record triggers use names such as `"created"`, auth token triggers use `"issued"`, and workflow triggers use `"started"`, `"completed"`, and `"wait_resolved"`. The `rawEvent` field contains the full event type string (e.g., `"tailordb.type_record.created"`).
 
 ## Operation Types
 
@@ -551,3 +589,45 @@ interface AuthAccessTokenContext {
   userId: string; // The user associated with the token
 }
 ```
+
+### Workflow Execution Event Payload
+
+Workflow execution triggers receive execution context:
+
+```typescript
+interface WorkflowExecutionContext {
+  workspaceId: string; // Workspace identifier
+  env: TailorEnv; // Environment variables from tailor.config.ts
+  actor: TailorActor | null; // Principal that triggered the workflow
+  workflowId: string; // Workflow resource ID
+  workflowName: string; // Workflow name
+  workflowExecutionId: string; // Workflow execution ID
+  event: "started" | "completed" | "retried" | "resumed" | "wait_started" | "wait_resolved";
+  rawEvent: string; // Full event type
+}
+```
+
+Completed events narrow on `success`. Failed executions include `error`; retried executions include `retryCount` and `retryAfter`.
+
+```typescript
+body: async (args) => {
+  if (args.event === "completed" && !args.success) {
+    console.error(args.error);
+  }
+};
+```
+
+### Workflow Job Execution Event Payload
+
+Workflow job execution triggers include every `WorkflowExecutionContext` field above, plus job-specific fields:
+
+```typescript
+interface WorkflowJobExecutionContext {
+  workflowJobExecutionId: string; // Job execution ID
+  jobFunctionName: string; // Name passed to createWorkflowJob
+  event: "started" | "completed" | "wait_started" | "wait_resolved";
+  rawEvent: string; // Full event type
+}
+```
+
+`wait_started` events include `waitKey`, plus JSON-serialized `waitPayload` when the wait point recorded one; `wait_resolved` events include `waitKey`.

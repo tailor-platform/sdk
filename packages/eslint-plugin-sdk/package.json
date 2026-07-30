@@ -36,8 +36,8 @@
     "@types/eslint": "9.6.1"
   },
   "devDependencies": {
-    "eslint": "10.7.0",
-    "oxlint": "1.74.0",
+    "eslint": "10.8.0",
+    "oxlint": "1.75.0",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
   },

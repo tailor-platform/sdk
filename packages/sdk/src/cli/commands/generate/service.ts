@@ -40,8 +40,6 @@ import type { Executor } from "#/types/executor.generated";
 import type { Resolver } from "#/types/resolver.generated";
 import type { GenerateOptions } from "./options";
 
-export type { CodeGenerator } from "#/cli/commands/generate/types";
-
 type TypeInfo = {
   types: Record<string, TailorDBType>;
   sourceInfo: TypeSourceInfo;

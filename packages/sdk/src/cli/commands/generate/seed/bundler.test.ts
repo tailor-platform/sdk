@@ -1,7 +1,16 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
+import { resolveTSConfig } from "pkg-types";
 import { afterAll, afterEach, aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import { bundleSeedScript } from "./bundler";
+import type * as pkgTypes from "pkg-types";
+
+type PkgTypesModule = typeof pkgTypes;
+
+vi.mock("pkg-types", async (importOriginal) => {
+  const original = await importOriginal<PkgTypesModule>();
+  return { ...original, resolveTSConfig: vi.fn(async () => undefined) };
+});
 
 const TEST_BUNDLER_BASE = path.join(__dirname, "__test_bundler__");
 
@@ -101,6 +110,16 @@ describe("seed-bundler", () => {
 
       expect(result.bundledCode).toContain("getDB");
       expect(result.bundledCode).toContain('"custom-namespace"');
+    });
+
+    test("resolves the tsconfig from the provided project directory", async () => {
+      const projectDir = path.join(TEST_BUNDLER_BASE, "project");
+      fs.mkdirSync(projectDir, { recursive: true });
+      vi.mocked(resolveTSConfig).mockClear();
+
+      await bundleSeedScript("tailordb", ["User"], projectDir);
+
+      expect(resolveTSConfig).toHaveBeenCalledWith(projectDir);
     });
 
     test("generates split insert and update logic gated on the runtime upsert input", async () => {

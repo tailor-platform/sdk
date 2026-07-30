@@ -4,7 +4,7 @@
  * Do not edit by hand: changes will be overwritten on the next `sdk generate`.
  */
 import { readFileSync } from "node:fs";
-import { join, isAbsolute } from "node:path";
+import { dirname, join, isAbsolute } from "node:path";
 import { parseArgs, styleText } from "node:util";
 import { createInterface } from "node:readline";
 import {
@@ -408,7 +408,7 @@ const seedViaTestExecScript = async (
   console.log(styleText("cyan", `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch ${values.upsert ? "upsert" : "insert"}...`));
 
   // Bundle seed script
-  const bundled = await bundleSeedScript(namespace, typesWithData);
+  const bundled = await bundleSeedScript(namespace, typesWithData, dirname(configPath));
 
   // Chunk seed data to fit within gRPC message size limits
   const chunks = chunkSeedData({
