@@ -310,4 +310,48 @@ fork("tools/worker.mjs");
       await fs.promises.rm(projectDir, { recursive: true, force: true });
     }
   });
+
+  test("surfaces shell-variable runner paths without flagging bare exec.mjs text", async () => {
+    const codemod = allCodemods.find((entry) => entry.id === "v2/seed-exec-to-cli-plugin");
+    expect(codemod).toBeDefined();
+    if (!codemod) throw new Error("seed exec codemod is not registered");
+
+    const scriptPath = path.resolve(
+      __dirname,
+      "../codemods/v2/seed-exec-to-cli-plugin/scripts/transform.ts",
+    );
+    const projectDir = await fs.promises.mkdtemp(
+      path.join(os.tmpdir(), "seed-exec-variable-paths-"),
+    );
+    const suspiciousFiles = ["seed.sh", "ci.yml", "README.md"];
+
+    try {
+      await Promise.all([
+        ...suspiciousFiles.map((file) =>
+          fs.promises.writeFile(
+            path.join(projectDir, file),
+            'node "${SEED_DIST}/exec.mjs" --yes\n',
+            "utf-8",
+          ),
+        ),
+        fs.promises.writeFile(
+          path.join(projectDir, "notes.md"),
+          "The generated exec.mjs file\nnode exec.mjs\n",
+          "utf-8",
+        ),
+      ]);
+
+      const result = await runCodemods([{ codemod, scriptPath }], projectDir, false);
+
+      expect(result.filesModified).toEqual([]);
+      expect(result.llmReviews).toMatchObject([
+        {
+          codemodId: "v2/seed-exec-to-cli-plugin",
+          files: suspiciousFiles.toSorted(),
+        },
+      ]);
+    } finally {
+      await fs.promises.rm(projectDir, { recursive: true, force: true });
+    }
+  });
 });
