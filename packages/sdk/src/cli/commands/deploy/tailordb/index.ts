@@ -261,7 +261,9 @@ async function reconcileMigrationLabels(
       continue;
     }
     const targetVersion = getLatestMigrationNumber(migrationsDir);
-    const currentVersion = await getRemoteMigrationNumber(client, workspaceId, namespace);
+    const currentVersion = await getRemoteMigrationNumber(client, workspaceId, namespace).catch(
+      () => null,
+    );
     if (currentVersion === targetVersion) {
       continue;
     }

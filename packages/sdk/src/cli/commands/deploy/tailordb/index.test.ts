@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { create } from "@bufbuild/protobuf";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { TailorDBTypeSchema } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 import * as path from "pathe";
 import { describe, test, expect, vi, aroundEach } from "vitest";
@@ -1289,7 +1290,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         ? { listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }) }
         : {}),
     } as unknown as OperatorClient;
-    return { client, setMetadata };
+    return { client, getMetadata, setMetadata };
   }
 
   function addSentinelTypeCreate(planResult: Awaited<ReturnType<typeof planTailorDB>>): void {
@@ -1317,6 +1318,23 @@ describe("applyTailorDB migration label reconciliation", () => {
 
   test("forces migration label even when remote has no prior label (--no-schema-check)", async () => {
     const { client, setMetadata } = createMigrationClient({});
+
+    await applyTailorDB(client, makePlanResult(true), "create-update");
+
+    expect(setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.objectContaining({ "sdk-migration": "m0000" }),
+      }),
+    );
+  });
+
+  test("reconciles the migration label after a transient metadata read failure", async () => {
+    const { client, getMetadata, setMetadata } = createMigrationClient({
+      "sdk-migration": "m0002",
+    });
+    getMetadata
+      .mockResolvedValueOnce({ metadata: { labels: { "sdk-migration": "m0002" } } })
+      .mockRejectedValueOnce(new ConnectError("transient metadata read failure", Code.Internal));
 
     await applyTailorDB(client, makePlanResult(true), "create-update");
 
