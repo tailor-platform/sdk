@@ -507,6 +507,17 @@ describe("IdPSchema validation", () => {
     expect(result.publishEvents).toBe(expected);
   });
 
+  test("rejects the legacy publishUserEvents key", () => {
+    const config = {
+      name: "test-idp",
+      permission: TEST_PERMISSION,
+      clients: ["client-1"],
+      publishUserEvents: true,
+    };
+
+    expect(() => IdPSchema.parse(config)).toThrow("publishUserEvents");
+  });
+
   test("accepts gqlOperations with all fields", () => {
     const config = {
       name: "test-idp",

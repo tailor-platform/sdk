@@ -10,8 +10,8 @@ declare module "@tailor-platform/sdk" {
     __tuple?: [];
   }
   interface Env {
-    appName: "Resolver Template";
-    version: 1;
+    appName: string;
+    version: number;
   }
   interface MachineUserNameRegistry {
     admin: true;

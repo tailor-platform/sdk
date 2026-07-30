@@ -167,6 +167,14 @@ function coversIndex(ranges: ReadonlyArray<Range>, index: number): boolean {
   return ranges.some((range) => index >= range.start && index < range.end);
 }
 
+/** Quoted keys, e.g. `{ "publishUserEvents": true }`, whose node kind is a string. */
+function quotedLegacyKeys(root: SgNode): SgNode[] {
+  return root.findAll({ rule: { kind: "pair" } }).flatMap((pair) => {
+    const key = pair.children()[0];
+    return key?.kind() === "string" && stringValue(key) === LEGACY_KEY ? [key] : [];
+  });
+}
+
 /** Computed keys whose value cannot be read statically, e.g. `[key]: value`. */
 function computedKeyEntries(object: SgNode): SgNode[] {
   return object
@@ -238,14 +246,19 @@ export function reviewFindings(
 
   // A type declaration's key is a property_identifier too, so this one rule
   // covers object literals, shorthand entries, and property signatures alike.
-  for (const node of root.findAll({
-    rule: {
-      any: [
-        { kind: "property_identifier", regex: `^${LEGACY_KEY}$` },
-        { kind: "shorthand_property_identifier", regex: `^${LEGACY_KEY}$` },
-      ],
-    },
-  })) {
+  // A quoted key is a string node instead, so it is collected separately.
+  const residual = [
+    ...root.findAll({
+      rule: {
+        any: [
+          { kind: "property_identifier", regex: `^${LEGACY_KEY}$` },
+          { kind: "shorthand_property_identifier", regex: `^${LEGACY_KEY}$` },
+        ],
+      },
+    }),
+    ...quotedLegacyKeys(root),
+  ];
+  for (const node of residual) {
     const index = node.range().start.index;
     // Rewritten already, or a nested key belonging to another option shape.
     if (rewritten.has(index) || coversIndex(optionRanges, index)) continue;

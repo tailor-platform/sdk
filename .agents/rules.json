@@ -16,6 +16,11 @@
       "file": ".agents/rules/code-comments.md"
     },
     {
+      "name": "deprecation",
+      "paths": ["packages/sdk/src/**/*.ts", "packages/sdk-codemod/src/registry.ts"],
+      "file": ".agents/rules/deprecation.md"
+    },
+    {
       "name": "docs-authoring",
       "paths": ["packages/sdk/docs/**", "packages/sdk/src/**/*.ts"],
       "file": ".agents/rules/docs-authoring.md"

@@ -34,7 +34,13 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { normalizeInvoker } from "./invoker";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -45,7 +51,6 @@ import type { Executor } from "#/types/executor.generated";
 import type { TailorField } from "#/types/field.generated";
 import type { Resolver } from "#/types/resolver.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 // Scalar type mapping for field type conversion
 const SCALAR_TYPE_MAP = {
@@ -81,11 +86,11 @@ export async function applyPipeline(
     await Promise.all([
       ...changeSet.service.creates.map(async (create) => {
         await client.createPipelineService(create.request);
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.service.updates.map(async (update) => {
         await client.updatePipelineService(update.request);
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
 
@@ -159,13 +164,13 @@ export async function planPipeline(context: PlanContext) {
 type CreateService = {
   name: string;
   request: MessageInitShape<typeof CreatePipelineServiceRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateService = {
   name: string;
   request: MessageInitShape<typeof UpdatePipelineServiceRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteService = {

@@ -17,11 +17,13 @@ import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import {
   buildMetaRequest,
-  dependedByAppLabelKey,
+  dependencyLabelWrite,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  type MetadataLabelWrite,
   recordedDependencies,
   resourceTrn,
+  writeMetadataLabels,
 } from "./label";
 import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
@@ -34,7 +36,6 @@ import type {
   UpdateApplicationRequestSchema,
 } from "@tailor-platform/tailor-proto/application_pb";
 import type { HttpAdapterSchema } from "@tailor-platform/tailor-proto/http_adapter_resource_pb";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply application changes for the given phase.
@@ -61,7 +62,7 @@ export async function applyApplication(
           "CORS",
         );
         await client.createApplication(create.request);
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...updates.map(async (update) => {
         update.request.cors = await resolveStaticWebsiteUrls(
@@ -71,7 +72,7 @@ export async function applyApplication(
           "CORS",
         );
         await client.updateApplication(update.request);
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
   } else {
@@ -88,7 +89,7 @@ export async function applyApplication(
 type CreateApplication = {
   name: string;
   request: MessageInitShape<typeof CreateApplicationRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
   /** Per-adapter diff lines shown indented beneath the application entry. */
   details?: string[];
 };
@@ -96,7 +97,7 @@ type CreateApplication = {
 type UpdateApplication = {
   name: string;
   request: MessageInitShape<typeof UpdateApplicationRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
   /** Per-adapter diff lines shown indented beneath the application entry. */
   details?: string[];
 };
@@ -339,11 +340,14 @@ export async function planApplication(
     trn: resourceTrn(workspaceId, "application", application.name),
     appName: application.name,
     appId: application.id,
-    extraLabels: dependencyLabels(
-      await fetchAppLabels(client, workspaceId, application.name),
-      context,
-    ),
   });
+  const dependencies = dependencyLabelWrite({
+    existingLabels: await fetchAppLabels(client, workspaceId, application.name),
+    dependentApps: context.dependentApps,
+    runAppIds: context.runAppIds,
+  });
+  metaRequest.labels = { ...metaRequest.labels, ...dependencies.labels };
+  metaRequest.remove = dependencies.remove;
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,
@@ -451,37 +455,6 @@ export async function fetchMissingDependentApps(params: {
   return recordedDependencies(labels)
     .filter((dependency) => !runAppIds.has(dependency.appId))
     .map((dependency) => ({ appName, appId: dependency.appId, reason: dependency.reason }));
-}
-
-/**
- * Build the labels recording which applications must take part in the same
- * deploy as this one.
- *
- * A record for an application outside the run is preserved: it was written when
- * both took part, and dropping it here would lose the only signal that a later
- * partial deploy is about to change how this config's resources are applied.
- * Records for applications in the run are recomputed, so a dependency that no
- * longer exists disappears on the next deploy that includes both.
- * @param existingLabels - Labels currently stored on the application
- * @param context - Plan context carrying the run's dependency inputs
- * @returns Labels to write alongside the SDK labels
- */
-function dependencyLabels(
-  existingLabels: Record<string, string> | undefined,
-  context: PlanContext,
-): Record<string, string> {
-  const runAppIds = context.runAppIds ?? new Set<string>();
-  const labels: Record<string, string> = {};
-  for (const { appId, reason } of recordedDependencies(existingLabels)) {
-    if (runAppIds.has(appId)) continue;
-    const key = dependedByAppLabelKey(appId);
-    if (key) labels[key] = reason;
-  }
-  for (const [appId, reason] of context.dependentApps ?? []) {
-    const key = dependedByAppLabelKey(appId);
-    if (key) labels[key] = reason;
-  }
-  return labels;
 }
 
 async function fetchAppLabels(

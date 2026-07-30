@@ -1,0 +1,395 @@
+import { describe, expect, test } from "vitest";
+import {
+  PENDING_SINCE,
+  checkDeprecationTags,
+  findDeprecationTags,
+  findMisplacedDeprecationMentions,
+  resolvePendingSince,
+} from "./deprecation-tags";
+
+const options = {
+  // Both boundaries sit above the current version, so a well-formed tag passes.
+  codemodBoundaries: new Map([
+    ["v2/old-to-new", "3.0.0"],
+    ["v2/other", "3.0.0"],
+  ]),
+  currentVersion: "2.0.0-next.10",
+};
+
+describe("findDeprecationTags", () => {
+  test("reads a single-line tag", () => {
+    const source = `/** @deprecated since 1.9.0 — use newApi. codemod: v2/old-to-new */
+export const oldApi = 1;
+`;
+
+    expect(findDeprecationTags(source)).toEqual([
+      { line: 1, text: "since 1.9.0 — use newApi. codemod: v2/old-to-new" },
+    ]);
+  });
+
+  test("joins continuation lines and stops at the next block tag", () => {
+    const source = `/**
+ * Does a thing.
+ * @deprecated since 1.9.0 — use {@link newApi} instead.
+ *   codemod: v2/old-to-new
+ * @param value - Ignored
+ */
+export function oldApi(value: string): void {}
+`;
+
+    expect(findDeprecationTags(source)).toEqual([
+      {
+        line: 3,
+        text: "since 1.9.0 — use {@link newApi} instead. codemod: v2/old-to-new",
+      },
+    ]);
+  });
+
+  test("reports each tag with its own line", () => {
+    const source = `/** @deprecated since 1.0.0 codemod: v2/old-to-new */
+export type A = string;
+
+/** @deprecated since 1.1.0 codemod: v2/other */
+export type B = string;
+`;
+
+    expect(findDeprecationTags(source).map((tag) => tag.line)).toEqual([1, 4]);
+  });
+
+  test("returns nothing when the file has no deprecation", () => {
+    expect(findDeprecationTags("export const a = 1;\n")).toEqual([]);
+  });
+
+  test("ignores @deprecated outside a JSDoc block", () => {
+    const source = `// @deprecated in a line comment
+/* @deprecated in a block comment */
+export const message = "warn about @deprecated members";
+export const template = \`@deprecated\`;
+`;
+
+    expect(findDeprecationTags(source)).toEqual([]);
+  });
+
+  test("ignores prose about the tag written as inline code", () => {
+    const source = `/**
+ * Fails a member marked \`@deprecated\` without a codemod.
+ * @param value - Ignored
+ */
+export function check(value: string): void {}
+`;
+
+    expect(findDeprecationTags(source)).toEqual([]);
+  });
+
+  test("does not read a mid-line mention as a tag", () => {
+    const source = "/** Kept for now. @deprecated since 1.0.0 codemod: v2/old-to-new */\n";
+
+    expect(findDeprecationTags(source)).toEqual([]);
+    expect(findMisplacedDeprecationMentions(source)).toEqual([1]);
+  });
+
+  test("ignores a JSDoc comment that only exists inside a template literal", () => {
+    const source = `export const generated = \`
+/**
+ * @deprecated since 1.0.0 — use newApi. codemod: v2/old-to-new
+ */
+export const oldApi = 1;
+\`;
+`;
+
+    expect(findDeprecationTags(source)).toEqual([]);
+    expect(findMisplacedDeprecationMentions(source)).toEqual([]);
+  });
+
+  test("ignores a JSDoc comment inside a plain string literal", () => {
+    const source =
+      'export const snippet = "/** @deprecated since 1.0.0 codemod: v2/old-to-new */";\n';
+
+    expect(findDeprecationTags(source)).toEqual([]);
+  });
+
+  test("reads a tag next to a type assertion the TSX grammar would reject", () => {
+    // `<string>value` is a cast in .ts and JSX in .tsx; parsing this with the
+    // TSX grammar loses the comment that follows it.
+    const source = `const cast = <string>value;
+
+/** @deprecated since 1.0.0 codemod: v2/old-to-new */
+export const oldApi = 1;
+`;
+
+    expect(findDeprecationTags(source, "src/cast.ts").map((tag) => tag.line)).toEqual([3]);
+  });
+
+  test("reads a tag that follows a string containing the tag name", () => {
+    const source = `const message = "@deprecated";
+
+/** @deprecated since 1.0.0 codemod: v2/old-to-new */
+export const oldApi = 1;
+`;
+
+    expect(findDeprecationTags(source)).toEqual([
+      { line: 3, text: "since 1.0.0 codemod: v2/old-to-new" },
+    ]);
+  });
+});
+
+describe("checkDeprecationTags", () => {
+  test("accepts a released version with a registered codemod", () => {
+    const source = `/** @deprecated since 1.83.0 — use newApi instead. codemod: v2/old-to-new */
+export const oldApi = 1;
+`;
+
+    expect(checkDeprecationTags(source, options)).toEqual([]);
+  });
+
+  test("accepts the pending sentinel", () => {
+    const source = `/** @deprecated since ${PENDING_SINCE} — use newApi instead. codemod: v2/old-to-new */
+export const oldApi = 1;
+`;
+
+    expect(checkDeprecationTags(source, options)).toEqual([]);
+  });
+
+  test("accepts several codemods", () => {
+    const source = `/** @deprecated since 1.0.0 — use newApi. codemod: v2/old-to-new, v2/other */
+export const oldApi = 1;
+`;
+
+    expect(checkDeprecationTags(source, options)).toEqual([]);
+  });
+
+  test("rejects a tag without a since", () => {
+    const source = "/** @deprecated Use newApi instead. codemod: v2/old-to-new */\n";
+
+    expect(checkDeprecationTags(source, options)).toEqual([
+      { line: 1, message: expect.stringContaining("must start with `since <version>`") },
+    ]);
+  });
+
+  test("rejects a since that is not a version", () => {
+    const source = "/** @deprecated since soon — use newApi. codemod: v2/old-to-new */\n";
+
+    expect(checkDeprecationTags(source, options)).toEqual([
+      { line: 1, message: expect.stringContaining("`since soon` is not a semver version") },
+    ]);
+  });
+
+  test("rejects a version the package has not reached yet", () => {
+    const source = "/** @deprecated since 2.0.0 — use newApi. codemod: v2/old-to-new */\n";
+
+    expect(checkDeprecationTags(source, options)).toEqual([
+      {
+        line: 1,
+        message: expect.stringContaining("is newer than the current version 2.0.0-next.10"),
+      },
+    ]);
+  });
+
+  test("rejects a tag without a codemod", () => {
+    const source = "/** @deprecated since 1.0.0 — use newApi instead. */\n";
+
+    expect(checkDeprecationTags(source, options)).toEqual([
+      { line: 1, message: expect.stringContaining("codemod: <id>") },
+    ]);
+  });
+
+  test("rejects an unregistered codemod id", () => {
+    const source = "/** @deprecated since 1.0.0 — use newApi. codemod: v2/does-not-exist */\n";
+
+    expect(checkDeprecationTags(source, options)).toEqual([
+      { line: 1, message: expect.stringContaining("`v2/does-not-exist` is not registered") },
+    ]);
+  });
+
+  test("accepts a codemod id that ends the sentence", () => {
+    const source = "/** @deprecated since 1.0.0 — use newApi. codemod: v2/old-to-new. */\n";
+
+    expect(checkDeprecationTags(source, options)).toEqual([]);
+  });
+
+  test("reads the id list without swallowing the prose that follows it", () => {
+    const source =
+      "/** @deprecated since 1.0.0 codemod: v2/old-to-new which also covers the option type. */\n";
+
+    expect(checkDeprecationTags(source, options)).toEqual([]);
+  });
+
+  test("rejects a declaration that outlived its codemod's boundary", () => {
+    const source = "/** @deprecated since 1.0.0 — use newApi. codemod: v2/removed-in-2 */\n";
+
+    expect(
+      checkDeprecationTags(source, {
+        codemodBoundaries: new Map([["v2/removed-in-2", "2.0.0"]]),
+        currentVersion: "2.0.0",
+      }),
+    ).toEqual([
+      {
+        line: 1,
+        message: expect.stringContaining("as of 2.0.0, which 2.0.0 has reached"),
+      },
+    ]);
+  });
+
+  test("rejects a declaration whose prerelease boundary has already shipped", () => {
+    const source = "/** @deprecated since 1.0.0 — use newApi. codemod: v2/removed-in-next-1 */\n";
+
+    expect(
+      checkDeprecationTags(source, {
+        codemodBoundaries: new Map([["v2/removed-in-next-1", "2.0.0-next.1"]]),
+        currentVersion: "2.0.0-next.10",
+      }),
+    ).toHaveLength(1);
+  });
+
+  test("accepts a declaration whose removal is still ahead", () => {
+    const source = "/** @deprecated since 2.1.0 — use newApi. codemod: v3/old-to-new */\n";
+
+    expect(
+      checkDeprecationTags(source, {
+        codemodBoundaries: new Map([["v3/old-to-new", "3.0.0"]]),
+        currentVersion: "2.1.0",
+      }),
+    ).toEqual([]);
+  });
+
+  test("reports a tag the grammar could not read instead of passing silently", () => {
+    // Parsed as .tsx, `<string>value` opens a JSX element and swallows the
+    // comment that follows, so the tag would otherwise go unchecked.
+    const source = `const cast = <string>value;
+
+/** @deprecated no since, no codemod */
+export const oldApi = 1;
+`;
+
+    const problems = checkDeprecationTags(source, { ...options, filePath: "src/cast.tsx" });
+
+    expect(findDeprecationTags(source, "src/cast.tsx")).toEqual([]);
+    expect(problems).toEqual([
+      { line: 3, message: expect.stringContaining("the parser could not read this part") },
+    ]);
+  });
+
+  test("reports a mid-line mention instead of silently skipping it", () => {
+    const source = "/** Kept for now. @deprecated since 1.0.0 codemod: v2/old-to-new */\n";
+
+    expect(checkDeprecationTags(source, options)).toEqual([
+      { line: 1, message: expect.stringContaining("must start its own JSDoc line") },
+    ]);
+  });
+
+  test("accepts prose about the tag written as inline code", () => {
+    const source = `/**
+ * Fails a member marked \`@deprecated\` without a codemod.
+ * @param value - Ignored
+ */
+export function check(value: string): void {}
+`;
+
+    expect(checkDeprecationTags(source, options)).toEqual([]);
+  });
+
+  test("reports every violation on a tag", () => {
+    const source = "/** @deprecated Use newApi instead. */\n";
+
+    expect(checkDeprecationTags(source, options)).toHaveLength(2);
+  });
+});
+
+describe("resolvePendingSince", () => {
+  test("rewrites every pending marker", () => {
+    const source = `/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: v2/old-to-new */
+export const a = 1;
+
+/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: v2/other */
+export const b = 2;
+`;
+
+    const result = resolvePendingSince(source, "2.1.0");
+
+    expect(result.changed).toBe(true);
+    expect(result.source).not.toContain(PENDING_SINCE);
+    expect(result.source.match(/since 2\.1\.0/g)).toHaveLength(2);
+  });
+
+  test("resolves a marker wrapped onto the next JSDoc line", () => {
+    const source = `/**
+ * @deprecated
+ *   since ${PENDING_SINCE} — use newApi. codemod: v2/old-to-new
+ */
+export const a = 1;
+`;
+
+    expect(resolvePendingSince(source, "2.0.0-next.11").source).toContain(
+      "since 2.0.0-next.11 — use newApi.",
+    );
+  });
+
+  test("leaves the sentinel outside a JSDoc block alone", () => {
+    const source = `// @deprecated since ${PENDING_SINCE} — not a real tag
+const help = "write @deprecated since ${PENDING_SINCE} until the version is known";
+
+/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: v2/old-to-new */
+export const oldApi = 1;
+`;
+
+    const result = resolvePendingSince(source, "2.1.0");
+
+    expect(result.changed).toBe(true);
+    expect(result.source).toContain(`// @deprecated since ${PENDING_SINCE} — not a real tag`);
+    expect(result.source).toContain(
+      `const help = "write @deprecated since ${PENDING_SINCE} until the version is known";`,
+    );
+    expect(result.source).toContain("/** @deprecated since 2.1.0 — use newApi.");
+  });
+
+  test("resolves a tag whose sentinel sits on a continuation line", () => {
+    const source = `/**
+ * @deprecated since
+ *   ${PENDING_SINCE} — use newApi. codemod: v2/old-to-new
+ */
+export const oldApi = 1;
+`;
+
+    const result = resolvePendingSince(source, "2.1.0");
+
+    expect(result.changed).toBe(true);
+    expect(result.source).not.toContain(PENDING_SINCE);
+    expect(result.source).toContain(" *   2.1.0 — use newApi.");
+  });
+
+  test("leaves a sentinel inside a template literal alone", () => {
+    const source = `export const generated = \`
+/**
+ * @deprecated since ${PENDING_SINCE} — use newApi. codemod: v2/old-to-new
+ */
+\`;
+
+/** @deprecated since ${PENDING_SINCE} — use newApi. codemod: v2/old-to-new */
+export const oldApi = 1;
+`;
+
+    const result = resolvePendingSince(source, "2.1.0");
+
+    expect(result.changed).toBe(true);
+    expect(result.source.match(new RegExp(PENDING_SINCE, "g"))).toHaveLength(1);
+    expect(result.source).toContain(`/** @deprecated since 2.1.0 — use newApi.`);
+  });
+
+  test("is a no-op when the sentinel only appears outside JSDoc", () => {
+    const source = `const help = "@deprecated since ${PENDING_SINCE}";\n`;
+
+    expect(resolvePendingSince(source, "2.1.0")).toEqual({ changed: false, source });
+  });
+
+  test("is a no-op without a pending marker", () => {
+    const source = "/** @deprecated since 1.0.0 codemod: v2/old-to-new */\n";
+
+    expect(resolvePendingSince(source, "2.1.0")).toEqual({ changed: false, source });
+  });
+
+  test("rejects a resolved version that is not semver", () => {
+    expect(() =>
+      resolvePendingSince(`/** @deprecated since ${PENDING_SINCE} */\n`, "not-a-version"),
+    ).toThrow("must be a valid semver version");
+  });
+});

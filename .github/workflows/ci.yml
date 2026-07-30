@@ -95,3 +95,21 @@ jobs:
 
       - name: Check import cycles
         run: pnpm -r run check:import-cycles
+
+      # The checks below guard files that are generated from a source of truth.
+      # They were only reachable through `pnpm check` locally, so forgetting the
+      # matching `:update` command left CI green while the generated copy drifted.
+      - name: Check agent rules are up to date
+        run: pnpm run check:agent-rules
+
+      - name: Check migration docs match the codemod registry
+        run: pnpm run check:codemod-docs
+
+      - name: Check public API JSDoc
+        run: pnpm run check:jsdoc
+
+      # Also gates the release PR: once its version bump reaches a codemod's
+      # boundary, an API that was supposed to be removed there still carrying a
+      # `@deprecated` declaration fails here.
+      - name: Check deprecations
+        run: pnpm run check:deprecations
