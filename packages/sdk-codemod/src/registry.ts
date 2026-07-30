@@ -1294,7 +1294,7 @@ export const allCodemods: CodemodPackage[] = [
     // async plumbing unwound; `reviewFindings` points at those exact lines.
     // Outside source files `exec.mjs` alone is a generic script name, so the
     // directory-qualified path keeps unrelated runners from being flagged.
-    suspiciousPatterns: [/[\w./@~-]+\/exec\.mjs/],
+    suspiciousPatterns: [/[\w./@~${}-]+\/exec\.mjs/],
     // Source strings keep the bare filename: a forked runner is often assembled
     // (`fork(path.join(distPath, "exec.mjs"))`), leaving no path to match, and
     // `reviewFindings` only reports quoted literal paths.
