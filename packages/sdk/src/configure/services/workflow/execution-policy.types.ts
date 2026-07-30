@@ -85,7 +85,7 @@ export type ResolvedExecutionPolicyInstance<
  *
  * When both `name` and `key` are omitted in the `defineWorkflowExecutionPolicies`
  * builder, the property name is used verbatim for both (like
- * `defineWaitPoints`). Provide `name` when the property identifier is not
+ * `createWaitPoints`). Provide `name` when the property identifier is not
  * valid execution policy grammar, and provide `key` when the runtime key
  * prefix needs to differ from `name` (e.g. it needs `:` or `.`).
  */

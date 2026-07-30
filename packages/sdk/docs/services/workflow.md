@@ -383,7 +383,7 @@ Execution policies apply a per-key concurrency cap to workflow job function disp
 
 ### Declaring Policies
 
-Use `defineWorkflowExecutionPolicies` with a builder callback. Property names supply the workspace-unique name and default key prefix verbatim, matching the mental model of `defineWaitPoints`. Override `name` or `key` in the body when the property identifier is not valid execution policy grammar or the key prefix needs to differ. Set `matchType: "prefix"` to register the prefix as a wildcard that matches every dispatch key starting with it (the default, `"exact"`, matches only a dispatch key equal to it).
+Use `defineWorkflowExecutionPolicies` with a builder callback. Property names supply the workspace-unique name and default key prefix verbatim, matching the mental model of `createWaitPoints`. Override `name` or `key` in the body when the property identifier is not valid execution policy grammar or the key prefix needs to differ. Set `matchType: "prefix"` to register the prefix as a wildcard that matches every dispatch key starting with it (the default, `"exact"`, matches only a dispatch key equal to it).
 
 ```typescript
 import { defineWorkflowExecutionPolicies } from "@tailor-platform/sdk";
