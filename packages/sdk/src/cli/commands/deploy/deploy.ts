@@ -136,6 +136,11 @@ type EventSubscription = {
   owner: BuiltDeploymentTarget;
   /** The subscribed resource, named as error messages name it. */
   resource: string;
+  /**
+   * Whether the owner declares `publishEvents` on the subscribed resource, which
+   * pins the value and leaves nothing for a dependency record to protect.
+   */
+  pinned: boolean;
   /** The executor's trigger, narrowed to a kind that names a publishing resource. */
   trigger: PublishingTrigger;
 };
@@ -201,7 +206,7 @@ export function collectEventSubscriptions(
         trigger: lookup.trigger,
       };
       if (lookup.declaredBy(subscriber)) {
-        subscriptions.push({ ...entry, owner: subscriber });
+        subscriptions.push({ ...entry, owner: subscriber, pinned: lookup.pinned(subscriber) });
         continue;
       }
       const owners = targets.filter(
@@ -217,7 +222,7 @@ export function collectEventSubscriptions(
       if (owners.length > 1) {
         continue;
       }
-      subscriptions.push({ ...entry, owner });
+      subscriptions.push({ ...entry, owner, pinned: lookup.pinned(owner) });
     }
   }
   return subscriptions;
@@ -1293,6 +1298,11 @@ type EventSourceLookup = {
   /** Whether `target` declares the resource. */
   declaredBy: (target: BuiltDeploymentTarget) => boolean | undefined;
   /**
+   * Whether `target` declares `publishEvents` on the resource, so the value does
+   * not depend on which configs the run covers.
+   */
+  pinned: (target: BuiltDeploymentTarget) => boolean;
+  /**
    * What `target` declares as owned elsewhere that could hold this resource,
    * described for an error message. Undefined for a resource kind that cannot be
    * referenced from another config at all.
@@ -1375,6 +1385,45 @@ function declaresWorkflow(
   return workflows.some((entry) => entry.name === workflowName) || undefined;
 }
 
+// A resource that declares publishEvents keeps that value whatever the run covers,
+// so nothing about it needs recording. An explicit `false` with a subscriber is
+// rejected by assertNoPublishEventsConflict, which explains that case on its own.
+function pinsTailorDBType(target: BuiltDeploymentTarget, typeName: string): boolean {
+  for (const service of target.application.tailorDBServices) {
+    const type = service.types[typeName];
+    if (type) return type.settings.publishEvents !== undefined;
+  }
+  return false;
+}
+
+function pinsResolver(target: BuiltDeploymentTarget, resolverName: string): boolean {
+  return target.application.resolverServices.some((service) =>
+    Object.values(service.resolvers).some(
+      (resolver) => resolver.name === resolverName && resolver.publishEvents !== undefined,
+    ),
+  );
+}
+
+function pinsIdp(target: BuiltDeploymentTarget, idpName: string): boolean {
+  return target.application.idpServices.some(
+    (entry) => entry.name === idpName && entry.publishEvents !== undefined,
+  );
+}
+
+function pinsWorkflow(target: BuiltDeploymentTarget, workflowName: string): boolean {
+  return Object.values(target.application.workflowService?.workflows ?? {}).some(
+    (entry) => entry.name === workflowName && entry.publishEvents !== undefined,
+  );
+}
+
+// A workflowJobExecution trigger enables publishing on every job the workflow
+// runs, and which jobs those are is only known once the workflow is bundled. Ask
+// that all of the config's jobs be declared rather than guessing the subset.
+function pinsEveryWorkflowJob(target: BuiltDeploymentTarget): boolean {
+  const jobs = target.application.workflowService?.jobs ?? [];
+  return jobs.length > 0 && jobs.every((job) => job.publishEvents !== undefined);
+}
+
 /**
  * Resolve how to find the resource an executor's event trigger subscribes to.
  * @param executor - Executor declared by the subscribing config
@@ -1392,6 +1441,7 @@ function eventSourceLookup(
         resource: publishEventsConflict.tailorDBType(trigger.typeName).resource,
         trigger,
         declaredBy: (target) => declaresTailorDBType(target, trigger.typeName),
+        pinned: (target) => pinsTailorDBType(target, trigger.typeName),
         externalHint: (target) =>
           describeExternal("TailorDB namespace", externalTailorDBNamespaces(target)),
       };
@@ -1400,6 +1450,7 @@ function eventSourceLookup(
         resource: publishEventsConflict.resolver(trigger.resolverName).resource,
         trigger,
         declaredBy: (target) => declaresResolver(target, trigger.resolverName),
+        pinned: (target) => pinsResolver(target, trigger.resolverName),
         externalHint: (target) =>
           describeExternal("resolver namespace", externalResolverNamespaces(target)),
       };
@@ -1412,6 +1463,7 @@ function eventSourceLookup(
         resource: publishEventsConflict.idpService(idpName).resource,
         trigger,
         declaredBy: (target) => declaresIdp(target, idpName),
+        pinned: (target) => pinsIdp(target, idpName),
         // The trigger names the IdP, so the hint can be exact rather than a list.
         externalHint: (target) =>
           describeExternal(
@@ -1426,6 +1478,10 @@ function eventSourceLookup(
         resource: publishEventsConflict.workflow(trigger.workflowName).resource,
         trigger,
         declaredBy: (target) => declaresWorkflow(target, trigger.workflowName),
+        pinned: (target) =>
+          trigger.kind === "workflowExecution"
+            ? pinsWorkflow(target, trigger.workflowName)
+            : pinsEveryWorkflowJob(target),
         // A workflow has no `external` declaration to check.
         externalHint: () => undefined,
       };
@@ -1485,6 +1541,10 @@ export function collectExternalAuthIdpConfigNames(
  * A subscriber that resolves without an `id` cannot be named in a record either.
  * That check applies only to a run that writes: `--dry-run` leaves every id
  * uninjected, so demanding one there would reject configs a real deploy gives one.
+ *
+ * Either way, declaring `publishEvents` on the subscribed resource pins the value
+ * and leaves nothing to record, which is why both messages offer it — a
+ * subscription reaching here is one whose owner left the value unset.
  * @param subscriptions - Every event subscription resolved for the run
  * @param writes - Whether this run applies changes rather than only reporting them
  */
@@ -1492,8 +1552,9 @@ export function assertRecordableDependencies(
   subscriptions: ReadonlyArray<EventSubscription>,
   writes: boolean,
 ): void {
-  for (const { subscriber, owner, executorName, resource } of subscriptions) {
+  for (const { subscriber, owner, executorName, resource, pinned } of subscriptions) {
     if (subscriber.config.path === owner.config.path) continue;
+    if (pinned) continue;
     if (writes && subscriber.application.id === undefined) {
       throw new Error(
         `Executor "${executorName}" in ${subscriber.config.path} subscribes to ${resource} in ` +
@@ -1503,7 +1564,7 @@ export function assertRecordableDependencies(
           `the dependency belongs to, and deploying ${owner.config.path} alone later would turn ` +
           `publishing back off without asking.\n\n` +
           `Call defineConfig() inline in ${subscriber.config.path} so deploy can manage its "id", ` +
-          `or set "publishEvents: true" on ${resource}.`,
+          `or declare "publishEvents" on ${resource} so the value no longer depends on the run.`,
       );
     }
     if (owner.application.subgraphs.length > 0) continue;
@@ -1513,8 +1574,8 @@ export function assertRecordableDependencies(
         `${owner.config.path} defines no TailorDB type, resolver, IdP, or auth namespace, so ` +
         `deploy has no application to record the dependency on, and deploying it alone later ` +
         `would turn publishing back off without asking.\n\n` +
-        `Set "publishEvents: true" on ${resource} so it does not depend on which configs are ` +
-        `deployed together.`,
+        `Declare "publishEvents" on ${resource} — on its jobs for a workflowJobExecution ` +
+        `trigger — so the value no longer depends on which configs are deployed together.`,
     );
   }
 }
