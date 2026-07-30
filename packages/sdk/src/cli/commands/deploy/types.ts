@@ -15,7 +15,7 @@ export interface PlanContext {
   forceApplyAll?: boolean;
   /**
    * Set of IdP names that have at least one executor with an idpUser trigger.
-   * Controls how `publishUserEvents` defaults on each IdP service. Empty when
+   * Controls how `publishEvents` defaults on each IdP service. Empty when
    * no idpUser triggers are defined.
    */
   idpUserTriggerTargets?: ReadonlySet<string>;
