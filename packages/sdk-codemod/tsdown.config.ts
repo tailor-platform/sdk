@@ -56,6 +56,8 @@ export default defineConfig([
         "codemods/v2/exec-job-function-rename/scripts/transform.ts",
       "v2/workflow-trigger-rename/scripts/transform":
         "codemods/v2/workflow-trigger-rename/scripts/transform.ts",
+      "v2/seed-exec-to-cli-plugin/scripts/transform":
+        "codemods/v2/seed-exec-to-cli-plugin/scripts/transform.ts",
     },
     format: ["esm"],
     target: "node18",
