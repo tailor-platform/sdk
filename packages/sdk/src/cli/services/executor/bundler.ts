@@ -12,7 +12,10 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
-import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
@@ -41,6 +44,8 @@ export interface BundleExecutorsOptions {
   bundleLogLevel?: LogLevel;
   /** Directory the config's file patterns are resolved against */
   baseDir: string;
+  /** Optional tsconfig lookup cache shared across bundles in this CLI run */
+  tsconfigCache?: TsconfigLookupCache;
 }
 
 /**
@@ -64,6 +69,7 @@ export async function bundleExecutors(
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
     baseDir,
+    tsconfigCache,
   } = options;
   const configFiles = loadFilesWithIgnores(config, baseDir);
   const files = [...configFiles, ...additionalFiles];
@@ -108,7 +114,15 @@ export async function bundleExecutors(
   // Process each executor, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
   const results = await withBundleConcurrency(executors, (executor) =>
-    bundleSingleExecutor(executor, tsconfig, startContext, cache, inlineSourcemap, bundleLogLevel),
+    bundleSingleExecutor(
+      executor,
+      tsconfig,
+      startContext,
+      cache,
+      inlineSourcemap,
+      bundleLogLevel,
+      tsconfigCache,
+    ),
   );
 
   for (const [name, code] of results) {
@@ -127,6 +141,7 @@ async function bundleSingleExecutor(
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -170,7 +185,7 @@ async function bundleSingleExecutor(
         plugins.push(startPlugin);
       }
       plugins.push(
-        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
         platformBundleDefinePlugin,
         ...cachePlugins,
       );

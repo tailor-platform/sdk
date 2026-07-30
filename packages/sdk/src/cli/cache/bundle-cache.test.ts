@@ -236,6 +236,25 @@ describe("createBundleCache", () => {
       expect(secondEntry).toBeDefined();
       expect(secondEntry?.inputHash).not.toBe(firstInputHash);
     });
+
+    test("skips storing the entry instead of throwing when a dependency path is unreadable", () => {
+      const store = createCacheStore({ cacheDir });
+      const cache = createBundleCache(store);
+      const sourceFile = writeFile("src/resolver.ts", "export default {}");
+      const unreadableDir = path.join(tmpDir, "src");
+
+      expect(() =>
+        cache.save({
+          kind: "resolver",
+          name: "myResolver",
+          sourceFile,
+          content: "bundled output",
+          dependencyPaths: [sourceFile, unreadableDir],
+        }),
+      ).not.toThrow();
+
+      expect(store.getEntry("resolver:myResolver")).toBeUndefined();
+    });
   });
 
   describe("cache key format", () => {

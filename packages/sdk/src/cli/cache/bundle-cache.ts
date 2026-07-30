@@ -177,7 +177,16 @@ function createBundleCache(store: CacheStore): BundleCache {
     const allDeps = dependencyPaths.includes(sourceFile)
       ? dependencyPaths
       : [sourceFile, ...dependencyPaths];
-    const inputHash = combineHash(hashFiles(allDeps), contextHash);
+
+    // Mirror tryRestore()'s tolerance: a non-ENOENT read error (e.g. EISDIR)
+    // should give up on caching this entry rather than fail the build.
+    let inputHash: string;
+    try {
+      inputHash = combineHash(hashFiles(allDeps), contextHash);
+    } catch {
+      return;
+    }
+
     const contentHash = hashContent(content);
 
     store.storeBundleContent(cacheKey, content);

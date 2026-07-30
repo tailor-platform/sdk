@@ -12,7 +12,10 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
-import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { findAllJobs } from "./job-detector";
@@ -62,6 +65,7 @@ export interface BundleWorkflowJobsResult {
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param inlineSourcemap - Whether to enable inline sourcemaps
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
+ * @param tsconfigCache - Optional tsconfig lookup cache shared across bundles in this CLI run
  * @returns Workflow job bundling result
  */
 export async function bundleWorkflowJobs(
@@ -73,6 +77,7 @@ export async function bundleWorkflowJobs(
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<BundleWorkflowJobsResult> {
   if (allJobs.length === 0) {
     logger.warn("No workflow jobs to bundle");
@@ -101,6 +106,7 @@ export async function bundleWorkflowJobs(
       cache,
       inlineSourcemap,
       bundleLogLevel,
+      tsconfigCache,
     ),
   );
 
@@ -250,6 +256,7 @@ async function bundleSingleJob(
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<[string, string]> {
   const serializedStartContext = serializeStartContext(startContext);
 
@@ -352,7 +359,7 @@ async function bundleSingleJob(
       const plugins: rolldown.Plugin[] = [
         entry.plugin,
         transformPlugin,
-        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
         platformBundleDefinePlugin,
         ...cachePlugins,
       ];
