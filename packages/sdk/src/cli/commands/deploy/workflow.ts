@@ -11,7 +11,14 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -21,7 +28,6 @@ import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "#/types/workflow.
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 import type { CreateWorkflowRequestSchema } from "@tailor-platform/tailor-proto/workflow_pb";
 import type {
   ConcurrencyPolicySchema,
@@ -71,7 +77,7 @@ export async function applyWorkflow(
           jobFunctions: filteredVersions,
           publishExecutionEvents: shape.publishExecutionEvents,
         });
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
         const filteredVersions = filterJobFunctionVersions(
@@ -88,7 +94,7 @@ export async function applyWorkflow(
           jobFunctions: filteredVersions,
           publishExecutionEvents: shape.publishExecutionEvents,
         });
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
   } else {
@@ -236,7 +242,8 @@ async function registerJobFunctions(
           : await client.createWorkflowJobFunction(request);
 
         // Set metadata to mark this JobFunction as owned by this app
-        await client.setMetadata(
+        await writeMetadataLabels(
+          client,
           await buildMetaRequest({
             trn: resourceTrn(workspaceId, "workflow_job_function", jobName),
             appName,
@@ -263,7 +270,7 @@ type CreateWorkflow = {
   workspaceId: string;
   workflow: Workflow;
   usedJobNames: string[];
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateWorkflow = {
@@ -271,7 +278,7 @@ type UpdateWorkflow = {
   workspaceId: string;
   workflow: Workflow;
   usedJobNames: string[];
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteWorkflow = {

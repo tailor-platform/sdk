@@ -7,7 +7,14 @@ import { type AuthService } from "#/cli/services/auth/service";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, resourceTrn, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  type MetadataLabelWrite,
+  resourceTrn,
+  sdkNameLabelKey,
+  type WithLabel,
+  writeMetadataLabels,
+} from "./label";
 import { trackDesiredResourceOwnership, trackRemainingResourceOwner } from "./owned-resource";
 import {
   hashValue,
@@ -24,23 +31,22 @@ import type {
   UpdateAuthConnectionRequestSchema,
 } from "@tailor-platform/tailor-proto/auth_pb";
 import type { AuthConnection } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 type CreateConnection = {
   name: string;
   request: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateConnection = {
   name: string;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type MaskedUpdateConnection = {
   name: string;
   updateRequest: MessageInitShape<typeof UpdateAuthConnectionRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteConnection = {
@@ -265,7 +271,7 @@ export async function applyAuthConnections(
         await Promise.all(
           changeSet.creates.map(async (create) => {
             await client.createAuthConnection(create.request);
-            await client.setMetadata(create.metaRequest);
+            await writeMetadataLabels(client, create.metaRequest);
             logger.info(
               `Connection "${create.name}" was created. Authorize it with:\n` +
                 `  tailor authconnection authorize --name ${create.name}\n` +
@@ -283,7 +289,7 @@ export async function applyAuthConnections(
                 `Or via the Console: tailor authconnection open`,
             );
           }
-          await client.setMetadata(replace.metaRequest);
+          await writeMetadataLabels(client, replace.metaRequest);
         }
 
         const secretReplaces = changeSet.replaces.filter((replace) =>
@@ -315,7 +321,7 @@ export async function applyAuthConnections(
     // whose configuration is otherwise unchanged.
     await Promise.all(
       changeSet.updates.map(async (update) => {
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     );
   } else if (changeSet.deletes.length > 0) {

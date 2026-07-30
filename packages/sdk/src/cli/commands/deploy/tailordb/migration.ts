@@ -28,7 +28,7 @@ import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { logger, styles } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
 import { spinner } from "#/cli/shared/spinner";
-import { resourceTrn } from "../label";
+import { resourceTrn, writeMetadataLabels } from "../label";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 
 // ============================================================================
@@ -251,19 +251,9 @@ export async function updateMigrationLabel(
 ): Promise<void> {
   const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
-  // Get existing metadata
-  const { metadata } = await client.getMetadata({ trn });
-  const existingLabels = metadata?.labels ?? {};
-
-  const newLabel = `m${formatMigrationNumber(migrationNumber)}`;
-
-  // Update with new migration label
-  await client.setMetadata({
+  await writeMetadataLabels(client, {
     trn,
-    labels: {
-      ...existingLabels,
-      [MIGRATION_LABEL_KEY]: newLabel,
-    },
+    labels: { [MIGRATION_LABEL_KEY]: `m${formatMigrationNumber(migrationNumber)}` },
   });
 }
 

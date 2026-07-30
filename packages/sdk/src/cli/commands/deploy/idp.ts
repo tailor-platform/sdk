@@ -28,7 +28,13 @@ import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -44,7 +50,6 @@ import type {
 } from "#/parser/service/idp/types";
 import type { IdP, IdPLang as IdPLangInput } from "#/types/idp.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 type IdPServiceMutationRequest = {
   workspaceId?: string;
@@ -119,12 +124,12 @@ export async function applyIdP(
       ...changeSet.service.creates.map(async (create) => {
         await resolveServiceReturnOrigins(client, create.request);
         await client.createIdPService(create.request);
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.service.updates.map(async (update) => {
         await resolveServiceReturnOrigins(client, update.request);
         await client.updateIdPService(update.request);
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
 
@@ -250,13 +255,13 @@ export async function planIdP(context: PlanContext) {
 type CreateService = {
   name: string;
   request: MessageInitShape<typeof CreateIdPServiceRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateService = {
   name: string;
   request: MessageInitShape<typeof UpdateIdPServiceRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteService = {

@@ -38,7 +38,12 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import { idpClientSecretName, idpClientVaultName } from "./idp";
-import { buildMetaRequest, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -86,7 +91,6 @@ import type {
   UpdateTenantConfigRequestSchema,
   UpdateUserProfileConfigRequestSchema,
 } from "@tailor-platform/tailor-proto/auth_pb";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 type AuthApplyPhase =
   | Exclude<ApplyPhase, "delete">
@@ -110,11 +114,11 @@ export async function applyAuth(
     await Promise.all([
       ...changeSet.service.creates.map(async (create) => {
         await client.createAuthService(create.request);
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.service.updates.map(async (update) => {
         await client.updateAuthService(update.request);
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
   };
@@ -386,13 +390,13 @@ export async function planAuth(context: PlanContext) {
 type CreateService = {
   name: string;
   request: MessageInitShape<typeof CreateAuthServiceRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateService = {
   name: string;
   request: MessageInitShape<typeof UpdateAuthServiceRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteService = {
