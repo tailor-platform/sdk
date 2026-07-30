@@ -108,22 +108,23 @@ export interface BuildMetaRequestParams {
   trn: string;
   appName: string;
   appId?: string;
-  existingLabels?: Record<string, string>;
 }
 
 /**
  * Build metadata request with SDK labels.
+ *
+ * Sets only the SDK's own labels; {@link writeMetadataLabels} keeps the rest
+ * from the labels it reads at write time.
  * @param params - Parameters for building the metadata request
  * @param params.trn - Target TRN
  * @param params.appName - Application name label
  * @param params.appId - Stable application id label (when managed by SDK)
- * @param params.existingLabels - Existing labels to preserve (optional)
  * @returns Metadata request
  */
 export async function buildMetaRequest(
   params: BuildMetaRequestParams,
 ): Promise<MetadataLabelWrite> {
-  const { trn, appName, appId, existingLabels } = params;
+  const { trn, appName, appId } = params;
   const packageJson = await readPackageJson();
   // Format version to be suitable for label value
   const sdkVersion = packageJson.version
@@ -133,7 +134,6 @@ export async function buildMetaRequest(
   return {
     trn,
     labels: {
-      ...existingLabels,
       [sdkNameLabelKey]: appName,
       [sdkVersionLabelKey]: sdkVersion,
       ...(appId ? { [sdkAppIdLabelKey]: toAppIdLabelValue(appId) } : {}),
