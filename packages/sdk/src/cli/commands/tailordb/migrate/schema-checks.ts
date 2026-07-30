@@ -10,7 +10,6 @@
 import { resourceTrn } from "#/cli/commands/deploy/label";
 import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
-import { assertDefined } from "#/utils/assert";
 import {
   hasChanges,
   formatMigrationDiff,
@@ -31,11 +30,15 @@ import {
   type SnapshotSettings,
   type TailorDBSnapshotType,
 } from "./snapshot";
+import {
+  MIGRATION_LABEL_KEY,
+  parseMigrationLabelNumber,
+  type RemoteSchemaVerificationResult,
+} from "./types";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 import type { NamespaceWithMigrations } from "./config";
-import type { RemoteSchemaVerificationResult } from "./types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
 /**
@@ -225,14 +228,11 @@ async function getRemoteMigrationNumberState(
     return metadata;
   });
   if (!metadata) return { metadataExists: false, number: null };
-  const label = metadata.labels["sdk-migration"];
+  const label = metadata.labels[MIGRATION_LABEL_KEY];
   if (!label) return { metadataExists: true, number: null };
-  const match = label.match(/^m(\d+)$/);
   return {
     metadataExists: true,
-    number: match
-      ? parseInt(assertDefined(match[1], "migration label capture group missing"), 10)
-      : null,
+    number: parseMigrationLabelNumber(label),
   };
 }
 

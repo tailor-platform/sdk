@@ -236,6 +236,26 @@ describe("tailordb migration validate", () => {
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
+  test("treats out-of-range migration labels as unset", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m10000" } },
+    });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(true);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.remoteSchema).toEqual({
+      remoteMigrationNumber: 0,
+      hasDrift: false,
+      drifts: [],
+      skipped: "no_migration_label",
+    });
+    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+  });
+
   test("fails when the remote migration checkpoint is not in the local history", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
