@@ -56,5 +56,9 @@
   },
   "peerDependencies": {
     "@tailor-platform/sdk": "workspace:^"
+  },
+  "engines": {
+    "bun": ">=1.2.0",
+    "node": ">=22.15.0"
   }
 }

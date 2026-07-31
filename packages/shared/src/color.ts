@@ -16,9 +16,9 @@ export const color =
     styleText(format, text, { validateStream: false });
 
 // Ask styleText whether the destination gets colors, so the TTY / NO_COLOR /
-// FORCE_COLOR rules stay Node's rather than being reimplemented here. styleText
-// returns the text unchanged for streams without color support, and rejects
-// values that are not streams at all, such as test doubles.
+// FORCE_COLOR rules stay Node's rather than being reimplemented here. It returns
+// the text unchanged when the stream has no color support, and throws for values
+// that are not streams, which is why test doubles are filtered out first.
 const PROBE = "?";
 const supportsColor = (stream: NodeJS.WriteStream): boolean =>
   stream instanceof Stream && styleText("red", PROBE, { stream }) !== PROBE;
