@@ -76,6 +76,45 @@ jobs:
           RUN_ID: ${{ github.run_id }}
         run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --run-id="${RUN_ID}-sdk"
 
+  seed-plugin-e2e:
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    name: sdk-plugin-seed e2e
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    steps:
+      - name: checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: "false"
+
+      - name: Install deps
+        uses: ./.github/actions/install-deps
+
+      - name: Login as machine user
+        run: pnpm tailor login --machine-user
+        env:
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_ID }}
+          TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET: ${{ secrets.PLATFORM_MACHINE_USER_CLIENT_SECRET }}
+
+      - name: Run sdk-plugin-seed e2e tests
+        working-directory: packages/sdk-plugin-seed
+        run: pnpm run test --project e2e
+        env:
+          TAILOR_PLATFORM_E2E_RUN_ID: ${{ github.run_id }}-seed-plugin
+          TAILOR_PLATFORM_ORGANIZATION_ID: ${{ secrets.TAILOR_PLATFORM_ORGANIZATION_ID }}
+          TAILOR_PLATFORM_FOLDER_ID: ${{ secrets.TAILOR_PLATFORM_FOLDER_ID }}
+          TAILOR_PLATFORM_WORKSPACE_REGION: us-west
+
+      - name: Cleanup e2e workspaces
+        if: always()
+        working-directory: packages/sdk
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: pnpm exec tsx scripts/cleanup-e2e-workspaces.ts --run-id="${RUN_ID}-seed-plugin"
+
   template-workflow-e2e:
     needs: changes
     if: needs.changes.outputs.should_run == 'true'
@@ -118,7 +157,7 @@ jobs:
 
   sdk-e2e-result:
     name: SDK E2E result
-    needs: [changes, sdk-e2e, template-workflow-e2e]
+    needs: [changes, sdk-e2e, seed-plugin-e2e, template-workflow-e2e]
     if: >-
       always() &&
       (github.event.action != 'synchronize' || github.event.sender.login != 'tailor-pr-trigger[bot]')
@@ -131,6 +170,7 @@ jobs:
           CHANGES_RESULT: ${{ needs.changes.result }}
           SHOULD_RUN: ${{ needs.changes.outputs.should_run }}
           SDK_E2E_RESULT: ${{ needs.sdk-e2e.result }}
+          SEED_PLUGIN_E2E_RESULT: ${{ needs.seed-plugin-e2e.result }}
           TEMPLATE_WORKFLOW_E2E_RESULT: ${{ needs.template-workflow-e2e.result }}
         run: |
           # Fail closed: if the paths-filter job itself failed, should_run is
@@ -145,6 +185,10 @@ jobs:
           fi
           if [[ "$SDK_E2E_RESULT" != "success" ]]; then
             echo "SDK package e2e job failed"
+            exit 1
+          fi
+          if [[ "$SEED_PLUGIN_E2E_RESULT" != "success" ]]; then
+            echo "sdk-plugin-seed e2e job failed"
             exit 1
           fi
           if [[ "$TEMPLATE_WORKFLOW_E2E_RESULT" != "success" ]]; then

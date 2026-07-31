@@ -11,6 +11,16 @@ export default defineConfig({
           exclude: ["**/node_modules/**", "**/dist/**"],
         },
       },
+      {
+        extends: true,
+        test: {
+          name: "e2e",
+          include: ["e2e/**/*.test.ts"],
+          testTimeout: 120000,
+          hookTimeout: 300000,
+          globalSetup: ["e2e/globalSetup.ts"],
+        },
+      },
     ],
     environment: "node",
     globals: true,
