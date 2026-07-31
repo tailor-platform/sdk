@@ -17,12 +17,12 @@ const TYPE_ICONS: Record<string, string> = {
 
 /** Semantic style functions for inline text styling */
 export const styles = {
-  info: color("cyan"),
-  success: color("green"),
-  warning: color("yellow"),
-  error: color("red"),
-  dim: color("dim"),
-  debug: color("gray"),
+  info: color.cyan,
+  success: color.green,
+  warning: color.yellow,
+  error: color.red,
+  dim: color.dim,
+  debug: color.gray,
 };
 
 const TYPE_COLORS: Record<string, (text: string) => string> = {

@@ -15,13 +15,13 @@ const TYPE_ICONS: Record<string, string> = {
   log: "",
 };
 
-const gray = color("gray");
+const gray = color.gray;
 
 const TYPE_COLORS: Record<string, (text: string) => string> = {
-  info: color("cyan"),
-  success: color("green"),
-  warn: color("yellow"),
-  error: color("red"),
+  info: color.cyan,
+  success: color.green,
+  warn: color.yellow,
+  error: color.red,
   log: (text) => text,
 };
 

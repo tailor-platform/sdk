@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as url from "node:url";
 import { parse, Lang } from "@ast-grep/napi";
-import { color, renderFor } from "@tailor-platform/shared/color";
+import { color, renderFor, type StyleFn } from "@tailor-platform/shared/color";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
@@ -118,13 +118,8 @@ async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string
   }
 }
 
-const bold = color("bold");
-const cyan = color("cyan");
-const green = color("green");
-const red = color("red");
-
-function writeDiffLine(line: string): void {
-  process.stderr.write(renderFor(process.stderr, `${line}\n`));
+function writeDiffLine(line: string, style?: StyleFn): void {
+  process.stderr.write(renderFor(process.stderr, `${style ? style(line) : line}\n`));
 }
 
 /**
@@ -137,18 +132,20 @@ function printDiff(filePath: string, before: string, after: string): void {
   const patch = structuredPatch(filePath, filePath, before, after, "", "", { context: 3 });
   if (patch.hunks.length === 0) return;
 
-  writeDiffLine(`\n${bold(`--- ${filePath}`)}`);
-  writeDiffLine(bold(`+++ ${filePath}`));
+  writeDiffLine("");
+  writeDiffLine(`--- ${filePath}`, color.bold);
+  writeDiffLine(`+++ ${filePath}`, color.bold);
 
   for (const hunk of patch.hunks) {
     writeDiffLine(
-      cyan(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`),
+      `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`,
+      color.cyan,
     );
     for (const line of hunk.lines) {
       if (line.startsWith("+")) {
-        writeDiffLine(green(line));
+        writeDiffLine(line, color.green);
       } else if (line.startsWith("-")) {
-        writeDiffLine(red(line));
+        writeDiffLine(line, color.red);
       } else {
         writeDiffLine(line);
       }

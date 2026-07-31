@@ -22,35 +22,35 @@ export class CIPromptError extends Error {
  */
 export const styles = {
   // Status colors
-  success: color("green"),
-  error: color("red"),
-  warning: color("yellow"),
-  info: color("cyan"),
+  success: color.green,
+  error: color.red,
+  warning: color.yellow,
+  info: color.cyan,
 
   // Action colors (for change sets)
-  create: color("green"),
-  update: color("yellow"),
-  delete: color("red"),
-  replace: color("magenta"),
-  unchanged: color("gray"),
+  create: color.green,
+  update: color.yellow,
+  delete: color.red,
+  replace: color.magenta,
+  unchanged: color.gray,
 
   // Emphasis
-  bold: color("bold"),
-  dim: color("gray"),
-  highlight: color("cyanBright"),
-  successBright: color("greenBright"),
-  errorBright: color("redBright"),
+  bold: color.bold,
+  dim: color.gray,
+  highlight: color.cyanBright,
+  successBright: color.greenBright,
+  errorBright: color.redBright,
 
   // Resource types
-  resourceType: color("bold"),
-  resourceName: color("cyan"),
+  resourceType: color.bold,
+  resourceName: color.cyan,
 
   // File paths
-  path: color("cyan"),
+  path: color.cyan,
 
   // Values
-  value: color("white"),
-  placeholder: color(["gray", "italic"]),
+  value: color.white,
+  placeholder: (text: string) => color.italic(color.gray(text)),
 };
 
 /**
