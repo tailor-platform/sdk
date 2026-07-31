@@ -453,7 +453,6 @@ async function planServices(
       }),
       {
         key: eventSourceKey.idp(namespaceName),
-        existingLabels: existing?.allLabels,
         dependentApps: records.dependentApps,
         runAppIds: records.runAppIds,
         pinned: idp.publishEvents !== undefined,

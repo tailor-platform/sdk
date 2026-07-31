@@ -50,7 +50,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { byName } from "#/cli/shared/apply-concurrency";
-import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { assertNoPublishEventsConflict, publishEventsConflict } from "#/cli/shared/publish-events";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
@@ -1524,10 +1524,8 @@ async function planTypes(
     explicitPublishEvents: boolean | undefined,
   ) => {
     const trn = tailorDBTypeTrn(workspaceId, namespace, typeName);
-    const existing = await getOrNull(() => client.getMetadata({ trn }));
     return addDependencyRecords(await buildMetaRequest({ trn, appName: appName ?? "", appId }), {
       key: eventSourceKey.tailorDBType(namespace, typeName),
-      existingLabels: existing?.metadata?.labels,
       dependentApps,
       runAppIds,
       pinned: explicitPublishEvents !== undefined,

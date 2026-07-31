@@ -542,7 +542,6 @@ export async function planWorkflow(
       }),
       {
         key: eventSourceKey.workflow(workflow.name),
-        existingLabels: existing?.allLabels,
         dependentApps,
         runAppIds,
         pinned: workflow.publishEvents !== undefined,
@@ -552,7 +551,6 @@ export async function planWorkflow(
     // of the workflow's own, so its records live in their own namespace here.
     addDependencyRecords(metaRequest, {
       key: eventSourceKey.workflowJobs(workflow.name),
-      existingLabels: existing?.allLabels,
       dependentApps,
       runAppIds,
       pinned: everyJobDeclaresPublishEvents(workflow.name),

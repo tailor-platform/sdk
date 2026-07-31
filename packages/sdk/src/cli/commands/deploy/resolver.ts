@@ -17,7 +17,7 @@ import {
 import * as inflection from "inflection";
 import { type ResolverService } from "#/cli/services/resolver/service";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
-import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import {
   assertNoPublishEventsConflict,
   publishEventsConflict,
@@ -361,12 +361,8 @@ async function planResolvers(
     resolver: { name: string; publishEvents?: boolean },
   ) => {
     const trn = resolverTrn(workspaceId, namespace, resolver.name);
-    // Read what is on the resolver so a record for an app that took part and
-    // stopped depending can be named for removal.
-    const existing = await getOrNull(() => client.getMetadata({ trn }));
     return addDependencyRecords(await buildMetaRequest({ trn, appName: appName ?? "", appId }), {
       key: eventSourceKey.resolver(namespace, resolver.name),
-      existingLabels: existing?.metadata?.labels,
       dependentApps,
       runAppIds,
       pinned: resolver.publishEvents !== undefined,

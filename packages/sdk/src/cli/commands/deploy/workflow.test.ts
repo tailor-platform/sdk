@@ -12,13 +12,15 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    // A fresh object per call, as the real one returns: callers mutate the write
+    // they get back, so a shared literal accumulates across tests.
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:workflow:test",
       labels: {
         "sdk-name": "test-app",
         "sdk-version": "v1-0-0",
       },
-    }),
+    })),
   };
 });
 
@@ -1101,9 +1103,6 @@ describe("planWorkflow", () => {
   });
 
   describe("dependency records and job-level publishing", () => {
-    const dependent = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
-    const jobDependentKey = `sdk-job-depended-by-app-${dependent}`;
-
     /**
      * Plan one workflow carrying a record, with the jobs it runs declaring
      * `publishEvents` or not.
@@ -1112,9 +1111,7 @@ describe("planWorkflow", () => {
      */
     async function planWith(jobPublishEvents: ReadonlyMap<string, boolean>) {
       const workflow = { ...createMockWorkflow("orders", "main-job"), publishEvents: true };
-      const client = createMockClient([
-        { id: "wf-1", name: "orders", extraLabels: { [jobDependentKey]: "publish-events" } },
-      ]);
+      const client = createMockClient([{ id: "wf-1", name: "orders" }]);
       const result = await planWorkflow(
         client,
         workspaceId,
@@ -1130,27 +1127,29 @@ describe("planWorkflow", () => {
         },
       );
       const [entry] = [...result.changeSet.updates, ...result.changeSet.unchanged];
-      return entry?.metaRequest;
+      // The reconciliation resolves against the labels read at write time, so the
+      // planner's decision is the pinned flag it attaches for the jobs scope.
+      return entry?.metaRequest?.dependencies?.find((pending) => pending.scope === "jobs");
     }
 
-    test("keeps the record while a job it runs leaves publishEvents unset", async () => {
+    test("leaves the job records alive while a job it runs declares nothing", async () => {
       // fetchMissingDependentApps reads this workflow precisely because a job of it
-      // is still recomputed, so dropping the record here would leave it with nothing
-      // to find and the confirmation would never fire for job-level changes.
-      const write = await planWith(new Map([["main-job", true]]));
+      // is still recomputed, so treating it as pinned would drop the record and the
+      // confirmation would never fire for job-level changes.
+      const jobs = await planWith(new Map([["main-job", true]]));
 
-      expect(write?.remove ?? []).not.toContain(jobDependentKey);
+      expect(jobs?.pinned).toBe(false);
     });
 
-    test("drops the record once the workflow and all its jobs declare the value", async () => {
-      const write = await planWith(
+    test("pins the job records once every job it runs declares the value", async () => {
+      const jobs = await planWith(
         new Map([
           ["main-job", true],
           ["child-job", true],
         ]),
       );
 
-      expect(write?.remove ?? []).toContain(jobDependentKey);
+      expect(jobs?.pinned).toBe(true);
     });
   });
 });
