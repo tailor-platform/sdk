@@ -170,8 +170,13 @@ function collectUnacknowledgedWarnings(migrationsDir: string): UnacknowledgedWar
 function buildValidationReports(
   options: BuildValidationReportsOptions,
 ): NamespaceValidationReport[] {
-  const { targetNamespaces, migrationFileErrors, localResults, remoteResults } = options;
-  const { unacknowledgedWarnings } = options;
+  const {
+    targetNamespaces,
+    migrationFileErrors,
+    localResults,
+    remoteResults,
+    unacknowledgedWarnings,
+  } = options;
 
   return targetNamespaces.map((target) => {
     const fileError = migrationFileErrors.get(target.namespace);
