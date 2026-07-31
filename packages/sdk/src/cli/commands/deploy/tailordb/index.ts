@@ -544,6 +544,20 @@ export async function applyTailorDB(
           )
           .map((del) => client.deleteTailorDBType(del.request)),
       );
+
+      // Step 6: Write type metadata, which the migration phases above do not.
+      // Types inside migrating namespaces only exist once their phases have run,
+      // so this waits until every type in the change set is present. Skipping it
+      // would leave a cross-config dependency record unwritten on any deploy that
+      // carries a migration, and the owner's next solo deploy would turn
+      // publishing off without asking.
+      await Promise.all(
+        [...changeSet.type.creates, ...changeSet.type.updates, ...changeSet.type.unchanged]
+          .filter((entry) => entry.metaRequest && !deletedResources.types.has(entry.name))
+          .flatMap((entry) =>
+            entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : [],
+          ),
+      );
     } else {
       // Normal create-update flow without migrations
       // Services

@@ -21,6 +21,12 @@ type TargetSpec = {
   declaredJobs?: string[];
   /** TailorDB types that declare `publishEvents`, pinning the value. */
   pinnedTypes?: string[];
+  /**
+   * A second resolver namespace on this config, listed before the one `resolvers`
+   * builds. Resolver names are only namespace-unique, so this is how a config
+   * holds the same name twice.
+   */
+  extraResolverNamespace?: { namespace: string; resolvers: string[]; pinned?: string[] };
   externalTailorDBNamespaces?: string[];
   externalResolverNamespaces?: string[];
   externalIdps?: string[];
@@ -52,6 +58,24 @@ function target(spec: TargetSpec): Target {
         },
       ],
       resolverServices: [
+        ...(spec.extraResolverNamespace
+          ? [
+              {
+                namespace: spec.extraResolverNamespace.namespace,
+                resolvers: Object.fromEntries(
+                  spec.extraResolverNamespace.resolvers.map((name) => [
+                    name,
+                    {
+                      name,
+                      ...(spec.extraResolverNamespace?.pinned?.includes(name)
+                        ? { publishEvents: true }
+                        : {}),
+                    },
+                  ]),
+                ),
+              },
+            ]
+          : []),
         {
           namespace: `pipeline${suffix}`,
           resolvers: Object.fromEntries((spec.resolvers ?? []).map((name) => [name, { name }])),
@@ -82,6 +106,9 @@ function target(spec: TargetSpec): Target {
       subgraphs: [
         ...((spec.types ?? []).length ? [{ Type: "tailordb", Name: `db${suffix}` }] : []),
         ...((spec.resolvers ?? []).length ? [{ Type: "pipeline", Name: `pipeline${suffix}` }] : []),
+        ...(spec.extraResolverNamespace
+          ? [{ Type: "pipeline", Name: spec.extraResolverNamespace.namespace }]
+          : []),
         ...(spec.idps ?? []).map((Name) => ({ Type: "idp", Name })),
         ...(spec.externalResolverNamespaces ?? []).map((Name) => ({ Type: "pipeline", Name })),
         ...(spec.externalIdps ?? []).map((Name) => ({ Type: "idp", Name })),
@@ -551,5 +578,72 @@ describe("collectEventSubscriptions and which jobs settle a workflow's jobs valu
     expect(() => assertRecordableDependencies(subscriptions, true)).toThrow(
       /resolves without an "id"/,
     );
+  });
+});
+
+describe("collectEventSubscriptions and a resolver name held in two namespaces", () => {
+  // Resolver names are only namespace-unique. The namespace the subscriber sees
+  // the name through decides which resolver is subscribed, so reading the pin or
+  // the record key back off the owner by bare name can land on the other one.
+  const owner = target({
+    configPath: "supplier/tailor.config.ts",
+    namespace: "public",
+    resolvers: ["processOrder"],
+    extraResolverNamespace: {
+      namespace: "pipeline-internal",
+      resolvers: ["processOrder"],
+      pinned: ["processOrder"],
+    },
+  });
+  const subscriber = target({
+    configPath: "buyer/tailor.config.ts",
+    appId: supplierId,
+    types: ["Order"],
+    externalResolverNamespaces: ["pipeline-public"],
+    executors: { "sync-order": { kind: "resolverExecuted", resolverName: "processOrder" } },
+  });
+
+  test("takes the pin from the namespace the subscriber sees", () => {
+    const subscriptions = collectEventSubscriptions([owner, subscriber]);
+
+    expect(subscriptions).toHaveLength(1);
+    // pipeline-internal declares the value; pipeline-public does not.
+    expect(subscriptions[0]?.pinned).toBe(false);
+  });
+
+  test("records the dependency on the resolver the subscriber sees", () => {
+    const subscriptions = collectEventSubscriptions([owner, subscriber]);
+
+    expect(subscriptions[0]?.key).toBe("pipeline:pipeline-public:resolver:processOrder");
+    expect([...collectDependentApps(subscriptions).keys()]).toEqual([
+      "pipeline:pipeline-public:resolver:processOrder",
+    ]);
+  });
+});
+
+describe("assertRecordableDependencies and an id that cannot form a label key", () => {
+  // Label keys are lowercase, but the config's own id validation accepts a UUID in
+  // any case. Without this check the run reaches apply and the write throws
+  // partway through, once sibling resources have already been mutated.
+  const uppercase = supplierId.toUpperCase();
+  const subscriptions = () =>
+    collectEventSubscriptions([
+      target({ configPath: "supplier/tailor.config.ts", types: ["Order"] }),
+      target({
+        configPath: "buyer/tailor.config.ts",
+        appId: uppercase,
+        types: ["Invoice"],
+        executors: { "sync-order": { kind: "tailordb", typeName: "Order" } },
+      }),
+    ]);
+
+  test("rejects an uppercase id on a run that applies changes", () => {
+    expect(() => assertRecordableDependencies(subscriptions(), true)).toThrow(
+      /is not the lowercase UUID deploy writes/,
+    );
+  });
+
+  test("leaves a dry run alone, which never has an id injected", () => {
+    expect(() => assertRecordableDependencies(subscriptions(), false)).not.toThrow();
   });
 });
