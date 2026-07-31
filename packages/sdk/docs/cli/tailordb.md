@@ -181,6 +181,12 @@ tailor tailordb migration set [options] <number>
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
+**Notes**
+
+The migration number must be a 4-digit value (e.g. `0001`) or a bare integer (e.g. `1`) within 0–9999, and must exist in the local migration history; `0` is always accepted as the baseline. The local history is validated first, so a gapped history is rejected.
+
+Metadata lookup failures (authentication, permission, or network errors) are reported as errors; only a not-yet-deployed namespace is treated as having no checkpoint.
+
 #### tailordb migration status
 
 Show the current migration status for TailorDB namespaces, including applied and pending migrations.
@@ -201,6 +207,10 @@ tailor tailordb migration status [options]
 | `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (shows all namespaces if not specified) | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+Metadata lookup failures (authentication, permission, or network errors) are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.
 
 #### tailordb migration sync
 
