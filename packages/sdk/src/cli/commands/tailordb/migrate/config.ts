@@ -3,6 +3,7 @@
  */
 
 import * as path from "pathe";
+import { assertDefined } from "#/utils/assert";
 import type { AppConfig } from "#/configure/config/types";
 
 // ============================================================================
@@ -53,4 +54,34 @@ export function getNamespacesWithMigrations(
   }
 
   return result;
+}
+
+/**
+ * Select the single target namespace for a migration command
+ * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations configured
+ * @param {string | undefined} requested - Namespace requested via --namespace, if any
+ * @returns {NamespaceWithMigrations} The selected namespace
+ */
+export function selectTargetNamespace(
+  namespacesWithMigrations: NamespaceWithMigrations[],
+  requested: string | undefined,
+): NamespaceWithMigrations {
+  if (namespacesWithMigrations.length === 0) {
+    throw new Error("No TailorDB services with migrations configuration found");
+  }
+  if (requested) {
+    const found = namespacesWithMigrations.find((ns) => ns.namespace === requested);
+    if (!found) {
+      throw new Error(`Namespace "${requested}" not found or does not have migrations configured`);
+    }
+    return found;
+  }
+  if (namespacesWithMigrations.length > 1) {
+    throw new Error(
+      `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations
+        .map((ns) => ns.namespace)
+        .join(", ")}`,
+    );
+  }
+  return assertDefined(namespacesWithMigrations[0], "namespace with migrations missing");
 }

@@ -890,9 +890,32 @@ export function reconstructSnapshotFromMigrations(
  * @returns {number} Latest migration number or 0 if no migrations exist
  */
 export function getLatestMigrationNumber(migrationsDir: string): number {
-  const files = getMigrationFiles(migrationsDir);
+  return latestMigrationNumber(getMigrationFiles(migrationsDir));
+}
+
+function latestMigrationNumber(files: { number: number }[]): number {
   if (files.length === 0) return 0;
   return Math.max(...files.map((f) => f.number));
+}
+
+/**
+ * Assert that a migration number exists in the local migration history.
+ * 0 is always accepted as the baseline snapshot.
+ * @param {string} migrationsDir - Migrations directory path
+ * @param {number} migrationNumber - Migration number to check
+ * @returns {number} The latest migration number in the history
+ */
+export function assertMigrationNumberExists(
+  migrationsDir: string,
+  migrationNumber: number,
+): number {
+  const files = getMigrationFiles(migrationsDir);
+  if (migrationNumber !== 0 && !files.some((f) => f.number === migrationNumber)) {
+    throw new Error(
+      `Migration ${formatMigrationNumber(migrationNumber)} does not exist in working tree (latest is ${formatMigrationNumber(latestMigrationNumber(files))}).`,
+    );
+  }
+  return latestMigrationNumber(files);
 }
 
 // ============================================================================

@@ -11,13 +11,13 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
 import { getNamespacesWithMigrations } from "./config";
+import { fetchRemoteMigrationNumber } from "./remote-state";
 import {
   getMigrationFiles,
   loadDiff,
   getMigrationFilePath,
   formatMigrationNumber,
 } from "./snapshot";
-import { MIGRATION_LABEL_KEY, parseMigrationLabelNumber } from "./types";
 
 export interface StatusOptions {
   configPath?: string;
@@ -73,14 +73,8 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
 
   for (const { namespace, migrationsDir } of targetNamespaces) {
     const trn = resourceTrn(workspaceId, "tailordb", namespace);
-    let currentMigration: number;
-    try {
-      const { metadata } = await client.getMetadata({ trn });
-      const label = metadata?.labels[MIGRATION_LABEL_KEY];
-      currentMigration = label ? (parseMigrationLabelNumber(label) ?? 0) : 0;
-    } catch {
-      currentMigration = 0;
-    }
+    const current = await fetchRemoteMigrationNumber(client, trn);
+    const currentMigration = current ?? 0;
 
     const migrationFiles = getMigrationFiles(migrationsDir);
     const availableNumbers = migrationFiles
