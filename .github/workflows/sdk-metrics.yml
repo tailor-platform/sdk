@@ -2,13 +2,14 @@ name: SDK Metrics
 
 on:
   pull_request:
+    branches: [main]
     paths:
       - packages/**
       - package.json
       - pnpm-lock.yaml
       - .github/workflows/sdk-metrics.yml
   push:
-    branches: [main, v2]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:

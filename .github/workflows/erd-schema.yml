@@ -2,7 +2,7 @@ name: ERD Schema
 
 on:
   push:
-    branches: [main, v2]
+    branches: [main]
     paths:
       - packages/sdk-plugin-tailordb-erd/**
       - packages/sdk/src/cli/shared/tailordb-namespaces.ts

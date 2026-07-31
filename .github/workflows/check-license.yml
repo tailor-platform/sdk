@@ -2,7 +2,7 @@ name: Check Licenses
 
 on:
   push:
-    branches: [main, v2]
+    branches: [main]
     paths:
       - "pnpm-lock.yaml"
       - ".github/workflows/check-license.yml"
