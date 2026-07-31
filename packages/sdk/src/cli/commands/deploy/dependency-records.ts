@@ -1,5 +1,11 @@
 import { getOrNull } from "#/cli/shared/client";
-import { recordedDependencies, resolverTrn, resourceTrn, tailorDBTypeTrn } from "./label";
+import {
+  eventSourceKey,
+  recordedDependencies,
+  resolverTrn,
+  resourceTrn,
+  tailorDBTypeTrn,
+} from "./label";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MissingDependentApp } from "./confirm";
@@ -8,6 +14,8 @@ import type { MissingDependentApp } from "./confirm";
 type RecomputedResource = {
   /** TRN carrying the resource's dependency records. */
   trn: string;
+  /** Key the run's own subscriptions are recorded under. */
+  key: string;
   /** How the resource is named in the confirmation, e.g. `Workflow "nightly"`. */
   label: string;
 };
@@ -33,6 +41,7 @@ function recomputedResources(
       if (type.settings.publishEvents === undefined) {
         resources.push({
           trn: tailorDBTypeTrn(workspaceId, service.namespace, typeName),
+          key: eventSourceKey.tailorDBType(service.namespace, typeName),
           label: `TailorDB type "${typeName}"`,
         });
       }
@@ -44,6 +53,7 @@ function recomputedResources(
       if (resolver.publishEvents === undefined) {
         resources.push({
           trn: resolverTrn(workspaceId, service.namespace, resolver.name),
+          key: eventSourceKey.resolver(service.namespace, resolver.name),
           label: `Resolver "${resolver.name}"`,
         });
       }
@@ -54,6 +64,7 @@ function recomputedResources(
     if (idp.publishEvents === undefined) {
       resources.push({
         trn: resourceTrn(workspaceId, "idp", idp.name),
+        key: eventSourceKey.idp(idp.name),
         label: `IdP service "${idp.name}"`,
       });
     }
@@ -67,6 +78,7 @@ function recomputedResources(
     if (workflow.publishEvents === undefined || anyJobRecomputed) {
       resources.push({
         trn: resourceTrn(workspaceId, "workflow", workflow.name),
+        key: eventSourceKey.workflow(workflow.name),
         label: `Workflow "${workflow.name}"`,
       });
     }
@@ -81,11 +93,17 @@ function recomputedResources(
  *
  * Records live on the resources rather than on the application, so this survives
  * the application being renamed and stops reporting a resource that is gone.
- * @param params - Client, workspace, application, and the run's app ids
+ *
+ * A resource this run still subscribes to is skipped: its value resolves to `true`
+ * from the run's own executors, so the absent config changes nothing about it and
+ * asking would be asking about something that cannot happen. What is left over is
+ * a resource that really does turn off.
+ * @param params - Client, workspace, application, and the run's inputs
  * @param params.client - Operator client instance
  * @param params.workspaceId - Workspace being deployed to
  * @param params.application - Application being planned
  * @param params.runAppIds - Stable ids of every application in the run
+ * @param params.subscribedKeys - Resources this run subscribes to, by resource key
  * @returns Recorded dependencies missing from the run
  */
 export async function fetchMissingDependentApps(params: {
@@ -93,19 +111,22 @@ export async function fetchMissingDependentApps(params: {
   workspaceId: string;
   application: Readonly<Application>;
   runAppIds: ReadonlySet<string>;
+  subscribedKeys: ReadonlySet<string>;
 }): Promise<MissingDependentApp[]> {
-  const { client, workspaceId, application, runAppIds } = params;
+  const { client, workspaceId, application, runAppIds, subscribedKeys } = params;
   const found = await Promise.all(
-    recomputedResources(workspaceId, application).map(async ({ trn, label }) => {
-      const metadata = await getOrNull(() => client.getMetadata({ trn }));
-      return recordedDependencies(metadata?.metadata?.labels)
-        .filter((dependency) => !runAppIds.has(dependency.appId))
-        .map((dependency) => ({
-          resource: label,
-          appId: dependency.appId,
-          reason: dependency.reason,
-        }));
-    }),
+    recomputedResources(workspaceId, application)
+      .filter(({ key }) => !subscribedKeys.has(key))
+      .map(async ({ trn, label }) => {
+        const metadata = await getOrNull(() => client.getMetadata({ trn }));
+        return recordedDependencies(metadata?.metadata?.labels)
+          .filter((dependency) => !runAppIds.has(dependency.appId))
+          .map((dependency) => ({
+            resource: label,
+            appId: dependency.appId,
+            reason: dependency.reason,
+          }));
+      }),
   );
   return found.flat();
 }

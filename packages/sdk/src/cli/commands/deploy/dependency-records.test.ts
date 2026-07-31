@@ -86,6 +86,7 @@ describe("fetchMissingDependentApps", () => {
       workspaceId,
       application: application({ types: { Order: undefined } }),
       runAppIds: new Set(),
+      subscribedKeys: new Set(),
     });
 
     expect(missing).toEqual([
@@ -106,6 +107,7 @@ describe("fetchMissingDependentApps", () => {
       workspaceId,
       application: application({ types: { Order: true } }),
       runAppIds: new Set(),
+      subscribedKeys: new Set(),
     });
 
     expect(missing).toEqual([]);
@@ -120,6 +122,7 @@ describe("fetchMissingDependentApps", () => {
       workspaceId,
       application: application({ workflows: { nightly: undefined } }),
       runAppIds: new Set([buyer]),
+      subscribedKeys: new Set(),
     });
 
     expect(missing).toEqual([]);
@@ -138,6 +141,7 @@ describe("fetchMissingDependentApps", () => {
         jobs: { "process-order": undefined },
       }),
       runAppIds: new Set(),
+      subscribedKeys: new Set(),
     });
 
     expect(missing).toEqual([
@@ -164,8 +168,43 @@ describe("fetchMissingDependentApps", () => {
       workspaceId,
       application: application(spec),
       runAppIds: new Set(),
+      subscribedKeys: new Set(),
     });
 
     expect(missing).toEqual([{ resource: label, appId: buyer, reason: "publish-events" }]);
+  });
+});
+
+describe("fetchMissingDependentApps and the run's own subscribers", () => {
+  test("skips a resource this run still subscribes to", async () => {
+    // Its value resolves to true from the run's own executor, so the absent
+    // config changes nothing and the confirmation would ask about a change that
+    // cannot happen.
+    const client = clientRecording(["trn:v1:workspace:ws:tailordb:db:type:Order"]);
+
+    const missing = await fetchMissingDependentApps({
+      client,
+      workspaceId,
+      application: application({ types: { Order: undefined } }),
+      runAppIds: new Set(),
+      subscribedKeys: new Set(["tailordb:db:type:Order"]),
+    });
+
+    expect(missing).toEqual([]);
+    expect(client.getMetadata).not.toHaveBeenCalled();
+  });
+
+  test("still reports a resource nothing in the run subscribes to", async () => {
+    const client = clientRecording(["trn:v1:workspace:ws:tailordb:db:type:Order"]);
+
+    const missing = await fetchMissingDependentApps({
+      client,
+      workspaceId,
+      application: application({ types: { Order: undefined } }),
+      runAppIds: new Set(),
+      subscribedKeys: new Set(["tailordb:db:type:Invoice"]),
+    });
+
+    expect(missing).toHaveLength(1);
   });
 });
