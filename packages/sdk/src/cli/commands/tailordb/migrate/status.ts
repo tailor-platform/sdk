@@ -34,6 +34,7 @@ interface PendingMigrationStatusInfo {
 }
 
 interface MigrationStatusInfo {
+  status: "ok";
   namespace: string;
   currentMigration: number;
   currentMigrationLabel: string;
@@ -41,6 +42,7 @@ interface MigrationStatusInfo {
 }
 
 interface MigrationStatusFailure {
+  status: "error";
   namespace: string;
   error: string;
 }
@@ -48,7 +50,7 @@ interface MigrationStatusFailure {
 type MigrationStatusRow = MigrationStatusInfo | MigrationStatusFailure;
 
 function isStatusFailure(row: MigrationStatusRow): row is MigrationStatusFailure {
-  return "error" in row;
+  return row.status === "error";
 }
 
 async function collectMigrationStatuses(options: StatusOptions): Promise<MigrationStatusRow[]> {
@@ -88,7 +90,11 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     try {
       current = await fetchRemoteMigrationNumber(client, trn);
     } catch (error) {
-      rows.push({ namespace, error: error instanceof Error ? error.message : String(error) });
+      rows.push({
+        status: "error",
+        namespace,
+        error: error instanceof Error ? error.message : String(error),
+      });
       continue;
     }
     const currentMigration = current ?? 0;
@@ -121,6 +127,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     });
 
     rows.push({
+      status: "ok",
       namespace,
       currentMigration,
       currentMigrationLabel: formatMigrationNumber(currentMigration),
@@ -174,8 +181,9 @@ async function status(options: StatusOptions): Promise<void> {
 
   const failures = rows.filter(isStatusFailure);
   if (failures.length > 0) {
+    const namespaces = failures.map((f) => f.namespace).join(", ");
     throw new Error(
-      `Failed to read migration state:\n${failures.map((f) => `  - ${f.namespace}: ${f.error}`).join("\n")}`,
+      `Failed to read migration state for ${failures.length} namespace${failures.length === 1 ? "" : "s"}: ${namespaces}`,
     );
   }
 }
@@ -184,7 +192,8 @@ export const statusCommand = defineAppCommand({
   name: "status",
   description:
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
-  notes: `Metadata lookup failures (authentication, permission, or network errors) are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.`,
+  notes:
+    "Metadata lookup failures (authentication, permission, or network errors) are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {

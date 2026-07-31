@@ -183,7 +183,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-The migration number must be a 4-digit value (e.g. `0001`) or a bare integer (e.g. `1`) within 0–9999, and must exist in the local migration history; `0` is always accepted as the baseline. The local history is validated first, so a gapped history is rejected.
+The migration number must be a 4-digit value (e.g. `0001`) or a bare integer (e.g. `1`) within 0–9999, and must exist in the local migration history; `0` is always accepted as the baseline, provided the local history passes validation. A gapped history is rejected.
 
 Metadata lookup failures (authentication, permission, or network errors) are reported as errors; only a not-yet-deployed namespace is treated as having no checkpoint.
 

@@ -118,7 +118,7 @@ async function set(options: SetOptions): Promise<void> {
 export const setCommand = defineAppCommand({
   name: "set",
   description: "Set migration checkpoint to a specific number.",
-  notes: `The migration number must be a 4-digit value (e.g. \`0001\`) or a bare integer (e.g. \`1\`) within 0–9999, and must exist in the local migration history; \`0\` is always accepted as the baseline. The local history is validated first, so a gapped history is rejected.
+  notes: `The migration number must be a 4-digit value (e.g. \`0001\`) or a bare integer (e.g. \`1\`) within 0–9999, and must exist in the local migration history; \`0\` is always accepted as the baseline, provided the local history passes validation. A gapped history is rejected.
 
 Metadata lookup failures (authentication, permission, or network errors) are reported as errors; only a not-yet-deployed namespace is treated as having no checkpoint.`,
   args: z.strictObject({

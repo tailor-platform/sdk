@@ -78,6 +78,7 @@ describe("tailordb migration status --json", () => {
     expect(stdout.output).not.toBe("");
     expect(JSON.parse(stdout.output)).toEqual([
       {
+        status: "ok",
         namespace: "tailordb",
         currentMigration: 1,
         currentMigrationLabel: "0001",
@@ -102,6 +103,7 @@ describe("tailordb migration status --json", () => {
 
     expect(JSON.parse(stdout.output)).toMatchObject([
       {
+        status: "ok",
         namespace: "tailordb",
         currentMigration: 0,
         pendingMigrations: [{ number: 1 }, { number: 2 }],
@@ -111,12 +113,23 @@ describe("tailordb migration status --json", () => {
 
   test("propagates metadata errors other than NotFound", async () => {
     state.getMetadata.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+    using stdout = captureStdout();
     using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
 
     const result = await runCommand(statusCommand, []);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/unavailable/);
+    expect(String(result.error)).toMatch(
+      /Failed to read migration state for 1 namespace: tailordb/,
+    );
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "error",
+        namespace: "tailordb",
+        error: expect.stringContaining("unavailable"),
+      },
+    ]);
   });
 
   test("keeps reporting healthy namespaces when another namespace fails", async () => {
@@ -141,14 +154,18 @@ describe("tailordb migration status --json", () => {
     const result = await runCommand(statusCommand, []);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/analyticsdb/);
+    expect(String(result.error)).toMatch(
+      /Failed to read migration state for 1 namespace: analyticsdb/,
+    );
     expect(JSON.parse(stdout.output)).toMatchObject([
       {
+        status: "ok",
         namespace: "tailordb",
         currentMigration: 1,
         pendingMigrations: [{ number: 2 }],
       },
       {
+        status: "error",
         namespace: "analyticsdb",
         error: expect.stringContaining("unavailable"),
       },
