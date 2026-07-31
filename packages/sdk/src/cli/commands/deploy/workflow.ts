@@ -100,6 +100,11 @@ export async function applyWorkflow(
         });
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      // An unchanged workflow still gets its labels written, because its dependency
+      // records can change while its definition does not.
+      ...changeSet.unchanged.flatMap((entry) =>
+        entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : [],
+      ),
     ]);
   } else {
     await deleteAllSettled(
@@ -356,6 +361,15 @@ export type WorkflowEventSubscribers = {
   workflowNames: ReadonlySet<string>;
 };
 
+/**
+ * A workflow whose definition is unchanged but whose dependency records may not
+ * be. The plan shows it as unchanged; apply still writes its labels.
+ */
+type UnchangedWorkflow = {
+  name: string;
+  metaRequest?: MetadataLabelWrite;
+};
+
 /** Inputs deciding which workflows and job functions publish execution events. */
 export type WorkflowEventPublishing = {
   /** Subscribers of `workflow.workflow_execution.*` events. */
@@ -468,7 +482,13 @@ export async function planWorkflow(
   unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
   eventPublishing: WorkflowEventPublishing = {},
 ) {
-  const changeSet = createChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>("Workflows");
+  const changeSet = createChangeSet<
+    CreateWorkflow,
+    UpdateWorkflow,
+    DeleteWorkflow,
+    never,
+    UnchangedWorkflow
+  >("Workflows");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -477,6 +497,15 @@ export async function planWorkflow(
 
   const executionSubscribers = eventPublishing.execution ?? NO_EVENT_SUBSCRIBERS;
   const { dependentApps, runAppIds } = eventPublishing;
+  // A workflowJobExecution subscription records on the workflow, so the workflow's
+  // own declaration does not settle whether its records still matter. Dropping
+  // them while a job it runs leaves publishEvents unset would delete the only
+  // signal fetchMissingDependentApps looks for on that workflow.
+  const everyJobDeclaresPublishEvents = (workflowName: string): boolean => {
+    const jobNames = mainJobDeps[workflows[workflowName]?.mainJob.name ?? ""] ?? [];
+    const explicit = eventPublishing.jobPublishEvents ?? new Map<string, boolean>();
+    return jobNames.length > 0 && jobNames.every((jobName) => explicit.has(jobName));
+  };
   const existingJobFunctions = await fetchExistingJobFunctions(client, workspaceId);
   const jobFunctionPublishEvents = resolveJobPublishEvents({
     workflows,
@@ -516,7 +545,8 @@ export async function planWorkflow(
         existingLabels: existing?.allLabels,
         dependentApps,
         runAppIds,
-        pinned: workflow.publishEvents !== undefined,
+        pinned:
+          workflow.publishEvents !== undefined && everyJobDeclaresPublishEvents(workflow.name),
       },
     );
     // Get jobs used by this workflow from mainJobDeps
@@ -565,7 +595,8 @@ export async function planWorkflow(
           staleJobFunctionNames,
         })
       ) {
-        changeSet.unchanged.push({ name: workflow.name });
+        // The definition matches, but the records may not, so the labels still go.
+        changeSet.unchanged.push({ name: workflow.name, metaRequest });
         for (const jobName of usedJobNames) {
           unchangedWorkflowJobNames.add(jobName);
         }
