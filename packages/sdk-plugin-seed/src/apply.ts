@@ -10,6 +10,7 @@ import {
   show,
   truncate,
 } from "@tailor-platform/sdk/cli";
+import { renderFor } from "@tailor-platform/shared/color";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
@@ -17,7 +18,7 @@ import { selectEntities } from "./entities";
 import { assertSeedDataDirectory, loadSeedData } from "./jsonl";
 import { deploymentArgs } from "./shared/args";
 import { defineAppCommand } from "./shared/command";
-import { logger, renderFor, styles } from "./shared/logger";
+import { logger, styles } from "./shared/logger";
 import { topologicalSort } from "./topo-sort";
 import type { OperatorClient, ScriptExecutionResult, SeedData } from "@tailor-platform/sdk/cli";
 

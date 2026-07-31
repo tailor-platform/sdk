@@ -605,6 +605,9 @@ importers:
       '@opentelemetry/sdk-trace-base':
         specifier: 2.10.0
         version: 2.10.0(@opentelemetry/api@1.9.1)
+      '@tailor-platform/shared':
+        specifier: workspace:^
+        version: link:../shared
       '@tailor-platform/tailor-proto':
         specifier: workspace:^
         version: link:../tailor-proto
@@ -678,6 +681,9 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
+      '@tailor-platform/shared':
+        specifier: workspace:^
+        version: link:../shared
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
@@ -721,6 +727,9 @@ importers:
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../sdk
+      '@tailor-platform/shared':
+        specifier: workspace:^
+        version: link:../shared
       '@types/node':
         specifier: 24.13.3
         version: 24.13.3
@@ -767,6 +776,9 @@ importers:
       '@tailor-platform/sdk':
         specifier: workspace:^
         version: link:../sdk
+      '@tailor-platform/shared':
+        specifier: workspace:^
+        version: link:../shared
       '@types/mime-types':
         specifier: 3.0.1
         version: 3.0.1
@@ -788,6 +800,8 @@ importers:
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.2.0(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
+
+  packages/shared: {}
 
   packages/tailor-proto:
     dependencies:

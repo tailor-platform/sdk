@@ -36,6 +36,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@tailor-platform/shared": "workspace:^",
     "@types/node": "24.13.3",
     "@types/picomatch": "4.0.3",
     "@types/semver": "7.7.1",

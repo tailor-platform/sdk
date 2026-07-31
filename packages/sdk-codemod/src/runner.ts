@@ -1,8 +1,7 @@
 import * as fs from "node:fs";
-import { Stream } from "node:stream";
 import * as url from "node:url";
-import { stripVTControlCharacters, styleText } from "node:util";
 import { parse, Lang } from "@ast-grep/napi";
+import { color, renderFor } from "@tailor-platform/shared/color";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
@@ -119,20 +118,13 @@ async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string
   }
 }
 
-// Ask styleText whether the destination gets colors, so the TTY / NO_COLOR /
-// FORCE_COLOR rules stay Node's rather than being reimplemented here. styleText
-// returns the text unchanged for streams without color support, and rejects
-// values that are not streams at all.
-const PROBE = "?";
-const supportsColor = (stream: NodeJS.WriteStream): boolean =>
-  stream instanceof Stream && styleText("red", PROBE, { stream }) !== PROBE;
-
-const style = (format: "bold" | "cyan" | "green" | "red", text: string): string =>
-  styleText(format, text, { validateStream: false });
+const bold = color("bold");
+const cyan = color("cyan");
+const green = color("green");
+const red = color("red");
 
 function writeDiffLine(line: string): void {
-  const rendered = supportsColor(process.stderr) ? line : stripVTControlCharacters(line);
-  process.stderr.write(`${rendered}\n`);
+  process.stderr.write(renderFor(process.stderr, `${line}\n`));
 }
 
 /**
@@ -145,18 +137,18 @@ function printDiff(filePath: string, before: string, after: string): void {
   const patch = structuredPatch(filePath, filePath, before, after, "", "", { context: 3 });
   if (patch.hunks.length === 0) return;
 
-  writeDiffLine(`\n${style("bold", `--- ${filePath}`)}`);
-  writeDiffLine(style("bold", `+++ ${filePath}`));
+  writeDiffLine(`\n${bold(`--- ${filePath}`)}`);
+  writeDiffLine(bold(`+++ ${filePath}`));
 
   for (const hunk of patch.hunks) {
     writeDiffLine(
-      style("cyan", `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`),
+      cyan(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`),
     );
     for (const line of hunk.lines) {
       if (line.startsWith("+")) {
-        writeDiffLine(style("green", line));
+        writeDiffLine(green(line));
       } else if (line.startsWith("-")) {
-        writeDiffLine(style("red", line));
+        writeDiffLine(red(line));
       } else {
         writeDiffLine(line);
       }

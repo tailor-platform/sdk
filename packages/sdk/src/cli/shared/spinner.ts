@@ -1,5 +1,6 @@
+import { renderFor } from "@tailor-platform/shared/color";
 import { assertDefined } from "#/utils/assert";
-import { renderFor, styles, symbols } from "./logger";
+import { styles, symbols } from "./logger";
 
 const FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const FRAME_INTERVAL_MS = 80;

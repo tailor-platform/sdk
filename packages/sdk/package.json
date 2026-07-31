@@ -225,6 +225,7 @@
   },
   "devDependencies": {
     "@opentelemetry/sdk-trace-base": "2.10.0",
+    "@tailor-platform/shared": "workspace:^",
     "@tailor-platform/tailor-proto": "workspace:^",
     "@types/mime-types": "3.0.1",
     "@types/node": "24.13.3",

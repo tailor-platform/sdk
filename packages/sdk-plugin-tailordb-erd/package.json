@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
+    "@tailor-platform/shared": "workspace:^",
     "@types/mime-types": "3.0.1",
     "@types/node": "24.13.3",
     "eslint-plugin-zod": "4.9.0",

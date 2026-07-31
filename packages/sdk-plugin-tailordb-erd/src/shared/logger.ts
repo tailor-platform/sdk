@@ -1,5 +1,4 @@
-import { Stream } from "node:stream";
-import { stripVTControlCharacters, styleText } from "node:util";
+import { color, renderFor } from "@tailor-platform/shared/color";
 
 export type LogMode = "default" | "stream" | "plain";
 
@@ -15,27 +14,6 @@ const TYPE_ICONS: Record<string, string> = {
   error: "✖",
   log: "",
 };
-
-type StyleFormat = Parameters<typeof styleText>[0];
-
-// Styling is always applied; renderFor drops it again when the destination
-// stream has no color support.
-const color =
-  (format: StyleFormat) =>
-  (text: string): string =>
-    styleText(format, text, { validateStream: false });
-
-// Ask styleText whether the destination gets colors, so the TTY / NO_COLOR /
-// FORCE_COLOR rules stay Node's rather than being reimplemented here. styleText
-// returns the text unchanged for streams without color support, and rejects
-// values that are not streams at all, such as test doubles.
-const PROBE = "?";
-const supportsColor = (stream: NodeJS.WriteStream): boolean =>
-  stream instanceof Stream && styleText("red", PROBE, { stream }) !== PROBE;
-
-function renderFor(stream: NodeJS.WriteStream, text: string): string {
-  return supportsColor(stream) ? text : stripVTControlCharacters(text);
-}
 
 const gray = color("gray");
 
