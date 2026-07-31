@@ -233,10 +233,15 @@ export const workspaceArgs = {
 } satisfies ArgsShape;
 
 /**
+ * Default config file path used when --config is not passed
+ */
+export const DEFAULT_CONFIG_PATH = "tailor.config.ts";
+
+/**
  * Shared config arg for commands that accept a config file path
  */
 export const configArg = {
-  config: arg(z.string().default("tailor.config.ts"), {
+  config: arg(z.string().default(DEFAULT_CONFIG_PATH), {
     alias: "c",
     description: "Path to Tailor config file",
     env: "TAILOR_CONFIG_PATH",
@@ -248,7 +253,7 @@ export const configArg = {
  * Shared config arg for commands that accept one or more comma-separated config file paths
  */
 export const multiConfigArg = {
-  config: arg(z.string().default("tailor.config.ts"), {
+  config: arg(z.string().default(DEFAULT_CONFIG_PATH), {
     alias: "c",
     description:
       "Path to SDK config file. Use comma-separated paths to deploy multiple apps together.",

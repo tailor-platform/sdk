@@ -504,6 +504,18 @@ describe("tailordb migration validate", () => {
     );
   });
 
+  test("--strict includes the active --config in the acknowledgment command", async () => {
+    using stderr = captureStderr();
+    writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
+
+    const result = await runCommand(validateCommand, ["--strict", "--config", "custom.config.ts"]);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain(
+      'tailor tailordb migration script 0001 --namespace tailordb --config "custom.config.ts" --no-script --reason "..."',
+    );
+  });
+
   test("--strict accepts warnings acknowledged with a recorded reason", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();

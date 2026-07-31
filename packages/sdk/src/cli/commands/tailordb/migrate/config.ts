@@ -3,6 +3,7 @@
  */
 
 import * as path from "pathe";
+import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
 import { assertDefined } from "#/utils/assert";
 import type { AppConfig } from "#/configure/config/types";
 
@@ -31,6 +32,17 @@ function hasMigrationConfig(dbConfig: unknown): dbConfig is { migration: { direc
   if (!("directory" in migration)) return false;
 
   return typeof (migration as { directory: unknown }).directory === "string";
+}
+
+/**
+ * Format the --config argument for remediation commands so they target the
+ * same config the current run used
+ * @param {string} [configPath] - Config path passed to the command, if any
+ * @returns {string} Leading-space --config argument, or an empty string when the default config is in use
+ */
+export function formatConfigArg(configPath?: string): string {
+  if (!configPath || configPath === DEFAULT_CONFIG_PATH) return "";
+  return ` --config "${path.relative(process.cwd(), configPath) || configPath}"`;
 }
 
 /**

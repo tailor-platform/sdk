@@ -12,7 +12,11 @@ import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
-import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
+import {
+  formatConfigArg,
+  getNamespacesWithMigrations,
+  type NamespaceWithMigrations,
+} from "./config";
 import {
   formatDiffSummary,
   formatMigrationDiff,
@@ -432,7 +436,7 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
   logger.newline();
 }
 
-function printResolutionHints(reports: NamespaceValidationReport[]): void {
+function printResolutionHints(reports: NamespaceValidationReport[], configPath?: string): void {
   if (reports.some((r) => r.localSchema?.hasDiff && !r.localSchema.diff)) {
     logger.info("Run 'tailor tailordb migration generate' to create the initial snapshot.");
   }
@@ -457,7 +461,7 @@ function printResolutionHints(reports: NamespaceValidationReport[]): void {
     for (const report of missingAcknowledgments) {
       for (const migration of report.warningAcknowledgments?.missing ?? []) {
         logger.info(
-          `  tailor tailordb migration script ${formatMigrationNumber(migration.migrationNumber)} --namespace ${report.namespace} --no-script --reason "..."`,
+          `  tailor tailordb migration script ${formatMigrationNumber(migration.migrationNumber)} --namespace ${report.namespace}${formatConfigArg(configPath)} --no-script --reason "..."`,
           { mode: "plain" },
         );
       }
@@ -483,7 +487,7 @@ async function validate(options: ValidateOptions): Promise<void> {
     if (invalidCount === 0 && !("remoteError" in collected)) {
       logger.success("All migration validation checks passed.");
     } else {
-      printResolutionHints(reports);
+      printResolutionHints(reports, options.configPath);
     }
   }
 

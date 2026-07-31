@@ -97,6 +97,18 @@ describe("tailordb migration generate with warning-tier changes", () => {
     expect(stderr.output).toContain('--no-script --reason "..."');
   });
 
+  test("includes the active --config in the follow-up commands", async () => {
+    using stderr = captureStderr();
+    vi.mocked(prompt.confirm).mockResolvedValue(false);
+
+    const result = await runCommand(generateCommand, ["--config", "custom.config.ts"]);
+
+    expect(result.success).toBe(true);
+    expect(stderr.output).toContain(
+      'tailor tailordb migration script 0001 --namespace tailordb --config "custom.config.ts" --no-script --reason "..."',
+    );
+  });
+
   test("does not prompt with --yes", async () => {
     using stderr = captureStderr();
 

@@ -19,7 +19,11 @@ import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared
 import { logger, styles } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { PluginManager } from "#/plugin/manager";
-import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
+import {
+  formatConfigArg,
+  getNamespacesWithMigrations,
+  type NamespaceWithMigrations,
+} from "./config";
 import {
   formatMigrationDiff,
   formatBreakingChanges,
@@ -332,6 +336,7 @@ async function generateDiffFromSnapshot(
       migrationsDir,
       migrationNumber: result.migrationNumber,
       skipPrompt: options.yes,
+      configPath: options.configPath,
     });
   }
 }
@@ -341,6 +346,7 @@ interface AcknowledgeWarningsOptions {
   migrationsDir: string;
   migrationNumber: number;
   skipPrompt?: boolean;
+  configPath?: string;
 }
 
 /**
@@ -349,7 +355,7 @@ interface AcknowledgeWarningsOptions {
  * @param {AcknowledgeWarningsOptions} options - Target migration and prompt behavior
  */
 async function acknowledgeWarnings(options: AcknowledgeWarningsOptions): Promise<void> {
-  const { namespace, migrationsDir, migrationNumber, skipPrompt } = options;
+  const { namespace, migrationsDir, migrationNumber, skipPrompt, configPath } = options;
   const label = formatMigrationNumber(migrationNumber);
 
   logger.newline();
@@ -374,14 +380,11 @@ async function acknowledgeWarnings(options: AcknowledgeWarningsOptions): Promise
     }
   }
 
+  const scriptCmd = `tailor tailordb migration script ${label} --namespace ${namespace}${formatConfigArg(configPath)}`;
   logger.log("To add a custom migrate.ts, run:");
-  logger.log(
-    `  ${styles.bold(`tailor tailordb migration script ${label} --namespace ${namespace}`)}`,
-  );
+  logger.log(`  ${styles.bold(scriptCmd)}`);
   logger.log("To record that this migration intentionally has no script, run:");
-  logger.log(
-    `  ${styles.bold(`tailor tailordb migration script ${label} --namespace ${namespace} --no-script --reason "..."`)}`,
-  );
+  logger.log(`  ${styles.bold(`${scriptCmd} --no-script --reason "..."`)}`);
 }
 
 /**
