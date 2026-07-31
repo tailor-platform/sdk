@@ -647,3 +647,36 @@ describe("assertRecordableDependencies and an id that cannot form a label key", 
     expect(() => assertRecordableDependencies(subscriptions(), false)).not.toThrow();
   });
 });
+
+describe("collectEventSubscriptions and a resolver name the subscriber also declares", () => {
+  // The trigger resolves a locally declared resolver first and only then the
+  // namespaces the config sees, so a peer holding the same name must not make the
+  // local one look ambiguous. Losing the key here drops the resolver from the
+  // run's subscribed set, and the confirmation then asks about a resolver this
+  // run still keeps publishing.
+  const subscriptions = () =>
+    collectEventSubscriptions([
+      target({
+        configPath: "buyer/tailor.config.ts",
+        namespace: "local",
+        appId: supplierId,
+        resolvers: ["processOrder"],
+        externalResolverNamespaces: ["pipeline-shared"],
+        executors: { "sync-order": { kind: "resolverExecuted", resolverName: "processOrder" } },
+      }),
+      target({
+        configPath: "supplier/tailor.config.ts",
+        namespace: "shared",
+        resolvers: ["processOrder"],
+      }),
+    ]);
+
+  test("keys the subscription by the locally declared namespace", () => {
+    expect(subscriptions()).toHaveLength(1);
+    expect(subscriptions()[0]?.key).toBe("pipeline:pipeline-local:resolver:processOrder");
+  });
+
+  test("owns the subscription itself rather than the peer", () => {
+    expect(subscriptions()[0]?.owner.config.path).toBe("buyer/tailor.config.ts");
+  });
+});

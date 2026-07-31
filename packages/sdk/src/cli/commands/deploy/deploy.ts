@@ -41,6 +41,7 @@ import { fetchMissingDependentApps } from "./dependency-records";
 import {
   buildPlannedExecutorsByName,
   collectApplicationIdpNames,
+  findResolverNamespace,
   formatExecutorChangeEntries,
   planExecutor,
 } from "./executor";
@@ -1612,10 +1613,15 @@ function eventSourceLookup(
           describeExternal("TailorDB namespace", externalTailorDBNamespaces(target)),
       };
     case "resolverExecuted": {
-      // The namespace the subscriber resolves the name through, which is also the
-      // one `narrowOwners` keeps candidates by. Reading it back off the owner by
-      // bare name would pick whichever namespace comes first instead.
-      const namespace = visibility.resolvers.get(trigger.resolverName);
+      // The namespace the subscriber resolves the name through, in the same order
+      // the trigger itself resolves it: a locally declared resolver wins, and only
+      // then the namespaces the config sees. Reading it back off the owner by bare
+      // name would pick whichever namespace comes first instead, and reading only
+      // the visible map would call a local name ambiguous because an external
+      // namespace happens to hold it too.
+      const namespace =
+        findResolverNamespace(subscriber.application, trigger.resolverName) ??
+        visibility.resolvers.get(trigger.resolverName);
       return {
         resource: publishEventsConflict.resolver(trigger.resolverName).resource,
         trigger,
