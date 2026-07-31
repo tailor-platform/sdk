@@ -333,6 +333,32 @@ describe("retryInterceptor", () => {
     expect(next).toHaveBeenCalledTimes(2);
   });
 
+  test("retries Aborted for no-side-effect methods then succeeds", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("socket disconnected", Code.Aborted))
+      .mockResolvedValueOnce(okResponse);
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.getWorkspace)),
+    );
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry Aborted for non-idempotent methods", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("operation aborted", Code.Aborted))
+      .mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.updateTailorDBType))),
+    ).rejects.toThrow("operation aborted");
+    expect(next).toHaveBeenCalledOnce();
+  });
+
   test("does not retry workspace creation when the outcome is ambiguous", async () => {
     const next = vi
       .fn()
