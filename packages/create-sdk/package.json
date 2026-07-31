@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@types/node": "24.13.3",
-    "oxlint": "1.75.0",
+    "oxlint": "1.76.0",
     "oxlint-tsgolint": "7.0.2001",
     "tsdown": "0.22.14",
     "typescript": "6.0.3"
