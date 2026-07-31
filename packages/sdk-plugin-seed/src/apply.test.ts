@@ -1,5 +1,5 @@
 import { runCommand } from "politty";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { z } from "zod";
 import { seedApplyCommand } from "./apply";
 import { commonArgs } from "./shared/args";
@@ -38,6 +38,10 @@ vi.mock("./shared/logger", () => ({ logger }));
 
 beforeEach(() => {
   vi.resetAllMocks();
+  // Isolate the env-bound args so ambient shell exports cannot leak in.
+  vi.stubEnv("TAILOR_PLATFORM_WORKSPACE_ID", undefined);
+  vi.stubEnv("TAILOR_PLATFORM_PROFILE", undefined);
+  vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
   sdk.loadSeedContext.mockResolvedValue({
     config: { path: "/workspace/tailor.config.ts" },
     distPath: "/seed",
@@ -76,6 +80,10 @@ beforeEach(() => {
       typeNames.map((typeName) => [typeName, typeName === "_User" ? [{ name: "Ada" }] : []]),
     ),
   );
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 function runApplyCommand(args: string[]) {
