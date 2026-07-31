@@ -283,7 +283,8 @@ export async function confirmMissingDependentApps(
   logger.newline();
   logger.log("  Applying without them turns off event publishing on the resources above:");
   logger.log("  nothing in this deploy subscribes to them, so the value resolves to false.");
-  logger.log("  To keep it, add their configs to --config, or declare publishEvents there.");
+  logger.log("  To keep it, add their configs to --config, or set publishEvents on");
+  logger.log("  the resources above.");
 
   if (yes) {
     logger.warn("Continuing without them (--yes flag specified); applying turns publishing off.");
