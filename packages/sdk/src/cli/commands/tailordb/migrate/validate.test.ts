@@ -100,6 +100,7 @@ describe("tailordb migration validate", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-validate-test-"));
     state.migrationsDir = path.join(tmpDir, "migrations");
@@ -129,6 +130,7 @@ describe("tailordb migration validate", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
