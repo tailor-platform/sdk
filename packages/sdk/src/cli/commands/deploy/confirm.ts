@@ -286,7 +286,7 @@ export async function confirmMissingDependentApps(
   logger.log("  To keep it, add their configs to --config, or declare publishEvents there.");
 
   if (yes) {
-    logger.warn("Continuing without them (--yes flag specified); event publishing turns off.");
+    logger.warn("Continuing without them (--yes flag specified); applying turns publishing off.");
     return;
   }
 

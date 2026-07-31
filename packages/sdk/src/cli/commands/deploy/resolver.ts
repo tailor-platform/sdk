@@ -353,7 +353,6 @@ async function planResolvers(
    * belong to it. The resolver is what publishes, so the record lives there.
    * @param namespace - Namespace holding the resolver
    * @param resolver - Resolver being planned
-   * @param existingLabels - Labels currently on the resolver
    * @returns The resolver's metadata write
    */
   const resolverMetaRequest = async (
