@@ -1,5 +1,11 @@
 # @tailor-platform/eslint-plugin-sdk
 
+## 0.2.0
+
+### Minor Changes
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`152a2de`](https://github.com/tailor-platform/sdk/commit/152a2de92db8565791dc1ec8aab29f2a75c94913) Thanks [@toiroakr](https://github.com/toiroakr)! - Add a lint rule (`no-execute-script-arg-stringify`) that flags passing a `JSON.stringify(...)` result as `executeScript`'s `arg` option — `executeScript` serializes `arg` internally, so a pre-stringified value silently double-encodes at runtime. Enabled in newly scaffolded projects.
+
 ## 0.2.0-next.1
 
 ### Minor Changes
