@@ -444,3 +444,28 @@ describe("collectEventSubscriptions and namespace visibility", () => {
     ).toThrow(/which no config in this deploy declares/);
   });
 });
+
+describe("collectEventSubscriptions and the two values a workflow carries", () => {
+  // The workflow's own execution events and the ones its jobs publish are driven
+  // by different triggers, so one key for both lets a subscriber of one answer for
+  // the other and suppress the confirmation.
+  function keysFor(kind: "workflowExecution" | "workflowJobExecution") {
+    return collectEventSubscriptions([
+      target({ configPath: "runner/tailor.config.ts", workflows: ["nightly"] }),
+      target({
+        configPath: "buyer/tailor.config.ts",
+        appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82",
+        types: ["Order"],
+        executors: { "watch-nightly": { kind, workflowName: "nightly" } },
+      }),
+    ]).map((subscription) => subscription.key);
+  }
+
+  test("keys a workflowExecution subscription by the workflow", () => {
+    expect(keysFor("workflowExecution")).toEqual(["workflow:nightly"]);
+  });
+
+  test("keys a workflowJobExecution subscription separately from the workflow", () => {
+    expect(keysFor("workflowJobExecution")).toEqual(["workflow:nightly:jobs"]);
+  });
+});

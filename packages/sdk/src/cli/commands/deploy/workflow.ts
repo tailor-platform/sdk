@@ -545,10 +545,19 @@ export async function planWorkflow(
         existingLabels: existing?.allLabels,
         dependentApps,
         runAppIds,
-        pinned:
-          workflow.publishEvents !== undefined && everyJobDeclaresPublishEvents(workflow.name),
+        pinned: workflow.publishEvents !== undefined,
       },
     );
+    // The jobs' value is driven by workflowJobExecution subscribers, independently
+    // of the workflow's own, so its records live in their own namespace here.
+    addDependencyRecords(metaRequest, {
+      key: eventSourceKey.workflowJobs(workflow.name),
+      existingLabels: existing?.allLabels,
+      dependentApps,
+      runAppIds,
+      pinned: everyJobDeclaresPublishEvents(workflow.name),
+      scope: "jobs",
+    });
     // Get jobs used by this workflow from mainJobDeps
     const usedJobNames = mainJobDeps[workflow.mainJob.name];
     if (!usedJobNames) {
