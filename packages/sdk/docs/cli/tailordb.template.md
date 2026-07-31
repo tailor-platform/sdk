@@ -76,7 +76,7 @@ Note: Migration scripts are automatically executed during `tailor deploy`. See [
 The `tailordb erd` commands (export, diff, serve, deploy) are provided by the `@tailor-platform/sdk-plugin-tailordb-erd` CLI plugin. Install it next to the SDK and keep running `tailor tailordb erd <command>` as before:
 
 ```bash
-npm install -D @tailor-platform/sdk-plugin-tailordb-erd@next
+npm install -D @tailor-platform/sdk-plugin-tailordb-erd
 tailor tailordb erd export --namespace myNamespace
 ```
 
