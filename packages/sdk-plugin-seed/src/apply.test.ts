@@ -50,6 +50,7 @@ beforeEach(() => {
       {
         dependencies: { User: [] },
         namespace: "tailordb",
+        requiredFields: { User: [] },
         selfRefTypes: [],
         types: ["User"],
       },
@@ -221,5 +222,75 @@ describe("seedApplyCommand", () => {
 
     expect(sdk.truncate).toHaveBeenCalledWith(expect.objectContaining({ all: true }));
     expect(sdk.executeScript).not.toHaveBeenCalled();
+  });
+
+  test("does not print a success line when every _User row fails", async () => {
+    sdk.executeScript.mockImplementation(({ name }: { name: string }) =>
+      Promise.resolve({
+        error: undefined,
+        logs: "",
+        result:
+          name === "seed-idp-user.ts"
+            ? JSON.stringify({
+                success: false,
+                processed: 0,
+                created: 0,
+                updated: 0,
+                skipped: 0,
+                errors: ["Row 0 (Ada): boom"],
+              })
+            : '{"success":true,"deleted":1}',
+        success: true,
+      }),
+    );
+
+    const result = await runApplyCommand(["--machine-user", "manager"]);
+
+    expect(result.exitCode).toBe(1);
+    const loggedLines = logger.log.mock.calls.map(([line]) => String(line));
+    expect(loggedLines.some((line) => line.includes("✓ _User"))).toBe(false);
+  });
+
+  test("passes --upsert through to the TailorDB and IdP seed scripts", async () => {
+    jsonl.loadSeedData.mockImplementation((_dataDir: string, typeNames: string[]) =>
+      Object.fromEntries(
+        typeNames.map((typeName) => [
+          typeName,
+          typeName === "_User" ? [{ name: "Ada" }] : [{ id: "u1" }],
+        ]),
+      ),
+    );
+    sdk.bundleSeedScript.mockResolvedValue({
+      bundledCode: "code",
+      namespace: "tailordb",
+      typesIncluded: ["User"],
+    });
+    sdk.chunkSeedData.mockReturnValue([{ data: { User: [{ id: "u1" }] }, order: ["User"] }]);
+    sdk.executeScript.mockImplementation(({ name }: { name: string }) =>
+      Promise.resolve({
+        error: undefined,
+        logs: "",
+        result:
+          name === "seed-idp-user.ts"
+            ? '{"success":true,"processed":1,"created":0,"updated":1,"skipped":0,"errors":[]}'
+            : '{"success":true,"processed":{"User":{"inserted":0,"updated":1,"skipped":0}},"errors":[]}',
+        success: true,
+      }),
+    );
+
+    await runApply(["--upsert"]);
+
+    expect(sdk.executeScript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "seed-tailordb.ts",
+        arg: expect.objectContaining({ upsert: true }),
+      }),
+    );
+    expect(sdk.executeScript).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "seed-idp-user.ts",
+        arg: expect.objectContaining({ upsert: true }),
+      }),
+    );
   });
 });

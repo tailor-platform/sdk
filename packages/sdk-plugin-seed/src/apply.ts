@@ -36,6 +36,8 @@ interface SeedNamespaceParams {
   typesToSeed: string[];
   dependencies: Record<string, string[]>;
   selfRefTypes: string[];
+  requiredFields: Record<string, string[]>;
+  upsert: boolean;
   configDir: string;
 }
 
@@ -71,7 +73,11 @@ function parseExecutionResult(
   logExecutionLogs(result.logs, indent);
 
   if (!result.success) {
-    return { success: false, parsed: {}, errors: [result.error ?? "Script execution failed"] };
+    return {
+      success: false,
+      parsed: {},
+      errors: [result.error ?? "Script execution failed"],
+    };
   }
 
   let parsed: Record<string, unknown>;
@@ -80,7 +86,11 @@ function parseExecutionResult(
     parsed = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { success: false, parsed: {}, errors: [`Failed to parse result: ${message}`] };
+    return {
+      success: false,
+      parsed: {},
+      errors: [`Failed to parse result: ${message}`],
+    };
   }
 
   if (!parsed.success) {
@@ -101,9 +111,21 @@ interface SeedResult {
 }
 
 async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
-  const { execution, namespace, typesToSeed, dependencies, selfRefTypes, configDir } = params;
+  const {
+    execution,
+    namespace,
+    typesToSeed,
+    dependencies,
+    selfRefTypes,
+    requiredFields,
+    upsert,
+    configDir,
+  } = params;
   const sortedTypes = topologicalSort(typesToSeed, dependencies);
-  const data = loadSeedData(execution.dataDir, sortedTypes);
+  const data = loadSeedData(execution.dataDir, sortedTypes, {
+    requireId: upsert,
+    requiredFieldsByType: upsert ? requiredFields : {},
+  });
   const processedTotals: Record<string, number> = {};
 
   const typesWithData = sortedTypes.filter((type) => data[type] && data[type].length > 0);
@@ -112,9 +134,10 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     return { success: true, processed: processedTotals };
   }
 
-  logger.info(`  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch insert...`, {
-    mode: "plain",
-  });
+  logger.info(
+    `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch ${upsert ? "upsert" : "insert"}...`,
+    { mode: "plain" },
+  );
 
   const bundled = await bundleSeedScript(namespace, typesWithData, configDir);
   const chunks = chunkSeedData({
@@ -144,7 +167,7 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
       workspaceId: execution.workspaceId,
       name: `seed-${namespace}.ts`,
       code: bundled.bundledCode,
-      arg: { data: chunk.data, order: chunk.order, selfRefTypes },
+      arg: { data: chunk.data, order: chunk.order, selfRefTypes, upsert },
       invoker: {
         namespace: execution.authNamespace,
         machineUserName: execution.machineUserName,
@@ -152,13 +175,22 @@ async function seedNamespace(params: SeedNamespaceParams): Promise<SeedResult> {
     });
 
     const { success: chunkSuccess, parsed, errors } = parseExecutionResult(result, "    ");
-    const processed = (parsed.processed ?? {}) as Record<string, number>;
-    for (const [type, count] of Object.entries(processed)) {
-      processedTotals[type] = (processedTotals[type] ?? 0) + count;
-      logger.log(chalk.green(`    ✓ ${type}: ${count} rows inserted`));
+    const processed = (parsed.processed ?? {}) as Record<
+      string,
+      { inserted: number; updated: number; skipped: number }
+    >;
+    for (const [type, counts] of Object.entries(processed)) {
+      processedTotals[type] = (processedTotals[type] ?? 0) + counts.inserted + counts.updated;
+      const skippedSuffix = counts.skipped > 0 ? `, ${counts.skipped} skipped` : "";
+      const message = upsert
+        ? `${counts.inserted} inserted, ${counts.updated} updated${skippedSuffix}`
+        : `${counts.inserted} rows inserted`;
+      logger.log(chalk.green(`    ✓ ${type}: ${message}`));
     }
     if (!chunkSuccess) {
-      logger.error(`  Seed failed:\n      ${errors.join("\n      ")}`, { mode: "plain" });
+      logger.error(`  Seed failed:\n      ${errors.join("\n      ")}`, {
+        mode: "plain",
+      });
       success = false;
     }
   }
@@ -169,7 +201,7 @@ interface IdpScriptRun {
   execution: SeedExecutionContext;
   scriptCode: string;
   scriptName: string;
-  arg?: { users: SeedData[string] };
+  arg?: { users: SeedData[string]; upsert?: boolean };
   indent: string;
   reportSuccess: (parsed: Record<string, unknown>) => void;
 }
@@ -204,6 +236,7 @@ async function runIdpScript(
 async function seedIdpUser(
   execution: SeedExecutionContext,
   scriptCode: string,
+  upsert: boolean,
 ): Promise<{ success: boolean; processed: number }> {
   logger.info("  Seeding _User via tailor.idp.Client...", { mode: "plain" });
 
@@ -218,15 +251,27 @@ async function seedIdpUser(
     execution,
     scriptCode,
     scriptName: "seed-idp-user.ts",
-    arg: { users: rows },
+    arg: { users: rows, upsert },
     indent: "    ",
     reportSuccess: (result) => {
-      if (typeof result.processed === "number") {
-        logger.log(chalk.green(`    ✓ _User: ${result.processed} rows processed`));
+      const created = typeof result.created === "number" ? result.created : 0;
+      const updated = typeof result.updated === "number" ? result.updated : 0;
+      const skipped = typeof result.skipped === "number" ? result.skipped : 0;
+      const processed = typeof result.processed === "number" ? result.processed : 0;
+      if (created === 0 && updated === 0 && skipped === 0) {
+        return;
       }
+      const skippedSuffix = skipped > 0 ? `, ${skipped} skipped` : "";
+      const message = upsert
+        ? `${created} created, ${updated} updated${skippedSuffix}`
+        : `${processed} rows processed`;
+      logger.log(chalk.green(`    ✓ _User: ${message}`));
     },
   });
-  return { success, processed: typeof parsed.processed === "number" ? parsed.processed : 0 };
+  return {
+    success,
+    processed: typeof parsed.processed === "number" ? parsed.processed : 0,
+  };
 }
 
 async function truncateIdpUser(
@@ -268,6 +313,9 @@ export const seedApplyCommand = defineAppCommand({
     }),
     truncate: arg(z.boolean().default(false), {
       description: "Truncate target tables before seeding",
+    }),
+    upsert: arg(z.boolean().default(false), {
+      description: "Update existing rows instead of failing on duplicate ids",
     }),
     yes: arg(z.boolean().default(false), {
       alias: "y",
@@ -419,6 +467,8 @@ export const seedApplyCommand = defineAppCommand({
         typesToSeed,
         dependencies: nsConfig.dependencies,
         selfRefTypes: nsConfig.selfRefTypes,
+        requiredFields: nsConfig.requiredFields,
+        upsert: args.upsert,
         configDir: path.dirname(context.config.path),
       });
       for (const [type, count] of Object.entries(seeded.processed)) {
@@ -434,7 +484,7 @@ export const seedApplyCommand = defineAppCommand({
       !args["skip-idp"] &&
       (!selection.entitiesToProcess || selection.entitiesToProcess.includes("_User"));
     if (shouldSeedUser && context.idpUser) {
-      const seeded = await seedIdpUser(execution, context.idpUser.seedScriptCode);
+      const seeded = await seedIdpUser(execution, context.idpUser.seedScriptCode, args.upsert);
       if (seeded.processed > 0) {
         allProcessed._User = seeded.processed;
       }

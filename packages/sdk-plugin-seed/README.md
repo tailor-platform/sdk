@@ -33,7 +33,12 @@ tailor seed apply User Order
 # Validate JSONL seed data against the generated schemas
 tailor seed validate
 tailor seed validate ./seed/data/User.jsonl
+
+# Update existing rows (matched by id, or by name for _User) instead of failing on duplicates
+tailor seed apply --upsert
 ```
+
+Without `--upsert`, a row whose id already exists in a target table fails the seed run. With `--upsert`, every row must supply an `id` (and any field the type requires), and a matching row is updated in place instead. Because the update goes through the same write path as any other update, it runs update hooks and validation and updates fields such as `updatedAt`, and it publishes a record-updated event — so an executor using `recordUpdatedTrigger` fires for each existing row that gets updated.
 
 The machine user used for seeding comes from `--machine-user` or the `machineUserName` seedPlugin option:
 

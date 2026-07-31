@@ -23,13 +23,29 @@ export function assertSeedDataDirectory(dataDir: string): void {
 }
 
 /**
+ * Options for {@link loadSeedData}.
+ */
+export interface LoadSeedDataOptions {
+  /** Reject rows without an `id` (enforced with `--upsert`, which matches existing rows by id). */
+  requireId?: boolean;
+  /** Field names a row must supply per type, enforced alongside `requireId`. */
+  requiredFieldsByType?: Record<string, string[]>;
+}
+
+/**
  * Load seed rows from `<dataDir>/<typeName>.jsonl` for each type. Missing
  * files load as empty lists.
  * @param dataDir - Directory containing the JSONL files
  * @param typeNames - Type names to load
+ * @param options - Row validation options
  * @returns Seed rows per type
  */
-export function loadSeedData(dataDir: string, typeNames: string[]): SeedData {
+export function loadSeedData(
+  dataDir: string,
+  typeNames: string[],
+  options: LoadSeedDataOptions = {},
+): SeedData {
+  const { requireId = false, requiredFieldsByType = {} } = options;
   const data: SeedData = {};
   for (const typeName of typeNames) {
     const jsonlPath = path.join(dataDir, `${typeName}.jsonl`);
@@ -59,7 +75,19 @@ export function loadSeedData(dataDir: string, typeNames: string[]): SeedData {
               `Invalid seed row in ${jsonlPath} at line ${index + 1}: expected a JSON object`,
             );
           }
-          return value as SeedData[string][number];
+          const record = value as Record<string, unknown>;
+          if (requireId && (record.id === undefined || record.id === null)) {
+            throw new Error(`${jsonlPath}:${index + 1}: \`id\` is required with --upsert`);
+          }
+          const missingRequiredField = (requiredFieldsByType[typeName] ?? []).find(
+            (field) => record[field] === undefined || record[field] === null,
+          );
+          if (missingRequiredField) {
+            throw new Error(
+              `${jsonlPath}:${index + 1}: field \`${missingRequiredField}\` is required with --upsert`,
+            );
+          }
+          return record as SeedData[string][number];
         })
       : [];
   }

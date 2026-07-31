@@ -20,7 +20,12 @@ function fakeNamespace(namespace: string, types: TailorDBType[]): TailorDBNamesp
   return {
     namespace,
     types: Object.fromEntries(types.map((type) => [type.name, type])),
-    sourceInfo: new Map(),
+    sourceInfo: new Map(
+      types.map((type) => [
+        type.name,
+        { filePath: `${namespace}/${type.name}.ts`, exportName: type.name },
+      ]),
+    ),
     pluginAttachments: new Map(),
   };
 }
@@ -130,6 +135,7 @@ describe("loadSeedContext", () => {
         types: ["User", "Order"],
         dependencies: { User: [], Order: ["User"] },
         selfRefTypes: ["Order"],
+        requiredFields: { User: [], Order: ["user", "parent"] },
       },
     ]);
   });
