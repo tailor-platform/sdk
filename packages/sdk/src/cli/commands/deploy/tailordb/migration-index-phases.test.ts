@@ -151,6 +151,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
             },
           ],
           deletes: [],
+          unchanged: [],
           title: "TailorDB Types",
           isEmpty: () => false,
           lines: () => [],

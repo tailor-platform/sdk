@@ -62,6 +62,7 @@ import {
 import { planIdP } from "./idp";
 import {
   buildMetaRequest,
+  dependedByAppLabelKey,
   type DependentAppsByResource,
   type DeployDependencyReason,
   eventSourceKey,
@@ -1487,11 +1488,20 @@ function pinsTailorDBType(target: BuiltDeploymentTarget, typeName: string): bool
   return false;
 }
 
-function pinsResolver(target: BuiltDeploymentTarget, resolverName: string): boolean {
-  return target.application.resolverServices.some((service) =>
-    Object.values(service.resolvers).some(
-      (resolver) => resolver.name === resolverName && resolver.publishEvents !== undefined,
-    ),
+// Resolver names are only namespace-unique, so the namespace the subscriber sees
+// the name through is what decides which resolver's declared value applies.
+// Searching every namespace would let one namespace's declaration pin another's.
+function pinsResolverIn(
+  target: BuiltDeploymentTarget,
+  namespace: string,
+  resolverName: string,
+): boolean {
+  return target.application.resolverServices.some(
+    (service) =>
+      service.namespace === namespace &&
+      Object.values(service.resolvers).some(
+        (resolver) => resolver.name === resolverName && resolver.publishEvents !== undefined,
+      ),
   );
 }
 
@@ -1526,15 +1536,6 @@ function tailorDBTypeNamespaceIn(
   typeName: string,
 ): string | undefined {
   return target.application.tailorDBServices.find((service) => service.types[typeName])?.namespace;
-}
-
-function resolverNamespaceIn(
-  target: BuiltDeploymentTarget,
-  resolverName: string,
-): string | undefined {
-  return target.application.resolverServices.find((service) =>
-    Object.values(service.resolvers).some((resolver) => resolver.name === resolverName),
-  )?.namespace;
 }
 
 // A namespaced resource is owned by whichever config declares it in the one
@@ -1610,16 +1611,18 @@ function eventSourceLookup(
         externalHint: (target) =>
           describeExternal("TailorDB namespace", externalTailorDBNamespaces(target)),
       };
-    case "resolverExecuted":
+    case "resolverExecuted": {
+      // The namespace the subscriber resolves the name through, which is also the
+      // one `narrowOwners` keeps candidates by. Reading it back off the owner by
+      // bare name would pick whichever namespace comes first instead.
+      const namespace = visibility.resolvers.get(trigger.resolverName);
       return {
         resource: publishEventsConflict.resolver(trigger.resolverName).resource,
         trigger,
         declaredBy: (target) => declaresResolver(target, trigger.resolverName),
-        pinned: (target) => pinsResolver(target, trigger.resolverName),
-        keyIn: (owner) => {
-          const namespace = resolverNamespaceIn(owner, trigger.resolverName);
-          return namespace && eventSourceKey.resolver(namespace, trigger.resolverName);
-        },
+        pinned: (target) =>
+          namespace !== undefined && pinsResolverIn(target, namespace, trigger.resolverName),
+        keyIn: () => namespace && eventSourceKey.resolver(namespace, trigger.resolverName),
         narrowOwners: (candidates) =>
           narrowByVisibleNamespace({
             candidates,
@@ -1631,6 +1634,7 @@ function eventSourceLookup(
         externalHint: (target) =>
           describeExternal("resolver namespace", externalResolverNamespaces(target)),
       };
+    }
     case "idpUser": {
       const idpName = subscribedIdpName(subscriber.application, trigger);
       if (idpName === undefined) {
@@ -1743,17 +1747,29 @@ export function assertRecordableDependencies(
   for (const { subscriber, owner, executorName, resource, pinned } of subscriptions) {
     if (subscriber.config.path === owner.config.path) continue;
     if (pinned) continue;
-    if (writes && subscriber.application.id === undefined) {
-      throw new Error(
-        `Executor "${executorName}" in ${subscriber.config.path} subscribes to ${resource} in ` +
-          `${owner.config.path}, which would enable event publishing on it for this deploy only. ` +
-          `${subscriber.config.path} resolves without an "id" — a config that re-exports ` +
-          `defineConfig() from another file never gets one — so deploy cannot record which config ` +
-          `the dependency belongs to, and deploying ${owner.config.path} alone later would turn ` +
-          `publishing back off without asking.\n\n` +
-          `Call defineConfig() inline in ${subscriber.config.path} so deploy can manage its "id".`,
-      );
-    }
+    if (!writes) continue;
+    const appId = subscriber.application.id;
+    // An id that cannot form a label key fails the same way as a missing one, and
+    // it has to fail here: the write happens partway through apply, once sibling
+    // resources have already been mutated.
+    if (appId !== undefined && dependedByAppLabelKey(appId) !== undefined) continue;
+    const cause =
+      appId === undefined
+        ? `${subscriber.config.path} resolves without an "id" — a config that re-exports ` +
+          `defineConfig() from another file never gets one`
+        : `${subscriber.config.path} resolves to the id "${appId}", which is not the lowercase ` +
+          `UUID deploy writes`;
+    const fix =
+      appId === undefined
+        ? `Call defineConfig() inline in ${subscriber.config.path} so deploy can manage its "id".`
+        : `Restore the generated value in ${subscriber.config.path}'s "id".`;
+    throw new Error(
+      `Executor "${executorName}" in ${subscriber.config.path} subscribes to ${resource} in ` +
+        `${owner.config.path}, which would enable event publishing on it for this deploy only. ` +
+        `${cause} — so deploy cannot record which config the dependency belongs to, and ` +
+        `deploying ${owner.config.path} alone later would turn publishing back off without ` +
+        `asking.\n\n${fix}`,
+    );
   }
 }
 

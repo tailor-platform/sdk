@@ -46,7 +46,7 @@ function application(spec: AppSpec): Readonly<Application> {
       workflows: Object.fromEntries(
         Object.entries(spec.workflows ?? {}).map(([name, publishEvents]) => [
           name,
-          { name, publishEvents, mainJob: { name: "main-job" } },
+          { name, publishEvents, mainJob: { name: `${name}-main` } },
         ]),
       ),
       jobs: Object.entries(spec.jobs ?? {}).map(([name, publishEvents]) => ({
@@ -90,7 +90,7 @@ describe("fetchMissingDependentApps", () => {
       application: application({ types: { Order: undefined } }),
       runAppIds: new Set(),
       subscribedKeys: new Set(),
-      jobsByWorkflow: { "main-job": ["process-order"] },
+      jobsByWorkflow: { "nightly-main": ["process-order"] },
     });
 
     expect(missing).toEqual([
@@ -112,7 +112,7 @@ describe("fetchMissingDependentApps", () => {
       application: application({ types: { Order: true } }),
       runAppIds: new Set(),
       subscribedKeys: new Set(),
-      jobsByWorkflow: { "main-job": ["process-order"] },
+      jobsByWorkflow: { "nightly-main": ["process-order"] },
     });
 
     expect(missing).toEqual([]);
@@ -128,7 +128,7 @@ describe("fetchMissingDependentApps", () => {
       application: application({ workflows: { nightly: undefined } }),
       runAppIds: new Set([buyer]),
       subscribedKeys: new Set(),
-      jobsByWorkflow: { "main-job": ["process-order"] },
+      jobsByWorkflow: { "nightly-main": ["process-order"] },
     });
 
     expect(missing).toEqual([]);
@@ -148,7 +148,7 @@ describe("fetchMissingDependentApps", () => {
       }),
       runAppIds: new Set(),
       subscribedKeys: new Set(),
-      jobsByWorkflow: { "main-job": ["process-order"] },
+      jobsByWorkflow: { "nightly-main": ["process-order"] },
     });
 
     expect(missing).toEqual([
@@ -176,7 +176,7 @@ describe("fetchMissingDependentApps", () => {
       application: application(spec),
       runAppIds: new Set(),
       subscribedKeys: new Set(),
-      jobsByWorkflow: { "main-job": ["process-order"] },
+      jobsByWorkflow: { "nightly-main": ["process-order"] },
     });
 
     expect(missing).toEqual([{ resource: label, appId: buyer, reason: "publish-events" }]);
@@ -196,7 +196,7 @@ describe("fetchMissingDependentApps and the run's own subscribers", () => {
       application: application({ types: { Order: undefined } }),
       runAppIds: new Set(),
       subscribedKeys: new Set(["tailordb:db:type:Order"]),
-      jobsByWorkflow: { "main-job": ["process-order"] },
+      jobsByWorkflow: { "nightly-main": ["process-order"] },
     });
 
     expect(missing).toEqual([]);
@@ -212,7 +212,7 @@ describe("fetchMissingDependentApps and the run's own subscribers", () => {
       application: application({ types: { Order: undefined } }),
       runAppIds: new Set(),
       subscribedKeys: new Set(["tailordb:db:type:Invoice"]),
-      jobsByWorkflow: { "main-job": ["process-order"] },
+      jobsByWorkflow: { "nightly-main": ["process-order"] },
     });
 
     expect(missing).toHaveLength(1);
@@ -235,7 +235,7 @@ describe("fetchMissingDependentApps and the two values a workflow carries", () =
       }),
       runAppIds: new Set(),
       subscribedKeys: new Set(["workflow:nightly"]),
-      jobsByWorkflow: { "main-job": ["process-order"] },
+      jobsByWorkflow: { "nightly-main": ["process-order"] },
     });
 
     expect(missing).toEqual([
@@ -255,7 +255,7 @@ describe("fetchMissingDependentApps and the two values a workflow carries", () =
       }),
       runAppIds: new Set(),
       subscribedKeys: new Set(["workflow:nightly:jobs"]),
-      jobsByWorkflow: { "main-job": ["process-order"] },
+      jobsByWorkflow: { "nightly-main": ["process-order"] },
     });
 
     expect(missing).toEqual([]);
@@ -281,7 +281,7 @@ describe("fetchMissingDependentApps and which jobs a workflow runs", () => {
         workflows: { "pinned-jobs": undefined },
         jobs: { "declared-job": true, "unset-job": undefined },
       }),
-      jobsByWorkflow: { "main-job": ["declared-job"] },
+      jobsByWorkflow: { "pinned-jobs-main": ["declared-job"] },
     });
 
     expect(missing.map((entry) => entry.resource)).not.toContain('Jobs of workflow "pinned-jobs"');
@@ -297,9 +297,53 @@ describe("fetchMissingDependentApps and which jobs a workflow runs", () => {
         workflows: { "runs-unset": true },
         jobs: { "declared-job": true, "unset-job": undefined },
       }),
-      jobsByWorkflow: { "main-job": ["declared-job", "unset-job"] },
+      jobsByWorkflow: { "runs-unset-main": ["declared-job", "unset-job"] },
     });
 
     expect(missing.map((entry) => entry.resource)).toContain('Jobs of workflow "runs-unset"');
+  });
+});
+
+describe("fetchMissingDependentApps and a job two workflows share", () => {
+  test("skips the job records of a workflow whose jobs a subscribed peer keeps on", () => {
+    // Job values are resolved per job name from the union of subscribed workflows,
+    // so a job "shared" runs by both workflows stays on while this run subscribes
+    // to "watched". Reporting "quiet"'s record would prompt about a value that
+    // does not turn off.
+    const client = clientRecording(["trn:v1:workspace:ws:workflow:quiet"], "jobs");
+
+    return expect(
+      fetchMissingDependentApps({
+        client,
+        workspaceId,
+        application: application({
+          workflows: { quiet: true, watched: true },
+          jobs: { shared: undefined },
+        }),
+        runAppIds: new Set(),
+        subscribedKeys: new Set(["workflow:watched:jobs"]),
+        jobsByWorkflow: { "quiet-main": ["shared"], "watched-main": ["shared"] },
+      }),
+    ).resolves.toEqual([]);
+  });
+
+  test("still reports the job records when no subscribed workflow runs the unset job", () => {
+    const client = clientRecording(["trn:v1:workspace:ws:workflow:quiet"], "jobs");
+
+    return expect(
+      fetchMissingDependentApps({
+        client,
+        workspaceId,
+        application: application({
+          workflows: { quiet: true, watched: true },
+          jobs: { "quiet-only": undefined, "watched-only": undefined },
+        }),
+        runAppIds: new Set(),
+        subscribedKeys: new Set(["workflow:watched:jobs"]),
+        jobsByWorkflow: { "quiet-main": ["quiet-only"], "watched-main": ["watched-only"] },
+      }),
+    ).resolves.toEqual([
+      { resource: 'Jobs of workflow "quiet"', appId: buyer, reason: "publish-events" },
+    ]);
   });
 });

@@ -33,12 +33,14 @@ type RecomputedResource = {
  * @param workspaceId - Workspace being deployed to
  * @param application - Application whose resources are listed
  * @param jobsByWorkflow - Job names each workflow runs, keyed by its main job
+ * @param subscribedKeys - Resources this run subscribes to, by resource key
  * @returns One entry per value that leaves `publishEvents` unset
  */
 function recomputedResources(
   workspaceId: string,
   application: Readonly<Application>,
   jobsByWorkflow: Record<string, string[]>,
+  subscribedKeys: ReadonlySet<string>,
 ): RecomputedResource[] {
   const resources: RecomputedResource[] = [];
 
@@ -85,6 +87,11 @@ function recomputedResources(
   const explicitByJob = new Map(
     (application.workflowService?.jobs ?? []).map((job) => [job.name, job.publishEvents]),
   );
+  const subscribedJobNames = new Set(
+    Object.values(application.workflowService?.workflows ?? {})
+      .filter((workflow) => subscribedKeys.has(eventSourceKey.workflowJobs(workflow.name)))
+      .flatMap((workflow) => jobsByWorkflow[workflow.mainJob.name] ?? []),
+  );
   for (const workflow of Object.values(application.workflowService?.workflows ?? {})) {
     const trn = resourceTrn(workspaceId, "workflow", workflow.name);
     if (workflow.publishEvents === undefined) {
@@ -95,11 +102,17 @@ function recomputedResources(
         label: eventSourceLabel.workflow(workflow.name),
       });
     }
-    // Only the jobs this workflow runs decide whether its job records matter.
-    // Asking across every job in the config prompts about workflows whose jobs all
-    // declare the value, which the owner cannot act on.
+    // Only the jobs this workflow runs decide whether its job records matter, and
+    // a job stays on while any subscribed workflow in the run also runs it — job
+    // values are resolved per job name, not per workflow. Asking across every job
+    // in the config, or ignoring a peer workflow's subscription, prompts about
+    // publishing the run does not turn off.
     const jobNames = jobsByWorkflow[workflow.mainJob.name] ?? [];
-    if (jobNames.some((jobName) => explicitByJob.get(jobName) === undefined)) {
+    if (
+      jobNames.some(
+        (jobName) => explicitByJob.get(jobName) === undefined && !subscribedJobNames.has(jobName),
+      )
+    ) {
       resources.push({
         trn,
         key: eventSourceKey.workflowJobs(workflow.name),
@@ -142,7 +155,7 @@ export async function fetchMissingDependentApps(params: {
 }): Promise<MissingDependentApp[]> {
   const { client, workspaceId, application, runAppIds, subscribedKeys, jobsByWorkflow } = params;
   const found = await Promise.all(
-    recomputedResources(workspaceId, application, jobsByWorkflow)
+    recomputedResources(workspaceId, application, jobsByWorkflow, subscribedKeys)
       .filter(({ key }) => !subscribedKeys.has(key))
       .map(async ({ trn, scope, label }) => {
         const metadata = await getOrNull(() => client.getMetadata({ trn }));
