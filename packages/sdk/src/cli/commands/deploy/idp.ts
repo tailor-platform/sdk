@@ -123,7 +123,8 @@ export async function applyIdP(
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
-    // Services
+    // Services. An unchanged service still gets its labels written, because its
+    // dependency records can change while its definition does not.
     await Promise.all([
       ...changeSet.service.creates.map(async (create) => {
         await resolveServiceReturnOrigins(client, create.request);
@@ -135,6 +136,9 @@ export async function applyIdP(
         await client.updateIdPService(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...changeSet.service.unchanged.flatMap((entry) =>
+        entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : [],
+      ),
     ]);
 
     // Clients
@@ -274,6 +278,15 @@ type UpdateService = {
 type DeleteService = {
   name: string;
   request: MessageInitShape<typeof DeleteIdPServiceRequestSchema>;
+};
+
+/**
+ * An IdP service whose definition is unchanged but whose dependency records are
+ * not. The plan shows it as unchanged; apply still writes its labels.
+ */
+type UnchangedService = {
+  name: string;
+  metaRequest?: MetadataLabelWrite;
 };
 
 type ComparableIdPService = {
@@ -423,7 +436,13 @@ async function planServices(
     runAppIds: ReadonlySet<string> | undefined;
   },
 ) {
-  const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("IdP services");
+  const changeSet = createChangeSet<
+    CreateService,
+    UpdateService,
+    DeleteService,
+    never,
+    UnchangedService
+  >("IdP services");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -542,7 +561,7 @@ async function planServices(
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         areIdPServicesEqual(existing.resource, desired)
       ) {
-        changeSet.unchanged.push({ name: namespaceName });
+        changeSet.unchanged.push({ name: namespaceName, metaRequest });
       } else {
         changeSet.updates.push({
           name: namespaceName,

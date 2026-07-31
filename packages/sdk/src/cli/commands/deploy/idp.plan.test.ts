@@ -559,3 +559,35 @@ describe("planIdP / publishEvents auto-configuration", () => {
     expect(byName.get("idp-b")?.publishUserEvents).toBe(false);
   });
 });
+
+describe("planIdP and an unchanged service's dependency records", () => {
+  const buyer = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
+
+  test("carries the metadata write on a service whose definition is unchanged", async () => {
+    // Only the cross-config subscription changed, so the definition matches and
+    // the service is planned as unchanged. Dropping its write here would leave the
+    // record on the remote resource and prompt about a config already deployed.
+    const client = createMockClient({
+      services: [createMatchingRemoteService()],
+      clients: defaultIdpClientSecret,
+    });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: createMockApplication({ idpServices: [{ publishEvents: undefined }] }),
+      idpUserTriggerTargets: new Set(["idp-a"]),
+      dependentApps: new Map([["idp:idp-a", new Map([[buyer, "publish-events" as const]])]]),
+      runAppIds: new Set([buyer]),
+    });
+
+    expect(result.changeSet.service.unchanged).toHaveLength(1);
+    expect(result.changeSet.service.unchanged[0]?.metaRequest?.dependencies).toEqual([
+      {
+        dependentApps: new Map([[buyer, "publish-events"]]),
+        runAppIds: new Set([buyer]),
+        pinned: false,
+        scope: undefined,
+      },
+    ]);
+  });
+});

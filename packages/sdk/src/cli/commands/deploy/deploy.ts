@@ -12,7 +12,7 @@ import { getDistDir } from "#/cli/shared/dist-dir";
 import { logger, styles } from "#/cli/shared/logger";
 import { readPackageJson } from "#/cli/shared/package-json";
 import { parseBoolean } from "#/cli/shared/parse-boolean";
-import { publishEventsConflict } from "#/cli/shared/publish-events";
+import { eventSourceLabel, publishEventsConflict } from "#/cli/shared/publish-events";
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
@@ -1663,8 +1663,8 @@ function eventSourceLookup(
         // naming the workflow would read as if its publishEvents were at stake.
         resource:
           trigger.kind === "workflowExecution"
-            ? publishEventsConflict.workflow(trigger.workflowName).resource
-            : `Jobs of workflow "${trigger.workflowName}"`,
+            ? eventSourceLabel.workflow(trigger.workflowName)
+            : eventSourceLabel.workflowJobs(trigger.workflowName),
         trigger,
         declaredBy: (target) => declaresWorkflow(target, trigger.workflowName),
         pinned: (target) =>
