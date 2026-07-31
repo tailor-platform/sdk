@@ -1,5 +1,20 @@
 # SDK Internals
 
+## API Naming: `define*` vs `create*`
+
+Public functions in `src/configure/` follow a strict naming convention.
+
+| Prefix    | Meaning                                 | Output                                                                                             | Where used                                                               |
+| --------- | --------------------------------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `define*` | Declarative resource specification      | Pure data/config struct (no SDK-managed runtime methods)                                           | `tailor.config.ts` as resource entries                                   |
+| `create*` | Instantiation of a runtime-capable unit | Object with runtime-capable methods (`trigger`, `wait`, `resolve`) or user-written `body` function | Standalone files as default/named exports, or inside workflow job bodies |
+
+**`define*` examples:** `defineConfig`, `defineAuth`, `defineIdp`, `defineStaticWebSite`, `defineAIGateway`, `defineSecretManager`, `definePlugins`
+
+**`create*` examples:** `createResolver`, `createExecutor`, `createWorkflow`, `createWorkflowJob`, `createWaitPoint`, `createWaitPoints`, `createHttpAdapter`
+
+Decision rule: if the result has a method that calls the platform at runtime (`.trigger()`, `.wait()`, `.resolve()`, etc.) or carries a user-written `body` function, use `create*`. If the result is purely a typed config object that tooling/deployer reads, use `define*`.
+
 ## Module Architecture and Import Rules
 
 The SDK enforces strict module boundaries to maintain a clean architecture:

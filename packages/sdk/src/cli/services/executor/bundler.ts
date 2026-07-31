@@ -2,7 +2,7 @@ import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { loadFilesWithIgnores, type FileLoadConfig } from "#/cli/services/file-loader";
-import { createTriggerTransformPlugin } from "#/cli/services/workflow/trigger-transformer";
+import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
@@ -11,8 +11,11 @@ import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
-import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
-import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { loadExecutor } from "./loader";
@@ -29,8 +32,8 @@ interface ExecutorInfo {
 export interface BundleExecutorsOptions {
   /** Executor file loading configuration */
   config: FileLoadConfig;
-  /** Trigger context for workflow/job transformations */
-  triggerContext?: TriggerContext;
+  /** Start context for workflow/job transformations */
+  startContext?: StartContext;
   /** Additional files to bundle (e.g., plugin-generated executors) */
   additionalFiles?: string[];
   /** Optional bundle cache for skipping unchanged builds */
@@ -41,6 +44,8 @@ export interface BundleExecutorsOptions {
   bundleLogLevel?: LogLevel;
   /** Directory the config's file patterns are resolved against */
   baseDir: string;
+  /** Optional tsconfig lookup cache shared across bundles in this CLI run */
+  tsconfigCache?: TsconfigLookupCache;
 }
 
 /**
@@ -58,12 +63,13 @@ export async function bundleExecutors(
   const bundledCode = new Map<string, string>();
   const {
     config,
-    triggerContext,
+    startContext,
     additionalFiles = [],
     cache,
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
     baseDir,
+    tsconfigCache,
   } = options;
   const configFiles = loadFilesWithIgnores(config, baseDir);
   const files = [...configFiles, ...additionalFiles];
@@ -111,10 +117,11 @@ export async function bundleExecutors(
     bundleSingleExecutor(
       executor,
       tsconfig,
-      triggerContext,
+      startContext,
       cache,
       inlineSourcemap,
       bundleLogLevel,
+      tsconfigCache,
     ),
   );
 
@@ -130,16 +137,17 @@ export async function bundleExecutors(
 async function bundleSingleExecutor(
   executor: ExecutorInfo,
   tsconfig: string | undefined,
-  triggerContext?: TriggerContext,
+  startContext?: StartContext,
   cache?: BundleCache,
   inlineSourcemap?: boolean,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<[string, string]> {
-  const serializedTriggerContext = serializeTriggerContext(triggerContext);
+  const serializedStartContext = serializeStartContext(startContext);
 
   const contextHash = computeBundlerContextHash({
     sourceFile: executor.sourceFile,
-    serializedTriggerContext,
+    extraContext: serializedStartContext,
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -171,13 +179,13 @@ async function bundleSingleExecutor(
         absoluteSourcePath,
       );
 
-      const triggerPlugin = createTriggerTransformPlugin(triggerContext);
+      const startPlugin = createStartTransformPlugin(startContext);
       const plugins: rolldown.Plugin[] = [entry.plugin];
-      if (triggerPlugin) {
-        plugins.push(triggerPlugin);
+      if (startPlugin) {
+        plugins.push(startPlugin);
       }
       plugins.push(
-        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
         platformBundleDefinePlugin,
         ...cachePlugins,
       );

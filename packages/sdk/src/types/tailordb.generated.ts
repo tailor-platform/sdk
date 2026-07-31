@@ -62,7 +62,7 @@ export type DBFieldMetadata = {
       }
     | undefined;
   /** Validation functions for the field */
-  validate?: (Function | [Function, string])[] | undefined;
+  validate?: Function[] | undefined;
   /** Serial (auto-increment) configuration */
   serial?:
     | {
@@ -76,6 +76,8 @@ export type DBFieldMetadata = {
     | undefined;
   /** Decimal scale (number of digits after decimal point, 0-12) */
   scale?: number | undefined;
+  /** Default value for the field on create */
+  default?: unknown;
 };
 export type DBFieldMetadataInput = DBFieldMetadata;
 
@@ -1028,6 +1030,13 @@ export type TailorDBTypeRawInput = {
           };
         }
       | undefined;
+    typeHook?:
+      | {
+          create?: Function | undefined;
+          update?: Function | undefined;
+        }
+      | undefined;
+    typeValidate?: Function | undefined;
   };
 };
 
@@ -1060,7 +1069,7 @@ export type TailorDBTypeRaw = {
               update?: Function | undefined;
             }
           | undefined;
-        validate?: (Function | [Function, string])[] | undefined;
+        validate?: Function[] | undefined;
         serial?:
           | {
               start: number;
@@ -1069,6 +1078,7 @@ export type TailorDBTypeRaw = {
             }
           | undefined;
         scale?: number | undefined | undefined;
+        default?: unknown;
       };
       rawRelation?:
         | {
@@ -1099,6 +1109,13 @@ export type TailorDBTypeRaw = {
           };
         }
       | undefined;
+    typeHook?:
+      | {
+          create?: Function | undefined;
+          update?: Function | undefined;
+        }
+      | undefined;
+    typeValidate?: Function | undefined;
   };
 };
 
@@ -1107,8 +1124,6 @@ export type TailorDBServiceConfigInput = {
   files: string[];
   /** Glob patterns to exclude from type discovery */
   ignores?: string[] | undefined;
-  /** URL for the ERD (Entity Relationship Diagram) site */
-  erdSite?: string | undefined;
   /** Migration configuration */
   migration?:
     | {
@@ -1139,8 +1154,6 @@ export type TailorDBServiceConfig = {
   files: string[];
   /** Glob patterns to exclude from type discovery */
   ignores?: string[] | undefined;
-  /** URL for the ERD (Entity Relationship Diagram) site */
-  erdSite?: string | undefined;
   /** Migration configuration */
   migration?:
     | {

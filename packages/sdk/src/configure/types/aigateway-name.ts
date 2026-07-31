@@ -6,7 +6,7 @@ export interface AIGatewayNameRegistry {}
 /**
  * AI Gateway name.
  *
- * When `tailor.d.ts` is generated (via `tailor-sdk deploy`/`generate`), this is narrowed
+ * When `tailor.d.ts` is generated (via `tailor deploy`/`generate`), this is narrowed
  * to the union of AI Gateway names defined via `defineAIGateway()`. Falls back to
  * `string` before the first generate run.
  */

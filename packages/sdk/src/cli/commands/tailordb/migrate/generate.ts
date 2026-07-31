@@ -303,7 +303,7 @@ async function generateDiffFromSnapshot(
     }
     logger.newline();
     logger.log("A migration script was generated for breaking changes.");
-    logger.log("Please review and edit the script before running 'tailor-sdk deploy'.");
+    logger.log("Please review and edit the script before running 'tailor deploy'.");
 
     const editor = getConfiguredEditorCommand();
     if (!editor) {
@@ -330,7 +330,7 @@ async function generateDiffFromSnapshot(
       `Data loss is possible for this migration but no script was generated. To add a custom migrate.ts, run:`,
     );
     logger.log(
-      `  ${styles.bold(`tailor-sdk tailordb migration script ${result.migrationNumber.toString().padStart(4, "0")} --namespace ${diff.namespace}`)}`,
+      `  ${styles.bold(`tailor tailordb migration script ${result.migrationNumber.toString().padStart(4, "0")} --namespace ${diff.namespace}`)}`,
     );
   }
 }
@@ -342,19 +342,17 @@ export const generateCommand = defineAppCommand({
   name: "generate",
   description:
     "Generate migration files by detecting schema differences between current local types and the previous migration snapshot.",
-  args: z
-    .object({
-      ...confirmationArgs,
-      ...configArg,
-      name: arg(z.string().optional(), {
-        alias: "n",
-        description: "Optional description for the migration",
-      }),
-      init: arg(z.boolean().default(false), {
-        description: "Delete existing migrations and start fresh",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...confirmationArgs,
+    ...configArg,
+    name: arg(z.string().optional(), {
+      alias: "n",
+      description: "Optional description for the migration",
+    }),
+    init: arg(z.boolean().default(false), {
+      description: "Delete existing migrations and start fresh",
+    }),
+  }),
   run: async (args) => {
     await generate({
       configPath: args.config,

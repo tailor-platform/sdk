@@ -7,7 +7,7 @@ import { loadAccessToken, loadMachineUserName, loadWorkspaceId } from "#/cli/sha
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { resolveWorkflow } from "./get";
-import { startCommand, startWorkflow } from "./start";
+import { startCommand, startWorkflow, startWorkflowByName } from "./start";
 import type { WorkflowExecution } from "@tailor-platform/tailor-proto/workflow_resource_pb";
 
 vi.mock("#/cli/shared/context", () => ({
@@ -28,7 +28,7 @@ vi.mock("./get", () => ({
   resolveWorkflow: vi.fn(),
 }));
 
-describe("startWorkflow runtime overload", () => {
+describe("startWorkflow", () => {
   let getApplicationMock: ReturnType<typeof vi.fn>;
   let getWorkflowExecutionMock: ReturnType<typeof vi.fn>;
   let testStartWorkflowMock: ReturnType<typeof vi.fn>;
@@ -76,35 +76,82 @@ describe("startWorkflow runtime overload", () => {
     await runTest();
   });
 
-  test("prefers legacy shape when name exists even if workflow key is present", async () => {
+  test("typed shape resolves auth namespace from config and sends proto credentials", async () => {
     await startWorkflow({
-      name: "legacy-workflow",
-      machineUser: "legacy-user",
       workflow: {
         name: "typed-workflow",
         mainJob: {
           body: () => undefined,
         },
       },
-      authInvoker: {
-        namespace: "typed-ns",
-        machineUserName: "typed-user",
-      },
-    } as never);
+      invoker: "typed-user",
+    });
 
     expect(loadConfig).toHaveBeenCalledTimes(1);
-    expect(resolveWorkflow).toHaveBeenCalledWith(
-      expect.anything(),
-      "workspace-1",
-      "legacy-workflow",
-    );
-
-    expect(getApplicationMock).toHaveBeenCalledTimes(1);
+    expect(getApplicationMock).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      applicationName: "my-app",
+    });
     expect(testStartWorkflowMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        workflowId: "id:legacy-workflow",
+        workflowId: "id:typed-workflow",
+        authInvoker: expect.objectContaining({
+          namespace: "auth-ns",
+          machineUserName: "typed-user",
+        }),
       }),
     );
+  });
+
+  test("typed shape falls back to external auth config name", async () => {
+    vi.mocked(loadConfig).mockResolvedValueOnce({
+      config: {
+        name: "my-app",
+        auth: { name: "external-auth", external: true },
+      },
+    } as Awaited<ReturnType<typeof loadConfig>>);
+    getApplicationMock.mockResolvedValueOnce({
+      application: {},
+    });
+
+    await startWorkflow({
+      workflow: {
+        name: "typed-workflow",
+        mainJob: {
+          body: () => undefined,
+        },
+      },
+      invoker: "typed-user",
+    });
+
+    expect(testStartWorkflowMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workflowId: "id:typed-workflow",
+        authInvoker: expect.objectContaining({
+          namespace: "external-auth",
+          machineUserName: "typed-user",
+        }),
+      }),
+    );
+  });
+
+  test("throws when neither the deployed app nor the config has an auth namespace", async () => {
+    getApplicationMock.mockResolvedValueOnce({
+      application: {},
+    });
+
+    await expect(
+      startWorkflow({
+        workflow: {
+          name: "typed-workflow",
+          mainJob: {
+            body: () => undefined,
+          },
+        },
+        invoker: "typed-user",
+      }),
+    ).rejects.toThrow("my-app does not have an auth configuration");
+    expect(testStartWorkflowMock).not.toHaveBeenCalled();
   });
 
   test("start command with jsonMode emits only parseable JSON to stdout", async () => {
@@ -150,9 +197,7 @@ describe("startWorkflow runtime overload", () => {
   test("uses machine user from profile default when --machine-user flag is absent", async () => {
     vi.mocked(loadMachineUserName).mockResolvedValue("profile-bot");
 
-    await startWorkflow({
-      name: "my-workflow",
-    });
+    await startWorkflowByName({ name: "my-workflow" });
 
     expect(loadMachineUserName).toHaveBeenCalledWith({
       machineUser: undefined,
@@ -167,7 +212,7 @@ describe("startWorkflow runtime overload", () => {
   });
 
   test("forwards the machineUser option to machine user resolution", async () => {
-    await startWorkflow({ name: "my-workflow", machineUser: "flag-bot" });
+    await startWorkflowByName({ name: "my-workflow", machineUser: "flag-bot" });
 
     expect(loadMachineUserName).toHaveBeenCalledWith({
       machineUser: "flag-bot",
@@ -179,7 +224,7 @@ describe("startWorkflow runtime overload", () => {
   test("throws when no machine user source is available", async () => {
     vi.mocked(loadMachineUserName).mockResolvedValue(undefined);
 
-    await expect(startWorkflow({ name: "my-workflow" })).rejects.toThrow(
+    await expect(startWorkflowByName({ name: "my-workflow" })).rejects.toThrow(
       "Machine user is required",
     );
   });

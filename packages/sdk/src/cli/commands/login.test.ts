@@ -11,7 +11,7 @@ import { readPlatformConfig, writePlatformConfig } from "#/cli/shared/context";
 import { resetKeyringState } from "#/cli/shared/token-store";
 import { loginCommand } from "./login";
 
-const xdgTempDir = vi.hoisted(() => `/tmp/tailor-login-${Date.now()}-${Math.random()}`);
+const xdgTempDir = vi.hoisted(() => `/tmp/sdk-login-test-${Date.now()}-${Math.random()}`);
 const openMock = vi.hoisted(() => vi.fn());
 const getAuthorizeUriMock = vi.hoisted(() => vi.fn());
 const getTokenFromCodeRedirectMock = vi.hoisted(() => vi.fn());
@@ -100,20 +100,21 @@ describe("login --profile", () => {
       'Profile "dev" is configured for "u@example.com", but login authenticated "machine-client".',
     );
     expect((result as { error?: Error }).error?.message).toContain(
-      "tailor-sdk profile update --user 'machine-client' -- 'dev'",
+      "tailor profile update --user 'machine-client' -- 'dev'",
     );
     expect((result as { error?: Error }).error?.message).toContain(
       "Then retry the original machine-user login command.",
     );
     expect((result as { error?: Error }).error?.message).not.toContain(
-      "tailor-sdk login --profile 'dev'",
+      "tailor login --profile 'dev'",
     );
 
     const pfConfig = await readPlatformConfig();
     expect(pfConfig.profiles.dev?.user).toBe("u@example.com");
     expect(pfConfig.current_user).toBeNull();
     expect(pfConfig.users["https://api.dev.tailor.tech|machine-client"]).toMatchObject({
-      access_token: "dev-token",
+      storage: "keyring",
+      token_expires_at: "2099-01-01T00:00:00.000Z",
     });
     expect(closeConnectionPool).toHaveBeenCalledTimes(1);
   });
@@ -125,7 +126,10 @@ describe("login --profile", () => {
       refreshToken: "browser-refresh-token",
       expiresAt: Date.parse("2099-01-01T00:00:00.000Z"),
     });
-    vi.mocked(fetchUserInfo).mockResolvedValue({ email: "browser@example.com" });
+    vi.mocked(fetchUserInfo).mockResolvedValue({
+      sub: "browser@example.com",
+      email: "browser@example.com",
+    });
     openMock.mockImplementation(async () => {
       await fetch("http://localhost:8085/callback?code=browser-code&state=browser-state");
     });
@@ -151,10 +155,10 @@ describe("login --profile", () => {
       'Profile "dev" is configured for "u@example.com", but login authenticated "browser@example.com".',
     );
     expect((result as { error?: Error }).error?.message).toContain(
-      "tailor-sdk profile update --user 'browser@example.com' -- 'dev'",
+      "tailor profile update --user 'browser@example.com' -- 'dev'",
     );
     expect((result as { error?: Error }).error?.message).toContain(
-      "Then run:\n  tailor-sdk login --profile 'dev'",
+      "Then run:\n  tailor login --profile 'dev'",
     );
     expect((result as { error?: Error }).error?.message).not.toContain(
       "Then retry the original machine-user login command.",
@@ -164,8 +168,8 @@ describe("login --profile", () => {
     expect(pfConfig.profiles.dev?.user).toBe("u@example.com");
     expect(pfConfig.current_user).toBeNull();
     expect(pfConfig.users["https://api.dev.tailor.tech|browser@example.com"]).toMatchObject({
-      access_token: "browser-token",
-      refresh_token: "browser-refresh-token",
+      storage: "keyring",
+      token_expires_at: "2099-01-01T00:00:00.000Z",
     });
     expect(closeConnectionPool).toHaveBeenCalledTimes(1);
   });
@@ -202,7 +206,7 @@ describe("login --profile", () => {
 
     expect(result.success).toBe(false);
     expect((result as { error?: Error }).error?.message).toContain(
-      "tailor-sdk profile update --user 'machine client; echo nope' -- 'dev profile'",
+      "tailor profile update --user 'machine client; echo nope' -- 'dev profile'",
     );
     expect((result as { error?: Error }).error?.message).toContain(
       "Then retry the original machine-user login command.",
@@ -240,10 +244,10 @@ describe("login --profile", () => {
 
     expect(result.success).toBe(false);
     expect((result as { error?: Error }).error?.message).toContain(
-      "tailor-sdk profile update --user 'machine-client' -- '-dev'",
+      "tailor profile update --user 'machine-client' -- '-dev'",
     );
     expect((result as { error?: Error }).error?.message).not.toContain(
-      "tailor-sdk profile update '-dev' --user 'machine-client'",
+      "tailor profile update '-dev' --user 'machine-client'",
     );
   });
 
@@ -269,13 +273,13 @@ describe("login --profile", () => {
 
       expect(result.success).toBe(false);
       expect((result as { error?: Error }).error?.message).toContain(
-        "tailor-sdk profile update --user machine-client -- dev",
+        "tailor profile update --user machine-client -- dev",
       );
       expect((result as { error?: Error }).error?.message).toContain(
         "Then retry the original machine-user login command.",
       );
       expect((result as { error?: Error }).error?.message).not.toContain(
-        "tailor-sdk login --profile dev",
+        "tailor login --profile dev",
       );
     } finally {
       if (platformDescriptor) {
@@ -319,14 +323,14 @@ describe("login --profile", () => {
 
       expect(result.success).toBe(false);
       expect((result as { error?: Error }).error?.message).toContain(
-        "tailor-sdk profile update --user <authenticated-user> -- <profile>",
+        "tailor profile update --user <authenticated-user> -- <profile>",
       );
       expect((result as { error?: Error }).error?.message).toContain('profile = "%USERNAME%"');
       expect((result as { error?: Error }).error?.message).toContain(
         'authenticated user = "machine-client"',
       );
       expect((result as { error?: Error }).error?.message).not.toContain(
-        "tailor-sdk profile update %USERNAME% --user machine-client",
+        "tailor profile update %USERNAME% --user machine-client",
       );
     } finally {
       if (platformDescriptor) {
@@ -378,7 +382,8 @@ describe("login --profile", () => {
       access_token: "default-token",
     });
     expect(pfConfig.users["https://api.dev.tailor.tech|machine-client"]).toMatchObject({
-      access_token: "dev-token",
+      storage: "keyring",
+      token_expires_at: "2099-01-01T00:00:00.000Z",
     });
   });
 });

@@ -1,9 +1,8 @@
 /* oxlint-disable typescript/no-explicit-any */
 import { brandValue } from "#/utils/brand";
-import { dispatchTriggerWorkflow, registerWorkflow } from "./registry";
+import { dispatchStartWorkflow } from "./registry";
 import type { MachineUserName } from "#/configure/types/machine-user";
 import type { ConcurrencyPolicy, RetryPolicy } from "#/types/workflow.generated";
-import type { AuthInvoker } from "../auth";
 import type { WorkflowJob } from "./job";
 
 export type { ConcurrencyPolicy, RetryPolicy };
@@ -24,10 +23,12 @@ export interface Workflow<Job extends WorkflowJob<any, any, any> = WorkflowJob<a
   retryPolicy?: RetryPolicy;
   concurrencyPolicy?: ConcurrencyPolicy;
   publishEvents?: boolean;
-  trigger: (
-    args: Parameters<Job["trigger"]>[0],
-    options?: { authInvoker: AuthInvoker<string> | MachineUserName },
-  ) => Promise<string>;
+  start: [Parameters<Job["start"]>[0]] extends [undefined]
+    ? (args?: undefined, options?: { invoker: MachineUserName }) => Promise<string>
+    : (
+        args: Parameters<Job["start"]>[0],
+        options?: { invoker: MachineUserName },
+      ) => Promise<string>;
 }
 
 interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
@@ -46,8 +47,8 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 }
 
 /**
- * Create a workflow definition that can be triggered via the Tailor SDK.
- * In production, bundler transforms .trigger() calls to tailor.workflow.triggerWorkflow().
+ * Create a workflow definition that can be started via the Tailor SDK.
+ * In production, the bundler rewrites `.start()` calls into direct platform workflow calls.
  *
  * The workflow MUST be the default export of the file.
  * All jobs referenced by the workflow MUST be named exports.
@@ -58,8 +59,8 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
  * export const fetchData = createWorkflowJob({ name: "fetch-data", body: async (input: { id: string }) => ({ id: input.id }) });
  * export const processData = createWorkflowJob({
  *   name: "process-data",
- *   body: async (input: { id: string }) => {
- *     const data = await fetchData.trigger({ id: input.id });
+ *   body: (input: { id: string }) => {
+ *     const data = fetchData.start({ id: input.id });
  *     return { data };
  *   },
  * });
@@ -73,33 +74,28 @@ interface WorkflowDefinition<Job extends WorkflowJob<any, any, any>> {
 export function createWorkflow<Job extends WorkflowJob<any, any, any>>(
   config: WorkflowDefinition<Job>,
 ): Workflow<Job> {
-  // Test-only registry/trigger shim; the platform bundle sets the flag so it is DCE'd.
-  if (!process.env.TAILOR_PLATFORM_BUNDLE) {
-    registerWorkflow(config.name, config.mainJob.name);
-  }
-
   return brandValue(
     {
       ...config,
-      trigger: process.env.TAILOR_PLATFORM_BUNDLE
+      start: process.env.__TAILOR_PLATFORM_BUNDLE
         ? async () => {
             throw new Error(
-              "workflow.trigger() is rewritten at build time and unavailable in the bundle",
+              "workflow.start() is rewritten at build time and unavailable in the bundle",
             );
           }
         : // Preserve arity: use `arguments.length` (regular function, not arrow) so
-          // `.trigger(args, undefined)` is treated as "options passed" — matching
+          // `.start(args, undefined)` is treated as "options passed" — matching
           // the bundler rewrite, which forwards the literal `undefined` from the
           // AST as a third argument. Without this, local execution and bundled
           // workflows would hand mocks different call shapes.
-          async function trigger(
-            args: Parameters<Job["trigger"]>[0],
-            options?: { authInvoker: AuthInvoker<string> | MachineUserName },
+          async function start(
+            args: Parameters<Job["start"]>[0],
+            options?: { invoker: MachineUserName },
           ) {
             // oxlint-disable-next-line prefer-rest-params
             return arguments.length >= 2
-              ? await dispatchTriggerWorkflow(config.name, args, options)
-              : await dispatchTriggerWorkflow(config.name, args);
+              ? await dispatchStartWorkflow(config.name, args, options)
+              : await dispatchStartWorkflow(config.name, args);
           },
     } as Workflow<Job>,
     "workflow",

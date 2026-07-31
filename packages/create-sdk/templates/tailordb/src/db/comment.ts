@@ -4,8 +4,10 @@ import { task } from "./task";
 import { user } from "./user";
 
 export const comment = db
-  .type("Comment", "A comment on a task", {
-    body: db.string().validate([({ value }) => value.length >= 1, "Comment must not be empty"]),
+  .table("Comment", "A comment on a task", {
+    body: db
+      .string()
+      .validate(({ value }) => (value.length < 1 ? "Comment must not be empty" : undefined)),
     taskId: db.uuid().relation({
       type: "n-1",
       toward: { type: task },

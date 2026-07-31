@@ -1,11 +1,11 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, expect, test, expectTypeOf, vi } from "vitest";
 import { t } from "./type";
-import type { TailorUser } from "#/runtime/types";
+import type { TailorPrincipal } from "#/runtime/types";
 import type { output } from "#/types/helpers";
 import type { AllowedValues } from "./field";
 
-const user: TailorUser = {
+const invoker: TailorPrincipal = {
   id: "test",
   type: "user",
   workspaceId: "workspace-test",
@@ -515,10 +515,10 @@ describe("t.object tests", () => {
 describe("TailorField runtime validation tests", () => {
   describe("validates primitive types", () => {
     test("validates string type", () => {
-      const ok = t.string().parse({ value: "valid string", data, user });
+      const ok = t.string().parse({ value: "valid string", data, invoker });
       expect(expectParsed(ok)).toBe("valid string");
 
-      const bad = t.string().parse({ value: 123, data, user });
+      const bad = t.string().parse({ value: 123, data, invoker });
       expect(bad.issues).toBeDefined();
       expect(bad.issues?.[0]?.message).toEqual("Expected a string: received 123");
       expect(bad.issues?.[0]?.path).toBeUndefined();
@@ -528,13 +528,13 @@ describe("TailorField runtime validation tests", () => {
       { value: "invalid string", message: "Expected an integer: received invalid string" },
       { value: 1.5, message: "Expected an integer: received 1.5" },
     ])("validates integer type - rejects $value", ({ value, message }) => {
-      const result = t.int().parse({ value, data, user });
+      const result = t.int().parse({ value, data, invoker });
       expect(result.issues).toBeDefined();
       expect(result.issues?.[0]?.message).toEqual(message);
     });
 
     test("validates integer type - accepts a valid integer", () => {
-      const result = t.int().parse({ value: 123, data, user });
+      const result = t.int().parse({ value: 123, data, invoker });
       expect(expectParsed(result)).toBe(123);
     });
 
@@ -542,21 +542,21 @@ describe("TailorField runtime validation tests", () => {
       { value: Number.NaN, message: "Expected a number: received NaN" },
       { value: "invalid string", message: "Expected a number: received invalid string" },
     ])("validates float type - rejects $value", ({ value, message }) => {
-      const result = t.float().parse({ value, data, user });
+      const result = t.float().parse({ value, data, invoker });
       expect(result.issues).toBeDefined();
       expect(result.issues?.[0]?.message).toEqual(message);
     });
 
     test("validates float type - accepts a valid float", () => {
-      const result = t.float().parse({ value: 1.5, data, user });
+      const result = t.float().parse({ value: 1.5, data, invoker });
       expect(expectParsed(result)).toBe(1.5);
     });
 
     test("validates boolean type", () => {
-      const ok = t.bool().parse({ value: true, data, user });
+      const ok = t.bool().parse({ value: true, data, invoker });
       expect(expectParsed(ok)).toBe(true);
 
-      const bad = t.bool().parse({ value: "true", data, user });
+      const bad = t.bool().parse({ value: "true", data, invoker });
       expect(bad.issues).toBeDefined();
       expect(bad.issues?.[0]?.message).toEqual("Expected a boolean: received true");
     });
@@ -593,21 +593,31 @@ describe("TailorField runtime validation tests", () => {
         invalidMessage: 'Expected to match "HH:mm" format: received 10:11:12',
       },
     ])("validates $name format", ({ field, validValue, invalidValue, invalidMessage }) => {
-      const ok = field.parse({ value: validValue, data, user });
+      const ok = field.parse({ value: validValue, data, invoker });
       expect(expectParsed(ok)).toBe(validValue);
 
-      const bad = field.parse({ value: invalidValue, data, user });
+      const bad = field.parse({ value: invalidValue, data, invoker });
       expect(bad.issues).toBeDefined();
       expect(bad.issues?.[0]?.message).toEqual(invalidMessage);
     });
 
-    test("rejects a non-dot datetime fractional-second separator", () => {
-      const value = "2025-12-21T10:11:12x123Z";
-      const result = t.datetime().parse({ value, data, user });
-
-      expect(result.issues?.[0]?.message).toEqual(
-        `Expected to match ISO format: received ${value}`,
-      );
+    test.each([
+      {
+        name: "out-of-range time",
+        field: t.time(),
+        value: "99:99",
+        message: 'Expected to match "HH:mm" format: received 99:99',
+      },
+      {
+        name: "datetime with a non-dot fractional separator",
+        field: t.datetime(),
+        value: "2025-12-21T10:11:12x123Z",
+        message: "Expected to match ISO format: received 2025-12-21T10:11:12x123Z",
+      },
+    ])("rejects $name", ({ field, value, message }) => {
+      const result = field.parse({ value, data, invoker });
+      expect(result.issues).toBeDefined();
+      expect(result.issues?.[0]?.message).toEqual(message);
     });
   });
 
@@ -615,10 +625,10 @@ describe("TailorField runtime validation tests", () => {
     test("validates enum values", () => {
       const status = t.enum(["active", "inactive"]);
 
-      const ok = status.parse({ value: "active", data, user });
+      const ok = status.parse({ value: "active", data, invoker });
       expect(expectParsed(ok)).toBe("active");
 
-      const bad = status.parse({ value: "pending", data, user });
+      const bad = status.parse({ value: "pending", data, invoker });
       expect(bad.issues).toBeDefined();
       expect(bad.issues?.[0]?.message).toEqual(
         "Must be one of [active, inactive]: received pending",
@@ -635,11 +645,11 @@ describe("TailorField runtime validation tests", () => {
       const ok = schema.parse({
         value: { name: "name", age: null, gender: "male" },
         data,
-        user,
+        invoker,
       });
       expect(expectParsed(ok)).toEqual({ name: "name", age: null, gender: "male" });
 
-      const bad = schema.parse({ value: { age: 1, gender: "invalid" }, data, user });
+      const bad = schema.parse({ value: { age: 1, gender: "invalid" }, data, invoker });
       expect(bad.issues).toBeDefined();
       expect(bad.issues).toEqual([
         { message: "Required field is missing", path: ["name"] },
@@ -648,7 +658,7 @@ describe("TailorField runtime validation tests", () => {
 
       const notAnObjectSchema = t.object({ value: t.string({ optional: true }) });
       const now = new Date();
-      const notAnObject = notAnObjectSchema.parse({ value: now, data, user });
+      const notAnObject = notAnObjectSchema.parse({ value: now, data, invoker });
       expect(notAnObject.issues).toBeDefined();
       expect(notAnObject.issues?.[0]?.message).toEqual(
         `Expected an object: received ${String(now)}`,
@@ -656,14 +666,14 @@ describe("TailorField runtime validation tests", () => {
     });
 
     test("runs parent custom validation when nested custom validation fails", () => {
-      const parentValidate = vi.fn(() => false);
+      const parentValidate = vi.fn((): string | void => "Parent validation failed");
       const schema = t
         .object({
-          name: t.string().validate([() => false, "Child validation failed"]),
+          name: t.string().validate(() => "Child validation failed"),
         })
-        .validate([parentValidate, "Parent validation failed"]);
+        .validate(parentValidate);
 
-      const result = schema.parse({ value: { name: "valid" }, data, user });
+      const result = schema.parse({ value: { name: "valid" }, data, invoker });
 
       expect(result.issues).toEqual([
         { message: "Child validation failed", path: ["name"] },
@@ -673,9 +683,8 @@ describe("TailorField runtime validation tests", () => {
     });
 
     test("finishes nested base validation before running custom validation", () => {
-      const validate = vi.fn(({ data }: { data: unknown }) => {
-        const record = data as { unsafe: string };
-        return record.unsafe.toUpperCase() === "VALID";
+      const validate = vi.fn(({ value }: { value: string }): string | void => {
+        if (value !== "valid") return "Not valid";
       });
       const schema = t.object({
         safe: t.string().validate(validate),
@@ -683,7 +692,7 @@ describe("TailorField runtime validation tests", () => {
       });
       const value = { safe: "valid", unsafe: 42 };
 
-      const result = schema.parse({ value, data: value, user });
+      const result = schema.parse({ value, data: value, invoker });
 
       expect(result.issues).toEqual([
         { message: "Expected a string: received 42", path: ["unsafe"] },
@@ -694,14 +703,14 @@ describe("TailorField runtime validation tests", () => {
     test("validates array fields and element paths", () => {
       const schema = t.int({ array: true });
 
-      const ok = schema.parse({ value: [1, 2, 3], data, user });
+      const ok = schema.parse({ value: [1, 2, 3], data, invoker });
       expect(expectParsed(ok)).toEqual([1, 2, 3]);
 
-      const notAnArray = schema.parse({ value: "invalid", data, user });
+      const notAnArray = schema.parse({ value: "invalid", data, invoker });
       expect(notAnArray.issues).toBeDefined();
       expect(notAnArray.issues?.[0]?.message).toEqual("Expected an array");
 
-      const badElement = schema.parse({ value: [1, "x"], data, user });
+      const badElement = schema.parse({ value: [1, "x"], data, invoker });
       expect(badElement.issues).toBeDefined();
       expect(badElement.issues?.[0]).toEqual({
         path: ["[1]"],
@@ -710,50 +719,56 @@ describe("TailorField runtime validation tests", () => {
     });
 
     test("runs custom validation once against the complete array", () => {
-      const validate = vi.fn(({ value }: { value: string[] }) => value.length >= 2);
-      const schema = t.string({ array: true }).validate([validate, "Expected at least two values"]);
+      const validate = vi.fn(({ value }: { value: string[] }): string | void => {
+        if (value.length < 2) return "Expected at least two values";
+      });
+      const schema = t.string({ array: true }).validate(validate);
 
-      const validResult = schema.parse({ value: ["a", "b"], data, user });
-      const invalidResult = schema.parse({ value: ["a"], data, user });
+      const validResult = schema.parse({ value: ["a", "b"], data, invoker });
+      const invalidResult = schema.parse({ value: ["a"], data, invoker });
 
       expect(expectParsed(validResult)).toEqual(["a", "b"]);
       expect(invalidResult.issues).toEqual([{ message: "Expected at least two values" }]);
       expect(validate).toHaveBeenCalledTimes(2);
-      expect(validate).toHaveBeenNthCalledWith(1, { value: ["a", "b"], data, user });
-      expect(validate).toHaveBeenNthCalledWith(2, { value: ["a"], data, user });
+      expect(validate).toHaveBeenNthCalledWith(1, { value: ["a", "b"] });
+      expect(validate).toHaveBeenNthCalledWith(2, { value: ["a"] });
     });
 
     test("skips custom validation when scalar base validation fails", () => {
-      const validate = vi.fn(({ value }: { value: string }) => value.toUpperCase().length > 0);
+      const validate = vi.fn(({ value }: { value: string }): string | void => {
+        if (value.toUpperCase().length === 0) return "Value is empty";
+      });
       const schema = t.string().validate(validate);
 
-      const result = schema.parse({ value: 42, data, user });
+      const result = schema.parse({ value: 42, data, invoker });
 
       expect(result.issues).toEqual([{ message: "Expected a string: received 42" }]);
       expect(validate).not.toHaveBeenCalled();
     });
 
     test("skips array custom validation when element base validation fails", () => {
-      const validate = vi.fn(({ value }: { value: string[] }) => value.length > 0);
+      const validate = vi.fn(({ value }: { value: string[] }): string | void => {
+        if (value.length === 0) return "Array is empty";
+      });
       const schema = t.string({ array: true }).validate(validate);
 
-      const result = schema.parse({ value: ["valid", 42], data, user });
+      const result = schema.parse({ value: ["valid", 42], data, invoker });
 
       expect(result.issues).toEqual([{ message: "Expected a string: received 42", path: ["[1]"] }]);
       expect(validate).not.toHaveBeenCalled();
     });
 
     test("treats null/undefined as missing when required, and allowed when optional", () => {
-      const required = t.string().parse({ value: null, data, user });
+      const required = t.string().parse({ value: null, data, invoker });
       expect(required.issues).toBeDefined();
       expect(required.issues?.[0]?.message).toEqual("Required field is missing");
 
-      const optionalScalar = t.string({ optional: true }).parse({ value: null, data, user });
+      const optionalScalar = t.string({ optional: true }).parse({ value: null, data, invoker });
       expect(expectParsed(optionalScalar)).toBeNull();
 
       const optionalArray = t
         .int({ optional: true, array: true })
-        .parse({ value: null, data, user });
+        .parse({ value: null, data, invoker });
       expect(expectParsed(optionalArray)).toBeNull();
     });
   });
@@ -771,14 +786,14 @@ describe("TailorField runtime validation tests", () => {
       "2.41E-3",
       "-1.5e10",
     ])("accepts valid decimal string %s", (value) => {
-      const result = t.decimal().parse({ value, data, user });
+      const result = t.decimal().parse({ value, data, invoker });
       expect(expectParsed(result)).toBe(value);
     });
 
     test.each(["abc", "", "1_000_000", "0b1.1p-5", "1e", "e5", ".", 123])(
       "rejects invalid decimal value %s",
       (value) => {
-        const result = t.decimal().parse({ value, data, user });
+        const result = t.decimal().parse({ value, data, invoker });
         expect(result.issues).toBeDefined();
       },
     );
@@ -806,7 +821,9 @@ describe("TailorField clone-on-write / no aliasing", () => {
 
   test("validate() returns a clone and never mutates the original", () => {
     const original = t.string();
-    const updated = original.validate((args) => args.value.length > 0);
+    const updated = original.validate((args) =>
+      args.value.length <= 0 ? "Must not be empty" : undefined,
+    );
 
     expect(original.metadata.validate).toBeUndefined();
     expect(updated.metadata.validate).toHaveLength(1);
@@ -868,7 +885,9 @@ describe("TailorField clone-on-write / no aliasing", () => {
     expect(enumClone.metadata.allowedValues).not.toBe(enumField.metadata.allowedValues);
     expect(enumClone.metadata.allowedValues?.[0]).not.toBe(enumField.metadata.allowedValues?.[0]);
 
-    const validated = t.string().validate((args) => args.value.length > 0);
+    const validated = t
+      .string()
+      .validate((args) => (args.value.length <= 0 ? "Must not be empty" : undefined));
     const validatedClone = validated.description("name");
     expect(validatedClone.metadata.validate).not.toBe(validated.metadata.validate);
   });
@@ -877,10 +896,10 @@ describe("TailorField clone-on-write / no aliasing", () => {
     const status = t.enum(["active", "inactive"]);
     const cloned = status.description("status field");
 
-    const ok = cloned.parse({ value: "active", data, user });
+    const ok = cloned.parse({ value: "active", data, invoker });
     expect(ok.issues).toBeUndefined();
 
-    const ng = cloned.parse({ value: "pending", data, user });
+    const ng = cloned.parse({ value: "pending", data, invoker });
     expect(ng.issues).toBeDefined();
     expect(ng.issues?.[0]?.message).toEqual("Must be one of [active, inactive]: received pending");
   });
@@ -889,16 +908,18 @@ describe("TailorField clone-on-write / no aliasing", () => {
     const calls: unknown[] = [];
     const field = t.string().validate((args) => {
       calls.push(args.value);
-      return args.value.length > 0;
+      return args.value.length <= 0 ? "Must not be empty" : undefined;
     });
 
-    const result = field.parse({ value: "x", data, user });
+    const result = field.parse({ value: "x", data, invoker });
     expect(result.issues).toBeUndefined();
     expect(calls).toEqual(["x"]);
   });
 
   test("validators survive a clone triggered by a later builder, leaving the original intact", () => {
-    const validated = t.string().validate((args) => args.value.length > 0);
+    const validated = t
+      .string()
+      .validate((args) => (args.value.length <= 0 ? "Must not be empty" : undefined));
     // description() clones the field; the validators must carry over to the clone
     // and keep working, while the original stays unchanged.
     const described = validated.description("name");
@@ -907,7 +928,7 @@ describe("TailorField clone-on-write / no aliasing", () => {
     expect(described.metadata.description).toBe("name");
     expect(validated.metadata.description).toBeUndefined();
 
-    const failed = described.parse({ value: "", data, user });
+    const failed = described.parse({ value: "", data, invoker });
     expect(failed.issues).toBeDefined();
   });
 });

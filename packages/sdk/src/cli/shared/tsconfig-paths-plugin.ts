@@ -17,6 +17,30 @@ type ResolutionContext = {
   matcher: (specifier: string) => string[];
 };
 
+/**
+ * The lookup cache {@link createTsconfigPathsPlugin} maintains internally by
+ * default. Share one instance across every bundle in a CLI run (via the
+ * `cache` option) so bundling many items — hundreds of resolvers, say — reads
+ * and parses each ancestor tsconfig once instead of once per item.
+ *
+ * `get-tsconfig`'s `Cache` is a plain `Map`; concurrent bundles racing to
+ * populate the same key recompute the same deterministic value and simply
+ * overwrite each other, so sharing it across `withBundleConcurrency` workers
+ * is safe.
+ */
+export interface TsconfigLookupCache {
+  tsconfigCache: Cache;
+  contextCache: Map<string, ResolutionContext | null>;
+}
+
+/**
+ * Create a {@link TsconfigLookupCache} to share across every bundle in a CLI run.
+ * @returns A fresh, empty lookup cache
+ */
+export function createTsconfigLookupCache(): TsconfigLookupCache {
+  return { tsconfigCache: new Map(), contextCache: new Map() };
+}
+
 export interface TsconfigPathsPluginOptions {
   /**
    * Source file a bundler's virtual entry was built from. A virtual entry has no
@@ -32,6 +56,11 @@ export interface TsconfigPathsPluginOptions {
    * table changes or a nearer tsconfig.json appears.
    */
   onTsconfigRead?: (tsconfigPath: string) => void;
+  /**
+   * Lookup cache to share across multiple bundles in one CLI run. Defaults to
+   * a fresh cache scoped to this plugin instance when omitted.
+   */
+  cache?: TsconfigLookupCache;
 }
 
 /**
@@ -43,11 +72,10 @@ export interface TsconfigPathsPluginOptions {
 export function createTsconfigPathsPlugin(
   options: TsconfigPathsPluginOptions = {},
 ): rolldown.Plugin {
-  const tsconfigCache: Cache = new Map();
-  const contextCache = new Map<string, ResolutionContext | null>();
+  const { tsconfigCache, contextCache } = options.cache ?? createTsconfigLookupCache();
 
   return {
-    name: "tailor-sdk-tsconfig-paths",
+    name: "tailor-tsconfig-paths",
     resolveId: {
       order: "post",
       async handler(source, importer) {
@@ -101,7 +129,15 @@ function getResolutionContext(
   onTsconfigRead?: (tsconfigPath: string) => void,
 ): ResolutionContext | null {
   const cached = contextCache.get(startDir);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    // A shared cache (see TsconfigLookupCache) may have resolved this exact
+    // startDir already for a different bundle; that bundle's own dependency
+    // list must not become this caller's, so still report every tsconfig
+    // reachable from tsconfigCache — a superset is safe (extra invalidation
+    // at worst), missing one is not (a stale bundle never rebuilds).
+    reportTsconfigDependencies(tsconfigCache, onTsconfigRead);
+    return cached;
+  }
 
   const tsconfig = getTsconfig(startDir, "tsconfig.json", tsconfigCache);
   reportTsconfigDependencies(tsconfigCache, onTsconfigRead);

@@ -8,14 +8,12 @@ import { createPatOperatorClient } from "./user";
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a personal access token.",
-  args: z
-    .object({
-      name: arg(z.string(), {
-        positional: true,
-        description: "Token name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    name: arg(z.string(), {
+      positional: true,
+      description: "Token name",
+    }),
+  }),
   run: async (args) => {
     await assertWritable();
     const client = await createPatOperatorClient();

@@ -4,7 +4,6 @@ import { sendCommand } from "./send";
 
 export const crashReportCommand = defineCommand({
   name: "crashreport",
-  aliases: ["crash-report"],
   description: "Manage crash reports.",
   subCommands: {
     list: listCommand,

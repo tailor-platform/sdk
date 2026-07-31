@@ -138,8 +138,8 @@ export type FunctionOperation = {
   kind: "function" | "jobFunction";
   /** Function implementation */
   body: Function;
-  /** Auth invoker for the function execution */
-  authInvoker?:
+  /** Invoker for the function execution */
+  invoker?:
     | string
     | {
         /** Auth namespace */
@@ -158,8 +158,8 @@ export type GqlOperationInput = {
   appName?: string | undefined;
   /** Function to compute GraphQL variables */
   variables?: Function | undefined;
-  /** Auth invoker for the GraphQL execution */
-  authInvoker?:
+  /** Invoker for the GraphQL execution */
+  invoker?:
     | string
     | {
         /** Auth namespace */
@@ -177,8 +177,8 @@ export type GqlOperation = {
   appName?: string | undefined;
   /** Function to compute GraphQL variables */
   variables?: Function | undefined;
-  /** Auth invoker for the GraphQL execution */
-  authInvoker?:
+  /** Invoker for the GraphQL execution */
+  invoker?:
     | string
     | {
         /** Auth namespace */
@@ -209,25 +209,112 @@ export type WebhookOperation = {
 };
 export type WebhookOperationInput = WebhookOperation;
 
-export type WorkflowOperationInput = unknown;
+export type JsonValueInput =
+  | string
+  | number
+  | boolean
+  | JsonValueInput[]
+  | { [key: string]: JsonValueInput }
+  | null;
 
-export type WorkflowOperation = {
-  kind: "workflow";
-  workflowName: string;
-  args?:
-    | Function
-    | {
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | JsonValue[]
+  | { [key: string]: JsonValue }
+  | null;
+
+export type WorkflowInput = string | number | boolean | JsonValue[] | { [key: string]: JsonValue };
+export type WorkflowInputInput = WorkflowInput;
+
+/**
+ * Arguments to pass to the workflow
+ */
+export type WorkflowOperationArgs = WorkflowInput | Function;
+export type WorkflowOperationArgsInput = WorkflowOperationArgs;
+
+export type WorkflowOperationInput =
+  | {
+      workflow: {
         [x: string]: unknown;
-      }
-    | undefined;
-  authInvoker?:
-    | string
-    | {
-        namespace: string;
-        machineUserName: string;
-      }
-    | undefined;
-};
+        name: string;
+      };
+      kind: "workflow";
+      /** Name of the workflow to execute */
+      workflowName?: string | undefined;
+      args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
+      invoker?:
+        | string
+        | {
+            /** Auth namespace */
+            namespace: string;
+            /** Machine user name for authentication */
+            machineUserName: string;
+          }
+        | undefined;
+    }
+  | {
+      /** Name of the workflow to execute */
+      workflowName: string;
+      kind: "workflow";
+      workflow?: undefined;
+      args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
+      invoker?:
+        | string
+        | {
+            /** Auth namespace */
+            namespace: string;
+            /** Machine user name for authentication */
+            machineUserName: string;
+          }
+        | undefined;
+    };
+
+export type WorkflowOperation =
+  | {
+      /** Name of the workflow to execute */
+      workflowName: string;
+      kind: "workflow";
+      args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
+      invoker?:
+        | string
+        | {
+            /** Auth namespace */
+            namespace: string;
+            /** Machine user name for authentication */
+            machineUserName: string;
+          }
+        | undefined;
+    }
+  | {
+      /** Name of the workflow to execute */
+      workflowName: string;
+      kind: "workflow";
+      workflow?: undefined;
+      args?: WorkflowOperationArgs;
+      /** Invoker for the workflow execution */
+      invoker?:
+        | string
+        | {
+            /** Auth namespace */
+            namespace: string;
+            /** Machine user name for authentication */
+            machineUserName: string;
+          }
+        | undefined;
+    };
+
+export type OperationInput =
+  | FunctionOperation
+  | GqlOperationInput
+  | WebhookOperation
+  | WorkflowOperationInput;
+
+export type Operation = FunctionOperation | GqlOperation | WebhookOperation | WorkflowOperation;
 
 export type ExecutorInput = {
   /** Executor name */
@@ -235,7 +322,7 @@ export type ExecutorInput = {
   /** Event trigger configuration */
   trigger: TriggerInput;
   /** Operation to execute when triggered */
-  operation: unknown;
+  operation: OperationInput;
   /** Executor description */
   description?: string | undefined;
   /** Whether the executor is disabled */
@@ -250,78 +337,7 @@ export type Executor = {
   /** Event trigger configuration */
   trigger: Trigger;
   /** Operation to execute when triggered */
-  operation:
-    | {
-        kind: "workflow";
-        workflowName: string;
-        args?:
-          | Function
-          | {
-              [x: string]: unknown;
-            }
-          | undefined;
-        /** Auth invoker for the function execution */
-        authInvoker?:
-          | string
-          | {
-              /** Auth namespace */
-              namespace: string;
-              /** Machine user name for authentication */
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "function" | "jobFunction";
-        /** Function implementation */
-        body: Function;
-        /** Auth invoker for the function execution */
-        authInvoker?:
-          | string
-          | {
-              /** Auth namespace */
-              namespace: string;
-              /** Machine user name for authentication */
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "graphql";
-        query: string;
-        /** Target application name for the GraphQL query */
-        appName?: string | undefined;
-        /** Function to compute GraphQL variables */
-        variables?: Function | undefined;
-        /** Auth invoker for the function execution */
-        authInvoker?:
-          | string
-          | {
-              /** Auth namespace */
-              namespace: string;
-              /** Machine user name for authentication */
-              machineUserName: string;
-            }
-          | undefined;
-      }
-    | {
-        kind: "webhook";
-        /** Function returning the webhook URL */
-        url: Function;
-        /** Function to compute the request body */
-        requestBody?: Function | undefined;
-        /** HTTP headers for the webhook request */
-        headers?:
-          | {
-              [x: string]:
-                | string
-                | {
-                    vault: string;
-                    key: string;
-                  };
-            }
-          | undefined;
-      };
+  operation: Operation;
   /** Executor description */
   description?: string | undefined;
 };

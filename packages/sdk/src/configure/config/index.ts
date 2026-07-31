@@ -1,5 +1,5 @@
 import type { AppConfig } from "#/configure/config/types";
-import type { GeneratorConfig, Plugin } from "#/plugin/types";
+import type { Plugin } from "#/plugin/types";
 
 /**
  * Define a Tailor SDK application configuration with shallow exactness.
@@ -14,17 +14,6 @@ export function defineConfig<
     Record<Exclude<keyof Config, keyof AppConfig>, never>,
 >(config: Config) {
   return config;
-}
-
-/**
- * Define generators to be used with the Tailor SDK.
- * @deprecated Use definePlugins() with generation hooks (onTypeLoaded, generate, etc.) instead.
- * @param configs - Generator configurations
- * @returns Generator configurations as given
- */
-/* @__NO_SIDE_EFFECTS__ */
-export function defineGenerators(...configs: GeneratorConfig[]) {
-  return configs;
 }
 
 /**

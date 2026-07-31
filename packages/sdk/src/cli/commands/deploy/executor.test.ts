@@ -16,7 +16,7 @@ vi.mock("node:fs", () => ({
 
 // Mock dist-dir to avoid getDistDir issues
 vi.mock("#/cli/shared/dist-dir", () => ({
-  getDistDir: vi.fn().mockReturnValue(".tailor-sdk"),
+  getDistDir: vi.fn().mockReturnValue(".tailor"),
 }));
 
 // Mock config values for tests
@@ -28,13 +28,13 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:executor:test",
       labels: {
         "sdk-name": "test-app",
         "sdk-version": "v1-0-0",
       },
-    }),
+    })),
   };
 });
 
@@ -145,6 +145,7 @@ describe("planExecutor", () => {
       resolverNames?: Record<string, string>;
       idpNames?: ReadonlyArray<string>;
       authName?: string;
+      externalAuthName?: string;
     },
   ): Application {
     const tailorDBServices = Object.entries(
@@ -165,7 +166,6 @@ describe("planExecutor", () => {
 
     return {
       name: appName,
-      config: {},
       subgraphs: idpServices.map((idp) => ({ Type: "idp", Name: idp.name })),
       env: {},
       executorService: createMockExecutorService(executors),
@@ -173,6 +173,9 @@ describe("planExecutor", () => {
       resolverServices,
       idpServices,
       authService: options?.authName ? { config: { name: options.authName } } : undefined,
+      config: options?.externalAuthName
+        ? { auth: { name: options.externalAuthName, external: true } }
+        : {},
     } as unknown as Application;
   }
 
@@ -369,6 +372,29 @@ describe("planExecutor", () => {
       expect(result.changeSet.updates).toHaveLength(0);
       expect(result.changeSet.deletes).toHaveLength(0);
     });
+
+    test.each([
+      ["false", false, "false"],
+      ["zero", 0, "0"],
+      ["empty string", "", '""'],
+    ])("preserves %s workflow args", async (_description, args, expectedExpression) => {
+      const executor = createMockExecutor("workflow-executor");
+      executor.operation = {
+        kind: "workflow",
+        workflowName: "test-workflow",
+        args,
+      };
+
+      const result = await planExecutor(
+        buildPlanContext(createMockApplication([executor]), { client: createMockClient([]) }),
+      );
+      const targetConfig = result.changeSet.creates[0]?.request.executor?.targetConfig?.config;
+      if (targetConfig?.case !== "workflow") {
+        throw new Error("Expected workflow target config");
+      }
+
+      expect(targetConfig.value.variables?.expr).toBe(expectedExpression);
+    });
   });
 
   describe("update scenarios", () => {
@@ -560,6 +586,46 @@ describe("planExecutor", () => {
       expect(variablesExpr).toContain("success: !!args.succeeded");
       expect(variablesExpr).toContain("result: args.succeeded?.result.resolver");
       expect(variablesExpr).toContain("error: args.failed?.error");
+    });
+
+    test("string invoker uses external auth config name", async () => {
+      const client = createMockClient([]);
+      const executor: Executor = {
+        name: "test-executor",
+        description: "Executor test-executor",
+        disabled: false,
+        trigger: {
+          kind: "schedule",
+          timezone: "UTC",
+          cron: "0 * * * *",
+        },
+        operation: {
+          kind: "function",
+          body: () => {},
+          invoker: "batch-user",
+        },
+      };
+      const application = createMockApplication([executor], {
+        externalAuthName: "external-auth",
+      });
+
+      const result = await planExecutor({
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+      });
+
+      const create = result.changeSet.creates[0]!;
+      const targetConfig = create.request.executor?.targetConfig?.config as {
+        case: "function";
+        value: { invoker: { namespace: string; machineUserName: string } };
+      };
+      expect(targetConfig.value.invoker).toEqual({
+        namespace: "external-auth",
+        machineUserName: "batch-user",
+      });
     });
   });
 

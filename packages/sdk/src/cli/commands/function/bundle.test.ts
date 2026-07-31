@@ -32,13 +32,13 @@ describe("bundleForTestRun", () => {
   aroundEach(async (runTest) => {
     testDir = path.join(TEST_BASE, `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     fs.mkdirSync(testDir, { recursive: true });
-    process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
     await runTest();
   });
 
   aroundAll(async (runSuite) => {
     await runSuite();
-    delete process.env.TAILOR_SDK_OUTPUT_DIR;
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BASE, { recursive: true, force: true });
     } catch {
@@ -346,7 +346,7 @@ export default {
         detected,
       );
 
-      expect(result.bundledCode).toContain("USER_TYPE_MACHINE_USER");
+      expect(result.bundledCode).toContain("machine_user");
       expect(result.bundledCode).toContain("ADMIN");
       expect(result.bundledCode).toContain(defaultMachineUser.id);
       expect(result.bundledCode).toContain(defaultWorkspaceId);

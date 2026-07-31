@@ -23,12 +23,13 @@ import {
   type PendingMigration,
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
+  sanitizeMigrationLabel,
 } from "#/cli/commands/tailordb/migrate/types";
 import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { logger, styles } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
 import { spinner } from "#/cli/shared/spinner";
-import { resourceTrn } from "../label";
+import { resourceTrn, writeMetadataLabels } from "../label";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 
 // ============================================================================
@@ -38,7 +39,7 @@ import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 export interface MigrationExecutionOptions {
   client: OperatorClient;
   workspaceId: string;
-  authInvoker: AuthInvoker;
+  invoker: AuthInvoker;
   env: Record<string, string | number | boolean>;
   configDir: string;
 }
@@ -148,7 +149,7 @@ export async function detectPendingMigrations(
         const configArg = configPath
           ? ` --config "${path.relative(process.cwd(), configPath) || configPath}"`
           : "";
-        const scriptCmd = `tailor-sdk tailordb migration script ${file.number} --namespace ${namespace}${configArg}`;
+        const scriptCmd = `tailor tailordb migration script ${file.number} --namespace ${namespace}${configArg}`;
         throw new Error(
           `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.\n` +
             `To resolve, either:\n` +
@@ -204,7 +205,7 @@ async function executeSingleMigration(
   options: MigrationExecutionOptions,
   migration: PendingMigration,
 ): Promise<ExecutionResult> {
-  const { client, workspaceId, authInvoker, env, configDir } = options;
+  const { client, workspaceId, invoker, env, configDir } = options;
 
   const migrationName = `migration-${migration.namespace}-${formatMigrationNumber(migration.number)}.js`;
 
@@ -223,7 +224,7 @@ async function executeSingleMigration(
     workspaceId,
     name: migrationName,
     code: bundleResult.bundledCode,
-    invoker: authInvoker,
+    invoker,
   });
 
   return {
@@ -251,19 +252,9 @@ export async function updateMigrationLabel(
 ): Promise<void> {
   const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
-  // Get existing metadata
-  const { metadata } = await client.getMetadata({ trn });
-  const existingLabels = metadata?.labels ?? {};
-
-  const newLabel = `m${formatMigrationNumber(migrationNumber)}`;
-
-  // Update with new migration label
-  await client.setMetadata({
+  await writeMetadataLabels(client, {
     trn,
-    labels: {
-      ...existingLabels,
-      [MIGRATION_LABEL_KEY]: newLabel,
-    },
+    labels: { [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) },
   });
 }
 
@@ -302,8 +293,7 @@ export async function executeMigrations(
       );
     }
 
-    // Create authInvoker for this namespace
-    const authInvoker = create(AuthInvokerSchema, {
+    const invoker = create(AuthInvokerSchema, {
       namespace: context.authNamespace,
       machineUserName,
     });
@@ -311,7 +301,7 @@ export async function executeMigrations(
     const options: MigrationExecutionOptions = {
       client: context.client,
       workspaceId: context.workspaceId,
-      authInvoker,
+      invoker,
       env: context.env,
       configDir: context.configDir,
     };

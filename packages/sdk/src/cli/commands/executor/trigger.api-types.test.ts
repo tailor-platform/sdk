@@ -4,7 +4,7 @@ import { createExecutor } from "#/configure/services/executor/index";
 import { idpUserCreatedTrigger } from "#/configure/services/executor/trigger/event";
 import { scheduleTrigger } from "#/configure/services/executor/trigger/schedule";
 import { incomingWebhookTrigger } from "#/configure/services/executor/trigger/webhook";
-import { type TriggerExecutorOptions, type TriggerExecutorTypedOptions } from "./trigger";
+import { type TriggerExecutorTypedOptions } from "./trigger";
 
 const incomingWebhookExecutor = createExecutor({
   name: "incoming-webhook-executor",
@@ -71,21 +71,6 @@ describe("triggerExecutor API types", () => {
     // @ts-expect-error - payload is not allowed for schedule trigger
     acceptsDefaultOptions({
       executor: scheduleExecutor,
-      payload: { body: { message: "hello" } },
-    });
-  });
-
-  test("keeps deprecated TriggerExecutorOptions shape available", () => {
-    const acceptsDeprecatedOptions = (_options: TriggerExecutorOptions): void => {};
-
-    acceptsDeprecatedOptions({
-      executorName: "incoming-webhook-executor",
-      payload: { body: { message: "hello" } },
-    });
-
-    acceptsDeprecatedOptions({
-      // @ts-expect-error - deprecated options must keep legacy executorName shape
-      executor: incomingWebhookExecutor,
       payload: { body: { message: "hello" } },
     });
   });

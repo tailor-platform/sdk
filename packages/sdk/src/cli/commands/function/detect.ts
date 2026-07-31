@@ -7,12 +7,13 @@
 
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
+import { stripExecutorTriggerArgs } from "#/cli/services/executor/loader";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { ResolverSchema } from "#/parser/service/resolver/index";
 import { WorkflowJobSchema } from "#/parser/service/workflow/index";
 import { type FieldRuntime, parseInputFields } from "#/runtime/field-parse";
 import { assertDefined } from "#/utils/assert";
-import type { TailorUser } from "#/runtime/types";
+import type { TailorPrincipal } from "#/runtime/types";
 import type { Resolver } from "#/types/resolver.generated";
 
 export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
@@ -20,7 +21,7 @@ export type FunctionType = "resolver" | "executor" | "workflow-job" | "plain";
 interface InputParseArgs {
   value: unknown;
   data: unknown;
-  user: TailorUser;
+  invoker: TailorPrincipal | null;
 }
 
 /** Minimal schema interface for local format detection (subset of TailorField) */
@@ -91,7 +92,7 @@ export async function detectFunctionType(
   }
 
   // 2. Check executor (only function/jobFunction kinds)
-  const executorResult = ExecutorSchema.safeParse(module.default);
+  const executorResult = ExecutorSchema.safeParse(stripExecutorTriggerArgs(module.default));
   if (executorResult.success) {
     const { operation } = executorResult.data;
     if (operation.kind === "function" || operation.kind === "jobFunction") {

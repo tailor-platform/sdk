@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { parseInputFields, type FieldRuntime } from "./field-parse";
-import type { TailorUser } from "./types";
+import type { TailorPrincipal } from "./types";
 
-const user: TailorUser = {
+const invoker: TailorPrincipal = {
   id: "00000000-0000-0000-0000-000000000000",
-  type: "",
+  type: "machine_user",
   workspaceId: "",
-  attributes: null,
+  attributes: {},
   attributeList: [],
 };
 
@@ -22,7 +22,7 @@ describe("parseInputFields", () => {
       fields: { name: stringField() },
       value: { name: "a" },
       data: {},
-      user,
+      invoker,
     });
     expect(result.issues).toBeUndefined();
   });
@@ -32,7 +32,7 @@ describe("parseInputFields", () => {
       fields: { name: stringField(), age: stringField() },
       value: {},
       data: {},
-      user,
+      invoker,
     });
     expect(result.issues).toEqual([
       { message: "Required field is missing", path: ["name"] },
@@ -45,33 +45,36 @@ describe("parseInputFields", () => {
       fields: {
         name: stringField({
           required: true,
-          validate: [[({ value }) => typeof value === "string" && value.length > 2, "Too short"]],
+          validate: [
+            ({ value }) =>
+              typeof value === "string" && value.length > 2 ? undefined : "Too short",
+          ],
         }),
       },
       value: { name: "ab" },
       data: {},
-      user,
+      invoker,
     });
     expect(result.issues).toEqual([{ message: "Too short", path: ["name"] }]);
   });
 
   test("rejects a top-level array even when all fields are optional", () => {
-    const result = parseInputFields({ fields: {}, value: [1, 2, 3], data: {}, user });
+    const result = parseInputFields({ fields: {}, value: [1, 2, 3], data: {}, invoker });
     expect(result.issues).toEqual([{ message: "Expected an object: received 1,2,3" }]);
   });
 
   test("rejects a missing top-level value as a required field", () => {
-    const result = parseInputFields({ fields: {}, value: null, data: {}, user });
+    const result = parseInputFields({ fields: {}, value: null, data: {}, invoker });
     expect(result.issues).toEqual([{ message: "Required field is missing" }]);
   });
 
   test("rejects primitive top-level values", () => {
-    const result = parseInputFields({ fields: {}, value: "hello", data: {}, user });
+    const result = parseInputFields({ fields: {}, value: "hello", data: {}, invoker });
     expect(result.issues).toEqual([{ message: "Expected an object: received hello" }]);
   });
 
   test("rejects a Date as a top-level value", () => {
-    const result = parseInputFields({ fields: {}, value: new Date(), data: {}, user });
+    const result = parseInputFields({ fields: {}, value: new Date(), data: {}, invoker });
     expect(result.issues?.[0]?.message).toMatch(/^Expected an object:/);
   });
 });

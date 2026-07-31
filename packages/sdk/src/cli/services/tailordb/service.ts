@@ -3,6 +3,7 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
+import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { parseTypes, TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import {
   findMissingPermissionConfig,
@@ -220,7 +221,7 @@ export function createTailorDBService(params: CreateTailorDBServiceParams): Tail
       for (const exportName of Object.keys(module)) {
         const exportedValue = module[exportName];
 
-        const result = TailorDBTypeSchema.safeParse(exportedValue);
+        const result = TailorDBTypeSchema.safeParse(stripTailorDBTypeBuilderHelpers(exportedValue));
         if (!result.success) {
           if (isSdkBranded(exportedValue, "tailordb-type")) {
             throw result.error;

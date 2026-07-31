@@ -9,7 +9,7 @@ Manage functions
 **Usage**
 
 ```
-tailor-sdk function [command]
+tailor function [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -30,7 +30,7 @@ Get a function registry by name
 **Usage**
 
 ```
-tailor-sdk function get [options]
+tailor function get [options]
 ```
 
 **Options**
@@ -50,7 +50,7 @@ List function registries in a workspace
 **Usage**
 
 ```
-tailor-sdk function list [options]
+tailor function list [options]
 ```
 
 **Options**
@@ -71,7 +71,7 @@ List or get function execution logs.
 **Usage**
 
 ```
-tailor-sdk function logs [options] [execution-id]
+tailor function logs [options] [execution-id]
 ```
 
 **Arguments**
@@ -96,32 +96,32 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **List all function execution logs**
 
 ```bash
-$ tailor-sdk function logs
+$ tailor function logs
 ```
 
 **Get execution details with logs**
 
 ```bash
-$ tailor-sdk function logs <execution-id>
+$ tailor function logs <execution-id>
 ```
 
 **Output as JSON**
 
 ```bash
-$ tailor-sdk function logs --json
+$ tailor function logs --json
 ```
 
 **Get execution details as JSON**
 
 ```bash
-$ tailor-sdk function logs <execution-id> --json
+$ tailor function logs <execution-id> --json
 ```
 
 **Notes**
 
 When viewing a specific execution that failed, the command displays error details with the stack trace mapped back to your original source files (clickable file links and code snippets, matching `function test-run` output).
 
-Stack traces stay accurate even after later redeploys, because the trace is resolved against the exact build that produced the execution. If that build is no longer available, the command falls back to a plain-text error display.
+Stack traces are mapped only when the execution includes a content hash for the exact build that ran. If the content hash is missing or the build is no longer available, the command falls back to a plain-text error display.
 
 ### function test-run
 
@@ -130,7 +130,7 @@ Run a function on the Tailor Platform server without deploying.
 **Usage**
 
 ```
-tailor-sdk function test-run [options] <file>
+tailor function test-run [options] <file>
 ```
 
 **Arguments**
@@ -157,19 +157,19 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 **Run a resolver with input arguments**
 
 ```bash
-$ tailor-sdk function test-run resolvers/add.ts --arg '{"a":1,"b":2}'
+$ tailor function test-run resolvers/add.ts --arg '{"a":1,"b":2}'
 ```
 
 **Run a specific workflow job by name**
 
 ```bash
-$ tailor-sdk function test-run workflows/sample.ts --name validate-order
+$ tailor function test-run workflows/sample.ts --name validate-order
 ```
 
 **Run a pre-bundled .js file directly**
 
 ```bash
-$ tailor-sdk function test-run build/resolvers/add.js --arg '{"a":1,"b":2}'
+$ tailor function test-run build/resolvers/add.js --arg '{"a":1,"b":2}'
 ```
 
 **Notes**
@@ -178,5 +178,5 @@ You can pass either a source file (`.ts`) or a pre-bundled file (`.js`).
 When a `.js` file is provided, detection and bundling are skipped and the file is executed as-is.
 
 > [!WARNING]
-> Workflow job `.trigger()` calls do not work in test-run mode.
-> Triggered jobs are not executed; only the target job's `body` function runs in isolation.
+> Workflow job `.start()` calls do not work in test-run mode.
+> Started jobs are not executed; only the target job's `body` function runs in isolation.

@@ -11,15 +11,13 @@ import { statusLabels } from "./status";
 export const domainGetCommand = defineAppCommand({
   name: "get",
   description: "Get details of a custom domain.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      domain: arg(z.string(), {
-        positional: true,
-        description: "Custom domain name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    domain: arg(z.string(), {
+      positional: true,
+      description: "Custom domain name",
+    }),
+  }),
   run: async (args) => {
     const accessToken = await loadAccessToken({
       profile: args.profile,

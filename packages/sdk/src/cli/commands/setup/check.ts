@@ -281,8 +281,8 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   const lock = readLock(outputDir);
   if (!lock || lock.targets.length === 0) {
     throw new Error(
-      "No managed workflows found (.github/tailor-sdk.lock is missing or empty). " +
-        "Run `tailor-sdk setup branch` (or another setup subcommand) first.",
+      "No managed workflows found (.github/tailor.lock is missing or empty). " +
+        "Run `tailor setup branch` (or another setup subcommand) first.",
     );
   }
 
@@ -301,7 +301,7 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
       throw new Error(
         "TAILOR_PLATFORM_WORKSPACE_ID is not set. " +
           "Provision the workspace and set the variable:\n" +
-          "  tailor-sdk workspace create   # if it does not exist yet; copy the id\n" +
+          "  tailor workspace create   # if it does not exist yet; copy the id\n" +
           "  gh variable set TAILOR_PLATFORM_WORKSPACE_ID --env <environment>",
       );
     }
@@ -389,6 +389,6 @@ export async function checkGitHub(options: CheckGitHubOptions): Promise<void> {
   }
   throw new Error(
     `Detected ${String(findings.length)} drift finding(s) across ${String(count)} target(s). ` +
-      "Re-run `tailor-sdk setup` to regenerate, or address each finding above.",
+      "Re-run `tailor setup` to regenerate, or address each finding above.",
   );
 }

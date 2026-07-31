@@ -3,7 +3,13 @@ import { createApplyLimiter } from "#/cli/shared/apply-concurrency";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
 import { createChangeSet, type ChangeSet, type HasName } from "./change-set";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -20,7 +26,6 @@ import type {
   CreateFunctionRegistryRequestSchema,
   UpdateFunctionRegistryRequestSchema,
 } from "@tailor-platform/tailor-proto/function_registry_pb";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 export type { BundledScripts, FunctionEntry } from "./function-registry-types";
 
@@ -29,13 +34,13 @@ const CHUNK_SIZE = 64 * 1024; // 64KB
 type CreateFunction = {
   name: string;
   entry: FunctionEntry;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateFunction = {
   name: string;
   entry: FunctionEntry;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteFunction = {
@@ -482,13 +487,13 @@ export async function applyFunctionRegistry(
       ...changeSet.creates.map((create) =>
         limitFunction(async () => {
           await uploadFunctionScript(client, workspaceId, create.entry, true);
-          await client.setMetadata(create.metaRequest);
+          await writeMetadataLabels(client, create.metaRequest);
         }),
       ),
       ...changeSet.updates.map((update) =>
         limitFunction(async () => {
           await uploadFunctionScript(client, workspaceId, update.entry, false);
-          await client.setMetadata(update.metaRequest);
+          await writeMetadataLabels(client, update.metaRequest);
         }),
       ),
     ]);

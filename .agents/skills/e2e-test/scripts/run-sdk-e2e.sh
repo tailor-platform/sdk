@@ -62,7 +62,7 @@ fi
 test_pid=""
 trap - HUP INT TERM
 
-"$cleanup_node" "$workspace_cleanup" "$run_id" -- pnpm exec tailor-sdk
+"$cleanup_node" "$workspace_cleanup" "$run_id" -- pnpm exec tailor
 cleanup_status=$?
 
 echo "E2E test status: $test_status; cleanup status: $cleanup_status" >&2

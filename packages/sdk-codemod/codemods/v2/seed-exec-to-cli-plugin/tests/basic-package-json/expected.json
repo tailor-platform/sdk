@@ -1,0 +1,10 @@
+{
+  "name": "my-app",
+  "scripts": {
+    "seed": "tailor seed apply --env-file-if-exists .env",
+    "seed:reset": "tailor seed apply --env-file-if-exists .env --truncate --yes",
+    "seed:validate": "tailor seed validate --env-file-if-exists .env",
+    "seed:types": "tailor seed apply User Order",
+    "build": "node scripts/build.mjs"
+  }
+}

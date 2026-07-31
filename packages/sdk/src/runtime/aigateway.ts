@@ -6,7 +6,7 @@
  * from `@tailor-platform/sdk/vitest` to mock these calls in unit tests.
  *
  * `name` is narrowed to the AI Gateway names defined via `defineAIGateway()`
- * once `tailor.d.ts` has been generated (via `tailor-sdk deploy`/`generate`).
+ * once `tailor.d.ts` has been generated (via `tailor deploy`/`generate`).
  * @example
  * import { aigateway } from "@tailor-platform/sdk/runtime";
  *
@@ -28,10 +28,6 @@ export interface GetAIGatewayResult {
 /**
  * Platform API surface for `tailor.aigateway`. Describes the shape the
  * platform runtime injects on `globalThis.tailor.aigateway`.
- *
- * Each method below is also re-exported as a top-level named export from this
- * module so callers can either `import * as aigateway from
- * "@tailor-platform/sdk/runtime/aigateway"` or pick individual methods.
  */
 export interface TailorAigatewayAPI {
   /**
@@ -43,11 +39,9 @@ export interface TailorAigatewayAPI {
 }
 
 const api = (): TailorAigatewayAPI =>
-  (globalThis as { tailor: { aigateway: TailorAigatewayAPI } }).tailor.aigateway;
+  (globalThis as unknown as { tailor: { aigateway: TailorAigatewayAPI } }).tailor.aigateway;
 
-/**
- * See {@link TailorAigatewayAPI.get}.
- * @param args - Forwarded to {@link TailorAigatewayAPI.get}
- * @returns The resolved AI Gateway's platform-assigned URL
- */
-export const get: TailorAigatewayAPI["get"] = (...args) => api().get(...args);
+const get: TailorAigatewayAPI["get"] = (...args) => api().get(...args);
+
+/** Runtime wrapper namespace for `tailor.aigateway`. */
+export const aigateway = { get } as const satisfies TailorAigatewayAPI;

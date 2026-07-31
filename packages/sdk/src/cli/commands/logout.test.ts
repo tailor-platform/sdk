@@ -15,6 +15,7 @@ import { logoutCommand } from "./logout";
 const xdgTempDir = vi.hoisted(() => `/tmp/tailor-logout-${Date.now()}-${Math.random()}`);
 
 const revokeMock = vi.hoisted(() => vi.fn());
+const keyringPasswords = vi.hoisted(() => new Map<string, string>());
 
 vi.mock("xdg-basedir", () => ({
   xdgConfig: xdgTempDir,
@@ -22,11 +23,19 @@ vi.mock("xdg-basedir", () => ({
 
 vi.mock("@napi-rs/keyring", () => ({
   Entry: class {
-    setPassword() {}
-    getPassword(): string | null {
-      return null;
+    private key: string;
+    constructor(service: string, account: string) {
+      this.key = `${service}:${account}`;
     }
-    deletePassword() {}
+    setPassword(password: string) {
+      keyringPasswords.set(this.key, password);
+    }
+    getPassword(): string | null {
+      return keyringPasswords.get(this.key) ?? null;
+    }
+    deletePassword() {
+      keyringPasswords.delete(this.key);
+    }
   },
 }));
 
@@ -50,6 +59,7 @@ describe("logout --profile", () => {
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
     resetKeyringState();
+    keyringPasswords.clear();
     writePlatformConfig({
       version: 2,
       min_sdk_version: "1.29.0",
@@ -82,7 +92,12 @@ describe("logout --profile", () => {
         refreshToken: "dev-refresh-token",
       },
       futureDate,
-      { platformUrl: "https://api.dev.tailor.tech", oauth2ClientId: "dev-client" },
+      {
+        platformConfig: {
+          platformUrl: "https://api.dev.tailor.tech",
+          oauth2ClientId: "dev-client",
+        },
+      },
     );
     config.current_user = "u@example.com";
     writePlatformConfig(config);

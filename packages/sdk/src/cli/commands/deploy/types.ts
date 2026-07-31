@@ -1,6 +1,7 @@
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
+import type { DependentAppsByResource } from "./label";
 import type { ApplyPhase } from "./phase";
 
 export type { ApplyPhase };
@@ -15,7 +16,7 @@ export interface PlanContext {
   forceApplyAll?: boolean;
   /**
    * Set of IdP names that have at least one executor with an idpUser trigger.
-   * Controls how `publishUserEvents` defaults on each IdP service. Empty when
+   * Controls how `publishEvents` defaults on each IdP service. Empty when
    * no idpUser triggers are defined.
    */
   idpUserTriggerTargets?: ReadonlySet<string>;
@@ -33,4 +34,15 @@ export interface PlanContext {
   resolverNamespaces?: ReadonlyMap<string, string | undefined>;
   /** IdP names known to the current deploy run. */
   idpNames?: ReadonlySet<string>;
+  /** Stable ids of every application taking part in the current deploy run. */
+  runAppIds?: ReadonlySet<string>;
+  /**
+   * Applications that have to take part in the same deploy for this config's
+   * resources to be applied the same way, keyed by resource.
+   *
+   * A planner looks up the resource it is applying and folds the result into that
+   * resource's own labels, so a record lives on the thing whose `publishEvents`
+   * is at stake rather than on the application.
+   */
+  dependentApps?: DependentAppsByResource;
 }

@@ -19,13 +19,15 @@ import { createTailorDBService, type TailorDBService } from "#/cli/services/tail
 import { assertUniqueLocalTailorDBTypeNames } from "#/cli/services/tailordb/type-name-validation";
 import { bundleWorkflowJobs, type BundleWorkflowJobsResult } from "#/cli/services/workflow/bundler";
 import { createWorkflowService, type WorkflowService } from "#/cli/services/workflow/service";
+import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { resolveBundleLogLevel } from "#/cli/shared/bundle-log-level";
 import { type LoadedConfig } from "#/cli/shared/config-loader";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import { resolveInlineSourcemap } from "#/cli/shared/inline-sourcemap";
 import { logger } from "#/cli/shared/logger";
 import { resolverBundleKey } from "#/cli/shared/resolver-bundle-key";
-import { buildTriggerContext } from "#/cli/shared/trigger-context";
+import { buildStartContext } from "#/cli/shared/start-context";
+import { createTsconfigLookupCache } from "#/cli/shared/tsconfig-paths-plugin";
 import {
   type AppConfig,
   type ExecutorServiceInput,
@@ -34,7 +36,7 @@ import {
   type WorkflowServiceConfig,
 } from "#/configure/config/types";
 import { type AuthConfig } from "#/configure/services/auth/types";
-import { type IdPConfig } from "#/configure/services/idp/types";
+import { type IdPConfig, type IdPOwnConfig } from "#/configure/services/idp/types";
 import { AIGatewaySchema } from "#/parser/service/aigateway/index";
 import { AuthConfigSchema } from "#/parser/service/auth/index";
 import { IdPSchema } from "#/parser/service/idp/index";
@@ -160,6 +162,13 @@ type DefineIdpResult = {
   subgraphs: Array<{ Type: string; Name: string }>;
 };
 
+function stripIdpProviderHelper(idpConfig: IdPOwnConfig): IdPOwnConfig {
+  const configWithProvider = idpConfig as IdPOwnConfig & { provider?: unknown };
+  if (typeof configWithProvider.provider !== "function") return idpConfig;
+  const { provider: _provider, ...config } = configWithProvider;
+  return config as IdPOwnConfig;
+}
+
 function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
   const idpServices: IdP[] = [];
   const subgraphs: Array<{ Type: string; Name: string }> = [];
@@ -176,7 +185,7 @@ function defineIdp(config: readonly IdPConfig[] | undefined): DefineIdpResult {
     }
     idpNames.add(name);
     if (!("external" in idpConfig)) {
-      const idp = IdPSchema.parse(idpConfig);
+      const idp = IdPSchema.parse(stripIdpProviderHelper(idpConfig));
       idpServices.push(idp);
     }
     subgraphs.push({ Type: "idp", Name: name });
@@ -245,6 +254,13 @@ function defineHttpAdapterService(
   return createHttpAdapterService({ config, baseDir });
 }
 
+function stripStaticWebsiteUrlHelper(config: StaticWebsiteInput): StaticWebsiteInput {
+  const configWithUrl = config as StaticWebsiteInput & { url?: unknown };
+  if (configWithUrl.url !== `${config.name}:url`) return config;
+  const { url: _url, ...websiteConfig } = configWithUrl;
+  return websiteConfig;
+}
+
 function defineStaticWebsites(
   websites: readonly StaticWebsiteInput[] | undefined,
 ): StaticWebsite[] {
@@ -252,7 +268,7 @@ function defineStaticWebsites(
   const websiteNames = new Set<string>();
 
   (websites ?? []).forEach((config) => {
-    const website = StaticWebsiteSchema.parse(config);
+    const website = StaticWebsiteSchema.parse(stripStaticWebsiteUrlHelper(config));
     if (websiteNames.has(website.name)) {
       throw new Error(`Static website with name "${website.name}" already defined.`);
     }
@@ -527,16 +543,19 @@ export async function loadApplication(
     await httpAdapterService.loadAdapters();
   }
 
-  // 7. Build trigger context for workflow/job trigger transformation
-  const triggerContext = await buildTriggerContext(
+  // 7. Build start context for workflow/job start transformation
+  const startContext = await buildStartContext(
     config.workflow,
-    authResult.authService?.config.name,
+    getApplicationAuthNamespace({ authService: authResult.authService, config }),
     baseDir,
   );
 
   // 8. Resolve bundle settings
   const inlineSourcemap = resolveInlineSourcemap(config.inlineSourcemap);
   const bundleLogLevel = resolveBundleLogLevel(config.logLevel);
+  // Shared across every bundle below so a project with many resolvers/executors/etc.
+  // reads and parses each ancestor tsconfig once instead of once per item.
+  const tsconfigCache = createTsconfigLookupCache();
 
   // Collect in-memory bundled scripts
   const bundledScripts: BundledScripts = {
@@ -552,10 +571,11 @@ export async function loadApplication(
       pipeline.namespace,
       pipeline.config,
       baseDir,
-      triggerContext,
+      startContext,
       bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      tsconfigCache,
     );
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
@@ -566,12 +586,13 @@ export async function loadApplication(
   if (executorService) {
     bundledScripts.executors = await bundleExecutors({
       config: executorService.config,
-      triggerContext,
+      startContext,
       additionalFiles: [...pluginExecutorFiles],
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
       baseDir,
+      tsconfigCache,
     });
   }
 
@@ -583,11 +604,12 @@ export async function loadApplication(
       workflowService.jobs,
       mainJobNames,
       config.env ?? {},
-      triggerContext,
+      startContext,
       baseDir,
       bundleCache,
       inlineSourcemap,
       bundleLogLevel,
+      tsconfigCache,
     );
     bundledScripts.workflowJobs = workflowBuildResult.bundledCode;
   }
@@ -605,6 +627,7 @@ export async function loadApplication(
       baseDir,
       bundleCache,
       bundleLogLevel,
+      tsconfigCache,
     );
   }
 
@@ -616,11 +639,12 @@ export async function loadApplication(
       authName,
       handlerAccessPath: `auth.hooks.beforeLogin.handler`,
       env: config.env ?? {},
-      triggerContext,
+      startContext,
       cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
       baseDir,
+      tsconfigCache,
     });
   }
 

@@ -38,7 +38,7 @@ describe("createTailorDBService.loadTypes", () => {
       "user.ts",
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -47,7 +47,7 @@ export const user = db.type("User", {
       "account.ts",
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const account = db.type("User", {
+export const account = db.table("User", {
   email: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -70,7 +70,7 @@ export const account = db.type("User", {
       "object-prototype.ts",
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const objectPrototype = db.type("toString", {
+export const objectPrototype = db.table("toString", {
   value: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -92,7 +92,7 @@ export const objectPrototype = db.type("toString", {
       "proto.ts",
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const proto = db.type("__proto__", {
+export const proto = db.table("__proto__", {
   value: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -115,7 +115,7 @@ export const proto = db.type("__proto__", {
       "overlapping-glob.ts",
       `
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const user = db.type("User", {
+export const user = db.table("User", {
   name: db.string(),
 }).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -140,7 +140,7 @@ export const user = db.type("User", {
       onNamespaceLoaded: () => ({
         types: {
           auditLog: db
-            .type("AuditLog", {
+            .table("AuditLog", {
               message: db.string(),
             })
             .permission(unsafeAllowAllTypePermission)
@@ -170,7 +170,7 @@ export const user = db.type("User", {
       importPath: "@example/namespace",
       onNamespaceLoaded: () => ({
         types: {
-          auditLog: db.type("AuditLogNoPermission", {
+          auditLog: db.table("AuditLogNoPermission", {
             message: db.string(),
           }),
         },
@@ -196,7 +196,7 @@ export const user = db.type("User", {
       "no-permission.ts",
       `
 import { db, unsafeAllowAllGqlPermission } from "@tailor-platform/sdk";
-export const noPermission = db.type("NoPermission", {
+export const noPermission = db.table("NoPermission", {
   name: db.string(),
 }).gqlPermission(unsafeAllowAllGqlPermission);
 `,
@@ -221,7 +221,7 @@ export const noPermission = db.type("NoPermission", {
       "no-gql-permission.ts",
       `
 import { db, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const noGqlPermission = db.type("NoGqlPermission", {
+export const noGqlPermission = db.table("NoGqlPermission", {
   name: db.string(),
 }).permission(unsafeAllowAllTypePermission);
 `,
@@ -244,7 +244,7 @@ export const noGqlPermission = db.type("NoGqlPermission", {
       "gql-disabled.ts",
       `
 import { db, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const gqlDisabled = db.type("GqlDisabled", {
+export const gqlDisabled = db.table("GqlDisabled", {
   name: db.string(),
 }).permission(unsafeAllowAllTypePermission).features({
   gqlOperations: { create: false, update: false, delete: false, read: false },
@@ -268,7 +268,7 @@ export const gqlDisabled = db.type("GqlDisabled", {
       "namespace-gql-disabled.ts",
       `
 import { db, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
-export const namespaceGqlDisabled = db.type("NamespaceGqlDisabled", {
+export const namespaceGqlDisabled = db.table("NamespaceGqlDisabled", {
   name: db.string(),
 }).permission(unsafeAllowAllTypePermission);
 `,

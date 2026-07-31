@@ -2,7 +2,7 @@
  * Tests for `@tailor-platform/sdk/runtime/file` typed wrappers.
  */
 import { aroundEach, describe, expect, test } from "vitest";
-import * as file from "#/runtime/file";
+import { file, type TailorDBFileError, type TailorDBFileErrorCode } from "#/runtime/file";
 import { mockFile, injectMocks } from "#/vitest/mock";
 
 const args = ["ns", "Doc", "blob", "rec-1"] as const;
@@ -81,35 +81,15 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     expect(fileM.calls[0]?.method).toBe("getMetadata");
   });
 
-  test("delete forwards (re-exported from deleteFile)", async () => {
+  test("delete forwards", async () => {
     using fileM = mockFile();
     await file.delete(...args);
 
     expect(fileM.calls).toEqual([expectedCall("delete")]);
   });
 
-  test("openDownloadStream forwards and yields StreamValue chunks", async () => {
-    using fileM = mockFile();
-    const sequence: file.StreamValue[] = [
-      {
-        type: "metadata",
-        metadata: { contentType: "application/octet-stream", fileSize: 2, sha256sum: "h" },
-      },
-      { type: "chunk", data: new Uint8Array([1]), position: 0 },
-      { type: "chunk", data: new Uint8Array([2]), position: 1 },
-      { type: "complete" },
-    ];
-    fileM.enqueueResult(sequence);
-
-    const stream = await file.openDownloadStream(...args);
-
-    const chunks: file.StreamValue[] = [];
-    for await (const chunk of stream) {
-      chunks.push(chunk);
-    }
-
-    expect(chunks).toEqual(sequence);
-    expect(fileM.calls[0]?.method).toBe("openDownloadStream");
+  test("does not export the removed openDownloadStream wrapper", () => {
+    expect("openDownloadStream" in file).toBe(false);
   });
 
   test("downloadStream forwards and returns body with metadata", async () => {
@@ -158,8 +138,8 @@ describe("@tailor-platform/sdk/runtime/file", () => {
       globalThis as unknown as {
         TailorDBFileError: new (
           m: string,
-          c?: file.TailorDBFileErrorCode,
-        ) => Error & { code?: file.TailorDBFileErrorCode };
+          c?: TailorDBFileErrorCode,
+        ) => Error & { code?: TailorDBFileErrorCode };
       }
     ).TailorDBFileError;
     const err = new TailorDBFileError("operation failed", "OPERATION_FAILED");
@@ -167,7 +147,7 @@ describe("@tailor-platform/sdk/runtime/file", () => {
     expect(err.code).toBe("OPERATION_FAILED");
     // Type-level: file.TailorDBFileError is a structural interface that the
     // global class instances satisfy (not a direct alias of the class itself).
-    const _typed: file.TailorDBFileError = err as file.TailorDBFileError;
+    const _typed: TailorDBFileError = err as TailorDBFileError;
     expect(_typed).toBe(err);
   });
 });

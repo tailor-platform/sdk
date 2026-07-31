@@ -10,7 +10,7 @@ Workflows provide:
 - Durable execution with automatic state management
 - Resume capabilities from failure points
 - Access to TailorDB via Kysely query builder
-- Job triggering to compose multi-step logic
+- Job starting to compose multi-step logic
 
 For the official Tailor Platform documentation, see [Workflow Guide](https://docs.tailor.tech/guides/workflow).
 
@@ -26,12 +26,12 @@ All workflow components must follow these rules:
 - **Job name uniqueness**: Job names must be unique across the entire project (not just within one file)
 - **mainJob required**: Every workflow must specify a `mainJob`
 
-| Rule                                           | Description                                                                                              |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `createWorkflow` result must be default export | Workflow files must export the workflow as default                                                       |
-| All jobs must be named exports                 | Includes `mainJob` and any job triggered via `.trigger()` (even if referenced only within the same file) |
-| Job `name` values must be unique               | Job names must be unique across the entire project                                                       |
-| `mainJob` is required                          | Every workflow must specify a `mainJob`                                                                  |
+| Rule                                           | Description                                                                                          |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `createWorkflow` result must be default export | Workflow files must export the workflow as default                                                   |
+| All jobs must be named exports                 | Includes `mainJob` and any job started via `.start()` (even if referenced only within the same file) |
+| Job `name` values must be unique               | Job names must be unique across the entire project                                                   |
+| `mainJob` is required                          | Every workflow must specify a `mainJob`                                                              |
 
 ## Creating a Workflow Job
 
@@ -92,11 +92,11 @@ export const nullJob = createWorkflowJob({
 
 These constraints are enforced at compile time — you will get a type error if you use an unsupported type.
 
-## Triggering Jobs
+## Starting Jobs
 
-Use `.trigger()` to start other jobs from within a job.
+Use `.start()` to start other jobs from within a job.
 
-Jobs are triggered by calling `.trigger()` on the other job object (no `deps` and no `jobs` object in the context).
+Jobs are started by calling `.start()` on the other job object (no `deps` and no `jobs` object in the context).
 
 ```typescript
 import { createWorkflowJob } from "@tailor-platform/sdk";
@@ -105,11 +105,11 @@ import { sendNotification } from "./jobs/send-notification";
 
 export const mainJob = createWorkflowJob({
   name: "main-job",
-  body: async (input: { customerId: string }) => {
-    const customer = await fetchCustomer.trigger({
+  body: (input: { customerId: string }) => {
+    const customer = fetchCustomer.start({
       customerId: input.customerId,
     });
-    const notification = await sendNotification.trigger({
+    const notification = sendNotification.start({
       message: "Order processed",
       recipient: customer.email,
     });
@@ -120,51 +120,51 @@ export const mainJob = createWorkflowJob({
 
 ### Deterministic Execution Requirement
 
-Workflow jobs use a **suspend/resume execution model**. When a job calls `.trigger()`, the runtime suspends the current job, executes the triggered job, and then **re-executes the calling job from the beginning** with cached results from previous triggers.
+Workflow jobs use a **suspend/resume execution model**. When a job calls `.start()`, the runtime suspends the current job, executes the started job, and then **re-executes the calling job from the beginning** with cached results from previous starts.
 
-This means that **job code must be deterministic** — every re-execution must produce the same sequence of `.trigger()` calls with the same arguments in the same order.
+This means that **job code must be deterministic** — every re-execution must produce the same sequence of `.start()` calls with the same arguments in the same order.
 
-Using `.trigger()` inside a loop works correctly, as long as the loop is deterministic:
+Using `.start()` inside a loop works correctly, as long as the loop is deterministic:
 
 ```typescript
 // ✅ OK: deterministic loop — same calls in the same order on every execution
 const regions = ["us", "eu", "ap"];
 for (const region of regions) {
-  const result = await fetchData.trigger({ region });
+  const result = fetchData.start({ region });
   results.push(result);
 }
 ```
 
 ```typescript
 // ❌ Bad: non-deterministic — argument changes between executions
-await processJob.trigger({ timestamp: Date.now() });
+processJob.start({ timestamp: Date.now() });
 
-// ✅ OK: call Date.now() in separated job
-const timestamp = await timestampJob.trigger();
-await processJob.trigger({ timestamp });
+// ✅ OK: call Date.now() in a separate job
+const timestamp = timestampJob.start();
+processJob.start({ timestamp });
 ```
 
 ```typescript
 // ❌ Bad: non-deterministic — external data may change between executions
 const items = await fetch("https://api.example.com/items").then((r) => r.json());
 for (const item of items) {
-  await processItem.trigger({ id: item.id });
+  processItem.start({ id: item.id });
 }
 
-// ✅ OK: call fetch("https://api.example.com/items").then((r) => r.json()); in separated job
-const items = await fetchItemsJob.trigger();
+// ✅ OK: call fetch("https://api.example.com/items").then((r) => r.json()); in a separate job
+const items = fetchItemsJob.start();
 for (const item of items) {
-  await processItem.trigger({ id: item.id });
+  processItem.start({ id: item.id });
 }
 ```
 
-If the runtime detects that a `.trigger()` call at the same position has different arguments than the previous execution, it will throw an **argument hash mismatch error**.
+If the runtime detects that a `.start()` call at the same position has different arguments than the previous execution, it will throw an **argument hash mismatch error**.
 
 **Guidelines:**
 
-- Do not use non-deterministic values (random numbers, timestamps, external API responses) as `.trigger()` arguments.
-- Do not use conditions that may change between executions to decide whether to call `.trigger()`.
-- Any data that varies between executions should be fetched **inside the triggered job**, not passed as an argument from the calling job.
+- Do not use non-deterministic values (random numbers, timestamps, external API responses) as `.start()` arguments.
+- Do not use conditions that may change between executions to decide whether to call `.start()`.
+- Any data that varies between executions should be fetched **inside the started job**, not passed as an argument from the calling job.
 
 ## Workflow Definition
 
@@ -178,15 +178,15 @@ import { sendNotification } from "./jobs/send-notification";
 // Jobs must be named exports
 export const processOrder = createWorkflowJob({
   name: "process-order",
-  body: async (input: { customerId: string }, { env, invoker }) => {
+  body: (input: { customerId: string }, { env, invoker }) => {
     // `env` contains values from `tailor.config.ts` -> `env`.
-    // `invoker` is the principal running this job, overridden by `authInvoker`
-    // when set; `null` for anonymous calls.
-    // Trigger other jobs by calling .trigger() on the job object.
-    const customer = await fetchCustomer.trigger({
+    // `invoker` is the principal running this job, or the machine user
+    // configured through the start `invoker` option; `null` for anonymous calls.
+    // Start other jobs by calling .start() on the job object.
+    const customer = fetchCustomer.start({
       customerId: input.customerId,
     });
-    await sendNotification.trigger({
+    sendNotification.start({
       message: "Order processed",
       recipient: customer.email,
     });
@@ -203,9 +203,11 @@ export default createWorkflow({
 
 ## Execution Events
 
-Workflows can publish execution lifecycle events for executors. When an executor subscribes to a workflow's events, the SDK enables publishing automatically. A `workflowExecution*` trigger enables it on the workflow, and a `workflowJobExecution*` trigger enables it on every job that workflow runs. See [Workflow Execution Triggers](./executor.md#workflow-execution-triggers).
+Workflows can publish execution lifecycle events for executors. When an executor subscribes to a workflow's events, `deploy` enables publishing automatically. A `workflowExecution*` trigger enables it on the workflow, and a `workflowJobExecution*` trigger enables it on every job that workflow runs. See [Workflow Execution Triggers](./executor.md#workflow-execution-triggers).
 
-Set `publishEvents` explicitly to override that. Use `true` to publish workflow-level events with no subscribing executor:
+Publishing follows the subscription in both directions: removing the last subscribing trigger turns it back off on the next `deploy`.
+
+Set `publishEvents` explicitly to pin the value instead. Use `true` to publish workflow-level events with no subscribing executor:
 
 ```typescript
 export default createWorkflow({
@@ -227,29 +229,31 @@ export const processOrder = createWorkflowJob({
 
 Use `false` to keep publishing off. `deploy` fails if an executor subscribes to events the value opts out of, so the subscription cannot silently go unfulfilled.
 
+**Subscribing from another config:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). The workflow a `workflowExecution*` or `workflowJobExecution*` trigger names must be declared by a config in the run; `deploy` fails otherwise rather than creating an executor whose events never arrive. `deploy` records the dependency on the workflow itself, so deploying that config alone later asks for confirmation instead of silently turning publishing off. Declaring `publishEvents` clears the record: a declared value no longer depends on which configs are deployed together, so there is nothing left to warn about.
+
 ## Wait Points
 
 Wait points allow a workflow job to suspend execution and wait for an external signal before resuming. This enables human-in-the-loop patterns such as approvals, reviews, and manual confirmations.
 
 ### Defining Wait Points
 
-Use `defineWaitPoint` to declare a single typed wait point:
+Use `createWaitPoint` to create a single typed wait point:
 
 ```typescript
-import { defineWaitPoint } from "@tailor-platform/sdk";
+import { createWaitPoint } from "@tailor-platform/sdk";
 
-export const approval = defineWaitPoint<
+export const approval = createWaitPoint<
   { message: string; requestId: string },
   { approved: boolean }
 >("approval");
 ```
 
-For multiple wait points, use `defineWaitPoints` with a builder callback. Property names become wait point keys, and JSDoc on each property is preserved in IDE autocompletion:
+For multiple wait points, use `createWaitPoints` with a builder callback. Property names become wait point keys, and JSDoc on each property is preserved in IDE autocompletion:
 
 ```typescript
-import { defineWaitPoints } from "@tailor-platform/sdk";
+import { createWaitPoints } from "@tailor-platform/sdk";
 
-export const waitPoints = defineWaitPoints((define) => ({
+export const waitPoints = createWaitPoints((define) => ({
   /** Manager approval step */
   managerApproval: define<{ amount: number }, { approved: boolean }>(),
   /** Finance review step */
@@ -271,9 +275,9 @@ Both must be JsonValue-compatible (plain objects/arrays; no class instances or f
 Call `.wait()` inside a workflow job body to suspend execution:
 
 ```typescript
-import { createWorkflow, createWorkflowJob, defineWaitPoint } from "@tailor-platform/sdk";
+import { createWaitPoint, createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 
-export const approval = defineWaitPoint<
+export const approval = createWaitPoint<
   { message: string; requestId: string },
   { approved: boolean }
 >("approval");
@@ -379,11 +383,11 @@ export default createWorkflow({
 
 ## Execution Policies
 
-Execution policies apply a per-key concurrency cap to workflow job function dispatches. Declare them at the workspace level and pass a matching key when triggering a job; the platform serializes dispatches that resolve to the same key and suspends any that would exceed the cap until slots free up.
+Execution policies apply a per-key concurrency cap to workflow job function dispatches. Declare them at the workspace level and pass a matching key when starting a job; the platform serializes dispatches that resolve to the same key and suspends any that would exceed the cap until slots free up.
 
 ### Declaring Policies
 
-Use `defineWorkflowExecutionPolicies` with a builder callback. Property names supply the workspace-unique name and default key prefix verbatim, matching the mental model of `defineWaitPoints`. Override `name` or `key` in the body when the property identifier is not valid execution policy grammar or the key prefix needs to differ. Set `matchType: "prefix"` to register the prefix as a wildcard that matches every dispatch key starting with it (the default, `"exact"`, matches only a dispatch key equal to it).
+Use `defineWorkflowExecutionPolicies` with a builder callback. Property names supply the workspace-unique name and default key prefix verbatim, matching the mental model of `createWaitPoints`. Override `name` or `key` in the body when the property identifier is not valid execution policy grammar or the key prefix needs to differ. Set `matchType: "prefix"` to register the prefix as a wildcard that matches every dispatch key starting with it (the default, `"exact"`, matches only a dispatch key equal to it).
 
 ```typescript
 import { defineWorkflowExecutionPolicies } from "@tailor-platform/sdk";
@@ -427,7 +431,7 @@ An exact-key policy applies to dispatches whose runtime key equals the policy ke
 
 ### Referencing a Policy from a Workflow
 
-Pass the runtime key through the `executionPolicyKey` option on `job.trigger()` or `tailor.workflow.execJobFunction()` (or its aliases `startJobFunction` / `triggerJobFunction`). For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`matchType: "prefix"`), there is no `<policy>.key` — call `<policy>.keyFor(suffix)` to build the concrete key. `keyFor` joins the prefix and suffix with `.` by default; override it with `separator` — the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group), or a `def` field on a single `defineWorkflowExecutionPolicy`.
+Pass the runtime key through the `executionPolicyKey` option on `job.start()` or `tailor.workflow.execJobFunction()`. For exact-key policies, use `<policy>.key` directly — it's typed so only a value that came from a declared policy can be passed. For wildcard policies (`matchType: "prefix"`), there is no `<policy>.key` — call `<policy>.keyFor(suffix)` to build the concrete key. `keyFor` joins the prefix and suffix with `.` by default; override it with `separator` — the second argument to `defineWorkflowExecutionPolicies` (applies to every policy in the group), or a `def` field on a single `defineWorkflowExecutionPolicy`.
 
 ```typescript
 import { createWorkflowJob } from "@tailor-platform/sdk";
@@ -439,13 +443,13 @@ export const mainJob = createWorkflowJob({
   name: "main-job",
   body: async (input: { tenantId: string }) => {
     // Exact key policy: pass .key directly.
-    await sendNotification.trigger(
+    await sendNotification.start(
       { message: "Order processed" },
       { executionPolicyKey: executionPolicies.premium.key },
     );
 
     // Wildcard policy: build the concrete key with keyFor().
-    await fetchTenant.trigger(
+    await fetchTenant.start(
       { tenantId: input.tenantId },
       { executionPolicyKey: executionPolicies.tenantApi.keyFor(input.tenantId) },
     );
@@ -453,30 +457,30 @@ export const mainJob = createWorkflowJob({
 });
 ```
 
-The same `executionPolicyKey` option is available on `tailor.workflow.execJobFunction(name, args, options)` (or its aliases `tailor.workflow.startJobFunction` / `tailor.workflow.triggerJobFunction`) for jobs invoked by name.
+The same `executionPolicyKey` option is available on `tailor.workflow.execJobFunction(name, args, options)` for jobs invoked by name.
 
-## Triggering a Workflow from a Resolver
+## Starting a Workflow from a Resolver
 
-You can start a workflow execution from a resolver using `workflow.trigger()`.
+You can start a workflow execution from a resolver using `workflow.start()`.
 
-- `workflow.trigger(args, options?)` returns a workflow run ID (`Promise<string>`).
-- To run with machine-user permissions, pass `{ authInvoker: "<machine-user>" }`. The name is type-narrowed to the machine users defined in your auth config.
+- `workflow.start(args, options?)` returns a workflow run ID (`Promise<string>`).
+- To run with machine-user permissions, pass `{ invoker: "<machine-user>" }`. The name is type-narrowed to the machine users defined in your auth config.
 
 ```typescript
 import { createResolver, t } from "@tailor-platform/sdk";
 import orderProcessingWorkflow from "../workflows/order-processing";
 
 export default createResolver({
-  name: "triggerOrderProcessing",
+  name: "startOrderProcessing",
   operation: "mutation",
   input: {
     orderId: t.string(),
     customerId: t.string(),
   },
   body: async ({ input }) => {
-    const workflowRunId = await orderProcessingWorkflow.trigger(
+    const workflowRunId = await orderProcessingWorkflow.start(
       { orderId: input.orderId, customerId: input.customerId },
-      { authInvoker: "manager-machine-user" },
+      { invoker: "manager-machine-user" },
     );
 
     return { workflowRunId };
@@ -487,9 +491,7 @@ export default createResolver({
 });
 ```
 
-> **Deprecated:** `auth.invoker("manager-machine-user")` still works but is deprecated. Using the string form avoids importing `auth` into runtime code.
-
-See the full working example in the repository: [example/resolvers/triggerWorkflow.ts](https://github.com/tailor-platform/sdk/blob/main/example/resolvers/triggerWorkflow.ts).
+See the full working example in the repository: [example/resolvers/startWorkflow.ts](https://github.com/tailor-platform/sdk/blob/main/example/resolvers/startWorkflow.ts).
 
 ## File Organization
 
@@ -512,22 +514,22 @@ Manage workflows using the CLI:
 
 ```bash
 # List workflows
-tailor-sdk workflow list
+tailor workflow list
 
 # Get workflow details
-tailor-sdk workflow get <name>
+tailor workflow get <name>
 
 # Start a workflow
-tailor-sdk workflow start <name> -m <machine-user> -a '{"key": "value"}'
+tailor workflow start <name> -m <machine-user> -a '{"key": "value"}'
 
 # List executions
-tailor-sdk workflow executions
+tailor workflow executions
 
 # Get execution details with logs
-tailor-sdk workflow executions <execution-id> --logs
+tailor workflow executions <execution-id> --logs
 
 # Resume a failed execution
-tailor-sdk workflow resume <execution-id>
+tailor workflow resume <execution-id>
 ```
 
 See [Workflow CLI Commands](../cli/workflow.md) for full documentation.

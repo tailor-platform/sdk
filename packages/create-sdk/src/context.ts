@@ -31,7 +31,7 @@ const templateHints: Record<string, string | undefined> = {
   workflow: "Workflow patterns with job chaining and testing",
   executor: "Executor trigger types (record, resolver, schedule, webhook)",
   "static-web-site": "Static website with auth and IdP integration",
-  generators: "Built-in generators: kysely, enums, files, seed",
+  generators: "Built-in generation plugins: kysely, enums, files, seed",
 };
 
 const validateName = (name: string | undefined) => {

@@ -138,7 +138,7 @@ idpUserCreatedTrigger({ idp: "my-idp" });
 
 Omitting `idp` is allowed only when the project has exactly one IdP; otherwise `deploy` fails with an error listing the configured IdPs.
 
-These triggers require the IdP to publish user lifecycle events. The SDK enables `publishUserEvents` automatically during `deploy` on each IdP that is targeted by an `idpUser` trigger; set the value explicitly on `defineIdp()` to override. See [IdP service - publishUserEvents](./idp.md#publishuserevents).
+These triggers require the IdP to publish user lifecycle events. `deploy` enables `publishEvents` automatically on each IdP targeted by an `idpUser` trigger taking part in the same run, and turns it back off once no such trigger remains; set the value explicitly on `defineIdp()` to pin it. See [IdP service - publishEvents](./idp.md#publishevents).
 
 ### Auth Access Token Triggers
 
@@ -181,7 +181,7 @@ The available workflow events are `started`, `completed`, `retried`, `resumed`, 
 
 `completed` events include `success`; when it is `false`, `error` contains the failure message. A job released from a wait point emits `wait_resolved` instead of `completed`.
 
-These triggers require the workflow to publish execution events. The SDK enables `publishEvents` automatically during `deploy` on each targeted workflow, and on every job of a workflow targeted by a `workflowJobExecution*` trigger; set the value explicitly to override. See [Workflow service - Execution Events](./workflow.md#execution-events).
+These triggers require the workflow to publish execution events. `deploy` enables `publishEvents` automatically on each targeted workflow, and on every job of a workflow targeted by a `workflowJobExecution*` trigger, and turns it back off once no such trigger remains; set the value explicitly to pin it. See [Workflow service - Execution Events](./workflow.md#execution-events).
 
 ### Multi-Event Triggers
 
@@ -257,7 +257,7 @@ createExecutor({
 });
 ```
 
-Executor callbacks receive the trigger args, including `env` from `defineConfig({ env })`. `function` and `jobFunction` `body` args also include an `invoker` field: the principal running this function, overridden by `authInvoker` when set; `null` for anonymous calls. Other operation kinds (`graphql`, `webhook`, `workflow`) receive `env` through their callback args but do not pass `invoker` into those callbacks.
+Executor callbacks receive the trigger args, including `env` from `defineConfig({ env })`. `function` and `jobFunction` `body` args also include an `invoker` field: the principal running this function, or the machine user configured through the operation `invoker` option; `null` for anonymous calls. Other operation kinds (`graphql`, `webhook`, `workflow`) receive `env` through their callback args but do not pass `invoker` into those callbacks.
 
 ### Job Function Operation
 
@@ -367,9 +367,14 @@ createExecutor({
 });
 ```
 
+`args` must match the workflow's main job input. It is required when that input is required
+and can be omitted when the workflow has no input. Static arguments can be JSON-compatible
+primitives, arrays, or plain objects; top-level `null` is not supported. An argument callback
+must return the same input type.
+
 ### Authentication for Operations
 
-GraphQL and Workflow operations can specify an `authInvoker` to execute with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names defined in your auth config:
+GraphQL and Workflow operations can specify an `invoker` to execute with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names defined in your auth config:
 
 ```typescript
 import { createExecutor, scheduleTrigger } from "@tailor-platform/sdk";
@@ -380,12 +385,10 @@ export default createExecutor({
   operation: {
     kind: "graphql",
     query: `mutation { cleanupOldRecords { count } }`,
-    authInvoker: "batch-processor",
+    invoker: "batch-processor",
   },
 });
 ```
-
-> **Deprecated:** `auth.invoker("batch-processor")` still works, but is deprecated. Prefer the string form to avoid importing config-layer modules into runtime files.
 
 ## Event Payloads
 

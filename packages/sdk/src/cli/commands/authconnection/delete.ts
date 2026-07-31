@@ -12,13 +12,11 @@ import { connectionNameArgs } from "./args";
 export const deleteAuthConnectionCommand = defineAppCommand({
   name: "delete",
   description: "Delete an auth connection entirely.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...connectionNameArgs,
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...connectionNameArgs,
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({

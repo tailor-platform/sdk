@@ -246,7 +246,7 @@ describe("createBundleLog", () => {
       (caught: Error) => caught,
     );
     expect(error).toBeInstanceOf(Error);
-    expect((error as Error).message).toMatch(/a generated entry \(tailor-sdk-entry:/);
+    expect((error as Error).message).toMatch(/a generated entry \(tailor-entry:/);
     expect((error as Error).message).not.toContain(String.fromCodePoint(0));
   });
 

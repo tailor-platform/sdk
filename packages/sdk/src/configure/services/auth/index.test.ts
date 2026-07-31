@@ -3,16 +3,15 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, test, expectTypeOf } from "vitest";
 import { t } from "#/configure/types/type";
 import { db } from "../tailordb/schema";
-import { defineAuth, type AuthInvoker } from "./index";
+import { defineAuth } from "./index";
 import type {
   BeforeLoginHook,
   BeforeLoginHookArgs,
   FederatedIdentity,
 } from "#/configure/services/auth/types";
-import type { AuthInvoker as ProtoAuthInvoker } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import type { JsonObject } from "type-fest";
 
-const userType = db.type("User", {
+const userType = db.table("User", {
   email: db.string().unique(),
   role: db.string(),
   isActive: db.bool(),
@@ -20,7 +19,7 @@ const userType = db.type("User", {
   externalId: db.uuid(),
 });
 
-type AttributeMap = {
+type Attributes = {
   role: true;
   isActive: true;
   tags: true;
@@ -29,7 +28,7 @@ type AttributeMap = {
 
 type AttributeList = ["externalId"];
 
-const attributeMapConfig: AttributeMap = {
+const attributeMapConfig: Attributes = {
   role: true,
   isActive: true,
   tags: true,
@@ -68,24 +67,6 @@ describe("defineAuth", () => {
     expect(authConfig.machineUsers?.admin.attributes?.role).toBe("ADMIN");
   });
 
-  test("creates auth configuration with invoker method", () => {
-    const authConfig = defineAuth("test-service", {
-      userProfile: basicUserProfile,
-      machineUsers: {
-        admin: {},
-        worker: {},
-      },
-    });
-
-    const invoker = authConfig.invoker("admin");
-    expect(invoker.namespace).toBe("test-service");
-    expect(invoker.machineUserName).toBe("admin");
-
-    const workerInvoker = authConfig.invoker("worker");
-    expect(workerInvoker.namespace).toBe("test-service");
-    expect(workerInvoker.machineUserName).toBe("worker");
-  });
-
   test("creates minimal auth configuration", () => {
     const authConfig = defineAuth("minimal", {
       userProfile: basicUserProfile,
@@ -94,6 +75,8 @@ describe("defineAuth", () => {
     expect(authConfig.name).toBe("minimal");
     expect(authConfig.userProfile.type).toBe(userType);
     expect(authConfig.machineUsers).toBeUndefined();
+    expect(authConfig).not.toHaveProperty("getConnectionToken");
+    expectTypeOf(authConfig).not.toHaveProperty("getConnectionToken");
   });
 
   test("creates auth configuration with machineUsers only", () => {
@@ -155,7 +138,7 @@ describe("defineAuth", () => {
   });
 
   test("mirrors user field optionality in userProfile-derived machine user attributes", () => {
-    const mirrorUserType = db.type("MirrorUser", {
+    const mirrorUserType = db.table("MirrorUser", {
       email: db.string().unique(),
       role: db.string(),
       nickname: db.string({ optional: true }),
@@ -299,8 +282,6 @@ describe("defineAuth", () => {
       });
 
       expect(authConfig.hooks!.beforeLogin!.invoker).toBe("admin");
-      // invoker should not narrow MachineUserNames — both machine users must remain valid
-      expectTypeOf(authConfig.invoker).parameter(0).toEqualTypeOf<"admin" | "worker">();
     });
 
     test("typed claims expose federated_identity while keeping arbitrary claims", () => {
@@ -325,66 +306,6 @@ describe("defineAuth", () => {
       });
 
       expect(authConfig.hooks).toBeUndefined();
-    });
-  });
-
-  describe("AuthInvoker type compatibility with tailor-proto", () => {
-    test("AuthInvoker has namespace field compatible with proto", () => {
-      // Verify the field name matches tailor.v1.AuthInvoker
-      type HasNamespace = AuthInvoker<string> extends { namespace: string } ? true : false;
-      expectTypeOf<HasNamespace>().toEqualTypeOf<true>();
-
-      // Verify proto type has the same field
-      type ProtoHasNamespace = ProtoAuthInvoker extends { namespace: string } ? true : false;
-      expectTypeOf<ProtoHasNamespace>().toEqualTypeOf<true>();
-    });
-
-    test("AuthInvoker has machineUserName field compatible with proto", () => {
-      // Verify the field name matches tailor.v1.AuthInvoker
-      type HasMachineUserName =
-        AuthInvoker<string> extends {
-          machineUserName: string;
-        }
-          ? true
-          : false;
-      expectTypeOf<HasMachineUserName>().toEqualTypeOf<true>();
-
-      // Verify proto type has the same field
-      type ProtoHasMachineUserName = ProtoAuthInvoker extends {
-        machineUserName: string;
-      }
-        ? true
-        : false;
-      expectTypeOf<ProtoHasMachineUserName>().toEqualTypeOf<true>();
-    });
-
-    test("AuthInvoker is assignable to proto AuthInvoker fields", () => {
-      // This ensures that our AuthInvoker can be used where proto AuthInvoker is expected
-      // (checking the common properties)
-      type IsCompatible =
-        AuthInvoker<string> extends Pick<ProtoAuthInvoker, "namespace" | "machineUserName">
-          ? true
-          : false;
-      expectTypeOf<IsCompatible>().toEqualTypeOf<true>();
-    });
-
-    test("invoker() returns AuthInvoker compatible object", () => {
-      const authConfig = defineAuth("test-auth", {
-        userProfile: basicUserProfile,
-        machineUsers: {
-          admin: {},
-        },
-      });
-
-      const invoker = authConfig.invoker("admin");
-
-      // Verify at runtime that the object has the correct field names
-      expect(invoker).toHaveProperty("namespace");
-      expect(invoker).toHaveProperty("machineUserName");
-
-      // Verify it does NOT have the old field names
-      expect(invoker).not.toHaveProperty("authName");
-      expect(invoker).not.toHaveProperty("machineUser");
     });
   });
 });

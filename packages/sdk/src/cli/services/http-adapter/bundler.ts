@@ -9,7 +9,10 @@ import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
-import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { HTTP_METHODS, type HttpMethodKey } from "#/parser/service/http-adapter/index";
 import { getNodeBuiltinMessage, isNodeBuiltinImport } from "#/utils/node-builtins";
@@ -42,6 +45,7 @@ export interface HttpAdapterBundleResult {
  * @param baseDir - Directory the owning config's tsconfig is resolved against
  * @param cache - Optional bundle cache for skipping unchanged builds
  * @param bundleLogLevel - Controls which console calls are kept in bundled code
+ * @param tsconfigCache - Optional tsconfig lookup cache shared across bundles in this CLI run
  * @returns Bundled scripts keyed by adapter name
  */
 export async function bundleHttpAdapters(
@@ -49,6 +53,7 @@ export async function bundleHttpAdapters(
   baseDir: string,
   cache?: BundleCache,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<HttpAdapterBundleResult> {
   if (adapters.length === 0) {
     return { bundledInputs: new Map(), bundledOutputs: new Map() };
@@ -67,7 +72,7 @@ export async function bundleHttpAdapters(
     return kinds.map((kind) => ({ adapter, kind }));
   });
   const results = await withBundleConcurrency(tasks, ({ adapter, kind }) =>
-    bundleAdapterScript(adapter, kind, tsconfig, cache, bundleLogLevel),
+    bundleAdapterScript(adapter, kind, tsconfig, cache, bundleLogLevel, tsconfigCache),
   );
 
   const bundledInputs = new Map<string, string>();
@@ -91,10 +96,11 @@ async function bundleAdapterScript(
   tsconfig: string | undefined,
   cache: BundleCache | undefined,
   bundleLogLevel: LogLevel = "DEBUG",
+  tsconfigCache?: TsconfigLookupCache,
 ): Promise<[string, "input" | "output", string]> {
   const contextHash = computeBundlerContextHash({
     sourceFile: adapter.sourceFile,
-    serializedTriggerContext: kind === "input" ? adapter.methods.join(",") : "",
+    extraContext: kind === "input" ? adapter.methods.join(",") : "",
     tsconfig,
     inlineSourcemap: false,
     bundleLogLevel,
@@ -152,7 +158,7 @@ async function bundleAdapterScript(
         entry.plugin,
         rejectNodeImports,
         stubSdkImports,
-        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
         ...cachePlugins,
       ];
 

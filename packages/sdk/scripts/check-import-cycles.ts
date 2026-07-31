@@ -1,4 +1,3 @@
-#!/usr/bin/env -S pnpm exec tsx
 // Verify the src/ module graph is acyclic — including type-only edges.
 //
 // oxlint's import/no-cycle (ignoreTypes: false) already rejects cycles formed

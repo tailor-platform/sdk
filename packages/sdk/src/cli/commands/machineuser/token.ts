@@ -39,7 +39,7 @@ async function getMachineUserTokenInternal(
   });
   if (!name) {
     throw new Error(
-      "Machine user is required. Provide the NAME positional argument, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+      "Machine user is required. Provide the NAME positional argument, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
     );
   }
 
@@ -102,16 +102,14 @@ export async function getMachineUserToken(
 export const tokenCommand = defineAppCommand({
   name: "token",
   description: "Get an access token for a machine user.",
-  args: z
-    .object({
-      ...deploymentArgs,
-      name: arg(z.string().optional(), {
-        positional: true,
-        description:
-          "Machine user name. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user.",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    name: arg(z.string().optional(), {
+      positional: true,
+      description:
+        "Machine user name. Falls back to TAILOR_PLATFORM_MACHINE_USER_NAME, then the active profile's default machine user.",
+    }),
+  }),
   run: async (args) => {
     // Execute machineuser token logic
     const token = await getMachineUserTokenInternal({

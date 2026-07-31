@@ -1,11 +1,11 @@
-# tailor-sdk
+# tailor
 
 Tailor Platform SDK - The SDK to work with Tailor Platform
 
 ## Usage
 
 ```bash
-tailor-sdk <command> [options]
+tailor <command> [options]
 ```
 
 ## Global Options
@@ -42,7 +42,7 @@ The following options are available for most commands:
 | ---------------- | ----- | -------------------------------------- |
 | `--workspace-id` | `-w`  | Workspace ID (for deployment commands) |
 | `--profile`      | `-p`  | Workspace profile                      |
-| `--config`       | `-c`  | Path to SDK config file                |
+| `--config`       | `-c`  | Path to Tailor config file             |
 | `--yes`          | `-y`  | Skip confirmation prompts              |
 
 ### Environment File Loading
@@ -55,10 +55,10 @@ Both `--env-file` and `--env-file-if-exists` can be specified multiple times and
 
 ```bash
 # Load .env (required) and .env.local (optional, if exists)
-tailor-sdk deploy --env-file .env --env-file-if-exists .env.local
+tailor deploy --env-file .env --env-file-if-exists .env.local
 
 # Load multiple files
-tailor-sdk deploy --env-file .env --env-file .env.production
+tailor deploy --env-file .env --env-file .env.production
 ```
 
 ## Environment Variables
@@ -71,10 +71,9 @@ You can use environment variables to configure workspace and authentication:
 | `TAILOR_PLATFORM_ORGANIZATION_ID`            | Organization ID for organization commands                                                             |
 | `TAILOR_PLATFORM_FOLDER_ID`                  | Folder ID for folder commands                                                                         |
 | `TAILOR_PLATFORM_TOKEN`                      | Authentication token (alternative to `login`)                                                         |
-| `TAILOR_TOKEN`                               | **Deprecated.** Use `TAILOR_PLATFORM_TOKEN` instead                                                   |
 | `TAILOR_PLATFORM_PROFILE`                    | Workspace profile name                                                                                |
-| `TAILOR_PLATFORM_SDK_CONFIG_PATH`            | Path to SDK config file                                                                               |
-| `TAILOR_PLATFORM_SDK_DTS_PATH`               | Output path for generated `tailor.d.ts` type definition file                                          |
+| `TAILOR_CONFIG_PATH`                         | Path to Tailor config file                                                                            |
+| `TAILOR_DTS_PATH`                            | Output path for generated `tailor.d.ts` type definition file                                          |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_ID`     | Client ID for `login --machine-user`                                                                  |
 | `TAILOR_PLATFORM_MACHINE_USER_CLIENT_SECRET` | Client secret for `login --machine-user`                                                              |
 | `TAILOR_PLATFORM_MACHINE_USER_NAME`          | Default machine user name for `query`, `workflow start`, `function test-run`, `machineuser token`     |
@@ -92,9 +91,8 @@ You can use environment variables to configure workspace and authentication:
 Token resolution follows this priority order:
 
 1. `TAILOR_PLATFORM_TOKEN` environment variable
-2. `TAILOR_TOKEN` environment variable (deprecated)
-3. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
-4. Current user from platform config (`~/.config/tailor-platform/config.yaml`)
+2. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
+3. Current user from platform config (`~/.config/tailor-platform/config.yaml`)
 
 Config-backed login tokens are scoped to the Platform API URL. Profiles with `--platform-url` use the token saved for that URL, so switching profiles can also switch between Platform API environments.
 
@@ -105,6 +103,80 @@ Workspace ID resolution follows this priority order:
 1. `--workspace-id` command option
 2. `TAILOR_PLATFORM_WORKSPACE_ID` environment variable
 3. Profile specified via `--profile` option or `TAILOR_PLATFORM_PROFILE`
+
+## CLI Plugins
+
+> [!WARNING]
+> CLI plugins are a **beta** feature. The dispatch behavior and the set of injected environment
+> variables may change in a future release.
+
+You can extend the CLI with external plugins, similar to `gh` extensions. When you run a command that
+is not a built-in, the CLI looks for an executable named `tailor-<name>` and runs it, forwarding the
+remaining arguments:
+
+```bash
+# Runs the `tailor-hello` executable with: world --loud
+tailor hello world --loud
+```
+
+This is how the `@tailor-platform/sdk-plugin-seed` package provides the `seed` commands:
+
+```bash
+# Runs `tailor-seed` with: apply
+tailor seed apply
+```
+
+This also works under a built-in command group. The command path is joined with hyphens, so a plugin
+nested under `tailordb` is named `tailor-tailordb-erd`. This is how the
+`@tailor-platform/sdk-plugin-tailordb-erd`
+package provides the `tailordb erd` commands:
+
+```bash
+# Runs `tailor-tailordb-erd` with: export
+tailor tailordb erd export
+```
+
+Resolution rules:
+
+- **Built-ins always win.** A plugin is only used when no built-in command matches.
+- **A command that takes its own arguments is never replaced.** Plugin dispatch applies only to command
+  _groups_ (commands that just route to subcommands). A command that performs its own action — including
+  one that accepts a positional argument — always runs itself, so a plugin can never shadow an argument value.
+- **Lookup order:** the project's `node_modules/.bin` (nearest first, walking up from the current
+  directory), then your `PATH`. So a plugin installed as a project dev-dependency takes precedence over a
+  globally installed one.
+- **Place global flags after the plugin command.** Only the arguments following the plugin name are
+  forwarded; a global flag placed before it (e.g. `tailor --json tailordb erd export`) is consumed by
+  the host CLI and does not reach the plugin. Write `tailor tailordb erd export --json` instead.
+
+Because resolution is based on `node_modules/.bin` and `PATH`, any package manager that populates
+`node_modules/.bin` works for project-local plugins — npm, pnpm (its content-addressable store is
+transparent here), Bun, and Yarn Classic. The exception is **Yarn Plug'n'Play**, which does not create a
+`node_modules` directory: install such plugins globally so they resolve via `PATH`, or use Yarn's
+`nodeLinker: node-modules` setting.
+
+Run `tailor plugin list` to see which plugins are discovered and where they resolve from.
+
+### Context passed to plugins
+
+Before running a plugin, the CLI injects the current Tailor Platform context as environment variables so
+the plugin does not need to re-implement authentication or re-resolve the active workspace:
+
+| Variable                           | Description                                                              |
+| ---------------------------------- | ------------------------------------------------------------------------ |
+| `TAILOR_PLATFORM_TOKEN`            | A valid access token (refreshed if needed). Omitted when not logged in.  |
+| `TAILOR_PLATFORM_URL`              | The Tailor Platform endpoint in effect                                   |
+| `TAILOR_PLATFORM_OAUTH2_CLIENT_ID` | The OAuth2 client ID in effect, for plugins that run their own auth flow |
+| `TAILOR_PLATFORM_WORKSPACE_ID`     | The resolved workspace ID, when one can be determined                    |
+| `TAILOR_PLATFORM_USER`             | The active user (email when known), when logged in                       |
+| `TAILOR_CONFIG_PATH`               | Path to the resolved Tailor config file, when found                      |
+| `TAILOR_VERSION`                   | The `tailor` version that invoked the plugin                             |
+| `TAILOR_BIN`                       | Path to the `tailor` executable, for calling back into the CLI           |
+
+The token, workspace ID, and user are best-effort: whatever the current context can resolve is injected,
+and auth-free plugins still run when you are not logged in. A long-running plugin (or one started on its
+own) can obtain a fresh token at any time with `tailor auth token`, which prints a valid access token to
+stdout, refreshing it first if it has expired.
 
 ## Commands
 
@@ -139,11 +211,6 @@ Commands for managing TailorDB tables, data, and schema migrations.
 | [tailordb migration status](./cli/tailordb.md#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                                                                                                                                                   |
 | [tailordb migration sync](./cli/tailordb.md#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                                                                                                                                                                                  |
 | [tailordb migration validate](./cli/tailordb.md#tailordb-migration-validate) | Validate the full migration history and detect schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found. |
-| [tailordb erd](./cli/tailordb.md#tailordb-erd)                               | Generate TailorDB ERD viewer artifacts from local TailorDB schema. (beta)                                                                                                                                                                                                              |
-| [tailordb erd export](./cli/tailordb.md#tailordb-erd-export)                 | Export TailorDB ERD static viewer from local TailorDB schema.                                                                                                                                                                                                                          |
-| [tailordb erd diff](./cli/tailordb.md#tailordb-erd-diff)                     | Render TailorDB ERD schema diff HTML from exported ERD viewers.                                                                                                                                                                                                                        |
-| [tailordb erd serve](./cli/tailordb.md#tailordb-erd-serve)                   | Generate and serve TailorDB ERD locally with watch reload. (beta)                                                                                                                                                                                                                      |
-| [tailordb erd deploy](./cli/tailordb.md#tailordb-erd-deploy)                 | Deploy ERD static website for TailorDB namespace(s).                                                                                                                                                                                                                                   |
 
 ### [Query Commands](./cli/query.md)
 
@@ -157,19 +224,21 @@ Run ad-hoc SQL/GraphQL queries or enter the interactive REPL.
 
 Commands for authentication and user management.
 
-| Command                                          | Description                                           |
-| ------------------------------------------------ | ----------------------------------------------------- |
-| [login](./cli/user.md#login)                     | Login to Tailor Platform.                             |
-| [logout](./cli/user.md#logout)                   | Logout from Tailor Platform.                          |
-| [user](./cli/user.md#user)                       | Manage Tailor Platform users.                         |
-| [user current](./cli/user.md#user-current)       | Show current user.                                    |
-| [user list](./cli/user.md#user-list)             | List all users.                                       |
-| [user pat](./cli/user.md#user-pat)               | Manage personal access tokens.                        |
-| [user pat create](./cli/user.md#user-pat-create) | Create a new personal access token.                   |
-| [user pat delete](./cli/user.md#user-pat-delete) | Delete a personal access token.                       |
-| [user pat list](./cli/user.md#user-pat-list)     | List all personal access tokens.                      |
-| [user pat update](./cli/user.md#user-pat-update) | Update a personal access token (delete and recreate). |
-| [user switch](./cli/user.md#user-switch)         | Set current user.                                     |
+| Command                                          | Description                                                                           |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| [login](./cli/user.md#login)                     | Login to Tailor Platform.                                                             |
+| [logout](./cli/user.md#logout)                   | Logout from Tailor Platform.                                                          |
+| [auth](./cli/user.md#auth)                       | Authentication helpers for scripts and plugins.                                       |
+| [auth token](./cli/user.md#auth-token)           | Print a valid Tailor Platform access token to stdout, refreshing it first if expired. |
+| [user](./cli/user.md#user)                       | Manage Tailor Platform users.                                                         |
+| [user current](./cli/user.md#user-current)       | Show current user.                                                                    |
+| [user list](./cli/user.md#user-list)             | List all users.                                                                       |
+| [user pat](./cli/user.md#user-pat)               | Manage personal access tokens.                                                        |
+| [user pat create](./cli/user.md#user-pat-create) | Create a new personal access token.                                                   |
+| [user pat delete](./cli/user.md#user-pat-delete) | Delete a personal access token.                                                       |
+| [user pat list](./cli/user.md#user-pat-list)     | List all personal access tokens.                                                      |
+| [user pat update](./cli/user.md#user-pat-update) | Update a personal access token (delete and recreate).                                 |
+| [user switch](./cli/user.md#user-switch)         | Set current user.                                                                     |
 
 ### [Organization Commands](./cli/organization.md)
 
@@ -325,7 +394,7 @@ Commands for setting up project infrastructure.
 | [setup branch](./cli/setup.md#setup-branch)         | Generate a branch-target deploy workflow (push to branch triggers deploy).                       |
 | [setup check](./cli/setup.md#setup-check)           | Audit generated workflows for drift against the current config/repo (read-only).                 |
 | [setup coordinate](./cli/setup.md#setup-coordinate) | Generate a coordinator workflow that orchestrates multiple --action-generated composite actions. |
-| [setup delete](./cli/setup.md#setup-delete)         | Delete managed workflow/action file(s) and their .github/tailor-sdk.lock entries.                |
+| [setup delete](./cli/setup.md#setup-delete)         | Delete managed workflow/action file(s) and their .github/tailor.lock entries.                    |
 | [setup preview](./cli/setup.md#setup-preview)       | Generate a preview workflow (PR open/sync triggers deploy to a per-PR workspace).                |
 | [setup tag](./cli/setup.md#setup-tag)               | Generate a tag-target deploy workflow (tag push triggers deploy).                                |
 
@@ -339,12 +408,24 @@ Commands for upgrading SDK versions with automated code migration.
 
 ### [Skills Commands](./cli/skills.md)
 
-Commands for installing Tailor SDK agent skills.
+Commands for managing Tailor SDK agent skills.
 
-| Command                                          | Description                                                        |
-| ------------------------------------------------ | ------------------------------------------------------------------ |
-| [skills](./cli/skills.md#skills)                 | Manage Tailor SDK agent skills.                                    |
-| [skills install](./cli/skills.md#skills-install) | Install the tailor-sdk agent skill from the installed SDK package. |
+| Command                                        | Description                                   |
+| ---------------------------------------------- | --------------------------------------------- |
+| [skills](./cli/skills.md#skills)               | Manage Tailor SDK agent skills.               |
+| [skills add](./cli/skills.md#skills-add)       | Install Tailor SDK agent skills.              |
+| [skills list](./cli/skills.md#skills-list)     | List Tailor SDK agent skills.                 |
+| [skills remove](./cli/skills.md#skills-remove) | Remove installed Tailor SDK agent skills.     |
+| [skills sync](./cli/skills.md#skills-sync)     | Remove and reinstall Tailor SDK agent skills. |
+
+### [Plugin Commands](./cli/plugin.md)
+
+Discover and inspect CLI plugins (external `tailor-<name>` executables).
+
+| Command                                    | Description                                                                              |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| [plugin](./cli/plugin.md#plugin)           | Manage and inspect CLI plugins (beta).                                                   |
+| [plugin list](./cli/plugin.md#plugin-list) | List discovered plugins (executables named `<cli>-<name>` on PATH or node_modules/.bin). |
 
 ### [Completion](./cli/completion.md)
 

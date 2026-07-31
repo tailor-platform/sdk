@@ -18,9 +18,98 @@ type ScriptFunction = (...args: never[]) => unknown;
 
 type ScriptContextKind = "hooks.create" | "hooks.update" | "validate";
 
-// Since there's naming difference between platform and sdk,
-// use this mapping in all scripts to provide variables that match sdk types.
-export const tailorUserMap = /* js */ `{ id: user.id, type: user.type, workspaceId: user.workspace_id, attributes: user.attribute_map, attributeList: user.attributes }`;
+const NIL_UUID = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Per-source field expressions for {@link makePrincipalExpr}. Each value is a JS
+ * snippet evaluated against the raw server payload bound to `$raw`.
+ */
+interface PrincipalFieldExprs {
+  /**
+   * Raw type accessor. `raw` is matched against `USER_TYPE_*` when normalizing;
+   * `fallback` (defaulting to `raw`) supplies the type for non-matching values,
+   * which lets sources whose primary field is empty fall back to a secondary.
+   */
+  type: { raw: string; fallback?: string };
+  /** Raw id accessor. */
+  id: string;
+  workspaceId: string;
+  attributes: string;
+  attributeList: string;
+}
+
+interface MakePrincipalExprOptions {
+  source: string;
+  fields: PrincipalFieldExprs;
+  normalize: boolean;
+  requireId?: boolean;
+}
+
+/**
+ * Build the server→SDK principal mapping expression shared across services.
+ *
+ * All principal-bearing call sites (`caller`, `actor`, `invoker`) must agree on
+ * the `TailorPrincipal | null` shape, so they are generated here rather than
+ * hand-written per service.
+ * @param options - Mapping source and field expressions
+ * @param options.source - Expression yielding the raw server payload (e.g. `user`)
+ * @param options.fields - Per-source accessors for each principal field
+ * @param options.normalize - When true, map `USER_TYPE_*` to SDK type literals and
+ *   return `null` for unspecified types or the nil-UUID id; when false, the
+ *   payload is already in SDK shape and only `null` pass-through is applied
+ * @param options.requireId - When true, missing ids are also mapped to `null`
+ * @returns A JS expression string evaluating to `TailorPrincipal | null`
+ */
+export function makePrincipalExpr(options: MakePrincipalExprOptions): string {
+  const { source, fields, normalize, requireId = false } = options;
+  const body = /* js */ `{
+    id,
+    type,
+    workspaceId: ${fields.workspaceId},
+    attributes: ${fields.attributes},
+    attributeList: ${fields.attributeList},
+  }`;
+  if (!normalize) {
+    return /* js */ `(($raw) => {
+  if (!$raw) {
+    return null;
+  }
+  const id = ${fields.id};
+  const type = ${fields.type.raw};
+  return ${body};
+})(${source})`;
+  }
+  const missingIdGuard = requireId ? " || !id" : "";
+  return /* js */ `(($raw) => {
+  if (!$raw) {
+    return null;
+  }
+  const type = ${fields.type.raw} === "USER_TYPE_USER"
+    ? "user"
+    : ${fields.type.raw} === "USER_TYPE_MACHINE_USER"
+      ? "machine_user"
+      : ${fields.type.fallback ?? fields.type.raw};
+  const id = ${fields.id};
+  if (!type || type === "USER_TYPE_UNSPECIFIED" || id === "${NIL_UUID}"${missingIdGuard}) {
+    return null;
+  }
+  return ${body};
+})(${source})`;
+}
+
+// Since there's naming difference between platform and SDK, use this mapping in
+// all scripts to provide variables that match `TailorPrincipal | null`.
+export const tailorPrincipalMap = makePrincipalExpr({
+  source: "user",
+  normalize: true,
+  fields: {
+    type: { raw: "$raw?.type" },
+    id: "$raw.id",
+    workspaceId: "$raw.workspace_id ?? $raw.workspaceId",
+    attributes: "$raw.attribute_map ?? $raw.attributeMap ?? {}",
+    attributeList: "$raw.attributes ?? []",
+  },
+});
 
 /**
  * Parse `wrapped` and return the first property of the top-level parenthesized
@@ -53,7 +142,7 @@ const firstObjectProperty = (wrapped: string) => {
  * @param fn - Function to stringify
  * @returns Stringified function source
  */
-// eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
+// oxlint-disable-next-line typescript/no-unsafe-function-type
 export const stringifyFunction = (fn: Function): string => {
   const src = fn.toString().trim();
   // `src` is already a valid function/arrow expression (e.g. `function () {}`,
@@ -109,9 +198,41 @@ const convertToScriptExpr = (
     return precompiledExpr;
   }
   const normalized = stringifyFunction(fn);
+  const argsObject =
+    kind === "validate"
+      ? `{ value: _value }`
+      : kind === "hooks.create"
+        ? `{ input: _value, invoker: ${tailorPrincipalMap}, now: _now }`
+        : `{ input: _value, oldValue: _oldValue, invoker: ${tailorPrincipalMap}, now: _now }`;
   return assertParsableExpression(
-    `(${normalized})({ value: _value, data: _data, user: ${tailorUserMap} })`,
+    `(${normalized})(${argsObject})`,
     formatScriptContext(kind, context),
+  );
+};
+
+// oxlint-disable-next-line typescript/no-unsafe-function-type
+export const convertTypeHookToExpr = (fn: Function): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+  if (precompiledExpr) {
+    return precompiledExpr;
+  }
+  const normalized = stringifyFunction(fn);
+  return assertParsableExpression(
+    `(${normalized})({ input: _input, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap}, now: _now })`,
+    "type-hook",
+  );
+};
+
+// oxlint-disable-next-line typescript/no-unsafe-function-type
+export const convertTypeValidateToExpr = (fn: Function): string => {
+  const precompiledExpr = getPrecompiledScriptExpr(fn as (...args: never[]) => unknown);
+  if (precompiledExpr) {
+    return precompiledExpr;
+  }
+  const normalized = stringifyFunction(fn);
+  return assertParsableExpression(
+    `(${normalized})({ newRecord: _newRecord, oldRecord: _oldRecord, invoker: ${tailorPrincipalMap} }, __issues)`,
+    "type-validate",
   );
 };
 
@@ -130,6 +251,20 @@ export function parseFieldConfig(
   const fieldType = field.type;
   // Access rawRelation via getter (if available)
   const rawRelation = (field as unknown as { rawRelation?: RawRelationConfig }).rawRelation;
+
+  if (context && context.fieldPath.length > 1 && metadata.default !== undefined) {
+    throw new Error(
+      `Field "${context.fieldPath.join(".")}" on type "${context.typeName}": ` +
+        `.default() cannot be used on nested inner fields`,
+    );
+  }
+
+  if (context && context.fieldPath.length > 1 && metadata.hooks) {
+    throw new Error(
+      `Field "${context.fieldPath.join(".")}" on type "${context.typeName}": ` +
+        `.hooks() cannot be used on nested inner fields`,
+    );
+  }
 
   const nestedFields = field.fields as Record<string, TailorAnyDBField> | undefined;
   return {
@@ -153,19 +288,12 @@ export function parseFieldConfig(
           ),
         }
       : {}),
-    validate: metadata.validate?.map((v) => {
-      const { fn, message } =
-        typeof v === "function"
-          ? { fn: v, message: `failed by \`${v.toString().trim()}\`` }
-          : { fn: v[0], message: v[1] };
-
-      return {
-        script: {
-          expr: convertToScriptExpr(fn, "validate", context),
-        },
-        errorMessage: message,
-      };
-    }),
+    validate: metadata.validate?.map((fn) => ({
+      script: {
+        expr: convertToScriptExpr(fn, "validate", context),
+      },
+      errorMessage: "",
+    })),
     hooks: metadata.hooks
       ? {
           create: metadata.hooks.create

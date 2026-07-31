@@ -62,6 +62,7 @@ function createMockApplyClient() {
     deleteSecretManagerSecret: vi.fn().mockResolvedValue({}),
     deleteSecretManagerVault: vi.fn().mockResolvedValue({}),
     setMetadata: vi.fn().mockResolvedValue({}),
+    getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
   } as unknown as OperatorClient;
 }
 

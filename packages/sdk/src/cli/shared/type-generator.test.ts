@@ -1,5 +1,5 @@
 import * as path from "pathe";
-import { aroundEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
 import {
@@ -7,7 +7,7 @@ import {
   generateTypeDefinition,
   resolveTypeDefinitionPath,
 } from "./type-generator";
-import type { AttributeListConfig, AttributeMapConfig } from "./type-generator";
+import type { AttributeListConfig, AttributesConfig } from "./type-generator";
 
 describe("generateTypeDefinition", () => {
   test.each<{
@@ -21,9 +21,9 @@ describe("generateTypeDefinition", () => {
       expected: ["__tuple?: [string, string]"],
     },
     {
-      name: "generates AttributeMap interface",
+      name: "generates Attributes interface",
       args: [{ role: { type: '"MANAGER" | "STAFF"' }, isActive: { type: "boolean" } }, undefined],
-      expected: ["interface AttributeMap", 'role: "MANAGER" | "STAFF"', "isActive: boolean"],
+      expected: ["interface Attributes", 'role: "MANAGER" | "STAFF"', "isActive: boolean"],
     },
     {
       name: "generates optional key for an optional-field-derived attribute",
@@ -31,9 +31,9 @@ describe("generateTypeDefinition", () => {
       expected: ["nickname?: string;"],
     },
     {
-      name: "generates empty AttributeMap when no attributes",
+      name: "generates empty Attributes when no attributes",
       args: [undefined, undefined],
-      expected: ["interface AttributeMap {}", "interface AttributeList", "__tuple?: []"],
+      expected: ["interface Attributes {}", "interface AttributeList", "__tuple?: []"],
     },
     {
       name: "includes proper file header and structure",
@@ -43,16 +43,6 @@ describe("generateTypeDefinition", () => {
         'declare module "@tailor-platform/sdk"',
         "export {};",
       ],
-    },
-    {
-      name: "generates Env interface with literal types",
-      args: [undefined, undefined, { hoge: 1, fuga: "hello", piyo: true }],
-      expected: ["interface Env", "hoge: 1;", 'fuga: "hello";', "piyo: true;"],
-    },
-    {
-      name: "generates empty Env interface when no env provided",
-      args: [undefined, undefined],
-      expected: ["interface Env {}"],
     },
     {
       name: "generates empty MachineUserNameRegistry when no machine users provided",
@@ -77,16 +67,97 @@ describe("generateTypeDefinition", () => {
   });
 
   test("should generate interface AttributeList for declaration merging", () => {
-    const attributeMap: AttributeMapConfig = {
+    const attributes: AttributesConfig = {
       role: { type: '"MANAGER" | "STAFF"' },
     };
     const attributeList: AttributeListConfig = [];
 
-    const result = generateTypeDefinition(attributeMap, attributeList);
+    const result = generateTypeDefinition(attributes, attributeList);
 
     expect(result).toContain("interface AttributeList");
     expect(result).not.toContain("type AttributeList =");
     expect(result).toContain("__tuple?: []");
+  });
+
+  test("should generate Attributes interface", () => {
+    const attributes: AttributesConfig = {
+      role: { type: '"MANAGER" | "STAFF"' },
+      isActive: { type: "boolean" },
+    };
+
+    const result = generateTypeDefinition(attributes, undefined);
+
+    expect(result).toContain("interface Attributes");
+    expect(result).toContain('role: "MANAGER" | "STAFF"');
+    expect(result).toContain("isActive: boolean");
+  });
+
+  test("should generate empty Attributes when no attributes", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface Attributes {}");
+    expect(result).toContain("interface AttributeList");
+    expect(result).toContain("__tuple?: []");
+  });
+
+  test("should include proper file header and structure", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("// This file is auto-generated");
+    expect(result).toContain('declare module "@tailor-platform/sdk"');
+    expect(result).toContain("export {};");
+  });
+
+  test("should generate Env interface with value types", () => {
+    const env = {
+      hoge: 1,
+      fuga: "hello",
+      piyo: true,
+    };
+
+    const result = generateTypeDefinition(undefined, undefined, env);
+
+    expect(result).toContain("interface Env");
+    expect(result).toContain("hoge: number;");
+    expect(result).toContain("fuga: string;");
+    expect(result).toContain("piyo: boolean;");
+  });
+
+  test("should never emit env values into the generated file", () => {
+    const result = generateTypeDefinition(undefined, undefined, {
+      TOKEN: "xoxb-must-not-leak",
+      RETRIES: 3,
+      ENABLED: false,
+    });
+
+    expect(result).not.toContain("xoxb-must-not-leak");
+    expect(result).not.toContain("RETRIES: 3");
+    expect(result).not.toContain("ENABLED: false");
+  });
+
+  test("should quote env keys that are not valid identifiers", () => {
+    const result = generateTypeDefinition(undefined, undefined, {
+      "API-BASE": "https://example.com",
+      appName: "my-app",
+    });
+
+    expect(result).toContain('"API-BASE": string;');
+    // Valid identifiers stay unquoted (matches formatter output)
+    expect(result).toContain("appName: string;");
+    expect(result).not.toContain('"appName"');
+  });
+
+  test("should generate empty Env interface when no env provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface Env {}");
+  });
+
+  test("should generate empty MachineUserNameRegistry when no machine users provided", () => {
+    const result = generateTypeDefinition(undefined, undefined);
+
+    expect(result).toContain("interface MachineUserNameRegistry {}");
+    expect(result).not.toContain('declare module "@tailor-platform/sdk/cli"');
   });
 
   test("should generate MachineUserNameRegistry with machine user names", () => {
@@ -96,6 +167,7 @@ describe("generateTypeDefinition", () => {
     ]);
 
     expect(result).toContain("interface MachineUserNameRegistry");
+    expect(result).not.toContain('declare module "@tailor-platform/sdk/cli"');
     // Names with hyphens are quoted
     expect(result).toContain('"manager-machine-user": true;');
     // Valid identifiers are emitted unquoted (matches formatter output)
@@ -144,14 +216,17 @@ describe("generateTypeDefinition", () => {
 });
 
 describe("resolveTypeDefinitionPath", () => {
-  aroundEach(async (runTest) => {
-    const originalEnv = process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
-    delete process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
-    await runTest();
+  const originalEnv = process.env.TAILOR_DTS_PATH;
+
+  beforeEach(() => {
+    delete process.env.TAILOR_DTS_PATH;
+  });
+
+  afterEach(() => {
     if (originalEnv !== undefined) {
-      process.env.TAILOR_PLATFORM_SDK_DTS_PATH = originalEnv;
+      process.env.TAILOR_DTS_PATH = originalEnv;
     } else {
-      delete process.env.TAILOR_PLATFORM_SDK_DTS_PATH;
+      delete process.env.TAILOR_DTS_PATH;
     }
   });
 
@@ -160,26 +235,27 @@ describe("resolveTypeDefinitionPath", () => {
     expect(result).toBe(path.resolve("/project", "tailor.d.ts"));
   });
 
-  test("should use TAILOR_PLATFORM_SDK_DTS_PATH when set to an absolute path", () => {
-    process.env.TAILOR_PLATFORM_SDK_DTS_PATH = "/custom/output/types.d.ts";
+  test("should use TAILOR_DTS_PATH when set to an absolute path", () => {
+    process.env.TAILOR_DTS_PATH = "/custom/output/types.d.ts";
     const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
     expect(result).toBe("/custom/output/types.d.ts");
   });
 
-  test("should resolve TAILOR_PLATFORM_SDK_DTS_PATH relative to cwd when relative", () => {
-    process.env.TAILOR_PLATFORM_SDK_DTS_PATH = "custom/types.d.ts";
+  test("should resolve TAILOR_DTS_PATH relative to cwd when relative", () => {
+    process.env.TAILOR_DTS_PATH = "custom/types.d.ts";
     const result = resolveTypeDefinitionPath("/project/tailor.config.ts");
     expect(result).toBe(path.resolve("custom/types.d.ts"));
   });
 });
 
 describe("extractAttributesFromConfig + generateTypeDefinition", () => {
-  test("renders machineUserAttributes into AttributeMap", () => {
+  test("renders machineUserAttributes into Attributes", () => {
     const config = {
       name: "test-app",
       auth: defineAuth("auth", {
         machineUserAttributes: {
           role: t.enum(["ADMIN", "WORKER"]),
+          roles: t.enum(["ADMIN", "WORKER"], { array: true }),
           isActive: t.bool(),
           tags: t.string({ array: true }),
           nickname: t.string({ optional: true }),
@@ -188,6 +264,7 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
           admin: {
             attributes: {
               role: "ADMIN",
+              roles: ["ADMIN"],
               isActive: true,
               tags: ["root"],
             },
@@ -196,10 +273,11 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
       }),
     };
 
-    const { attributeMap } = extractAttributesFromConfig(config);
-    const content = generateTypeDefinition(attributeMap, undefined);
+    const { attributes } = extractAttributesFromConfig(config);
+    const content = generateTypeDefinition(attributes, undefined);
 
     expect(content).toContain('role: "ADMIN" | "WORKER";');
+    expect(content).toContain('roles: ("ADMIN" | "WORKER")[];');
     expect(content).toContain("isActive: boolean;");
     expect(content).toContain("tags: string[];");
     // A field derived from an optional source field renders as an optional key,
@@ -222,10 +300,10 @@ describe("extractAttributesFromConfig + generateTypeDefinition", () => {
       }),
     };
 
-    const { attributeMap, machineUserNames } = extractAttributesFromConfig(config);
+    const { attributes, machineUserNames } = extractAttributesFromConfig(config);
     expect(machineUserNames).toEqual(["admin", "worker"]);
 
-    const content = generateTypeDefinition(attributeMap, undefined, undefined, machineUserNames);
+    const content = generateTypeDefinition(attributes, undefined, undefined, machineUserNames);
     expect(content).toContain("interface MachineUserNameRegistry");
     expect(content).toContain("admin: true;");
     expect(content).toContain("worker: true;");

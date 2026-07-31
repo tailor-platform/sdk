@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { readFile, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "pathe";
 import { z } from "zod";
+import { getDistDir } from "#/cli/shared/dist-dir";
 
+// strip unknown keys
 const workspaceContextSchema = z.object({
   version: z.literal(1),
   platformUrl: z.url(),
@@ -17,7 +19,7 @@ function defaultConfigPath(): string {
 }
 
 function contextPath(configPath: string): string {
-  return join(dirname(configPath), ".tailor-sdk", `${basename(configPath)}.context.json`);
+  return join(dirname(configPath), getDistDir(), `${basename(configPath)}.context.json`);
 }
 
 /**
@@ -74,7 +76,7 @@ export async function saveWorkspaceContext(
     ...context,
     ...(applicationId === undefined ? {} : { applicationId }),
   });
-  const stateDirectory = join(dirname(configPath), ".tailor-sdk");
+  const stateDirectory = join(dirname(configPath), getDistDir());
   const targetPath = contextPath(configPath);
   const serialized = `${JSON.stringify(validated, null, 2)}\n`;
   try {

@@ -76,12 +76,12 @@ export default {
     expect(code).toContain("env");
   });
 
-  test("inlines LOG_LEVEL references from config during bundling", async () => {
+  test("inlines TAILOR_APP_LOG_LEVEL references from config during bundling", async () => {
     const configFile = writeConfig(`
 const handler = async () => ({ ok: true });
 
 export default {
-  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
   auth: { hooks: { beforeLogin: { handler } } },
 };
 `);
@@ -96,7 +96,7 @@ export default {
 
     const code = bundled.get("auth-hook--my-auth--before-login");
     expect(code).toBeDefined();
-    expect(code).not.toContain("process.env.LOG_LEVEL");
+    expect(code).not.toContain("process.env.TAILOR_APP_LOG_LEVEL");
   });
 
   test("uses the passed baseDir rather than deriving one from the config file's own directory", async () => {

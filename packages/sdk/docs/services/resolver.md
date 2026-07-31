@@ -108,7 +108,7 @@ Define input/output schemas using methods of `t` object. Basic usage and support
 You can reuse fields defined with `db` object, but note that unsupported options will be ignored:
 
 ```typescript
-const user = db.type("User", {
+const user = db.table("User", {
   name: db.string().unique(),
   age: db.int(),
 });
@@ -208,7 +208,7 @@ Validation functions receive:
 
 - `value` - The field value being validated
 - `data` - The entire input object
-- `user` - The user performing the operation
+- `invoker` - The principal performing the operation
 
 You can specify validation as:
 
@@ -234,13 +234,13 @@ Validation runs automatically before the `body` function executes. When validati
 Define actual resolver logic in the `body` function. Function arguments include:
 
 - `input` - Input data from GraphQL request
-- `user` - The user who called this resolver; unaffected by `authInvoker`
-- `invoker` - The principal running this function; equals `user` by default, or the machine user set by `authInvoker`. `null` for anonymous calls.
+- `caller` - The user or machine user who called this resolver; unaffected by `invoker`. `null` for anonymous calls.
+- `invoker` - The principal running this function; equals `caller` by default, or the machine user configured through the resolver `invoker` option. `null` for anonymous calls.
 - `env` - Environment variables declared in `tailor.config.ts`
 
 ### Using Kysely for Database Access
 
-If you're generating Kysely types with a generator, you can use `getDB` to execute typed queries:
+If you're generating Kysely types with `kyselyTypePlugin`, you can use `getDB` to execute typed queries:
 
 ```typescript
 import { getDB } from "../generated/tailordb";
@@ -305,12 +305,12 @@ createResolver({
 **Behavior:**
 
 - When `publishEvents: true`, resolver execution events are published
-- When not specified, it is **automatically set to `true`** if an executor uses this resolver with `resolverExecutedTrigger`
-- When explicitly set to `false` while an executor uses this resolver, an error is thrown during `tailor apply`
+- When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this resolver with `resolverExecutedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
+- When explicitly set to `false` while an executor taking part in the same run uses this resolver, `deploy` fails
 
 **Use cases:**
 
-1. **Auto-detection (recommended)**: Don't set `publishEvents` - the SDK automatically enables it when needed by executors
+1. **Auto-detection (recommended)**: Don't set `publishEvents` - `deploy` enables it while an executor taking part in the same run needs it
 
    ```typescript
    // publishEvents is automatically enabled because an executor uses this resolver
@@ -339,7 +339,7 @@ createResolver({
    });
    ```
 
-3. **Explicit disable**: Disable event publishing for a resolver that doesn't need it (error if executor uses it)
+3. **Explicit disable**: Disable event publishing for a resolver that doesn't need it (error if an executor taking part in the same run uses it)
 
    ```typescript
    createResolver({
@@ -349,6 +349,8 @@ createResolver({
      // ...
    });
    ```
+
+**Sharing a resolver across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the resolver to keep it on regardless of which configs take part.
 
 ## Permissions
 
@@ -406,7 +408,7 @@ This check is based on `context.user`, the original caller, so it still applies 
 
 ## Authentication
 
-Specify an `authInvoker` to execute the resolver with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names you defined in your auth config:
+Specify an `invoker` to execute the resolver with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names you defined in your auth config:
 
 ```typescript
 import { createResolver, t } from "@tailor-platform/sdk";
@@ -419,12 +421,10 @@ export default createResolver({
     // Executes as "batch-processor" machine user
     return { result: "ok" };
   },
-  authInvoker: "batch-processor",
+  invoker: "batch-processor",
 });
 ```
 
 The machine user name is looked up in the auth service configured on your app (`machineUsers` in `defineAuth`). The namespace is resolved automatically — no need to import `auth` from `tailor.config.ts` in resolver files.
 
-> **Deprecated:** `auth.invoker("batch-processor")` still works, but is deprecated. Importing `auth` into runtime files pulls config-layer (Node-only) dependencies into the bundle.
-
-**Note:** `authInvoker` controls the permissions for database operations and other platform actions. The `user` object passed to `body` still reflects the original caller, while `invoker` reflects the principal actually running the body.
+**Note:** The `invoker` option controls the permissions for database operations and other platform actions. The `caller` object passed to `body` still reflects the original caller, while the `invoker` body field reflects the principal actually running the body.

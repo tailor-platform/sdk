@@ -35,7 +35,7 @@ When the project has no saved selection, `deploy` discovers the account's worksp
 In CI and other non-interactive environments, workspace creation must be explicit:
 
 ```bash
-tailor-sdk deploy \
+tailor deploy \
   --create-workspace \
   --workspace-name example-workspace \
   --workspace-region us-west
@@ -63,7 +63,7 @@ On first run, `deploy` automatically injects a stable `id: "<uuid>"` field into 
 To deploy interdependent applications to the same workspace in one run, pass comma-separated config paths:
 
 ```bash
-tailor-sdk deploy --config apps/buyer/tailor.config.ts,apps/supplier/tailor.config.ts
+tailor deploy --config apps/buyer/tailor.config.ts,apps/supplier/tailor.config.ts
 ```
 
 When multiple configs are provided, `deploy` creates or updates all configured services first, then updates the applications. This lets one application reference resources owned by another config with `external: true` during the same deploy.
@@ -114,7 +114,7 @@ Plan: 5 to create, 3 to update, 1 to delete
 Use `--dry-run` to preview the plan without applying anything. In dry-run mode the plan is written to **stdout**, so it can be captured in CI without `2>&1`:
 
 ```bash
-tailor-sdk deploy --dry-run > plan.txt
+tailor deploy --dry-run > plan.txt
 ```
 
 In apply mode, the plan is printed to stderr so it does not interfere with piped output.

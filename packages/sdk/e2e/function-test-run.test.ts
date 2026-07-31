@@ -5,11 +5,11 @@
  * different function types on the Tailor Platform server via TestExecScript API.
  *
  * Uses internal APIs directly (detectFunctionType, bundleForTestRun, executeScript)
- * instead of spawning CLI subprocesses. The `apply` step still uses subprocess
+ * instead of spawning CLI subprocesses. The deploy step still uses subprocess
  * since it orchestrates multiple services.
  *
  * Prerequisites:
- * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor-sdk login`
+ * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor login`
  * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
  * - packages/sdk must be built (dist/cli/index.mjs must exist)
  *
@@ -29,7 +29,6 @@ import {
 import { describe, test, expect, aroundAll } from "vitest";
 import { bundleForTestRun, type ResolvedMachineUser } from "../src/cli/commands/function/bundle";
 import { detectFunctionType } from "../src/cli/commands/function/detect";
-import { resolveResolverArg } from "../src/cli/commands/function/test-run";
 import { initOperatorClient, type OperatorClient } from "../src/cli/shared/client";
 import { loadAccessToken } from "../src/cli/shared/context";
 import { executeScript, type ScriptExecutionResult } from "../src/cli/shared/script-executor";
@@ -49,7 +48,7 @@ const exampleDir = path.resolve(sdkRoot, "..", "..", "example");
 
 let workspaceId: string;
 let client: OperatorClient;
-let authInvoker: AuthInvoker;
+let invoker: AuthInvoker;
 let machineUser: ResolvedMachineUser;
 const env = { foo: 1, bar: "hello", baz: true };
 const AUTH_NAMESPACE = "my-auth";
@@ -79,8 +78,8 @@ async function runTestRun(
       workspaceId,
       name: scriptName,
       code,
-      arg: options?.arg,
-      invoker: authInvoker,
+      arg: options?.arg === undefined ? undefined : JSON.parse(options.arg),
+      invoker,
     });
     return { ...result, scriptName };
   }
@@ -91,12 +90,8 @@ async function runTestRun(
   });
 
   let resolvedArg = options?.arg;
-  if (detected.type === "resolver" && resolvedArg) {
-    if (!detected.hasInput) {
-      resolvedArg = undefined;
-    } else if (detected.inputSchema) {
-      resolvedArg = resolveResolverArg(resolvedArg, detected.inputSchema, machineUser, workspaceId);
-    }
+  if (detected.type === "resolver" && resolvedArg && !detected.hasInput) {
+    resolvedArg = undefined;
   }
 
   const { bundledCode, scriptName } = await bundleForTestRun({
@@ -113,8 +108,8 @@ async function runTestRun(
     workspaceId,
     name: scriptName,
     code: bundledCode,
-    arg: resolvedArg,
-    invoker: authInvoker,
+    arg: resolvedArg === undefined ? undefined : JSON.parse(resolvedArg),
+    invoker,
   });
 
   return { ...result, scriptName, functionType: detected.type, functionName: detected.name };
@@ -139,20 +134,20 @@ describe.sequential("E2E: function test-run", () => {
     console.log(`Workspace created: ${workspaceId}`);
     trackWorkspace(workspaceId);
 
-    // Apply example config to deploy DB schema, auth, machine users
-    console.log("Applying example config...");
+    // Deploy example config to create DB schema, auth, machine users
+    console.log("Deploying example config...");
     execFileSync(
       "node",
-      [cliPath, "apply", "--config", "tailor.config.ts", "--workspace-id", workspaceId, "--yes"],
+      [cliPath, "deploy", "--config", "tailor.config.ts", "--workspace-id", workspaceId, "--yes"],
       {
         cwd: exampleDir,
         stdio: ["ignore", "pipe", "pipe"],
         env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules" },
         encoding: "utf-8",
-        timeout: 120000,
+        timeout: 300000,
       },
     );
-    console.log("Apply completed.");
+    console.log("Deploy completed.");
 
     // Resolve machine user from API + config
     let machineUserId = "00000000-0000-0000-0000-000000000000";
@@ -175,7 +170,7 @@ describe.sequential("E2E: function test-run", () => {
       attributeList: [],
     };
 
-    authInvoker = create(AuthInvokerSchema, {
+    invoker = create(AuthInvokerSchema, {
       namespace: AUTH_NAMESPACE,
       machineUserName: MACHINE_USER_NAME,
     });
@@ -186,7 +181,7 @@ describe.sequential("E2E: function test-run", () => {
   describe("resolver", () => {
     test("runs add resolver with input arguments", async () => {
       const result = await runTestRun("resolvers/add.ts", {
-        arg: '{"input":{"a":1,"b":2}}',
+        arg: '{"a":1,"b":2}',
       });
 
       expect(result.success).toBe(true);
@@ -204,11 +199,11 @@ describe.sequential("E2E: function test-run", () => {
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
       const nilUuid = "00000000-0000-0000-0000-000000000000";
 
-      expect(parsed.user.type).toBe("machine_user");
-      expect(parsed.user.workspaceId).toBe(workspaceId);
-      expect(parsed.user.role).toBe("MANAGER");
-      expect(parsed.user.id).toMatch(uuidRegex);
-      expect(parsed.user.id).not.toBe(nilUuid);
+      expect(parsed.caller.type).toBe("machine_user");
+      expect(parsed.caller.workspaceId).toBe(workspaceId);
+      expect(parsed.caller.role).toBe("MANAGER");
+      expect(parsed.caller.id).toMatch(uuidRegex);
+      expect(parsed.caller.id).not.toBe(nilUuid);
 
       expect(parsed.invoker.type).toBe("machine_user");
       expect(parsed.invoker.workspaceId).toBe(workspaceId);
@@ -219,7 +214,7 @@ describe.sequential("E2E: function test-run", () => {
 
     test("injects environment variables into resolver", async () => {
       const result = await runTestRun("resolvers/env.ts", {
-        arg: '{"input":{"multiplier":3}}',
+        arg: '{"multiplier":3}',
       });
 
       expect(result.success).toBe(true);
@@ -232,7 +227,7 @@ describe.sequential("E2E: function test-run", () => {
 
     test("supports getDB in resolver (stepChain)", async () => {
       const result = await runTestRun("resolvers/stepChain.ts", {
-        arg: '{"input":{"user":{"name":{"first":"John","last":"Doe"}}}}',
+        arg: '{"user":{"name":{"first":"John","last":"Doe"}}}',
       });
 
       expect(result.success).toBe(true);
@@ -245,7 +240,7 @@ describe.sequential("E2E: function test-run", () => {
 
     test("inserts nested object with Date and verifies round-trip", async () => {
       const result = await runTestRun("resolvers/insertNestedProfileWithDate.ts", {
-        arg: '{"input":{"name":"Test User","email":"test@example.com"}}',
+        arg: '{"name":"Test User","email":"test@example.com"}',
       });
 
       expect(result.success).toBe(true);
@@ -260,7 +255,7 @@ describe.sequential("E2E: function test-run", () => {
 
     test("reports validation errors for invalid input", async () => {
       const result = await runTestRun("resolvers/add.ts", {
-        arg: '{"input":{"a":100,"b":2}}',
+        arg: '{"a":100,"b":2}',
       });
 
       expect(result.success).toBe(false);
@@ -320,8 +315,8 @@ describe.sequential("E2E: function test-run", () => {
         workspaceId,
         name: "add.js",
         code,
-        arg: '{"a":5,"b":7}',
-        invoker: authInvoker,
+        arg: { a: 5, b: 7 },
+        invoker,
       });
 
       expect(result.success).toBe(true);
@@ -351,7 +346,7 @@ describe.sequential("E2E: function test-run", () => {
         workspaceId,
         name: scriptName,
         code: bundledCode,
-        invoker: authInvoker,
+        invoker,
       });
 
       expect(result.success).toBe(false);

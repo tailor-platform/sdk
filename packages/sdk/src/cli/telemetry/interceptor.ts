@@ -9,7 +9,7 @@ import type { Interceptor } from "@connectrpc/connect";
  */
 export function createTracingInterceptor(): Interceptor {
   return (next) => async (req) => {
-    const tracer = trace.getTracer("tailor-sdk");
+    const tracer = trace.getTracer("tailor");
 
     return tracer.startActiveSpan(`rpc.${req.method.name}`, async (span) => {
       span.setAttribute("rpc.method", req.method.name);

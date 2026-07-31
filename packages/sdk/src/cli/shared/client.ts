@@ -643,7 +643,9 @@ export async function fetchUserInfo(accessToken: string, config?: PlatformClient
   }
 
   const rawJson = await resp.json();
+  // strip unknown keys
   const schema = z.object({
+    sub: z.string(),
     email: z.string(),
   });
   return schema.parse(rawJson);
@@ -762,6 +764,7 @@ export async function fetchMachineUserToken(url: string, clientId: string, clien
   }
   const rawJson = await resp.json();
 
+  // strip unknown keys
   const schema = z.object({
     token_type: z.string(),
     access_token: z.string(),

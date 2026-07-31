@@ -1,4 +1,3 @@
-import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { FunctionExecution_Type } from "@tailor-platform/tailor-proto/function_resource_pb";
 import { describe, test, expect, vi } from "vitest";
 import { downloadFunctionScript, scriptNameToRegistryName } from "./function-script-download";
@@ -21,53 +20,32 @@ function makeStreamingClient(responses: DownloadResponse[]): OperatorClient {
   } as unknown as OperatorClient;
 }
 
-function chunk(text: string): DownloadResponse {
-  return { payload: { case: "chunk", value: new TextEncoder().encode(text) } };
-}
-
-async function download(
-  client: OperatorClient,
-  overrides: { name?: string; contentHash?: string } = {},
-) {
-  return downloadFunctionScript({
-    client,
-    workspaceId: "ws-1",
-    name: overrides.name ?? "my-fn",
-    contentHash: overrides.contentHash,
-  });
-}
-
 describe("downloadFunctionScript", () => {
-  test("concatenates chunks into a UTF-8 string and returns registry updatedAt", async () => {
-    const updatedAt = new Date("2024-03-01T00:00:00Z");
+  test("concatenates chunks into a UTF-8 string", async () => {
     const client = makeStreamingClient([
-      {
-        payload: {
-          case: "metadata",
-          value: { function: { updatedAt: timestampFromDate(updatedAt) } },
-        },
-      },
-      chunk("hello, "),
-      chunk("world"),
+      { payload: { case: "chunk", value: new TextEncoder().encode("hello, ") } },
+      { payload: { case: "chunk", value: new TextEncoder().encode("world") } },
     ]);
 
-    const result = await download(client);
+    const result = await downloadFunctionScript({
+      client,
+      workspaceId: "ws-1",
+      name: "my-fn",
+    });
 
-    expect(result).toEqual({ code: "hello, world", registryUpdatedAt: updatedAt });
-  });
-
-  test("returns registryUpdatedAt as null when metadata omits the timestamp", async () => {
-    const client = makeStreamingClient([{ payload: { case: "metadata", value: {} } }, chunk("x")]);
-
-    const result = await download(client);
-
-    expect(result).toEqual({ code: "x", registryUpdatedAt: null });
+    expect(result).toEqual({ code: "hello, world" });
   });
 
   test("returns null when no chunks are received", async () => {
     const client = makeStreamingClient([{ payload: { case: "metadata", value: {} } }]);
 
-    expect(await download(client)).toBeNull();
+    const result = await downloadFunctionScript({
+      client,
+      workspaceId: "ws-1",
+      name: "my-fn",
+    });
+
+    expect(result).toBeNull();
   });
 
   test("returns null when the streaming RPC throws", async () => {
@@ -77,7 +55,13 @@ describe("downloadFunctionScript", () => {
       }),
     } as unknown as OperatorClient;
 
-    expect(await download(client, { name: "missing-fn" })).toBeNull();
+    const result = await downloadFunctionScript({
+      client,
+      workspaceId: "ws-1",
+      name: "missing-fn",
+    });
+
+    expect(result).toBeNull();
   });
 
   test("forwards translated registry name to the RPC request", async () => {
@@ -85,11 +69,18 @@ describe("downloadFunctionScript", () => {
     // scriptNameToRegistryName before calling. This test verifies the
     // raw `name` field is forwarded as-is so the translation contract
     // is enforced at the call site.
-    const client = makeStreamingClient([chunk("x")]);
+    const fn = vi.fn(async function* () {
+      yield { payload: { case: "chunk" as const, value: new TextEncoder().encode("x") } };
+    });
+    const client = { downloadFunctionRegistryScript: fn } as unknown as OperatorClient;
 
-    await download(client, { name: "resolver--ns--myFn" });
+    await downloadFunctionScript({
+      client,
+      workspaceId: "ws-1",
+      name: "resolver--ns--myFn",
+    });
 
-    expect(client.downloadFunctionRegistryScript).toHaveBeenCalledWith({
+    expect(fn).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       name: "resolver--ns--myFn",
       contentHash: undefined,
@@ -97,11 +88,19 @@ describe("downloadFunctionScript", () => {
   });
 
   test("forwards contentHash to the RPC request", async () => {
-    const client = makeStreamingClient([chunk("x")]);
+    const fn = vi.fn(async function* () {
+      yield { payload: { case: "chunk" as const, value: new TextEncoder().encode("x") } };
+    });
+    const client = { downloadFunctionRegistryScript: fn } as unknown as OperatorClient;
 
-    await download(client, { contentHash: "abc123" });
+    await downloadFunctionScript({
+      client,
+      workspaceId: "ws-1",
+      name: "my-fn",
+      contentHash: "abc123",
+    });
 
-    expect(client.downloadFunctionRegistryScript).toHaveBeenCalledWith({
+    expect(fn).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       name: "my-fn",
       contentHash: "abc123",
@@ -110,39 +109,34 @@ describe("downloadFunctionScript", () => {
 });
 
 describe("scriptNameToRegistryName", () => {
-  test.each([
-    [
-      "translates resolver scriptName to registry name",
-      "my-resolver.throwError.body.js",
-      FunctionExecution_Type.STANDARD,
-      "resolver--my-resolver--throwError",
-    ],
-    [
-      "translates executor scriptName to registry name",
-      "user-changed.operation.js",
-      FunctionExecution_Type.STANDARD,
-      "executor--user-changed",
-    ],
-    [
-      "translates auth hook scriptName to registry name",
-      "my-auth.before-login.hook.js",
-      FunctionExecution_Type.STANDARD,
-      "auth-hook--my-auth--before-login",
-    ],
-    [
-      "translates workflow job scriptName (no dots) under JOB type",
-      "validate-order",
-      FunctionExecution_Type.JOB,
-      "workflow--validate-order",
-    ],
-  ])("%s", (_description, scriptName, type, expected) => {
-    expect(scriptNameToRegistryName(scriptName, type)).toBe(expected);
+  test("translates resolver scriptName to registry name", () => {
+    expect(
+      scriptNameToRegistryName("my-resolver.throwError.body.js", FunctionExecution_Type.STANDARD),
+    ).toBe("resolver--my-resolver--throwError");
   });
 
   test("preserves dots in resolver name (non-greedy namespace)", () => {
     // namespace must not contain dots; resolver name may contain dots
     expect(scriptNameToRegistryName("ns.foo.bar.body.js", FunctionExecution_Type.STANDARD)).toBe(
       "resolver--ns--foo.bar",
+    );
+  });
+
+  test("translates executor scriptName to registry name", () => {
+    expect(
+      scriptNameToRegistryName("user-changed.operation.js", FunctionExecution_Type.STANDARD),
+    ).toBe("executor--user-changed");
+  });
+
+  test("translates auth hook scriptName to registry name", () => {
+    expect(
+      scriptNameToRegistryName("my-auth.before-login.hook.js", FunctionExecution_Type.STANDARD),
+    ).toBe("auth-hook--my-auth--before-login");
+  });
+
+  test("translates workflow job scriptName (no dots) under JOB type", () => {
+    expect(scriptNameToRegistryName("validate-order", FunctionExecution_Type.JOB)).toBe(
+      "workflow--validate-order",
     );
   });
 
@@ -158,13 +152,23 @@ describe("scriptNameToRegistryName", () => {
     ).toBe("workflow--looks-like-a-resolver.body.js");
   });
 
-  test.each([
-    ["ad-hoc test-run scripts", "test-run--throwError.js"],
-    ["seed scripts", "seed-tailordb.ts"],
-    ["query scripts", "query-gql.js"],
-    ["query scripts", "query-sql-tailordb.js"],
-  ])("returns null for %s under STANDARD type: %j", (_kind, scriptName) => {
-    expect(scriptNameToRegistryName(scriptName, FunctionExecution_Type.STANDARD)).toBeNull();
+  test("returns null for ad-hoc test-run scripts under STANDARD type", () => {
+    expect(
+      scriptNameToRegistryName("test-run--throwError.js", FunctionExecution_Type.STANDARD),
+    ).toBeNull();
+  });
+
+  test("returns null for seed scripts under STANDARD type", () => {
+    expect(
+      scriptNameToRegistryName("seed-tailordb.ts", FunctionExecution_Type.STANDARD),
+    ).toBeNull();
+  });
+
+  test("returns null for query scripts under STANDARD type", () => {
+    expect(scriptNameToRegistryName("query-gql.js", FunctionExecution_Type.STANDARD)).toBeNull();
+    expect(
+      scriptNameToRegistryName("query-sql-tailordb.js", FunctionExecution_Type.STANDARD),
+    ).toBeNull();
   });
 
   test("falls back to extension parsing for UNSPECIFIED type (legacy servers)", () => {

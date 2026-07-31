@@ -15,8 +15,14 @@
     "deploy": "pnpm run build && pnpm -r run deploy",
     "agent:rules:update": "node scripts/sync-agent-rules.mjs --write",
     "agent:rules:check": "node scripts/sync-agent-rules.mjs --check",
+    "codemod:docs:update": "tsx packages/sdk-codemod/scripts/sync-codemod-docs.ts --write",
+    "codemod:docs:check": "tsx packages/sdk-codemod/scripts/sync-codemod-docs.ts --check",
+    "codemod:resolve-pending": "tsx packages/sdk-codemod/scripts/resolve-pending-boundaries.ts",
+    "deprecations:resolve-pending": "tsx packages/sdk-codemod/scripts/resolve-pending-deprecations.ts",
     "check": "pnpm run generate && pnpm run format && pnpm run \"/^check:/\"",
     "check:agent-rules": "pnpm run agent:rules:check",
+    "check:codemod-docs": "pnpm run codemod:docs:check",
+    "check:deprecations": "tsx packages/sdk-codemod/scripts/check-deprecations.ts",
     "check:lint": "pnpm -r run lint:fix && pnpm run lint:vitest",
     "check:typecheck": "pnpm run --no-bail \"/^check-type:/\"",
     "check-type:root": "pnpm run typecheck:root",
@@ -46,6 +52,7 @@
     "@changesets/cli": "3.0.0-next.10",
     "@tailor-platform/sdk": "workspace:^",
     "@types/node": "24.13.3",
+    "eslint-plugin-zod": "4.7.0",
     "knip": "6.29.0",
     "lefthook": "2.1.10",
     "madge": "8.0.0",
@@ -57,7 +64,7 @@
     "typescript": "6.0.3"
   },
   "engines": {
-    "node": ">= 22.14.0"
+    "node": ">= 22.15.0"
   },
   "packageManager": "pnpm@11.17.0"
 }

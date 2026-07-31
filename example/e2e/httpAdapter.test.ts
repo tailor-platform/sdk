@@ -21,7 +21,7 @@ describe("HTTP adapter routing", () => {
     expect(res.headers.get("content-type") ?? "").toContain("application/xml");
     const body = await res.text();
     expect(body).toContain("<whoami>");
-    expect(body).toMatch(/<user>[\s\S]*<\/user>/);
+    expect(body).toMatch(/<caller>[\s\S]*<\/caller>/);
   });
 
   test("POST /api/whoami fails with 404 because the adapter only declares GET", async () => {

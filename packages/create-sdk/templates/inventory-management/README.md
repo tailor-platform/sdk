@@ -9,12 +9,12 @@ This project was bootstrapped with [Create Tailor Platform SDK](https://www.npmj
 1. Create a new workspace:
 
 ```bash
-npx tailor-sdk login
-npx tailor-sdk workspace create --name <workspace-name> --region <workspace-region>
-npx tailor-sdk workspace list
-# For yarn: yarn tailor-sdk <command>
-# For pnpm: pnpm tailor-sdk <command>
-# For bun: bun tailor-sdk <command>
+npx tailor login
+npx tailor workspace create --name <workspace-name> --region <workspace-region>
+npx tailor workspace list
+# For yarn: yarn tailor <command>
+# For pnpm: pnpm tailor <command>
+# For bun: bun tailor <command>
 
 # OR
 # Create a new workspace using Tailor Platform Console
@@ -36,9 +36,9 @@ npm run deploy -- --workspace-id <your-workspace-id>
 
 ```bash
 # Get Manager's token
-npx tailor-sdk machineuser token manager --workspace-id <your-workspace-id>
+npx tailor machineuser token manager --workspace-id <your-workspace-id>
 # Get Staff's token
-npx tailor-sdk machineuser token staff --workspace-id <your-workspace-id>
+npx tailor machineuser token staff --workspace-id <your-workspace-id>
 ```
 
 ## Features

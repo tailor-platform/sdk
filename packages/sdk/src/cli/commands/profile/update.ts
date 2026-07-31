@@ -14,45 +14,43 @@ import type { ProfileInfo } from "./types";
 export const updateCommand = defineAppCommand({
   name: "update",
   description: "Update profile properties.",
-  args: z
-    .object({
-      name: arg(z.string(), {
-        positional: true,
-        description: "Profile name",
-      }),
-      user: arg(z.string().optional(), {
-        alias: "u",
-        description: "New user email",
-      }),
-      "workspace-id": arg(z.string().optional(), {
-        alias: "w",
-        description: "New workspace ID",
-      }),
-      permission: arg(z.enum(["write", "read"]).optional(), {
-        description:
-          "Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.",
-      }),
-      "machine-user": arg(z.string().optional(), {
-        alias: "m",
-        description:
-          "Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.",
-      }),
-      "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
-        description:
-          "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user; 'allow' lifts the restriction.",
-      }),
-      "platform-url": arg(z.union([z.url(), z.literal("")]).optional(), {
-        description: "Platform API base URL for this profile. Pass an empty string to clear.",
-      }),
-      "oauth2-client-id": arg(z.string().optional(), {
-        description:
-          "OAuth2 client ID for logging in to this profile's platform. Pass an empty string to clear.",
-      }),
-      "console-url": arg(z.union([z.url(), z.literal("")]).optional(), {
-        description: "Console base URL for this profile. Pass an empty string to clear.",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    name: arg(z.string(), {
+      positional: true,
+      description: "Profile name",
+    }),
+    user: arg(z.string().optional(), {
+      alias: "u",
+      description: "New user email address or machine user client ID",
+    }),
+    "workspace-id": arg(z.string().optional(), {
+      alias: "w",
+      description: "New workspace ID",
+    }),
+    permission: arg(z.enum(["write", "read"]).optional(), {
+      description:
+        "Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.",
+    }),
+    "machine-user": arg(z.string().optional(), {
+      alias: "m",
+      description:
+        "Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.",
+    }),
+    "machine-user-override": arg(z.enum(["allow", "deny"]).optional(), {
+      description:
+        "Whether the command line or TAILOR_PLATFORM_MACHINE_USER_NAME may override the profile's machine user. 'deny' requires --machine-user; 'allow' lifts the restriction.",
+    }),
+    "platform-url": arg(z.union([z.url(), z.literal("")]).optional(), {
+      description: "Platform API base URL for this profile. Pass an empty string to clear.",
+    }),
+    "oauth2-client-id": arg(z.string().optional(), {
+      description:
+        "OAuth2 client ID for logging in to this profile's platform. Pass an empty string to clear.",
+    }),
+    "console-url": arg(z.union([z.url(), z.literal("")]).optional(), {
+      description: "Console base URL for this profile. Pass an empty string to clear.",
+    }),
+  }),
   run: async (args) => {
     const config = await readPlatformConfig();
 
@@ -79,6 +77,7 @@ export const updateCommand = defineAppCommand({
     const newUser = args.user || oldUser;
     const oldWorkspaceId = profile.workspace_id;
     const newWorkspaceId = args["workspace-id"] || oldWorkspaceId;
+    let resolvedUser = newUser;
 
     // Compute the final machine_user and machine_user_override to validate the combination.
     const finalMachineUser =
@@ -128,10 +127,11 @@ export const updateCommand = defineAppCommand({
       args["platform-url"] !== undefined
     ) {
       // Check if user exists
-      const token = await fetchLatestToken(config, newUser, tokenLookupPlatformConfig);
+      const refreshed = await fetchLatestToken(config, newUser, tokenLookupPlatformConfig);
+      resolvedUser = refreshed.user;
 
       // Check if workspace exists
-      const client = await initOperatorClient(token, finalPlatformConfig);
+      const client = await initOperatorClient(refreshed.accessToken, finalPlatformConfig);
       const workspaces = await fetchAll(async (pageToken, maxPageSize) => {
         const { workspaces, nextPageToken } = await client.listWorkspaces({
           pageToken,
@@ -146,7 +146,7 @@ export const updateCommand = defineAppCommand({
     }
 
     // Update properties
-    profile.user = newUser;
+    profile.user = resolvedUser;
     profile.workspace_id = newWorkspaceId;
     if (args.permission === "read") {
       profile.readonly = true;
@@ -194,7 +194,7 @@ export const updateCommand = defineAppCommand({
     // Show profile info
     const profileInfo: ProfileInfo = {
       name: args.name,
-      user: newUser,
+      user: resolvedUser,
       workspaceId: newWorkspaceId,
       permission: profile.readonly === true ? "read" : "write",
       ...(profile.machine_user

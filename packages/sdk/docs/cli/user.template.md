@@ -11,6 +11,7 @@ Commands for authentication and user management.
 
 {{politty:command:login}}
 {{politty:command:logout}}
+{{politty:command:auth}}
 {{politty:command:user}}
 When no subcommand is provided, defaults to `list`.
 

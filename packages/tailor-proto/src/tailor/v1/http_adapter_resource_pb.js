@@ -19,4 +19,3 @@ export const file_tailor_v1_http_adapter_resource = /*@__PURE__*/
  */
 export const HttpAdapterSchema = /*@__PURE__*/
   messageDesc(file_tailor_v1_http_adapter_resource, 0);
-

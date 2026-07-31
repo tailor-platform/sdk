@@ -22,11 +22,12 @@
     "pnpm-debug.log*",
     "lerna-debug.log*",
     "coverage/",
-    ".tailor-sdk",
+    ".tailor",
     "example/tests/fixtures/",
     "example/seed/",
     "packages/tailor-proto/",
     "packages/sdk-codemod/codemods/**/tests/",
+    "packages/sdk/docs/migration/v2.md",
     "generated/"
   ]
 }

@@ -16,8 +16,8 @@ This project contains two applications: `user` and `admin`.
 1. Create a new workspace:
 
 ```bash
-npx tailor-sdk login
-npx tailor-sdk workspace create --name <workspace-name> --region <workspace-region>
+npx tailor login
+npx tailor workspace create --name <workspace-name> --region <workspace-region>
 ```
 
 2. Deploy the project:

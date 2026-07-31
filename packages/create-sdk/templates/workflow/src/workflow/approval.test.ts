@@ -8,7 +8,10 @@ describe("approval workflow", () => {
     const approvalMock = wf.waitPoint(approval);
     approvalMock.wait.mockResolvedValue({ approved: true });
 
-    const result = await processWithApproval.body({ orderId: "order-1" }, { env: {} });
+    const result = await processWithApproval.body(
+      { orderId: "order-1" },
+      { env: {}, invoker: null },
+    );
 
     expect(result).toEqual({ orderId: "order-1", status: "approved" });
     expect(approvalMock.wait).toHaveBeenCalledWith({
@@ -21,7 +24,10 @@ describe("approval workflow", () => {
     using wf = mockWorkflow();
     wf.waitPoint(approval).wait.mockResolvedValue({ approved: false });
 
-    const result = await processWithApproval.body({ orderId: "order-2" }, { env: {} });
+    const result = await processWithApproval.body(
+      { orderId: "order-2" },
+      { env: {}, invoker: null },
+    );
 
     expect(result).toEqual({ orderId: "order-2", status: "rejected" });
   });

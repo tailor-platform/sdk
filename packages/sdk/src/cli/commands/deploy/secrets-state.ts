@@ -14,16 +14,19 @@ import { z } from "zod";
 import { getDistDir } from "#/cli/shared/dist-dir";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
+// strip unknown keys
 const SecretsStateEntrySchema = z.object({
   hash: z.string(),
   updateTime: z.string().optional(),
 });
 
+// strip unknown keys
 const SecretsStateSchema = z.object({
   vaults: z.record(z.string(), z.record(z.string(), SecretsStateEntrySchema)),
   connections: z.record(z.string(), z.string()).optional(),
 });
 
+// strip unknown keys
 const PersistedSecretsStateSchema = z.object({
   version: z.literal(2),
   workspaceId: z.string(),

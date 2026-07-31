@@ -5,7 +5,7 @@ import { parseTypes } from "./type-parser";
 
 describe("parseTypes", () => {
   test("allows type names that match Object prototype properties", () => {
-    const testType = db.type("toString", {
+    const testType = db.table("toString", {
       value: db.string(),
     });
 
@@ -15,7 +15,7 @@ describe("parseTypes", () => {
   });
 
   test("allows __proto__ as a type name", () => {
-    const testType = db.type("__proto__", {
+    const testType = db.table("__proto__", {
       value: db.string(),
     });
 
@@ -36,7 +36,7 @@ describe("parseTypes", () => {
       const field = db.string({ array: true });
       (field as unknown as { _metadata: Record<string, boolean> })._metadata[metadataKey] = true;
 
-      const testType = db.type("Test", {
+      const testType = db.table("Test", {
         tags: field,
       });
 
@@ -49,7 +49,7 @@ describe("parseTypes", () => {
       ["index", () => db.string().index()],
       ["unique", () => db.string().unique()],
     ] as const)("should allow %s on non-array fields", (metadataKey, buildField) => {
-      const testType = db.type("Test", {
+      const testType = db.table("Test", {
         email: buildField(),
       });
 
@@ -60,11 +60,11 @@ describe("parseTypes", () => {
 
   describe("buildBackwardRelationships", () => {
     test("should build backward relationships correctly", () => {
-      const employee = db.type("Employee", {
+      const employee = db.table("Employee", {
         name: db.string(),
       });
 
-      const performanceReview = db.type("PerformanceReview", {
+      const performanceReview = db.table("PerformanceReview", {
         employeeId: db.uuid().relation({
           type: "n-1",
           toward: { type: employee },
@@ -88,13 +88,13 @@ describe("parseTypes", () => {
     });
 
     test("should throw error when backward relation names are duplicated", () => {
-      const employee = db.type("Employee", {
+      const employee = db.table("Employee", {
         name: db.string(),
       });
 
       // Two fields referencing the same type without explicit backward names
       // Both will generate "performanceReviews" as the backward name
-      const performanceReview = db.type("PerformanceReview", {
+      const performanceReview = db.table("PerformanceReview", {
         targetEmployeeId: db.uuid().relation({
           type: "n-1",
           toward: { type: employee, as: "targetEmployee" },
@@ -117,12 +117,12 @@ describe("parseTypes", () => {
     });
 
     test("should not throw error when backward names are explicitly set to be unique", () => {
-      const employee = db.type("Employee", {
+      const employee = db.table("Employee", {
         name: db.string(),
       });
 
       // Two fields referencing the same type with explicit unique backward names
-      const performanceReview = db.type("PerformanceReview", {
+      const performanceReview = db.table("PerformanceReview", {
         targetEmployeeId: db.uuid().relation({
           type: "n-1",
           toward: { type: employee, as: "targetEmployee" },
@@ -155,11 +155,11 @@ describe("parseTypes", () => {
     });
 
     test("should include source file information in error message when available", () => {
-      const employee = db.type("Employee", {
+      const employee = db.table("Employee", {
         name: db.string(),
       });
 
-      const performanceReview = db.type("PerformanceReview", {
+      const performanceReview = db.table("PerformanceReview", {
         targetEmployeeId: db.uuid().relation({
           type: "n-1",
           toward: { type: employee, as: "targetEmployee" },
@@ -187,12 +187,12 @@ describe("parseTypes", () => {
     });
 
     test("should generate default backward names using inflection", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
       // No explicit backward name, should generate "posts" (plural of "Post")
-      const post = db.type("Post", {
+      const post = db.table("Post", {
         userId: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
@@ -210,12 +210,12 @@ describe("parseTypes", () => {
     });
 
     test("should generate singular backward name for unique relations", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
       // Unique relation (1-1), should generate singular "profile"
-      const profile = db.type("Profile", {
+      const profile = db.table("Profile", {
         userId: db.uuid().relation({
           type: "1-1",
           toward: { type: user },
@@ -239,7 +239,7 @@ describe("parseTypes", () => {
       [
         "existing field",
         () =>
-          db.type("User", {
+          db.table("User", {
             name: db.string(),
             posts: db.string({ array: true }),
           }),
@@ -248,7 +248,7 @@ describe("parseTypes", () => {
         "files field",
         () =>
           db
-            .type("User", {
+            .table("User", {
               name: db.string(),
             })
             .files({
@@ -261,7 +261,7 @@ describe("parseTypes", () => {
         const user = buildUser();
 
         // Post's backward relation will generate "posts" which conflicts
-        const post = db.type("Post", {
+        const post = db.table("Post", {
           userId: db.uuid().relation({
             type: "n-1",
             toward: { type: user },
@@ -276,37 +276,114 @@ describe("parseTypes", () => {
   });
 
   describe("forwardRelationships", () => {
-    test("should throw error when forward relation names are duplicated", () => {
-      const user = db.type("User", {
+    test("should derive default forward relation names from field names", () => {
+      const unit = db.table("Unit", {
         name: db.string(),
       });
 
-      // Two fields referencing the same type without explicit forward names ("as")
-      // Both will generate "user" as the forward name
-      const post = db.type("Post", {
-        authorID: db.uuid().relation({
+      const inventoryExecutionLine = db.table("InventoryExecutionLine", {
+        unitId: db.uuid().relation({
+          type: "n-1",
+          toward: { type: unit },
+          backward: "inventoryExecutionLines",
+        }),
+        primaryUnitId: db.uuid().relation({
+          type: "n-1",
+          toward: { type: unit },
+          backward: "primaryInventoryExecutionLines",
+        }),
+      });
+
+      const result = parseTypes(
+        toSchemaOutputs({ Unit: unit, InventoryExecutionLine: inventoryExecutionLine }),
+        "test-namespace",
+      );
+
+      expect(result.InventoryExecutionLine!.forwardRelationships).toMatchObject({
+        unit: {
+          name: "unit",
+          targetType: "Unit",
+          targetField: "unitId",
+        },
+        primaryUnit: {
+          name: "primaryUnit",
+          targetType: "Unit",
+          targetField: "primaryUnitId",
+        },
+      });
+    });
+
+    test.each([
+      ["assigneeID", "assignee"],
+      ["assigneeId", "assignee"],
+      ["assigneeid", "assignee"],
+    ])("should strip a trailing ID suffix from %s", (fieldName, forwardName) => {
+      const user = db.table("User", {
+        name: db.string(),
+      });
+      const task = db.table("Task", {
+        [fieldName]: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+          backward: "tasks",
+        }),
+      });
+
+      const result = parseTypes(toSchemaOutputs({ User: user, Task: task }), "test-namespace");
+
+      expect(result.Task!.forwardRelationships[forwardName]).toMatchObject({
+        name: forwardName,
+        targetType: "User",
+        targetField: fieldName,
+      });
+    });
+
+    test("should require toward.as when a relation field has no ID suffix", () => {
+      const user = db.table("User", {
+        email: db.string().unique(),
+      });
+      const profile = db.table("Profile", {
+        userEmail: db.string().relation({
+          type: "1-1",
+          toward: { type: user, key: "email" },
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Profile: profile }), "test-namespace"),
+      ).toThrow(/Forward relation name "userEmail".*same as its own relation field/s);
+    });
+
+    test("should throw error when forward relation names are duplicated", () => {
+      const user = db.table("User", {
+        name: db.string(),
+      });
+
+      // Different supported ID suffixes can still normalize to the same name.
+      const post = db.table("Post", {
+        authorId: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
           backward: "authoredPosts",
         }),
-        reviewerID: db.uuid().relation({
+        authorID: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
-          backward: "reviewedPosts",
+          backward: "reviewedAuthoredPosts",
         }),
       });
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
-      ).toThrow(/Forward relation name "user".*duplicated.*authorID.*reviewerID/s);
+      ).toThrow(/Forward relation name "author".*duplicated.*authorId.*authorID/s);
     });
 
     test("should not throw error when forward names are explicitly set to be unique", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
-      const post = db.type("Post", {
+      const post = db.table("Post", {
         authorID: db.uuid().relation({
           type: "n-1",
           toward: { type: user, as: "author" },
@@ -336,13 +413,13 @@ describe("parseTypes", () => {
     });
 
     test("should throw error when forward name conflicts with existing field", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
-      // Post has a field named "user"
-      const post = db.type("Post", {
-        user: db.string(),
+      // Post has a field named "author"
+      const post = db.table("Post", {
+        author: db.string(),
         authorID: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
@@ -351,36 +428,36 @@ describe("parseTypes", () => {
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
-      ).toThrow(/Forward relation name "user".*conflicts with existing field/s);
+      ).toThrow(/Forward relation name "author".*conflicts with existing field/s);
     });
 
     test("should throw error when conflicting field is defined after the relation field", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
-      // The conflicting "user" field is defined after authorID in the object
-      const post = db.type("Post", {
+      // The conflicting "author" field is defined after authorID in the object
+      const post = db.table("Post", {
         authorID: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
         }),
-        user: db.string(),
+        author: db.string(),
       });
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
-      ).toThrow(/Forward relation name "user".*conflicts with existing field/s);
+      ).toThrow(/Forward relation name "author".*conflicts with existing field/s);
     });
 
     test("should throw error when forward name equals its own relation field name", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
       // "as" is set to the same name as the relation field itself: the manifest
       // would end up with both a scalar field and a relationship named "authorID"
-      const post = db.type("Post", {
+      const post = db.table("Post", {
         authorID: db.uuid().relation({
           type: "n-1",
           toward: { type: user, as: "authorID" },
@@ -393,13 +470,13 @@ describe("parseTypes", () => {
     });
 
     test("should throw error when forward name conflicts with files field", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
       // Post has a files field named "avatar"
       const post = db
-        .type("Post", {
+        .table("Post", {
           authorID: db.uuid().relation({
             type: "n-1",
             toward: { type: user, as: "avatar" },
@@ -415,11 +492,11 @@ describe("parseTypes", () => {
     });
 
     test("should throw error when forward name conflicts with backward name", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
-      const post = db.type("Post", {
+      const post = db.table("Post", {
         authorID: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
@@ -427,34 +504,34 @@ describe("parseTypes", () => {
         }),
       });
 
-      const comment = db.type("Comment", {
+      const comment = db.table("Comment", {
         postID: db.uuid().relation({
           type: "n-1",
           toward: { type: post, as: "post" },
-          backward: "user",
+          backward: "author",
         }),
       });
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post, Comment: comment }), "test-namespace"),
-      ).toThrow(/Relation name "user" on type "Post".*forward.*backward/s);
+      ).toThrow(/Relation name "author" on type "Post".*forward.*backward/s);
     });
 
     test("should include source file information in forward conflict error message", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
-      const post = db.type("Post", {
-        authorID: db.uuid().relation({
+      const post = db.table("Post", {
+        authorId: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
           backward: "authoredPosts",
         }),
-        reviewerID: db.uuid().relation({
+        authorID: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
-          backward: "reviewedPosts",
+          backward: "reviewedAuthoredPosts",
         }),
       });
 
@@ -467,11 +544,11 @@ describe("parseTypes", () => {
 
       expect(() =>
         parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace", typeSourceInfo),
-      ).toThrow(/Forward relation name "user".*\/path\/to\/post\.ts/s);
+      ).toThrow(/Forward relation name "author".*\/path\/to\/post\.ts/s);
     });
 
     test("should throw error when self relation forward name is empty", () => {
-      const node = db.type("Node", {
+      const node = db.table("Node", {
         ID: db.uuid().relation({
           type: "n-1",
           toward: { type: "self" },
@@ -482,16 +559,32 @@ describe("parseTypes", () => {
         /Forward relation name for field "ID" on type "Node" cannot be empty/s,
       );
     });
+
+    test("should throw error when non-self relation forward name is empty", () => {
+      const user = db.table("User", {
+        name: db.string(),
+      });
+      const post = db.table("Post", {
+        ID: db.uuid().relation({
+          type: "n-1",
+          toward: { type: user },
+        }),
+      });
+
+      expect(() =>
+        parseTypes(toSchemaOutputs({ User: user, Post: post }), "test-namespace"),
+      ).toThrow(/Forward relation name for field "ID" on type "Post" cannot be empty/s);
+    });
   });
 
   describe("validateRelationType", () => {
     test("should throw error when relation type is missing", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
       // Missing 'type' property - only TypeScript error, need runtime check
-      const post = db.type("Post", {
+      const post = db.table("Post", {
         // @ts-ignore - intentionally missing 'type' to test runtime validation (tsgo/tsc compat)
         userId: db.uuid().relation({
           // @ts-ignore - ignore No overload matches this call error
@@ -505,11 +598,11 @@ describe("parseTypes", () => {
     });
 
     test("should throw error when relation type is invalid", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
-      const post = db.type("Post", {
+      const post = db.table("Post", {
         userId: db.uuid().relation({
           // @ts-ignore - intentionally invalid 'type' to test runtime validation (tsgo/tsc compat)
           type: "invalid-type",
@@ -523,11 +616,11 @@ describe("parseTypes", () => {
     });
 
     test("should throw error when target type does not exist", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
-      const post = db.type("Post", {
+      const post = db.table("Post", {
         userId: db.uuid().relation({
           type: "n-1",
           toward: { type: user },
@@ -543,11 +636,11 @@ describe("parseTypes", () => {
     test.each(["oneToOne", "1-1", "manyToOne", "n-1", "N-1", "keyOnly"] as const)(
       "should accept valid relation type %s",
       (relationType) => {
-        const user = db.type("User", {
+        const user = db.table("User", {
           name: db.string(),
         });
 
-        const post = db.type("Post", {
+        const post = db.table("Post", {
           userId: db.uuid().relation({
             type: relationType,
             toward: { type: user },
@@ -563,11 +656,11 @@ describe("parseTypes", () => {
 
   describe("processRelation", () => {
     test("should compute derived metadata for relations", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
-      const post = db.type("Post", {
+      const post = db.table("Post", {
         authorId: db.uuid().relation({
           type: "n-1",
           toward: { type: user, as: "author" },
@@ -589,7 +682,7 @@ describe("parseTypes", () => {
     test.each([
       [
         "relation only",
-        (user: ReturnType<typeof db.type>) =>
+        (user: ReturnType<typeof db.table>) =>
           db.uuid().relation({
             type: "1-1",
             toward: { type: user },
@@ -597,7 +690,7 @@ describe("parseTypes", () => {
       ],
       [
         "unique before relation",
-        (user: ReturnType<typeof db.type>) =>
+        (user: ReturnType<typeof db.table>) =>
           db
             .uuid()
             .unique()
@@ -607,11 +700,11 @@ describe("parseTypes", () => {
             }),
       ],
     ] as const)("should set unique=true for oneToOne relations (%s)", (_label, buildUserId) => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
-      const profile = db.type("Profile", {
+      const profile = db.table("Profile", {
         userId: buildUserId(user),
       });
 
@@ -624,7 +717,7 @@ describe("parseTypes", () => {
     });
 
     test("should set unique=true for oneToOne relations (unique after relation)", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
       const relatedUserId = db.uuid().relation({
@@ -634,7 +727,7 @@ describe("parseTypes", () => {
       // @ts-expect-error - Testing runtime behavior: 1-1 already implies unique, but we test the call order
       const userId = relatedUserId.unique();
 
-      const profile = db.type("Profile", {
+      const profile = db.table("Profile", {
         userId,
       });
 
@@ -649,7 +742,7 @@ describe("parseTypes", () => {
     test.each([
       [
         "unique before relation",
-        (user: ReturnType<typeof db.type>) =>
+        (user: ReturnType<typeof db.table>) =>
           db
             .uuid()
             .unique()
@@ -660,7 +753,7 @@ describe("parseTypes", () => {
       ],
       [
         "unique after relation",
-        (user: ReturnType<typeof db.type>) =>
+        (user: ReturnType<typeof db.table>) =>
           db
             .uuid()
             .relation({
@@ -672,11 +765,11 @@ describe("parseTypes", () => {
     ] as const)(
       "should throw error when unique is set on n-1 relation (%s)",
       (_label, buildUserId) => {
-        const user = db.type("User", {
+        const user = db.table("User", {
           name: db.string(),
         });
 
-        const employee = db.type("Employee", {
+        const employee = db.table("Employee", {
           userID: buildUserId(user),
         });
 
@@ -690,7 +783,7 @@ describe("parseTypes", () => {
     );
 
     test("should handle self-referencing relations", () => {
-      const node = db.type("Node", {
+      const node = db.table("Node", {
         name: db.string(),
         parentId: db.uuid().relation({
           type: "n-1",
@@ -707,11 +800,11 @@ describe("parseTypes", () => {
     });
 
     test("should not create forward/backward relationships for keyOnly relations", () => {
-      const user = db.type("User", {
+      const user = db.table("User", {
         name: db.string(),
       });
 
-      const post = db.type("Post", {
+      const post = db.table("Post", {
         userId: db.uuid().relation({
           type: "keyOnly",
           toward: { type: user },

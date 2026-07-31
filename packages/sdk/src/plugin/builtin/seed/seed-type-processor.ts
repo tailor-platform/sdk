@@ -1,4 +1,7 @@
+import { assertDefined } from "#/utils/assert";
+import { processLinesDb } from "./lines-db-processor";
 import type { TailorDBType } from "#/parser/service/tailordb/types";
+import type { TailorDBNamespaceData } from "#/plugin/types";
 import type { SeedTypeInfo } from "./types";
 
 /**
@@ -30,4 +33,67 @@ export function processSeedTypeInfo(type: TailorDBType, namespace: string): Seed
     selfRefFields,
     dataFile: `data/${type.name}.jsonl`,
   };
+}
+
+/**
+ * Seed ordering information for a TailorDB namespace.
+ */
+export interface SeedNamespaceConfig {
+  /** TailorDB namespace name. */
+  namespace: string;
+  /** Type names in the namespace, in definition order. */
+  types: string[];
+  /** Seed dependencies (referenced type names) per type. */
+  dependencies: Record<string, string[]>;
+  /** Types with self-referencing fields, seeded in two passes. */
+  selfRefTypes: string[];
+  /** Field names a seed row must supply per type, enforced with `--upsert`. */
+  requiredFields: Record<string, string[]>;
+}
+
+/**
+ * Build per-namespace seed ordering information from TailorDB namespace data.
+ * @param tailordb - TailorDB namespaces with their types
+ * @returns Seed namespace configs, in namespace order
+ */
+export function buildSeedNamespaceConfigs(
+  tailordb: TailorDBNamespaceData[],
+): SeedNamespaceConfig[] {
+  return tailordb.map((ns) => {
+    const types: string[] = [];
+    const dependencies: Record<string, string[]> = {};
+    const selfRefTypes: string[] = [];
+    const requiredFields: Record<string, string[]> = {};
+
+    for (const [typeName, type] of Object.entries(ns.types)) {
+      const typeInfo = processSeedTypeInfo(type, ns.namespace);
+      types.push(typeInfo.name);
+      dependencies[typeInfo.name] = typeInfo.dependencies;
+      if (typeInfo.selfRefFields.length > 0) {
+        selfRefTypes.push(typeInfo.name);
+      }
+
+      const source = assertDefined(
+        ns.sourceInfo.get(typeName),
+        `source info missing for type: ${typeName}`,
+      );
+      const linesDb = processLinesDb(type, source);
+      requiredFields[typeInfo.name] = Object.entries(type.fields)
+        .filter(
+          ([fieldName, field]) =>
+            field.config.required !== false &&
+            !linesDb.optionalFields.includes(fieldName) &&
+            !linesDb.omitFields.includes(fieldName),
+        )
+        .map(([fieldName]) => fieldName);
+    }
+
+    return {
+      namespace: ns.namespace,
+      types,
+      dependencies,
+      selfRefTypes,
+      requiredFields,
+    };
+  });
 }

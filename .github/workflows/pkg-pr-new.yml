@@ -28,6 +28,7 @@ jobs:
     outputs:
       sdk_url: ${{ steps.urls.outputs.sdk_url }}
       create_sdk_url: ${{ steps.urls.outputs.create_sdk_url }}
+      seed_plugin_url: ${{ steps.urls.outputs.seed_plugin_url }}
       eslint_plugin_sdk_url: ${{ steps.urls.outputs.eslint_plugin_sdk_url }}
 
     steps:
@@ -39,10 +40,9 @@ jobs:
       - name: Install deps
         uses: ./.github/actions/install-deps
 
-      # pkg.pr.new URLs are deterministic from the abbreviated (7-char) head SHA,
-      # so they can be computed BEFORE publishing. SDK and create-sdk can use
-      # compact URLs because they already exist on npm. The new ESLint plugin
-      # needs a repository-qualified URL until its first npm release.
+      # Non-compact pkg.pr.new URLs are deterministic from the full head SHA,
+      # so they can be computed BEFORE publishing. An unpublished package makes
+      # a combined publish use repository-qualified URLs for every package.
       # Computing all URLs up front lets one publish call include every package;
       # separate publishes would each rewrite the PR comment (last wins).
       - name: Compute preview URLs
@@ -50,17 +50,19 @@ jobs:
         env:
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          SHORT_SHA="${SHA:0:7}"
-          SDK_URL="https://pkg.pr.new/@tailor-platform/sdk@${SHORT_SHA}"
-          CREATE_SDK_URL="https://pkg.pr.new/@tailor-platform/create-sdk@${SHORT_SHA}"
-          ESLINT_PLUGIN_SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/eslint-plugin-sdk@${SHORT_SHA}"
+          SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/sdk@${SHA}"
+          CREATE_SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/create-sdk@${SHA}"
+          SEED_PLUGIN_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/sdk-plugin-seed@${SHA}"
+          ESLINT_PLUGIN_SDK_URL="https://pkg.pr.new/tailor-platform/sdk/@tailor-platform/eslint-plugin-sdk@${SHA}"
           {
             echo "sdk_url=$SDK_URL"
             echo "create_sdk_url=$CREATE_SDK_URL"
+            echo "seed_plugin_url=$SEED_PLUGIN_URL"
             echo "eslint_plugin_sdk_url=$ESLINT_PLUGIN_SDK_URL"
           } >> "$GITHUB_OUTPUT"
           echo "SDK preview: $SDK_URL"
           echo "create-sdk preview: $CREATE_SDK_URL"
+          echo "seed plugin preview: $SEED_PLUGIN_URL"
           echo "ESLint plugin preview: $ESLINT_PLUGIN_SDK_URL"
 
       # `prepare-templates.js` rewrites template manifests but leaves the
@@ -69,14 +71,15 @@ jobs:
       # the build and hang the job. The build itself only needs create-sdk's own deps.
       - name: Build create-sdk with pkg.pr.new dependencies
         env:
-          TAILOR_SDK_VERSION: ${{ steps.urls.outputs.sdk_url }}
-          TAILOR_SDK_ESLINT_PLUGIN_VERSION: ${{ steps.urls.outputs.eslint_plugin_sdk_url }}
+          TAILOR_TEMPLATE_SDK_VERSION: ${{ steps.urls.outputs.sdk_url }}
+          TAILOR_TEMPLATE_SEED_PLUGIN_VERSION: ${{ steps.urls.outputs.seed_plugin_url }}
+          TAILOR_TEMPLATE_ESLINT_PLUGIN_VERSION: ${{ steps.urls.outputs.eslint_plugin_sdk_url }}
         run: |
           node packages/create-sdk/scripts/prepare-templates.js
           pnpm --config.verify-deps-before-run=false --filter @tailor-platform/create-sdk build
 
       - name: Publish to pkg.pr.new
-        run: pnpm --config.verify-deps-before-run=false exec pkg-pr-new publish --pnpm --compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/eslint-plugin-sdk" "packages/create-sdk" # zizmor: ignore[use-trusted-publishing]
+        run: pnpm --config.verify-deps-before-run=false exec pkg-pr-new publish --pnpm --no-compact --commentWithSha --packageManager=pnpm "packages/sdk" "packages/eslint-plugin-sdk" "packages/create-sdk" "packages/sdk-plugin-seed" "packages/sdk-plugin-tailordb-erd" # zizmor: ignore[use-trusted-publishing]
 
   init-smoke:
     needs: [publish]
@@ -89,20 +92,25 @@ jobs:
           - runtime: node
             pm: pnpm
             node: 22
+            template: generators
           - runtime: node
             pm: npm
             node: 24
+            template: hello-world
           - runtime: node
             pm: yarn
             node: 22
+            template: hello-world
           - runtime: bun
             pm: bun
             node: 24
+            template: hello-world
           - runtime: bun
             pm: pnpm
             node: 24
+            template: hello-world
     runs-on: ubuntu-latest
-    name: Smoke (${{ matrix.runtime }}, ${{ matrix.pm }}, node${{ matrix.node }})
+    name: Smoke (${{ matrix.template }}, ${{ matrix.runtime }}, ${{ matrix.pm }}, node${{ matrix.node }})
     timeout-minutes: 10
     permissions:
       contents: read
@@ -146,9 +154,10 @@ jobs:
         env:
           CREATE_SDK_URL: ${{ needs.publish.outputs.create_sdk_url }}
           CREATE_SDK_NO_INSTALL: "1"
+          TEMPLATE: ${{ matrix.template }}
         run: |
           cd /tmp
-          npx --yes --package="$CREATE_SDK_URL" create-sdk test-init-app --template hello-world
+          npx --yes --package="$CREATE_SDK_URL" create-sdk test-init-app --template "$TEMPLATE"
 
       - name: Verify generated files
         run: |
@@ -156,12 +165,15 @@ jobs:
           test -f /tmp/test-init-app/package.json
           test -f /tmp/test-init-app/tsconfig.json
 
-      - name: Verify SDK dependency uses pkg.pr.new URL
+      - name: Verify generated dependencies use pkg.pr.new URLs
         env:
           EXPECTED_SDK_URL: ${{ needs.publish.outputs.sdk_url }}
+          EXPECTED_SEED_PLUGIN_URL: ${{ needs.publish.outputs.seed_plugin_url }}
           EXPECTED_ESLINT_PLUGIN_SDK_URL: ${{ needs.publish.outputs.eslint_plugin_sdk_url }}
+          TEMPLATE: ${{ matrix.template }}
         run: |
           SDK_VERSION=$(jq -r '.devDependencies["@tailor-platform/sdk"]' /tmp/test-init-app/package.json)
+          SEED_PLUGIN_VERSION=$(jq -r '.devDependencies["@tailor-platform/sdk-plugin-seed"] // empty' /tmp/test-init-app/package.json)
           ESLINT_PLUGIN_SDK_VERSION=$(jq -r '.devDependencies["@tailor-platform/eslint-plugin-sdk"]' /tmp/test-init-app/package.json)
           echo "SDK version in generated project: $SDK_VERSION"
           echo "Expected SDK URL: $EXPECTED_SDK_URL"
@@ -174,6 +186,14 @@ jobs:
           if [[ "$ESLINT_PLUGIN_SDK_VERSION" != "$EXPECTED_ESLINT_PLUGIN_SDK_URL" ]]; then
             echo "Error: ESLint plugin dependency should be '$EXPECTED_ESLINT_PLUGIN_SDK_URL' but got '$ESLINT_PLUGIN_SDK_VERSION'"
             exit 1
+          fi
+          if [[ "$TEMPLATE" = "generators" ]]; then
+            echo "Seed plugin version in generated project: $SEED_PLUGIN_VERSION"
+            echo "Expected seed plugin URL: $EXPECTED_SEED_PLUGIN_URL"
+            if [[ "$SEED_PLUGIN_VERSION" != "$EXPECTED_SEED_PLUGIN_URL" ]]; then
+              echo "Error: seed plugin dependency should be '$EXPECTED_SEED_PLUGIN_URL' but got '$SEED_PLUGIN_VERSION'"
+              exit 1
+            fi
           fi
 
       # Lockfile-less install is expected: scaffolded projects have no lockfile.
@@ -196,9 +216,13 @@ jobs:
       - name: Verify SDK installed
         env:
           PM: ${{ matrix.pm }}
+          TEMPLATE: ${{ matrix.template }}
         run: |
           test -d /tmp/test-init-app/node_modules/@tailor-platform/sdk
           test -d /tmp/test-init-app/node_modules/@tailor-platform/eslint-plugin-sdk
+          if [ "$TEMPLATE" = "generators" ]; then
+            test -d /tmp/test-init-app/node_modules/@tailor-platform/sdk-plugin-seed
+          fi
           echo "SDK dependency successfully installed with $PM"
 
       - name: Verify generated project lint

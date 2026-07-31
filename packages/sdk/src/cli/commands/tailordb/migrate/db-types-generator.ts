@@ -291,6 +291,7 @@ function mapToTsType(fieldType: string): {
     case "number":
       return { type: "number", usedTimestamp: false };
     case "date":
+      return { type: "string", usedTimestamp: false };
     case "datetime":
       return { type: "Timestamp", usedTimestamp: true };
     case "bool":
@@ -323,6 +324,24 @@ function generateEnumChangeColumnType(
     return `ColumnType<(${selectType}) | null, (${afterType}) | null, (${afterType}) | null>`;
   }
   return `ColumnType<${selectType}, ${afterType}, ${afterType}>`;
+}
+
+function generateOptionalToRequiredDateColumnType(config: SnapshotFieldConfig): string | null {
+  if (config.type !== "date" && config.type !== "datetime") return null;
+
+  if (config.type === "date") {
+    if (config.array) {
+      return "ColumnType<string[] | null, string[], string[]>";
+    }
+
+    return "ColumnType<string | null, string, string>";
+  }
+
+  if (config.array) {
+    return "ColumnType<Date[] | null, (Date | string)[], (Date | string)[]>";
+  }
+
+  return "ColumnType<Date | null, Date | string, Date | string>";
 }
 
 /**
@@ -373,6 +392,15 @@ function generateFieldType(
 
   // Handle nullable/required modifiers
   if (isOptionalToRequired) {
+    const dateColumnType = generateOptionalToRequiredDateColumnType(config);
+    if (dateColumnType) {
+      return {
+        type: dateColumnType,
+        usedTimestamp: false,
+        usedColumnType: true,
+      };
+    }
+
     // For fields changing from optional to required:
     // SELECT returns T | null (existing data might be null)
     // INSERT/UPDATE requires T (must provide a value)

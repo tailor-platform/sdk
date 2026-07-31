@@ -1,9 +1,34 @@
 import { describe, test, expect } from "vitest";
 import {
+  INVOKER_EXPR,
   buildExecutorArgsExpr,
   buildResolverOperationHookExpr,
   buildResolverPermissionGuardExpr,
 } from "./runtime-exprs";
+
+const runInvokerExpr = (invoker: unknown): unknown =>
+  Function(
+    "tailor",
+    `return ${INVOKER_EXPR};`,
+  )({
+    context: { getInvoker: () => invoker },
+  });
+
+const runExecutorArgsExpr = (args: Record<string, unknown>): Record<string, unknown> =>
+  Function("args", `return ${buildExecutorArgsExpr("schedule", {})};`)(args) as Record<
+    string,
+    unknown
+  >;
+
+const runResolverOperationHookExpr = (
+  user: unknown,
+  context = { pipeline: {}, args: {} },
+): Record<string, unknown> =>
+  Function(
+    "context",
+    "user",
+    `return ${buildResolverOperationHookExpr({})}`,
+  )(context, user) as Record<string, unknown>;
 
 describe("buildExecutorArgsExpr", () => {
   const env = { API_URL: "https://example.com", DEBUG: true };
@@ -11,48 +36,104 @@ describe("buildExecutorArgsExpr", () => {
   describe("event triggers (with actor)", () => {
     const eventTriggerKinds = ["schedule", "tailordb", "idpUser", "authAccessToken"] as const;
 
-    test.each(eventTriggerKinds)("%s includes appNamespace, actor transform, and env", (kind) => {
-      const expr = buildExecutorArgsExpr(kind, env);
-      expect(expr).toContain("...args");
-      expect(expr).toContain("appNamespace: args.namespaceName");
-      expect(expr).toContain("actor: args.actor");
-      expect(expr).toContain("attributeMap");
-      expect(expr).toContain("attributeList");
-      expect(expr).toContain(`env: ${JSON.stringify(env)}`);
-    });
+    for (const kind of eventTriggerKinds) {
+      test(`${kind} includes appNamespace, actor transform, and env`, () => {
+        const expr = buildExecutorArgsExpr(kind, env);
+        expect(expr).toContain("...args");
+        expect(expr).toContain("appNamespace: args.namespaceName");
+        expect(expr).toContain("actor: (($raw)");
+        expect(expr).toContain("})(args.actor)");
+        expect(expr).toContain("userType");
+        expect(expr).toContain("attributeMap");
+        expect(expr).toContain("attributeList");
+        expect(expr).toContain(`env: ${JSON.stringify(env)}`);
+      });
+    }
 
-    test.each(["tailordb", "idpUser", "authAccessToken"] as const)(
-      "%s trigger injects kind and rawKind from args.eventType",
-      (kind) => {
+    test("event triggers inject kind and rawKind from args.eventType", () => {
+      const eventKinds = ["tailordb", "idpUser", "authAccessToken"] as const;
+      for (const kind of eventKinds) {
         const expr = buildExecutorArgsExpr(kind, env);
         expect(expr).toContain('event: args.eventType?.split(".").pop()');
         expect(expr).toContain("rawEvent: args.eventType");
-      },
-    );
+      }
+    });
 
     test("schedule trigger does not inject event", () => {
       const expr = buildExecutorArgsExpr("schedule", env);
       expect(expr).not.toContain("event:");
     });
+
+    test("maps actor payloads to TailorPrincipal shape", () => {
+      expect(
+        runExecutorArgsExpr({
+          namespaceName: "app",
+          actor: {
+            userType: "USER_TYPE_USER",
+            userId: "user-1",
+            workspaceId: "workspace-1",
+            attributeMap: { role: "admin" },
+            attributes: ["role"],
+          },
+        }).actor,
+      ).toEqual({
+        id: "user-1",
+        type: "user",
+        workspaceId: "workspace-1",
+        attributes: { role: "admin" },
+        attributeList: ["role"],
+      });
+    });
+
+    test("maps absent actor payloads to null", () => {
+      const nilUuid = "00000000-0000-0000-0000-000000000000";
+      const actors = [
+        null,
+        undefined,
+        { userType: "USER_TYPE_UNSPECIFIED", userId: "user-1" },
+        { userType: "USER_TYPE_USER", userId: nilUuid },
+        { userType: "USER_TYPE_USER" },
+      ];
+      for (const actor of actors) {
+        expect(runExecutorArgsExpr({ namespaceName: "app", actor }).actor).toBeNull();
+      }
+    });
   });
 
   describe("resolverExecuted trigger", () => {
-    test("includes success/result/error transformations, actor, appNamespace, and env", () => {
+    test("includes success/result/error transformations", () => {
       const expr = buildExecutorArgsExpr("resolverExecuted", env);
       expect(expr).toContain("success: !!args.succeeded");
       expect(expr).toContain("result: args.succeeded?.result.resolver");
       expect(expr).toContain("error: args.failed?.error");
-      expect(expr).toContain("actor: args.actor");
+    });
+
+    test("includes actor transform and appNamespace", () => {
+      const expr = buildExecutorArgsExpr("resolverExecuted", env);
+      expect(expr).toContain("actor: (($raw)");
+      expect(expr).toContain("})(args.actor)");
       expect(expr).toContain("appNamespace: args.namespaceName");
+    });
+
+    test("includes env", () => {
+      const expr = buildExecutorArgsExpr("resolverExecuted", env);
       expect(expr).toContain(`env: ${JSON.stringify(env)}`);
     });
   });
 
   describe("incomingWebhook trigger", () => {
-    test("includes rawBody mapping, appNamespace, and env, but not actor transform", () => {
+    test("includes rawBody mapping", () => {
       const expr = buildExecutorArgsExpr("incomingWebhook", env);
       expect(expr).toContain("rawBody: args.raw_body");
+    });
+
+    test("does NOT include actor transform", () => {
+      const expr = buildExecutorArgsExpr("incomingWebhook", env);
       expect(expr).not.toContain("actor:");
+    });
+
+    test("includes appNamespace and env", () => {
+      const expr = buildExecutorArgsExpr("incomingWebhook", env);
       expect(expr).toContain("appNamespace: args.namespaceName");
       expect(expr).toContain(`env: ${JSON.stringify(env)}`);
     });
@@ -84,12 +165,12 @@ describe("buildResolverOperationHookExpr", () => {
     expect(expr).toContain("input: context.args");
   });
 
-  test("includes user transformation via tailorUserMap", () => {
+  test("includes caller transformation via tailorPrincipalMap", () => {
     const expr = buildResolverOperationHookExpr(env);
-    expect(expr).toContain("user:");
-    expect(expr).toContain("user.workspace_id");
-    expect(expr).toContain("user.attribute_map");
-    expect(expr).toContain("user.attributes");
+    expect(expr).toContain("caller:");
+    expect(expr).toContain("workspace_id");
+    expect(expr).toContain("attribute_map");
+    expect(expr).toContain("attributes");
   });
 
   test("includes env injection", () => {
@@ -106,6 +187,61 @@ describe("buildResolverOperationHookExpr", () => {
     const expr = buildResolverOperationHookExpr({});
     expect(expr).toContain("env: {}");
   });
+
+  test("maps caller payloads to TailorPrincipal shape", () => {
+    expect(
+      runResolverOperationHookExpr({
+        type: "USER_TYPE_MACHINE_USER",
+        id: "machine-1",
+        workspace_id: "workspace-1",
+        attribute_map: { team: "ops" },
+        attributes: ["team"],
+      }).caller,
+    ).toEqual({
+      id: "machine-1",
+      type: "machine_user",
+      workspaceId: "workspace-1",
+      attributes: { team: "ops" },
+      attributeList: ["team"],
+    });
+  });
+
+  test("maps absent caller payloads to null", () => {
+    const nilUuid = "00000000-0000-0000-0000-000000000000";
+    const users = [
+      null,
+      undefined,
+      { type: "USER_TYPE_UNSPECIFIED", id: "user-1" },
+      { type: "USER_TYPE_USER", id: nilUuid },
+    ];
+    for (const user of users) {
+      expect(runResolverOperationHookExpr(user).caller).toBeNull();
+    }
+  });
+});
+
+describe("INVOKER_EXPR", () => {
+  test("maps invoker payloads to TailorPrincipal shape", () => {
+    expect(
+      runInvokerExpr({
+        id: "user-1",
+        type: "user",
+        workspaceId: "workspace-1",
+        attributeMap: { role: "member" },
+        attributes: ["role"],
+      }),
+    ).toEqual({
+      id: "user-1",
+      type: "user",
+      workspaceId: "workspace-1",
+      attributes: { role: "member" },
+      attributeList: ["role"],
+    });
+  });
+
+  test("maps anonymous invokers to null", () => {
+    expect(runInvokerExpr(null)).toBeNull();
+  });
 });
 
 describe("buildResolverPermissionGuardExpr", () => {
@@ -113,7 +249,7 @@ describe("buildResolverPermissionGuardExpr", () => {
 
   function runGuard(
     permission: Parameters<typeof buildResolverPermissionGuardExpr>[0],
-    user: unknown,
+    caller: unknown,
   ): void {
     const guard = buildResolverPermissionGuardExpr(permission);
     if (!guard) {
@@ -121,7 +257,7 @@ describe("buildResolverPermissionGuardExpr", () => {
     }
     // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
     const fn = new Function("context", "TailorErrorMessage", guard);
-    fn({ user }, TailorErrorMessage);
+    fn({ caller }, TailorErrorMessage);
   }
 
   test("returns undefined when permission is omitted", () => {
@@ -143,7 +279,7 @@ describe("buildResolverPermissionGuardExpr", () => {
     const permission = [
       { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
     ] as const;
-    expect(() => runGuard(permission, { type: "" })).toThrow(TailorErrorMessage);
+    expect(() => runGuard(permission, null)).toThrow(TailorErrorMessage);
   });
 
   test("permit:false denies matching callers instead of allowing them", () => {
@@ -151,7 +287,7 @@ describe("buildResolverPermissionGuardExpr", () => {
       { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: false },
     ] as const;
     expect(() => runGuard(permission, { type: "user" })).toThrow(TailorErrorMessage);
-    expect(() => runGuard(permission, { type: "" })).not.toThrow();
+    expect(() => runGuard(permission, null)).not.toThrow();
   });
 
   test("supports the != operator", () => {
@@ -212,9 +348,7 @@ describe("buildResolverPermissionGuardExpr", () => {
     expect(() => runGuard(permission, { type: "user", attributes: { role: "MEMBER" } })).toThrow(
       TailorErrorMessage,
     );
-    expect(() => runGuard(permission, { type: "", attributes: { role: "ADMIN" } })).toThrow(
-      TailorErrorMessage,
-    );
+    expect(() => runGuard(permission, null)).toThrow(TailorErrorMessage);
   });
 
   test("ORs multiple allow policies", () => {
@@ -262,7 +396,7 @@ describe("buildResolverPermissionGuardExpr", () => {
         description: "must be logged in",
       },
     ] as const;
-    expect(() => runGuard(permission, { type: "" })).toThrow(/must be logged in/);
+    expect(() => runGuard(permission, null)).toThrow(/must be logged in/);
   });
 
   test("only includes the description of the policy that actually caused the denial", () => {
@@ -281,7 +415,7 @@ describe("buildResolverPermissionGuardExpr", () => {
 
     // Denied for failing the allow-list (not logged in) — only that policy's
     // description should appear, not the unrelated deny policy's.
-    expect(() => runGuard(permission, { type: "" })).toThrow("access denied: must be logged in");
+    expect(() => runGuard(permission, null)).toThrow("access denied: must be logged in");
 
     // Denied for matching the deny policy (logged in but banned) — only that
     // policy's description should appear, not the unrelated allow policy's.

@@ -27,7 +27,7 @@ describe("EnumConstantsPlugin", () => {
 
   describe("enum collection", () => {
     test("should collect top-level enum fields", async () => {
-      const type = db.type("User", {
+      const type = db.table("User", {
         role: db.enum(["ADMIN", "USER"]),
         status: db.enum(["ACTIVE", "INACTIVE"], { optional: true }),
       });
@@ -48,7 +48,7 @@ describe("EnumConstantsPlugin", () => {
     });
 
     test("should collect enum fields from nested objects", async () => {
-      const type = db.type("PurchaseOrder", {
+      const type = db.table("PurchaseOrder", {
         attachedFiles: db.object(
           {
             id: db.uuid(),
@@ -70,7 +70,7 @@ describe("EnumConstantsPlugin", () => {
     });
 
     test("should return empty array when no enums are present", async () => {
-      const type = db.type("User", {
+      const type = db.table("User", {
         name: db.string(),
         age: db.int(),
       });
@@ -81,7 +81,7 @@ describe("EnumConstantsPlugin", () => {
     });
 
     test("should collect enum values with descriptions", async () => {
-      const type = db.type("Invoice", {
+      const type = db.table("Invoice", {
         status: db.enum([
           { value: "draft", description: "Draft invoice" },
           { value: "sent", description: "Sent invoice" },

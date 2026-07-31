@@ -1,7 +1,8 @@
 import { brandValue } from "#/utils/brand";
-import { dispatchTriggerJob, registerJob, type RegisteredJobBody } from "./registry";
-import type { TailorEnv, TailorInvoker } from "#/runtime/types";
-import type { TriggerJobFunctionOptions } from "#/runtime/workflow";
+import { dispatchStartJob, registerJob, type RegisteredJobBody } from "./registry";
+import { withWorkflowTestInvoker } from "./test-env-key";
+import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
+import type { ExecJobFunctionOptions } from "#/runtime/workflow";
 import type { JsonCompatible, TypeLevelError } from "#/types/helpers";
 
 /**
@@ -9,7 +10,7 @@ import type { JsonCompatible, TypeLevelError } from "#/types/helpers";
  */
 export type WorkflowJobContext = {
   env: TailorEnv;
-  invoker?: TailorInvoker;
+  invoker: TailorPrincipal | null;
 };
 
 /**
@@ -32,36 +33,34 @@ type JobBody<I, O> = [null] extends [I]
         : TypeLevelError<"Input must be JsonValue-compatible (plain objects/arrays; no class instances or functions)">;
 
 /**
- * WorkflowJob represents a job that can be triggered in a workflow.
+ * WorkflowJob represents a job that can be started from a workflow.
  *
  * Type constraints:
  * - Input: Must be JsonValue-compatible (plain objects/arrays; no class instances or functions) or undefined.
  * - Output: Must be JsonValue-compatible (plain objects/arrays; no class instances or functions), undefined, or void.
- * - Trigger returns `Awaited<Output>` as-is (no Jsonify transformation).
+ * - Start returns `Awaited<Output>` as-is (no Promise or Jsonify transformation).
  */
 export interface WorkflowJob<Name extends string = string, Input = undefined, Output = undefined> {
   name: Name;
   /**
-   * Trigger this job with the given input. Returns a Promise that resolves
-   * to the job's output value. Accepts an optional second argument to pass
-   * `executionPolicyKey` for platform-side concurrency enforcement.
+   * Start this job with the given input and return the job's output value.
+   * Accepts an optional second argument to pass `executionPolicyKey` for
+   * platform-side concurrency enforcement.
    * @example
    * body: async (input) => {
-   *   const a = await jobA.trigger({ id: input.id });
-   *   const b = await jobB.trigger({ id: input.id }, {
+   *   const a = jobA.start({ id: input.id });
+   *   const b = jobB.start({ id: input.id }, {
    *     executionPolicyKey: `tenant-api.${input.tenantId}`,
    *   });
    *   return { a, b };
    * }
    */
-  trigger: [Input] extends [undefined]
-    ? (input?: undefined, options?: TriggerJobFunctionOptions) => Promise<Awaited<Output>>
-    : (input: Input, options?: TriggerJobFunctionOptions) => Promise<Awaited<Output>>;
+  start: [Input] extends [undefined]
+    ? (input?: undefined, options?: ExecJobFunctionOptions) => Awaited<Output>
+    : (input: Input, options?: ExecJobFunctionOptions) => Awaited<Output>;
   body: (input: Input, context: WorkflowJobContext) => Output | Promise<Output>;
   publishEvents?: boolean;
 }
-
-export { WORKFLOW_TEST_ENV_KEY } from "./test-env-key";
 
 interface CreateWorkflowJobConfig<Name extends string, I, O> {
   readonly name: Name;
@@ -87,8 +86,8 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  * class instances exposing methods are rejected via the property walk.
  * @param config - Job configuration with name and body function.
  * @param config.name - Unique job name across the project.
- * @param config.body - Async function that processes the job input.
- * @returns A WorkflowJob that can be triggered from other jobs.
+ * @param config.body - Function that processes the job input.
+ * @returns A WorkflowJob that can be started from other jobs.
  * @example
  * // Simple job with async body:
  * export const fetchData = createWorkflowJob({
@@ -102,9 +101,9 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
  * // Orchestrator job that fans out to other jobs.
  * export const orchestrate = createWorkflowJob({
  *   name: "orchestrate",
- *   body: async (input: { orderId: string }) => {
- *     const inventory = await checkInventory.trigger({ orderId: input.orderId });
- *     const payment = await processPayment.trigger({ orderId: input.orderId });
+ *   body: (input: { orderId: string }) => {
+ *     const inventory = checkInventory.start({ orderId: input.orderId });
+ *     const payment = processPayment.start({ orderId: input.orderId });
  *     return { inventory, payment };
  *   },
  * });
@@ -112,37 +111,41 @@ interface CreateWorkflowJobConfig<Name extends string, I, O> {
 export function createWorkflowJob<const Name extends string, I = undefined, O = undefined>(
   config: CreateWorkflowJobConfig<Name, I, O>,
 ): WorkflowJob<Name, I, Awaited<O>> {
-  const body = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
+  const userBody = config.body as (input: I, context: WorkflowJobContext) => O | Promise<O>;
+  const body = process.env.__TAILOR_PLATFORM_BUNDLE
+    ? userBody
+    : (input: I, context: WorkflowJobContext): O | Promise<O> =>
+        withWorkflowTestInvoker(context.invoker, () => userBody(input, context));
 
-  // Test-only registry/trigger shim; the platform bundle sets the flag so it is DCE'd.
-  if (!process.env.TAILOR_PLATFORM_BUNDLE) {
+  // Test-only local runner registry; the platform bundle sets the flag so it is DCE'd.
+  if (!process.env.__TAILOR_PLATFORM_BUNDLE) {
     registerJob(config.name, body as RegisteredJobBody);
   }
 
-  const trigger = process.env.TAILOR_PLATFORM_BUNDLE
-    ? async () => {
+  const start = process.env.__TAILOR_PLATFORM_BUNDLE
+    ? () => {
         throw new Error(
-          "This workflow job's .trigger() is rewritten at build time and is unavailable in the bundle",
+          "This workflow job's .start() is rewritten at build time and is unavailable in the bundle",
         );
       }
     : // Preserve arity: use `arguments.length` (regular function, not arrow) so
-      // `.trigger(args, undefined)` is treated as "options passed" — matching
+      // `.start(args, undefined)` is treated as "options passed" — matching
       // the bundler rewrite, which forwards the literal `undefined` from the
       // AST as a third argument. Without this, local execution and bundled
       // workflows would hand mocks different call shapes.
-      async function trigger(args?: unknown, options?: TriggerJobFunctionOptions) {
+      function start(args?: unknown, options?: ExecJobFunctionOptions) {
         // oxlint-disable-next-line prefer-rest-params
         return (
           arguments.length >= 2
-            ? await dispatchTriggerJob(config.name, args, options)
-            : await dispatchTriggerJob(config.name, args)
+            ? dispatchStartJob(config.name, args, options)
+            : dispatchStartJob(config.name, args)
         ) as Awaited<O>;
       };
 
   return brandValue(
     {
       name: config.name,
-      trigger,
+      start,
       body,
       ...(config.publishEvents !== undefined ? { publishEvents: config.publishEvents } : {}),
     } as WorkflowJob<Name, I, Awaited<O>>,

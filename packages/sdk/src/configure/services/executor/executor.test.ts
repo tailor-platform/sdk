@@ -18,11 +18,11 @@ import {
 } from "./trigger/event";
 import { scheduleTrigger } from "./trigger/schedule";
 import { incomingWebhookTrigger } from "./trigger/webhook";
-import type { TailorInvoker } from "#/runtime/types";
+import type { TailorPrincipal } from "#/runtime/types";
 import type { Operation } from "./operation";
 
 const createUserType = () =>
-  db.type("User", {
+  db.table("User", {
     name: db.string(),
     age: db.int(),
   });
@@ -76,7 +76,7 @@ describe("createExecutor", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          expectTypeOf(args).toEqualTypeOf<Args & { invoker?: TailorInvoker }>();
+          expectTypeOf(args).toEqualTypeOf<Args & { invoker: TailorPrincipal | null }>();
         },
       },
     });
@@ -1017,7 +1017,7 @@ describe("functionTarget", () => {
       operation: {
         kind: "function",
         body: (args) => {
-          expectTypeOf(args.invoker).toEqualTypeOf<TailorInvoker | undefined>();
+          expectTypeOf(args.invoker).toEqualTypeOf<TailorPrincipal | null>();
         },
       },
     });
@@ -1242,6 +1242,60 @@ describe("workflowTarget", () => {
     expect(executor.operation.workflow.name).toBe("test-workflow");
   });
 
+  test("requires args for workflow with required input", () => {
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      // @ts-expect-error - args is required by the workflow's main job input
+      operation: {
+        kind: "workflow",
+        workflow: testWorkflow,
+      },
+    });
+  });
+
+  test("accepts primitive static args", () => {
+    const primitiveJob = createWorkflowJob({
+      name: "primitive-input-job",
+      body: (input: string) => input,
+    });
+    const primitiveWorkflow = createWorkflow({
+      name: "primitive-input-workflow",
+      mainJob: primitiveJob,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: primitiveWorkflow,
+        args: "hello",
+      },
+    });
+  });
+
+  test("accepts array static args", () => {
+    const arrayJob = createWorkflowJob({
+      name: "array-input-job",
+      body: (input: string[]) => input.length,
+    });
+    const arrayWorkflow = createWorkflow({
+      name: "array-input-workflow",
+      mainJob: arrayJob,
+    });
+
+    createExecutor({
+      name: "test",
+      trigger: scheduleTrigger({ cron: "0 12 * * *" }),
+      operation: {
+        kind: "workflow",
+        workflow: arrayWorkflow,
+        args: ["hello"],
+      },
+    });
+  });
+
   test("args can be a function", () => {
     createExecutor({
       name: "test",
@@ -1309,7 +1363,7 @@ describe("workflowTarget", () => {
     });
   });
 
-  test("can specify authInvoker", () => {
+  test("can specify invoker", () => {
     createExecutor({
       name: "test",
       trigger: scheduleTrigger({ cron: "0 12 * * *" }),
@@ -1317,7 +1371,7 @@ describe("workflowTarget", () => {
         kind: "workflow",
         workflow: testWorkflow,
         args: { orderId: "test-id" },
-        authInvoker: { namespace: "my-auth", machineUserName: "admin" },
+        invoker: "admin",
       },
     });
   });

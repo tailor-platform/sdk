@@ -41,8 +41,10 @@ jobs:
             packages:
               - 'packages/sdk/**'
               - 'packages/create-sdk/**'
+              - 'packages/sdk-plugin-seed/**'
               - 'packages/eslint-plugin-sdk/**'
               - 'packages/sdk-codemod/**'
+              - 'packages/sdk-plugin-tailordb-erd/**'
               - 'packages/tailor-proto/**'
 
       - name: Fail if no changeset
@@ -62,7 +64,9 @@ jobs:
 
       - name: Validate changeset packages
         if: steps.filter.outputs.changeset == 'true'
-        run: pnpm changeset status --since origin/main
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: pnpm changeset status --since "origin/$BASE_REF"
 
       # `changeset status` only validates the plan; it doesn't run the JSON
       # edits that `changeset version` performs during the Release workflow.

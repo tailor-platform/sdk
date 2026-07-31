@@ -2,7 +2,7 @@ import { describe, expectTypeOf, test, expect } from "vitest";
 import { db } from "#/configure/services/tailordb/index";
 import { t } from "#/configure/types/index";
 import { createResolver } from "./resolver";
-import type { TailorInvoker, TailorUser } from "#/runtime/types";
+import type { TailorPrincipal } from "#/runtime/types";
 import type { output } from "#/types/helpers";
 import type { ResolverInput } from "#/types/resolver.generated";
 import type { ResolverPermission } from "./permission";
@@ -15,11 +15,11 @@ describe("createResolver", () => {
         operation: "query",
         output: t.object({ result: t.string() }),
         body: (context) => {
-          expectTypeOf(context).toHaveProperty("user");
+          expectTypeOf(context).toHaveProperty("caller");
           expectTypeOf(context).toHaveProperty("input");
           expectTypeOf(context).toHaveProperty("invoker");
-          expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
-          expectTypeOf(context.invoker).toEqualTypeOf<TailorInvoker | undefined>();
+          expectTypeOf(context.caller).toEqualTypeOf<TailorPrincipal | null>();
+          expectTypeOf(context.invoker).toEqualTypeOf<TailorPrincipal | null>();
           expectTypeOf(context.input).toBeNever();
           return { result: "hello" };
         },
@@ -32,9 +32,9 @@ describe("createResolver", () => {
         operation: "mutation",
         output: t.object({ success: t.bool() }),
         body: (context) => {
-          expectTypeOf(context).toHaveProperty("user");
+          expectTypeOf(context).toHaveProperty("caller");
           expectTypeOf(context).toHaveProperty("input");
-          expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
+          expectTypeOf(context.caller).toEqualTypeOf<TailorPrincipal | null>();
           expectTypeOf(context.input).toBeNever();
           return { success: true };
         },
@@ -54,7 +54,7 @@ describe("createResolver", () => {
         output: t.object({ message: t.string() }),
         body: (context) => {
           expectTypeOf(context).toHaveProperty("input");
-          expectTypeOf(context).toHaveProperty("user");
+          expectTypeOf(context).toHaveProperty("caller");
           expectTypeOf(context.input).toEqualTypeOf<{
             name: string;
             age: number;
@@ -222,7 +222,7 @@ describe("createResolver", () => {
         output: t.object({ data: t.string() }),
         body: async (context) => {
           expectTypeOf(context).toHaveProperty("input");
-          expectTypeOf(context).toHaveProperty("user");
+          expectTypeOf(context).toHaveProperty("caller");
           await new Promise((resolve) => setTimeout(resolve, 0));
           return { data: context.input.id };
         },
@@ -237,23 +237,24 @@ describe("createResolver", () => {
         output: t.object({ success: t.bool() }),
         body: async (context) => {
           expectTypeOf(context).toHaveProperty("input");
-          expectTypeOf(context).toHaveProperty("user");
+          expectTypeOf(context).toHaveProperty("caller");
           return { success: true };
         },
       });
     });
 
-    test("user context always available", () => {
+    test("caller context is nullable", () => {
       createResolver({
         name: "withUser",
         operation: "query",
         output: t.object({ userId: t.string() }),
         body: (context) => {
-          expectTypeOf(context.user).toEqualTypeOf<TailorUser>();
-          expectTypeOf(context.user.id).toBeString();
-          expectTypeOf(context.user.type).toBeString();
-          expectTypeOf(context.user.workspaceId).toBeString();
-          return { userId: context.user.id };
+          expectTypeOf(context.caller).toEqualTypeOf<TailorPrincipal | null>();
+          if (!context.caller) return { userId: "anonymous" };
+          expectTypeOf(context.caller.id).toBeString();
+          expectTypeOf(context.caller.type).toEqualTypeOf<"user" | "machine_user">();
+          expectTypeOf(context.caller.workspaceId).toBeString();
+          return { userId: context.caller.id };
         },
       });
     });
@@ -451,19 +452,21 @@ describe("createResolver", () => {
       expect(typeof resolver.body).toBe("function");
     });
 
-    test("creates resolver with authInvoker", () => {
-      const outputType = t.object({ result: t.string() });
+    test("creates resolver with invoker", () => {
+      const outputType = t.object({
+        result: t.string(),
+      });
 
       const resolver = createResolver({
-        name: "withAuthInvoker",
+        name: "withInvoker",
         operation: "query",
         output: outputType,
         body: () => ({ result: "ok" }),
-        authInvoker: { namespace: "my-auth", machineUserName: "batch-user" },
+        invoker: "batch-user",
       });
 
-      expect(resolver.name).toBe("withAuthInvoker");
-      expect(resolver.authInvoker).toEqual({ namespace: "my-auth", machineUserName: "batch-user" });
+      expect(resolver.name).toBe("withInvoker");
+      expect(resolver.invoker).toBe("batch-user");
     });
 
     test("creates resolver with loggedIn permission condition", () => {

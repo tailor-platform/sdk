@@ -1,0 +1,7 @@
+name: "@tailor-platform/workflow-trigger-rename"
+version: "1.0.0"
+description: "Rename tailor.workflow triggerWorkflow/triggerJobFunction/resumeWorkflow call sites to startWorkflow/execJobFunction/resumeWorkflowExecution"
+engine: jssg
+language: typescript
+since: "1.0.0"
+until: "2.0.0"

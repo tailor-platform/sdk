@@ -86,7 +86,7 @@ Example TailorDB type for user profile:
 // tailordb/user.ts
 import { db } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   email: db.string().unique(), // usernameField must have unique constraint
   role: db.enum(["admin", "user"]),
   ...db.fields.timestamps(),
@@ -130,7 +130,7 @@ Example TailorDB type with UUID fields for attribute list:
 // tailordb/user.ts
 import { db } from "@tailor-platform/sdk";
 
-export const user = db.type("User", {
+export const user = db.table("User", {
   email: db.string().unique(),
   role: db.enum(["admin", "user"]),
   organizationId: db.uuid(), // Can be used in attributeList
@@ -139,18 +139,18 @@ export const user = db.type("User", {
 });
 ```
 
-The `attributeList` values are accessible via `user.attributeList` as a tuple:
+The `attributeList` values are accessible via the runtime principal's `attributeList` as a tuple:
 
 ```typescript
 // In a resolver
 body: (context) => {
-  const [organizationId, teamId] = context.user.attributeList;
+  const [organizationId, teamId] = context.caller?.attributeList ?? [];
 },
 
 // In TailorDB hooks
 .hooks({
   field: {
-    create: ({ user }) => user.attributeList[0], // First UUID from list
+    create: ({ invoker }) => invoker?.attributeList[0] ?? null, // First UUID from list
   },
 })
 ```
@@ -160,7 +160,7 @@ body: (context) => {
 When you want to use machine users without defining a `userProfile`, define `machineUserAttributes` instead. These attributes are used for:
 
 - type-safe `machineUsers[*].attributes`
-- `context.user.attributes` typing (via `tailor.d.ts`)
+- runtime principal `attributes` typing (via `tailor.d.ts`)
 
 ```typescript
 import { defineAuth, t } from "@tailor-platform/sdk";
@@ -182,7 +182,7 @@ export const auth = defineAuth("my-auth", {
 To update types in `tailor.d.ts`, run:
 
 ```bash
-tailor-sdk generate
+tailor generate
 ```
 
 ## Machine Users
@@ -200,12 +200,12 @@ machineUsers: {
 },
 ```
 
-**attributes**: Values for attributes enabled in `userProfile.attributes` (or fields defined in `machineUserAttributes` when `userProfile` is omitted). Attribute keys mirror the field's optionality: attributes derived from required fields must be set, while attributes derived from optional fields may be omitted. Setting an attribute to `null` or `undefined` is equivalent to omitting it — the attribute is deployed as unset. These values are accessible via `user.attributes`:
+**attributes**: Values for attributes enabled in `userProfile.attributes` (or fields defined in `machineUserAttributes` when `userProfile` is omitted). Attribute keys mirror the field's optionality: attributes derived from required fields must be set, while attributes derived from optional fields may be omitted. Setting an attribute to `null` or `undefined` is equivalent to omitting it — the attribute is deployed as unset. These values are accessible via the runtime principal's `attributes`:
 
 ```typescript
 // In a resolver
 body: (context) => {
-  const role = context.user.attributes?.role;
+  const role = context.caller?.attributes.role;
 },
 ```
 
@@ -230,25 +230,25 @@ machineUsers: {
 },
 ```
 
-These values are accessible via `user.attributeList`:
+These values are accessible via the runtime principal's `attributeList`:
 
 ```typescript
 // In a resolver
 body: (context) => {
-  const [organizationId, teamId] = context.user.attributeList;
+  const [organizationId, teamId] = context.caller?.attributeList ?? [];
 },
 
 // In TailorDB hooks
 .hooks({
   field: {
-    create: ({ user }) => user.attributes?.role === "ADMIN" ? "default" : null,
+    create: ({ invoker }) => invoker?.attributes.role === "ADMIN" ? "default" : null,
   },
 })
 
 // In TailorDB validate
 .validate({
   field: [
-    ({ user }) => user.attributes?.role === "ADMIN",
+    ({ invoker }) => invoker?.attributes.role === "ADMIN",
     "Only admins can set this field",
   ],
 })
@@ -264,12 +264,12 @@ Machine users are useful for:
 Get a machine user token using the CLI:
 
 ```bash
-tailor-sdk machineuser token <name>
+tailor machineuser token <name>
 ```
 
 ### Specifying a machine user invoker
 
-Resolvers, executors, and `workflow.trigger()` accept an `authInvoker` option that chooses which machine user runs the operation. Pass the machine user name as a plain string — it is type-narrowed to the names you registered in `machineUsers`.
+Resolvers, executors, and `workflow.start()` accept an `invoker` option that chooses which machine user runs the operation. Pass the machine user name as a plain string — it is type-narrowed to the names you registered in `machineUsers`.
 
 ```typescript
 // tailor.config.ts
@@ -284,21 +284,21 @@ export const auth = defineAuth("my-auth", {
 ```
 
 ```typescript
-// resolvers/trigger-workflow.ts
+// resolvers/start-workflow.ts
 import { createResolver, t } from "@tailor-platform/sdk";
 import myWorkflow from "../workflows/my-workflow";
 
 export default createResolver({
-  name: "triggerMyWorkflow",
+  name: "startMyWorkflow",
   operation: "mutation",
   input: {
     id: t.string(),
   },
   body: async ({ input }) => {
-    // Trigger workflow with machine user permissions
-    const workflowRunId = await myWorkflow.trigger(
+    // Start workflow with machine user permissions
+    const workflowRunId = await myWorkflow.start(
       { id: input.id },
-      { authInvoker: "admin-machine-user" },
+      { invoker: "admin-machine-user" },
     );
     return { workflowRunId };
   },
@@ -308,9 +308,7 @@ export default createResolver({
 });
 ```
 
-Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor-sdk generate` (or `deploy`) after defining new machine users to refresh it.
-
-> **Deprecated:** The `auth.invoker("<name>")` helper is still available for backward compatibility. Prefer the string form — it does not require importing `auth` from `tailor.config.ts` into runtime files, avoiding bundling config-layer (Node-only) dependencies.
+Type narrowing is provided by the generated `tailor.d.ts` (the `MachineUserNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new machine users to refresh it.
 
 ## OAuth 2.0 Clients
 
@@ -350,7 +348,7 @@ oauth2Clients: {
 Get OAuth2 client credentials using the CLI:
 
 ```bash
-tailor-sdk oauth2client get <name>
+tailor oauth2client get <name>
 ```
 
 ## Identity Provider
@@ -373,9 +371,9 @@ For the official Tailor Platform documentation, see [AuthConnection Guide](https
 > Deploy updates connections **in-place**, preserving the OAuth token. If the connection requires re-authorization after an update, the deploy will warn you:
 >
 > ```bash
-> tailor-sdk authconnection authorize --name <connection-name>
+> tailor authconnection authorize --name <connection-name>
 > # Or via the Console:
-> tailor-sdk authconnection open
+> tailor authconnection open
 > ```
 
 ### Setup Flow
@@ -408,10 +406,10 @@ export const auth = defineAuth("my-auth", {
 });
 ```
 
-After `tailor-sdk deploy`, authorize the connection:
+After `tailor deploy`, authorize the connection:
 
 ```bash
-tailor-sdk authconnection authorize --name google-connection \
+tailor authconnection authorize --name google-connection \
   --scopes "openid,profile,email"
 ```
 
@@ -445,9 +443,9 @@ const response = await fetch("https://www.googleapis.com/...", {
 // authconnection.getConnectionToken("unknown"); // Type error — only "google-connection" is allowed
 ```
 
-Type narrowing is provided by the generated `tailor.d.ts` (the `ConnectionNameRegistry` interface). Run `tailor-sdk generate` (or `deploy`) after defining new connections to refresh it. Before the first generate, or when `connections` is not defined in `defineAuth()`, `getConnectionToken()` accepts any string — this also supports connections managed entirely via the CLI.
+Type narrowing is provided by the generated `tailor.d.ts` (the `ConnectionNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new connections to refresh it. Before the first generate, or when `connections` is not defined in `defineAuth()`, `getConnectionToken()` accepts any string — this also supports connections managed entirely via the CLI.
 
-> **Deprecated:** `auth.getConnectionToken("<name>")` still works, but is deprecated. Importing `auth` from `tailor.config.ts` into runtime files pulls config-layer (Node-only) dependencies into the bundle.
+This keeps runtime files independent from `tailor.config.ts`.
 
 See [Built-in Interfaces](https://docs.tailor.tech/guides/function/builtin-interfaces.html#auth-connection) for the full runtime API.
 
@@ -457,19 +455,19 @@ Auth connections can also be managed via the CLI:
 
 ```bash
 # Open the connections page in the Console (recommended for creating connections/tokens)
-tailor-sdk authconnection open
+tailor authconnection open
 
 # Authorize (opens browser for OAuth2 flow)
-tailor-sdk authconnection authorize --name google-connection
+tailor authconnection authorize --name google-connection
 
 # List all connections
-tailor-sdk authconnection list
+tailor authconnection list
 
 # Revoke a connection
-tailor-sdk authconnection revoke --name google-connection
+tailor authconnection revoke --name google-connection
 ```
 
-Connection creation is handled by `tailor-sdk deploy` via the config, but recreation on deploy can drop the authorized token (see the warning at the top of this section) — for shared and CI workflows, create connections and tokens from the Console (`tailor-sdk authconnection open`) instead.
+Connection creation and updates are handled by `tailor deploy` via the config. Deploy updates connections in-place, preserving the authorized token, and warns you if an update requires re-authorization (see the note above).
 
 See [Auth Resource Commands](../cli/auth.md) for full CLI documentation.
 
@@ -532,21 +530,21 @@ Manage Auth resources using the CLI:
 
 ```bash
 # Auth connections
-tailor-sdk authconnection authorize --name <name>
-tailor-sdk authconnection list
-tailor-sdk authconnection revoke --name <name>
+tailor authconnection authorize --name <name>
+tailor authconnection list
+tailor authconnection revoke --name <name>
 
 # List machine users
-tailor-sdk machineuser list
+tailor machineuser list
 
 # Get machine user token
-tailor-sdk machineuser token <name>
+tailor machineuser token <name>
 
 # List OAuth2 clients
-tailor-sdk oauth2client list
+tailor oauth2client list
 
 # Get OAuth2 client credentials
-tailor-sdk oauth2client get <name>
+tailor oauth2client get <name>
 ```
 
 See [Auth Resource Commands](../cli/auth.md) for full documentation.

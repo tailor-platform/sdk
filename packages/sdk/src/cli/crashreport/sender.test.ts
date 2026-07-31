@@ -12,7 +12,7 @@ function makeCrashReport(): CrashReport {
     osRelease: "25.3.0",
     arch: "arm64",
     command: "apply",
-    argv: ["node", "tailor-sdk", "apply"],
+    argv: ["node", "tailor", "apply"],
     errorName: "TypeError",
     errorMessage: "Cannot read properties of undefined",
     stackTrace: "TypeError: Cannot read properties of undefined",
@@ -49,7 +49,7 @@ describe("sendCrashReport", () => {
     mockFetchResolvedValue({ data: { submitCrashReport: { success: true } } });
     const report = makeCrashReport();
 
-    await sendCrashReport(report, "tailor-sdk/1.0.0");
+    await sendCrashReport(report, "tailor/1.0.0");
 
     const call = vi.mocked(globalThis.fetch).mock.calls[0]!;
     const body = JSON.parse(call[1]!.body as string);
@@ -65,7 +65,7 @@ describe("sendCrashReport", () => {
     mockFetchResolvedValue({ data: { submitCrashReport: { success: true } } });
     const report = makeCrashReport();
 
-    await sendCrashReport(report, "tailor-sdk/1.0.0");
+    await sendCrashReport(report, "tailor/1.0.0");
 
     const call = vi.mocked(globalThis.fetch).mock.calls[0]!;
     const { variables } = JSON.parse(call[1]!.body as string);
@@ -96,7 +96,7 @@ describe("sendCrashReport", () => {
   ])("%s", async (_name, response, expected) => {
     mockFetchResolvedValue(response);
 
-    const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
+    const result = await sendCrashReport(makeCrashReport(), "tailor/1.0.0");
 
     expect(result).toBe(expected);
   });
@@ -108,7 +108,7 @@ describe("sendCrashReport", () => {
       json: () => Promise.resolve({}),
     });
 
-    const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
+    const result = await sendCrashReport(makeCrashReport(), "tailor/1.0.0");
 
     expect(result).toBe(false);
   });
@@ -116,7 +116,7 @@ describe("sendCrashReport", () => {
   test("returns false on network error", async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
 
-    const result = await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
+    const result = await sendCrashReport(makeCrashReport(), "tailor/1.0.0");
 
     expect(result).toBe(false);
   });
@@ -125,7 +125,7 @@ describe("sendCrashReport", () => {
     mockFetchResolvedValue({ data: { submitCrashReport: { success: true } } });
 
     process.env.TAILOR_CRASH_REPORT_ENDPOINT = "https://custom.example.com/query";
-    await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
+    await sendCrashReport(makeCrashReport(), "tailor/1.0.0");
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       "https://custom.example.com/query",
@@ -136,14 +136,14 @@ describe("sendCrashReport", () => {
   test("sends Content-Type application/json and User-Agent headers", async () => {
     mockFetchResolvedValue({ data: { submitCrashReport: { success: true } } });
 
-    await sendCrashReport(makeCrashReport(), "tailor-sdk/1.0.0");
+    await sendCrashReport(makeCrashReport(), "tailor/1.0.0");
 
     expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({
         headers: expect.objectContaining({
           "Content-Type": "application/json",
-          "User-Agent": "tailor-sdk/1.0.0",
+          "User-Agent": "tailor/1.0.0",
         }),
       }),
     );

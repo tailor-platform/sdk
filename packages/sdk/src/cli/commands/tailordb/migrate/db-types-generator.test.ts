@@ -149,7 +149,7 @@ describe("db-types-generator", () => {
         expectedContains: ["externalId: string;", "referenceId: string | null;"],
       },
       {
-        testName: "generates types with date/datetime fields using Timestamp",
+        testName: "generates types with date strings and datetime Timestamps",
         typeName: "Event",
         fields: {
           eventDate: { type: "date", required: true },
@@ -158,7 +158,7 @@ describe("db-types-generator", () => {
         },
         expectedContains: [
           "type Timestamp = ColumnType<Date, Date | string, Date | string>;",
-          "eventDate: Timestamp;",
+          "eventDate: string;",
           "startTime: Timestamp;",
           "endTime: Timestamp | null;",
         ],
@@ -304,6 +304,68 @@ describe("db-types-generator", () => {
       // SELECT returns T | null (existing data might be null)
       // INSERT/UPDATE requires T (must provide a value)
       expect(content).toContain("email: ColumnType<string | null, string, string>;");
+    });
+
+    test("generates ColumnType for optional to required datetime change", async () => {
+      const snapshot = createMockSnapshot({
+        User: {
+          fields: {
+            updatedAt: { type: "datetime", required: true },
+          },
+        },
+      });
+      createMigrationDir(testDir, 1);
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "User",
+            fieldName: "updatedAt",
+            before: { type: "datetime", required: false },
+            after: { type: "datetime", required: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff);
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain(
+        "updatedAt: ColumnType<Date | null, Date | string, Date | string>;",
+      );
+    });
+
+    test("generates ColumnType for optional to required date change", async () => {
+      const snapshot = createMockSnapshot({
+        User: {
+          fields: {
+            birthDate: { type: "date", required: true },
+          },
+        },
+      });
+      createMigrationDir(testDir, 1);
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_modified",
+            typeName: "User",
+            fieldName: "birthDate",
+            before: { type: "date", required: false },
+            after: { type: "date", required: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        requiresMigrationScript: true,
+      });
+
+      const filePath = await writeDbTypesFile(snapshot, testDir, 1, diff);
+      const content = fs.readFileSync(filePath, "utf-8");
+
+      expect(content).toContain("birthDate: ColumnType<string | null, string, string>;");
     });
 
     test("generates ColumnType for added required fields", async () => {

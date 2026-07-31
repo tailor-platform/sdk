@@ -8,6 +8,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
 
+// strip unknown keys
 const deleteFolderOptionsSchema = z.object({
   organizationId: z.uuid({ message: "organization-id must be a valid UUID" }),
   folderId: z.uuid({ message: "folder-id must be a valid UUID" }),
@@ -38,13 +39,11 @@ export async function deleteFolder(options: DeleteFolderOptions): Promise<void> 
 export const deleteCommand = defineAppCommand({
   name: "delete",
   description: "Delete a folder from an organization.",
-  args: z
-    .object({
-      ...organizationArgs,
-      ...folderArgs,
-      ...confirmationArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...organizationArgs,
+    ...folderArgs,
+    ...confirmationArgs,
+  }),
   run: async (args) => {
     await assertWritable();
     const accessToken = await loadAccessToken();

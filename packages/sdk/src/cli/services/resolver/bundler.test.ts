@@ -47,7 +47,7 @@ vi.mock("rolldown", async (importOriginal) => {
           entry = fs.readFileSync(input, "utf8");
         } else {
           const plugins = options.plugins as rolldown.Plugin[];
-          const entryPlugin = plugins.find((plugin) => plugin.name === "tailor-sdk-virtual-entry");
+          const entryPlugin = plugins.find((plugin) => plugin.name === "tailor-virtual-entry");
           if (!entryPlugin || typeof entryPlugin.resolveId !== "function") {
             throw new Error("Virtual entry plugin was not configured");
           }
@@ -160,7 +160,7 @@ describe("bundleResolvers", () => {
     const entryContent = result.get("protected");
 
     expect(entryContent).toBeDefined();
-    expect(entryContent).toContain("user.type!==");
+    expect(entryContent).toContain("caller!==null");
     expect(entryContent).toContain("TailorErrorMessage");
     expect(entryContent).toContain("access denied");
   });

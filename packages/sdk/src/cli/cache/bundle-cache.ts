@@ -54,7 +54,7 @@ function combineHash(fileHash: string, contextHash?: string): string {
 
 type ComputeBundlerContextHashParams = {
   sourceFile: string;
-  serializedTriggerContext: string;
+  extraContext: string;
   tsconfig?: string;
   inlineSourcemap?: boolean;
   bundleLogLevel?: string;
@@ -64,25 +64,19 @@ type ComputeBundlerContextHashParams = {
 /**
  * Compute a context hash for cache invalidation across bundlers.
  *
- * Combines the source file path, serialized trigger context, tsconfig hash,
- * sourcemap mode, bundle log level, and an optional prefix (e.g., serialized
- * env variables) into a single SHA-256 hash.
+ * Combines the source file path, a caller-supplied extra context string
+ * (e.g. serialized workflow start-call bindings, or an HTTP adapter's method
+ * list), tsconfig hash, sourcemap mode, bundle log level, and an optional
+ * prefix (e.g., serialized env variables) into a single SHA-256 hash.
  * @param params - Context hash computation parameters
  * @returns SHA-256 hex digest of the combined context
  */
 function computeBundlerContextHash(params: ComputeBundlerContextHashParams): string {
-  const {
-    sourceFile,
-    serializedTriggerContext,
-    tsconfig,
-    inlineSourcemap,
-    bundleLogLevel,
-    prefix,
-  } = params;
+  const { sourceFile, extraContext, tsconfig, inlineSourcemap, bundleLogLevel, prefix } = params;
   return hashContent(
     (prefix ?? "") +
       path.resolve(sourceFile) +
-      serializedTriggerContext +
+      extraContext +
       (tsconfig ? hashFile(tsconfig) : "") +
       String(inlineSourcemap ?? false) +
       (bundleLogLevel ?? ""),
@@ -183,7 +177,16 @@ function createBundleCache(store: CacheStore): BundleCache {
     const allDeps = dependencyPaths.includes(sourceFile)
       ? dependencyPaths
       : [sourceFile, ...dependencyPaths];
-    const inputHash = combineHash(hashFiles(allDeps), contextHash);
+
+    // Mirror tryRestore()'s tolerance: a non-ENOENT read error (e.g. EISDIR)
+    // should give up on caching this entry rather than fail the build.
+    let inputHash: string;
+    try {
+      inputHash = combineHash(hashFiles(allDeps), contextHash);
+    } catch {
+      return;
+    }
+
     const contentHash = hashContent(content);
 
     store.storeBundleContent(cacheKey, content);

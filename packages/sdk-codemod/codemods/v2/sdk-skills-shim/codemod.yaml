@@ -1,6 +1,6 @@
 name: "@tailor-platform/sdk-skills-shim"
 version: "1.0.0"
-description: "Replace deprecated `tailor-sdk-skills` binary with `tailor-sdk skills install`"
+description: "Replace deprecated `tailor-sdk-skills` binary with `tailor skills add`"
 engine: jssg
 language: text
 since: "1.0.0"

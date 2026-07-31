@@ -22,7 +22,7 @@ if [[ ${1:-} == "run" && ${2:-} == "test:e2e" ]]; then
   exit "${E2E_TEST_STATUS:-0}"
 fi
 
-if [[ ${1:-} == "exec" && ${2:-} == "tailor-sdk" ]]; then
+if [[ ${1:-} == "exec" && ${2:-} == "tailor" ]]; then
   shift 2
   exec "$E2E_FAKE_NODE" "$E2E_FAKE_CLI" "$@"
 fi

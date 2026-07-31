@@ -6,7 +6,7 @@ import {
   parseCompletionContext,
 } from "politty/completion";
 import { describe, expect, test, vi } from "vitest";
-import { mainCommand } from "./index";
+import { mainCommand } from "./main";
 
 vi.mock("node:module", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -41,7 +41,6 @@ describe("shell completion", () => {
 
     test("completes nested subcommands for tailordb", async () => {
       const values = await completeValues(["tailordb", ""]);
-      expect(values).toContain("erd");
       expect(values).toContain("migration");
       expect(values).toContain("truncate");
     });
@@ -77,13 +76,13 @@ describe("shell completion", () => {
   });
 
   describe("directory completion", () => {
-    test.each([
-      ["staticwebsite deploy --dir", ["staticwebsite", "deploy", "--dir", ""]],
-      ["tailordb erd export --output", ["tailordb", "erd", "export", "--output", ""]],
-    ])("triggers directory completion for %s", async (_label, args) => {
-      const result = await complete(args);
-      expect(result.directive & CompletionDirective.DirectoryCompletion).toBeTruthy();
-    });
+    test.each([["staticwebsite deploy --dir", ["staticwebsite", "deploy", "--dir", ""]]])(
+      "triggers directory completion for %s",
+      async (_label, args) => {
+        const result = await complete(args);
+        expect(result.directive & CompletionDirective.DirectoryCompletion).toBeTruthy();
+      },
+    );
   });
 
   describe("no file completion", () => {
@@ -120,7 +119,7 @@ describe("shell completion", () => {
         candidates: readonly { value: string; description?: string }[];
       }[];
     } {
-      const data = extractCompletionData(mainCommand, "tailor-sdk");
+      const data = extractCompletionData(mainCommand, "tailor");
       const apiCmd = data.command.subcommands.find((s) => s.name === "api");
       if (!apiCmd) throw new Error("api subcommand missing");
       const fieldOpt = apiCmd.options.find((o) => o.name === "field");
@@ -186,9 +185,9 @@ describe("shell completion", () => {
       // repeated. Confirm both are wired up in the zsh script.
       const { script } = generateCompletion(mainCommand, {
         shell: "zsh",
-        programName: "tailor-sdk",
+        programName: "tailor",
       });
-      expect(script).toMatch(/__tailor_sdk_expand_[a-z_]+__field=/);
+      expect(script).toMatch(/__tailor_expand_[a-z_]+__field=/);
       expect(script).toContain("GetFunctionExecution");
       expect(script).toContain("_used_field_keys");
     });

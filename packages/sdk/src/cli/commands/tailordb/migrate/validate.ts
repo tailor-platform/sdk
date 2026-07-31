@@ -117,8 +117,8 @@ function assertRequiredMigrationScripts(migrationsDir: string, namespace: string
     throw new Error(
       `Migration(s) ${missing.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
         "require a migration script but have no migrate.ts. " +
-        "Add one with 'tailor-sdk tailordb migration script <number>', or record that no script " +
-        `is needed with 'tailor-sdk tailordb migration script <number> --no-script --reason "..."'.`,
+        "Add one with 'tailor tailordb migration script <number>', or record that no script " +
+        `is needed with 'tailor tailordb migration script <number> --no-script --reason "..."'.`,
     );
   }
 }
@@ -347,14 +347,14 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
 
 function printResolutionHints(reports: NamespaceValidationReport[]): void {
   if (reports.some((r) => r.localSchema?.hasDiff && !r.localSchema.diff)) {
-    logger.info("Run 'tailor-sdk tailordb migration generate' to create the initial snapshot.");
+    logger.info("Run 'tailor tailordb migration generate' to create the initial snapshot.");
   }
   if (reports.some((r) => r.localSchema?.diff)) {
-    logger.info("Run 'tailor-sdk tailordb migration generate' to create migration files.");
+    logger.info("Run 'tailor tailordb migration generate' to create migration files.");
   }
   if (reports.some((r) => r.remoteSchema?.checkpointMissingLocal)) {
     logger.info(
-      "The remote migration checkpoint is ahead of the local history. Pull the latest migration files, or run 'tailor-sdk tailordb migration status' to compare.",
+      "The remote migration checkpoint is ahead of the local history. Pull the latest migration files, or run 'tailor tailordb migration status' to compare.",
     );
   }
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
@@ -396,15 +396,13 @@ export const validateCommand = defineAppCommand({
   name: "validate",
   description:
     "Validate the full migration history and detect schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
-  args: z
-    .object({
-      ...deploymentArgs,
-      namespace: arg(z.string().optional(), {
-        alias: "n",
-        description: "Target TailorDB namespace (validates all namespaces if not specified)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    namespace: arg(z.string().optional(), {
+      alias: "n",
+      description: "Target TailorDB namespace (validates all namespaces if not specified)",
+    }),
+  }),
   run: async (args) => {
     await validate({
       configPath: args.config,

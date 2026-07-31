@@ -16,6 +16,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import {
   platformConfigFromProfile,
   readPlatformConfig,
+  removeLegacyUserAlias,
   saveUserTokens,
   writePlatformConfig,
 } from "#/cli/shared/context";
@@ -47,8 +48,14 @@ function randomState() {
 function getProfileUserMismatch(
   args: ProfileLoginOptions,
   authenticatedUser: string,
+  authenticatedSubject?: string,
 ): ProfileUserMismatch | undefined {
-  if (!args.profile || !args.profileUser || authenticatedUser === args.profileUser) {
+  if (
+    !args.profile ||
+    !args.profileUser ||
+    authenticatedUser === args.profileUser ||
+    authenticatedSubject === args.profileUser
+  ) {
     return undefined;
   }
   return {
@@ -73,10 +80,10 @@ function profileUpdateCommand(mismatch: ProfileUserMismatch) {
   const profileArg = quoteCommandArg(mismatch.profile);
   const userArg = quoteCommandArg(mismatch.authenticatedUser);
   if (profileArg && userArg) {
-    return `tailor-sdk profile update --user ${userArg} -- ${profileArg}`;
+    return `tailor profile update --user ${userArg} -- ${profileArg}`;
   }
   return [
-    "tailor-sdk profile update --user <authenticated-user> -- <profile>",
+    "tailor profile update --user <authenticated-user> -- <profile>",
     `profile = ${JSON.stringify(mismatch.profile)}`,
     `authenticated user = ${JSON.stringify(mismatch.authenticatedUser)}`,
   ].join("\n");
@@ -90,7 +97,7 @@ function retryInstruction(mismatch: ProfileUserMismatch) {
   if (!profileArg) {
     return "Then retry the browser login with the same profile value.";
   }
-  return `Then run:\n  tailor-sdk login --profile ${profileArg}`;
+  return `Then run:\n  tailor login --profile ${profileArg}`;
 }
 
 function profileUserMismatchError(mismatch: ProfileUserMismatch) {
@@ -136,7 +143,7 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
         const pfConfig = await readPlatformConfig();
         await saveUserTokens(
           pfConfig,
-          userInfo.email,
+          userInfo.sub,
           {
             accessToken: tokens.accessToken,
             refreshToken: tokens.refreshToken ?? undefined,
@@ -144,16 +151,17 @@ const startAuthServer = async (args: ProfileLoginOptions = {}) => {
           new Date(
             assertDefined(tokens.expiresAt, "token response missing expiresAt"),
           ).toISOString(),
-          args.platformConfig,
+          { platformConfig: args.platformConfig, email: userInfo.email },
         );
-        const mismatch = getProfileUserMismatch(args, userInfo.email);
+        const mismatch = getProfileUserMismatch(args, userInfo.email, userInfo.sub);
         if (mismatch) {
           writePlatformConfig(pfConfig);
           throw profileUserMismatchError(mismatch);
         }
         if (args.updateCurrentUser ?? true) {
-          pfConfig.current_user = userInfo.email;
+          pfConfig.current_user = userInfo.sub;
         }
+        await removeLegacyUserAlias(pfConfig, userInfo.email, userInfo.sub, args.platformConfig);
         writePlatformConfig(pfConfig);
 
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -223,7 +231,7 @@ async function loginAsMachineUser(
     args.clientId,
     { accessToken: tokens.accessToken },
     new Date(assertDefined(tokens.expiresAt, "token response missing expiresAt")).toISOString(),
-    args.platformConfig,
+    { platformConfig: args.platformConfig },
   );
   const mismatch = getProfileUserMismatch(args, args.clientId);
   if (mismatch) {
@@ -241,19 +249,17 @@ export const loginCommand = defineAppCommand({
   description: "Login to Tailor Platform.",
   args: z.xor([
     z
-      .object({
+      .strictObject({
         profile: arg(z.string().optional(), {
           alias: "p",
           description: "Workspace profile whose platform settings should be used for login.",
           env: "TAILOR_PLATFORM_PROFILE",
         }),
       })
-      .strict()
       .describe("User Login"),
     z
-      .object({
+      .strictObject({
         "machine-user": arg(z.literal(true), {
-          hiddenAlias: "machineuser",
           description: "Login as a platform machine user.",
           required: true,
         }),
@@ -272,7 +278,6 @@ export const loginCommand = defineAppCommand({
           env: "TAILOR_PLATFORM_PROFILE",
         }),
       })
-      .strict()
       .describe("Machine User Login"),
   ]),
   run: async (args) => {

@@ -34,8 +34,8 @@ export const sendConfirmation = createWorkflowJob({
 
 export const fulfillOrder = createWorkflowJob({
   name: "fulfill-order",
-  body: async (input: { orderId: string; amount: number }) => {
-    const validation = await validateOrder.trigger({
+  body: (input: { orderId: string; amount: number }) => {
+    const validation = validateOrder.start({
       orderId: input.orderId,
       amount: input.amount,
     });
@@ -44,12 +44,12 @@ export const fulfillOrder = createWorkflowJob({
       throw new Error("Order validation failed");
     }
 
-    const payment = await processPayment.trigger({
+    const payment = processPayment.start({
       orderId: input.orderId,
       amount: input.amount,
     });
 
-    const confirmation = await sendConfirmation.trigger({
+    const confirmation = sendConfirmation.start({
       orderId: input.orderId,
       transactionId: payment.transactionId,
     });

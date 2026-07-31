@@ -3,11 +3,8 @@ import { describe, test } from "vitest";
 import { createExecutor } from "#/configure/services/executor/index";
 import { scheduleTrigger } from "#/configure/services/executor/trigger/schedule";
 import {
-  type ListExecutorJobsOptions,
   type ListExecutorJobsTypedOptions,
-  type GetExecutorJobOptions,
   type GetExecutorJobTypedOptions,
-  type WatchExecutorJobOptions,
   type WatchExecutorJobTypedOptions,
 } from "./jobs";
 
@@ -68,25 +65,6 @@ describe("listExecutorJobs API types", () => {
       executorName: "legacy-executor",
     });
   });
-
-  test("keeps deprecated ListExecutorJobsOptions shape available", () => {
-    const acceptsDeprecatedOptions = (_options: ListExecutorJobsOptions): void => {};
-
-    acceptsDeprecatedOptions({
-      executorName: "legacy-executor",
-    });
-
-    acceptsDeprecatedOptions({
-      executorName: "legacy-executor",
-      order: "desc",
-      limit: 25,
-    });
-
-    acceptsDeprecatedOptions({
-      // @ts-expect-error - deprecated options must keep legacy executorName shape
-      executor: myExecutor,
-    });
-  });
 });
 
 describe("getExecutorJob API types", () => {
@@ -127,21 +105,6 @@ describe("getExecutorJob API types", () => {
     acceptsTypedOptions({
       // @ts-expect-error - typed overload requires executor, not executorName
       executorName: "legacy-executor",
-      jobId: "job-1",
-    });
-  });
-
-  test("keeps deprecated GetExecutorJobOptions shape available", () => {
-    const acceptsDeprecatedOptions = (_options: GetExecutorJobOptions): void => {};
-
-    acceptsDeprecatedOptions({
-      executorName: "legacy-executor",
-      jobId: "job-1",
-    });
-
-    acceptsDeprecatedOptions({
-      // @ts-expect-error - deprecated options must keep legacy executorName shape
-      executor: myExecutor,
       jobId: "job-1",
     });
   });
@@ -186,21 +149,6 @@ describe("watchExecutorJob API types", () => {
     acceptsTypedOptions({
       // @ts-expect-error - typed overload requires executor, not executorName
       executorName: "legacy-executor",
-      jobId: "job-1",
-    });
-  });
-
-  test("keeps deprecated WatchExecutorJobOptions shape available", () => {
-    const acceptsDeprecatedOptions = (_options: WatchExecutorJobOptions): void => {};
-
-    acceptsDeprecatedOptions({
-      executorName: "legacy-executor",
-      jobId: "job-1",
-    });
-
-    acceptsDeprecatedOptions({
-      // @ts-expect-error - deprecated options must keep legacy executorName shape
-      executor: myExecutor,
       jobId: "job-1",
     });
   });

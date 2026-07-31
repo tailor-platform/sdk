@@ -4,6 +4,7 @@ import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { ExecutorSchema } from "#/parser/service/executor/index";
 import { isSdkBranded } from "#/utils/brand";
+import { stripExecutorTriggerArgs } from "./loader";
 import type { ExecutorServiceConfig } from "#/configure/config/types";
 import type { Executor } from "#/types/executor.generated";
 
@@ -51,7 +52,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
   const loadExecutorForFile = async (executorFile: string): Promise<Executor | undefined> => {
     try {
       const executorModule = await import(pathToFileURL(executorFile).href);
-      const result = ExecutorSchema.safeParse(executorModule.default);
+      const result = ExecutorSchema.safeParse(stripExecutorTriggerArgs(executorModule.default));
       if (result.success) {
         const relativePath = path.relative(process.cwd(), executorFile);
         logger.log(
@@ -111,7 +112,7 @@ export function createExecutorService(params: CreateExecutorServiceParams): Exec
         const executor = await loadExecutorForFile(filePath);
         if (executor) {
           // Track as plugin executor (plugin ID is extracted from file path)
-          // File path format: .tailor-sdk/plugin/{executor-name}.ts
+          // File path format: .tailor/plugin/{executor-name}.ts
           pluginExecutors.push({
             executor,
             pluginId: "plugin-generated",

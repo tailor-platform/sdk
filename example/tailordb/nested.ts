@@ -2,7 +2,7 @@ import { db } from "@tailor-platform/sdk";
 import { defaultGqlPermission, defaultPermission } from "./permissions";
 
 export const nestedProfile = db
-  .type("NestedProfile", "Nested Profile Type", {
+  .table("NestedProfile", "Nested Profile Type", {
     userInfo: db
       .object({
         name: db.string().description("User's full name"),

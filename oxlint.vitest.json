@@ -9,7 +9,7 @@
     "style": "off",
     "restriction": "off"
   },
-  "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.agent/**", "**/.tailor-sdk/**"],
+  "ignorePatterns": ["**/node_modules/**", "**/dist/**", "**/.agent/**", "**/.tailor/**"],
   "rules": {
     "vitest/consistent-each-for": "error",
     "vitest/consistent-test-it": [

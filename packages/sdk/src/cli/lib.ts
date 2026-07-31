@@ -1,7 +1,7 @@
 // CLI API exports for programmatic usage
-import { registerTypeScriptRuntime } from "./shared/register-typescript-runtime";
+import { registerTsHook } from "./shared/register-ts-hook";
 
-await registerTypeScriptRuntime(new URL("./tsconfig-paths-hook.mjs", import.meta.url));
+await registerTsHook(new URL("./ts-hook.mjs", import.meta.url));
 
 export { deploy, deploy as apply } from "./commands/deploy/deploy";
 export type { DeployOptions, DeployOptions as ApplyOptions } from "./commands/deploy/deploy";
@@ -9,36 +9,35 @@ export type { BundledScripts } from "./commands/deploy/function-registry";
 export { generate } from "./commands/generate/service";
 export type { GenerateOptions } from "./commands/generate/options";
 export { loadConfig, type LoadedConfig } from "./shared/config-loader";
+export { errorToJson, serializeError, type ErrorToJsonOptions } from "./shared/error-json";
 export { generateUserTypes } from "./shared/type-generator";
+export {
+  loadTailorDBNamespaces,
+  type TailorDBNamespaceSelector,
+  type LoadTailorDBNamespacesOptions,
+  type LoadedTailorDBNamespaces,
+} from "./shared/tailordb-namespaces";
+export {
+  deployStaticWebsite,
+  type DeployResult as StaticWebsiteDeployResult,
+} from "./commands/staticwebsite/deploy";
+export { assertWritable } from "./shared/readonly-guard";
+export { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
 export type {
-  CodeGenerator,
-  TailorDBGenerator,
-  ResolverGenerator,
-  ExecutorGenerator,
-  TailorDBResolverGenerator,
-  FullCodeGenerator,
-  TailorDBInput,
-  ResolverInput,
-  ExecutorInput,
-  FullInput,
-  AggregateArgs,
   GeneratorResult,
-  DependencyKind,
+  Plugin,
   PluginAttachment,
+  TailorDBNamespaceData,
+} from "#/plugin/types";
+export type {
+  TailorDBType,
   TypeSourceInfoEntry,
-} from "./commands/generate/types";
-export type { TailorDBType } from "#/parser/service/tailordb/types";
+  ParsedField,
+  OperatorFieldConfig,
+  PluginGeneratedTypeSource,
+} from "#/parser/service/tailordb/types";
 export type { Resolver } from "#/types/resolver.generated";
 export type { Executor } from "#/types/executor.generated";
-
-/** @deprecated Import from '@tailor-platform/sdk/plugin/kysely-type' instead */
-export { kyselyTypePlugin } from "#/plugin/builtin/kysely-type/index";
-/** @deprecated Import from '@tailor-platform/sdk/plugin/enum-constants' instead */
-export { enumConstantsPlugin } from "#/plugin/builtin/enum-constants/index";
-/** @deprecated Import from '@tailor-platform/sdk/plugin/file-utils' instead */
-export { fileUtilsPlugin } from "#/plugin/builtin/file-utils/index";
-/** @deprecated Import from '@tailor-platform/sdk/plugin/seed' instead */
-export { seedPlugin } from "#/plugin/builtin/seed/index";
 
 export {
   show,
@@ -85,14 +84,10 @@ export { getOAuth2Client, type GetOAuth2ClientOptions } from "./commands/oauth2c
 export { listOAuth2Clients, type ListOAuth2ClientsOptions } from "./commands/oauth2client/list";
 export type { OAuth2ClientInfo, OAuth2ClientCredentials } from "./commands/oauth2client/transform";
 export { listWorkflows, type ListWorkflowsOptions } from "./commands/workflow/list";
-export {
-  getWorkflow,
-  type GetWorkflowOptions,
-  type GetWorkflowTypedOptions,
-} from "./commands/workflow/get";
+export { getWorkflow, type GetWorkflowTypedOptions } from "./commands/workflow/get";
+export type { MachineUserName } from "@tailor-platform/sdk";
 export {
   startWorkflow,
-  type StartWorkflowOptions,
   type StartWorkflowTypedOptions,
   type StartWorkflowResultWithWait,
   type WaitOptions,
@@ -100,7 +95,6 @@ export {
 export {
   listWorkflowExecutions,
   getWorkflowExecution,
-  type ListWorkflowExecutionsOptions,
   type ListWorkflowExecutionsTypedOptions,
   type GetWorkflowExecutionOptions,
   type GetWorkflowExecutionResult,
@@ -121,7 +115,6 @@ export type {
 } from "./commands/workflow/transform";
 export {
   triggerExecutor,
-  type TriggerExecutorOptions,
   type TriggerExecutorTypedOptions,
   type TriggerExecutorResult,
 } from "./commands/executor/trigger";
@@ -130,21 +123,14 @@ export {
   getExecutorJob,
   getExecutorWaitFailureMessage,
   watchExecutorJob,
-  type ListExecutorJobsOptions,
   type ListExecutorJobsTypedOptions,
-  type GetExecutorJobOptions,
   type GetExecutorJobTypedOptions,
-  type WatchExecutorJobOptions,
   type WatchExecutorJobTypedOptions,
   type ExecutorJobDetailInfo,
   type WatchExecutorJobResult,
 } from "./commands/executor/jobs";
 export { listExecutors, type ListExecutorsOptions } from "./commands/executor/list";
-export {
-  getExecutor,
-  type GetExecutorOptions,
-  type GetExecutorTypedOptions,
-} from "./commands/executor/get";
+export { getExecutor, type GetExecutorTypedOptions } from "./commands/executor/get";
 export {
   listWebhookExecutors,
   type ListWebhookExecutorsOptions,
@@ -218,7 +204,19 @@ export {
 export { MIGRATION_LABEL_KEY } from "./commands/tailordb/migrate/types";
 
 // Seed exports
-export { chunkSeedData, type SeedChunk, type ChunkSeedDataOptions } from "./shared/seed-chunker";
+export {
+  loadSeedContext,
+  type LoadSeedContextOptions,
+  type SeedContext,
+  type SeedIdpUserContext,
+  type SeedNamespaceConfig,
+} from "./shared/seed-context";
+export {
+  chunkSeedData,
+  type SeedChunk,
+  type ChunkSeedDataOptions,
+  type SeedData,
+} from "./shared/seed-chunker";
 export { bundleSeedScript, type SeedBundleResult } from "./commands/generate/seed/bundler";
 export {
   bundleMigrationScript,
@@ -229,6 +227,7 @@ export {
   waitForExecution,
   type ScriptExecutionOptions,
   type ScriptExecutionResult,
+  type ScriptInvoker,
   type ExecutionWaitResult,
 } from "./shared/script-executor";
 export { initOperatorClient, type OperatorClient } from "./shared/client";

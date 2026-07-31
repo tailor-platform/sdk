@@ -48,17 +48,17 @@ logger.info("order processed", { orderId: "o-1", total: 99.5 });
 Each namespace can also be imported individually so you only pull what you need:
 
 ```ts
-import * as iconv from "@tailor-platform/sdk/runtime/iconv";
-import type { ListUsersResponse, ClientConfig } from "@tailor-platform/sdk/runtime/idp";
+import { iconv } from "@tailor-platform/sdk/runtime/iconv";
+import { idp, type ListUsersResponse, type ClientConfig } from "@tailor-platform/sdk/runtime/idp";
 ```
+
+`TailorContextAPI` and `TailorWorkflowAPI` describe the imported SDK wrapper objects. When typing direct access to the platform-provided globals or a runtime mock, use `PlatformContextAPI` or `PlatformWorkflowAPI` instead.
 
 ## Activating the global types
 
 Most users do not need to touch the globals entry — `@tailor-platform/sdk/runtime` (and its subpath modules) cover the same surface without depending on any ambient declaration.
 
-For backwards compatibility with the previous `@tailor-platform/function-types`-based setup, the SDK still activates the ambient `tailor.*` / `tailordb.*` types automatically when you import from `@tailor-platform/sdk`. **This implicit activation will be removed in v2.0**; new code should prefer the typed wrappers from `@tailor-platform/sdk/runtime`.
-
-If you want to opt into the globals explicitly (or you are migrating ahead of v2.0), add a single side-effect import anywhere in your project:
+Importing from `@tailor-platform/sdk` does not activate the ambient `tailor.*` / `tailordb.*` declarations. If you want to opt into the globals, add a single side-effect import anywhere in your project:
 
 ```ts
 import "@tailor-platform/sdk/runtime/globals";
@@ -74,6 +74,8 @@ Or register the entry in `tsconfig.json`:
 }
 ```
 
+The globals entry exposes the lowercase `tailordb.*` namespace only. If your project still references the removed capital-cased `Tailordb.*` namespace from `@tailor-platform/function-types`, migrate before upgrading in two steps: run `pnpm dlx @tailor-platform/sdk-codemod v2/tailordb-namespace` to rewrite `Tailordb.*` references to lowercase `tailordb.*`, then add the `import "@tailor-platform/sdk/runtime/globals"` opt-in above so the rewritten references resolve.
+
 ## Namespaces
 
 The runtime entry re-exports the following namespaces. Detailed signatures, parameters, and return types live in the JSDoc next to each export — hover the symbol in your IDE or browse the source.
@@ -82,9 +84,9 @@ The runtime entry re-exports the following namespaces. Detailed signatures, para
 - `secretmanager` — secret-vault access (`getSecret`, `getSecrets`)
 - `authconnection` — OAuth-style connection tokens (`getConnectionToken`)
 - `idp` — IdP user management (`new Client({ namespace })`)
-- `workflow` — workflow & job control (`startWorkflow`, `resumeWorkflowExecution`, `execJobFunction`, `wait`, `resolve`; the pre-alignment names `triggerWorkflow`, `resumeWorkflow`, `startJobFunction`, `triggerJobFunction` are kept as aliases)
+- `workflow` — workflow & job control (`startWorkflow`, `resumeWorkflowExecution`, `execJobFunction`, `wait`, `resolve`)
 - `context` — execution context (`getInvoker`)
-- `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `downloadStream`, `uploadStream`, `openDownloadStream` _(deprecated)_)
+- `file` — `tailordb.file` BLOB API (`upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `downloadStream`, `uploadStream`)
 - `aigateway` — AI Gateway URL resolution (`get`)
 - `logger` — structured logging with severity and attributes; the message is written to standard output, the full entry with its attributes is exported over OpenTelemetry where the attributes are queryable (`debug`, `info`, `warn`, `error`, `setAttributes`)
 

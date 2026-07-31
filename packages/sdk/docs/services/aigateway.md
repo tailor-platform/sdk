@@ -110,6 +110,6 @@ const { url } = await aigateway.get("my-aigateway");
 // await aigateway.get("unknown"); // Type error — only "my-aigateway" is allowed
 ```
 
-Type narrowing is provided by the generated `tailor.d.ts` (the `AIGatewayNameRegistry` interface). Run `tailor-sdk generate` (or `deploy`) after defining new AI Gateways to refresh it. Before the first generate run, `get()` accepts any string.
+Type narrowing is provided by the generated `tailor.d.ts` (the `AIGatewayNameRegistry` interface). Run `tailor generate` (or `deploy`) after defining new AI Gateways to refresh it. Before the first generate run, `get()` accepts any string.
 
-The same URL is also shown by `tailor-sdk show`, which lists the URL of each AI Gateway defined in `aiGateways` once it has been deployed.
+The same URL is also shown by `tailor show`, which lists the URL of each AI Gateway defined in `aiGateways` once it has been deployed.

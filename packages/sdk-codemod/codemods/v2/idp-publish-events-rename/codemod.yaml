@@ -1,0 +1,7 @@
+name: "@tailor-platform/idp-publish-events-rename"
+version: "1.0.0"
+description: "Rename the defineIdp publishUserEvents option to publishEvents"
+engine: jssg
+language: typescript
+since: "1.0.0"
+until: "2.0.0"

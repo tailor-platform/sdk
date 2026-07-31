@@ -40,8 +40,12 @@ export type TailorFieldInput = {
           update?: Function | undefined;
         }
       | undefined;
+    /** Validation functions for the field */
+    validate?: Function[] | undefined;
     /** Type name for nested or enum fields */
     typeName?: string | undefined;
+    /** Default value for the field on create */
+    default?: unknown;
   };
   fields: {
     [x: string]: TailorFieldInput;
@@ -88,8 +92,12 @@ export type TailorField = {
           update?: Function | undefined;
         }
       | undefined;
+    /** Validation functions for the field */
+    validate?: Function[] | undefined;
     /** Type name for nested or enum fields */
     typeName?: string | undefined;
+    /** Default value for the field on create */
+    default?: unknown;
   };
   fields: {
     [x: string]: TailorField;

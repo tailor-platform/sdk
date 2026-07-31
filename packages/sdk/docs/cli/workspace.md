@@ -9,7 +9,7 @@ Manage Tailor Platform workspaces.
 **Usage**
 
 ```
-tailor-sdk workspace [command]
+tailor workspace [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -33,7 +33,7 @@ Manage workspace applications
 **Usage**
 
 ```
-tailor-sdk workspace app [command]
+tailor workspace app [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -52,7 +52,7 @@ Check application schema health
 **Usage**
 
 ```
-tailor-sdk workspace app health [options]
+tailor workspace app health [options]
 ```
 
 **Options**
@@ -72,7 +72,7 @@ List applications in a workspace
 **Usage**
 
 ```
-tailor-sdk workspace app list [options]
+tailor workspace app list [options]
 ```
 
 **Options**
@@ -93,7 +93,7 @@ Create a new Tailor Platform workspace.
 **Usage**
 
 ```
-tailor-sdk workspace create [options]
+tailor workspace create [options]
 ```
 
 **Options**
@@ -107,7 +107,7 @@ tailor-sdk workspace create [options]
 | `--folder-id <FOLDER_ID>`             | `-f`  | Folder ID to workspace associate with                                                                       | No       | -         | `TAILOR_PLATFORM_FOLDER_ID`       |
 | `--profile-name <PROFILE_NAME>`       | `-p`  | Profile name to create                                                                                      | No       | -         | -                                 |
 | `--profile <PROFILE>`                 | -     | Workspace profile used for authentication and Platform selection                                            | No       | -         | `TAILOR_PLATFORM_PROFILE`         |
-| `--profile-user <PROFILE_USER>`       | -     | User email for the profile (defaults to current user)                                                       | No       | -         | -                                 |
+| `--profile-user <PROFILE_USER>`       | -     | User email address or machine user client ID for the profile (defaults to current user)                     | No       | -         | -                                 |
 | `--permission <PERMISSION>`           | -     | Profile permission (requires --profile-name). 'read' blocks all write commands while the profile is active. | No       | `"write"` | -                                 |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -119,7 +119,7 @@ Delete a Tailor Platform workspace.
 **Usage**
 
 ```
-tailor-sdk workspace delete [options]
+tailor workspace delete [options]
 ```
 
 **Options**
@@ -138,7 +138,7 @@ Show detailed information about a workspace
 **Usage**
 
 ```
-tailor-sdk workspace get [options]
+tailor workspace get [options]
 ```
 
 **Options**
@@ -157,7 +157,7 @@ List all Tailor Platform workspaces.
 **Usage**
 
 ```
-tailor-sdk workspace list [options]
+tailor workspace list [options]
 ```
 
 **Options**
@@ -177,7 +177,7 @@ Restore a deleted workspace
 **Usage**
 
 ```
-tailor-sdk workspace restore [options]
+tailor workspace restore [options]
 ```
 
 **Options**
@@ -196,7 +196,7 @@ Manage workspace users
 **Usage**
 
 ```
-tailor-sdk workspace user [command]
+tailor workspace user [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -217,7 +217,7 @@ Invite a user to a workspace
 **Usage**
 
 ```
-tailor-sdk workspace user invite [options]
+tailor workspace user invite [options]
 ```
 
 **Options**
@@ -238,7 +238,7 @@ List users in a workspace
 **Usage**
 
 ```
-tailor-sdk workspace user list [options]
+tailor workspace user list [options]
 ```
 
 **Options**
@@ -259,7 +259,7 @@ Remove a user from a workspace
 **Usage**
 
 ```
-tailor-sdk workspace user remove [options]
+tailor workspace user remove [options]
 ```
 
 **Options**
@@ -280,7 +280,7 @@ Update a user's role in a workspace
 **Usage**
 
 ```
-tailor-sdk workspace user update [options]
+tailor workspace user update [options]
 ```
 
 **Options**
@@ -301,7 +301,7 @@ Manage workspace profiles (user + workspace combinations).
 **Usage**
 
 ```
-tailor-sdk profile [command]
+tailor profile [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -322,7 +322,7 @@ Create a new profile.
 **Usage**
 
 ```
-tailor-sdk profile create [options] <name>
+tailor profile create [options] <name>
 ```
 
 **Arguments**
@@ -335,7 +335,7 @@ tailor-sdk profile create [options] <name>
 
 | Option                                            | Alias | Description                                                                                                                            | Required | Default   | Env                                |
 | ------------------------------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------- | -------- | --------- | ---------------------------------- |
-| `--user <USER>`                                   | `-u`  | User email                                                                                                                             | Yes      | -         | -                                  |
+| `--user <USER>`                                   | `-u`  | User email address or machine user client ID                                                                                           | Yes      | -         | -                                  |
 | `--workspace-id <WORKSPACE_ID>`                   | `-w`  | Workspace ID                                                                                                                           | Yes      | -         | -                                  |
 | `--permission <PERMISSION>`                       | -     | Profile permission. 'read' blocks all write commands while the profile is active.                                                      | No       | `"write"` | -                                  |
 | `--machine-user <MACHINE_USER>`                   | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token).                 | No       | -         | -                                  |
@@ -353,7 +353,7 @@ Delete a profile.
 **Usage**
 
 ```
-tailor-sdk profile delete <name>
+tailor profile delete <name>
 ```
 
 **Arguments**
@@ -371,7 +371,7 @@ List all profiles.
 **Usage**
 
 ```
-tailor-sdk profile list
+tailor profile list
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -383,7 +383,7 @@ Update profile properties.
 **Usage**
 
 ```
-tailor-sdk profile update [options] <name>
+tailor profile update [options] <name>
 ```
 
 **Arguments**
@@ -396,7 +396,7 @@ tailor-sdk profile update [options] <name>
 
 | Option                                            | Alias | Description                                                                                                                                                           | Required | Default |
 | ------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
-| `--user <USER>`                                   | `-u`  | New user email                                                                                                                                                        | No       | -       |
+| `--user <USER>`                                   | `-u`  | New user email address or machine user client ID                                                                                                                      | No       | -       |
 | `--workspace-id <WORKSPACE_ID>`                   | `-w`  | New workspace ID                                                                                                                                                      | No       | -       |
 | `--permission <PERMISSION>`                       | -     | Profile permission. 'read' blocks all write commands; 'write' lifts the restriction.                                                                                  | No       | -       |
 | `--machine-user <MACHINE_USER>`                   | `-m`  | Default machine user name for application-data commands (query, workflow start, function test-run, machineuser token). Pass an empty string to clear.                 | No       | -       |

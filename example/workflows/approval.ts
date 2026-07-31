@@ -1,6 +1,6 @@
-import { createWorkflow, createWorkflowJob, defineWaitPoints } from "@tailor-platform/sdk";
+import { createWaitPoints, createWorkflow, createWorkflowJob } from "@tailor-platform/sdk";
 
-export const { approval } = defineWaitPoints((define) => ({
+export const { approval } = createWaitPoints((define) => ({
   /** Approval for order processing */
   approval: define<{ message: string; requestId: string }, { approved: boolean }>(),
 }));

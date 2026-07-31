@@ -2,7 +2,7 @@
 import { describe, test } from "vitest";
 import { createExecutor } from "#/configure/services/executor/index";
 import { scheduleTrigger } from "#/configure/services/executor/trigger/schedule";
-import { type GetExecutorOptions, type GetExecutorTypedOptions } from "./get";
+import { type GetExecutorTypedOptions } from "./get";
 
 const myExecutor = createExecutor({
   name: "my-executor",
@@ -46,25 +46,6 @@ describe("getExecutor API types", () => {
     acceptsTypedOptions({
       // @ts-expect-error - typed overload requires executor, not name
       name: "legacy-executor",
-    });
-  });
-
-  test("keeps deprecated GetExecutorOptions shape available", () => {
-    const acceptsDeprecatedOptions = (_options: GetExecutorOptions): void => {};
-
-    acceptsDeprecatedOptions({
-      name: "legacy-executor",
-    });
-
-    acceptsDeprecatedOptions({
-      name: "legacy-executor",
-      workspaceId: "ws-1",
-      profile: "dev",
-    });
-
-    acceptsDeprecatedOptions({
-      // @ts-expect-error - deprecated options must keep legacy name shape
-      executor: myExecutor,
     });
   });
 });

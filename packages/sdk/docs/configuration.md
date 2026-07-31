@@ -27,7 +27,7 @@ export default defineConfig({
   cors: ["https://example.com"],
   allowedIpAddresses: ["192.168.1.0/24"],
   disableIntrospection: false,
-  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
 });
 ```
 
@@ -46,11 +46,11 @@ export default defineConfig({
 ```typescript
 export default defineConfig({
   name: "my-app",
-  logLevel: process.env.LOG_LEVEL ?? "DEBUG",
+  logLevel: process.env.TAILOR_APP_LOG_LEVEL ?? "DEBUG",
 });
 ```
 
-This is a bundle-time setting. Changing `LOG_LEVEL` affects newly bundled deployments; already deployed functions must be redeployed.
+This is a bundle-time setting. Changing `TAILOR_APP_LOG_LEVEL` affects newly bundled deployments; already deployed functions must be redeployed.
 
 Only `logger.*` calls made through the SDK's `logger` wrapper (from `@tailor-platform/sdk/runtime` or its `@tailor-platform/sdk/runtime/logger` subpath), or written as `globalThis.tailor.logger.*`, are covered. Other equivalent forms — such as the bare `tailor.logger.*` global or `self.tailor.logger.*` — are not affected by `logLevel`.
 
@@ -86,6 +86,21 @@ export default defineConfig({
 
 **Pattern resolution**: `files` and `ignores` patterns are resolved relative to the directory of the `tailor.config.ts` file that declares them, not the directory you run the command from. This matters when deploying [multiple configs](./cli/application.md#deploy) together — each config's patterns only match files under its own directory. If a config's _relative_ patterns match nothing under its own directory, the SDK falls back to resolving them from the directory you ran the command from and logs a warning (this fallback doesn't apply to already-absolute patterns, since their resolution can't change). Update such patterns to be relative to the config's own directory — this fallback will be removed in v2.
 
+### Bundling
+
+Resolvers, executors, workflow jobs, auth hooks, HTTP adapters, TailorDB hooks and validators, functions, seeds, queries, and migration scripts are all bundled before running locally or deploying. Bundling honors `compilerOptions.paths` aliases declared in a `tsconfig.json`, resolved against the importing file's own nearest `tsconfig.json` (the first one found walking up from that file's directory, following its `extends` chain) — so a path alias works the same whether it is imported directly or through another aliased import.
+
+An import that cannot be resolved fails the command instead of shipping a broken bundle, naming the specifier, the importing file, and the tsconfig the build used:
+
+```
+Error [UNRESOLVED_IMPORT]: Could not resolve "@lib/missing" imported from "/path/to/resolver.ts".
+  Suggestion: Check that each import path is correct, and that a `compilerOptions.paths`
+  entry covering it is declared in the importing file's own tsconfig.json or an ancestor.
+  The build used "/path/to/tsconfig.json".
+```
+
+If the unresolved specifier is a Node.js built-in (e.g. `fs`, `crypto`, `path`), the suggestion explains that it is not available in the Tailor Platform runtime and, where one exists, names a Web-standard replacement (e.g. the Fetch API instead of `http`/`https`).
+
 ### External Resources
 
 You can reference resources managed by Terraform or other SDK projects to include them in your application's subgraph. External resources are not deployed by this project but can be used for shared access across multiple applications.
@@ -112,7 +127,8 @@ When using external resources:
 - The resource must be deployed and available before referencing it
 - You can combine external resources with locally-defined resources
 - TailorDB type names must remain unique across local and external TailorDB namespaces; `deploy` checks external TailorDB type names before applying changes
-- Destructive operations like `tailordb truncate` (and `seedPlugin`'s `seed:reset`) automatically exclude external resources to prevent accidental data loss in shared resources
+- Destructive operations like `tailordb truncate` (and `tailor seed apply --truncate`) automatically exclude external resources to prevent accidental data loss in shared resources
+- Subscribing an executor to an external resource's events requires the config that owns the resource in the same `deploy`. Publishing is then enabled automatically, and `deploy` records the dependency so a later deploy without that config asks for confirmation instead of silently turning publishing off
 
 ### Built-in IdP
 
@@ -273,6 +289,40 @@ export async function main(trx: Transaction, { env }: MigrationContext): Promise
 }
 ```
 
+#### Secret Detection
+
+`env` values are deployed as plaintext, so loading a config fails when one of them looks like a credential:
+
+```
+✖ Secret detected in 'env' in /path/to/tailor.config.ts:
+  - env.SLACK_BOT_TOKEN (matched slack: SLACK_TOKEN)
+    https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
+```
+
+Each finding names the pattern that matched and links to its description, so a value flagged as an AWS account id is distinguishable from one flagged as an AWS secret access key.
+
+Move the value to [Secret Manager](./services/secret.md) to fix this. Detection recognizes the credential formats published by common providers, such as Slack, GitHub and AWS.
+
+A value that is merely long and random-looking, with no recognizable provider format, is reported as a warning instead and does not fail the command.
+
+When detection is wrong about a value, allow it in place with `allowSecretReason`, stating why the value is safe to deploy as plaintext:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  env: {
+    slackRelayUrl: {
+      value: process.env.SLACK_RELAY_URL ?? "",
+      allowSecretReason: "Public relay endpoint; the token it proxies stays in Secret Manager.",
+    },
+  },
+});
+```
+
+This silences both the failure and the warning, so it also covers a value that is random-looking without being a credential — say so in the reason. Only string and number values accept an allowance: a boolean is never flagged, so it never needs one.
+
+Application code still reads `env.slackRelayUrl` as the value itself: the wrapper only carries the reason and does not reach the deployed application.
+
 ### Workflow Service
 
 Configure Workflow service by specifying glob patterns for workflow files:
@@ -328,5 +378,3 @@ export const plugins = definePlugins(
   enumConstantsPlugin({ distPath: "./generated/enums.ts" }),
 );
 ```
-
-See [Generators](./generator/index.md) for legacy `defineGenerators()` documentation.

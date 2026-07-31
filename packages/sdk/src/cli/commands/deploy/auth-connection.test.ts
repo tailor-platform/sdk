@@ -66,6 +66,8 @@ type ConnectionFixture = {
   name: string;
   /** sdk-name label value when the connection carries SDK metadata */
   ownerLabel?: string;
+  /** sdk-app-id label value when the connection was tagged with an app id */
+  appIdLabel?: string;
 };
 
 const oauth2DesiredConfig: AuthConnectionConfig = {
@@ -103,7 +105,10 @@ function createMockClient(opts: { connections: ConnectionFixture[] }): OperatorC
       const fixture = opts.connections.find((c) => c.name === name);
       return {
         metadata: {
-          labels: fixture?.ownerLabel ? { "sdk-name": fixture.ownerLabel } : {},
+          labels: {
+            ...(fixture?.ownerLabel ? { "sdk-name": fixture.ownerLabel } : {}),
+            ...(fixture?.appIdLabel ? { "sdk-app-id": fixture.appIdLabel } : {}),
+          },
         },
       };
     }),
@@ -194,6 +199,31 @@ describe("planAuthConnections", () => {
     expect(changeSet.updates.map((u) => u.name)).toEqual(["adopted-connection"]);
     expect(changeSet.unchanged.map((u) => u.name)).toEqual([]);
     expect(changeSet.replaces.map((r) => r.name)).toEqual([]);
+  });
+
+  test("re-tags an unchanged connection whose recorded id does not match", async () => {
+    // The conflict is reported, so the user is asked to take the connection over.
+    // Unless the plan also writes the labels, accepting changes nothing and the
+    // same question comes back on the next deploy.
+    mockLoadSecretsState.mockReturnValue({
+      vaults: {},
+      connections: { "owned-connection": "fixed-hash" },
+    });
+    const client = createMockClient({
+      connections: [{ name: "owned-connection", ownerLabel: appName, appIdLabel: "app-id-1" }],
+    });
+
+    const { changeSet, conflicts } = await planAuthConnections(
+      client,
+      workspaceId,
+      appName,
+      "id-2",
+      authsWith(["owned-connection"]),
+    );
+
+    expect(conflicts.map((c) => c.resourceName)).toEqual(["owned-connection"]);
+    expect(changeSet.updates.map((u) => u.name)).toEqual(["owned-connection"]);
+    expect(changeSet.unchanged.map((u) => u.name)).toEqual([]);
   });
 
   test("leaves an already-owned unchanged connection untouched", async () => {
@@ -344,7 +374,7 @@ describe("applyAuthConnections", () => {
     await applyAuthConnections(client, result, "create-update");
 
     expect(mockLoggerInfo).toHaveBeenCalledWith(
-      expect.stringContaining("tailor-sdk authconnection authorize --name new-conn"),
+      expect.stringContaining("tailor authconnection authorize --name new-conn"),
     );
   });
 
@@ -435,7 +465,7 @@ describe("applyAuthConnections", () => {
     await applyAuthConnections(client, result, "create-update");
 
     expect(mockLoggerWarn).toHaveBeenCalledWith(
-      expect.stringContaining("tailor-sdk authconnection authorize --name conn"),
+      expect.stringContaining("tailor authconnection authorize --name conn"),
     );
   });
 });

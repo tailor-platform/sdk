@@ -1,6 +1,6 @@
 import * as inflection from "inflection";
 import { isPluginGeneratedType } from "#/parser/service/tailordb/type-source";
-import { parseFieldConfig } from "./field";
+import { convertTypeHookToExpr, convertTypeValidateToExpr, parseFieldConfig } from "./field";
 import { parsePermissions } from "./permission";
 import {
   validateRelationConfig,
@@ -171,6 +171,19 @@ function parseTailorDBType(
     permissions: parsePermissions(metadata.permissions),
     indexes: metadata.indexes,
     files: metadata.files,
+    ...(metadata.typeHook && {
+      typeHookExpr: {
+        ...(typeof metadata.typeHook.create === "function" && {
+          create: convertTypeHookToExpr(metadata.typeHook.create),
+        }),
+        ...(typeof metadata.typeHook.update === "function" && {
+          update: convertTypeHookToExpr(metadata.typeHook.update),
+        }),
+      },
+    }),
+    ...(typeof metadata.typeValidate === "function" && {
+      typeValidateExpr: convertTypeValidateToExpr(metadata.typeValidate),
+    }),
   };
 }
 
@@ -352,7 +365,7 @@ function validatePluralFormUniqueness(
       const location = formatTypeSourceLocation(sourceInfo);
       errors.push(
         `Type "${parsedType.name}"${location} has identical singular and plural query names "${singularQuery}". ` +
-          `Use db.type(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
+          `Use db.table(["${parsedType.name}", "UniquePluralForm"], {...}) to set a unique pluralForm.`,
       );
     }
   }

@@ -51,25 +51,39 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
       let processed = 0;
       let created = 0;
       let updated = 0;
+      let skipped = 0;
       const upsert = input.upsert === true;
 
       for (let i = 0; i < input.users.length; i++) {
         try {
           if (upsert) {
             let existing;
+            let lookupError;
             try {
               existing = await client.userByName(input.users[i].name);
-            } catch {
+            } catch (error) {
               existing = undefined;
+              lookupError = error instanceof Error ? error.message : String(error);
             }
 
             if (existing) {
               const { name, ...attributes } = input.users[i];
-              await client.updateUser({ id: existing.id, ...attributes });
-              updated++;
+              if (Object.keys(attributes).length === 0) {
+                skipped++;
+              } else {
+                await client.updateUser({ id: existing.id, ...attributes });
+                updated++;
+              }
             } else {
-              await client.createUser(input.users[i]);
-              created++;
+              try {
+                await client.createUser(input.users[i]);
+                created++;
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                throw new Error(
+                  lookupError ? \`create failed (\${message}); lookup failed (\${lookupError})\` : message,
+                );
+              }
             }
           } else {
             await client.createUser(input.users[i]);
@@ -89,6 +103,7 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
         processed,
         created,
         updated,
+        skipped,
         errors,
       };
     }

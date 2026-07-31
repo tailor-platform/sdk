@@ -124,3 +124,12 @@ export const error: TailorLoggerAPI["error"] = (...args) => {
 export const setAttributes: TailorLoggerAPI["setAttributes"] = (...args) => {
   (globalThis as GlobalWithLogger).tailor.logger.setAttributes(...args);
 };
+
+/** `tailor.logger` API object. See {@link TailorLoggerAPI} for method docs. */
+export const logger: TailorLoggerAPI = {
+  debug,
+  info,
+  warn,
+  error,
+  setAttributes,
+};

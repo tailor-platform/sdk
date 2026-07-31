@@ -17,13 +17,11 @@ export namespace t {
 
 export { type TailorField } from "#/configure/types/type";
 export {
-  type TailorUser,
-  type TailorInvoker,
-  type AttributeMap,
+  type TailorPrincipal,
+  type Attributes,
   type AttributeList,
   type Env,
 } from "#/runtime/types";
-export { unauthenticatedTailorUser } from "#/configure/user";
 export { type MachineUserNameRegistry, type MachineUserName } from "#/configure/types/machine-user";
 export { type IdpNameRegistry, type IdpName } from "#/configure/types/idp-name";
 export {
@@ -34,7 +32,7 @@ export { type AIGatewayNameRegistry, type AIGatewayName } from "#/configure/type
 
 export * from "#/configure/services/index";
 
-export { defineConfig, defineGenerators, definePlugins } from "#/configure/config/index";
+export { defineConfig, definePlugins } from "#/configure/config/index";
 
 // Plugin types for custom plugin development
 export type {

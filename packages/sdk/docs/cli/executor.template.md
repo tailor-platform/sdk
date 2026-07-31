@@ -40,7 +40,7 @@ Trigger an executor and wait for the executor job plus any downstream workflow o
 function execution:
 
 ```bash
-tailor-sdk executor trigger daily-workflow \
+tailor executor trigger daily-workflow \
   --wait \
   --timeout 5m \
   --interval 5s \
@@ -50,7 +50,7 @@ tailor-sdk executor trigger daily-workflow \
 Wait for an existing job when another process already captured the job ID:
 
 ```bash
-tailor-sdk executor jobs daily-workflow "$job_id" \
+tailor executor jobs daily-workflow "$job_id" \
   --wait \
   --timeout 5m \
   --logs \

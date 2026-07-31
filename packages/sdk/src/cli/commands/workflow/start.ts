@@ -23,6 +23,10 @@ import {
   waitForWorkflowExecution,
   type WorkflowWaitResult,
 } from "./waiter";
+// Import from the public entry (not `@/types/auth`) so the `./cli` d.ts references
+// `@tailor-platform/sdk` externally instead of inlining the registry — a single
+// generated `declare module "@tailor-platform/sdk"` then narrows both entries.
+import type { MachineUserName } from "@tailor-platform/sdk";
 import type { Jsonifiable } from "type-fest";
 
 type WorkflowLike = {
@@ -32,7 +36,7 @@ type WorkflowLike = {
   };
 };
 
-type AuthInvoker<M extends string = string> = {
+type WorkflowInvoker<M extends string = string> = {
   namespace: string;
   machineUserName: M;
 };
@@ -53,10 +57,7 @@ type StartWorkflowArgOption<W extends WorkflowLike> = W extends WorkflowLike
   ? StartWorkflowArgOptionForSingleWorkflow<W>
   : never;
 
-/**
- * @deprecated Use StartWorkflowTypedOptions instead.
- */
-export interface StartWorkflowOptions {
+type StartWorkflowByNameOptions = {
   name: string;
   machineUser?: string;
   arg?: Jsonifiable;
@@ -64,17 +65,15 @@ export interface StartWorkflowOptions {
   profile?: string;
   configPath?: string;
   interval?: number;
-}
-
-type StartWorkflowByNameOptions = StartWorkflowOptions & {
   machineUserSource?: MachineUserInputSource;
 };
 
 type StartWorkflowTypedBaseOptions<W extends WorkflowLike> = {
   workflow: W;
-  authInvoker: AuthInvoker<string>;
+  invoker: MachineUserName;
   workspaceId?: string;
   profile?: string;
+  configPath?: string;
   interval?: number;
 };
 
@@ -98,7 +97,7 @@ interface StartWorkflowCoreOptions {
   client: Awaited<ReturnType<typeof initOperatorClient>>;
   workspaceId: string;
   workflowName: string;
-  authInvoker: AuthInvoker<string>;
+  invoker: WorkflowInvoker<string>;
   arg?: unknown;
   interval?: number;
 }
@@ -110,7 +109,7 @@ async function startWorkflowCore(
 
   try {
     const workflow = await resolveWorkflow(client, workspaceId, workflowName);
-    const authInvoker = create(AuthInvokerSchema, options.authInvoker);
+    const invoker = create(AuthInvokerSchema, options.invoker);
     const arg =
       options.arg === undefined
         ? undefined
@@ -121,7 +120,7 @@ async function startWorkflowCore(
     const { executionId } = await client.testStartWorkflow({
       workspaceId,
       workflowId: workflow.id,
-      authInvoker,
+      authInvoker: invoker,
       arg,
     });
 
@@ -147,7 +146,31 @@ async function startWorkflowCore(
   }
 }
 
-async function startWorkflowByName(
+async function resolveApplicationAuthNamespace(options: {
+  client: Awaited<ReturnType<typeof initOperatorClient>>;
+  workspaceId: string;
+  configPath?: string;
+}): Promise<string> {
+  const { config } = await loadConfig(options.configPath);
+  const { application } = await options.client.getApplication({
+    workspaceId: options.workspaceId,
+    applicationName: config.name,
+  });
+  const authNamespace = application?.authNamespace || config.auth?.name;
+  if (!authNamespace) {
+    throw new Error(`Application ${config.name} does not have an auth configuration.`);
+  }
+  return authNamespace;
+}
+
+/**
+ * Start a workflow looked up by name, resolving the machine user from the
+ * flag, environment, or profile default. Backs the `workflow start` command;
+ * programmatic callers use {@link startWorkflow} with a workflow definition.
+ * @param options - Start options keyed by workflow name
+ * @returns Start result with wait helper
+ */
+export async function startWorkflowByName(
   options: StartWorkflowByNameOptions,
 ): Promise<StartWorkflowResultWithWait> {
   const machineUser = await loadMachineUserName({
@@ -157,7 +180,7 @@ async function startWorkflowByName(
   });
   if (!machineUser) {
     throw new Error(
-      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
     );
   }
 
@@ -170,21 +193,18 @@ async function startWorkflowByName(
     profile: options.profile,
   });
 
-  const { config } = await loadConfig(options.configPath);
-  const { application } = await client.getApplication({
+  const authNamespace = await resolveApplicationAuthNamespace({
+    client,
     workspaceId,
-    applicationName: config.name,
+    configPath: options.configPath,
   });
-  if (!application?.authNamespace) {
-    throw new Error(`Application ${config.name} does not have an auth configuration.`);
-  }
 
   return await startWorkflowCore({
     client,
     workspaceId,
     workflowName: options.name,
-    authInvoker: {
-      namespace: application.authNamespace,
+    invoker: {
+      namespace: authNamespace,
       machineUserName: machineUser,
     },
     arg: options.arg,
@@ -199,18 +219,7 @@ async function startWorkflowByName(
  */
 export async function startWorkflow<W extends WorkflowLike>(
   options: StartWorkflowTypedOptions<W>,
-): Promise<StartWorkflowResultWithWait>;
-export async function startWorkflow(
-  options: StartWorkflowOptions,
-): Promise<StartWorkflowResultWithWait>;
-export async function startWorkflow<W extends WorkflowLike>(
-  options: StartWorkflowOptions | StartWorkflowTypedOptions<W>,
 ): Promise<StartWorkflowResultWithWait> {
-  // Keep backward compatibility: if both legacy and typed keys are present, prefer legacy shape.
-  if ("name" in options) {
-    return await startWorkflowByName(options);
-  }
-
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -219,12 +228,20 @@ export async function startWorkflow<W extends WorkflowLike>(
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
+  const authNamespace = await resolveApplicationAuthNamespace({
+    client,
+    workspaceId,
+    configPath: options.configPath,
+  });
 
   return await startWorkflowCore({
     client,
     workspaceId,
     workflowName: options.workflow.name,
-    authInvoker: options.authInvoker,
+    invoker: {
+      namespace: authNamespace,
+      machineUserName: options.invoker,
+    },
     arg: options.arg,
     interval: options.interval,
   });
@@ -233,23 +250,20 @@ export async function startWorkflow<W extends WorkflowLike>(
 export const startCommand = defineAppCommand({
   name: "start",
   description: "Start a workflow execution.",
-  args: z
-    .object({
-      ...deploymentArgs,
-      ...nameArgs,
-      "machine-user": arg(z.string().optional(), {
-        alias: "m",
-        hiddenAlias: "machineuser",
-        description: "Machine user name. Falls back to the active profile's default machine user.",
-        env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
-      }),
-      arg: arg(z.string().optional(), {
-        alias: "a",
-        description: "Workflow argument (JSON string)",
-      }),
-      ...waitArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...deploymentArgs,
+    ...nameArgs,
+    "machine-user": arg(z.string().optional(), {
+      alias: "m",
+      description: "Machine user name. Falls back to the active profile's default machine user.",
+      env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
+    }),
+    arg: arg(z.string().optional(), {
+      alias: "a",
+      description: "Workflow argument (JSON string)",
+    }),
+    ...waitArgs,
+  }),
   run: async (args) => {
     const { executionId, wait } = await startWorkflowByName({
       name: args.name,

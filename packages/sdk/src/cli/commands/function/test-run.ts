@@ -1,5 +1,5 @@
 /**
- * `tailor-sdk function test-run` command
+ * `tailor function test-run` command
  *
  * Bundles and executes a function on the Tailor Platform server
  * without deploying (applying) the application.
@@ -25,12 +25,13 @@ import { executeScript } from "#/cli/shared/script-executor";
 import { formatErrorWithSourcemap } from "#/cli/shared/stack-trace";
 import { assertDefined } from "#/utils/assert";
 import { bundleForTestRun, type ResolvedMachineUser } from "./bundle";
-import { detectFunctionType, type DetectedFunction } from "./detect";
-import type { TailorUser } from "#/runtime/types";
+import { detectFunctionType } from "./detect";
+import type { Jsonifiable } from "type-fest";
 
 export const testRunCommand = defineAppCommand({
   name: "test-run",
   description: "Run a function on the Tailor Platform server without deploying.",
+  // strip unknown keys
   args: z.object({
     ...workspaceArgs,
     file: arg(z.string(), {
@@ -60,8 +61,8 @@ export const testRunCommand = defineAppCommand({
 When a \`.js\` file is provided, detection and bundling are skipped and the file is executed as-is.
 
 > [!WARNING]
-> Workflow job \`.trigger()\` calls do not work in test-run mode.
-> Triggered jobs are not executed; only the target job's \`body\` function runs in isolation.`,
+> Workflow job \`.start()\` calls do not work in test-run mode.
+> Started jobs are not executed; only the target job's \`body\` function runs in isolation.`,
   examples: [
     {
       cmd: 'resolvers/add.ts --arg \'{"a":1,"b":2}\'',
@@ -140,15 +141,11 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       functionName = detected.name;
       logger.info(`Detected: ${styles.bold(detected.type)} ${styles.info(`"${detected.name}"`)}`);
 
-      if (detected.type === "resolver" && args.arg) {
-        if (!detected.hasInput) {
-          logger.warn(
-            '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
-          );
-          args.arg = undefined;
-        } else if (detected.inputSchema) {
-          args.arg = resolveResolverArg(args.arg, detected.inputSchema, machineUser, workspaceId);
-        }
+      if (detected.type === "resolver" && args.arg && !detected.hasInput) {
+        logger.warn(
+          '--arg is ignored because this resolver has no input schema. Define "input" in your resolver to use --arg.',
+        );
+        args.arg = undefined;
       }
 
       logger.info("Bundling...");
@@ -166,20 +163,31 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
     }
 
     // 5. Execute via TestExecScript
-    const authInvoker = create(AuthInvokerSchema, {
+    const invoker = create(AuthInvokerSchema, {
       namespace: authNamespace,
       machineUserName: machineUser.name,
     });
 
     logger.info(`Executing on workspace ${styles.dim(workspaceId)}...`);
 
+    let parsedArg: Jsonifiable | undefined;
+    if (args.arg !== undefined) {
+      try {
+        parsedArg = JSON.parse(args.arg);
+      } catch (error) {
+        throw new Error(`Invalid --arg JSON: ${error instanceof Error ? error.message : error}`, {
+          cause: error,
+        });
+      }
+    }
+
     const result = await executeScript({
       client,
       workspaceId,
       name: scriptName,
       code: bundledCode,
-      arg: args.arg,
-      invoker: authInvoker,
+      arg: parsedArg,
+      invoker,
     });
 
     // 7. Display result
@@ -285,7 +293,7 @@ async function resolveMachineUserName(options: ResolveMachineUserNameOptions): P
     }
   }
   throw new Error(
-    "Machine user is required. Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>', or ensure tailor.config.ts has machine users configured.",
+    "Machine user is required. Provide --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, set a profile default with 'tailor profile update <profile> --machine-user <name>', or ensure tailor.config.ts has machine users configured.",
   );
 }
 
@@ -338,56 +346,4 @@ async function resolveMachineUser(
   }
 
   return { name: machineUserName, id, attributes, attributeList };
-}
-
-/**
- * Resolve resolver arg format: detect and unwrap deprecated {"input":{...}} wrapper.
- * Tries new format (arg = input fields) first via schema parse.
- * If that fails and arg looks like old format, tries unwrapping.
- * @param argStr - JSON string of the arg
- * @param inputSchema - Pre-built schema object from detect (has .parse())
- * @param machineUser - Resolved machine user info
- * @param workspaceId - Workspace ID
- * @returns Resolved JSON string (unwrapped if old format)
- */
-export function resolveResolverArg(
-  argStr: string,
-  inputSchema: NonNullable<DetectedFunction["inputSchema"]>,
-  machineUser: ResolvedMachineUser,
-  workspaceId: string,
-): string {
-  const parsed = JSON.parse(argStr);
-  const user = {
-    id: machineUser.id,
-    type: "machine_user" as const,
-    workspaceId,
-    attributes: machineUser.attributes as TailorUser["attributes"],
-    attributeList: machineUser.attributeList as TailorUser["attributeList"],
-  };
-
-  const newResult = inputSchema.parse({ value: parsed, data: parsed, user });
-  if (!newResult.issues) {
-    return argStr;
-  }
-
-  // New format failed — check if old format works
-  if (
-    typeof parsed === "object" &&
-    parsed !== null &&
-    Object.keys(parsed).length === 1 &&
-    parsed.input != null &&
-    typeof parsed.input === "object" &&
-    !Array.isArray(parsed.input)
-  ) {
-    const oldResult = inputSchema.parse({ value: parsed.input, data: parsed.input, user });
-    if (!oldResult.issues) {
-      logger.warn(
-        '[DEPRECATED] Wrapping args with "input" key (e.g. {"input":{...}}) is deprecated. Pass input fields directly (e.g. {"a":1}). The "input" wrapper will be removed in v2.',
-      );
-      return JSON.stringify(parsed.input);
-    }
-  }
-
-  // Both failed — pass as-is, let server report the validation error
-  return argStr;
 }

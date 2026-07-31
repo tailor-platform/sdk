@@ -2,7 +2,7 @@
  * Tests for `@tailor-platform/sdk/runtime/context` typed wrappers.
  */
 import { aroundEach, describe, expect, expectTypeOf, test, vi } from "vitest";
-import * as context from "#/runtime/context";
+import { context, type Invoker, type TailorContextAPI } from "#/runtime/context";
 import { injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/context", () => {
@@ -11,10 +11,15 @@ describe("@tailor-platform/sdk/runtime/context", () => {
     await runTest();
   });
 
+  test("exposes the normalized wrapper contract", () => {
+    expectTypeOf(context).toExtend<TailorContextAPI>();
+    expectTypeOf<ReturnType<TailorContextAPI["getInvoker"]>>().toEqualTypeOf<Invoker | null>();
+  });
+
   test("getInvoker returns null for anonymous invocations", () => {
     const result = context.getInvoker();
 
-    expectTypeOf(result).toEqualTypeOf<context.Invoker | null>();
+    expectTypeOf(result).toEqualTypeOf<Invoker | null>();
     expect(result).toBeNull();
   });
 

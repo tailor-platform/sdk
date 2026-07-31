@@ -79,6 +79,14 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/principal-unify")).resolves.toBeUndefined();
   });
 
+  test("v2/erd-site-to-plugin transforms correctly", async () => {
+    await expect(runFixtureCases("v2/erd-site-to-plugin")).resolves.toBeUndefined();
+  });
+
+  test("v2/auth-attributes-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/auth-attributes-rename")).resolves.toBeUndefined();
+  });
+
   test("v2/apply-to-deploy transforms correctly", async () => {
     await expect(runFixtureCases("v2/apply-to-deploy")).resolves.toBeUndefined();
   });
@@ -87,11 +95,67 @@ describe("codemod transforms", () => {
     await expect(runFixtureCases("v2/cli-rename")).resolves.toBeUndefined();
   });
 
+  test("v2/env-var-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/env-var-rename")).resolves.toBeUndefined();
+  });
+
+  test("v2/auth-invoker-call-unwrap transforms correctly", async () => {
+    await expect(runFixtureCases("v2/auth-invoker-call-unwrap")).resolves.toBeUndefined();
+  });
+
   test("v2/auth-invoker-unwrap transforms correctly", async () => {
     await expect(runFixtureCases("v2/auth-invoker-unwrap")).resolves.toBeUndefined();
   });
 
+  test("v2/auth-connection-token-helper transforms correctly", async () => {
+    await expect(runFixtureCases("v2/auth-connection-token-helper")).resolves.toBeUndefined();
+  });
+
+  test("v2/runtime-subpath-namespace transforms correctly", async () => {
+    await expect(runFixtureCases("v2/runtime-subpath-namespace")).resolves.toBeUndefined();
+  });
+
   test("v2/tailordb-namespace transforms correctly", async () => {
     await expect(runFixtureCases("v2/tailordb-namespace")).resolves.toBeUndefined();
+  });
+
+  test("v2/runtime-globals-opt-in transforms correctly", async () => {
+    await expect(runFixtureCases("v2/runtime-globals-opt-in")).resolves.toBeUndefined();
+  });
+
+  test("v2/execute-script-arg transforms correctly", async () => {
+    await expect(runFixtureCases("v2/execute-script-arg")).resolves.toBeUndefined();
+  });
+
+  test("v2/tailor-output-ignore-dir transforms correctly", async () => {
+    await expect(runFixtureCases("v2/tailor-output-ignore-dir")).resolves.toBeUndefined();
+  });
+
+  test("v2/rename-bin transforms correctly", async () => {
+    await expect(runFixtureCases("v2/rename-bin")).resolves.toBeUndefined();
+  });
+
+  test("v2/wait-point-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/wait-point-rename")).resolves.toBeUndefined();
+  });
+
+  test("v2/db-type-to-table transforms correctly", async () => {
+    await expect(runFixtureCases("v2/db-type-to-table")).resolves.toBeUndefined();
+  });
+
+  test("v2/exec-job-function-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/exec-job-function-rename")).resolves.toBeUndefined();
+  });
+
+  test("v2/workflow-trigger-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/workflow-trigger-rename")).resolves.toBeUndefined();
+  });
+
+  test("v2/seed-exec-to-cli-plugin transforms correctly", async () => {
+    await expect(runFixtureCases("v2/seed-exec-to-cli-plugin")).resolves.toBeUndefined();
+  });
+
+  test("v2/idp-publish-events-rename transforms correctly", async () => {
+    await expect(runFixtureCases("v2/idp-publish-events-rename")).resolves.toBeUndefined();
   });
 });

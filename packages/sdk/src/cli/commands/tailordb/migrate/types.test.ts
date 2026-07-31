@@ -16,7 +16,6 @@ import {
   sanitizeMigrationLabel,
   parseMigrationLabelNumber,
   MAX_LABEL_LENGTH,
-  MIGRATION_LABEL_PREFIX,
   SCHEMA_ERROR_PATTERNS,
 } from "./types";
 
@@ -25,8 +24,8 @@ describe("migration constants", () => {
     expect(MAX_LABEL_LENGTH).toBe(63);
   });
 
-  test("MIGRATION_LABEL_PREFIX should be 'm'", () => {
-    expect(MIGRATION_LABEL_PREFIX).toBe("m");
+  test("sanitizeMigrationLabel prefixes the label with 'm'", () => {
+    expect(sanitizeMigrationLabel(1)).toBe("m0001");
   });
 
   test.each([

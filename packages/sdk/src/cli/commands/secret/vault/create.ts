@@ -11,12 +11,10 @@ import { nameArgs } from "./args";
 export const createCommand = defineAppCommand({
   name: "create",
   description: "Create a new Secret Manager vault.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...nameArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...nameArgs,
+  }),
   run: async (args) => {
     await assertWritable({ profile: args.profile });
     const accessToken = await loadAccessToken({

@@ -28,7 +28,10 @@
     "typescript/no-namespace": "error",
     "typescript/no-require-imports": "error",
     "typescript/no-unnecessary-type-constraint": "error",
-    "typescript/no-unsafe-function-type": "error"
+    "typescript/no-unsafe-function-type": "error",
+    "tailor-zod/require-object-policy-comment": "error",
+    "zod/prefer-loose-object": "error",
+    "zod/prefer-strict-object": "error"
   },
   "overrides": [
     {
@@ -56,5 +59,6 @@
         "prefer-spread": "error"
       }
     }
-  ]
+  ],
+  "jsPlugins": ["eslint-plugin-zod", "../../scripts/oxlint/tailor-zod-plugin.cjs"]
 }

@@ -77,16 +77,14 @@ export async function resumeWorkflow(
 export const resumeCommand = defineAppCommand({
   name: "resume",
   description: "Resume a failed or pending workflow execution.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      "execution-id": arg(z.string(), {
-        positional: true,
-        description: "Failed execution ID",
-      }),
-      ...waitArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    "execution-id": arg(z.string(), {
+      positional: true,
+      description: "Failed execution ID",
+    }),
+    ...waitArgs,
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode || args.json;
     const { executionId, wait } = await resumeWorkflow({

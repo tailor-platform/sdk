@@ -14,6 +14,7 @@ import {
   type SnapshotFieldConfig,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
+import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
@@ -48,13 +49,13 @@ vi.mock("../label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("../label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:tailordb:test",
       labels: {
         "sdk-name": "test-app",
         "sdk-version": "v1-0-0",
       },
-    }),
+    })),
   };
 });
 
@@ -380,6 +381,120 @@ describe("planTailorDB (service level)", () => {
       expect(createdType?.schema?.settings?.publishRecordEvents).toBe(true);
     });
 
+    describe("publishEvents", () => {
+      function createTypeWith(publishEvents: boolean | undefined): TailorDBType {
+        return {
+          name: "User",
+          pluralForm: "Users",
+          description: "User type",
+          fields: { name: { name: "name", config: { type: "string" } } },
+          forwardRelationships: {},
+          backwardRelationships: {},
+          settings: publishEvents === undefined ? {} : { publishEvents },
+          permissions: {},
+          files: {},
+        };
+      }
+
+      function createClientWithRemoteType(publishRecordEvents: boolean): OperatorClient {
+        const client = createMockClient([{ name: "shared-db", label: appName }]);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (client as any).listTailorDBTypes = vi.fn().mockResolvedValue({
+          tailordbTypes: [{ name: "User", schema: { settings: { publishRecordEvents } } }],
+          nextPageToken: "",
+        });
+        return client;
+      }
+
+      async function planWith(params: {
+        publishEvents: boolean | undefined;
+        subscribed: boolean;
+        remote?: boolean;
+      }) {
+        const { publishEvents, subscribed, remote } = params;
+        const tailorDBService = createMockTailorDBService("shared-db");
+        const userType = createTypeWith(publishEvents);
+        Object.defineProperty(tailorDBService, "types", {
+          value: { [userType.name]: userType },
+        });
+        return await planTailorDB({
+          client: remote === undefined ? createMockClient([]) : createClientWithRemoteType(remote),
+          workspaceId,
+          application: createMockApplication([tailorDBService]),
+          forRemoval: false,
+          config: mockConfig,
+          executorUsedTailorDBTypes: subscribed ? new Set(["User"]) : new Set<string>(),
+        });
+      }
+
+      function desiredPublishRecordEvents(
+        result: Awaited<ReturnType<typeof planTailorDB>>,
+      ): boolean | undefined {
+        const entry = result.changeSet.type.creates[0] ?? result.changeSet.type.updates[0];
+        expect(entry).toBeDefined();
+        return entry!.request.tailordbType?.schema?.settings?.publishRecordEvents;
+      }
+
+      test.each([
+        { publishEvents: undefined, subscribed: true, expected: true },
+        { publishEvents: undefined, subscribed: false, expected: false },
+        { publishEvents: true, subscribed: false, expected: true },
+        { publishEvents: true, subscribed: true, expected: true },
+        { publishEvents: false, subscribed: false, expected: false },
+      ])(
+        "resolves publishEvents=$publishEvents subscribed=$subscribed to $expected",
+        async ({ publishEvents, subscribed, expected }) => {
+          const result = await planWith({ publishEvents, subscribed });
+
+          expect(desiredPublishRecordEvents(result)).toBe(expected);
+        },
+      );
+
+      test("throws when an opt-out is combined with a subscribing executor", async () => {
+        await expect(planWith({ publishEvents: false, subscribed: true })).rejects.toThrow(
+          'TailorDB type "User" has "publishEvents: false", but executors with record triggers subscribe to it.',
+        );
+      });
+
+      test("rejects a conflicting opt-out before listing remote types", async () => {
+        const client = createMockClient([{ name: "shared-db", label: appName }]);
+        const tailorDBService = createMockTailorDBService("shared-db");
+        const userType = createTypeWith(false);
+        Object.defineProperty(tailorDBService, "types", {
+          value: { [userType.name]: userType },
+        });
+
+        await expect(
+          planTailorDB({
+            client,
+            workspaceId,
+            application: createMockApplication([tailorDBService]),
+            forRemoval: false,
+            config: mockConfig,
+            executorUsedTailorDBTypes: new Set(["User"]),
+          }),
+        ).rejects.toThrow('TailorDB type "User" has "publishEvents: false"');
+
+        expect(client.listTailorDBTypes).not.toHaveBeenCalled();
+      });
+
+      test("turns a remote opt-in back off once nothing subscribes", async () => {
+        const result = await planWith({
+          publishEvents: undefined,
+          subscribed: false,
+          remote: true,
+        });
+
+        expect(desiredPublishRecordEvents(result)).toBe(false);
+      });
+
+      test("keeps a remote opt-in while an executor still subscribes", async () => {
+        const result = await planWith({ publishEvents: undefined, subscribed: true, remote: true });
+
+        expect(desiredPublishRecordEvents(result)).toBe(true);
+      });
+    });
+
     test("includes validate and hooks for nested fields", async () => {
       const client = createMockClient([]);
       const tailorDBService = createMockTailorDBService("test-tailordb");
@@ -460,20 +575,22 @@ describe("planTailorDB (service level)", () => {
       const displayNameField = profileField?.fields?.displayName;
       const contactEmailField = profileField?.fields?.contact!.fields?.email;
 
-      expect(displayNameField?.validate).toHaveLength(1);
-      expect(displayNameField?.validate?.[0]?.errorMessage).toBe("Display name is required");
-      expect(displayNameField?.validate?.[0]?.script?.expr).toContain(
-        "!((_value ?? '').length > 0)",
-      );
-      expect(displayNameField?.hooks?.create?.expr).toBe("(_value ?? '').trim()");
-      expect(displayNameField?.hooks?.update?.expr).toBe("(_value ?? '').trim()");
+      expect(displayNameField?.optionalOnCreate).toBe(true);
+      expect(displayNameField?.hooks).toBeUndefined();
+      expect(displayNameField?.validate ?? []).toHaveLength(0);
+      expect(contactEmailField?.optionalOnCreate).toBe(true);
+      expect(contactEmailField?.hooks).toBeUndefined();
+      expect(contactEmailField?.validate ?? []).toHaveLength(0);
 
-      expect(contactEmailField?.validate).toHaveLength(1);
-      expect(contactEmailField?.validate?.[0]?.errorMessage).toBe("Email must contain @");
-      expect(contactEmailField?.validate?.[0]?.script?.expr).toContain(
-        "!((_value ?? '').includes('@'))",
-      );
-      expect(contactEmailField?.hooks?.create?.expr).toBe("(_value ?? '').toLowerCase()");
+      const hookExpr = createdType?.schema?.typeHook?.create?.expr ?? "";
+      expect(hookExpr).toContain('"profile": Object.assign({}, _input["profile"], {');
+      expect(hookExpr).toContain("(_value ?? '').trim()");
+      expect(hookExpr).toContain("(_value ?? '').toLowerCase()");
+
+      const validateExpr = createdType?.schema?.typeValidate?.create?.expr ?? "";
+      expect(validateExpr).toContain('__errs["profile.displayName"]');
+      expect(validateExpr).toContain('__errs["profile.contact.email"]');
+      expect(validateExpr).toContain('if (typeof __r === "string")');
     });
   });
 
@@ -562,7 +679,78 @@ describe("planTailorDB (service level)", () => {
 
       const result = await planTailorDB(ctx);
 
-      expect(result.changeSet.type.unchanged).toEqual([{ name: "Invoice" }]);
+      expect(result.changeSet.type.unchanged.map((entry) => entry.name)).toEqual(["Invoice"]);
+      expect(result.changeSet.type.updates).toHaveLength(0);
+    });
+
+    test("treats permission policy order differences as unchanged", async () => {
+      // Committed migration snapshots can carry the same permission policies in
+      // a different array order than the current config parse; the platform
+      // evaluates policies order-insensitively, so this must not read as drift.
+      const rolePolicy = {
+        conditions: [[{ user: "role" }, "eq", "MANAGER"]],
+        permit: "allow",
+      } as const;
+      const loggedInPolicy = {
+        conditions: [[{ user: "_loggedIn" }, "eq", true]],
+        permit: "allow",
+      } as const;
+      const makeType = (
+        read: readonly (typeof rolePolicy | typeof loggedInPolicy)[],
+        fields: Record<string, unknown>,
+      ) =>
+        ({
+          name: "Invoice",
+          pluralForm: "Invoices",
+          description: "Invoice type",
+          fields,
+          forwardRelationships: {},
+          backwardRelationships: {},
+          settings: {},
+          permissions: { record: { create: [], read, update: [], delete: [] } },
+          files: {},
+        }) as unknown as TailorDBType;
+
+      const localType = makeType([rolePolicy, loggedInPolicy], {
+        code: { name: "code", config: { type: "string", required: true } },
+      });
+      // The remote side is the manifest the SDK itself would have applied from a
+      // migration snapshot (snapshot-shaped fields), with the policies reversed.
+      const remoteManifest = generateTailorDBTypeManifestFromSnapshot(
+        makeType([loggedInPolicy, rolePolicy], {
+          code: { type: "string", required: true },
+        }) as unknown as Parameters<typeof generateTailorDBTypeManifestFromSnapshot>[0],
+      );
+
+      const tailorDBService = createMockTailorDBService("test-tailordb");
+      Object.defineProperty(tailorDBService, "types", {
+        value: { [localType.name]: localType },
+      });
+
+      const client = createRemoteTypeClient("test-tailordb", {
+        name: "Invoice",
+        description: "Invoice type",
+        pluralForm: "invoices",
+        fields: {},
+      });
+      (client.listTailorDBTypes as ReturnType<typeof vi.fn>).mockResolvedValue({
+        tailordbTypes: [{ name: "Invoice", schema: remoteManifest.schema }],
+        nextPageToken: "",
+      });
+
+      const application = createMockApplication([tailorDBService]);
+      const ctx: PlanContext = {
+        client,
+        workspaceId,
+        application,
+        forRemoval: false,
+        config: mockConfig,
+        noSchemaCheck: true,
+      };
+
+      const result = await planTailorDB(ctx);
+
+      expect(result.changeSet.type.unchanged.map((entry) => entry.name)).toEqual(["Invoice"]);
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
 
@@ -696,7 +884,7 @@ describe("planTailorDB (service level)", () => {
       const result = await planTailorDB(makeCtx([remoteMessage]));
 
       expect(result.changeSet.type.updates).toHaveLength(0);
-      expect(result.changeSet.type.unchanged).toEqual([{ name: "Invoice" }]);
+      expect(result.changeSet.type.unchanged.map((entry) => entry.name)).toEqual(["Invoice"]);
     });
 
     test("treats an omitted remote field description as unchanged against the local empty-string manifest", async () => {
@@ -760,7 +948,7 @@ describe("planTailorDB (service level)", () => {
 
       const result = await planTailorDB(ctx);
 
-      expect(result.changeSet.type.unchanged).toEqual([{ name: "Event" }]);
+      expect(result.changeSet.type.unchanged.map((entry) => entry.name)).toEqual(["Event"]);
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
   });
@@ -912,6 +1100,7 @@ describe("applyTailorDB phase separation", () => {
               },
             },
           ],
+          unchanged: [],
           title: "TailorDB Services",
           isEmpty: () => false,
           lines: () => [],
@@ -929,6 +1118,7 @@ describe("applyTailorDB phase separation", () => {
               },
             },
           ],
+          unchanged: [],
           title: "TailorDB Types",
           isEmpty: () => false,
           lines: () => [],
@@ -946,6 +1136,7 @@ describe("applyTailorDB phase separation", () => {
               },
             },
           ],
+          unchanged: [],
           title: "TailorDB GQL Permissions",
           isEmpty: () => false,
           lines: () => [],
@@ -1212,6 +1403,7 @@ describe("applyTailorDB migration label reconciliation", () => {
           creates: [],
           updates: [],
           deletes: [],
+          unchanged: [],
           title: "TailorDB Services",
           isEmpty: () => true,
           lines: () => [],
@@ -1220,6 +1412,7 @@ describe("applyTailorDB migration label reconciliation", () => {
           creates: [],
           updates: [],
           deletes: [],
+          unchanged: [],
           title: "TailorDB Types",
           isEmpty: () => true,
           lines: () => [],
@@ -1228,6 +1421,7 @@ describe("applyTailorDB migration label reconciliation", () => {
           creates: [],
           updates: [],
           deletes: [],
+          unchanged: [],
           title: "TailorDB GQL Permissions",
           isEmpty: () => true,
           lines: () => [],
@@ -1754,6 +1948,7 @@ describe("applyTailorDB type apply concurrency", () => {
       updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
       deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
       deleteTailorDBType: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
     } as unknown as OperatorClient;
 
@@ -1764,11 +1959,13 @@ describe("applyTailorDB type apply concurrency", () => {
         namespaceName: "test-tailordb",
         tailordbType: { name },
       },
+      metaRequest: { trn: `trn:v1:workspace:ws:tailordb:test-tailordb:type:${name}` },
     });
     const emptyChanges = (title: string) => ({
       creates: [],
       updates: [],
       deletes: [],
+      unchanged: [],
       title,
       isEmpty: () => true,
       lines: () => [],
@@ -1780,6 +1977,7 @@ describe("applyTailorDB type apply concurrency", () => {
           creates: ["CreateA", "CreateB", "CreateC"].map(changeOf),
           updates: ["UpdateA", "UpdateB", "UpdateC"].map(changeOf),
           deletes: [],
+          unchanged: [],
           title: "TailorDB Types",
           isEmpty: () => false,
           lines: () => [],

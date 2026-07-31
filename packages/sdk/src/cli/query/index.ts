@@ -41,6 +41,7 @@ import type { Application } from "@tailor-platform/tailor-proto/application_reso
 export type { QueryEngine } from "./types";
 
 const queryEngineSchema = z.enum(queryEngines);
+// strip unknown keys
 const queryBaseOptionsSchema = z.object({
   workspaceId: z.string().optional(),
   profile: z.string().optional(),
@@ -152,7 +153,7 @@ async function loadOptions(options: QueryBaseOptions) {
   });
   if (!machineUser) {
     throw new Error(
-      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor-sdk profile update <profile> --machine-user <name>'.",
+      "Machine user is required. Specify --machine-user, set TAILOR_PLATFORM_MACHINE_USER_NAME, or set a profile default with 'tailor profile update <profile> --machine-user <name>'.",
     );
   }
 
@@ -212,10 +213,10 @@ async function sqlQuery(
     workspaceId: args.workspaceId,
     name: `query-sql-${args.namespace}.js`,
     code: args.bundledCode,
-    arg: JSON.stringify({
+    arg: {
       namespace: args.namespace,
       queries,
-    }),
+    },
     invoker,
   });
 
@@ -253,11 +254,11 @@ async function gqlQuery(
     workspaceId: args.workspaceId,
     name: `query-gql.js`,
     code: args.bundledCode,
-    arg: JSON.stringify({
+    arg: {
       endpoint: `${application.url}/query`,
       accessToken,
       query: args.query,
-    }),
+    },
     invoker,
   });
 
@@ -748,7 +749,7 @@ export const queryCommand = defineAppCommand({
   name: "query",
   description: "Run SQL/GraphQL query.",
   args: z
-    .object({
+    .strictObject({
       ...deploymentArgs,
       engine: arg(queryEngineSchema, {
         description: "Query engine (sql or gql)",
@@ -766,7 +767,6 @@ export const queryCommand = defineAppCommand({
       }),
       "machine-user": arg(z.string().optional(), {
         alias: "m",
-        hiddenAlias: "machineuser",
         description:
           "Machine user name for query execution. Falls back to the active profile's default machine user.",
         env: "TAILOR_PLATFORM_MACHINE_USER_NAME",
@@ -800,8 +800,7 @@ export const queryCommand = defineAppCommand({
           message: "Pass only one of --edit, -q/--query, or -f/--file.",
         });
       }
-    })
-    .strict(),
+    }),
   run: async (args) => {
     const mode = await resolveQueryCommandInput({
       query: args.query,
@@ -826,9 +825,7 @@ export const queryCommand = defineAppCommand({
 
     if (mode.mode === "repl") {
       const newlineOnEnter =
-        args["newline-on-enter"] ??
-        parseBoolean(process.env.TAILOR_PLATFORM_QUERY_NEWLINE_ON_ENTER) ??
-        true;
+        args["newline-on-enter"] ?? parseBoolean(process.env.TAILOR_QUERY_NEWLINE_ON_ENTER) ?? true;
       await runRepl({
         ...sharedOptions,
         json: args.json,

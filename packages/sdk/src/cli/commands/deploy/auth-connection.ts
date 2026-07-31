@@ -7,7 +7,14 @@ import { type AuthService } from "#/cli/services/auth/service";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { createChangeSet } from "./change-set";
-import { buildMetaRequest, resourceTrn, sdkNameLabelKey, type WithLabel } from "./label";
+import {
+  buildMetaRequest,
+  type MetadataLabelWrite,
+  resourceTrn,
+  sdkNameLabelKey,
+  type WithLabel,
+  writeMetadataLabels,
+} from "./label";
 import { trackDesiredResourceOwnership, trackRemainingResourceOwner } from "./owned-resource";
 import {
   hashValue,
@@ -24,23 +31,22 @@ import type {
   UpdateAuthConnectionRequestSchema,
 } from "@tailor-platform/tailor-proto/auth_pb";
 import type { AuthConnection } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 type CreateConnection = {
   name: string;
   request: MessageInitShape<typeof CreateAuthConnectionRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateConnection = {
   name: string;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type MaskedUpdateConnection = {
   name: string;
   updateRequest: MessageInitShape<typeof UpdateAuthConnectionRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteConnection = {
@@ -174,7 +180,7 @@ export async function planAuthConnections(
     });
 
     if (existing) {
-      trackDesiredResourceOwnership({
+      const owned = trackDesiredResourceOwnership({
         labels: existing.allLabels,
         ownerLabel: existing.label,
         appName,
@@ -199,11 +205,13 @@ export async function planAuthConnections(
           } as MessageInitShape<typeof UpdateAuthConnectionRequestSchema>,
           metaRequest,
         });
-      } else if (!existing.label) {
-        // The connection itself is unchanged, but it carries no SDK label
-        // (e.g. it was just adopted via the unmanaged-resource confirmation,
-        // or created by an older SDK that predates ownership labels). Write
-        // the label now so the next deploy recognizes it as owned.
+      } else if (!owned) {
+        // The connection itself is unchanged, but this application does not own
+        // it yet: it carries no SDK label (just adopted, or created by an SDK
+        // that predates ownership labels), or it carries an id this config does
+        // not match. Either way the labels have to be written, or the take-over
+        // the user just confirmed would not happen and the next deploy would ask
+        // the same question again.
         changeSet.updates.push({ name, metaRequest });
       } else {
         changeSet.unchanged.push({ name });
@@ -265,11 +273,11 @@ export async function applyAuthConnections(
         await Promise.all(
           changeSet.creates.map(async (create) => {
             await client.createAuthConnection(create.request);
-            await client.setMetadata(create.metaRequest);
+            await writeMetadataLabels(client, create.metaRequest);
             logger.info(
               `Connection "${create.name}" was created. Authorize it with:\n` +
-                `  tailor-sdk authconnection authorize --name ${create.name}\n` +
-                `Or via the Console: tailor-sdk authconnection open`,
+                `  tailor authconnection authorize --name ${create.name}\n` +
+                `Or via the Console: tailor authconnection open`,
             );
           }),
         );
@@ -279,11 +287,11 @@ export async function applyAuthConnections(
           if (resp.connection?.status === AuthConnection_Status.UNAUTHORIZED) {
             logger.warn(
               `Connection "${replace.name}" requires re-authorization. Authorize with:\n` +
-                `  tailor-sdk authconnection authorize --name ${replace.name}\n` +
-                `Or via the Console: tailor-sdk authconnection open`,
+                `  tailor authconnection authorize --name ${replace.name}\n` +
+                `Or via the Console: tailor authconnection open`,
             );
           }
-          await client.setMetadata(replace.metaRequest);
+          await writeMetadataLabels(client, replace.metaRequest);
         }
 
         const secretReplaces = changeSet.replaces.filter((replace) =>
@@ -315,7 +323,7 @@ export async function applyAuthConnections(
     // whose configuration is otherwise unchanged.
     await Promise.all(
       changeSet.updates.map(async (update) => {
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     );
   } else if (changeSet.deletes.length > 0) {

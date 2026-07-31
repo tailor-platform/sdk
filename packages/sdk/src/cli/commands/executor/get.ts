@@ -26,15 +26,6 @@ export type GetExecutorTypedOptions<E extends ExecutorLike = ExecutorLike> = {
 };
 
 /**
- * @deprecated Use GetExecutorTypedOptions instead.
- */
-export interface GetExecutorOptions {
-  name: string;
-  workspaceId?: string;
-  profile?: string;
-}
-
-/**
  * Resolve an executor by name.
  * @param client - Operator client
  * @param workspaceId - Workspace ID
@@ -63,13 +54,8 @@ async function resolveExecutor(
  */
 export async function getExecutor<E extends ExecutorLike>(
   options: GetExecutorTypedOptions<E>,
-): Promise<ExecutorInfo>;
-export async function getExecutor(options: GetExecutorOptions): Promise<ExecutorInfo>;
-export async function getExecutor<E extends ExecutorLike>(
-  options: GetExecutorOptions | GetExecutorTypedOptions<E>,
 ): Promise<ExecutorInfo> {
-  // Discriminant: legacy options have top-level 'name', typed options use 'executor'.
-  const name = "name" in options ? options.name : options.executor.name;
+  const name = options.executor.name;
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -93,15 +79,13 @@ export async function getExecutor<E extends ExecutorLike>(
 export const getCommand = defineAppCommand({
   name: "get",
   description: "Get executor details",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...nameArgs,
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...nameArgs,
+  }),
   run: async (args) => {
     const executor = await getExecutor({
-      name: args.name,
+      executor: { name: args.name },
       workspaceId: args["workspace-id"],
       profile: args.profile,
     });

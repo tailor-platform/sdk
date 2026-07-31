@@ -2,6 +2,7 @@ import { Code, ConnectError } from "@connectrpc/connect";
 import { parseDuration } from "#/cli/shared/args";
 import { type OperatorClient, fetchAll } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
@@ -11,7 +12,17 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
+import {
+  addDependencyRecords,
+  buildMetaRequest,
+  type DependentAppsByResource,
+  eventSourceKey,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  sdkNameLabelKey,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -21,7 +32,6 @@ import type { ConcurrencyPolicy, Workflow, RetryPolicy } from "#/types/workflow.
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type { ApplyPhase } from "./phase";
 import type { MessageInitShape } from "@bufbuild/protobuf";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 import type { CreateWorkflowRequestSchema } from "@tailor-platform/tailor-proto/workflow_pb";
 import type {
   ConcurrencyPolicySchema,
@@ -71,7 +81,7 @@ export async function applyWorkflow(
           jobFunctions: filteredVersions,
           publishExecutionEvents: shape.publishExecutionEvents,
         });
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
         const filteredVersions = filterJobFunctionVersions(
@@ -88,8 +98,13 @@ export async function applyWorkflow(
           jobFunctions: filteredVersions,
           publishExecutionEvents: shape.publishExecutionEvents,
         });
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
+      // An unchanged workflow still gets its labels written, because its dependency
+      // records can change while its definition does not.
+      ...changeSet.unchanged.flatMap((entry) =>
+        entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : [],
+      ),
     ]);
   } else {
     await deleteAllSettled(
@@ -236,7 +251,8 @@ async function registerJobFunctions(
           : await client.createWorkflowJobFunction(request);
 
         // Set metadata to mark this JobFunction as owned by this app
-        await client.setMetadata(
+        await writeMetadataLabels(
+          client,
           await buildMetaRequest({
             trn: resourceTrn(workspaceId, "workflow_job_function", jobName),
             appName,
@@ -263,7 +279,7 @@ type CreateWorkflow = {
   workspaceId: string;
   workflow: Workflow;
   usedJobNames: string[];
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateWorkflow = {
@@ -271,7 +287,7 @@ type UpdateWorkflow = {
   workspaceId: string;
   workflow: Workflow;
   usedJobNames: string[];
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteWorkflow = {
@@ -345,6 +361,15 @@ export type WorkflowEventSubscribers = {
   workflowNames: ReadonlySet<string>;
 };
 
+/**
+ * A workflow whose definition is unchanged but whose dependency records may not
+ * be. The plan shows it as unchanged; apply still writes its labels.
+ */
+type UnchangedWorkflow = {
+  name: string;
+  metaRequest?: MetadataLabelWrite;
+};
+
 /** Inputs deciding which workflows and job functions publish execution events. */
 export type WorkflowEventPublishing = {
   /** Subscribers of `workflow.workflow_execution.*` events. */
@@ -353,6 +378,10 @@ export type WorkflowEventPublishing = {
   jobExecution?: WorkflowEventSubscribers;
   /** `publishEvents` declared on jobs, keyed by job name. */
   jobPublishEvents?: ReadonlyMap<string, boolean>;
+  /** Dependents the run resolved, keyed by resource. */
+  dependentApps?: DependentAppsByResource;
+  /** Stable ids of every application taking part in the run. */
+  runAppIds?: ReadonlySet<string>;
 };
 
 const NO_EVENT_SUBSCRIBERS: WorkflowEventSubscribers = {
@@ -363,60 +392,67 @@ function isSubscribed(subscribers: WorkflowEventSubscribers, workflowName: strin
   return subscribers.workflowNames.has(workflowName);
 }
 
-type ResolvePublishEventsParams = {
-  explicit: boolean | undefined;
-  subscribed: boolean;
-  remote: boolean | undefined;
-  conflictError: string;
-};
-
-function resolvePublishEvents(params: ResolvePublishEventsParams): boolean {
-  const { explicit, subscribed, remote, conflictError } = params;
-  if (explicit === false && subscribed) {
-    throw new Error(conflictError);
-  }
-  if (explicit !== undefined) {
-    return explicit;
-  }
-  // Subscriptions only cover this target, so a remote opt-in is kept rather than
-  // flipped off when the subscribing executor lives in a config outside the run.
-  return subscribed || (remote ?? false);
-}
-
 type ResolveJobPublishEventsParams = {
   workflows: Record<string, Workflow>;
   mainJobDeps: Record<string, string[]>;
   subscribers: WorkflowEventSubscribers;
   explicit: ReadonlyMap<string, boolean>;
-  existing: ReadonlyMap<string, ExistingJobFunction>;
 };
+
+/**
+ * Job names the given workflows' subscriptions enable.
+ *
+ * A job execution trigger names a workflow rather than a job, so the value is
+ * resolved per job name over the union of the workflows that run it: a job two
+ * workflows share stays on while either one is subscribed. Whoever asks whether a
+ * job still publishes has to apply that same union, which is why this is shared
+ * rather than restated — the two answering it differently is what let a shared
+ * job be reported as turning off while a peer subscription kept it on.
+ * @param params - Workflows, the jobs each runs, and which are subscribed
+ * @param params.workflows - Workflows whose job sets are considered
+ * @param params.mainJobDeps - Job names each workflow runs, keyed by its main job
+ * @param params.isSubscribed - Whether a workflow's jobs are subscribed in this run
+ * @returns Job names those subscriptions enable
+ */
+export function subscribedWorkflowJobNames(params: {
+  workflows: Iterable<{ name: string; mainJob: { name: string } }>;
+  mainJobDeps: Record<string, string[]>;
+  isSubscribed: (workflowName: string) => boolean;
+}): ReadonlySet<string> {
+  const { workflows, mainJobDeps, isSubscribed } = params;
+  const jobNames = new Set<string>();
+  for (const workflow of workflows) {
+    if (!isSubscribed(workflow.name)) continue;
+    // A missing entry gets a fuller diagnostic from planWorkflow's own loop.
+    for (const jobName of mainJobDeps[workflow.mainJob.name] ?? []) {
+      jobNames.add(jobName);
+    }
+  }
+  return jobNames;
+}
 
 /**
  * Resolve `publishExecutionEvents` for every job function used by a workflow.
  *
  * A job execution trigger names a workflow rather than a job, so a subscription
  * opts in every job that workflow runs.
- * @param params - Workflows, their job dependencies, subscribers, explicit job flags, and existing job functions
+ * @param params - Workflows, their job dependencies, subscribers, and explicit job flags
  * @returns Resolved flags keyed by job function name
  */
 function resolveJobPublishEvents(params: ResolveJobPublishEventsParams): Map<string, boolean> {
-  const { workflows, mainJobDeps, subscribers, explicit, existing } = params;
+  const { workflows, mainJobDeps, subscribers, explicit } = params;
   const usedJobNames = new Set<string>();
-  const subscribedJobNames = new Set<string>();
   for (const workflow of Object.values(workflows)) {
-    const jobNames = mainJobDeps[workflow.mainJob.name];
     // A missing entry gets a fuller diagnostic from planWorkflow's own loop.
-    if (!jobNames) {
-      continue;
-    }
-    const subscribed = isSubscribed(subscribers, workflow.name);
-    for (const jobName of jobNames) {
+    for (const jobName of mainJobDeps[workflow.mainJob.name] ?? []) {
       usedJobNames.add(jobName);
-      if (subscribed) {
-        subscribedJobNames.add(jobName);
-      }
     }
   }
+  const subscribedJobNames = subscribedWorkflowJobNames({
+    workflows: Object.values(workflows),
+    mainJobDeps,
+    isSubscribed: (workflowName) => isSubscribed(subscribers, workflowName),
+  });
 
   const resolved = new Map<string, boolean>();
   for (const jobName of usedJobNames) {
@@ -425,10 +461,7 @@ function resolveJobPublishEvents(params: ResolveJobPublishEventsParams): Map<str
       resolvePublishEvents({
         explicit: explicit.get(jobName),
         subscribed: subscribedJobNames.has(jobName),
-        remote: existing.get(jobName)?.publishExecutionEvents,
-        conflictError:
-          `Job "${jobName}" has "publishEvents: false", but executors with a workflowJobExecution trigger subscribe to a workflow that runs it. ` +
-          `Either remove "publishEvents: false" or remove the matching executor triggers.`,
+        conflict: publishEventsConflict.workflowJob(jobName),
       }),
     );
   }
@@ -477,7 +510,13 @@ export async function planWorkflow(
   unchangedJobFunctions: ReadonlySet<string> = new Set<string>(),
   eventPublishing: WorkflowEventPublishing = {},
 ) {
-  const changeSet = createChangeSet<CreateWorkflow, UpdateWorkflow, DeleteWorkflow>("Workflows");
+  const changeSet = createChangeSet<
+    CreateWorkflow,
+    UpdateWorkflow,
+    DeleteWorkflow,
+    never,
+    UnchangedWorkflow
+  >("Workflows");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -485,13 +524,22 @@ export async function planWorkflow(
   const retainedWorkflowJobNames = new Set<string>();
 
   const executionSubscribers = eventPublishing.execution ?? NO_EVENT_SUBSCRIBERS;
+  const { dependentApps, runAppIds } = eventPublishing;
+  // A workflowJobExecution subscription records on the workflow, so the workflow's
+  // own declaration does not settle whether its records still matter. Dropping
+  // them while a job it runs leaves publishEvents unset would delete the only
+  // signal fetchMissingDependentApps looks for on that workflow.
+  const everyJobDeclaresPublishEvents = (workflowName: string): boolean => {
+    const jobNames = mainJobDeps[workflows[workflowName]?.mainJob.name ?? ""] ?? [];
+    const explicit = eventPublishing.jobPublishEvents ?? new Map<string, boolean>();
+    return jobNames.length > 0 && jobNames.every((jobName) => explicit.has(jobName));
+  };
   const existingJobFunctions = await fetchExistingJobFunctions(client, workspaceId);
   const jobFunctionPublishEvents = resolveJobPublishEvents({
     workflows,
     mainJobDeps,
     subscribers: eventPublishing.jobExecution ?? NO_EVENT_SUBSCRIBERS,
     explicit: eventPublishing.jobPublishEvents ?? new Map<string, boolean>(),
-    existing: existingJobFunctions,
   });
   const staleJobFunctionNames = collectStaleJobFunctionNames(
     existingJobFunctions,
@@ -514,10 +562,27 @@ export async function planWorkflow(
 
   for (const workflow of Object.values(workflows)) {
     const existing = existingWorkflows[workflow.name];
-    const metaRequest = await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "workflow", workflow.name),
-      appName,
-      appId,
+    const metaRequest = addDependencyRecords(
+      await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "workflow", workflow.name),
+        appName,
+        appId,
+      }),
+      {
+        key: eventSourceKey.workflow(workflow.name),
+        dependentApps,
+        runAppIds,
+        pinned: workflow.publishEvents !== undefined,
+      },
+    );
+    // The jobs' value is driven by workflowJobExecution subscribers, independently
+    // of the workflow's own, so its records live in their own namespace here.
+    addDependencyRecords(metaRequest, {
+      key: eventSourceKey.workflowJobs(workflow.name),
+      dependentApps,
+      runAppIds,
+      pinned: everyJobDeclaresPublishEvents(workflow.name),
+      scope: "jobs",
     });
     // Get jobs used by this workflow from mainJobDeps
     const usedJobNames = mainJobDeps[workflow.mainJob.name];
@@ -538,10 +603,7 @@ export async function planWorkflow(
       publishEvents: resolvePublishEvents({
         explicit: workflow.publishEvents,
         subscribed: isSubscribed(executionSubscribers, workflow.name),
-        remote: existing?.resource.publishExecutionEvents,
-        conflictError:
-          `Workflow "${workflow.name}" has "publishEvents: false", but executors with a workflowExecution trigger subscribe to it. ` +
-          `Either remove "publishEvents: false" or remove the matching executor triggers.`,
+        conflict: publishEventsConflict.workflow(workflow.name),
       }),
     };
 
@@ -568,7 +630,8 @@ export async function planWorkflow(
           staleJobFunctionNames,
         })
       ) {
-        changeSet.unchanged.push({ name: workflow.name });
+        // The definition matches, but the records may not, so the labels still go.
+        changeSet.unchanged.push({ name: workflow.name, metaRequest });
         for (const jobName of usedJobNames) {
           unchangedWorkflowJobNames.add(jobName);
         }
@@ -626,6 +689,7 @@ export async function planWorkflow(
     appId,
     existingJobFunctionNames: [...existingJobFunctions.keys()],
     retainedWorkflowJobNames,
+    resourceOwners,
   });
   const deletableJobNames = new Set(jobFunctionDeletes.map((del) => del.jobFunctionName));
 
@@ -676,6 +740,7 @@ type PlanWorkflowJobFunctionDeletesParams = {
   appId: string | undefined;
   existingJobFunctionNames: readonly string[];
   retainedWorkflowJobNames: ReadonlySet<string>;
+  resourceOwners: Set<string>;
 };
 
 async function planWorkflowJobFunctionDeletes(
@@ -688,6 +753,7 @@ async function planWorkflowJobFunctionDeletes(
     appId,
     existingJobFunctionNames,
     retainedWorkflowJobNames,
+    resourceOwners,
   } = params;
   const candidates = existingJobFunctionNames.filter(
     (jobName) => !retainedWorkflowJobNames.has(jobName),
@@ -697,7 +763,15 @@ async function planWorkflowJobFunctionDeletes(
       const { metadata } = await client.getMetadata({
         trn: resourceTrn(workspaceId, "workflow_job_function", jobFunctionName),
       });
-      return isOwnedByApp(metadata?.labels, appName, appId)
+      // Record the owner of what is skipped, so remove can say it left something
+      // behind instead of reporting that it deleted everything.
+      return trackRemainingResourceOwner({
+        labels: metadata?.labels,
+        ownerLabel: metadata?.labels[sdkNameLabelKey],
+        appName,
+        appId,
+        resourceOwners,
+      })
         ? { workspaceId, jobFunctionName }
         : undefined;
     }),

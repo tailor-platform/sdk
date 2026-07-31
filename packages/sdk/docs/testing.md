@@ -11,18 +11,21 @@ Lean on unit tests for the day-to-day feedback loop — they run fast and exerci
 
 Unit-test entrypoints exposed by the SDK:
 
-- `resolver.body({ input, user, env })` — invoke a resolver
-- `workflowJob.body(input, { env })` / `workflowJob.trigger(input)` — invoke or chain a workflow job
-- `executor.operation.body(args)` — invoke a function-kind executor
+- `resolver.body({ input, caller, invoker, env })` — invoke a resolver
+- `workflowJob.body(input, { env, invoker })` — invoke a workflow job body directly
+- `workflowJob.start(input)` — chain a workflow job through the workflow runtime
+- `runWorkflowLocally(workflow, args)` — run a workflow chain locally with real job bodies
+- `executor.operation.body({ ...args, invoker })` — invoke a function-kind executor
 
-Helpers under `@tailor-platform/sdk/test`:
+For anonymous direct calls:
 
-- `unauthenticatedTailorUser` — default `user` value for resolver contexts
+- Pass `null` for anonymous `caller` / `invoker` context in direct unit tests.
 
 Platform API mocks under `@tailor-platform/sdk/vitest` (for use with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below):
 
 - `mockTailordb` — TailorDB query stubs and call recording
 - `mockWorkflow` — `tailor.workflow` job / wait / resolve mocks
+- `runWorkflowLocally` — local full-chain workflow runner
 - `mockSecretmanager`, `mockAuthconnection`, `mockIdp`, `mockFile`, `mockIconv`, `mockAigateway`, `mockLogger` — corresponding platform API mocks
 
 For tighter alignment with the production runtime — Node.js module blocking, Web-only globals, and platform API mocks — pair the resolver helpers with the [`tailor-runtime` Vitest environment](#runtime-environment-emulation-beta) below.
@@ -101,7 +104,12 @@ test("resolver queries the database", async () => {
     [], // COMMIT
   );
 
-  const result = await resolver.body({ input: { email: "test@example.com" } });
+  const result = await resolver.body({
+    input: { email: "test@example.com" },
+    caller: null,
+    invoker: null,
+    env: {},
+  });
 
   expect(result).toEqual({ oldAge: 30, newAge: 31 });
   expect(db.executedQueries).toHaveLength(3);
@@ -119,7 +127,12 @@ test("content-based mock", async () => {
     .returnsRowsOnce([{ id: "first" }])
     .returnsRows([{ id: "later" }]);
 
-  const result = await resolver.body({ input: { userId: "1" } });
+  const result = await resolver.body({
+    input: { userId: "1" },
+    caller: null,
+    invoker: null,
+    env: {},
+  });
 
   expect(db.executedQueries[0].query).toContain("SELECT");
 });
@@ -133,13 +146,13 @@ Pass `{ onUnhandled: "error" }` to make an unmatched query fail instead of retur
 
 ### Workflow Mock
 
-`.trigger()` runs real job bodies locally out of the box (see [Running a full workflow locally](#running-a-full-workflow-locally)). Use `job(definition)` or `workflow(definition)` to get a stable, fully typed Vitest mock for one definition:
+Workflow job `.start()` calls use the platform workflow runtime. Acquire `mockWorkflow()` when you want to provide start responses with `setJobHandler` / `enqueueResult` or assert on `startedJobs`. If no response is configured, the mock throws so missing job mocks fail loudly. Use `job(definition)` or `workflow(definition)` to get a stable, fully typed Vitest mock for one definition:
 
 ```typescript
 import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { processPayment, validateOrder } from "./jobs";
 
-test("workflow triggers jobs", async () => {
+test("workflow starts jobs", async () => {
   using wf = mockWorkflow();
   const validate = wf.job(validateOrder);
   const payment = wf.job(processPayment);
@@ -153,7 +166,7 @@ test("workflow triggers jobs", async () => {
 });
 ```
 
-Unconfigured definition mocks continue to run their real implementations. The lower-level `execJobFunction`, `triggerWorkflow`, `resumeWorkflow`, `wait`, and `resolve` mocks and the existing `setJobHandler`, `enqueueResult`, `enqueueResults`, and call-record helpers remain available.
+Unconfigured definition mocks continue to run their real implementations. The lower-level `execJobFunction`, `startWorkflow`, `resumeWorkflowExecution`, `wait`, and `resolve` mocks and the existing `setJobHandler`, `enqueueResult`, `enqueueResults`, and call-record helpers remain available.
 
 Use `waitPoint(definition)` for typed wait-point control:
 
@@ -166,6 +179,8 @@ await approvalWaitPoint.wait({ message: "Please approve" });
 
 expect(approvalMock.wait).toHaveBeenCalledWith({ message: "Please approve" });
 ```
+
+Use `wf.setEnv(...)` when locally-run workflow job bodies need configuration values. Per-run `runWorkflowLocally(..., { env })` options take precedence over the mock's env.
 
 ### SecretManager Mock
 
@@ -247,7 +262,7 @@ test("mock file download", async () => {
 });
 ```
 
-All File operations are typed Vitest mocks: `upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `openDownloadStream`, `downloadStream`, and `uploadStream`. Use native methods such as `mockResolvedValueOnce` and `mockRejectedValueOnce` to model success and failure. The existing resolver, queue, and aggregate `calls` APIs remain supported.
+All File operations are typed Vitest mocks: `upload`, `download`, `downloadAsBase64`, `delete`, `getMetadata`, `downloadStream`, and `uploadStream`. Use native methods such as `mockResolvedValueOnce` and `mockRejectedValueOnce` to model success and failure. The existing resolver, queue, and aggregate `calls` APIs remain supported.
 
 For `downloadStream`, configure a `FileDownloadStreamResponse` object with a `ReadableStream` body and metadata:
 
@@ -267,28 +282,6 @@ test("mock file download stream", async () => {
 
   const result = await tailordb.file.downloadStream("ns", "Doc", "attachment", "r-1");
   expect(result.metadata.fileSize).toBe(3);
-});
-```
-
-For the deprecated `openDownloadStream`, `enqueueResult` can adapt an iterable of `StreamValue` items — `metadata`, one or more `chunk` items, and a terminal `complete`. Raw `Uint8Array` / `ArrayBuffer` chunks are rejected so tests stay aligned with the platform's structured stream contract.
-
-```typescript
-test("mock file download stream (deprecated openDownloadStream)", async () => {
-  using file = mockFile();
-  file.enqueueResult([
-    {
-      type: "metadata",
-      metadata: { contentType: "image/png", fileSize: 3, sha256sum: "abc" },
-    },
-    { type: "chunk", data: new Uint8Array([1, 2]), position: 0 },
-    { type: "chunk", data: new Uint8Array([3]), position: 2 },
-    { type: "complete" },
-  ]);
-
-  const stream = await tailordb.file.openDownloadStream("ns", "Doc", "attachment", "r-1");
-  const items = [];
-  for await (const item of stream) items.push(item);
-  expect(items).toHaveLength(4);
 });
 ```
 
@@ -402,7 +395,7 @@ export default defineConfig({
 
 ## Unit Tests
 
-Unit tests call `.body()` (or `.trigger()`) directly on a resolver, workflow job, or executor and stub any platform-provided globals they touch.
+Unit tests call `.body()` (or `.start()`) directly on a resolver, workflow job, or executor and stub any platform-provided globals they touch.
 
 ### Testing Resolvers
 
@@ -411,7 +404,6 @@ Unit tests call `.body()` (or `.trigger()`) directly on a resolver, workflow job
 For pure logic with no external dependencies, invoke `.body()` directly:
 
 ```typescript
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { describe, expect, test } from "vitest";
 import resolver from "../src/resolver/add";
 
@@ -419,7 +411,8 @@ describe("add resolver", () => {
   test("adds two numbers", async () => {
     const result = await resolver.body({
       input: { left: 1, right: 2 },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: {},
     });
     expect(result).toBe(3);
@@ -438,7 +431,6 @@ Stub the global `tailordb.Client` and queue raw query results in order. Best for
 > The example below uses `aroundAll` / `aroundEach`, which require Vitest ≥ 4.1.
 
 ```typescript
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { aroundAll, aroundEach, describe, expect, test, vi } from "vitest";
 import resolver from "../src/resolver/incrementUserAge";
 
@@ -472,7 +464,8 @@ describe("incrementUserAge resolver", () => {
 
     const result = await resolver.body({
       input: { email: "test@example.com" },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: {},
     });
 
@@ -543,7 +536,6 @@ describe("decrementUserAge", () => {
 Pass `mock.db` to functions that take a Kysely instance. When a resolver or executor calls `getDB()` internally there is no such seam, so spy the generated `getDB` and point it at the mock:
 
 ```typescript
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { createKyselyMock } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test, vi } from "vitest";
 import { getDB, type Namespace } from "../generated/db";
@@ -575,7 +567,8 @@ describe("upsertUsers resolver", () => {
           { name: "Existing", email: "exists@example.com", age: 41 },
         ],
       },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: { appName: "Resolver Template", version: 1 },
     });
 
@@ -594,7 +587,6 @@ Reach for [`mockTailordb`](#mocking-the-tailordb-client) instead when you want t
 Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `mockWorkflow().waitPoint(definition)` to invoke the callback with the payload that originally suspended the job:
 
 ```typescript
-import { unauthenticatedTailorUser } from "@tailor-platform/sdk/test";
 import { mockWorkflow } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import { approval } from "../workflow/approval";
@@ -611,7 +603,8 @@ describe("resolveApproval resolver", () => {
 
     const result = await resolver.body({
       input: { executionId: "exec-1", approved: true },
-      user: unauthenticatedTailorUser,
+      caller: null,
+      invoker: null,
       env: {},
     });
 
@@ -654,7 +647,7 @@ describe("retryFailedWorkflow resolver", () => {
 
 ### Testing Executors
 
-Function-kind executors expose their handler as `executor.operation.body(args)`. The shape of `args` is determined by the trigger — for example, `recordCreatedTrigger({ type: user })` produces `{ newRecord }` typed against the type's output. GraphQL, webhook, and workflow operation kinds are declarative and don't expose a user-authored body to test.
+Function-kind executors expose their handler as `executor.operation.body(args)`. The shape of `args` is determined by the trigger — for example, `recordCreatedTrigger({ type: user })` produces `{ newRecord }` typed against the type's output, plus runtime fields such as `env`, `actor`, and `invoker`. GraphQL, webhook, and workflow operation kinds are declarative and don't expose a user-authored body to test.
 
 The `executor` template extracts shared DB access into a helper (`shared.ts`) and tests the helper directly against a mocked `tailordb.Client` (same TailorDB-mocking pattern as the resolver section). Executor handlers themselves stay thin and can be tested by spying on the helper:
 
@@ -671,6 +664,14 @@ describe("onUserCreated executor", () => {
       throw new Error("expected function operation");
     }
     await onUserCreated.operation.body({
+      workspaceId: "workspace-1",
+      appNamespace: "app",
+      env: {},
+      actor: null,
+      invoker: null,
+      event: "created",
+      rawEvent: "tailordb.type_record.created",
+      typeName: "User",
       newRecord: {
         id: "user-1",
         name: "Alice",
@@ -695,11 +696,11 @@ To exercise the full chain (executor → helper → TailorDB), drop the spy and 
 
 ### Testing Workflow Jobs
 
-Workflow jobs expose the same `.body()` entrypoint as resolvers, plus `.trigger()` for calling them from another job or a test.
+Workflow jobs expose the same `.body()` entrypoint as resolvers, plus `.start()` for calling them from another job or a test.
 
 #### Simple job
 
-Call `.body()` with the input and a stub `{ env: {} }`:
+Call `.body()` with the input and a stub `{ env: {}, invoker: null }`:
 
 ```typescript
 import { describe, expect, test } from "vitest";
@@ -707,19 +708,22 @@ import { validateOrder } from "./order-fulfillment";
 
 describe("validateOrder", () => {
   test("accepts a valid order", () => {
-    const result = validateOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });
+    const result = validateOrder.body(
+      { orderId: "order-1", amount: 100 },
+      { env: {}, invoker: null },
+    );
     expect(result).toEqual({ valid: true, orderId: "order-1" });
   });
 
   test("rejects a non-positive amount", () => {
-    expect(() => validateOrder.body({ orderId: "order-1", amount: 0 }, { env: {} })).toThrow(
-      "Order amount must be positive",
-    );
+    expect(() =>
+      validateOrder.body({ orderId: "order-1", amount: 0 }, { env: {}, invoker: null }),
+    ).toThrow("Order amount must be positive");
   });
 });
 ```
 
-#### Jobs that trigger other jobs
+#### Jobs that start other jobs
 
 Use `mockWorkflow().job(definition)` to replace dependent jobs with deterministic results:
 
@@ -746,7 +750,10 @@ describe("fulfillOrder", () => {
       confirmed: true,
     });
 
-    const result = await fulfillOrder.body({ orderId: "order-1", amount: 100 }, { env: {} });
+    const result = await fulfillOrder.body(
+      { orderId: "order-1", amount: 100 },
+      { env: {}, invoker: null },
+    );
 
     expect(validate).toHaveBeenCalledWith({ orderId: "order-1", amount: 100 });
     expect(result).toMatchObject({ confirmed: true, paymentStatus: "completed" });
@@ -771,7 +778,10 @@ describe("processWithApproval", () => {
     const approvalMock = wf.waitPoint(approval);
     approvalMock.wait.mockResolvedValue({ approved: true });
 
-    const result = await processWithApproval.body({ orderId: "order-1" }, { env: {} });
+    const result = await processWithApproval.body(
+      { orderId: "order-1" },
+      { env: {}, invoker: null },
+    );
 
     expect(result).toEqual({ orderId: "order-1", status: "approved" });
     expect(approvalMock.wait).toHaveBeenCalledWith({
@@ -784,7 +794,10 @@ describe("processWithApproval", () => {
     using wf = mockWorkflow();
     wf.waitPoint(approval).wait.mockResolvedValue({ approved: false });
 
-    const result = await processWithApproval.body({ orderId: "order-2" }, { env: {} });
+    const result = await processWithApproval.body(
+      { orderId: "order-2" },
+      { env: {}, invoker: null },
+    );
 
     expect(result.status).toBe("rejected");
   });
@@ -795,15 +808,16 @@ The lower-level `setWaitHandler` and `waitCalls` APIs remain available when one 
 
 #### Running a full workflow locally
 
-To exercise the full chain with real job bodies, just call `workflow.mainJob.trigger()` — no `mockWorkflow()` needed. Dependent jobs run their real `.body()` functions, and trigger args/results cross the same JSON boundary as the platform, so a non-serializable payload fails the test exactly as it would in production:
+To exercise the full chain with real job bodies, call `runWorkflowLocally(workflow, args)`. Dependent jobs run their real `.body()` functions, and start args/results cross the same JSON boundary as the platform, so a non-serializable payload fails the test exactly as it would in production:
 
 ```typescript
+import { runWorkflowLocally } from "@tailor-platform/sdk/vitest";
 import { describe, expect, test } from "vitest";
 import workflow from "./order-fulfillment";
 
 describe("order-fulfillment workflow", () => {
-  test("mainJob.trigger() executes all jobs", async () => {
-    const result = await workflow.mainJob.trigger({ orderId: "order-3", amount: 300 });
+  test("runWorkflowLocally() executes all jobs", async () => {
+    const result = await runWorkflowLocally(workflow, { orderId: "order-3", amount: 300 });
 
     expect(result).toMatchObject({ confirmed: true, paymentStatus: "completed" });
   });
@@ -811,6 +825,14 @@ describe("order-fulfillment workflow", () => {
 ```
 
 Acquire `mockWorkflow()` only when you need to override a dependent definition with `wf.job(...)` / `wf.workflow(...)` (the rest still run their real bodies), control the env via `wf.setEnv(...)`, or assert on calls.
+
+Pass `{ env }` as the third argument when job bodies need configuration values during the local run.
+
+If you already acquired `mockWorkflow()`, you can also call `wf.setEnv(...)` to reuse the same env across local workflow runs.
+
+Like the platform runtime, the local runner re-runs the orchestrator body once per `.start()` call (N starts means N+1 passes), so any side effects outside the start results fire on every pass. Keep the body deterministic and move repeatable side effects into the started jobs.
+
+This helper is still a local runner. Use E2E tests when you need to verify deployed workflow scheduling, suspension, or replay behavior.
 
 **Use when:** you want to verify orchestration end to end without the cost of a real deployment.
 
@@ -910,14 +932,13 @@ Use `startWorkflow` from the CLI helpers. It starts the workflow on the deployed
 import { randomUUID } from "node:crypto";
 import { startWorkflow } from "@tailor-platform/sdk/cli";
 import { describe, expect, test } from "vitest";
-import config from "../tailor.config";
 import userProfileSync from "../src/workflow/sync-profile";
 
 describe("user-profile-sync workflow", () => {
   test("executes end to end", { timeout: 180_000 }, async () => {
     const { executionId, wait } = await startWorkflow({
       workflow: userProfileSync,
-      authInvoker: config.auth.invoker("admin"),
+      invoker: "admin",
       arg: {
         name: "workflow-test",
         email: `wf-${randomUUID()}@example.com`,

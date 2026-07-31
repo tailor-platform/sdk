@@ -21,13 +21,13 @@ describe("query-bundler", () => {
       `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     );
     fs.mkdirSync(testDir, { recursive: true });
-    process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
     await runTest();
   });
 
   aroundAll(async (runSuite) => {
     await runSuite();
-    delete process.env.TAILOR_SDK_OUTPUT_DIR;
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
     try {
       fs.rmSync(TEST_BUNDLER_BASE, { recursive: true, force: true });
     } catch {
@@ -81,7 +81,7 @@ describe("query-bundler", () => {
     });
 
     test("writes entry files to query output directory (bundle output is in-memory only)", async () => {
-      const outputDir = path.join(process.env.TAILOR_SDK_OUTPUT_DIR!, "query");
+      const outputDir = path.join(process.env.TAILOR_BUILD_OUTPUT_DIR!, "query");
 
       await bundleQueryScript("sql", __dirname);
       await bundleQueryScript("gql", __dirname);

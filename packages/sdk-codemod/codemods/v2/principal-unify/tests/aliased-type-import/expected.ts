@@ -1,5 +1,6 @@
-import { type TailorPrincipal as MyUser } from "@tailor-platform/sdk";
+import { type TailorPrincipal as MyUser, type TailorPrincipal } from "@tailor-platform/sdk";
 
 export type Props = {
   caller: MyUser;
+  invoker: (TailorPrincipal | null);
 };

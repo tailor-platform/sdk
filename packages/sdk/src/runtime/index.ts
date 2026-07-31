@@ -17,23 +17,23 @@
 
 import type { TailorAigatewayAPI } from "./aigateway";
 import type { TailorAuthconnectionAPI } from "./authconnection";
-import type { TailorContextAPI } from "./context";
+import type { PlatformContextAPI } from "./context";
 import type { TailorDBFileAPI } from "./file";
 import type { TailorIconvAPI } from "./iconv";
 import type { TailorIdpAPI } from "./idp";
 import type { TailorLoggerAPI } from "./logger";
 import type { TailorSecretmanagerAPI } from "./secretmanager";
-import type { TailorWorkflowAPI } from "./workflow";
+import type { PlatformWorkflowAPI } from "./workflow";
 
-export * as iconv from "./iconv";
-export * as secretmanager from "./secretmanager";
-export * as authconnection from "./authconnection";
-export * as idp from "./idp";
-export * as workflow from "./workflow";
-export * as context from "./context";
-export * as file from "./file";
-export * as aigateway from "./aigateway";
-export * as logger from "./logger";
+export { iconv } from "./iconv";
+export { secretmanager } from "./secretmanager";
+export { authconnection } from "./authconnection";
+export { idp } from "./idp";
+export { workflow } from "./workflow";
+export { context } from "./context";
+export { file } from "./file";
+export { aigateway } from "./aigateway";
+export { logger } from "./logger";
 
 /** SQL command type recorded on a {@link TailordbQueryResult}. */
 export type TailordbCommandType =
@@ -71,8 +71,8 @@ export interface TailorRuntime {
   authconnection: TailorAuthconnectionAPI;
   iconv: TailorIconvAPI;
   idp: TailorIdpAPI;
-  workflow: TailorWorkflowAPI;
-  context: TailorContextAPI;
+  workflow: PlatformWorkflowAPI;
+  context: PlatformContextAPI;
   aigateway: TailorAigatewayAPI;
   logger: TailorLoggerAPI;
 }

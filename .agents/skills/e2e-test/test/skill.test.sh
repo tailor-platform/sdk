@@ -8,7 +8,7 @@ cleanup_helper="$skill_dir/scripts/cleanup-e2e-workspaces.mjs"
 ids_helper="$skill_dir/scripts/with-e2e-ids.sh"
 runner="$skill_dir/scripts/run-sdk-e2e.sh"
 fixtures="$skill_dir/test/fixtures"
-fake_cli="$fixtures/fake-tailor-sdk.mjs"
+fake_cli="$fixtures/fake-tailor.mjs"
 fake_pnpm_source="$fixtures/bin/pnpm"
 
 fail() {

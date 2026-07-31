@@ -11,7 +11,7 @@ import ml from "#/utils/multiline";
 export const currentCommand = defineAppCommand({
   name: "current",
   description: "Show current user.",
-  args: z.object({}).strict(),
+  args: z.strictObject({}),
   run: async () => {
     const config = await readPlatformConfig();
     const profile = process.env.TAILOR_PLATFORM_PROFILE;
@@ -27,7 +27,7 @@ export const currentCommand = defineAppCommand({
     if (!currentUser) {
       throw new Error(ml`
         Current user not set.
-        Please login first using 'tailor-sdk login' command to register a user.
+        Please login first using 'tailor login' command to register a user.
       `);
     }
 
@@ -35,7 +35,7 @@ export const currentCommand = defineAppCommand({
     if (!hasUserTokenEntry(config, currentUser, platformConfig)) {
       throw new Error(ml`
         Current user '${currentUser}' not found in registered users.
-        Please login again using 'tailor-sdk login' command to register the user.
+        Please login again using 'tailor login' command to register the user.
       `);
     }
 

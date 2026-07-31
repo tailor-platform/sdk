@@ -5,8 +5,8 @@ import type {
   TailorTypePermission,
   TailorTypeGqlPermission,
 } from "#/configure/services/tailordb/permission";
-import type { DependencyKind } from "#/parser/generator-config/schema";
 import type {
+  DependencyKind,
   Plugin,
   PluginAttachment,
   PluginGeneratedExecutor,
@@ -509,7 +509,7 @@ export class PluginManager {
 
   /**
    * Extend a TailorDB type with new fields.
-   * This method handles the `db.type()` call and metadata copying internally.
+   * This method handles the `db.table()` call and metadata copying internally.
    * @param params - Parameters for type extension
    * @returns The extended TailorDB type
    */
@@ -536,7 +536,7 @@ export class PluginManager {
     const typeName = pluralForm
       ? ([originalType.name, pluralForm] as [string, string])
       : originalType.name;
-    const extendedType = db.type(typeName, fieldsWithoutId);
+    const extendedType = db.table(typeName, fieldsWithoutId);
     return copyMetadataToExtendedType(originalType, extendedType);
   }
 }
@@ -563,7 +563,7 @@ export interface PluginTypeGenerationResult {
  * Parameters for generating plugin files
  */
 export interface GeneratePluginFilesParams {
-  /** Base output directory (e.g., .tailor-sdk/plugin) */
+  /** Base output directory (e.g., .tailor/plugin) */
   outputDir: string;
   /** Map of source type names to their source info */
   sourceTypeInfoMap: Map<string, SourceTypeInfo>;

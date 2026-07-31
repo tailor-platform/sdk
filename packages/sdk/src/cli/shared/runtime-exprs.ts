@@ -7,10 +7,13 @@
  * - Bundle inline: interpolated into the generated entry module and
  *   evaluated inside the bundled script at function entry.
  *
- * The user field mapping (server → SDK) shared across services is defined in
- * `@/parser/service/tailordb` as `tailorUserMap`.
+ * The principal field mapping (server → SDK) shared across services is built by
+ * `makePrincipalExpr` from `@/parser/service/tailordb`; `tailorPrincipalMap`
+ * (the `caller` mapping) is one of its outputs. `INVOKER_EXPR` and
+ * `ACTOR_TRANSFORM_EXPR` below come from the same factory so the three stay in
+ * sync.
  */
-import { tailorUserMap } from "#/parser/service/tailordb/index";
+import { makePrincipalExpr, tailorPrincipalMap } from "#/parser/service/tailordb/index";
 import type { Trigger } from "#/types/executor.generated";
 import type { Resolver } from "#/types/resolver.generated";
 
@@ -22,15 +25,21 @@ import type { Resolver } from "#/types/resolver.generated";
  * `invoker` value expression, inlined into bundler entry wrappers.
  *
  * Calls `tailor.context.getInvoker()` at function entry and maps the server
- * shape to TailorInvoker. Anonymous callers (`null`) pass through as `null`.
+ * shape to `TailorPrincipal | null`. The payload is already in SDK type shape,
+ * so no `USER_TYPE_*` normalization is needed; anonymous callers (`null`) pass
+ * through as `null`.
  */
-export const INVOKER_EXPR = `(($raw) => $raw ? ({
-  id: $raw.id,
-  type: $raw.type,
-  workspaceId: $raw.workspaceId,
-  attributes: $raw.attributeMap,
-  attributeList: $raw.attributes,
-}) : null)(tailor.context.getInvoker())`;
+export const INVOKER_EXPR = makePrincipalExpr({
+  source: "tailor.context.getInvoker()",
+  normalize: false,
+  fields: {
+    type: { raw: "$raw.type" },
+    id: "$raw.id",
+    workspaceId: "$raw.workspaceId",
+    attributes: "$raw.attributeMap",
+    attributeList: "$raw.attributes",
+  },
+});
 
 // ---------------------------------------------------------------------------
 // Executor
@@ -39,15 +48,20 @@ export const INVOKER_EXPR = `(($raw) => $raw ? ({
 /**
  * Actor field transformation expression.
  *
- * Transforms the server's actor object to match the SDK's TailorActor type:
- *   server `attributeMap`  → SDK `attributes`
- *   server `attributes`    → SDK `attributeList`
- *   other fields           → passed through
- *   null/undefined actor   → null
+ * Transforms the server's actor object to match `TailorPrincipal | null`.
  */
-const ACTOR_TRANSFORM_EXPR =
-  `actor: args.actor ? (({ attributeMap, attributes: attrList, ...rest }) => ` +
-  `({ ...rest, attributes: attributeMap, attributeList: attrList }))(args.actor) : null`;
+const ACTOR_TRANSFORM_EXPR = `actor: ${makePrincipalExpr({
+  source: "args.actor",
+  normalize: true,
+  requireId: true,
+  fields: {
+    type: { raw: "$raw?.userType", fallback: "$raw?.type" },
+    id: "$raw?.userId ?? $raw?.id",
+    workspaceId: "$raw.workspaceId",
+    attributes: "$raw.attributeMap ?? {}",
+    attributeList: "$raw.attributes ?? []",
+  },
+})}`;
 
 /**
  * Build the JavaScript expression that transforms server-format executor event
@@ -100,7 +114,7 @@ export function buildExecutorArgsExpr(
  * Transforms server context to SDK resolver context:
  *   context.args        → input
  *   context.pipeline     → spread into result
- *   user (global var)    → TailorUser (via tailorUserMap: workspace_id→workspaceId, attribute_map→attributes, attributes→attributeList)
+ *   user (global var)    → caller (`TailorPrincipal | null`)
  *   env                 → injected as JSON
  * @param env - Application env record to embed in the expression
  * @returns A JavaScript expression string for the operationHook
@@ -108,7 +122,7 @@ export function buildExecutorArgsExpr(
 export function buildResolverOperationHookExpr(
   env: Record<string, string | number | boolean>,
 ): string {
-  return `({ ...context.pipeline, input: context.args, user: ${tailorUserMap}, env: ${JSON.stringify(env)} });`;
+  return `({ ...context.pipeline, input: context.args, caller: ${tailorPrincipalMap}, env: ${JSON.stringify(env)} });`;
 }
 
 type ResolverPermissionPolicies = Extract<NonNullable<Resolver["permission"]>, readonly unknown[]>;
@@ -129,22 +143,22 @@ function isSingleResolverCondition(
 function resolverPermissionOperandExpr(operand: ResolverPermissionOperand): string {
   if (typeof operand === "object") {
     if (operand.user === "_loggedIn") {
-      return `(context.user.type !== "")`;
+      return `(context.caller !== null)`;
     }
     if (operand.user === "id") {
-      return `context.user.id`;
+      return `context.caller?.id`;
     }
-    return `context.user.attributes?.[${JSON.stringify(operand.user)}]`;
+    return `context.caller?.attributes?.[${JSON.stringify(operand.user)}]`;
   }
   return JSON.stringify(operand);
 }
 
-// `_loggedIn` always evaluates to a defined boolean, and `id` is always a
-// defined string (a nil UUID for unauthenticated callers), but an arbitrary
-// attribute lookup (`context.user.attributes?.[key]`) can be `undefined` --
-// either because the whole attribute map is null or the key isn't set.
+// `_loggedIn` always evaluates to a defined boolean, but `id` and arbitrary
+// attribute lookups go through `context.caller?.` and can be `undefined` --
+// the caller is `null` for anonymous requests, and an attribute key may not
+// be set.
 function isArbitraryAttributeOperand(operand: ResolverPermissionOperand): boolean {
-  return typeof operand === "object" && operand.user !== "_loggedIn" && operand.user !== "id";
+  return typeof operand === "object" && operand.user !== "_loggedIn";
 }
 
 function resolverPermissionConditionExpr(condition: ResolverPermissionCondition): string {
@@ -197,7 +211,7 @@ function policyEntryExpr(policy: ResolverPermissionPolicy): string {
  * Build the permission guard statement injected at resolver entry.
  *
  * Rejects the call with `TailorErrorMessage` when the caller doesn't match
- * `permission`, evaluated against `context.user` — the original caller,
+ * `permission`, evaluated against `context.caller` — the original caller,
  * unaffected by `authInvoker`. `permission` is deny-by-default: a caller is
  * granted only by a matching `permit: true` policy, and a matching
  * `permit: false` policy always overrides that grant. The thrown message only
@@ -246,9 +260,10 @@ export function buildResolverPermissionGuardExpr(
  *
  * Kept as a single generator so a resolver-wrapping behavior (like the
  * permission guard) can't be added to one entry-point template and forgotten
- * in the other. References `context.user`, `context.input`, and
+ * in the other. References `context.caller`, `context.input`, `invoker`, and
  * `_internalResolver` — the caller's wrapper must bind a `context` object
- * with `user`/`input` properties before inlining this expression.
+ * with `user`/`input` properties and an `invoker` binding (from
+ * `INVOKER_EXPR`) before inlining this expression.
  * @param permission - The resolver's `permission` config
  * @returns A JS statement block to inline before calling `_internalResolver.body(...)`
  */
@@ -262,7 +277,7 @@ export function buildResolverPermissionAndInputCheckExpr(
       const result = t.object(_internalResolver.input).parse({
         value: context.input,
         data: context.input,
-        user: context.user,
+        invoker,
       });
 
       if (result.issues) {

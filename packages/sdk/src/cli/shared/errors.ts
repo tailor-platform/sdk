@@ -1,4 +1,3 @@
-import { Code, ConnectError } from "@connectrpc/connect";
 import chalk from "chalk";
 
 /**
@@ -15,14 +14,10 @@ export interface CLIErrorOptions {
 }
 
 export interface CLIErrorNextAction {
-  /** Executable name, such as `tailor-sdk`. */
+  /** Executable name, such as `tailor`. */
   command: string;
   /** Arguments passed directly to the executable. */
   args: readonly string[];
-}
-
-export interface ErrorToJsonOptions {
-  includeStack?: boolean;
 }
 
 /**
@@ -85,7 +80,7 @@ function formatError(error: CLIError): string {
 
   if (error.command) {
     parts.push(
-      `\n  ${chalk.gray("Help:")} Run \`tailor-sdk ${error.command} --help\` for usage information.`,
+      `\n  ${chalk.gray("Help:")} Run \`tailor ${error.command} --help\` for usage information.`,
     );
   }
 
@@ -121,67 +116,6 @@ function createCLIError(options: CLIErrorOptions): CLIError {
  */
 export function isCLIError(error: unknown): error is CLIError {
   return error instanceof Error && error.name === "CLIError";
-}
-
-/**
- * Convert a CLI failure into the stable JSON error envelope.
- * @param error - Failure to serialize
- * @param options - JSON serialization options
- * @returns JSON-compatible error envelope
- */
-export function errorToJson(
-  error: unknown,
-  options?: ErrorToJsonOptions,
-): { error: Readonly<Record<string, unknown>> } {
-  if (isCLIError(error)) {
-    return {
-      error: {
-        code: error.code ?? "CLI_ERROR",
-        message: error.message,
-        ...(error.details ? { details: error.details } : {}),
-        ...(error.suggestion ? { suggestion: error.suggestion } : {}),
-        ...(error.command
-          ? {
-              help: executableHelpAction(error.command),
-            }
-          : {}),
-        ...(error.next ? { next: error.next } : {}),
-        ...(error.context ? { context: error.context } : {}),
-        ...(options?.includeStack && error.stack ? { stack: error.stack } : {}),
-      },
-    };
-  }
-  if (error instanceof ConnectError) {
-    const codeName = Code[error.code];
-    const stableCode =
-      typeof codeName === "string"
-        ? codeName.replaceAll(/([a-z0-9])([A-Z])/g, "$1_$2").toUpperCase()
-        : `CODE_${error.code}`;
-    return {
-      error: {
-        code: `RPC_${stableCode}`,
-        message: error.message,
-        ...(options?.includeStack && error.stack ? { stack: error.stack } : {}),
-      },
-    };
-  }
-  if (error instanceof Error) {
-    return {
-      error: {
-        code: error.name === "CIPromptError" ? "INTERACTIVE_PROMPT_REQUIRED" : "UNEXPECTED_ERROR",
-        message: error.message,
-        ...(options?.includeStack && error.stack ? { stack: error.stack } : {}),
-      },
-    };
-  }
-  return { error: { code: "UNKNOWN_ERROR", message: String(error) } };
-}
-
-function executableHelpAction(command: string): CLIErrorNextAction {
-  return {
-    command: "tailor-sdk",
-    args: [...command.split(/\s+/).filter(Boolean), "--help"],
-  };
 }
 
 // Re-export createCLIError as CLIError for backward compatibility

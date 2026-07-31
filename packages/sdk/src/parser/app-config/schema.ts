@@ -3,6 +3,19 @@ import { LOG_LEVELS } from "./log-level";
 
 const envValueSchema = z.union([z.string(), z.number(), z.boolean()]);
 
+// A boolean is never detected as a credential, so it cannot need an allowance.
+const allowedSecretValueSchema = z.union([z.string(), z.number()]);
+
+const envEntrySchema = z.union([
+  envValueSchema,
+  z.strictObject({
+    value: allowedSecretValueSchema,
+    allowSecretReason: z.string().min(1, {
+      message: "'allowSecretReason' must state why the value is safe to keep in 'env'.",
+    }),
+  }),
+]);
+
 export const LogLevelSchema = z.enum(LOG_LEVELS);
 
 const logLevelSchema = z
@@ -22,10 +35,10 @@ const logLevelSchema = z
  * label-compatible prefix is added at the metadata boundary, so user-facing
  * configs only need to carry a UUID.
  */
-export const AppConfigSchema = z.object({
+export const AppConfigSchema = z.strictObject({
   id: z.uuid({ message: "'id' must be a UUID." }).optional(),
   name: z.string().min(1, { message: "'name' must be a non-empty string." }),
-  env: z.record(z.string(), envValueSchema).optional(),
+  env: z.record(z.string(), envEntrySchema).optional(),
   cors: z.array(z.string()).optional(),
   allowedIpAddresses: z.array(z.string()).optional(),
   disableIntrospection: z.boolean().optional(),

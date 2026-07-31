@@ -33,7 +33,7 @@ vi.mock("rolldown", async (importOriginal) => {
         throw new Error(`Expected a virtual TailorDB script entry, received ${String(input)}`);
       }
       const plugins = options.plugins as rolldown.Plugin[];
-      if (!plugins.some((plugin) => plugin.name === "tailor-sdk-virtual-entry")) {
+      if (!plugins.some((plugin) => plugin.name === "tailor-virtual-entry")) {
         throw new Error("Virtual entry plugin was not configured");
       }
 
@@ -79,6 +79,7 @@ describe("precompileTailorDBTypeScripts", () => {
           metadata: { hooks: { create: createHook } },
         },
       },
+      metadata: {},
     } as unknown as TailorDBTypeRaw;
 
     try {
@@ -104,6 +105,7 @@ describe("precompileTailorDBTypeScripts", () => {
           metadata: { hooks: { create: createHook } },
         },
       },
+      metadata: {},
     } as unknown as TailorDBTypeRaw;
 
     expectVirtualEntry = true;
@@ -215,7 +217,7 @@ describe("collectSourceBindings", () => {
         `import { db } from "@tailor-platform/sdk";`,
         `import { formatAddress } from "./helpers";`,
         `const MAX = 100;`,
-        `export const customer = db.type("Customer", {`,
+        `export const customer = db.table("Customer", {`,
         `  name: db.string(),`,
         `}).hooks({ fullAddress: { create: ({ data }) => formatAddress(data) } });`,
         ``,

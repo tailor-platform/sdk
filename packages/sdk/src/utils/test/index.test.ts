@@ -8,7 +8,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 describe("createTailorDBHook", () => {
   describe("id field", () => {
     test("uses existing id from data when provided", () => {
-      const type = db.type("Test", { name: db.string() });
+      const type = db.table("Test", { name: db.string() });
       const result = createTailorDBHook(type)({
         id: "00000000-0000-0000-0000-000000000001",
         name: "a",
@@ -21,7 +21,7 @@ describe("createTailorDBHook", () => {
       ["data is null", null],
       ["data is undefined", undefined],
     ])("generates a UUID when %s", (_label, data) => {
-      const type = db.type("Test", { name: db.string() });
+      const type = db.table("Test", { name: db.string() });
       const result = createTailorDBHook(type)(data);
       expect(result.id).toMatch(UUID_REGEX);
     });
@@ -29,7 +29,7 @@ describe("createTailorDBHook", () => {
 
   describe("plain field passthrough", () => {
     test("passes through scalar field values unchanged", () => {
-      const type = db.type("Test", {
+      const type = db.table("Test", {
         name: db.string(),
         age: db.int(),
         active: db.bool(),
@@ -46,13 +46,13 @@ describe("createTailorDBHook", () => {
       ["data is null", null],
       ["data is a non-object primitive", "not-an-object"],
     ])("does not set scalar fields when %s", (_label, data) => {
-      const type = db.type("Test", { name: db.string() });
+      const type = db.table("Test", { name: db.string() });
       const result = createTailorDBHook(type)(data);
       expect(result.name).toBeUndefined();
     });
 
     test("preserves explicit null values from data", () => {
-      const type = db.type("Test", { nickname: db.string({ optional: true }) });
+      const type = db.table("Test", { nickname: db.string({ optional: true }) });
       const result = createTailorDBHook(type)({ nickname: null });
       expect(result.nickname).toBeNull();
     });
@@ -60,7 +60,7 @@ describe("createTailorDBHook", () => {
 
   describe("single nested object field", () => {
     test("recursively processes the nested object", () => {
-      const type = db.type("Test", {
+      const type = db.table("Test", {
         user: db.object({ name: db.string(), age: db.int() }),
       });
       const result = createTailorDBHook(type)({
@@ -70,7 +70,7 @@ describe("createTailorDBHook", () => {
     });
 
     test("generates a nested id when the nested object has an id field", () => {
-      const type = db.type("Test", {
+      const type = db.table("Test", {
         nested: db.object({ id: db.uuid(), name: db.string() }),
       });
       const result = createTailorDBHook(type)({ nested: { name: "x" } });
@@ -78,10 +78,11 @@ describe("createTailorDBHook", () => {
     });
 
     test("invokes nested sub-field hooks", () => {
-      const type = db.type("Test", {
+      const type = db.table("Test", {
         user: db.object({
+          // @ts-expect-error hooks on nested inner fields are now type-blocked
           name: db.string().hooks({
-            create: ({ value }) => `hooked:${value as string}`,
+            create: ({ input }) => `hooked:${input as string}`,
           }),
         }),
       });
@@ -92,7 +93,7 @@ describe("createTailorDBHook", () => {
 
   describe("nested object array field", () => {
     test("preserves array values when array is provided", () => {
-      const type = db.type("Test", {
+      const type = db.table("Test", {
         lines: db.object({ kind: db.string(), days: db.int() }, { array: true }),
       });
       const value = [
@@ -104,7 +105,7 @@ describe("createTailorDBHook", () => {
     });
 
     test("recursively processes each array element so nested ids are generated", () => {
-      const type = db.type("Test", {
+      const type = db.table("Test", {
         lines: db.object({ id: db.uuid(), kind: db.string() }, { array: true }),
       });
       const result = createTailorDBHook(type)({
@@ -118,13 +119,14 @@ describe("createTailorDBHook", () => {
 
     test("invokes per-element sub-field hooks", () => {
       const calls: unknown[] = [];
-      const type = db.type("Test", {
+      const type = db.table("Test", {
         lines: db.object(
           {
+            // @ts-expect-error hooks on nested inner fields are now type-blocked
             stamp: db.string().hooks({
-              create: ({ value }) => {
-                calls.push(value);
-                return `stamped:${value as string}`;
+              create: ({ input }) => {
+                calls.push(input);
+                return `stamped:${input as string}`;
               },
             }),
           },
@@ -139,7 +141,7 @@ describe("createTailorDBHook", () => {
     });
 
     test("preserves an empty array as an empty array", () => {
-      const type = db.type("Test", {
+      const type = db.table("Test", {
         lines: db.object({ kind: db.string() }, { array: true }),
       });
       const result = createTailorDBHook(type)({ lines: [] });
@@ -150,14 +152,14 @@ describe("createTailorDBHook", () => {
       ["passes through null for optional array field", { lines: null }, null],
       ["passes through undefined for omitted optional array field", {}, undefined],
     ])("%s", (_label, data, expected) => {
-      const type = db.type("Test", {
+      const type = db.table("Test", {
         lines: db.object({ kind: db.string() }, { optional: true, array: true }),
       });
       expect(createTailorDBHook(type)(data).lines).toBe(expected);
     });
 
     test("passes through non-array values without recursing (so the validator surfaces a clear error)", () => {
-      const type = db.type("Test", {
+      const type = db.table("Test", {
         lines: db.object({ kind: db.string() }, { array: true }),
       });
       // Pass an object instead of an array; the hook must not corrupt it into a single
@@ -168,49 +170,74 @@ describe("createTailorDBHook", () => {
     });
   });
 
-  describe("create hook on a top-level field", () => {
-    test("invokes the create hook with value, full data, and the unauthenticated user", () => {
-      const seen: { value: unknown; data: unknown; userId: string }[] = [];
-      const type = db.type("Order", { total: db.float(), tax: db.float() }).hooks({
-        tax: {
-          create: ({ value, data, user }) => {
-            seen.push({ value, data, userId: user.id });
-            return (data as { total: number }).total * 0.1;
-          },
+  describe("type-level create hook", () => {
+    test("invokes the create hook and applies field overrides", () => {
+      const seen: { input: unknown; invoker: unknown }[] = [];
+      const type = db.table("Order", { total: db.float(), tax: db.float() }).hooks({
+        create: ({ input, invoker }) => {
+          seen.push({ input, invoker });
+          return { tax: (input as { total: number }).total * 0.1 };
         },
       });
       const result = createTailorDBHook(type)({ total: 100, tax: undefined });
       expect(result.tax).toBe(10);
       expect(seen).toEqual([
         {
-          value: undefined,
-          data: { total: 100, tax: undefined },
-          userId: "00000000-0000-0000-0000-000000000000",
+          input: { total: 100, tax: undefined },
+          invoker: null,
         },
       ]);
     });
 
-    test("normalizes a Date returned from the create hook to an ISO string", () => {
+    test("normalizes a Date returned from the type hook to an ISO string", () => {
       const fixed = new Date("2026-04-15T00:00:00.000Z");
       const type = db
-        .type("Test", { createdAt: db.datetime() })
-        .hooks({ createdAt: { create: () => fixed } });
+        .table("Test", { createdAt: db.datetime() })
+        .hooks({ create: () => ({ createdAt: fixed }) });
       expect(createTailorDBHook(type)({}).createdAt).toBe("2026-04-15T00:00:00.000Z");
+    });
+
+    test("shares the same now timestamp between field-level and type-level hooks", () => {
+      let fieldNow: Date | undefined;
+      let typeNow: Date | undefined;
+      const type = db
+        .table("Test", {
+          createdAt: db.datetime().hooks({ create: ({ now }) => (fieldNow = now) }),
+          label: db.string(),
+        })
+        .hooks({ create: ({ now }) => ((typeNow = now), { label: "x" }) });
+      createTailorDBHook(type)({});
+      expect(fieldNow).toBeInstanceOf(Date);
+      expect(typeNow).toBe(fieldNow);
+    });
+
+    test("runs type-level validate and throws on validation failure", () => {
+      const type = db
+        .table("Range", {
+          start: db.int(),
+          end: db.int(),
+        })
+        .validate(({ newRecord }, issues) => {
+          if ((newRecord.start as number) > (newRecord.end as number)) {
+            issues("start", "start must be <= end");
+          }
+        });
+      expect(() => createTailorDBHook(type)({ start: 10, end: 5 })).toThrow(
+        "Validation failed on field 'start': start must be <= end",
+      );
+      expect(() => createTailorDBHook(type)({ start: 1, end: 10 })).not.toThrow();
     });
 
     test("does not invoke a hook that only defines update (createTailorDBHook is create-only)", () => {
       let updateCalled = false;
-      const type = db.type("Test", { updatedAt: db.datetime() }).hooks({
-        updatedAt: {
-          update: () => {
-            updateCalled = true;
-            return new Date();
-          },
+      const type = db.table("Test", { updatedAt: db.datetime() }).hooks({
+        update: () => {
+          updateCalled = true;
+          return { updatedAt: new Date() };
         },
       });
       const result = createTailorDBHook(type)({ updatedAt: "2026-01-01T00:00:00.000Z" });
       expect(updateCalled).toBe(false);
-      // Falls through to plain passthrough
       expect(result.updatedAt).toBe("2026-01-01T00:00:00.000Z");
     });
   });
@@ -218,7 +245,7 @@ describe("createTailorDBHook", () => {
 
 describe("createStandardSchema", () => {
   const buildSchema = () => {
-    const type = db.type("PurchaseOrder", {
+    const type = db.table("PurchaseOrder", {
       paymentTermSnapshotLines: db.object(
         { kind: db.string(), days: db.int() },
         { optional: true, array: true },
@@ -253,7 +280,7 @@ describe("createStandardSchema", () => {
   });
 
   test("returns issues when the hooked data fails validation", () => {
-    const type = db.type("Test", { name: db.string() });
+    const type = db.table("Test", { name: db.string() });
     const schemaType = t.object({ id: t.uuid(), name: t.string() });
     const schema = createStandardSchema(schemaType, createTailorDBHook(type));
 

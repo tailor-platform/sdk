@@ -19,7 +19,7 @@ export interface Namespace {
       email: string;
       age: number;
       createdAt: Generated<Timestamp>;
-      updatedAt: Timestamp | null;
+      updatedAt: Generated<Timestamp>;
     }
   }
 }

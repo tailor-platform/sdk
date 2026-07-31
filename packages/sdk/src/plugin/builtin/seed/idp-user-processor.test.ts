@@ -14,6 +14,7 @@ type SeedResult = {
   processed: number;
   created: number;
   updated: number;
+  skipped: number;
   errors: string[];
 };
 
@@ -221,6 +222,27 @@ describe("generateIdpSeedScriptCode", () => {
     });
   });
 
+  test("skips an existing user whose seed row has no attributes beyond name", async () => {
+    const calls = stubIdp({ existing: { id: "existing-id" } });
+    const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+
+    const result = await main({
+      users: [{ name: "existing" }],
+      upsert: true,
+    });
+
+    expect(calls.updated).toEqual([]);
+    expect(calls.operations).toEqual(["lookup:existing"]);
+    expect(result).toMatchObject({
+      success: true,
+      processed: 1,
+      created: 0,
+      updated: 0,
+      skipped: 1,
+      errors: [],
+    });
+  });
+
   test("reports a create-after-lookup race instead of overwriting the user", async () => {
     const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
     const updated: Array<{ id: string; password?: string }> = [];
@@ -249,8 +271,34 @@ describe("generateIdpSeedScriptCode", () => {
     expect(result.processed).toBe(0);
     expect(result.created).toBe(0);
     expect(result.updated).toBe(0);
-    expect(result.errors[0]).toContain("already exists");
+    expect(result.errors[0]).toContain("create failed (already exists)");
+    expect(result.errors[0]).toContain("lookup failed (not found)");
     expect(updated).toEqual([]);
+  });
+
+  test("preserves the lookup failure reason alongside the create error", async () => {
+    const main = await loadSeedMain(generateIdpSeedScriptCode("test-ns"));
+    (globalThis as { tailor?: unknown }).tailor = {
+      idp: {
+        Client: class {
+          async createUser() {
+            throw new Error("duplicate name");
+          }
+          async userByName() {
+            throw new Error("permission denied");
+          }
+          async updateUser() {
+            throw new Error("should not be called");
+          }
+        },
+      },
+    };
+
+    const result = await main({ users: [{ name: "ghost" }], upsert: true });
+
+    expect(result.success).toBe(false);
+    expect(result.errors[0]).toContain("create failed (duplicate name)");
+    expect(result.errors[0]).toContain("lookup failed (permission denied)");
   });
 });
 

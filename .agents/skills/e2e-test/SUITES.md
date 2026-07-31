@@ -12,7 +12,7 @@ Confirm the saved workspace still hosts `my-app`:
 ```sh
 /bin/bash .agents/skills/e2e-test/scripts/with-e2e-ids.sh \
   .agents/skills/e2e-test/ids.local.env -- \
-  pnpm exec tailor-sdk workspace app list
+  pnpm exec tailor workspace app list
 ```
 
 Treat a reused workspace as shared until its users and ownership are known. List its Platform users
@@ -21,7 +21,7 @@ before any redeploy:
 ```sh
 /bin/bash .agents/skills/e2e-test/scripts/with-e2e-ids.sh \
   .agents/skills/e2e-test/ids.local.env -- \
-  pnpm exec tailor-sdk workspace user list
+  pnpm exec tailor workspace user list
 ```
 
 If another person or automation may rely on it, ask the user before changing it. With a valid
@@ -29,17 +29,17 @@ profile, run both checks with the same `TAILOR_PLATFORM_PROFILE` instead of the 
 
 If the workspace is missing or no longer hosts the application:
 
-1. Verify login with `pnpm exec tailor-sdk workspace list`.
+1. Verify login with `pnpm exec tailor workspace list`.
 2. Resolve existing organization and folder IDs only when they are not saved:
    ```sh
-   pnpm exec tailor-sdk organization list
-   pnpm exec tailor-sdk organization folder list --organization-id <organization-id>
+   pnpm exec tailor organization list
+   pnpm exec tailor organization folder list --organization-id <organization-id>
    ```
 3. Ask before creating a long-lived workspace. Use `example-e2e` unless it collides.
 4. Save its ID to `ids.local.env`, set mode `0600`, deploy, and confirm `my-app`:
    ```sh
    TAILOR_PLATFORM_WORKSPACE_ID=<workspace-id> pnpm --filter example run deploy
-   pnpm exec tailor-sdk workspace app list --workspace-id <workspace-id>
+   pnpm exec tailor workspace app list --workspace-id <workspace-id>
    ```
 
 Use `run deploy`; pnpm's built-in `deploy` shadows the package script when `run` is omitted.
@@ -70,8 +70,8 @@ This suite creates disposable workspaces and uses `TAILOR_PLATFORM_ORGANIZATION_
 If either ID is missing, discover an existing value and save it to `ids.local.env` with mode `0600`:
 
 ```sh
-pnpm exec tailor-sdk organization list
-pnpm exec tailor-sdk organization folder list --organization-id <organization-id>
+pnpm exec tailor organization list
+pnpm exec tailor organization folder list --organization-id <organization-id>
 ```
 
 Run through the wrapper so every workspace created for the run receives one namespace and cleanup is

@@ -2,6 +2,10 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "rules": {
     "unicorn/no-array-reverse": "error",
-    "unicorn/no-array-sort": "error"
-  }
+    "unicorn/no-array-sort": "error",
+    "tailor-zod/require-object-policy-comment": "error",
+    "zod/prefer-loose-object": "error",
+    "zod/prefer-strict-object": "error"
+  },
+  "jsPlugins": ["eslint-plugin-zod", "../scripts/oxlint/tailor-zod-plugin.cjs"]
 }

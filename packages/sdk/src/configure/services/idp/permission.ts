@@ -5,7 +5,7 @@ import type {
   UserStringOperand,
 } from "#/configure/types/permission-operand.types";
 import type { IdPUserField } from "#/parser/service/idp/types";
-import type { InferredAttributeMap } from "#/runtime/types";
+import type { InferredAttributes } from "#/runtime/types";
 
 type EqualityOperator = "=" | "!=";
 type ContainsOperator = "in" | "not in";
@@ -37,7 +37,7 @@ type BooleanEqualityCondition<User extends object, Update extends boolean> =
   | readonly [boolean | UserBooleanOperand<User>, EqualityOperator, IdPUserOperand<Update>];
 
 type EqualityCondition<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
 > = StringEqualityCondition<User, Update> | BooleanEqualityCondition<User, Update>;
 
@@ -54,17 +54,17 @@ type BooleanContainsCondition<User extends object, Update extends boolean> =
   | readonly [IdPUserOperand<Update>, ContainsOperator, boolean[] | UserBooleanArrayOperand<User>];
 
 type ContainsCondition<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
 > = StringContainsCondition<User, Update> | BooleanContainsCondition<User, Update>;
 
 export type IdPPermissionCondition<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
 > = EqualityCondition<User, Update> | ContainsCondition<User, Update>;
 
 type IdPActionPermission<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
 > =
   | {
@@ -98,7 +98,7 @@ type IdPActionPermission<
  *   unenrollMfa: [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }],
  * };
  */
-export type IdPPermission<User extends object = InferredAttributeMap> = {
+export type IdPPermission<User extends object = InferredAttributes> = {
   create: readonly IdPActionPermission<User, false>[];
   read: readonly IdPActionPermission<User, false>[];
   update: readonly IdPActionPermission<User, true>[];

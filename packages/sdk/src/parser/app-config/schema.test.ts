@@ -47,12 +47,23 @@ describe("AppConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  test("ignores unknown top-level fields without erroring", () => {
+  test("rejects unknown top-level fields", () => {
     const result = AppConfigSchema.safeParse({
       name: "my-app",
       futureField: "ok",
     });
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    if (result.success) {
+      throw new Error("Expected AppConfigSchema parsing to fail");
+    }
+    expect(result.error.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "unrecognized_keys",
+          keys: ["futureField"],
+        }),
+      ]),
+    );
   });
 
   test("rejects when env value type is unsupported", () => {

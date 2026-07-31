@@ -66,6 +66,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.get_access_token.outputs.token }}
 
+      # Only fires when changesets/action created/updated a release PR (as
+      # opposed to publishing). See resolve-pending-release-versions.sh.
+      - name: Resolve pending release versions
+        if: steps.changesets.outputs.pullRequestNumber
+        env:
+          GH_TOKEN: ${{ steps.get_access_token.outputs.token }}
+          PR_NUMBER: ${{ steps.changesets.outputs.pullRequestNumber }}
+        shell: bash
+        run: bash ./.github/scripts/resolve-pending-release-versions.sh
+
       # Idempotent: creates a release (and its tag, via `gh release create
       # --target`) for every package version that doesn't have one yet, and
       # fails the job if creation fails — so a broken release step is caught

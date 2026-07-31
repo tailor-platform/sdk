@@ -1,0 +1,7 @@
+name: "@tailor-platform/auth-connection-token-helper"
+version: "1.0.0"
+description: "Replace defineAuth auth.getConnectionToken() calls with the authconnection runtime wrapper where the auth binding is imported from tailor.config"
+engine: jssg
+language: typescript
+since: "1.0.0"
+until: "2.0.0"

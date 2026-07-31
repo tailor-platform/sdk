@@ -20,16 +20,24 @@ export function createVirtualEntry(
   sourceType: "js" | "ts" = "js",
   resolutionBasis?: string,
 ): VirtualEntry {
-  const input = `tailor-sdk-entry:${name}.${sourceType}`;
+  const input = `tailor-entry:${name}.${sourceType}`;
   const resolvedId = `\0${input}`;
 
   return {
     input,
     plugin: {
-      name: "tailor-sdk-virtual-entry",
+      name: "tailor-virtual-entry",
       async resolveId(source, importer) {
         if (source === input && importer === undefined) return resolvedId;
-        if (importer !== resolvedId || !resolutionBasis) return null;
+        if (
+          importer !== resolvedId ||
+          !resolutionBasis ||
+          source.startsWith(".") ||
+          path.isAbsolute(source) ||
+          source.startsWith("\0")
+        ) {
+          return null;
+        }
         return this.resolve(source, resolutionBasis, { skipSelf: true });
       },
       load(id) {
@@ -54,7 +62,7 @@ export function createGeneratedEntryResolverPlugin(entryPath: string, projectDir
   const resolutionBasis = path.join(path.resolve(projectDir), "__tailor_sdk_generated_entry__.js");
 
   return {
-    name: "tailor-sdk-generated-entry-resolver",
+    name: "tailor-generated-entry-resolver",
     async resolveId(source, importer) {
       if (
         importer === undefined ||

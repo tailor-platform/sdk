@@ -23,12 +23,43 @@ export default defineConfig([
         "codemods/v2/test-run-arg-input/scripts/transform.ts",
       "v2/sdk-skills-shim/scripts/transform": "codemods/v2/sdk-skills-shim/scripts/transform.ts",
       "v2/principal-unify/scripts/transform": "codemods/v2/principal-unify/scripts/transform.ts",
+      "v2/auth-attributes-rename/scripts/transform":
+        "codemods/v2/auth-attributes-rename/scripts/transform.ts",
       "v2/apply-to-deploy/scripts/transform": "codemods/v2/apply-to-deploy/scripts/transform.ts",
       "v2/cli-rename/scripts/transform": "codemods/v2/cli-rename/scripts/transform.ts",
+      "v2/env-var-rename/scripts/transform": "codemods/v2/env-var-rename/scripts/transform.ts",
+      "v2/auth-invoker-call-unwrap/scripts/transform":
+        "codemods/v2/auth-invoker-call-unwrap/scripts/transform.ts",
       "v2/auth-invoker-unwrap/scripts/transform":
         "codemods/v2/auth-invoker-unwrap/scripts/transform.ts",
+      "v2/auth-connection-token-helper/scripts/transform":
+        "codemods/v2/auth-connection-token-helper/scripts/transform.ts",
+      "v2/runtime-subpath-namespace/scripts/transform":
+        "codemods/v2/runtime-subpath-namespace/scripts/transform.ts",
       "v2/tailordb-namespace/scripts/transform":
         "codemods/v2/tailordb-namespace/scripts/transform.ts",
+      "v2/db-type-to-table/scripts/transform": "codemods/v2/db-type-to-table/scripts/transform.ts",
+      "v2/erd-site-to-plugin/scripts/transform":
+        "codemods/v2/erd-site-to-plugin/scripts/transform.ts",
+      "v2/forward-relation-name/scripts/transform":
+        "codemods/v2/forward-relation-name/scripts/transform.ts",
+      "v2/runtime-globals-opt-in/scripts/transform":
+        "codemods/v2/runtime-globals-opt-in/scripts/transform.ts",
+      "v2/execute-script-arg/scripts/transform":
+        "codemods/v2/execute-script-arg/scripts/transform.ts",
+      "v2/tailor-output-ignore-dir/scripts/transform":
+        "codemods/v2/tailor-output-ignore-dir/scripts/transform.ts",
+      "v2/rename-bin/scripts/transform": "codemods/v2/rename-bin/scripts/transform.ts",
+      "v2/wait-point-rename/scripts/transform":
+        "codemods/v2/wait-point-rename/scripts/transform.ts",
+      "v2/exec-job-function-rename/scripts/transform":
+        "codemods/v2/exec-job-function-rename/scripts/transform.ts",
+      "v2/workflow-trigger-rename/scripts/transform":
+        "codemods/v2/workflow-trigger-rename/scripts/transform.ts",
+      "v2/seed-exec-to-cli-plugin/scripts/transform":
+        "codemods/v2/seed-exec-to-cli-plugin/scripts/transform.ts",
+      "v2/idp-publish-events-rename/scripts/transform":
+        "codemods/v2/idp-publish-events-rename/scripts/transform.ts",
     },
     format: ["esm"],
     target: "node18",

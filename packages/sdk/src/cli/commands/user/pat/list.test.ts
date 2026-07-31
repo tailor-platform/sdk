@@ -1,11 +1,7 @@
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
-import {
-  fetchLatestToken,
-  loadPlatformClientConfig,
-  readPlatformConfig,
-} from "#/cli/shared/context";
+import { fetchLatestToken, readPlatformConfig } from "#/cli/shared/context";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { listCommand } from "./list";
 
@@ -17,17 +13,16 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
 vi.mock("#/cli/shared/context", async (importOriginal) => ({
   ...(await importOriginal()),
   fetchLatestToken: vi.fn(),
-  loadPlatformClientConfig: vi.fn(),
   readPlatformConfig: vi.fn(),
 }));
 
 describe("user pat list", () => {
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
-    vi.mocked(loadPlatformClientConfig).mockResolvedValue({
-      platformUrl: "https://api.dev.tailor.tech",
+    vi.mocked(fetchLatestToken).mockResolvedValue({
+      accessToken: "scoped-token",
+      user: "u@example.com",
     });
-    vi.mocked(fetchLatestToken).mockResolvedValue("scoped-token");
     vi.mocked(initOperatorClient).mockResolvedValue({
       listPersonalAccessTokens: vi.fn().mockResolvedValue({
         personalAccessTokens: [],
@@ -40,8 +35,8 @@ describe("user pat list", () => {
 
   test("uses the active profile platform when loading the current user's token", async () => {
     const config = {
-      version: 2,
-      min_sdk_version: "1.29.0",
+      version: 3,
+      min_sdk_version: "2.0.0",
       users: {},
       profiles: {
         dev: {
@@ -51,7 +46,7 @@ describe("user pat list", () => {
         },
       },
       current_user: null,
-    } as Awaited<ReturnType<typeof readPlatformConfig>>;
+    } satisfies Awaited<ReturnType<typeof readPlatformConfig>>;
     vi.stubEnv("TAILOR_PLATFORM_PROFILE", "dev");
     vi.mocked(readPlatformConfig).mockResolvedValue(config);
     using _json = jsonMode();

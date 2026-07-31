@@ -12,24 +12,15 @@
  * }
  */
 
+import type { TailorPrincipal } from "#/runtime/types";
+
 /**
  * Information about the invoker of the current function execution.
  *
- * Matches the shape of `TailorUser` and `TailorActor` — `attributes` is the
- * attribute map and `attributeList` is the array of attribute IDs.
+ * Matches the public `TailorPrincipal` shape — `attributes` is the attribute
+ * map and `attributeList` is the array of attribute IDs.
  */
-export interface Invoker {
-  /** The invoker's ID */
-  id: string;
-  /** The invoker's type */
-  type: "user" | "machine_user";
-  /** The workspace ID */
-  workspaceId: string;
-  /** A map of the invoker's attributes */
-  attributes: Record<string, unknown>;
-  /** The list of attribute IDs */
-  attributeList: string[];
-}
+export type Invoker = TailorPrincipal;
 
 /**
  * Raw platform-side invoker payload returned by `tailor.context.getInvoker()`.
@@ -54,8 +45,17 @@ export interface ContextInvoker {
  * runtime injects on `globalThis.tailor.context`.
  * @internal
  */
-export interface TailorContextAPI {
+export interface PlatformContextAPI {
   getInvoker(): ContextInvoker | null;
+}
+
+/** Runtime wrapper API for execution context utilities. */
+export interface TailorContextAPI {
+  /**
+   * Returns information about the current invoker.
+   * @returns Invoker details, or `null` for anonymous invocations
+   */
+  getInvoker(): Invoker | null;
 }
 
 /**
@@ -63,14 +63,19 @@ export interface TailorContextAPI {
  * or `null` for anonymous invocations.
  * @returns Invoker details, or `null` when the call is anonymous
  */
-export function getInvoker(): Invoker | null {
-  const raw = (globalThis as { tailor: { context: TailorContextAPI } }).tailor.context.getInvoker();
+function getInvoker(): Invoker | null {
+  const raw = (
+    globalThis as unknown as { tailor: { context: PlatformContextAPI } }
+  ).tailor.context.getInvoker();
   if (!raw) return null;
   return {
     id: raw.id,
     type: raw.type,
     workspaceId: raw.workspaceId,
-    attributes: raw.attributeMap,
-    attributeList: raw.attributes,
+    attributes: raw.attributeMap as Invoker["attributes"],
+    attributeList: raw.attributes as Invoker["attributeList"],
   };
 }
+
+/** Runtime wrapper namespace for `tailor.context`. */
+export const context = { getInvoker } as const satisfies TailorContextAPI;

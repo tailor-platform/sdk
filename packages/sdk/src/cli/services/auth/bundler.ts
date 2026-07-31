@@ -1,15 +1,18 @@
 import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
-import { createTriggerTransformPlugin } from "#/cli/services/workflow/trigger-transformer";
+import { createStartTransformPlugin } from "#/cli/services/workflow/start-transformer";
 import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
 import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin";
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
-import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
-import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
+import { serializeStartContext, type StartContext } from "#/cli/shared/start-context";
+import {
+  createTsconfigPathsPlugin,
+  type TsconfigLookupCache,
+} from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import type { LogLevel } from "#/configure/config/types";
@@ -26,8 +29,8 @@ export interface BundleAuthHooksOptions {
   handlerAccessPath: string;
   /** Environment variables to inject into the hook args */
   env?: Record<string, string | number | boolean>;
-  /** Trigger context for workflow/job transformations */
-  triggerContext?: TriggerContext;
+  /** Start context for workflow/job transformations */
+  startContext?: StartContext;
   /** Optional bundle cache for skipping unchanged builds */
   cache?: BundleCache;
   /** Whether to enable inline sourcemaps */
@@ -36,6 +39,8 @@ export interface BundleAuthHooksOptions {
   bundleLogLevel?: LogLevel;
   /** Directory the tsconfig is resolved against */
   baseDir: string;
+  /** Optional tsconfig lookup cache shared across bundles in this CLI run */
+  tsconfigCache?: TsconfigLookupCache;
 }
 
 /**
@@ -55,11 +60,12 @@ export async function bundleAuthHooks(
     authName,
     handlerAccessPath,
     env = {},
-    triggerContext,
+    startContext,
     cache,
     inlineSourcemap,
     bundleLogLevel = "DEBUG",
     baseDir,
+    tsconfigCache,
   } = options;
 
   logger.newline();
@@ -71,7 +77,7 @@ export async function bundleAuthHooks(
 
   const functionName = `auth-hook--${authName}--before-login`;
 
-  const serializedTriggerContext = serializeTriggerContext(triggerContext);
+  const serializedStartContext = serializeStartContext(startContext);
 
   // Include sorted env variables as a prefix so that env changes invalidate the cache
   const sortedEnvPrefix = JSON.stringify(
@@ -79,7 +85,7 @@ export async function bundleAuthHooks(
   );
   const contextHash = computeBundlerContextHash({
     sourceFile: absoluteConfigPath,
-    serializedTriggerContext,
+    extraContext: serializedStartContext,
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -108,13 +114,13 @@ export async function bundleAuthHooks(
         absoluteConfigPath,
       );
 
-      const triggerPlugin = createTriggerTransformPlugin(triggerContext);
+      const startPlugin = createStartTransformPlugin(startContext);
       const plugins: rolldown.Plugin[] = [entry.plugin];
-      if (triggerPlugin) {
-        plugins.push(triggerPlugin);
+      if (startPlugin) {
+        plugins.push(startPlugin);
       }
       plugins.push(
-        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency, cache: tsconfigCache }),
         platformBundleDefinePlugin,
         ...cachePlugins,
       );
@@ -139,7 +145,7 @@ export async function bundleAuthHooks(
         plugins,
         transform: {
           define: {
-            "process.env.LOG_LEVEL": JSON.stringify(bundleLogLevel),
+            "process.env.TAILOR_APP_LOG_LEVEL": JSON.stringify(bundleLogLevel),
           },
         },
         treeshake: composeFunctionTreeshakeOptions([

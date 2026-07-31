@@ -193,7 +193,7 @@ async function script(options: ScriptOptions): Promise<void> {
 
   logger.newline();
   logger.log("Edit the script to implement your data migration logic.");
-  logger.log("It will be executed by 'tailor-sdk deploy' between Pre and Post phases.");
+  logger.log("It will be executed by 'tailor deploy' between Pre and Post phases.");
 
   const editor = getConfiguredEditorCommand();
   if (!editor) return;
@@ -230,26 +230,24 @@ export const scriptCommand = defineAppCommand({
   name: "script",
   description:
     "Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.",
-  args: z
-    .object({
-      ...configArg,
-      number: arg(z.string(), {
-        positional: true,
-        description: "Migration number to add a script to (e.g., 0001 or 1)",
-      }),
-      namespace: arg(z.string().optional(), {
-        alias: "n",
-        description: "Target TailorDB namespace (required if multiple namespaces exist)",
-      }),
-      "no-script": arg(z.boolean().optional(), {
-        description:
-          "Record that this migration intentionally runs without a migration script (requires --reason)",
-      }),
-      reason: arg(z.string().optional(), {
-        description: "Reason why no migration script is needed (used with --no-script)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...configArg,
+    number: arg(z.string(), {
+      positional: true,
+      description: "Migration number to add a script to (e.g., 0001 or 1)",
+    }),
+    namespace: arg(z.string().optional(), {
+      alias: "n",
+      description: "Target TailorDB namespace (required if multiple namespaces exist)",
+    }),
+    "no-script": arg(z.boolean().optional(), {
+      description:
+        "Record that this migration intentionally runs without a migration script (requires --reason)",
+    }),
+    reason: arg(z.string().optional(), {
+      description: "Reason why no migration script is needed (used with --no-script)",
+    }),
+  }),
   run: async (args) => {
     await script({
       configPath: args.config,

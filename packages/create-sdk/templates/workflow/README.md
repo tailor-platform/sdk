@@ -1,13 +1,13 @@
 # Workflow Template
 
-Demonstrates workflow patterns with job chaining, trigger testing, and dependency injection.
+Demonstrates workflow patterns with job chaining, start testing, and dependency injection.
 
 ## Features
 
 - Workflow with multiple jobs (`createWorkflow`, `createWorkflowJob`)
-- Job chaining via `.trigger()`
+- Job chaining via `.start()`
 - Database operations in workflow jobs (DI pattern)
-- Integration testing with `workflow.mainJob.trigger()`
+- Integration testing with `runWorkflowLocally()`
 
 ## Getting Started
 

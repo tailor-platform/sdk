@@ -11,7 +11,7 @@ import {
 import type { SecretsStateScope } from "./secrets-state";
 
 vi.mock("#/cli/shared/dist-dir", () => ({
-  getDistDir: () => "/tmp/tailor-sdk-test-secrets-state",
+  getDistDir: () => "/tmp/tailor-test-secrets-state",
 }));
 
 const scopeA = {

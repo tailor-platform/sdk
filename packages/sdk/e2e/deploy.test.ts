@@ -8,7 +8,7 @@
  * The fix ensures services are deleted AFTER the Application is deleted.
  *
  * Prerequisites:
- * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor-sdk login`
+ * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor login`
  * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
  */
 
@@ -213,7 +213,7 @@ describe("E2E: Service deletion order", () => {
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string(),
     email: db.string(),
     role: db.string({ optional: true }),
@@ -238,7 +238,7 @@ export type user = typeof user;
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const extraUser = db
-  .type("ExtraUser", {
+  .table("ExtraUser", {
     name: db.string(),
     email: db.string(),
   })
@@ -556,7 +556,7 @@ export default defineConfig({
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string(),
     email: db.string(),
     role: db.string({ optional: true }),
@@ -614,7 +614,7 @@ export default defineConfig({
 import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
 
 export const user = db
-  .type("User", {
+  .table("User", {
     name: db.string(),
     email: db.string(),
     role: db.string({ optional: true }),

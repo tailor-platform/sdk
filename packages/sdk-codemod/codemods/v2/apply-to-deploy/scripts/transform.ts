@@ -2,23 +2,34 @@ import * as path from "pathe";
 
 // Match `tailor-sdk apply` plus the optional `@version` suffix that
 // package-manager run commands can add (`npx tailor-sdk@latest apply`,
-// `pnpm dlx tailor-sdk@1.45.2 apply`). The version pin is preserved because
-// `apply` and `deploy` are the same subcommand on the same binary.
+// `pnpm dlx tailor-sdk@1.45.2 apply`). The version pin is preserved; only the
+// command spelling changes.
 // `(?![-\w])` excludes both word continuation (`applyConfig`) and dash-suffixed
 // names (`apply-foo`) so a hypothetical sibling subcommand is not rewritten.
-const APPLY_PATTERN = /\btailor-sdk(@[^\s'"`]+)?(\s+)apply(?![-\w])/g;
+const ARG_VALUE = `(?:[^\\s'"\`;&|]+|'[^']*'|"(?:(?:\\\\.)|[^"\\\\])*")`;
+const BOOLEAN_GLOBAL_ARG = "(?:--verbose|--json|-j)";
+const VALUE_GLOBAL_ARG = "(?:--env-file|--env-file-if-exists|-e)";
+const GLOBAL_ARG_PATTERN = `(?:(?:\\s+${BOOLEAN_GLOBAL_ARG})|(?:\\s+${VALUE_GLOBAL_ARG}(?:=${ARG_VALUE}|\\s+${ARG_VALUE})))*`;
+const TAILOR_BINARY = `(?<![\\w-])tailor-sdk(?:@[^\\s'"\`]+)?(?![\\w-])`;
+const APPLY_PATTERN = new RegExp(`${TAILOR_BINARY}(${GLOBAL_ARG_PATTERN}\\s+)apply(?![-\\w])`, "g");
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
 
 function replaceApply(value: string): string {
-  return value.replace(
-    APPLY_PATTERN,
-    (_match, ver: string | undefined, sep: string) => `tailor-sdk${ver ?? ""}${sep}deploy`,
-  );
+  return value.replace(APPLY_PATTERN, (match) => `${match.slice(0, -"apply".length)}deploy`);
 }
 
 function transformText(source: string): string | null {
   if (!APPLY_PATTERN.test(source)) return null;
   APPLY_PATTERN.lastIndex = 0;
   const updated = replaceApply(source);
+  return updated === source ? null : updated;
+}
+
+function transformSourceText(source: string): string | null {
+  const updated = source
+    .split(/(\r\n|\n|\r)/)
+    .map((part, index) => (index % 2 === 0 ? replaceApply(part) : part))
+    .join("");
   return updated === source ? null : updated;
 }
 
@@ -52,7 +63,7 @@ function transformPackageJson(source: string): string | null {
 /**
  * Replace `tailor-sdk apply` invocations with `tailor-sdk deploy`.
  *
- * `deploy` is a v1 alias of `apply` and the recommended name going forward.
+ * `deploy` is the canonical v2 command name.
  * @param source - File contents
  * @param filePath - Absolute path to the file (used to dispatch package.json vs text)
  * @returns Transformed source or null when nothing matched.
@@ -62,5 +73,6 @@ export default function transform(source: string, filePath: string): string | nu
 
   const ext = path.extname(filePath).toLowerCase();
   if (ext === ".json") return transformPackageJson(source);
+  if (SOURCE_EXTENSIONS.has(ext)) return transformSourceText(source);
   return transformText(source);
 }

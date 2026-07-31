@@ -1,12 +1,7 @@
 import { type Mock, vi } from "vitest";
-import {
-  getRegisteredJob,
-  getRegisteredWorkflow,
-  TRIGGER_DEFAULT,
-} from "#/configure/services/workflow/registry";
+import { START_DEFAULT } from "#/configure/services/workflow/registry";
 import { platformSerialize } from "#/utils/test/platform-serialize";
 import {
-  buildJobContext,
   clearWorkflowTestEnv,
   readWorkflowTestEnv,
   writeWorkflowTestEnv,
@@ -20,7 +15,7 @@ import type { TailorEnv } from "../../runtime/types";
 
 type JobHandler = (jobName: string, args: unknown, options?: ExecJobFunctionOptions) => unknown;
 
-type TriggerHandlerFn = (
+type StartHandlerFn = (
   workflowName: string,
   args: unknown,
   options?: StartWorkflowOptions,
@@ -42,7 +37,7 @@ type SetWaitHandler = {
   (handler: unknown): void;
 };
 
-interface TriggeredJob {
+interface StartedJob {
   jobName: string;
   args: unknown;
   options?: ExecJobFunctionOptions;
@@ -55,13 +50,13 @@ interface ScopedMock {
 }
 
 type WaitPayload<Payload> = [Payload] extends [undefined] ? undefined : Payload;
-type TriggerProcedure = (...args: never[]) => unknown;
+type ProcedureFn = (...args: never[]) => unknown;
 // `vi.spyOn` reuses an existing spy for the same property. Keep the base
 // procedure separately so nested mockWorkflow scopes get independent mocks
 // while disposal can still restore the immediately preceding scope.
-const originalProcedures = new WeakMap<TriggerProcedure, TriggerProcedure>();
+const originalProcedures = new WeakMap<ProcedureFn, ProcedureFn>();
 
-function replaceProcedure<Procedure extends TriggerProcedure>(
+function replaceProcedure<Procedure extends ProcedureFn>(
   target: object,
   key: string,
   current: Procedure,
@@ -74,7 +69,7 @@ function replaceProcedure<Procedure extends TriggerProcedure>(
     return Reflect.apply(original, this, args) as ReturnType<Procedure>;
   };
   const mock = vi.fn(defaultImplementation) as unknown as Mock<Procedure>;
-  originalProcedures.set(mock as TriggerProcedure, original);
+  originalProcedures.set(mock as ProcedureFn, original);
 
   const record = target as Record<string, unknown>;
   record[key] = mock;
@@ -91,10 +86,10 @@ function replaceProcedure<Procedure extends TriggerProcedure>(
   };
 }
 
-function replaceTrigger<Trigger extends TriggerProcedure>(definition: {
-  trigger: Trigger;
-}): { mock: Mock<Trigger>; scoped: ScopedMock } {
-  return replaceProcedure(definition, "trigger", definition.trigger);
+function replaceStart<Start extends ProcedureFn>(definition: {
+  start: Start;
+}): { mock: Mock<Start>; scoped: ScopedMock } {
+  return replaceProcedure(definition, "start", definition.start);
 }
 
 // ---------------------------------------------------------------------------
@@ -104,17 +99,13 @@ function replaceTrigger<Trigger extends TriggerProcedure>(definition: {
 /**
  * Acquire a disposable mock for workflow operations (`tailor.workflow`).
  * Restored on dispose.
- *
- * Canonical names (`startWorkflow`, `execJobFunction`, `resumeWorkflowExecution`)
- * and their aliases (`triggerWorkflow`, `startJobFunction`, `triggerJobFunction`,
- * `resumeWorkflow`) share the same underlying `vi.fn`, so calls through any
- * name are recorded once and handlers configured on any name apply to all.
+
  * @returns Disposable workflow mock control object
  * @example
  * ```typescript
  * import { mockWorkflow } from "@tailor-platform/sdk/vitest";
  *
- * test("job trigger", async () => {
+ * test("job start", async () => {
  *   using wf = mockWorkflow();
  *   const job = wf.job(validateOrder);
  *   job.mockResolvedValue({ valid: true });
@@ -132,36 +123,30 @@ export function mockWorkflow() {
   const waitPointMocks = new Map<object, unknown>();
   const scopedMocks = new Set<ScopedMock>();
 
-  // Default impls (also restored by reset): run the registered body by name so a
-  // `.trigger()` with no handler/result executes the real job locally.
   const defaultExecJob = (
     jobName: string,
-    args?: unknown,
+    _args?: unknown,
     _options?: ExecJobFunctionOptions,
   ): unknown => {
-    const body = getRegisteredJob(jobName);
-    return body ? body(args, buildJobContext()) : null;
+    throw new Error(
+      `No workflow job mock for "${jobName}". Call mockWorkflow().setJobHandler(...) or enqueueResult(...), or use runWorkflowLocally() for local workflow execution.`,
+    );
   };
-  const defaultTriggerWorkflow = async (
-    workflowName: string,
-    args?: unknown,
+  const defaultStartWorkflow = async (
+    _workflowName: string,
+    _args?: unknown,
     _options?: StartWorkflowOptions,
   ): Promise<string> => {
-    const wf = getRegisteredWorkflow(workflowName);
-    if (wf) {
-      const out = execJobFunction(wf.mainJobName, platformSerialize(args));
-      if (out instanceof Promise) await out;
-    }
-    return TRIGGER_DEFAULT;
+    return START_DEFAULT;
   };
-  const defaultResumeWorkflow = async (executionId: string): Promise<string> => executionId;
+  const defaultResumeWorkflowExecution = async (executionId: string): Promise<string> =>
+    executionId;
 
   // Inner vi.fns hold the overridable behavior + call recording; the installed
-  // shims below cross the platform JSON boundary (serialize args + results) once
-  // so every path (default body, setJobHandler, enqueueResult) is covered.
+  // shims below cross the platform JSON boundary (serialize args + results) once.
   const execJobFunction = vi.fn(defaultExecJob);
-  const triggerWorkflow = vi.fn(defaultTriggerWorkflow);
-  const resumeWorkflow = vi.fn(defaultResumeWorkflow);
+  const startWorkflow = vi.fn(defaultStartWorkflow);
+  const resumeWorkflowExecution = vi.fn(defaultResumeWorkflowExecution);
   const wait = vi.fn((_key: string, _payload?: unknown): unknown => null);
   const resolve = vi.fn(
     async (
@@ -181,22 +166,16 @@ export function mockWorkflow() {
     return out instanceof Promise ? out.then((v) => platformSerialize(v)) : platformSerialize(out);
   };
   // Preserve arity so a forwarded third `options` arg — even `undefined` — is
-  // recorded, matching the real `.trigger(args, options)` call shape.
+  // recorded, matching the real `.start(args, options)` call shape.
   const workflowShim = (...call: [string, unknown?, StartWorkflowOptions?]) =>
     call.length >= 3
-      ? triggerWorkflow(call[0], platformSerialize(call[1]), call[2])
-      : triggerWorkflow(call[0], platformSerialize(call[1]));
-  const resumeShim = (executionId: string) => resumeWorkflow(executionId);
+      ? startWorkflow(call[0], platformSerialize(call[1]), call[2])
+      : startWorkflow(call[0], platformSerialize(call[1]));
+  const resumeShim = (executionId: string) => resumeWorkflowExecution(executionId);
   root.workflow = {
-    // Canonical and alias names share a single shim so calls through any
-    // name are recorded on the same underlying vi.fn.
     execJobFunction: jobFunctionShim,
-    startJobFunction: jobFunctionShim,
-    triggerJobFunction: jobFunctionShim,
     startWorkflow: workflowShim,
-    triggerWorkflow: workflowShim,
     resumeWorkflowExecution: resumeShim,
-    resumeWorkflow: resumeShim,
     wait: (key: string, payload?: unknown) => wait(key, platformSerialize(payload)),
     resolve: (executionId: string, key: string, callback: (payload: unknown) => unknown) =>
       resolve(executionId, key, (payload: unknown) => {
@@ -210,67 +189,46 @@ export function mockWorkflow() {
   const facade = {
     /** The `execJobFunction` `vi.fn`. */
     execJobFunction,
-    /**
-     * Alias of `execJobFunction` (same `vi.fn` reference).
-     * @deprecated Use `execJobFunction` instead.
-     */
-    startJobFunction: execJobFunction,
-    /**
-     * Frozen alias of `execJobFunction` (same `vi.fn` reference).
-     * @deprecated Use `execJobFunction` instead.
-     */
-    triggerJobFunction: execJobFunction,
     /** The `startWorkflow` `vi.fn`. */
-    startWorkflow: triggerWorkflow,
-    /**
-     * Frozen alias of `startWorkflow` (same `vi.fn` reference).
-     * @deprecated Use `startWorkflow` instead.
-     */
-    triggerWorkflow,
+    startWorkflow,
     /** The `resumeWorkflowExecution` `vi.fn`. */
-    resumeWorkflowExecution: resumeWorkflow,
-    /**
-     * Frozen alias of `resumeWorkflowExecution` (same `vi.fn` reference).
-     * @deprecated Use `resumeWorkflowExecution` instead.
-     */
-    resumeWorkflow,
+    resumeWorkflowExecution,
     /** The `wait` `vi.fn`. */
     wait,
     /** The `resolve` `vi.fn`. */
     resolve,
 
     /**
-     * Get a stable, typed mock for a workflow job's `trigger` method.
-     * The real trigger behavior is used until an implementation or result is configured.
+     * Get a stable, typed mock for a workflow job's `start` method.
+     * The real start behavior is used until an implementation or result is configured.
      * @param definition - Workflow job definition to mock
-     * @returns Typed `trigger` mock for the definition
+     * @returns Typed `start` mock for the definition
      */
     job<Name extends string, Input, Output>(
       definition: WorkflowJob<Name, Input, Output>,
-    ): Mock<WorkflowJob<Name, Input, Output>["trigger"]> {
+    ): Mock<WorkflowJob<Name, Input, Output>["start"]> {
       const existing = jobSpies.get(definition);
       if (existing) {
-        return existing as Mock<WorkflowJob<Name, Input, Output>["trigger"]>;
+        return existing as Mock<WorkflowJob<Name, Input, Output>["start"]>;
       }
 
-      const { mock, scoped } =
-        replaceTrigger<WorkflowJob<Name, Input, Output>["trigger"]>(definition);
+      const { mock, scoped } = replaceStart<WorkflowJob<Name, Input, Output>["start"]>(definition);
       scopedMocks.add(scoped);
       jobSpies.set(definition, mock);
       return mock;
     },
 
     /**
-     * Get a stable, typed mock for a workflow definition's `trigger` method.
-     * The real trigger behavior is used until an implementation or result is configured.
+     * Get a stable, typed mock for a workflow definition's `start` method.
+     * The real start behavior is used until an implementation or result is configured.
      * @param definition - Workflow definition to mock
-     * @returns Typed `trigger` mock for the definition
+     * @returns Typed `start` mock for the definition
      */
-    workflow<Definition extends Workflow>(definition: Definition): Mock<Definition["trigger"]> {
+    workflow<Definition extends Workflow>(definition: Definition): Mock<Definition["start"]> {
       const existing = workflowSpies.get(definition);
-      if (existing) return existing as Mock<Definition["trigger"]>;
+      if (existing) return existing as Mock<Definition["start"]>;
 
-      const { mock, scoped } = replaceTrigger<Definition["trigger"]>(definition);
+      const { mock, scoped } = replaceStart<Definition["start"]>(definition);
       workflowSpies.set(definition, mock);
       scopedMocks.add(scoped);
       return mock;
@@ -347,9 +305,9 @@ export function mockWorkflow() {
 
     /**
      * All jobs executed via `execJobFunction`, in order.
-     * @returns Triggered jobs array
+     * @returns Started jobs array
      */
-    get triggeredJobs(): TriggeredJob[] {
+    get startedJobs(): StartedJob[] {
       return execJobFunction.mock.calls.map(([jobName, args, options]) => ({
         jobName: jobName as string,
         args,
@@ -358,12 +316,12 @@ export function mockWorkflow() {
     },
 
     /**
-     * Configure what `triggerWorkflow` returns. Pass a string (same id every
+     * Configure what `startWorkflow` returns. Pass a string (same id every
      * call) or `(name, args, options) => string`. Default: a placeholder UUID.
      * @param handler - Static execution ID or a function returning one
      */
-    setTriggerHandler(handler: string | TriggerHandlerFn): void {
-      triggerWorkflow.mockImplementation(
+    setStartHandler(handler: string | StartHandlerFn): void {
+      startWorkflow.mockImplementation(
         typeof handler === "function"
           ? async (name, args, options) => handler(name, args, options)
           : async () => handler,
@@ -371,12 +329,12 @@ export function mockWorkflow() {
     },
 
     /**
-     * Configure what `resumeWorkflow` returns. Pass a string (same id every
-     * call) or `(executionId) => string`. Default: echoes the input executionId.
+     * Configure what `resumeWorkflowExecution` returns. Pass a string (same id
+     * every call) or `(executionId) => string`. Default: echoes the input executionId.
      * @param handler - Static execution ID or a function returning one
      */
     setResumeHandler(handler: string | ResumeHandlerFn): void {
-      resumeWorkflow.mockImplementation(
+      resumeWorkflowExecution.mockImplementation(
         typeof handler === "function"
           ? async (executionId) => handler(executionId)
           : async () => handler,
@@ -397,7 +355,7 @@ export function mockWorkflow() {
     }) as SetWaitHandler,
 
     /**
-     * Set the `env` passed to job bodies invoked via `createWorkflowJob().trigger()`.
+     * Set the `env` passed to job bodies invoked via `createWorkflowJob().start()`.
      * Cleared on dispose / reset.
      * @param env - Env passed to job bodies.
      */
@@ -438,8 +396,8 @@ export function mockWorkflow() {
     /** Clear recorded calls while preserving configured responses. */
     clear(): void {
       execJobFunction.mockClear();
-      triggerWorkflow.mockClear();
-      resumeWorkflow.mockClear();
+      startWorkflow.mockClear();
+      resumeWorkflowExecution.mockClear();
       wait.mockClear();
       resolve.mockClear();
       for (const mock of scopedMocks) mock.mockClear();
@@ -449,10 +407,10 @@ export function mockWorkflow() {
     reset(): void {
       execJobFunction.mockReset();
       execJobFunction.mockImplementation(defaultExecJob);
-      triggerWorkflow.mockReset();
-      triggerWorkflow.mockImplementation(defaultTriggerWorkflow);
-      resumeWorkflow.mockReset();
-      resumeWorkflow.mockImplementation(defaultResumeWorkflow);
+      startWorkflow.mockReset();
+      startWorkflow.mockImplementation(defaultStartWorkflow);
+      resumeWorkflowExecution.mockReset();
+      resumeWorkflowExecution.mockImplementation(defaultResumeWorkflowExecution);
       wait.mockReset();
       wait.mockImplementation(() => null);
       resolve.mockReset();

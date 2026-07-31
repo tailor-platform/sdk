@@ -60,12 +60,10 @@ export async function listWebhookExecutors(
 const listWebhookCommand = defineAppCommand({
   name: "list",
   description: "List executors with incoming webhook triggers",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const executors = await listWebhookExecutors({
@@ -90,9 +88,7 @@ const listWebhookCommand = defineAppCommand({
     });
 
     if (!jsonOutput) {
-      logger.info(
-        'To test a webhook, run: tailor-sdk executor trigger <name> -d \'{"key":"value"}\'',
-      );
+      logger.info('To test a webhook, run: tailor executor trigger <name> -d \'{"key":"value"}\'');
     }
   },
 });

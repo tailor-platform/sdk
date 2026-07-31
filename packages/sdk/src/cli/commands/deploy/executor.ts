@@ -13,11 +13,11 @@ import {
   type ExecutorTriggerEventConfigSchema,
   ExecutorTriggerType,
 } from "@tailor-platform/tailor-proto/executor_resource_pb";
+import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { type OperatorClient } from "#/cli/shared/client";
 import { buildExecutorArgsExpr } from "#/cli/shared/runtime-exprs";
 import { stringifyFunction } from "#/parser/service/tailordb/index";
 import { assertDefined } from "#/utils/assert";
-import { normalizeAuthInvoker } from "./auth-invoker";
 import { createChangeSet, type ChangeSet } from "./change-set";
 import { areNormalizedEqual, normalizeProtoConfig } from "./compare";
 import { executorFunctionName } from "./function-registry";
@@ -26,7 +26,14 @@ import {
   type GroupedDisplayEntry,
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "./label";
+import { normalizeInvoker } from "./invoker";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -36,7 +43,6 @@ import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { Executor } from "#/types/executor.generated";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 /**
  * Apply executor-related changes for the given phase.
@@ -56,11 +62,11 @@ export async function applyExecutor(
     await Promise.all([
       ...changeSet.creates.map(async (create) => {
         await client.createExecutorExecutor(create.request);
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
         await client.updateExecutorExecutor(update.request);
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
   } else {
@@ -73,13 +79,13 @@ export async function applyExecutor(
 type CreateExecutor = {
   name: string;
   request: MessageInitShape<typeof CreateExecutorExecutorRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateExecutor = {
   name: string;
   request: MessageInitShape<typeof UpdateExecutorExecutorRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteExecutor = {
@@ -478,7 +484,7 @@ function resolveIdpNamespace(
 }
 
 function resolveAuthNamespace(application: Readonly<Application>): string {
-  const authNamespace = application.authService?.config.name ?? application.config.auth?.name;
+  const authNamespace = getApplicationAuthNamespace(application);
   if (!authNamespace) {
     throw new Error("No Auth service configured");
   }
@@ -624,7 +630,7 @@ function protoExecutor(
   let targetType: ExecutorTargetType;
   let targetConfig: MessageInitShape<typeof ExecutorTargetConfigSchema>;
 
-  const authNamespace = application.authService?.config.name;
+  const authNamespace = getApplicationAuthNamespace(application);
   const invokerContext = `Executor "${executor.name}"`;
 
   switch (target.kind) {
@@ -680,7 +686,7 @@ function protoExecutor(
                   expr: `(${stringifyFunction(target.variables)})(${argsExpr})`,
                 }
               : undefined,
-            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
+            invoker: normalizeInvoker(target.invoker, authNamespace, invokerContext),
           },
         },
       };
@@ -703,7 +709,7 @@ function protoExecutor(
             variables: {
               expr: argsExpr,
             },
-            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
+            invoker: normalizeInvoker(target.invoker, authNamespace, invokerContext),
           },
         },
       };
@@ -716,12 +722,13 @@ function protoExecutor(
           case: "workflow",
           value: {
             workflowName: target.workflowName,
-            variables: target.args
-              ? typeof target.args === "function"
-                ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
-                : { expr: JSON.stringify(target.args) }
-              : undefined,
-            invoker: normalizeAuthInvoker(target.authInvoker, authNamespace, invokerContext),
+            variables:
+              target.args !== undefined
+                ? typeof target.args === "function"
+                  ? { expr: `(${stringifyFunction(target.args)})(${argsExpr})` }
+                  : { expr: JSON.stringify(target.args) }
+                : undefined,
+            invoker: normalizeInvoker(target.invoker, authNamespace, invokerContext),
           },
         },
       };

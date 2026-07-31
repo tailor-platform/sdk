@@ -79,6 +79,7 @@ export interface OperatorFieldConfig {
     format?: string;
   };
   scale?: number;
+  default?: unknown;
   fields?: Record<string, OperatorFieldConfig>;
 }
 
@@ -171,4 +172,6 @@ export interface TailorDBType {
   permissions: Permissions;
   indexes?: TailorDBTypeMetadata["indexes"];
   files?: TailorDBTypeMetadata["files"];
+  typeHookExpr?: { create?: string; update?: string };
+  typeValidateExpr?: string;
 }

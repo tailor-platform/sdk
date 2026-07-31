@@ -7,7 +7,7 @@ export type QueryType = "query" | "mutation";
 export type QueryTypeInput = QueryType;
 
 /**
- * Access requirement for this resolver, evaluated against the original caller (unaffected by `authInvoker`) before `body` runs. "allowAnonymous" documents that anonymous callers are allowed. Omitted (default): unchanged, anonymous callers can reach the resolver
+ * Access requirement for this resolver, evaluated against the original caller (unaffected by `invoker`) before `body` runs. "allowAnonymous" documents that anonymous callers are allowed. Omitted (default): unchanged, anonymous callers can reach the resolver
  */
 export type ResolverPermission =
   | "allowAnonymous"
@@ -76,8 +76,12 @@ export type Resolver = {
             update?: Function | undefined;
           }
         | undefined;
+      /** Validation functions for the field */
+      validate?: Function[] | undefined;
       /** Type name for nested or enum fields */
       typeName?: string | undefined;
+      /** Default value for the field on create */
+      default?: unknown;
     };
     fields: {
       [x: string]: any;
@@ -94,7 +98,7 @@ export type Resolver = {
   /** Enable publishing events from this resolver */
   publishEvents?: boolean | undefined;
   /** Machine user to execute this resolver as */
-  authInvoker?:
+  invoker?:
     | string
     | {
         /** Auth namespace */

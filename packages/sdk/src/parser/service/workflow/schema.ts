@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { functionSchema } from "../common";
 
-export const WorkflowJobSchema = z.object({
+export const WorkflowJobSchema = z.strictObject({
   name: z.string().describe("Job name (must be unique across the project)"),
-  trigger: functionSchema.describe("Trigger function that initiates the job"),
+  start: functionSchema.describe("Start function that initiates the job"),
   body: functionSchema.describe("Job implementation function"),
   publishEvents: z
     .boolean()
@@ -36,7 +36,7 @@ const durationSchema = (maxSeconds: number) =>
   });
 
 export const RetryPolicySchema = z
-  .object({
+  .strictObject({
     maxRetries: z.number().int().min(1).max(10).describe("Maximum number of retries (1-10)"),
     initialBackoff: durationSchema(3600).describe(
       "Initial backoff duration (e.g., '1s', '500ms', '1m', max 1h)",
@@ -46,6 +46,7 @@ export const RetryPolicySchema = z
     ),
     backoffMultiplier: z.number().min(1).describe("Backoff multiplier (>= 1)"),
   })
+
   .refine((data) => durationToSeconds(data.initialBackoff) <= durationToSeconds(data.maxBackoff), {
     message: "initialBackoff must be less than or equal to maxBackoff",
     path: ["initialBackoff"],
@@ -55,7 +56,7 @@ export const RetryPolicySchema = z
     path: ["initialBackoff"],
   });
 
-export const ConcurrencyPolicySchema = z.object({
+export const ConcurrencyPolicySchema = z.strictObject({
   maxConcurrentExecutions: z
     .number()
     .int()
@@ -78,11 +79,9 @@ export const ExecutionPolicyKeySchema = z
     /^[a-z0-9][a-z0-9_:.-]{0,62}[a-z0-9*]$/,
     "Invalid execution policy key: must match [a-z0-9_:.-] (2-64 chars; must start with [a-z0-9] and end with [a-z0-9] or a trailing '*')",
   )
-  .describe(
-    "Execution policy key passed to execJobFunction's (or its aliases startJobFunction / triggerJobFunction) executionPolicyKey option",
-  );
+  .describe("Execution policy key passed to execJobFunction's executionPolicyKey option");
 
-export const WorkflowJobFunctionExecutionPolicySchema = z.object({
+export const WorkflowJobFunctionExecutionPolicySchema = z.strictObject({
   name: ExecutionPolicyNameSchema,
   key: ExecutionPolicyKeySchema,
   concurrencyPolicy: ConcurrencyPolicySchema.optional().describe(
@@ -90,7 +89,7 @@ export const WorkflowJobFunctionExecutionPolicySchema = z.object({
   ),
 });
 
-export const WorkflowSchema = z.object({
+export const WorkflowSchema = z.strictObject({
   name: z.string().describe("Workflow name"),
   mainJob: WorkflowJobSchema.describe("Main job that starts the workflow"),
   retryPolicy: RetryPolicySchema.optional().describe("Retry policy for the workflow"),

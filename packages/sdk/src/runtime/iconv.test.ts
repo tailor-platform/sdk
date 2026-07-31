@@ -6,7 +6,7 @@
  * `string`, otherwise `Uint8Array`) holds at the type level.
  */
 import { aroundEach, describe, expect, expectTypeOf, test } from "vitest";
-import * as iconv from "#/runtime/iconv";
+import { iconv } from "#/runtime/iconv";
 import { mockIconv, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/iconv", () => {

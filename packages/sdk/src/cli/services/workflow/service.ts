@@ -15,6 +15,19 @@ export interface CollectedJob {
   publishEvents?: boolean;
 }
 
+function stripRuntimeStart(workflow: unknown): unknown {
+  if (
+    !isSdkBranded(workflow, "workflow") ||
+    workflow === null ||
+    typeof workflow !== "object" ||
+    !("start" in workflow)
+  ) {
+    return workflow;
+  }
+  const { start: _start, ...rest } = workflow as Record<string, unknown>;
+  return rest;
+}
+
 interface WorkflowLoadResult {
   workflows: Record<string, Workflow>;
   workflowSources: Array<{ workflow: Workflow; sourceFile: string }>;
@@ -181,7 +194,7 @@ async function loadFileContent(filePath: string): Promise<{
     for (const [exportName, exportValue] of Object.entries(module)) {
       // Check if it's a workflow (default export)
       if (exportName === "default") {
-        const workflowResult = WorkflowSchema.safeParse(exportValue);
+        const workflowResult = WorkflowSchema.safeParse(stripRuntimeStart(exportValue));
         if (workflowResult.success) {
           workflow = workflowResult.data;
         } else if (isSdkBranded(exportValue, ["workflow", "workflow-job"])) {

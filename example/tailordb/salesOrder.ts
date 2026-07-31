@@ -4,7 +4,7 @@ import { defaultPermission, defaultGqlPermission } from "./permissions";
 import { user } from "./user";
 
 export const salesOrder = db
-  .type(["SalesOrder", "SalesOrderList"], {
+  .table(["SalesOrder", "SalesOrderList"], {
     customerID: db.uuid().relation({
       type: "n-1",
       toward: { type: customer },
@@ -32,7 +32,7 @@ export const salesOrder = db
   .gqlPermission(defaultGqlPermission);
 
 export const salesOrderCreated = db
-  .type(["SalesOrderCreated", "SalesOrderCreatedList"], {
+  .table(["SalesOrderCreated", "SalesOrderCreatedList"], {
     salesOrderID: db.uuid(),
     customerID: db.uuid(),
     totalPrice: db.int({ optional: true }),

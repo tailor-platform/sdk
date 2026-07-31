@@ -5,10 +5,10 @@ import {
 } from "@tailor-platform/sdk";
 
 export const adminNote = db
-  .type("AdminNote", {
+  .table("AdminNote", {
     title: db.string(),
     content: db.string(),
-    authorId: db.uuid().hooks({ create: ({ user }) => user.id }),
+    authorId: db.uuid().hooks({ create: ({ invoker }) => invoker?.id ?? crypto.randomUUID() }),
     ...db.fields.timestamps(),
   })
   // NOTE: This permits all operations for simplicity.

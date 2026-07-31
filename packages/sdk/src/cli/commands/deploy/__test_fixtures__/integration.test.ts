@@ -60,7 +60,7 @@ describe("deploy command integration tests", () => {
     outputDir = result.outputDir;
     bundledScripts = result.bundledScripts;
     await runSuite();
-    delete process.env.TAILOR_SDK_OUTPUT_DIR;
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
     vi.useRealTimers();
   }, 120000);
 
@@ -76,9 +76,6 @@ describe("deploy command integration tests", () => {
       (f) => f.endsWith(".entry.js") || f.endsWith(".entry.ts"),
     );
     expect(entryFiles).toEqual([]);
-
-    // Unrelated files in former bundle directories should be preserved
-    expect(actualFiles).toContain("resolvers/keep.txt");
 
     // Bundle output files should NOT exist on disk (in-memory only)
     const bundleOutputFiles = actualFiles.filter(

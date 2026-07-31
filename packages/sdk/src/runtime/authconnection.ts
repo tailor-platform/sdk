@@ -6,7 +6,7 @@
  * `mockAuthconnection` from `@tailor-platform/sdk/vitest` to mock in unit tests.
  *
  * `connectionName` is narrowed to the connection names defined in `defineAuth()`'s
- * `connections` once `tailor.d.ts` has been generated (via `tailor-sdk deploy`/`generate`).
+ * `connections` once `tailor.d.ts` has been generated (via `tailor deploy`/`generate`).
  * @example
  * import { authconnection } from "@tailor-platform/sdk/runtime";
  *
@@ -22,10 +22,6 @@ import type { ConnectionName } from "@tailor-platform/sdk";
 /**
  * Platform API surface for `tailor.authconnection`. Describes the shape the
  * platform runtime injects on `globalThis.tailor.authconnection`.
- *
- * Each method below is also re-exported as a top-level named export from this
- * module so callers can either `import * as authconnection from
- * "@tailor-platform/sdk/runtime/authconnection"` or pick individual methods.
  */
 export interface TailorAuthconnectionAPI {
   /**
@@ -37,12 +33,11 @@ export interface TailorAuthconnectionAPI {
 }
 
 const api = (): TailorAuthconnectionAPI =>
-  (globalThis as { tailor: { authconnection: TailorAuthconnectionAPI } }).tailor.authconnection;
+  (globalThis as unknown as { tailor: { authconnection: TailorAuthconnectionAPI } }).tailor
+    .authconnection;
 
-/**
- * See {@link TailorAuthconnectionAPI.getConnectionToken}.
- * @param args - Forwarded to {@link TailorAuthconnectionAPI.getConnectionToken}
- * @returns Token payload
- */
-export const getConnectionToken: TailorAuthconnectionAPI["getConnectionToken"] = (...args) =>
+const getConnectionToken: TailorAuthconnectionAPI["getConnectionToken"] = (...args) =>
   api().getConnectionToken(...args);
+
+/** Runtime wrapper namespace for `tailor.authconnection`. */
+export const authconnection = { getConnectionToken } as const satisfies TailorAuthconnectionAPI;

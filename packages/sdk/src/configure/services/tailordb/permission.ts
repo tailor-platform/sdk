@@ -4,7 +4,7 @@ import type {
   UserStringArrayOperand,
   UserStringOperand,
 } from "#/configure/types/permission-operand.types";
-import type { InferredAttributeMap } from "#/runtime/types";
+import type { InferredAttributes } from "#/runtime/types";
 
 // --- Permission types (UX-focused, for configure layer) ---
 
@@ -25,7 +25,7 @@ import type { InferredAttributeMap } from "#/runtime/types";
  * };
  */
 export type TailorTypePermission<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Type extends object = object,
 > = {
   create: readonly ActionPermission<"record", User, Type, false>[];
@@ -36,7 +36,7 @@ export type TailorTypePermission<
 
 type ActionPermission<
   Level extends "record" | "gql" = "record" | "gql",
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Type extends object = object,
   Update extends boolean = boolean,
 > =
@@ -56,14 +56,11 @@ type ActionPermission<
   | readonly [...PermissionCondition<Level, User, Update, Type>[], ...([] | [boolean])]; // multiple array condition
 
 export type TailorTypeGqlPermission<
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Type extends object = object,
 > = readonly GqlPermissionPolicy<User, Type>[];
 
-type GqlPermissionPolicy<
-  User extends object = InferredAttributeMap,
-  Type extends object = object,
-> = {
+type GqlPermissionPolicy<User extends object = InferredAttributes, Type extends object = object> = {
   conditions: readonly PermissionCondition<"gql", User, boolean, Type>[];
   actions: "all" | readonly GqlPermissionAction[];
   /**
@@ -133,7 +130,7 @@ type BooleanEqualityCondition<
 
 type EqualityCondition<
   Level extends "record" | "gql" = "record",
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
   Type extends object = object,
 > =
@@ -189,7 +186,7 @@ type BooleanContainsCondition<
 
 type ContainsCondition<
   Level extends "record" | "gql" = "record",
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
   Type extends object = object,
 > =
@@ -224,7 +221,7 @@ type HasAnyCondition<
 /**
  * Type representing a permission condition that combines user attributes, record fields, and literal values using comparison operators.
  *
- * The User type is extended by `tailor.d.ts`, which is automatically generated when running `tailor-sdk generate`.
+ * The User type is extended by `tailor.d.ts`, which is automatically generated when running `tailor generate`.
  * Attributes enabled in the config file's `auth.userProfile.attributes` (or
  * `auth.machineUserAttributes` when userProfile is omitted) become available as types.
  * @example
@@ -243,7 +240,7 @@ type HasAnyCondition<
  */
 export type PermissionCondition<
   Level extends "record" | "gql" = "record",
-  User extends object = InferredAttributeMap,
+  User extends object = InferredAttributes,
   Update extends boolean = boolean,
   Type extends object = object,
 > =

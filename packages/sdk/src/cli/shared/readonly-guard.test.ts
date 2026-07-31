@@ -37,6 +37,9 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   // (including Create*/Update*/Delete*) and must guard.
   "api/inspect.ts",
   "api/list.ts",
+  // Auth token retrieval (may refresh via the OAuth server and persist tokens
+  // locally, but mutates no workspace/platform state)
+  "auth/token.ts",
   // Auth connections (read-only)
   "authconnection/index.ts",
   "authconnection/list.ts",
@@ -80,6 +83,9 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "organization/folder/index.ts",
   "organization/folder/get.ts",
   "organization/folder/list.ts",
+  // Plugin discovery (local filesystem listing only)
+  "plugin/index.ts",
+  "plugin/list.ts",
   // Profile management (local config only, never platform state)
   "profile/index.ts",
   "profile/create.ts",
@@ -93,9 +99,6 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "secret/vault/list.ts",
   // Setup (local file generation)
   "setup/index.ts",
-  // Skills (local file install)
-  "skills/index.ts",
-  "skills/install.ts",
   // Static website (read-only)
   "staticwebsite/index.ts",
   "staticwebsite/get.ts",
@@ -105,10 +108,6 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
   "staticwebsite/domain/list.ts",
   // TailorDB (read-only / local ops)
   "tailordb/index.ts",
-  "tailordb/erd/index.ts",
-  "tailordb/erd/diff-command.ts",
-  "tailordb/erd/export.ts",
-  "tailordb/erd/serve.ts",
   "tailordb/migrate/index.ts",
   "tailordb/migrate/generate.ts",
   "tailordb/migrate/script.ts",

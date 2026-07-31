@@ -2,9 +2,9 @@ import { arg } from "politty";
 import { z } from "zod";
 import { defineAppCommand } from "#/cli/shared/command";
 import {
-  hasUserTokenEntry,
   platformConfigFromProfile,
   readPlatformConfig,
+  resolveConfigUser,
   writePlatformConfig,
 } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
@@ -13,14 +13,12 @@ import ml from "#/utils/multiline";
 export const switchCommand = defineAppCommand({
   name: "switch",
   description: "Set current user.",
-  args: z
-    .object({
-      user: arg(z.string(), {
-        positional: true,
-        description: "User email",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    user: arg(z.string(), {
+      positional: true,
+      description: "User email address or machine user client ID",
+    }),
+  }),
   run: async (args) => {
     const config = await readPlatformConfig();
     const activeProfileName = process.env.TAILOR_PLATFORM_PROFILE;
@@ -38,21 +36,21 @@ export const switchCommand = defineAppCommand({
       );
     }
 
-    // Check if user exists
-    if (!hasUserTokenEntry(config, args.user, platformConfig)) {
+    const user = resolveConfigUser(config, args.user, platformConfig);
+    if (!user) {
       throw new Error(ml`
         User "${args.user}" not found.
-        Please login first using 'tailor-sdk login' command to register this user.
+        Please login first using 'tailor login' command to register this user.
       `);
     }
 
     if (activeProfileEntry) {
-      activeProfileEntry.user = args.user;
+      activeProfileEntry.user = user;
     } else {
-      config.current_user = args.user;
+      config.current_user = user;
     }
     writePlatformConfig(config);
 
-    logger.success(`Current user set to "${args.user}" successfully.`);
+    logger.success(`Current user set to "${user}" successfully.`);
   },
 });

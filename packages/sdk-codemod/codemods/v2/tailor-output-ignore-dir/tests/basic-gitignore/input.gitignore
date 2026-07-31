@@ -1,0 +1,7 @@
+node_modules/
+.tailor-sdk/
+/.tailor-sdk/
+.tailor-sdk
+/.tailor-sdk
+!.tailor-sdk/
+dist/

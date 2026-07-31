@@ -9,7 +9,7 @@ import type { ProfileInfo } from "./types";
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all profiles.",
-  args: z.object({}).strict(),
+  args: z.strictObject({}),
   run: async () => {
     const config = await readPlatformConfig();
     const jsonOutput = logger.jsonMode;
@@ -18,7 +18,7 @@ export const listCommand = defineAppCommand({
     if (profiles.length === 0) {
       logger.info(ml`
         No profiles found.
-        Please create a profile first using 'tailor-sdk profile create' command.
+        Please create a profile first using 'tailor profile create' command.
       `);
       if (jsonOutput) {
         logger.out([]);

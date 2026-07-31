@@ -2,7 +2,7 @@ import type {
   UserBooleanOperand,
   UserStringOperand,
 } from "#/configure/types/permission-operand.types";
-import type { InferredAttributeMap } from "#/runtime/types";
+import type { InferredAttributes } from "#/runtime/types";
 
 type EqualityOperator = "=" | "!=";
 
@@ -22,11 +22,11 @@ type BooleanEqualityCondition<User extends object> =
  * against. Only equality (`=`/`!=`) is supported for now.
  *
  * The User type is extended by `tailor.d.ts`, which is automatically generated
- * when running `tailor-sdk generate`. Attributes enabled in the config file's
+ * when running `tailor generate`. Attributes enabled in the config file's
  * `auth.userProfile.attributes` (or `auth.machineUserAttributes` when
  * `userProfile` is omitted) become available as types.
  */
-export type ResolverPermissionCondition<User extends object = InferredAttributeMap> =
+export type ResolverPermissionCondition<User extends object = InferredAttributes> =
   | StringEqualityCondition<User>
   | BooleanEqualityCondition<User>;
 
@@ -34,7 +34,7 @@ export type ResolverPermissionCondition<User extends object = InferredAttributeM
  * A single access policy, in the same style as TailorDB's `.permission()`
  * policies.
  */
-export type ResolverPermissionPolicy<User extends object = InferredAttributeMap> = {
+export type ResolverPermissionPolicy<User extends object = InferredAttributes> = {
   conditions: ResolverPermissionCondition<User> | readonly ResolverPermissionCondition<User>[];
   /** Whether matching callers are granted (`true`) or denied (`false`) access. */
   permit: boolean;
@@ -73,6 +73,6 @@ export type ResolverPermissionPolicy<User extends object = InferredAttributeMap>
  * @example
  * const permission: ResolverPermission = "allowAnonymous";
  */
-export type ResolverPermission<User extends object = InferredAttributeMap> =
+export type ResolverPermission<User extends object = InferredAttributes> =
   | readonly ResolverPermissionPolicy<User>[]
   | "allowAnonymous";

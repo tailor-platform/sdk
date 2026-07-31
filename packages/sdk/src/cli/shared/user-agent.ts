@@ -8,7 +8,7 @@ import { readPackageJson } from "./package-json";
  * @returns User-Agent header value
  */
 export function userAgentFromVersion(version: string): string {
-  return `tailor-sdk/${version}`;
+  return `tailor/${version}`;
 }
 
 /**

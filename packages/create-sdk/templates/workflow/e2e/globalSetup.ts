@@ -55,7 +55,7 @@ export async function setup(project: TestProject): Promise<void> {
     process.env.TAILOR_PLATFORM_WORKSPACE_ID = createdWorkspace.id;
     // This pipeline deploys a fresh app into a per-run workspace, so let the
     // SDK inject a missing app id even in CI (normally a hard error there).
-    process.env.TAILOR_PLATFORM_SDK_ALLOW_CI_ID_INJECTION = "true";
+    process.env.TAILOR_CI_ALLOW_ID_INJECTION = "true";
     await deployApplication();
   }
 

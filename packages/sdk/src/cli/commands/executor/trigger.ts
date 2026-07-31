@@ -70,10 +70,7 @@ type TriggerExecutorBaseOptions<E extends ManualTriggerExecutor> = {
   profile?: string;
 };
 
-/**
- * @deprecated Use TriggerExecutorTypedOptions instead.
- */
-export interface TriggerExecutorOptions {
+interface TriggerExecutorByNameOptions {
   executorName: string;
   payload?: JsonObject;
   workspaceId?: string;
@@ -90,7 +87,7 @@ export interface TriggerExecutorResult {
 }
 
 async function triggerExecutorByName(
-  options: TriggerExecutorOptions,
+  options: TriggerExecutorByNameOptions,
 ): Promise<TriggerExecutorResult> {
   const accessToken = await loadAccessToken({
     profile: options.profile,
@@ -127,18 +124,7 @@ async function triggerExecutorByName(
  */
 export async function triggerExecutor<E extends ManualTriggerExecutor>(
   options: TriggerExecutorTypedOptions<E>,
-): Promise<TriggerExecutorResult>;
-export async function triggerExecutor(
-  options: TriggerExecutorOptions,
-): Promise<TriggerExecutorResult>;
-export async function triggerExecutor<E extends ManualTriggerExecutor>(
-  options: TriggerExecutorOptions | TriggerExecutorTypedOptions<E>,
 ): Promise<TriggerExecutorResult> {
-  // Keep backward compatibility: if both legacy and typed keys are present, prefer legacy shape.
-  if ("executorName" in options) {
-    return await triggerExecutorByName(options);
-  }
-
   if (options.executor.trigger.kind !== "incomingWebhook" && options.payload !== undefined) {
     throw new Error(
       `Executor '${options.executor.name}' has '${options.executor.trigger.kind}' trigger type. ` +
@@ -184,41 +170,39 @@ The \`--logs\` option displays logs from the downstream execution when available
     { cmd: "my-executor -W", desc: "Trigger and wait for completion" },
     { cmd: "my-executor -W -l", desc: "Trigger, wait, and show logs" },
   ],
-  args: z
-    .object({
-      ...workspaceArgs,
-      "executor-name": arg(z.string(), {
-        positional: true,
-        description: "Executor name",
-      }),
-      data: arg(jsonDataArg.optional(), {
-        alias: "d",
-        description: "Request body (JSON string)",
-      }),
-      header: arg(headerArg.array().optional(), {
-        alias: "H",
-        overrideBuiltinAlias: true,
-        description: "Request header (format: 'Key: Value', can be specified multiple times)",
-      }),
-      wait: arg(z.boolean().default(false), {
-        alias: "W",
-        description:
-          "Wait for job completion and downstream execution (workflow/function) if applicable",
-      }),
-      interval: arg(durationArg.default("3s"), {
-        alias: "i",
-        description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
-      }),
-      timeout: arg(durationArg.default("5m"), {
-        alias: "t",
-        description: "Maximum time to wait when using --wait (e.g., '30s', '5m')",
-      }),
-      logs: arg(z.boolean().default(false), {
-        alias: "l",
-        description: "Display function execution logs after completion (requires --wait)",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    "executor-name": arg(z.string(), {
+      positional: true,
+      description: "Executor name",
+    }),
+    data: arg(jsonDataArg.optional(), {
+      alias: "d",
+      description: "Request body (JSON string)",
+    }),
+    header: arg(headerArg.array().optional(), {
+      alias: "H",
+      overrideBuiltinAlias: true,
+      description: "Request header (format: 'Key: Value', can be specified multiple times)",
+    }),
+    wait: arg(z.boolean().default(false), {
+      alias: "W",
+      description:
+        "Wait for job completion and downstream execution (workflow/function) if applicable",
+    }),
+    interval: arg(durationArg.default("3s"), {
+      alias: "i",
+      description: "Polling interval when using --wait (e.g., '3s', '500ms', '1m')",
+    }),
+    timeout: arg(durationArg.default("5m"), {
+      alias: "t",
+      description: "Maximum time to wait when using --wait (e.g., '30s', '5m')",
+    }),
+    logs: arg(z.boolean().default(false), {
+      alias: "l",
+      description: "Display function execution logs after completion (requires --wait)",
+    }),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode || args.json;
     await assertWritable({ profile: args.profile });
@@ -296,7 +280,7 @@ The \`--logs\` option displays logs from the downstream execution when available
 
     if (args.wait) {
       const watchResult = await watchExecutorJob({
-        executorName: args.executorName,
+        executor: { name: args.executorName },
         jobId: result.jobId,
         workspaceId: args["workspace-id"],
         profile: args.profile,

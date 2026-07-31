@@ -54,7 +54,7 @@ describe("readLock / writeLock", () => {
   test("round-trips through disk with 2-space indent and trailing newline", () => {
     const lock = makeLock();
     writeLock(testDir, lock);
-    const raw = fs.readFileSync(path.join(testDir, ".github/tailor-sdk.lock"), "utf-8");
+    const raw = fs.readFileSync(path.join(testDir, ".github/tailor.lock"), "utf-8");
     expect(raw.endsWith("\n")).toBe(true);
     expect(raw).toContain('  "version": 1');
     expect(readLock(testDir)).toEqual(lock);
@@ -89,7 +89,7 @@ describe("readLock / writeLock", () => {
     },
   ])("$title", ({ content, error }) => {
     fs.mkdirSync(path.join(testDir, ".github"), { recursive: true });
-    fs.writeFileSync(path.join(testDir, ".github/tailor-sdk.lock"), content());
+    fs.writeFileSync(path.join(testDir, ".github/tailor.lock"), content());
     expect(() => readLock(testDir)).toThrow(error);
   });
 });

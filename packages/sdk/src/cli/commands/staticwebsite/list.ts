@@ -63,12 +63,10 @@ async function listStaticWebsites(
 export const listCommand = defineAppCommand({
   name: "list",
   description: "List all static websites in a workspace.",
-  args: z
-    .object({
-      ...workspaceArgs,
-      ...paginationArgs(),
-    })
-    .strict(),
+  args: z.strictObject({
+    ...workspaceArgs,
+    ...paginationArgs(),
+  }),
   run: async (args) => {
     const jsonOutput = logger.jsonMode;
     const websites = await listStaticWebsites({

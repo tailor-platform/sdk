@@ -1,6 +1,7 @@
 import { pathToFileURL } from "node:url";
 import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
+import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
 import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 
@@ -32,7 +33,9 @@ export async function loadTypeFieldOrder(
         const module = await import(pathToFileURL(typeFile).href);
 
         for (const exportedValue of Object.values(module)) {
-          const result = TailorDBTypeSchema.safeParse(exportedValue);
+          const result = TailorDBTypeSchema.safeParse(
+            stripTailorDBTypeBuilderHelpers(exportedValue),
+          );
           if (!result.success) {
             continue;
           }

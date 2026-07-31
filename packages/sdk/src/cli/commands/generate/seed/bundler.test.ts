@@ -67,19 +67,24 @@ afterAll(() => {
 
 describe("seed-bundler", () => {
   aroundEach(async (runTest) => {
-    // Set TAILOR_SDK_OUTPUT_DIR to test directory so bundled output goes into test directory
+    // Set TAILOR_BUILD_OUTPUT_DIR to test directory so bundled output goes into test directory
     const testDir = path.join(
       TEST_BUNDLER_BASE,
       `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     );
     fs.mkdirSync(testDir, { recursive: true });
-    process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
     await runTest();
   });
 
   aroundAll(async (runSuite) => {
     await runSuite();
-    delete process.env.TAILOR_SDK_OUTPUT_DIR;
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
+    try {
+      fs.rmSync(TEST_BUNDLER_BASE, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors
+    }
   });
 
   describe("bundleSeedScript", () => {
@@ -144,7 +149,7 @@ describe("seed script upsert behavior", () => {
   const loadMain = async (namespace: string, typeNames: string[]) => {
     const { bundledCode } = await bundleSeedScript(namespace, typeNames);
     const modulePath = path.join(
-      process.env.TAILOR_SDK_OUTPUT_DIR as string,
+      process.env.TAILOR_BUILD_OUTPUT_DIR as string,
       `main-${namespace}.mjs`,
     );
     fs.writeFileSync(modulePath, bundledCode);
@@ -159,13 +164,13 @@ describe("seed script upsert behavior", () => {
       `upsert-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     );
     fs.mkdirSync(testDir, { recursive: true });
-    process.env.TAILOR_SDK_OUTPUT_DIR = testDir;
+    process.env.TAILOR_BUILD_OUTPUT_DIR = testDir;
     await runTest();
   });
 
   aroundAll(async (runSuite) => {
     await runSuite();
-    delete process.env.TAILOR_SDK_OUTPUT_DIR;
+    delete process.env.TAILOR_BUILD_OUTPUT_DIR;
   });
 
   test("inserts new rows and updates existing rows when upsert is enabled", async () => {

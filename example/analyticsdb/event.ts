@@ -2,7 +2,7 @@ import { db } from "@tailor-platform/sdk";
 import { defaultGqlPermission, defaultPermission } from "../tailordb/permissions";
 
 export const event = db
-  .type("Event", {
+  .table("Event", {
     name: db.enum(["CLICK", "VIEW", "PURCHASE"]),
     ...db.fields.timestamps(),
   })

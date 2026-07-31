@@ -15,6 +15,7 @@ describe("applyIdP phase separation", () => {
       createSecretManagerVault: vi.fn().mockResolvedValue({}),
       createSecretManagerSecret: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
     } as unknown as OperatorClient;
   }
 
@@ -24,6 +25,7 @@ describe("applyIdP phase separation", () => {
         service: {
           creates: [],
           updates: [],
+          unchanged: [],
           deletes: [
             {
               name: "test-idp",
@@ -110,6 +112,7 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
         service: {
           creates: opts.op === "create" ? [entry] : [],
           updates: opts.op === "update" ? [entry] : [],
+          unchanged: [],
           deletes: [],
           title: "IdP Services",
           isEmpty: () => false,
@@ -138,6 +141,7 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
       createIdPService: vi.fn().mockResolvedValue({}),
       updateIdPService: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
       getStaticWebsite,
     } as unknown as OperatorClient;
   }

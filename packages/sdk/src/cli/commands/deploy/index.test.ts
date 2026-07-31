@@ -20,10 +20,6 @@ describe("deployCommand", () => {
     await runTest();
   });
 
-  test("exposes 'apply' as an alias", () => {
-    expect(deployCommand.aliases).toContain("apply");
-  });
-
   test("forwards workspace creation options", async () => {
     await runCommand(deployCommand, [
       "--create-workspace",
@@ -60,6 +56,7 @@ describe("deployCommand", () => {
 
   test("forwards global options needed to reproduce deploy", async () => {
     await runCommand(deployCommand, ["--env-file-if-exists", ".env.local", "--verbose", "--json"], {
+      // strip unknown keys
       globalArgs: z.object(commonArgs),
     });
 

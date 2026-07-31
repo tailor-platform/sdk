@@ -1,9 +1,12 @@
 import { z } from "zod";
 import { AuthConnectionConfigSchema } from "#/parser/service/auth-connection/index";
 import { TailorFieldSchema } from "#/parser/service/field/schema";
+import { stripTailorDBTypeBuilderHelpers } from "#/parser/service/tailordb/builder-helpers";
+import { TailorDBTypeSchema } from "#/parser/service/tailordb/index";
 import type { ValueOperand } from "#/configure/services/auth/types";
+import type { TailorDBInstance } from "#/configure/services/tailordb/types";
 
-export const AuthInvokerObjectSchema = z.object({
+export const AuthInvokerObjectSchema = z.strictObject({
   namespace: z.string().describe("Auth namespace"),
   machineUserName: z.string().describe("Machine user name for authentication"),
 });
@@ -13,12 +16,12 @@ export const AuthInvokerSchema = z.union([
   AuthInvokerObjectSchema,
 ]);
 
-const secretValueSchema = z.object({
+const secretValueSchema = z.strictObject({
   vaultName: z.string().describe("Vault name containing the secret"),
   secretKey: z.string().describe("Key of the secret in the vault"),
 });
 
-export const OIDCSchema = z.object({
+export const OIDCSchema = z.strictObject({
   name: z.string().describe("Identity provider name"),
   kind: z.literal("OIDC"),
   clientID: z.string().describe("OAuth2 client ID"),
@@ -29,7 +32,7 @@ export const OIDCSchema = z.object({
 });
 
 export const SAMLSchema = z
-  .object({
+  .strictObject({
     name: z.string().describe("Identity provider name"),
     kind: z.literal("SAML"),
     enableSignRequest: z.boolean().default(false).describe("Enable signing of SAML requests"),
@@ -46,13 +49,14 @@ export const SAMLSchema = z
       .optional()
       .describe("URL to redirect to when SAML ACS receives a response with an empty RelayState."),
   })
+
   .refine((value) => {
     const hasMetadata = value.metadataURL !== undefined;
     const hasRaw = value.rawMetadata !== undefined;
     return hasMetadata !== hasRaw;
   }, "Provide either metadataURL or rawMetadata");
 
-export const IDTokenSchema = z.object({
+export const IDTokenSchema = z.strictObject({
   name: z.string().describe("Identity provider name"),
   kind: z.literal("IDToken"),
   providerURL: z.string().describe("ID token provider URL"),
@@ -61,7 +65,7 @@ export const IDTokenSchema = z.object({
   usernameClaim: z.string().optional().describe("JWT claim to use as username"),
 });
 
-export const BuiltinIdPSchema = z.object({
+export const BuiltinIdPSchema = z.strictObject({
   name: z.string().describe("Identity provider name"),
   kind: z.literal("BuiltInIdP"),
   namespace: z.string().describe("IdP namespace"),
@@ -80,7 +84,7 @@ export const OAuth2ClientGrantTypeSchema = z
   .describe("OAuth2 grant type");
 
 export const OAuth2ClientSchema = z
-  .object({
+  .strictObject({
     description: z.string().optional().describe("Client description"),
     grantTypes: z
       .array(OAuth2ClientGrantTypeSchema)
@@ -121,12 +125,13 @@ export const OAuth2ClientSchema = z
       .optional()
       .describe("Require DPoP (Demonstrating Proof-of-Possession) for token requests"),
   })
+
   .refine((data) => !(data.clientType === "browser" && data.requireDpop === true), {
     message: "requireDpop cannot be set to true for browser clients as they don't support DPoP",
     path: ["requireDpop"],
   });
 
-export const SCIMAuthorizationSchema = z.object({
+export const SCIMAuthorizationSchema = z.strictObject({
   type: z.union([z.literal("oauth2"), z.literal("bearer")]).describe("SCIM authorization type"),
   bearerSecret: secretValueSchema
     .optional()
@@ -143,7 +148,7 @@ export const SCIMAttributeTypeSchema = z
   ])
   .describe("SCIM attribute data type");
 
-export const SCIMAttributeSchema = z.object({
+export const SCIMAttributeSchema = z.strictObject({
   type: SCIMAttributeTypeSchema.describe("Attribute data type"),
   name: z.string().describe("Attribute name"),
   description: z.string().optional().describe("Attribute description"),
@@ -163,17 +168,17 @@ export const SCIMAttributeSchema = z.object({
   },
 });
 
-const SCIMSchemaSchema = z.object({
+const SCIMSchemaSchema = z.strictObject({
   name: z.string().describe("SCIM schema name"),
   attributes: z.array(SCIMAttributeSchema).describe("Schema attributes"),
 });
 
-export const SCIMAttributeMappingSchema = z.object({
+export const SCIMAttributeMappingSchema = z.strictObject({
   tailorDBField: z.string().describe("TailorDB field name to map to"),
   scimPath: z.string().describe("SCIM attribute path"),
 });
 
-export const SCIMResourceSchema = z.object({
+export const SCIMResourceSchema = z.strictObject({
   name: z.string().describe("SCIM resource name"),
   tailorDBNamespace: z.string().describe("TailorDB namespace for the resource"),
   tailorDBType: z.string().describe("TailorDB type name for the resource"),
@@ -181,34 +186,24 @@ export const SCIMResourceSchema = z.object({
   attributeMapping: z.array(SCIMAttributeMappingSchema).describe("Attribute mapping configuration"),
 });
 
-export const SCIMSchema = z.object({
+export const SCIMSchema = z.strictObject({
   machineUserName: z.string().describe("Machine user name for SCIM operations"),
   authorization: SCIMAuthorizationSchema.describe("SCIM authorization configuration"),
   resources: z.array(SCIMResourceSchema).describe("SCIM resource definitions"),
 });
 
-export const TenantProviderSchema = z.object({
+export const TenantProviderSchema = z.strictObject({
   namespace: z.string().describe("TailorDB namespace for the tenant type"),
   type: z.string().describe("TailorDB type name for tenants"),
   signatureField: z.string().describe("Field used as the tenant signature"),
 });
 
-const UserProfileSchema = z.object({
+const UserProfileSchema = z.strictObject({
   namespace: z.string().optional().describe("TailorDB namespace where the user type is defined"),
-  // FIXME: improve TailorDBInstance schema validation
-  type: z.object({
-    name: z.string(),
-    fields: z.any(),
-    metadata: z.any(),
-    hooks: z.any(),
-    validate: z.any(),
-    features: z.any(),
-    indexes: z.any(),
-    files: z.any(),
-    permission: z.any(),
-    gqlPermission: z.any(),
-    _output: z.any(),
-  }),
+  type: z
+    .custom<TailorDBInstance>()
+    .transform(stripTailorDBTypeBuilderHelpers)
+    .pipe(TailorDBTypeSchema),
   usernameField: z.string(),
   attributes: z.record(z.string(), z.literal(true)).optional(),
   attributeList: z.array(z.string()).optional(),
@@ -221,7 +216,7 @@ const ValueOperandSchema: z.ZodType<ValueOperand> = z.union([
   z.array(z.boolean()),
 ]);
 
-const MachineUserSchema = z.object({
+const MachineUserSchema = z.strictObject({
   // null/undefined values mean "attribute not set" and are dropped so
   // downstream (deploy, drift diff) only ever sees concrete values.
   attributes: z
@@ -238,15 +233,15 @@ const MachineUserSchema = z.object({
   attributeList: z.array(z.uuid()).optional(),
 });
 
-const BeforeLoginHookSchema = z.object({
+const BeforeLoginHookSchema = z.strictObject({
   handler: z.function(),
   invoker: z.string(),
 });
 
-const AuthConfigBaseSchema = z.object({
+const AuthConfigBaseSchema = z.strictObject({
   name: z.string().describe("Auth service name"),
   hooks: z
-    .object({
+    .strictObject({
       beforeLogin: BeforeLoginHookSchema.optional().describe("Before login auth hook"),
     })
     .optional()

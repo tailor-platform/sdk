@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/eslint-plugin-sdk",
-  "version": "0.1.0",
+  "version": "0.2.0-next.1",
   "description": "Lint rules for Tailor Platform SDK applications",
   "license": "MIT",
   "repository": {
@@ -11,8 +11,11 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "lib",
-    "rules",
+    "lib/ast.js",
+    "lib/sdk-bindings.js",
+    "rules/no-api-prefix-in-path-pattern.js",
+    "rules/no-execute-script-arg-stringify.js",
+    "rules/no-unconditional-permit.js",
     "README.md"
   ],
   "type": "module",

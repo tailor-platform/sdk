@@ -5,7 +5,7 @@
  * `tailor.idp.Client` and records calls with method, args, and namespace.
  */
 import { aroundEach, describe, expect, test } from "vitest";
-import * as idp from "#/runtime/idp";
+import { idp } from "#/runtime/idp";
 import { mockIdp, injectMocks } from "#/vitest/mock";
 
 describe("@tailor-platform/sdk/runtime/idp", () => {

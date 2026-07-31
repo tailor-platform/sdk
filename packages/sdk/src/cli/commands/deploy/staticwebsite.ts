@@ -9,7 +9,14 @@ import {
 import { getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
-import { buildMetaRequest, hasMatchingSdkVersion, isOwnedByApp, resourceTrn } from "./label";
+import {
+  buildMetaRequest,
+  hasMatchingSdkVersion,
+  isOwnedByApp,
+  type MetadataLabelWrite,
+  resourceTrn,
+  writeMetadataLabels,
+} from "./label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -17,7 +24,6 @@ import {
 } from "./owned-resource";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { OwnerConflict, UnmanagedResource } from "./confirm";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 import type { StaticWebsite as ProtoStaticWebsite } from "@tailor-platform/tailor-proto/staticwebsite_resource_pb";
 
 /**
@@ -38,18 +44,18 @@ export async function applyStaticWebsite(
     await Promise.all([
       ...changeSet.creates.map(async (create) => {
         await client.createStaticWebsite(create.request);
-        await client.setMetadata(create.metaRequest);
+        await writeMetadataLabels(client, create.metaRequest);
       }),
       ...changeSet.updates.map(async (update) => {
         await client.updateStaticWebsite(update.request);
-        await client.setMetadata(update.metaRequest);
+        await writeMetadataLabels(client, update.metaRequest);
       }),
     ]);
     // Custom domains
     await Promise.all([
       ...customDomainChangeSet.creates.map(async (add) => {
         await client.addCustomDomain(add.request);
-        await client.setMetadata(add.metaRequest);
+        await writeMetadataLabels(client, add.metaRequest);
       }),
       ...customDomainChangeSet.deletes.map((del) => client.removeCustomDomain(del.request)),
     ]);
@@ -63,13 +69,13 @@ export async function applyStaticWebsite(
 type CreateStaticWebsite = {
   name: string;
   request: MessageInitShape<typeof CreateStaticWebsiteRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateStaticWebsite = {
   name: string;
   request: MessageInitShape<typeof UpdateStaticWebsiteRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteStaticWebsite = {
@@ -80,7 +86,7 @@ type DeleteStaticWebsite = {
 type AddCustomDomainEntry = {
   name: string;
   request: MessageInitShape<typeof AddCustomDomainRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type RemoveCustomDomainEntry = {

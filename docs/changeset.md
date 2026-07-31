@@ -8,6 +8,14 @@ This project uses [Changesets](https://github.com/changesets/changesets) for ver
 pnpm changeset
 ```
 
+## Prerelease Codemod Validation
+
+When validating codemod behavior before a prerelease, record the exact runner that produced the result:
+
+- For package-based validation, cite an exact published npm version such as `@tailor-platform/sdk-codemod@0.3.0-next.3`.
+- For branch-head validation, build the package locally, run `node packages/sdk-codemod/dist/index.js ...`, and cite the `runner.gitCommit` plus `runner.localBuildCommand` from the JSON summary.
+- Do not cite an older npm prerelease for behavior that only exists on the branch head. Publish a new prerelease first, or keep the validation explicitly tied to the branch commit and local build command.
+
 ## Version Bump Levels
 
 The key question for choosing a level: **How does this change affect SDK users?**
@@ -16,7 +24,7 @@ The key question for choosing a level: **How does this change affect SDK users?*
 
 SDK users must modify their code or configuration to upgrade.
 
-- Removing or renaming a public API (`defineConfig`, `db.type`, `createResolver`, etc.)
+- Removing or renaming a public API (`defineConfig`, `db.table`, `createResolver`, etc.)
 - Changing the signature or behavior of an existing API in an incompatible way
 - Changing `tailor.config.ts` format in a way that requires migration
 - Raising the minimum Node.js version

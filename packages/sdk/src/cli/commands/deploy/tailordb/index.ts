@@ -52,10 +52,21 @@ import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/t
 import { byName } from "#/cli/shared/apply-concurrency";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { assertNoPublishEventsConflict, publishEventsConflict } from "#/cli/shared/publish-events";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig, toComparableProtoJson } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn } from "../label";
+import {
+  addDependencyRecords,
+  buildMetaRequest,
+  type DependentAppsByResource,
+  eventSourceKey,
+  hasMatchingSdkVersion,
+  type MetadataLabelWrite,
+  resourceTrn,
+  tailorDBTypeTrn,
+  writeMetadataLabels,
+} from "../label";
 import {
   fetchExistingResourcesWithLabels,
   trackDesiredResourceOwnership,
@@ -72,7 +83,6 @@ import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
 import type { OwnerConflict, UnmanagedResource } from "../confirm";
 import type { ApplyPhase, PlanContext } from "../types";
-import type { SetMetadataRequestSchema } from "@tailor-platform/tailor-proto/metadata_pb";
 
 // ============================================================================
 // Migration Validation
@@ -175,7 +185,7 @@ export async function validateAndDetectMigrations(
         logger.error("Schema changes detected that are not in migration files:");
         logger.log(formatMigrationCheckResults(migrationResults));
         logger.newline();
-        logger.info("Run 'tailor-sdk tailordb migration generate' to create migration files.");
+        logger.info("Run 'tailor tailordb migration generate' to create migration files.");
         logger.info("Or use '--no-schema-check' to skip this check.");
         throw new Error("Schema migration check failed");
       }
@@ -200,7 +210,7 @@ export async function validateAndDetectMigrations(
         }
         logger.newline();
         logger.info(
-          "Pull the latest migration files, or run 'tailor-sdk tailordb migration status' to compare.",
+          "Pull the latest migration files, or run 'tailor tailordb migration status' to compare.",
         );
         throw new Error("Remote migration checkpoint verification failed");
       }
@@ -424,7 +434,7 @@ export async function applyTailorDB(
         }
       } catch (error) {
         handleOptionalToRequiredError(error, [
-          "Run 'tailor-sdk tailordb migration generate' to create migration files.",
+          "Run 'tailor tailordb migration generate' to create migration files.",
           "Migration scripts allow you to handle existing data before applying the schema change.",
         ]);
       }
@@ -534,28 +544,52 @@ export async function applyTailorDB(
           )
           .map((del) => client.deleteTailorDBType(del.request)),
       );
+
+      // Step 6: Write type metadata, which the migration phases above do not.
+      // Types inside migrating namespaces only exist once their phases have run,
+      // so this waits until every type in the change set is present. Skipping it
+      // would leave a cross-config dependency record unwritten on any deploy that
+      // carries a migration, and the owner's next solo deploy would turn
+      // publishing off without asking.
+      await Promise.all(
+        [...changeSet.type.creates, ...changeSet.type.updates, ...changeSet.type.unchanged]
+          .filter((entry) => entry.metaRequest && !deletedResources.types.has(entry.name))
+          .flatMap((entry) =>
+            entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : [],
+          ),
+      );
     } else {
       // Normal create-update flow without migrations
       // Services
       await Promise.all([
         ...changeSet.service.creates.map(async (create) => {
           await client.createTailorDBService(create.request);
-          await client.setMetadata(create.metaRequest);
+          await writeMetadataLabels(client, create.metaRequest);
         }),
-        ...changeSet.service.updates.map((update) => client.setMetadata(update.metaRequest)),
+        ...changeSet.service.updates.map((update) =>
+          writeMetadataLabels(client, update.metaRequest),
+        ),
       ]);
 
-      // Types
+      // Types. An unchanged type still gets its labels written, because its
+      // dependency records can change while its schema does not.
       try {
         for (const create of changeSet.type.creates) {
           await client.createTailorDBType(create.request);
+          await writeMetadataLabels(client, create.metaRequest);
         }
         for (const update of changeSet.type.updates) {
           await client.updateTailorDBType(update.request);
+          await writeMetadataLabels(client, update.metaRequest);
         }
+        await Promise.all(
+          changeSet.type.unchanged.flatMap((entry) =>
+            entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : [],
+          ),
+        );
       } catch (error) {
         handleOptionalToRequiredError(error, [
-          "Run 'tailor-sdk tailordb migration generate' to create migration files.",
+          "Run 'tailor tailordb migration generate' to create migration files.",
           "Migration scripts allow you to handle existing data before applying the schema change.",
         ]);
       }
@@ -660,9 +694,9 @@ async function executeServicesCreation(
   await Promise.all([
     ...changeSet.service.creates.map(async (create) => {
       await client.createTailorDBService(create.request);
-      await client.setMetadata(create.metaRequest);
+      await writeMetadataLabels(client, create.metaRequest);
     }),
-    ...changeSet.service.updates.map((update) => client.setMetadata(update.metaRequest)),
+    ...changeSet.service.updates.map((update) => writeMetadataLabels(client, update.metaRequest)),
   ]);
 }
 
@@ -713,14 +747,6 @@ const migrationSnapshotCache = {
   },
 };
 
-/**
- * Build the TailorDBType manifest for `typeName` from migration N's snapshot.
- * @param migration - The pending migration whose snapshot to consult
- * @param typeName - The type name to look up in the snapshot
- * @param tailorDBInputs - Deploy inputs, used to resolve namespace gqlOperations
- * @param executorUsedTypes - Types used by executors (drives publishRecordEvents default)
- * @returns The manifest, or undefined if `typeName` is not in that snapshot.
- */
 function buildSnapshotTypeManifest(
   migration: PendingMigration,
   typeName: string,
@@ -732,7 +758,7 @@ function buildSnapshotTypeManifest(
   if (!snapshotType) return undefined;
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
   return generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-    publishRecordEvents: executorUsedTypes.has(snapshotType.name),
+    subscribed: executorUsedTypes.has(snapshotType.name),
     namespaceGqlOperations: input?.config.gqlOperations,
   });
 }
@@ -1097,7 +1123,7 @@ async function rollbackSingleMigrationPrePhase(
     try {
       if (priorType) {
         const manifest = generateTailorDBTypeManifestFromSnapshot(priorType, {
-          publishRecordEvents: executorUsedTypes.has(priorType.name),
+          subscribed: executorUsedTypes.has(priorType.name),
           namespaceGqlOperations: input?.config.gqlOperations,
         });
         await client.updateTailorDBType({
@@ -1195,6 +1221,12 @@ export async function planTailorDB(context: PlanContext) {
       deletedServices,
       undefined,
       forceApplyAll,
+      {
+        appName: application.name,
+        appId: application.id,
+        dependentApps: context.dependentApps,
+        runAppIds: context.runAppIds,
+      },
     ),
     planGqlPermissions(client, workspaceId, tailordbs, deletedServices, forceApplyAll),
   ]);
@@ -1305,12 +1337,12 @@ export function formatTailorDBResourceChangeEntries(
 type CreateService = {
   name: string;
   request: MessageInitShape<typeof CreateTailorDBServiceRequestSchema>;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateService = {
   name: string;
-  metaRequest: MessageInitShape<typeof SetMetadataRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type DeleteService = {
@@ -1381,7 +1413,6 @@ async function planServices(
       trn: resourceTrn(workspaceId, "tailordb", tailordb.namespace),
       appName,
       appId,
-      existingLabels: existing?.allLabels,
     });
     if (existing) {
       const owned = trackDesiredResourceOwnership({
@@ -1414,7 +1445,7 @@ async function planServices(
         request: {
           workspaceId,
           namespaceName: tailordb.namespace,
-          // Set UTC to match tailorctl/terraform
+          // Keep generated TailorDB services aligned with Terraform defaults.
           defaultTimezone: "UTC",
         },
         metaRequest,
@@ -1447,11 +1478,30 @@ async function planServices(
 type CreateType = {
   name: string;
   request: MessageInitShape<typeof CreateTailorDBTypeRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateType = {
   name: string;
   request: MessageInitShape<typeof UpdateTailorDBTypeRequestSchema>;
+  metaRequest: MetadataLabelWrite;
+};
+
+/**
+ * A type whose schema is unchanged but whose dependency records may not be. The
+ * plan shows it as unchanged; apply still writes its labels.
+ */
+type UnchangedType = {
+  name: string;
+  metaRequest?: MetadataLabelWrite;
+};
+
+/** What planTypes needs to record dependencies on each type. */
+type TypeRecordInputs = {
+  appName?: string;
+  appId?: string;
+  dependentApps?: DependentAppsByResource;
+  runAppIds?: ReadonlySet<string>;
 };
 
 type DeleteType = {
@@ -1467,8 +1517,34 @@ async function planTypes(
   deletedServices: ReadonlyArray<string>,
   filteredTypesByNamespace?: Map<string, Record<string, TailorDBSnapshotType>>,
   forceApplyAll = false,
+  records: TypeRecordInputs = {},
 ) {
-  const changeSet = createChangeSet<CreateType, UpdateType, DeleteType>("TailorDB types");
+  const changeSet = createChangeSet<CreateType, UpdateType, DeleteType, never, UnchangedType>(
+    "TailorDB types",
+  );
+  const { appName, appId, dependentApps, runAppIds } = records;
+
+  /**
+   * Build one type's metadata write, carrying the dependency records that belong
+   * to it. The type is what publishes record events, so the record lives there.
+   * @param namespace - Namespace holding the type
+   * @param typeName - Type name
+   * @param explicitPublishEvents - `publishEvents` declared on the type, if any
+   * @returns The type's metadata write
+   */
+  const typeMetaRequest = async (
+    namespace: string,
+    typeName: string,
+    explicitPublishEvents: boolean | undefined,
+  ) => {
+    const trn = tailorDBTypeTrn(workspaceId, namespace, typeName);
+    return addDependencyRecords(await buildMetaRequest({ trn, appName: appName ?? "", appId }), {
+      key: eventSourceKey.tailorDBType(namespace, typeName),
+      dependentApps,
+      runAppIds,
+      pinned: explicitPublishEvents !== undefined,
+    });
+  };
 
   const fetchTypes = (namespaceName: string) => {
     return fetchAllTolerant(async (pageToken, maxPageSize) => {
@@ -1482,16 +1558,15 @@ async function planTypes(
     });
   };
 
-  // Validate that types used by executors don't have publishEvents explicitly set to false
+  // Reject a conflicting opt-out before any request, not partway through.
   for (const tailordb of tailordbs) {
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
     for (const [typeName, type] of Object.entries(types)) {
-      if (executorUsedTypes.has(typeName) && type.settings?.publishEvents === false) {
-        throw new Error(
-          `Type "${typeName}" has publishEvents set to false, but it is used by an executor with a record trigger. ` +
-            `Either remove the publishEvents: false setting or remove the executor trigger for this type.`,
-        );
-      }
+      assertNoPublishEventsConflict({
+        explicit: type.settings?.publishEvents,
+        subscribed: executorUsedTypes.has(typeName),
+        conflict: publishEventsConflict.tailorDBType(typeName),
+      });
     }
   }
 
@@ -1501,10 +1576,12 @@ async function planTypes(
 
     // Use filtered types if provided, otherwise use local types
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
+    const typeMeta = (typeName: string) =>
+      typeMetaRequest(tailordb.namespace, typeName, types[typeName]?.settings?.publishEvents);
 
     for (const [typeName, tailordbTypeSnapshot] of Object.entries(types)) {
       const tailordbType = generateTailorDBTypeManifestFromSnapshot(tailordbTypeSnapshot, {
-        publishRecordEvents: executorUsedTypes.has(typeName),
+        subscribed: executorUsedTypes.has(typeName),
         namespaceGqlOperations: tailordb.config.gqlOperations,
       });
       const existingType = existingTypesMap.get(typeName);
@@ -1516,7 +1593,8 @@ async function planTypes(
             normalizeComparableTailorDBType(tailordbType),
           )
         ) {
-          changeSet.unchanged.push({ name: typeName });
+          // The schema matches, but the records may not, so the labels still go.
+          changeSet.unchanged.push({ name: typeName, metaRequest: await typeMeta(typeName) });
         } else {
           changeSet.updates.push({
             name: typeName,
@@ -1525,6 +1603,7 @@ async function planTypes(
               namespaceName: tailordb.namespace,
               tailordbType,
             },
+            metaRequest: await typeMeta(typeName),
           });
         }
         existingTypesMap.delete(typeName);
@@ -1536,6 +1615,7 @@ async function planTypes(
             namespaceName: tailordb.namespace,
             tailordbType,
           },
+          metaRequest: await typeMeta(typeName),
         });
       }
     }
@@ -1610,6 +1690,8 @@ function normalizeComparableTailorDBType(type: MessageInitShape<typeof TailorDBT
       indexes?: Record<string, unknown>;
       files?: Record<string, unknown>;
       permission?: Record<string, unknown>;
+      typeHook?: Record<string, unknown>;
+      typeValidate?: Record<string, unknown>;
     };
   } | null;
   return normalizeTailorDBCompareValue(
@@ -1623,9 +1705,22 @@ function normalizeComparableTailorDBType(type: MessageInitShape<typeof TailorDBT
         indexes: normalized?.schema?.indexes ?? {},
         files: normalized?.schema?.files ?? {},
         permission: normalized?.schema?.permission ?? {},
+        // Hooks/validators are sent as type-level scripts; include them so a
+        // changed hook or validator is detected as an update.
+        typeHook: normalized?.schema?.typeHook ?? {},
+        typeValidate: normalized?.schema?.typeValidate ?? {},
       },
     },
     [],
+  );
+}
+
+function isPermissionPolicyArrayPath(path: readonly (string | number)[]): boolean {
+  return (
+    path.length === 3 &&
+    path[0] === "schema" &&
+    path[1] === "permission" &&
+    (path[2] === "create" || path[2] === "read" || path[2] === "update" || path[2] === "delete")
   );
 }
 
@@ -1637,13 +1732,17 @@ function normalizeTailorDBCompareValue(
     return value;
   }
 
+  if (typeof value === "boolean") {
+    if (path.at(-1) === "optionalOnCreate" && value === false) {
+      return undefined;
+    }
+    return value;
+  }
+
   if (typeof value === "number" || typeof value === "bigint" || typeof value === "string") {
     if (matchesNumericStringPath(path) && isNumericLikeValue(value)) {
       return String(value);
     }
-    // Platform returns an empty string for `expr` (validate scripts) and field/type
-    // `description` when the SDK omitted them, while local manifests omit the key
-    // entirely. Treat the empty string as unset so it matches an omitted value.
     if (
       (path.at(-1) === "expr" || path.at(-1) === "description") &&
       value === tailordbCompareKnownDefaults.emptyExpression
@@ -1654,9 +1753,23 @@ function normalizeTailorDBCompareValue(
   }
 
   if (Array.isArray(value)) {
-    return value
+    const items = value
       .map((item, index) => normalizeTailorDBCompareValue(item, [...path, index]))
       .filter((item) => item !== undefined);
+    // Field-level validators are no longer emitted by the SDK (they are aggregated
+    // into type-level type_validate). The platform still returns an empty `validate`
+    // array per field; treat it as unset so it matches the omitted local value.
+    if (items.length === 0 && path.at(-1) === "validate") {
+      return undefined;
+    }
+    // The platform evaluates permission policies order-insensitively (any
+    // matching deny wins over any matching allow), while committed migration
+    // snapshots can record the same policies in a different order than the
+    // current config parse — so compare each action's policies as a set.
+    if (isPermissionPolicyArrayPath(path)) {
+      return items.toSorted((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1));
+    }
+    return items;
   }
 
   if (!isPlainObject(value)) {

@@ -4,6 +4,9 @@
   "scripts": {
     "report:tail": "tailor-sdk crash-report list",
     "report:send": "tailor-sdk crash-report send --file ./latest.crash.log",
+    "report:json": "tailor-sdk --json crash-report list",
+    "login": "tailor-sdk login --machineuser ci",
+    "query": "tailor-sdk query --machineuser=ci --json",
     "build": "tsc"
   }
 }

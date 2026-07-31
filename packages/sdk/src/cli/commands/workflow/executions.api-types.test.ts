@@ -1,10 +1,7 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { describe, test } from "vitest";
 import { createWorkflow, createWorkflowJob } from "#/configure/services/workflow/index";
-import {
-  type ListWorkflowExecutionsOptions,
-  type ListWorkflowExecutionsTypedOptions,
-} from "./executions";
+import { type ListWorkflowExecutionsTypedOptions } from "./executions";
 
 const mainJob = createWorkflowJob({
   name: "main",
@@ -77,28 +74,6 @@ describe("listWorkflowExecutions API types", () => {
     acceptsTypedOptions({
       // @ts-expect-error - typed overload requires workflow, not workflowName
       workflowName: "legacy-workflow",
-    });
-  });
-
-  test("keeps deprecated ListWorkflowExecutionsOptions shape available", () => {
-    const acceptsDeprecatedOptions = (_options: ListWorkflowExecutionsOptions): void => {};
-
-    acceptsDeprecatedOptions({
-      workflowName: "legacy-workflow",
-    });
-
-    acceptsDeprecatedOptions({
-      workflowName: "legacy-workflow",
-      status: "RUNNING",
-      order: "asc",
-      limit: 10,
-      workspaceId: "ws-1",
-      profile: "dev",
-    });
-
-    acceptsDeprecatedOptions({
-      // @ts-expect-error - deprecated options must keep legacy workflowName shape
-      workflow: myWorkflow,
     });
   });
 });

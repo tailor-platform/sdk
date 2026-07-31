@@ -4,18 +4,7 @@
 // This is a pure type module: type declarations only, no zod/schema
 // references, importable type-only from any layer.
 
-import type {
-  BaseGeneratorConfigInput,
-  CodeGeneratorInput,
-} from "#/types/generator-config.generated";
-
 export type DependencyKind = "tailordb" | "resolver" | "executor";
-
-export type GeneratorConfig = BaseGeneratorConfigInput;
-
-export type CodeGeneratorBase = Omit<CodeGeneratorInput, "dependencies"> & {
-  dependencies: readonly DependencyKind[];
-};
 
 import type {
   PluginAttachment,

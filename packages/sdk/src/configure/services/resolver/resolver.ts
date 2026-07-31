@@ -1,16 +1,15 @@
 import { t, type TailorAnyField, type TailorField } from "#/configure/types/type";
 import { brandValue } from "#/utils/brand";
-import type { AuthInvoker } from "#/configure/services/auth/index";
 import type { ResolverPermission } from "#/configure/services/resolver/permission";
 import type { MachineUserName } from "#/configure/types/machine-user";
-import type { TailorEnv, TailorInvoker, TailorUser } from "#/runtime/types";
+import type { TailorEnv, TailorPrincipal } from "#/runtime/types";
 import type { InferFieldsOutput, output } from "#/types/helpers";
 import type { ResolverInput } from "#/types/resolver.generated";
 
 type Context<Input extends Record<string, TailorAnyField> | undefined> = {
   input: Input extends Record<string, TailorAnyField> ? InferFieldsOutput<Input> : never;
-  user: TailorUser;
-  invoker?: TailorInvoker;
+  caller: TailorPrincipal | null;
+  invoker: TailorPrincipal | null;
   env: TailorEnv;
 };
 
@@ -36,12 +35,12 @@ type NormalizedOutput<Output extends TailorAnyField | Record<string, TailorAnyFi
 type ResolverReturn<
   Input extends Record<string, TailorAnyField> | undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField>,
-> = Omit<ResolverInput, "input" | "output" | "body" | "authInvoker" | "permission"> &
+> = Omit<ResolverInput, "input" | "output" | "body" | "invoker" | "permission"> &
   Readonly<{
     input?: Input;
     output: NormalizedOutput<Output>;
     body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
-    authInvoker?: AuthInvoker<string> | MachineUserName;
+    invoker?: MachineUserName;
     permission?: ResolverPermission;
   }>;
 
@@ -49,7 +48,7 @@ type ResolverReturn<
  * Create a resolver definition for the Tailor SDK.
  *
  * The `body` function receives a context with `input` (typed from `config.input`),
- * `user`, `invoker` (reflects `authInvoker` delegation), and `env`.
+ * `caller`, `invoker` (reflects configured machine-user delegation), and `env`.
  * The return value of `body` must match the `output` type.
  *
  * `output` accepts either a single TailorField (e.g. `t.string()`) or a
@@ -81,7 +80,7 @@ type ResolverReturn<
  *   input: {
  *     id: t.string(),
  *   },
- *   body: async ({ input, user }) => {
+ *   body: async ({ input, caller }) => {
  *     const db = getDB("tailordb");
  *     const result = await db.selectFrom("User").selectAll().where("id", "=", input.id).executeTakeFirst();
  *     return { name: result?.name ?? "", email: result?.email ?? "" };
@@ -97,12 +96,12 @@ export function createResolver<
   Input extends Record<string, TailorAnyField> | undefined = undefined,
   Output extends TailorAnyField | Record<string, TailorAnyField> = TailorAnyField,
 >(
-  config: Omit<ResolverInput, "input" | "output" | "body" | "authInvoker" | "permission"> &
+  config: Omit<ResolverInput, "input" | "output" | "body" | "invoker" | "permission"> &
     Readonly<{
       input?: Input;
       output: Output;
       body: (context: Context<Input>) => OutputType<Output> | Promise<OutputType<Output>>;
-      authInvoker?: AuthInvoker<string> | MachineUserName;
+      invoker?: MachineUserName;
       permission?: ResolverPermission;
     }>,
 ): ResolverReturn<Input, Output> {

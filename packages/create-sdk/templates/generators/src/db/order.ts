@@ -3,7 +3,7 @@ import { product } from "./product";
 import { user } from "./user";
 
 export const order = db
-  .type("Order", {
+  .table("Order", {
     productId: db.uuid().relation({
       type: "n-1",
       toward: { type: product },

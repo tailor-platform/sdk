@@ -43,7 +43,7 @@ export async function bundleMigrationScript(
   env: Record<string, string | number | boolean> = {},
   baseDir?: string,
 ): Promise<MigrationBundleResult> {
-  // Output directory in .tailor-sdk (relative to project root)
+  // Output directory in .tailor (relative to project root)
   const outputDir = path.resolve(getDistDir(), "migrations");
   fs.mkdirSync(outputDir, { recursive: true });
 

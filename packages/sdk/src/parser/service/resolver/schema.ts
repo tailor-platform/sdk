@@ -8,7 +8,7 @@ export const QueryTypeSchema = z
   .describe("GraphQL operation type");
 
 const ResolverPermissionOperandSchema = z.union([
-  z.object({ user: z.string() }).strict(),
+  z.strictObject({ user: z.string() }),
   z.string(),
   z.boolean(),
 ]);
@@ -67,7 +67,7 @@ const ResolverPermissionConditionSchema = z
   })
   .readonly();
 
-const ResolverPermissionPolicySchema = z.object({
+const ResolverPermissionPolicySchema = z.strictObject({
   conditions: z.union([
     ResolverPermissionConditionSchema,
     z
@@ -99,12 +99,12 @@ export const ResolverPermissionSchema = z
   ])
   .describe(
     "Access requirement for this resolver, evaluated against the original caller " +
-      '(unaffected by `authInvoker`) before `body` runs. "allowAnonymous" documents that ' +
+      '(unaffected by `invoker`) before `body` runs. "allowAnonymous" documents that ' +
       "anonymous callers are allowed. Omitted (default): unchanged, anonymous callers can " +
       "reach the resolver",
   );
 
-export const ResolverSchema = z.object({
+export const ResolverSchema = z.strictObject({
   operation: QueryTypeSchema.describe("GraphQL operation type (query or mutation)"),
   name: z.string().describe("Resolver name"),
   description: z.string().optional().describe("Resolver description"),
@@ -112,6 +112,6 @@ export const ResolverSchema = z.object({
   body: functionSchema.describe("Resolver implementation function"),
   output: TailorFieldSchema.describe("Output field definition"),
   publishEvents: z.boolean().optional().describe("Enable publishing events from this resolver"),
-  authInvoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
+  invoker: AuthInvokerSchema.optional().describe("Machine user to execute this resolver as"),
   permission: ResolverPermissionSchema.optional(),
 });

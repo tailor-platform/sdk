@@ -14,7 +14,7 @@ import type {
   TailorField as TailorFieldBase,
   FieldValidateInput,
 } from "#/configure/types/field.types";
-import type { InferFieldsOutput, TypeLevelError } from "#/types/helpers";
+import type { InferFieldsOutput, Prettify, TypeLevelError, output } from "#/types/helpers";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 // Erased fields stay assignable across builder method-state changes.
@@ -106,7 +106,7 @@ export interface TailorField<
   /**
    * Parse and validate a value against this field's validation rules
    * Returns StandardSchema Result type with success or failure
-   * @param args - Value, context data, and user
+   * @param args - Value, context data, and invoker
    * @returns Validation result
    */
   parse(args: FieldParseArgs): StandardSchemaV1.Result<Output>;
@@ -265,7 +265,7 @@ function createTailorField<
       return parseInternal({
         value: args.value,
         data: args.data,
-        user: args.user,
+        invoker: args.invoker,
         pathArray: [],
       });
     },
@@ -402,6 +402,19 @@ function _enum<const V extends AllowedValues, const Opt extends FieldOptions>(
   return createTailorField<"enum", Opt, AllowedValuesOutput<V>>("enum", options, undefined, values);
 }
 
+type DefaultFieldKeys<F> = {
+  [K in keyof F]: F[K] extends { _defined: { default: true } } ? K : never;
+}[keyof F];
+
+type InferFieldsOutputWithDefaults<
+  // oxlint-disable-next-line no-explicit-any
+  F extends Record<string, { _output: any; [key: string]: any }>,
+> = Prettify<
+  Omit<InferFieldsOutput<F>, DefaultFieldKeys<F> & string> & {
+    [K in DefaultFieldKeys<F> & keyof F]?: output<F[K]>;
+  }
+>;
+
 /**
  * Create a nested object field for resolver input/output.
  * @param fields - Record of field definitions
@@ -420,7 +433,7 @@ function object<const F extends Record<string, TailorAnyField>, const Opt extend
 ) {
   const objectField = createTailorField("nested", options, fields) as TailorField<
     { type: "nested"; array: Opt extends { array: true } ? true : false },
-    FieldOutput<InferFieldsOutput<F>, Opt>
+    FieldOutput<InferFieldsOutputWithDefaults<F>, Opt>
   >;
   return objectField;
 }

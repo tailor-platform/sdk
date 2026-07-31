@@ -1,6 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test, vi } from "vitest";
-import { CLIError, errorToJson } from "./errors";
+import { errorToJson, serializeError } from "./error-json";
+import { CLIError } from "./errors";
 import { CIPromptError } from "./logger";
 
 describe("errorToJson", () => {
@@ -11,7 +12,7 @@ describe("errorToJson", () => {
       suggestion: "Create a workspace.",
       command: "deploy",
       next: {
-        command: "tailor-sdk",
+        command: "tailor",
         args: ["deploy", "--create-workspace", "--workspace-name", "example"],
       },
       context: { availableRegions: ["us-west"] },
@@ -22,12 +23,27 @@ describe("errorToJson", () => {
         code: "WORKSPACE_NOT_FOUND",
         message: "No workspaces are available.",
         suggestion: "Create a workspace.",
-        help: { command: "tailor-sdk", args: ["deploy", "--help"] },
+        help: { command: "tailor", args: ["deploy", "--help"] },
         next: {
-          command: "tailor-sdk",
+          command: "tailor",
           args: ["deploy", "--create-workspace", "--workspace-name", "example"],
         },
         context: { availableRegions: ["us-west"] },
+      },
+    });
+  });
+
+  test("serializes a stable fallback when the error context is not JSON-compatible", () => {
+    const error = CLIError({
+      code: "WORKSPACE_NOT_FOUND",
+      message: "No workspaces are available.",
+      context: { availableRegions: 1n },
+    });
+
+    expect(JSON.parse(serializeError(error, { includeStack: true }))).toEqual({
+      error: {
+        code: "WORKSPACE_NOT_FOUND",
+        message: "No workspaces are available.",
       },
     });
   });
@@ -64,7 +80,7 @@ describe("errorToJson", () => {
     const error = CLIError({
       message: "Choose a workspace.",
       next: {
-        command: "tailor-sdk",
+        command: "tailor",
         args: [
           "deploy",
           "--config",
@@ -76,7 +92,7 @@ describe("errorToJson", () => {
     });
 
     expect(error.format()).toContain(
-      'tailor-sdk deploy --config "C:\\Users\\Jane Doe\\tailor.config.ts" --workspace-id "<workspace-id>"',
+      'tailor deploy --config "C:\\Users\\Jane Doe\\tailor.config.ts" --workspace-id "<workspace-id>"',
     );
   });
 
@@ -85,13 +101,13 @@ describe("errorToJson", () => {
     const error = CLIError({
       message: "Choose a workspace.",
       next: {
-        command: "tailor-sdk",
+        command: "tailor",
         args: ["deploy", "--config", "C:\\work\\!SECRET!\\tailor.config.ts"],
       },
     });
 
     expect(error.format()).toContain(
-      'argv ["tailor-sdk","deploy","--config","C:\\\\work\\\\!SECRET!\\\\tailor.config.ts"]',
+      'argv ["tailor","deploy","--config","C:\\\\work\\\\!SECRET!\\\\tailor.config.ts"]',
     );
   });
 

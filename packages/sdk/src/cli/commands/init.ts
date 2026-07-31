@@ -17,18 +17,16 @@ const detectPackageManager = () => {
 export const initCommand = defineAppCommand({
   name: "init",
   description: "Initialize a new project using create-sdk.",
-  args: z
-    .object({
-      name: arg(z.string().optional(), {
-        positional: true,
-        description: "Project name",
-      }),
-      template: arg(z.string().optional(), {
-        alias: "t",
-        description: "Template name",
-      }),
-    })
-    .strict(),
+  args: z.strictObject({
+    name: arg(z.string().optional(), {
+      positional: true,
+      description: "Project name",
+    }),
+    template: arg(z.string().optional(), {
+      alias: "t",
+      description: "Template name",
+    }),
+  }),
   run: async (args) => {
     const packageJson = await readPackageJson();
     const version =

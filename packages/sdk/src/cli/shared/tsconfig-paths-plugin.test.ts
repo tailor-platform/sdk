@@ -5,7 +5,7 @@ import * as rolldown from "rolldown";
 import { afterEach, describe, expect, test } from "vitest";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import { createBundleLog } from "./bundle-log";
-import { createTsconfigPathsPlugin } from "./tsconfig-paths-plugin";
+import { createTsconfigLookupCache, createTsconfigPathsPlugin } from "./tsconfig-paths-plugin";
 
 describe("createTsconfigPathsPlugin", () => {
   const tmpDirs: string[] = [];
@@ -456,5 +456,77 @@ describe("createTsconfigPathsPlugin", () => {
     bundleLog.assertAllResolved();
 
     expect(result.output[0].code).toContain("77");
+  });
+
+  describe("cache sharing", () => {
+    test("resolves aliases for a second bundle sharing the same lookup cache", async () => {
+      const dir = makeDir("tsconfig-paths-shared-cache-");
+      fs.mkdirSync(path.join(dir, "lib"));
+      fs.mkdirSync(path.join(dir, "services"));
+      fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
+      fs.writeFileSync(
+        path.join(dir, "services", "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["../lib/*"] } },
+        }),
+      );
+      fs.writeFileSync(path.join(dir, "lib", "helpers.ts"), "export const helper = () => 42;\n");
+      const entryA = path.join(dir, "services", "a.ts");
+      const entryB = path.join(dir, "services", "b.ts");
+      fs.writeFileSync(
+        entryA,
+        'import { helper } from "@lib/helpers";\nexport const main = () => helper();\n',
+      );
+      fs.writeFileSync(
+        entryB,
+        'import { helper } from "@lib/helpers";\nexport const main = () => helper() + 1;\n',
+      );
+
+      const cache = createTsconfigLookupCache();
+      const resultA = await build(entryA, path.join(dir, "tsconfig.json"), [
+        createTsconfigPathsPlugin({ cache }),
+      ]);
+      const resultB = await build(entryB, path.join(dir, "tsconfig.json"), [
+        createTsconfigPathsPlugin({ cache }),
+      ]);
+
+      expect(resultA.output[0].code).toContain("42");
+      expect(resultB.output[0].code).toContain("42");
+    });
+
+    test("still reports dependencies to the second bundle when the lookup cache is shared", async () => {
+      const dir = makeDir("tsconfig-paths-shared-cache-deps-");
+      fs.mkdirSync(path.join(dir, "lib"));
+      fs.mkdirSync(path.join(dir, "services"));
+      fs.writeFileSync(path.join(dir, "tsconfig.json"), JSON.stringify({}));
+      fs.writeFileSync(
+        path.join(dir, "services", "tsconfig.json"),
+        JSON.stringify({
+          compilerOptions: { baseUrl: ".", paths: { "@lib/*": ["../lib/*"] } },
+        }),
+      );
+      fs.writeFileSync(path.join(dir, "lib", "helpers.ts"), "export const helper = () => 42;\n");
+      const entry = path.join(dir, "services", "entry.ts");
+      fs.writeFileSync(
+        entry,
+        'import { helper } from "@lib/helpers";\nexport const main = () => helper();\n',
+      );
+
+      const cache = createTsconfigLookupCache();
+      const firstReported: string[] = [];
+      await build(entry, path.join(dir, "tsconfig.json"), [
+        createTsconfigPathsPlugin({ cache, onTsconfigRead: (p) => firstReported.push(p) }),
+      ]);
+      expect(firstReported).toContain(path.join(dir, "services", "tsconfig.json"));
+
+      // Same startDir, so the shared contextCache resolves the matcher without
+      // recomputing it — but the second caller must still learn its own
+      // dependency, or its own bundle-cache entry would never invalidate.
+      const secondReported: string[] = [];
+      await build(entry, path.join(dir, "tsconfig.json"), [
+        createTsconfigPathsPlugin({ cache, onTsconfigRead: (p) => secondReported.push(p) }),
+      ]);
+      expect(secondReported).toContain(path.join(dir, "services", "tsconfig.json"));
+    });
   });
 });

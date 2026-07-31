@@ -27,12 +27,12 @@ docker run -d --name jaeger-otlp \
 
 ```bash
 cd example
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 pnpm tailor-sdk deploy --dry-run
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 pnpm tailor deploy --dry-run
 ```
 
 ### 3. View traces
 
-Open http://localhost:16686, select service **tailor-sdk**, and click **Find Traces**.
+Open http://localhost:16686, select service **tailor**, and click **Find Traces**.
 
 ## Span Hierarchy
 
@@ -78,7 +78,7 @@ Individual RPC calls are also traced as `rpc.*` child spans (e.g., `rpc.CreateAp
 ### List spans sorted by duration
 
 ```bash
-curl -s "http://localhost:16686/api/traces?service=tailor-sdk&limit=1" | jq '
+curl -s "http://localhost:16686/api/traces?service=tailor&limit=1" | jq '
   .data[0].spans[]
   | {operationName, duration_ms: (.duration / 1000 | . * 100 | round / 100)}
 ' | jq -s 'sort_by(-.duration_ms)'
@@ -87,7 +87,7 @@ curl -s "http://localhost:16686/api/traces?service=tailor-sdk&limit=1" | jq '
 ### Show span hierarchy with parent info
 
 ```bash
-curl -s "http://localhost:16686/api/traces?service=tailor-sdk&limit=1" | jq '
+curl -s "http://localhost:16686/api/traces?service=tailor&limit=1" | jq '
   .data[0] as $trace |
   $trace.spans | map({
     operationName,
@@ -100,7 +100,7 @@ curl -s "http://localhost:16686/api/traces?service=tailor-sdk&limit=1" | jq '
 ### Compare two traces (before/after)
 
 ```bash
-curl -s "http://localhost:16686/api/traces?service=tailor-sdk&limit=2" | jq '
+curl -s "http://localhost:16686/api/traces?service=tailor&limit=2" | jq '
   [.data[] | {
     traceID: .traceID,
     spans: [.spans[]

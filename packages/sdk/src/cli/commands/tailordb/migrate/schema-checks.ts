@@ -357,7 +357,7 @@ export function logRemoteDriftGuidance(): void {
   logger.info("  - Migration history is out of sync", { mode: "plain" });
   logger.newline();
   logger.info("To resolve:");
-  logger.info("  - Run 'tailor-sdk tailordb migration status' to compare local vs remote.", {
+  logger.info("  - Run 'tailor tailordb migration status' to compare local vs remote.", {
     mode: "plain",
   });
   logger.info("  - If remote is correct, update local types and run 'migration generate'.", {
@@ -465,9 +465,7 @@ export function formatMigrationCheckResults(results: MigrationCheckResult[]): st
     lines.push(`Namespace: ${result.namespace}`);
 
     if (!result.diff) {
-      lines.push(
-        "  No migration snapshot found. Run 'tailor-sdk tailordb migration generate' first.",
-      );
+      lines.push("  No migration snapshot found. Run 'tailor tailordb migration generate' first.");
     } else {
       lines.push(`  ${formatDiffSummary(result.diff)}`);
       lines.push("");

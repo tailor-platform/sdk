@@ -9,7 +9,7 @@ Manage Secret Manager vaults and secrets.
 **Usage**
 
 ```
-tailor-sdk secret [command]
+tailor secret [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -31,7 +31,7 @@ Create a secret in a vault.
 **Usage**
 
 ```
-tailor-sdk secret create [options]
+tailor secret create [options]
 ```
 
 **Options**
@@ -54,7 +54,7 @@ Delete a secret in a vault.
 **Usage**
 
 ```
-tailor-sdk secret delete [options]
+tailor secret delete [options]
 ```
 
 **Options**
@@ -76,7 +76,7 @@ List all secrets in a vault.
 **Usage**
 
 ```
-tailor-sdk secret list [options]
+tailor secret list [options]
 ```
 
 **Options**
@@ -98,7 +98,7 @@ Update a secret in a vault.
 **Usage**
 
 ```
-tailor-sdk secret update [options]
+tailor secret update [options]
 ```
 
 **Options**
@@ -121,7 +121,7 @@ Manage Secret Manager vaults.
 **Usage**
 
 ```
-tailor-sdk secret vault [command]
+tailor secret vault [command]
 ```
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -141,7 +141,7 @@ Create a new Secret Manager vault.
 **Usage**
 
 ```
-tailor-sdk secret vault create [options] <name>
+tailor secret vault create [options] <name>
 ```
 
 **Arguments**
@@ -166,7 +166,7 @@ Delete a Secret Manager vault.
 **Usage**
 
 ```
-tailor-sdk secret vault delete [options] <name>
+tailor secret vault delete [options] <name>
 ```
 
 **Arguments**
@@ -192,7 +192,7 @@ List all Secret Manager vaults in the workspace.
 **Usage**
 
 ```
-tailor-sdk secret vault list [options]
+tailor secret vault list [options]
 ```
 
 **Options**

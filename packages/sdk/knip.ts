@@ -9,11 +9,15 @@ export default {
     "scripts/**",
     "e2e/fixtures/**",
     "src/cli/commands/deploy/__test_fixtures__/**",
-    "src/cli/commands/tailordb/erd/viewer-assets/**",
-    "src/cli/tsconfig-paths-hook.d.mts",
+    "src/cli/ts-hook.d.mts",
     "src/types/*.ts",
     "src/vitest/integration/vitest.config.ts",
     "zinfer.config.ts",
   ],
+  ignoreIssues: {
+    "src/runtime/{aigateway,authconnection,context,file,iconv,idp,secretmanager,workflow}.ts": [
+      "duplicates",
+    ],
+  },
   ignoreBinaries: ["knip", "publint", "actionlint"],
 } satisfies KnipConfig;
