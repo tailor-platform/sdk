@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
@@ -23,7 +24,8 @@ vi.mock("#/cli/shared/context", () => ({
   loadWorkspaceId: vi.fn().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
 }));
 
-vi.mock("#/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
+  ...(await importOriginal()),
   initOperatorClient: vi.fn(),
 }));
 
@@ -108,5 +110,32 @@ describe("tailordb migration status --json", () => {
         ],
       },
     ]);
+  });
+
+  test("treats metadata NotFound as no applied migrations", async () => {
+    state.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        namespace: "tailordb",
+        currentMigration: 0,
+        pendingMigrations: [{ number: 1 }, { number: 2 }],
+      },
+    ]);
+  });
+
+  test("propagates metadata errors other than NotFound", async () => {
+    state.getMetadata.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/unavailable/);
   });
 });
