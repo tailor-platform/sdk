@@ -352,6 +352,7 @@ export async function planApplication(
     appName: application.name,
     appId: application.id,
   });
+  const existingLabels = await fetchAppLabels(client, workspaceId, application.name);
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,
@@ -405,10 +406,9 @@ export async function planApplication(
   }
 
   if (existing) {
-    const labels = await fetchAppLabels(client, workspaceId, application.name);
     const owned = trackDesiredResourceOwnership({
-      labels,
-      ownerLabel: labels?.[sdkNameLabelKey],
+      labels: existingLabels,
+      ownerLabel: existingLabels?.[sdkNameLabelKey],
       appName: application.name,
       appId: application.id,
       resourceType: "Application",
@@ -423,7 +423,7 @@ export async function planApplication(
     };
     if (
       owned &&
-      hasMatchingSdkVersion(labels, metaRequest.labels) &&
+      hasMatchingSdkVersion(existingLabels, metaRequest.labels) &&
       areApplicationsEqual(existing, desired)
     ) {
       // Plan display shows this as unchanged, but apply still re-issues it.

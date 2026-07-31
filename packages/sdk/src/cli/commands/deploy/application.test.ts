@@ -21,6 +21,9 @@ vi.mock("./label", async (importOriginal) => {
             "sdk-version": "v1-0-0",
             ...(appId ? { "sdk-app-id": `app-${appId}` } : {}),
           },
+          // Mirrors the real buildMetaRequest: a config with no id asks for the
+          // stale sdk-app-id to be dropped.
+          remove: appId ? undefined : ["sdk-app-id"],
         }),
       ),
   };
@@ -80,6 +83,7 @@ function createMockClient(
     sdkVersion?: string;
     label?: string;
     sdkAppId?: string;
+    extraLabels?: Record<string, string>;
   }>,
 ): OperatorClient {
   return {
@@ -102,6 +106,7 @@ function createMockClient(
                 "sdk-name": application.label ?? appName,
                 "sdk-version": application.sdkVersion ?? "v1-0-0",
                 ...(application.sdkAppId ? { "sdk-app-id": `app-${application.sdkAppId}` } : {}),
+                ...application.extraLabels,
               }
             : {},
         },
@@ -125,6 +130,31 @@ async function planForRemoval(client: OperatorClient, application: Application) 
 }
 
 describe("planApplication", () => {
+  test("carries the sdk-app-id removal through for a config with no id", async () => {
+    const client = createMockClient([
+      {
+        name: appName,
+        authNamespace: "auth-a",
+        authIdpConfigName: "idp-a",
+        cors: ["https://a.example.com", "https://b.example.com"],
+        allowedIpAddresses: ["1.1.1.1", "2.2.2.2"],
+        disableIntrospection: true,
+        disabled: false,
+        subgraphs: matchingSubgraphs,
+        sdkAppId: "stale-id",
+      },
+    ]);
+
+    // sdk-app-id decides ownership on its own, so a stale one left in place makes
+    // every later deploy ask to re-tag the resource again.
+    const result = await planApplication(
+      createContext(client, createMockApplication({ id: undefined })),
+    );
+
+    const [entry] = [...result.updates, ...result.unchanged];
+    expect(entry?.metaRequest.remove).toContain("sdk-app-id");
+  });
+
   test("marks application unchanged when remote state matches desired state", async () => {
     const client = createMockClient([
       {

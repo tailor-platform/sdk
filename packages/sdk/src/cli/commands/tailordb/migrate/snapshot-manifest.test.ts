@@ -83,15 +83,15 @@ describe("snapshot-manifest", () => {
     });
 
     test.each([
-      { publishRecordEvents: true, expected: true },
-      { publishRecordEvents: false, expected: false },
+      { subscribed: true, expected: true },
+      { subscribed: false, expected: false },
     ])(
-      "sets publishRecordEvents to $expected from options.publishRecordEvents=$publishRecordEvents",
-      ({ publishRecordEvents, expected }) => {
+      "sets publishRecordEvents to $expected from options.subscribed=$subscribed",
+      ({ subscribed, expected }) => {
         const snapshotType = createTestSnapshotType("User");
 
         const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-          publishRecordEvents,
+          subscribed,
         });
 
         expect(manifest.schema?.settings?.publishRecordEvents).toBe(expected);
@@ -112,13 +112,13 @@ describe("snapshot-manifest", () => {
       },
     );
 
-    test("prioritizes snapshot settings.publishEvents over options.publishRecordEvents", () => {
+    test("prioritizes snapshot settings.publishEvents over options.subscribed", () => {
       const snapshotType = createTestSnapshotType("User", {
         settings: { publishEvents: true },
       });
 
       const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType, {
-        publishRecordEvents: false,
+        subscribed: false,
       });
 
       expect(manifest.schema?.settings?.publishRecordEvents).toBe(true);
@@ -524,10 +524,10 @@ describe("snapshot-manifest", () => {
         expected: { User: true, Post: false, Comment: true },
       },
       {
-        name: "falls back to baseOptions.publishRecordEvents when no manual setting and no executor",
+        name: "stays false when no manual setting and no executor subscribes",
         types: { User: {}, Post: {} },
-        options: { executorUsedTypes: new Set(["Other"]), publishRecordEvents: true },
-        expected: { User: true, Post: true },
+        options: { executorUsedTypes: new Set(["Other"]) },
+        expected: { User: false, Post: false },
       },
     ])("$name", ({ types, options, expected }) => {
       const snapshot = createTestSnapshot(
@@ -577,7 +577,7 @@ describe("snapshot-manifest", () => {
           executorUsedTypes: new Set(["User"]),
         }),
       ).toThrow(
-        'Type "User" has publishEvents set to false, but it is used by an executor with a record trigger.',
+        'TailorDB type "User" has "publishEvents: false", but executors with record triggers subscribe to it.',
       );
     });
 

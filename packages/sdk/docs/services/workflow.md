@@ -203,9 +203,11 @@ export default createWorkflow({
 
 ## Execution Events
 
-Workflows can publish execution lifecycle events for executors. When an executor subscribes to a workflow's events, the SDK enables publishing automatically. A `workflowExecution*` trigger enables it on the workflow, and a `workflowJobExecution*` trigger enables it on every job that workflow runs. See [Workflow Execution Triggers](./executor.md#workflow-execution-triggers).
+Workflows can publish execution lifecycle events for executors. When an executor subscribes to a workflow's events, `deploy` enables publishing automatically. A `workflowExecution*` trigger enables it on the workflow, and a `workflowJobExecution*` trigger enables it on every job that workflow runs. See [Workflow Execution Triggers](./executor.md#workflow-execution-triggers).
 
-Set `publishEvents` explicitly to override that. Use `true` to publish workflow-level events with no subscribing executor:
+Publishing follows the subscription in both directions: removing the last subscribing trigger turns it back off on the next `deploy`.
+
+Set `publishEvents` explicitly to pin the value instead. Use `true` to publish workflow-level events with no subscribing executor:
 
 ```typescript
 export default createWorkflow({
@@ -226,6 +228,8 @@ export const processOrder = createWorkflowJob({
 ```
 
 Use `false` to keep publishing off. `deploy` fails if an executor subscribes to events the value opts out of, so the subscription cannot silently go unfulfilled.
+
+**Subscribing from another config:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). The workflow a `workflowExecution*` or `workflowJobExecution*` trigger names must be declared by a config in the run; `deploy` fails otherwise rather than creating an executor whose events never arrive. `deploy` records the dependency on the workflow itself, so deploying that config alone later asks for confirmation instead of silently turning publishing off. Declaring `publishEvents` clears the record: a declared value no longer depends on which configs are deployed together, so there is nothing left to warn about.
 
 ## Wait Points
 

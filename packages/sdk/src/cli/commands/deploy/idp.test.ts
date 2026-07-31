@@ -25,6 +25,7 @@ describe("applyIdP phase separation", () => {
         service: {
           creates: [],
           updates: [],
+          unchanged: [],
           deletes: [
             {
               name: "test-idp",
@@ -111,6 +112,7 @@ describe("applyIdP allowedReturnOrigins placeholder resolution", () => {
         service: {
           creates: opts.op === "create" ? [entry] : [],
           updates: opts.op === "update" ? [entry] : [],
+          unchanged: [],
           deletes: [],
           title: "IdP Services",
           isEmpty: () => false,
