@@ -189,6 +189,10 @@ const auth = defineAuth("${authName}", {
 });
 
 export default defineConfig({
+  // CI never auto-injects an id (each run would otherwise be treated as a
+  // separate app); this suite deploys a fresh, disposable app per run, so
+  // it supplies one itself.
+  id: "${crypto.randomUUID()}",
   name: "${testAppName}",
   db: { "${dbNamespace}": { files: ["${tailordbFilesPattern}"] } },
   idp: [idp],
