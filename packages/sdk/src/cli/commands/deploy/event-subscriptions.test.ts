@@ -15,6 +15,10 @@ type TargetSpec = {
   workflows?: string[];
   /** Workflows that declare `publishEvents`, pinning the value. */
   pinnedWorkflows?: string[];
+  /** Job names each workflow runs, keyed by workflow name. */
+  jobsByWorkflow?: Record<string, string[]>;
+  /** Jobs that declare `publishEvents`, pinning the jobs' value. */
+  declaredJobs?: string[];
   /** TailorDB types that declare `publishEvents`, pinning the value. */
   pinnedTypes?: string[];
   externalTailorDBNamespaces?: string[];
@@ -58,9 +62,19 @@ function target(spec: TargetSpec): Target {
         workflows: Object.fromEntries(
           (spec.workflows ?? []).map((name) => [
             name,
-            (spec.pinnedWorkflows ?? []).includes(name) ? { name, publishEvents: true } : { name },
+            {
+              name,
+              mainJob: { name: `${name}-main` },
+              ...((spec.pinnedWorkflows ?? []).includes(name) ? { publishEvents: true } : {}),
+            },
           ]),
         ),
+        jobs: Object.values(spec.jobsByWorkflow ?? {})
+          .flat()
+          .map((name) => ({
+            name,
+            ...((spec.declaredJobs ?? []).includes(name) ? { publishEvents: true } : {}),
+          })),
       },
       externalTailorDBNamespaces: spec.externalTailorDBNamespaces ?? [],
       // Mirrors defineTailorDB/defineResolver/defineIdp: only these contribute a
@@ -80,6 +94,14 @@ function target(spec: TargetSpec): Target {
           ]),
         ),
       },
+    },
+    workflowBuildResult: {
+      mainJobDeps: Object.fromEntries(
+        Object.entries(spec.jobsByWorkflow ?? {}).map(([workflowName, jobNames]) => [
+          `${workflowName}-main`,
+          jobNames,
+        ]),
+      ),
     },
   } as unknown as Target;
 }
@@ -482,5 +504,52 @@ describe("collectEventSubscriptions and the two values a workflow carries", () =
 
   test("keys a workflowJobExecution subscription separately from the workflow", () => {
     expect(keysFor("workflowJobExecution")).toEqual(["workflow:nightly:jobs"]);
+  });
+});
+
+describe("collectEventSubscriptions and which jobs settle a workflow's jobs value", () => {
+  // planWorkflow decides a workflow's job records from the jobs that workflow
+  // runs, so reading the whole config's jobs here would disagree with what it
+  // writes: another workflow's unset job would make the value look recomputed.
+  const runner = target({
+    configPath: "runner/tailor.config.ts",
+    types: ["Report"],
+    workflows: ["nightly", "other"],
+    jobsByWorkflow: { nightly: ["send-report"], other: ["archive"] },
+    declaredJobs: ["send-report"],
+  });
+  const idlessSubscriber = target({
+    configPath: "buyer/tailor.config.ts",
+    types: ["Order"],
+    executors: {
+      "watch-jobs": { kind: "workflowJobExecution", workflowName: "nightly" },
+    },
+  });
+
+  test("treats the jobs as declared when the subscribed workflow declares all of its own", () => {
+    const subscriptions = collectEventSubscriptions([runner, idlessSubscriber]);
+
+    expect(subscriptions.map((subscription) => subscription.pinned)).toEqual([true]);
+    // A declared value needs no record, so the absent id is not a problem.
+    expect(() => assertRecordableDependencies(subscriptions, true)).not.toThrow();
+    expect(collectDependentApps(subscriptions).size).toBe(0);
+  });
+
+  test("treats the jobs as recomputed when the subscribed workflow leaves one of its own unset", () => {
+    const subscriptions = collectEventSubscriptions([
+      runner,
+      target({
+        configPath: "buyer/tailor.config.ts",
+        types: ["Order"],
+        executors: {
+          "watch-jobs": { kind: "workflowJobExecution", workflowName: "other" },
+        },
+      }),
+    ]);
+
+    expect(subscriptions.map((subscription) => subscription.pinned)).toEqual([false]);
+    expect(() => assertRecordableDependencies(subscriptions, true)).toThrow(
+      /resolves without an "id"/,
+    );
   });
 });

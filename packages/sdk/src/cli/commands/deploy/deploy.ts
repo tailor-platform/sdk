@@ -1507,12 +1507,18 @@ function pinsWorkflow(target: BuiltDeploymentTarget, workflowName: string): bool
   );
 }
 
-// A workflowJobExecution trigger enables publishing on every job the workflow
-// runs, and which jobs those are is only known once the workflow is bundled. Ask
-// that all of the config's jobs be declared rather than guessing the subset.
-function pinsEveryWorkflowJob(target: BuiltDeploymentTarget): boolean {
-  const jobs = target.application.workflowService?.jobs ?? [];
-  return jobs.length > 0 && jobs.every((job) => job.publishEvents !== undefined);
+// A workflowJobExecution trigger enables publishing on the jobs the subscribed
+// workflow runs, so only those decide whether the value is declared. Reading the
+// whole config's jobs instead would call the value unset because some other
+// workflow leaves one unset, and `planWorkflow` writes the records per workflow.
+function pinsEveryJobOfWorkflow(target: BuiltDeploymentTarget, workflowName: string): boolean {
+  const workflow = Object.values(target.application.workflowService?.workflows ?? {}).find(
+    (entry) => entry.name === workflowName,
+  );
+  if (workflow === undefined) return false;
+  const jobNames = target.workflowBuildResult?.mainJobDeps[workflow.mainJob.name] ?? [];
+  const declared = collectWorkflowJobPublishEvents(target);
+  return jobNames.length > 0 && jobNames.every((jobName) => declared.has(jobName));
 }
 
 function tailorDBTypeNamespaceIn(
@@ -1664,7 +1670,7 @@ function eventSourceLookup(
         pinned: (target) =>
           trigger.kind === "workflowExecution"
             ? pinsWorkflow(target, trigger.workflowName)
-            : pinsEveryWorkflowJob(target),
+            : pinsEveryJobOfWorkflow(target, trigger.workflowName),
         keyIn: () =>
           trigger.kind === "workflowExecution"
             ? eventSourceKey.workflow(trigger.workflowName)
