@@ -17,7 +17,7 @@ import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
 import { planAIGateway } from "./aigateway";
-import { fetchMissingDependentApps, planApplication } from "./application";
+import { planApplication } from "./application";
 import { applyDeploymentPlans, type PlannedDeployment } from "./apply-phases";
 import { formatAuthHookChangeEntries, planAuth } from "./auth";
 import {
@@ -37,6 +37,7 @@ import {
   type OwnerConflict,
   type UnmanagedResource,
 } from "./confirm";
+import { fetchMissingDependentApps } from "./dependency-records";
 import {
   buildPlannedExecutorsByName,
   collectApplicationIdpNames,
@@ -59,7 +60,15 @@ import {
   type NamespaceAction,
 } from "./grouped-display";
 import { planIdP } from "./idp";
-import { buildMetaRequest, hasMatchingSdkVersion, resourceTrn, sdkNameLabelKey } from "./label";
+import {
+  buildMetaRequest,
+  type DependentAppsByResource,
+  type DeployDependencyReason,
+  eventSourceKey,
+  hasMatchingSdkVersion,
+  resourceTrn,
+  sdkNameLabelKey,
+} from "./label";
 import { formatResolverChangeEntries, planPipeline } from "./resolver";
 import { planSecretManager } from "./secret-manager";
 import { planStaticWebsite } from "./staticwebsite";
@@ -73,7 +82,6 @@ import {
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 import { resolveDeployWorkspace } from "./workspace";
 import type { Executor } from "#/types/executor.generated";
-import type { DeployDependencyReason } from "./label";
 import type { PlanContext } from "./types";
 
 export interface DeployOptions {
@@ -136,6 +144,8 @@ type EventSubscription = {
   owner: BuiltDeploymentTarget;
   /** The subscribed resource, named as error messages name it. */
   resource: string;
+  /** Stable identity of the subscribed resource, keying its dependency records. */
+  key: string | undefined;
   /**
    * Whether the owner declares `publishEvents` on the subscribed resource, which
    * pins the value and leaves nothing for a dependency record to protect.
@@ -209,7 +219,12 @@ export function collectEventSubscriptions(
         trigger: lookup.trigger,
       };
       if (lookup.declaredBy(subscriber)) {
-        subscriptions.push({ ...entry, owner: subscriber, pinned: lookup.pinned(subscriber) });
+        subscriptions.push({
+          ...entry,
+          owner: subscriber,
+          pinned: lookup.pinned(subscriber),
+          key: lookup.keyIn(subscriber),
+        });
         continue;
       }
       const peers = targets.filter(
@@ -225,7 +240,12 @@ export function collectEventSubscriptions(
       if (!owner) {
         throw new Error(missingOwnerMessage(executor.name, lookup, subscriber));
       }
-      subscriptions.push({ ...entry, owner, pinned: lookup.pinned(owner) });
+      subscriptions.push({
+        ...entry,
+        owner,
+        pinned: lookup.pinned(owner),
+        key: lookup.keyIn(owner),
+      });
     }
   }
   return subscriptions;
@@ -324,23 +344,30 @@ function subscribedWorkflows(subscriptions: ReadonlyArray<EventSubscription>): {
  * recording a dependency for it would ask about a partial deploy that changes
  * nothing — and `prompt.confirm` rejects outright where it cannot ask, failing a
  * deploy that was never at risk.
+ *
+ * Records are keyed by resource rather than by application: the resource is what
+ * carries them, so a record survives the owner being renamed and disappears with
+ * the resource itself.
  * @param subscriptions - Subscriptions owned by the target being planned
- * @returns Dependency reasons keyed by dependent application id
+ * @returns Dependent application ids and reasons, keyed by resource
  */
 export function collectDependentApps(
   subscriptions: ReadonlyArray<EventSubscription>,
-): ReadonlyMap<string, DeployDependencyReason> {
-  const dependents = new Map<string, DeployDependencyReason>();
-  for (const { subscriber, owner, pinned } of subscriptions) {
-    if (subscriber.config.path === owner.config.path || pinned) {
+): DependentAppsByResource {
+  const byResource = new Map<string, Map<string, DeployDependencyReason>>();
+  for (const { subscriber, owner, pinned, key } of subscriptions) {
+    if (subscriber.config.path === owner.config.path || pinned || key === undefined) {
       continue;
     }
     const appId = subscriber.application.id;
-    if (appId !== undefined) {
-      dependents.set(appId, "publish-events");
+    if (appId === undefined) {
+      continue;
     }
+    const dependents = byResource.get(key) ?? new Map<string, DeployDependencyReason>();
+    dependents.set(appId, "publish-events");
+    byResource.set(key, dependents);
   }
-  return dependents;
+  return byResource;
 }
 
 /**
@@ -1336,6 +1363,11 @@ type EventSourceLookup = {
    */
   pinned: (target: BuiltDeploymentTarget) => boolean;
   /**
+   * Stable identity of the subscribed resource inside its owner, used to key the
+   * dependency records. Undefined when the owner does not declare it after all.
+   */
+  keyIn: (owner: BuiltDeploymentTarget) => string | undefined;
+  /**
    * Narrow peer configs to the ones the subscriber's own view resolves to.
    *
    * Matching on the name alone would count a same-named resource in a namespace
@@ -1465,6 +1497,22 @@ function pinsEveryWorkflowJob(target: BuiltDeploymentTarget): boolean {
   return jobs.length > 0 && jobs.every((job) => job.publishEvents !== undefined);
 }
 
+function tailorDBTypeNamespaceIn(
+  target: BuiltDeploymentTarget,
+  typeName: string,
+): string | undefined {
+  return target.application.tailorDBServices.find((service) => service.types[typeName])?.namespace;
+}
+
+function resolverNamespaceIn(
+  target: BuiltDeploymentTarget,
+  resolverName: string,
+): string | undefined {
+  return target.application.resolverServices.find((service) =>
+    Object.values(service.resolvers).some((resolver) => resolver.name === resolverName),
+  )?.namespace;
+}
+
 // A namespaced resource is owned by whichever config declares it in the one
 // namespace the subscriber sees it through. An absent key means the subscriber
 // cannot see the name at all, which the missing-owner error explains.
@@ -1523,6 +1571,10 @@ function eventSourceLookup(
         trigger,
         declaredBy: (target) => declaresTailorDBType(target, trigger.typeName),
         pinned: (target) => pinsTailorDBType(target, trigger.typeName),
+        keyIn: (owner) => {
+          const namespace = tailorDBTypeNamespaceIn(owner, trigger.typeName);
+          return namespace && eventSourceKey.tailorDBType(namespace, trigger.typeName);
+        },
         narrowOwners: (candidates) =>
           narrowByVisibleNamespace({
             candidates,
@@ -1540,6 +1592,10 @@ function eventSourceLookup(
         trigger,
         declaredBy: (target) => declaresResolver(target, trigger.resolverName),
         pinned: (target) => pinsResolver(target, trigger.resolverName),
+        keyIn: (owner) => {
+          const namespace = resolverNamespaceIn(owner, trigger.resolverName);
+          return namespace && eventSourceKey.resolver(namespace, trigger.resolverName);
+        },
         narrowOwners: (candidates) =>
           narrowByVisibleNamespace({
             candidates,
@@ -1561,6 +1617,7 @@ function eventSourceLookup(
         trigger,
         declaredBy: (target) => declaresIdp(target, idpName),
         pinned: (target) => pinsIdp(target, idpName),
+        keyIn: () => eventSourceKey.idp(idpName),
         // IdP namespace names are unique across a run, so there is nothing to
         // tell apart once the subscriber can see the name.
         narrowOwners: (candidates) =>
@@ -1585,6 +1642,7 @@ function eventSourceLookup(
           trigger.kind === "workflowExecution"
             ? pinsWorkflow(target, trigger.workflowName)
             : pinsEveryWorkflowJob(target),
+        keyIn: () => eventSourceKey.workflow(trigger.workflowName),
         narrowOwners: (candidates) =>
           candidates.filter((target) => declaresWorkflow(target, trigger.workflowName)),
         // A workflow has no `external` declaration to check.
@@ -1636,20 +1694,13 @@ export function collectExternalAuthIdpConfigNames(
 /**
  * Reject a cross-config subscription whose dependency cannot be recorded.
  *
- * The record lives on the owner's application, and `deploy` creates one only for
- * a config that contributes a subgraph — a TailorDB, resolver, IdP, or auth
- * namespace. Writing to the application TRN of a config with none of those is
- * rejected as `not found`, so the dependency would go unrecorded and the next
- * deploy of the owner alone would turn publishing off without asking. Workflows
- * are the one publishing resource that contributes no subgraph, so this is the
- * only shape that reaches it.
- * A subscriber that resolves without an `id` cannot be named in a record either.
- * That check applies only to a run that writes: `--dry-run` leaves every id
- * uninjected, so demanding one there would reject configs a real deploy gives one.
+ * Records live on the subscribed resource, so there is always somewhere to put
+ * one. What can be missing is the dependent's name: the record identifies it by
+ * application id, and a subscriber that resolves without one cannot be recorded,
+ * leaving the next deploy of the owner alone to turn publishing off unannounced.
  *
- * Either way, declaring `publishEvents` on the subscribed resource pins the value
- * and leaves nothing to record, which is why both messages offer it — a
- * subscription reaching here is one whose owner left the value unset.
+ * The check applies only to a run that writes: `--dry-run` leaves every id
+ * uninjected, so demanding one there would reject configs a real deploy gives one.
  * @param subscriptions - Every event subscription resolved for the run
  * @param writes - Whether this run applies changes rather than only reporting them
  */
@@ -1668,20 +1719,9 @@ export function assertRecordableDependencies(
           `defineConfig() from another file never gets one — so deploy cannot record which config ` +
           `the dependency belongs to, and deploying ${owner.config.path} alone later would turn ` +
           `publishing back off without asking.\n\n` +
-          `Call defineConfig() inline in ${subscriber.config.path} so deploy can manage its "id", ` +
-          `or declare "publishEvents" on ${resource} so the value no longer depends on the run.`,
+          `Call defineConfig() inline in ${subscriber.config.path} so deploy can manage its "id".`,
       );
     }
-    if (owner.application.subgraphs.length > 0) continue;
-    throw new Error(
-      `Executor "${executorName}" in ${subscriber.config.path} subscribes to ${resource} in ` +
-        `${owner.config.path}, which would enable event publishing on it for this deploy only. ` +
-        `${owner.config.path} defines no TailorDB type, resolver, IdP, or auth namespace, so ` +
-        `deploy has no application to record the dependency on, and deploying it alone later ` +
-        `would turn publishing back off without asking.\n\n` +
-        `Declare "publishEvents" on ${resource} — on its jobs for a workflowJobExecution ` +
-        `trigger — so the value no longer depends on which configs are deployed together.`,
-    );
   }
 }
 
@@ -1792,6 +1832,8 @@ async function planDeploymentTarget(
           {
             ...subscribedWorkflows(owned),
             jobPublishEvents: collectWorkflowJobPublishEvents(target),
+            dependentApps: ctx.dependentApps,
+            runAppIds: ctx.runAppIds,
           },
         ),
       ),
@@ -2512,7 +2554,7 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
           fetchMissingDependentApps({
             client,
             workspaceId,
-            appName: target.application.name,
+            application: target.application,
             runAppIds: runInputs.runAppIds ?? new Set<string>(),
           }),
         ),

@@ -5,6 +5,9 @@ import {
   buildMetaRequest,
   hasMatchingSdkVersion,
   isOwnedByApp,
+  resolverTrn,
+  resourceTrn,
+  tailorDBTypeTrn,
   writeMetadataLabels,
 } from "./label";
 import type { MetadataLabelClient } from "./label";
@@ -226,5 +229,30 @@ describe("setMetadata call sites", () => {
       .filter((file) => file !== "cli/commands/deploy/label.ts");
 
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("nested resource TRNs", () => {
+  const ws = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
+
+  // The platform reads everything after the workspace id as alternating
+  // key/value pairs (pkg/trn ParseWorkspace) and matches the pair list against
+  // one resource type: tailordb_type is [tailordb, type], pipeline_resolver is
+  // [pipeline, resolver]. A wrong shape parses as a different type or not at all.
+  test("names a TailorDB type as the namespace pair followed by the type pair", () => {
+    expect(tailorDBTypeTrn(ws, "db", "Order")).toBe(
+      `trn:v1:workspace:${ws}:tailordb:db:type:Order`,
+    );
+  });
+
+  test("names a resolver as the namespace pair followed by the resolver pair", () => {
+    expect(resolverTrn(ws, "pipeline", "processOrder")).toBe(
+      `trn:v1:workspace:${ws}:pipeline:pipeline:resolver:processOrder`,
+    );
+  });
+
+  test("keeps a namespace TRN distinct from a type TRN inside it", () => {
+    expect(tailorDBTypeTrn(ws, "db", "Order")).not.toBe(resourceTrn(ws, "tailordb", "db"));
+    expect(tailorDBTypeTrn(ws, "db", "Order")).toContain(`${resourceTrn(ws, "tailordb", "db")}:`);
   });
 });

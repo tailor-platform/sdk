@@ -130,9 +130,7 @@ async function planForRemoval(client: OperatorClient, application: Application) 
 }
 
 describe("planApplication", () => {
-  test("keeps the sdk-app-id removal while adding the dependency records", async () => {
-    const dependent = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
-    const stale = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b82";
+  test("carries the sdk-app-id removal through for a config with no id", async () => {
     const client = createMockClient([
       {
         name: appName,
@@ -143,26 +141,18 @@ describe("planApplication", () => {
         disableIntrospection: true,
         disabled: false,
         subgraphs: matchingSubgraphs,
-        extraLabels: { [`sdk-depended-by-app-${stale}`]: "publish-events" },
+        sdkAppId: "stale-id",
       },
     ]);
 
-    // The application has no id, so buildMetaRequest asks for sdk-app-id to be
-    // dropped. Replacing its remove list instead of adding to it leaves the
-    // stale id label behind for good.
-    const result = await planApplication({
-      ...createContext(client, createMockApplication({ id: undefined })),
-      dependentApps: new Map([[dependent, "publish-events" as const]]),
-      runAppIds: new Set([dependent, stale]),
-    });
+    // sdk-app-id decides ownership on its own, so a stale one left in place makes
+    // every later deploy ask to re-tag the resource again.
+    const result = await planApplication(
+      createContext(client, createMockApplication({ id: undefined })),
+    );
 
     const [entry] = [...result.updates, ...result.unchanged];
     expect(entry?.metaRequest.remove).toContain("sdk-app-id");
-    expect(entry?.metaRequest.remove).toContain(`sdk-depended-by-app-${stale}`);
-    expect(entry?.metaRequest.labels).toHaveProperty(
-      `sdk-depended-by-app-${dependent}`,
-      "publish-events",
-    );
   });
 
   test("marks application unchanged when remote state matches desired state", async () => {

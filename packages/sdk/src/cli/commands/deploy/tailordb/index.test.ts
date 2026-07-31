@@ -679,7 +679,7 @@ describe("planTailorDB (service level)", () => {
 
       const result = await planTailorDB(ctx);
 
-      expect(result.changeSet.type.unchanged).toEqual([{ name: "Invoice" }]);
+      expect(result.changeSet.type.unchanged.map((entry) => entry.name)).toEqual(["Invoice"]);
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
 
@@ -750,7 +750,7 @@ describe("planTailorDB (service level)", () => {
 
       const result = await planTailorDB(ctx);
 
-      expect(result.changeSet.type.unchanged).toEqual([{ name: "Invoice" }]);
+      expect(result.changeSet.type.unchanged.map((entry) => entry.name)).toEqual(["Invoice"]);
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
 
@@ -884,7 +884,7 @@ describe("planTailorDB (service level)", () => {
       const result = await planTailorDB(makeCtx([remoteMessage]));
 
       expect(result.changeSet.type.updates).toHaveLength(0);
-      expect(result.changeSet.type.unchanged).toEqual([{ name: "Invoice" }]);
+      expect(result.changeSet.type.unchanged.map((entry) => entry.name)).toEqual(["Invoice"]);
     });
 
     test("treats an omitted remote field description as unchanged against the local empty-string manifest", async () => {
@@ -948,7 +948,7 @@ describe("planTailorDB (service level)", () => {
 
       const result = await planTailorDB(ctx);
 
-      expect(result.changeSet.type.unchanged).toEqual([{ name: "Event" }]);
+      expect(result.changeSet.type.unchanged.map((entry) => entry.name)).toEqual(["Event"]);
       expect(result.changeSet.type.updates).toHaveLength(0);
     });
   });
@@ -1100,6 +1100,7 @@ describe("applyTailorDB phase separation", () => {
               },
             },
           ],
+          unchanged: [],
           title: "TailorDB Services",
           isEmpty: () => false,
           lines: () => [],
@@ -1117,6 +1118,7 @@ describe("applyTailorDB phase separation", () => {
               },
             },
           ],
+          unchanged: [],
           title: "TailorDB Types",
           isEmpty: () => false,
           lines: () => [],
@@ -1134,6 +1136,7 @@ describe("applyTailorDB phase separation", () => {
               },
             },
           ],
+          unchanged: [],
           title: "TailorDB GQL Permissions",
           isEmpty: () => false,
           lines: () => [],
@@ -1400,6 +1403,7 @@ describe("applyTailorDB migration label reconciliation", () => {
           creates: [],
           updates: [],
           deletes: [],
+          unchanged: [],
           title: "TailorDB Services",
           isEmpty: () => true,
           lines: () => [],
@@ -1408,6 +1412,7 @@ describe("applyTailorDB migration label reconciliation", () => {
           creates: [],
           updates: [],
           deletes: [],
+          unchanged: [],
           title: "TailorDB Types",
           isEmpty: () => true,
           lines: () => [],
@@ -1416,6 +1421,7 @@ describe("applyTailorDB migration label reconciliation", () => {
           creates: [],
           updates: [],
           deletes: [],
+          unchanged: [],
           title: "TailorDB GQL Permissions",
           isEmpty: () => true,
           lines: () => [],
@@ -1942,6 +1948,7 @@ describe("applyTailorDB type apply concurrency", () => {
       updateTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
       deleteTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
       deleteTailorDBType: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
     } as unknown as OperatorClient;
 
@@ -1952,11 +1959,13 @@ describe("applyTailorDB type apply concurrency", () => {
         namespaceName: "test-tailordb",
         tailordbType: { name },
       },
+      metaRequest: { trn: `trn:v1:workspace:ws:tailordb:test-tailordb:type:${name}` },
     });
     const emptyChanges = (title: string) => ({
       creates: [],
       updates: [],
       deletes: [],
+      unchanged: [],
       title,
       isEmpty: () => true,
       lines: () => [],
@@ -1968,6 +1977,7 @@ describe("applyTailorDB type apply concurrency", () => {
           creates: ["CreateA", "CreateB", "CreateC"].map(changeOf),
           updates: ["UpdateA", "UpdateB", "UpdateC"].map(changeOf),
           deletes: [],
+          unchanged: [],
           title: "TailorDB Types",
           isEmpty: () => false,
           lines: () => [],

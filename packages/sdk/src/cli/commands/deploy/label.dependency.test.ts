@@ -71,6 +71,7 @@ describe("dependencyLabelWrite", () => {
         existingLabels: undefined,
         dependentApps: dependents(buyer),
         runAppIds: new Set([buyer]),
+        pinned: false,
       }),
     ).toEqual({ labels: { [buyerKey]: "publish-events" }, remove: [] });
   });
@@ -81,6 +82,7 @@ describe("dependencyLabelWrite", () => {
         existingLabels: { [buyerKey]: "publish-events" },
         dependentApps: dependents(),
         runAppIds: new Set([buyer]),
+        pinned: false,
       }),
     ).toEqual({ labels: {}, remove: [buyerKey] });
   });
@@ -93,6 +95,7 @@ describe("dependencyLabelWrite", () => {
         existingLabels: { [buyerKey]: "publish-events" },
         dependentApps: dependents(),
         runAppIds: new Set([shell]),
+        pinned: false,
       }),
     ).toEqual({ labels: {}, remove: [] });
   });
@@ -103,6 +106,7 @@ describe("dependencyLabelWrite", () => {
         existingLabels: { [buyerKey]: "publish-events", [shellKey]: "publish-events" },
         dependentApps: dependents(buyer),
         runAppIds: new Set([buyer, shell]),
+        pinned: false,
       }),
     ).toEqual({ labels: { [buyerKey]: "publish-events" }, remove: [shellKey] });
   });
@@ -116,6 +120,7 @@ describe("dependencyLabelWrite", () => {
         existingLabels: undefined,
         dependentApps: new Map([["MY-APP-ID", "publish-events" as const]]),
         runAppIds: new Set(["MY-APP-ID"]),
+        pinned: false,
       }),
     ).toThrow(/Application id "MY-APP-ID" cannot be recorded/);
   });
@@ -126,6 +131,34 @@ describe("dependencyLabelWrite", () => {
         existingLabels: { "sdk-name": "buyer" },
         dependentApps: undefined,
         runAppIds: undefined,
+        pinned: false,
+      }),
+    ).toEqual({ labels: {}, remove: [] });
+  });
+});
+
+describe("dependencyLabelWrite and a declared publishEvents", () => {
+  test("drops every record, including one for an app outside the run", () => {
+    // The owner cannot clear such a record on its own — clearing needs the
+    // dependent to take part — so leaving it would prompt on every solo deploy
+    // about a change a declared value cannot undergo.
+    expect(
+      dependencyLabelWrite({
+        existingLabels: { [buyerKey]: "publish-events", [shellKey]: "publish-events" },
+        dependentApps: undefined,
+        runAppIds: new Set([buyer]),
+        pinned: true,
+      }),
+    ).toEqual({ labels: {}, remove: [buyerKey, shellKey] });
+  });
+
+  test("writes no record even while this run still sees a subscriber", () => {
+    expect(
+      dependencyLabelWrite({
+        existingLabels: undefined,
+        dependentApps: dependents(buyer),
+        runAppIds: new Set([buyer]),
+        pinned: true,
       }),
     ).toEqual({ labels: {}, remove: [] });
   });

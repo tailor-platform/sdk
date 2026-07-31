@@ -17,11 +17,9 @@ import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import {
   buildMetaRequest,
-  dependencyLabelWrite,
   hasMatchingSdkVersion,
   isOwnedByApp,
   type MetadataLabelWrite,
-  recordedDependencies,
   resourceTrn,
   sdkNameLabelKey,
   writeMetadataLabels,
@@ -31,7 +29,7 @@ import { expectedLocalStaticWebsiteNames } from "./staticwebsite";
 import type { ApplyPhase, PlanContext } from "#/cli/commands/deploy/types";
 import type { Application } from "#/cli/services/application";
 import type { HttpAdapterBundleResult } from "#/cli/services/http-adapter/bundler";
-import type { MissingDependentApp, OwnerConflict, UnmanagedResource } from "./confirm";
+import type { OwnerConflict, UnmanagedResource } from "./confirm";
 import type {
   DeleteApplicationRequestSchema,
   CreateApplicationRequestSchema,
@@ -355,15 +353,6 @@ export async function planApplication(
     appId: application.id,
   });
   const existingLabels = await fetchAppLabels(client, workspaceId, application.name);
-  const dependencies = dependencyLabelWrite({
-    existingLabels,
-    dependentApps: context.dependentApps,
-    runAppIds: context.runAppIds,
-  });
-  // Add to what buildMetaRequest asked for rather than replacing it — it drops
-  // sdk-app-id for a config that no longer carries an id.
-  metaRequest.labels = { ...metaRequest.labels, ...dependencies.labels };
-  metaRequest.remove = [...(metaRequest.remove ?? []), ...dependencies.remove];
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
   const resolvedCors = await resolveStaticWebsiteUrls(
     client,
@@ -480,29 +469,6 @@ function withOwnership<T extends object>(
   resourceOwners: Set<string>,
 ): T & { conflicts: OwnerConflict[]; unmanaged: UnmanagedResource[]; resourceOwners: Set<string> } {
   return Object.assign(changeSet, { conflicts, unmanaged, resourceOwners });
-}
-
-/**
- * Read the applications recorded as dependencies of this one but absent from the
- * current deploy.
- * @param params - Client, workspace, application name, and the run's app ids
- * @param params.client - Operator client instance
- * @param params.workspaceId - Workspace being deployed to
- * @param params.appName - Application whose records are read
- * @param params.runAppIds - Stable ids of every application in the run
- * @returns Recorded dependencies missing from the run
- */
-export async function fetchMissingDependentApps(params: {
-  client: OperatorClient;
-  workspaceId: string;
-  appName: string;
-  runAppIds: ReadonlySet<string>;
-}): Promise<MissingDependentApp[]> {
-  const { client, workspaceId, appName, runAppIds } = params;
-  const labels = await fetchAppLabels(client, workspaceId, appName);
-  return recordedDependencies(labels)
-    .filter((dependency) => !runAppIds.has(dependency.appId))
-    .map((dependency) => ({ appName, appId: dependency.appId, reason: dependency.reason }));
 }
 
 async function fetchAppLabels(

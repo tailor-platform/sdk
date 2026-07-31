@@ -50,17 +50,21 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { handleOptionalToRequiredError } from "#/cli/commands/tailordb/migrate/types";
 import { byName } from "#/cli/shared/apply-concurrency";
-import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import { assertNoPublishEventsConflict, publishEventsConflict } from "#/cli/shared/publish-events";
 import { createChangeSet, type HasName, type ChangeSet } from "../change-set";
 import { areNormalizedEqual, normalizeProtoConfig, toComparableProtoJson } from "../compare";
 import { ACTION_SYMBOLS, type DisplayAction, type GroupedDisplayEntry } from "../grouped-display";
 import {
+  addDependencyRecords,
   buildMetaRequest,
+  type DependentAppsByResource,
+  eventSourceKey,
   hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
+  tailorDBTypeTrn,
   writeMetadataLabels,
 } from "../label";
 import {
@@ -553,14 +557,22 @@ export async function applyTailorDB(
         ),
       ]);
 
-      // Types
+      // Types. An unchanged type still gets its labels written, because its
+      // dependency records can change while its schema does not.
       try {
         for (const create of changeSet.type.creates) {
           await client.createTailorDBType(create.request);
+          await writeMetadataLabels(client, create.metaRequest);
         }
         for (const update of changeSet.type.updates) {
           await client.updateTailorDBType(update.request);
+          await writeMetadataLabels(client, update.metaRequest);
         }
+        await Promise.all(
+          changeSet.type.unchanged.flatMap((entry) =>
+            entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : [],
+          ),
+        );
       } catch (error) {
         handleOptionalToRequiredError(error, [
           "Run 'tailor tailordb migration generate' to create migration files.",
@@ -1195,6 +1207,12 @@ export async function planTailorDB(context: PlanContext) {
       deletedServices,
       undefined,
       forceApplyAll,
+      {
+        appName: application.name,
+        appId: application.id,
+        dependentApps: context.dependentApps,
+        runAppIds: context.runAppIds,
+      },
     ),
     planGqlPermissions(client, workspaceId, tailordbs, deletedServices, forceApplyAll),
   ]);
@@ -1446,11 +1464,30 @@ async function planServices(
 type CreateType = {
   name: string;
   request: MessageInitShape<typeof CreateTailorDBTypeRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateType = {
   name: string;
   request: MessageInitShape<typeof UpdateTailorDBTypeRequestSchema>;
+  metaRequest: MetadataLabelWrite;
+};
+
+/**
+ * A type whose schema is unchanged but whose dependency records may not be. The
+ * plan shows it as unchanged; apply still writes its labels.
+ */
+type UnchangedType = {
+  name: string;
+  metaRequest?: MetadataLabelWrite;
+};
+
+/** What planTypes needs to record dependencies on each type. */
+type TypeRecordInputs = {
+  appName?: string;
+  appId?: string;
+  dependentApps?: DependentAppsByResource;
+  runAppIds?: ReadonlySet<string>;
 };
 
 type DeleteType = {
@@ -1466,8 +1503,36 @@ async function planTypes(
   deletedServices: ReadonlyArray<string>,
   filteredTypesByNamespace?: Map<string, Record<string, TailorDBSnapshotType>>,
   forceApplyAll = false,
+  records: TypeRecordInputs = {},
 ) {
-  const changeSet = createChangeSet<CreateType, UpdateType, DeleteType>("TailorDB types");
+  const changeSet = createChangeSet<CreateType, UpdateType, DeleteType, never, UnchangedType>(
+    "TailorDB types",
+  );
+  const { appName, appId, dependentApps, runAppIds } = records;
+
+  /**
+   * Build one type's metadata write, carrying the dependency records that belong
+   * to it. The type is what publishes record events, so the record lives there.
+   * @param namespace - Namespace holding the type
+   * @param typeName - Type name
+   * @param explicitPublishEvents - `publishEvents` declared on the type, if any
+   * @returns The type's metadata write
+   */
+  const typeMetaRequest = async (
+    namespace: string,
+    typeName: string,
+    explicitPublishEvents: boolean | undefined,
+  ) => {
+    const trn = tailorDBTypeTrn(workspaceId, namespace, typeName);
+    const existing = await getOrNull(() => client.getMetadata({ trn }));
+    return addDependencyRecords(await buildMetaRequest({ trn, appName: appName ?? "", appId }), {
+      key: eventSourceKey.tailorDBType(namespace, typeName),
+      existingLabels: existing?.metadata?.labels,
+      dependentApps,
+      runAppIds,
+      pinned: explicitPublishEvents !== undefined,
+    });
+  };
 
   const fetchTypes = (namespaceName: string) => {
     return fetchAllTolerant(async (pageToken, maxPageSize) => {
@@ -1499,6 +1564,8 @@ async function planTypes(
 
     // Use filtered types if provided, otherwise use local types
     const types = filteredTypesByNamespace?.get(tailordb.namespace) ?? tailordb.types;
+    const typeMeta = (typeName: string) =>
+      typeMetaRequest(tailordb.namespace, typeName, types[typeName]?.settings?.publishEvents);
 
     for (const [typeName, tailordbTypeSnapshot] of Object.entries(types)) {
       const tailordbType = generateTailorDBTypeManifestFromSnapshot(tailordbTypeSnapshot, {
@@ -1514,7 +1581,8 @@ async function planTypes(
             normalizeComparableTailorDBType(tailordbType),
           )
         ) {
-          changeSet.unchanged.push({ name: typeName });
+          // The schema matches, but the records may not, so the labels still go.
+          changeSet.unchanged.push({ name: typeName, metaRequest: await typeMeta(typeName) });
         } else {
           changeSet.updates.push({
             name: typeName,
@@ -1523,6 +1591,7 @@ async function planTypes(
               namespaceName: tailordb.namespace,
               tailordbType,
             },
+            metaRequest: await typeMeta(typeName),
           });
         }
         existingTypesMap.delete(typeName);
@@ -1534,6 +1603,7 @@ async function planTypes(
             namespaceName: tailordb.namespace,
             tailordbType,
           },
+          metaRequest: await typeMeta(typeName),
         });
       }
     }
