@@ -49,10 +49,46 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
       const client = new tailor.idp.Client({ namespace: "${idpNamespace}" });
       const errors = [];
       let processed = 0;
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+      const upsert = input.upsert === true;
 
       for (let i = 0; i < input.users.length; i++) {
         try {
-          await client.createUser(input.users[i]);
+          if (upsert) {
+            let existing;
+            let lookupError;
+            try {
+              existing = await client.userByName(input.users[i].name);
+            } catch (error) {
+              existing = undefined;
+              lookupError = error instanceof Error ? error.message : String(error);
+            }
+
+            if (existing) {
+              const { name, ...attributes } = input.users[i];
+              if (Object.keys(attributes).length === 0) {
+                skipped++;
+              } else {
+                await client.updateUser({ id: existing.id, ...attributes });
+                updated++;
+              }
+            } else {
+              try {
+                await client.createUser(input.users[i]);
+                created++;
+              } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                throw new Error(
+                  lookupError ? \`create failed (\${message}); lookup failed (\${lookupError})\` : message,
+                );
+              }
+            }
+          } else {
+            await client.createUser(input.users[i]);
+            created++;
+          }
           processed++;
           console.log(\`[_User] \${i + 1}/\${input.users.length}: \${input.users[i].name}\`);
         } catch (error) {
@@ -65,6 +101,9 @@ export function generateIdpSeedScriptCode(idpNamespace: string): string {
       return {
         success: errors.length === 0,
         processed,
+        created,
+        updated,
+        skipped,
         errors,
       };
     }

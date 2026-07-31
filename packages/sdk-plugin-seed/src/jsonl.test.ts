@@ -70,4 +70,37 @@ describe("loadSeedData", () => {
       /Invalid seed row in .*Bad\.jsonl at line 1: expected a JSON object/,
     );
   });
+
+  test.each([
+    ["missing", '{"name":"Alice"}\n', 1],
+    ["null", '{"id":"customer-1"}\n{"id":null,"name":"Bob"}\n', 2],
+  ])(
+    "rejects an %s id with the file and line number when requireId is set",
+    (_label, content, line) => {
+      const dir = makeDataDir({ "Customer.jsonl": content });
+      expect(() => loadSeedData(dir, ["Customer"], { requireId: true })).toThrow(
+        new RegExp(`Customer\\.jsonl:${line}: \`id\` is required with --upsert`),
+      );
+    },
+  );
+
+  test("allows a missing id when requireId is not set", () => {
+    const dir = makeDataDir({ "Customer.jsonl": '{"name":"Alice"}\n' });
+    expect(loadSeedData(dir, ["Customer"])).toEqual({ Customer: [{ name: "Alice" }] });
+  });
+
+  test("rejects a missing required field before an upsert", () => {
+    const dir = makeDataDir({
+      "Customer.jsonl":
+        '{"id":"customer-1","name":"Alice","email":"alice@example.com"}\n' +
+        '{"id":"customer-2","name":"Bob"}\n',
+    });
+
+    expect(() =>
+      loadSeedData(dir, ["Customer"], {
+        requireId: true,
+        requiredFieldsByType: { Customer: ["name", "email"] },
+      }),
+    ).toThrow(/Customer\.jsonl:2: field `email` is required with --upsert/);
+  });
 });
