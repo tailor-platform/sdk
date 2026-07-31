@@ -400,6 +400,38 @@ type ResolveJobPublishEventsParams = {
 };
 
 /**
+ * Job names the given workflows' subscriptions enable.
+ *
+ * A job execution trigger names a workflow rather than a job, so the value is
+ * resolved per job name over the union of the workflows that run it: a job two
+ * workflows share stays on while either one is subscribed. Whoever asks whether a
+ * job still publishes has to apply that same union, which is why this is shared
+ * rather than restated — the two answering it differently is what let a shared
+ * job be reported as turning off while a peer subscription kept it on.
+ * @param params - Workflows, the jobs each runs, and which are subscribed
+ * @param params.workflows - Workflows whose job sets are considered
+ * @param params.mainJobDeps - Job names each workflow runs, keyed by its main job
+ * @param params.isSubscribed - Whether a workflow's jobs are subscribed in this run
+ * @returns Job names those subscriptions enable
+ */
+export function subscribedWorkflowJobNames(params: {
+  workflows: Iterable<{ name: string; mainJob: { name: string } }>;
+  mainJobDeps: Record<string, string[]>;
+  isSubscribed: (workflowName: string) => boolean;
+}): ReadonlySet<string> {
+  const { workflows, mainJobDeps, isSubscribed } = params;
+  const jobNames = new Set<string>();
+  for (const workflow of workflows) {
+    if (!isSubscribed(workflow.name)) continue;
+    // A missing entry gets a fuller diagnostic from planWorkflow's own loop.
+    for (const jobName of mainJobDeps[workflow.mainJob.name] ?? []) {
+      jobNames.add(jobName);
+    }
+  }
+  return jobNames;
+}
+
+/**
  * Resolve `publishExecutionEvents` for every job function used by a workflow.
  *
  * A job execution trigger names a workflow rather than a job, so a subscription
@@ -410,21 +442,17 @@ type ResolveJobPublishEventsParams = {
 function resolveJobPublishEvents(params: ResolveJobPublishEventsParams): Map<string, boolean> {
   const { workflows, mainJobDeps, subscribers, explicit } = params;
   const usedJobNames = new Set<string>();
-  const subscribedJobNames = new Set<string>();
   for (const workflow of Object.values(workflows)) {
-    const jobNames = mainJobDeps[workflow.mainJob.name];
     // A missing entry gets a fuller diagnostic from planWorkflow's own loop.
-    if (!jobNames) {
-      continue;
-    }
-    const subscribed = isSubscribed(subscribers, workflow.name);
-    for (const jobName of jobNames) {
+    for (const jobName of mainJobDeps[workflow.mainJob.name] ?? []) {
       usedJobNames.add(jobName);
-      if (subscribed) {
-        subscribedJobNames.add(jobName);
-      }
     }
   }
+  const subscribedJobNames = subscribedWorkflowJobNames({
+    workflows: Object.values(workflows),
+    mainJobDeps,
+    isSubscribed: (workflowName) => isSubscribed(subscribers, workflowName),
+  });
 
   const resolved = new Map<string, boolean>();
   for (const jobName of usedJobNames) {

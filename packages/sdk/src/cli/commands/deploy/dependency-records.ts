@@ -8,6 +8,7 @@ import {
   resourceTrn,
   tailorDBTypeTrn,
 } from "./label";
+import { subscribedWorkflowJobNames } from "./workflow";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MissingDependentApp } from "./confirm";
@@ -87,11 +88,11 @@ function recomputedResources(
   const explicitByJob = new Map(
     (application.workflowService?.jobs ?? []).map((job) => [job.name, job.publishEvents]),
   );
-  const subscribedJobNames = new Set(
-    Object.values(application.workflowService?.workflows ?? {})
-      .filter((workflow) => subscribedKeys.has(eventSourceKey.workflowJobs(workflow.name)))
-      .flatMap((workflow) => jobsByWorkflow[workflow.mainJob.name] ?? []),
-  );
+  const subscribedJobNames = subscribedWorkflowJobNames({
+    workflows: Object.values(application.workflowService?.workflows ?? {}),
+    mainJobDeps: jobsByWorkflow,
+    isSubscribed: (workflowName) => subscribedKeys.has(eventSourceKey.workflowJobs(workflowName)),
+  });
   for (const workflow of Object.values(application.workflowService?.workflows ?? {})) {
     const trn = resourceTrn(workspaceId, "workflow", workflow.name);
     if (workflow.publishEvents === undefined) {
@@ -103,10 +104,8 @@ function recomputedResources(
       });
     }
     // Only the jobs this workflow runs decide whether its job records matter, and
-    // a job stays on while any subscribed workflow in the run also runs it — job
-    // values are resolved per job name, not per workflow. Asking across every job
-    // in the config, or ignoring a peer workflow's subscription, prompts about
-    // publishing the run does not turn off.
+    // only the ones no subscription in the run keeps on — `subscribedWorkflowJobNames`
+    // applies the same union the values themselves are resolved by.
     const jobNames = jobsByWorkflow[workflow.mainJob.name] ?? [];
     if (
       jobNames.some(
