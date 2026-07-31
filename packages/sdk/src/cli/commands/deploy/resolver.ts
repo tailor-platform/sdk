@@ -18,6 +18,11 @@ import * as inflection from "inflection";
 import { type ResolverService } from "#/cli/services/resolver/service";
 import { getApplicationAuthNamespace } from "#/cli/shared/auth-namespace";
 import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
+import {
+  assertNoPublishEventsConflict,
+  publishEventsConflict,
+  resolvePublishEvents,
+} from "#/cli/shared/publish-events";
 import { buildResolverOperationHookExpr } from "#/cli/shared/runtime-exprs";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet, type ChangeSet } from "./change-set";
@@ -30,9 +35,13 @@ import {
 } from "./grouped-display";
 import { normalizeInvoker } from "./invoker";
 import {
+  addDependencyRecords,
   buildMetaRequest,
+  type DependentAppsByResource,
+  eventSourceKey,
   hasMatchingSdkVersion,
   type MetadataLabelWrite,
+  resolverTrn,
   resourceTrn,
   writeMetadataLabels,
 } from "./label";
@@ -89,10 +98,20 @@ export async function applyPipeline(
       }),
     ]);
 
-    // Resolvers
+    // Resolvers. An unchanged resolver still gets its labels written, because its
+    // dependency records can change while its definition does not.
     await Promise.all([
-      ...changeSet.resolver.creates.map((create) => client.createPipelineResolver(create.request)),
-      ...changeSet.resolver.updates.map((update) => client.updatePipelineResolver(update.request)),
+      ...changeSet.resolver.creates.map(async (create) => {
+        await client.createPipelineResolver(create.request);
+        await writeMetadataLabels(client, create.metaRequest);
+      }),
+      ...changeSet.resolver.updates.map(async (update) => {
+        await client.updatePipelineResolver(update.request);
+        await writeMetadataLabels(client, update.metaRequest);
+      }),
+      ...changeSet.resolver.unchanged.flatMap((entry) =>
+        entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : [],
+      ),
     ]);
   } else if (phase === "delete-resources") {
     // Delete in reverse order of dependencies
@@ -143,6 +162,12 @@ export async function planPipeline(context: PlanContext) {
     application.env,
     getApplicationAuthNamespace(application),
     forceApplyAll,
+    {
+      appName: application.name,
+      appId: application.id,
+      dependentApps: context.dependentApps,
+      runAppIds: context.runAppIds,
+    },
   );
 
   return {
@@ -271,16 +296,35 @@ async function planServices(
 type CreateResolver = {
   name: string;
   request: MessageInitShape<typeof CreatePipelineResolverRequestSchema>;
+  metaRequest: MetadataLabelWrite;
 };
 
 type UpdateResolver = {
   name: string;
   request: MessageInitShape<typeof UpdatePipelineResolverRequestSchema>;
+  metaRequest: MetadataLabelWrite;
+};
+
+/**
+ * A resolver whose definition is unchanged but whose dependency records are not.
+ * The plan shows it as unchanged; apply still writes its labels.
+ */
+type UnchangedResolver = {
+  name: string;
+  metaRequest?: MetadataLabelWrite;
 };
 
 type DeleteResolver = {
   name: string;
   request: MessageInitShape<typeof DeletePipelineResolverRequestSchema>;
+};
+
+/** What planResolvers needs to record dependencies on each resolver. */
+type ResolverRecordInputs = {
+  appName?: string;
+  appId?: string;
+  dependentApps?: DependentAppsByResource;
+  runAppIds?: ReadonlySet<string>;
 };
 
 async function planResolvers(
@@ -293,10 +337,36 @@ async function planResolvers(
   env: Record<string, string | number | boolean>,
   authNamespace: string | undefined,
   forceApplyAll = false,
+  records: ResolverRecordInputs = {},
 ) {
-  const changeSet = createChangeSet<CreateResolver, UpdateResolver, DeleteResolver>(
-    "Pipeline resolvers",
-  );
+  const changeSet = createChangeSet<
+    CreateResolver,
+    UpdateResolver,
+    DeleteResolver,
+    never,
+    UnchangedResolver
+  >("Pipeline resolvers");
+  const { appName, appId, dependentApps, runAppIds } = records;
+
+  /**
+   * Build one resolver's metadata write, carrying the dependency records that
+   * belong to it. The resolver is what publishes, so the record lives there.
+   * @param namespace - Namespace holding the resolver
+   * @param resolver - Resolver being planned
+   * @returns The resolver's metadata write
+   */
+  const resolverMetaRequest = async (
+    namespace: string,
+    resolver: { name: string; publishEvents?: boolean },
+  ) => {
+    const trn = resolverTrn(workspaceId, namespace, resolver.name);
+    return addDependencyRecords(await buildMetaRequest({ trn, appName: appName ?? "", appId }), {
+      key: eventSourceKey.resolver(namespace, resolver.name),
+      dependentApps,
+      runAppIds,
+      pinned: resolver.publishEvents !== undefined,
+    });
+  };
 
   const fetchResolvers = (namespaceName: string) => {
     return fetchAllTolerant(async (pageToken, maxPageSize) => {
@@ -317,15 +387,14 @@ async function planResolvers(
     }
   }
 
-  // Validate that resolvers used by executors don't have publishEvents explicitly set to false
+  // Reject a conflicting opt-out before any request, not partway through.
   for (const pipeline of pipelines) {
     for (const resolver of Object.values(pipeline.resolvers)) {
-      if (executorUsedResolvers.has(resolver.name) && resolver.publishEvents === false) {
-        throw new Error(
-          `Resolver "${resolver.name}" has publishEvents set to false, but it is used by an executor with a resolverExecuted trigger. ` +
-            `Either remove the publishEvents: false setting or remove the executor trigger for this resolver.`,
-        );
-      }
+      assertNoPublishEventsConflict({
+        explicit: resolver.publishEvents,
+        subscribed: executorUsedResolvers.has(resolver.name),
+        conflict: publishEventsConflict.resolver(resolver.name),
+      });
     }
   }
 
@@ -343,6 +412,7 @@ async function planResolvers(
         authNamespace,
       );
       const existingResolver = existingResolversMap.get(resolver.name);
+      const metaRequest = await resolverMetaRequest(pipeline.namespace, resolver);
       if (existingResolver) {
         const { pipelineResolver: existingResolverDetail } = await client.getPipelineResolver({
           workspaceId,
@@ -354,7 +424,8 @@ async function planResolvers(
           existingResolverDetail &&
           areResolversEqual(existingResolverDetail, desiredResolver)
         ) {
-          changeSet.unchanged.push({ name: resolver.name });
+          // The definition matches, but the records may not, so the labels still go.
+          changeSet.unchanged.push({ name: resolver.name, metaRequest });
         } else {
           changeSet.updates.push({
             name: resolver.name,
@@ -363,6 +434,7 @@ async function planResolvers(
               namespaceName: pipeline.namespace,
               pipelineResolver: desiredResolver,
             },
+            metaRequest,
           });
         }
         existingResolversMap.delete(resolver.name);
@@ -374,6 +446,7 @@ async function planResolvers(
             namespaceName: pipeline.namespace,
             pipelineResolver: desiredResolver,
           },
+          metaRequest,
         });
       }
     }
@@ -582,15 +655,11 @@ function processResolver(
     ? `${resolverDescription}\n\nReturns:\n${outputDescription}`
     : resolverDescription;
 
-  // Determine publishExecutionEvents (user-facing name: publishEvents):
-  // - If user explicitly sets a value (true or false), respect that (validation already ensures no executor conflict)
-  // - If not set, use executor detection (true if executor uses this resolver)
-  let publishExecutionEvents = false;
-  if (resolver.publishEvents !== undefined) {
-    publishExecutionEvents = resolver.publishEvents;
-  } else if (executorUsedResolvers.has(resolver.name)) {
-    publishExecutionEvents = true;
-  }
+  const publishExecutionEvents = resolvePublishEvents({
+    explicit: resolver.publishEvents,
+    subscribed: executorUsedResolvers.has(resolver.name),
+    conflict: publishEventsConflict.resolver(resolver.name),
+  });
 
   return {
     authorization: "true==true",

@@ -22,10 +22,10 @@ vi.mock("../label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("../label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:tailordb:test-ns",
       labels: {},
-    }),
+    })),
   };
 });
 
@@ -191,6 +191,7 @@ describe("per-migration prePhase: schema is scoped to migration[N]", () => {
             },
           ],
           deletes: [],
+          unchanged: [],
           title: "TailorDB Types",
           isEmpty: () => false,
           lines: () => [],

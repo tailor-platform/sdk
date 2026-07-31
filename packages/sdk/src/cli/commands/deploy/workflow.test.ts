@@ -12,13 +12,15 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("./label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    // A fresh object per call, as the real one returns: callers mutate the write
+    // they get back, so a shared literal accumulates across tests.
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:workflow:test",
       labels: {
         "sdk-name": "test-app",
         "sdk-version": "v1-0-0",
       },
-    }),
+    })),
   };
 });
 
@@ -67,6 +69,8 @@ describe("planWorkflow", () => {
       label?: string;
       resource?: Record<string, unknown>;
       sdkVersion?: string;
+      /** Extra labels the workflow's own TRN answers with. */
+      extraLabels?: Record<string, string>;
     }>,
     jobFunctionLabels?: Record<string, MockJobFunction>,
   ): OperatorClient {
@@ -120,12 +124,15 @@ describe("planWorkflow", () => {
         const workflow = existingWorkflows.find((w) => w.name === name);
         return {
           metadata: {
-            labels: workflow?.label
-              ? {
-                  [sdkNameLabelKey]: workflow.label,
-                  "sdk-version": workflow.sdkVersion ?? "v1-0-0",
-                }
-              : {},
+            labels: {
+              ...(workflow?.label
+                ? {
+                    [sdkNameLabelKey]: workflow.label,
+                    "sdk-version": workflow.sdkVersion ?? "v1-0-0",
+                  }
+                : {}),
+              ...workflow?.extraLabels,
+            },
           },
         };
       }),
@@ -230,7 +237,36 @@ describe("planWorkflow", () => {
       );
     });
 
-    test("keeps a remote workflow opt-in when nothing in the target subscribes", async () => {
+    test.each([
+      { publishEvents: true, subscribed: false, expected: true },
+      { publishEvents: true, subscribed: true, expected: true },
+      { publishEvents: false, subscribed: false, expected: false },
+      { publishEvents: undefined, subscribed: false, expected: false },
+      { publishEvents: undefined, subscribed: true, expected: true },
+    ])(
+      "resolves a workflow with publishEvents=$publishEvents subscribed=$subscribed to $expected",
+      async ({ publishEvents, subscribed, expected }) => {
+        const workflow = {
+          ...createMockWorkflow("orders", "main-job"),
+          ...(publishEvents === undefined ? {} : { publishEvents }),
+        };
+
+        const result = await planWorkflow(
+          createMockClient([]),
+          workspaceId,
+          appName,
+          undefined,
+          { orders: workflow },
+          { "main-job": ["main-job"] },
+          new Set(),
+          subscribed ? { execution: { workflowNames: new Set(["orders"]) } } : {},
+        );
+
+        expect(result.changeSet.creates[0]!.workflow.publishEvents).toBe(expected);
+      },
+    );
+
+    test("turns a remote workflow opt-in back off once nothing subscribes", async () => {
       const client = createMockClient([
         {
           id: "1",
@@ -258,10 +294,10 @@ describe("planWorkflow", () => {
         {},
       );
 
-      expect(result.changeSet.updates[0]!.workflow.publishEvents).toBe(true);
+      expect(result.changeSet.updates[0]!.workflow.publishEvents).toBe(false);
     });
 
-    test("keeps a remote job opt-in when nothing in the target subscribes", async () => {
+    test("turns a remote job opt-in back off once nothing subscribes", async () => {
       const client = createMockClient(
         [
           {
@@ -290,7 +326,7 @@ describe("planWorkflow", () => {
         {},
       );
 
-      expect(result.jobFunctionPublishEvents.get("main-job")).toBe(true);
+      expect(result.jobFunctionPublishEvents.get("main-job")).toBe(false);
     });
 
     test("honors an explicit opt-out over a remote opt-in", async () => {
@@ -1063,6 +1099,57 @@ describe("planWorkflow", () => {
         'Skipped deleting workflow job function "job-a" because it is still referenced.',
       );
       warn.mockRestore();
+    });
+  });
+
+  describe("dependency records and job-level publishing", () => {
+    /**
+     * Plan one workflow carrying a record, with the jobs it runs declaring
+     * `publishEvents` or not.
+     * @param jobPublishEvents - Explicit job values, keyed by job name
+     * @returns The workflow's planned metadata write
+     */
+    async function planWith(jobPublishEvents: ReadonlyMap<string, boolean>) {
+      const workflow = { ...createMockWorkflow("orders", "main-job"), publishEvents: true };
+      const client = createMockClient([{ id: "wf-1", name: "orders" }]);
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: workflow },
+        { "main-job": ["main-job", "child-job"] },
+        new Set(),
+        {
+          jobPublishEvents,
+          dependentApps: new Map(),
+          runAppIds: new Set<string>(),
+        },
+      );
+      const [entry] = [...result.changeSet.updates, ...result.changeSet.unchanged];
+      // The reconciliation resolves against the labels read at write time, so the
+      // planner's decision is the pinned flag it attaches for the jobs scope.
+      return entry?.metaRequest?.dependencies?.find((pending) => pending.scope === "jobs");
+    }
+
+    test("leaves the job records alive while a job it runs declares nothing", async () => {
+      // fetchMissingDependentApps reads this workflow precisely because a job of it
+      // is still recomputed, so treating it as pinned would drop the record and the
+      // confirmation would never fire for job-level changes.
+      const jobs = await planWith(new Map([["main-job", true]]));
+
+      expect(jobs?.pinned).toBe(false);
+    });
+
+    test("pins the job records once every job it runs declares the value", async () => {
+      const jobs = await planWith(
+        new Map([
+          ["main-job", true],
+          ["child-job", true],
+        ]),
+      );
+
+      expect(jobs?.pinned).toBe(true);
     });
   });
 });

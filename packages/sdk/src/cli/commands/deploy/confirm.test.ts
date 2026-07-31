@@ -1,5 +1,10 @@
 import { aroundEach, describe, expect, test, vi } from "vitest";
-import { confirmOwnerConflict, type OwnerConflict } from "./confirm";
+import {
+  confirmMissingDependentApps,
+  confirmOwnerConflict,
+  type MissingDependentApp,
+  type OwnerConflict,
+} from "./confirm";
 import type { prompt as promptModule } from "#/cli/shared/prompt";
 
 vi.mock("#/cli/shared/logger", () => ({
@@ -137,5 +142,62 @@ describe("confirmOwnerConflict", () => {
     await expect(confirmOwnerConflict(conflicts, "new-app", false)).rejects.toThrow(
       /managed by their current applications/,
     );
+  });
+});
+
+describe("confirmMissingDependentApps", () => {
+  let prompt: typeof promptModule;
+
+  const missing: MissingDependentApp[] = [
+    {
+      resource: 'TailorDB type "Order"',
+      appId: "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81",
+      reason: "publish-events",
+    },
+  ];
+
+  aroundEach(async (runTest) => {
+    vi.clearAllMocks();
+    ({ prompt } = await import("#/cli/shared/prompt"));
+    await runTest();
+    vi.restoreAllMocks();
+  });
+
+  test("returns immediately when nothing is missing", async () => {
+    await confirmMissingDependentApps([], false);
+    expect(prompt.confirm).not.toHaveBeenCalled();
+  });
+
+  test("asks before continuing without a recorded dependency", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(true);
+
+    await confirmMissingDependentApps(missing, false);
+
+    expect(prompt.confirm).toHaveBeenCalledTimes(1);
+  });
+
+  test("names the absent application and the resource it depends on", async () => {
+    const { logger } = await import("#/cli/shared/logger");
+
+    await confirmMissingDependentApps(missing, false);
+
+    // The record names its dependent, so stating it the other way round tells the
+    // reader to keep the wrong config in `--config`. Records live on the resource,
+    // so the resource is what the message can point at.
+    expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(
+      'application id 0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81 depends on TailorDB type "Order"',
+    );
+  });
+
+  test("cancels the deploy when the answer is no", async () => {
+    vi.mocked(prompt.confirm).mockResolvedValue(false);
+
+    await expect(confirmMissingDependentApps(missing, false)).rejects.toThrow(/Apply cancelled/);
+  });
+
+  test("continues without asking when --yes is passed", async () => {
+    await confirmMissingDependentApps(missing, true);
+
+    expect(prompt.confirm).not.toHaveBeenCalled();
   });
 });

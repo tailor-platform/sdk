@@ -20,10 +20,10 @@ vi.mock("../label", async (importOriginal) => {
   const original = (await importOriginal()) as typeof import("../label");
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:tailordb:test-ns",
       labels: {},
-    }),
+    })),
   };
 });
 
@@ -94,6 +94,7 @@ describe("migration flow: namespaces without pending migrations", () => {
     return {
       createTailorDBService: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
+      getMetadata: vi.fn().mockResolvedValue({ metadata: { labels: {} } }),
       createTailorDBType: vi.fn().mockResolvedValue({}),
       updateTailorDBType: vi.fn().mockResolvedValue({}),
       createTailorDBGQLPermission: vi.fn().mockResolvedValue({}),
@@ -144,12 +145,20 @@ describe("migration flow: namespaces without pending migrations", () => {
             {
               name: "Event",
               request: typeRequest("analytics-ns", "Event"),
+              metaRequest: {
+                trn: "trn:v1:workspace:test-workspace:tailordb:analytics-ns:type:Event",
+                labels: { "sdk-name": "test-app" },
+              },
             },
           ],
           updates: [
             {
               name: "Session",
               request: typeRequest("analytics-ns", "Session"),
+              metaRequest: {
+                trn: "trn:v1:workspace:test-workspace:tailordb:analytics-ns:type:Session",
+                labels: { "sdk-name": "test-app" },
+              },
             },
           ],
           deletes: [
@@ -162,6 +171,7 @@ describe("migration flow: namespaces without pending migrations", () => {
               },
             },
           ],
+          unchanged: [],
           title: "TailorDB Types",
           isEmpty: () => false,
           lines: () => [],
@@ -275,5 +285,24 @@ describe("migration flow: namespaces without pending migrations", () => {
       return `${request.namespaceName}/${request.tailordbTypeName}`;
     });
     expect(deletedTypes).toContain("analytics-ns/Legacy");
+  });
+  test("writes the metadata of types planned alongside a migration", async () => {
+    // The migration flow applies types through its own phases, so it has to write
+    // their metadata itself. Leaving it to the non-migration branch would skip a
+    // cross-config dependency record on any deploy that carries a migration, and
+    // the owner's next solo deploy would turn publishing off without asking.
+    const client = createMockClient();
+    const planResult = createMockPlanResult();
+
+    vi.mocked(migrationModule.detectPendingMigrations).mockResolvedValue([mkPendingMigration()]);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const trns = vi.mocked(client.setMetadata).mock.calls.map((call) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (call[0] as any).trn as string;
+    });
+    expect(trns).toContain("trn:v1:workspace:test-workspace:tailordb:analytics-ns:type:Event");
+    expect(trns).toContain("trn:v1:workspace:test-workspace:tailordb:analytics-ns:type:Session");
   });
 });

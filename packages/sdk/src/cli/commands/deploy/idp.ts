@@ -24,12 +24,16 @@ import {
   type OperatorClient,
 } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
+import { publishEventsConflict, resolvePublishEvents } from "#/cli/shared/publish-events";
 import { findOmittedPermitRules, parseIdPPermission } from "#/parser/service/idp/permission";
 import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import {
+  addDependencyRecords,
   buildMetaRequest,
+  type DependentAppsByResource,
+  eventSourceKey,
   hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
@@ -119,7 +123,8 @@ export async function applyIdP(
 ) {
   const { changeSet } = result;
   if (phase === "create-update") {
-    // Services
+    // Services. An unchanged service still gets its labels written, because its
+    // dependency records can change while its definition does not.
     await Promise.all([
       ...changeSet.service.creates.map(async (create) => {
         await resolveServiceReturnOrigins(client, create.request);
@@ -131,6 +136,9 @@ export async function applyIdP(
         await client.updateIdPService(update.request);
         await writeMetadataLabels(client, update.metaRequest);
       }),
+      ...changeSet.service.unchanged.flatMap((entry) =>
+        entry.metaRequest ? [writeMetadataLabels(client, entry.metaRequest)] : [],
+      ),
     ]);
 
     // Clients
@@ -215,6 +223,8 @@ export async function planIdP(context: PlanContext) {
     forRemoval,
     forceApplyAll = false,
     idpUserTriggerTargets,
+    dependentApps,
+    runAppIds,
   } = context;
   const idps = forRemoval ? [] : application.idpServices;
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
@@ -231,6 +241,7 @@ export async function planIdP(context: PlanContext) {
     idps,
     idpUserTriggerTargets ?? new Set<string>(),
     expectedLocalWebsites,
+    { dependentApps, runAppIds },
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
@@ -267,6 +278,15 @@ type UpdateService = {
 type DeleteService = {
   name: string;
   request: MessageInitShape<typeof DeleteIdPServiceRequestSchema>;
+};
+
+/**
+ * An IdP service whose definition is unchanged but whose dependency records are
+ * not. The plan shows it as unchanged; apply still writes its labels.
+ */
+type UnchangedService = {
+  name: string;
+  metaRequest?: MetadataLabelWrite;
 };
 
 type ComparableIdPService = {
@@ -411,8 +431,18 @@ async function planServices(
   idps: ReadonlyArray<IdP>,
   idpUserTriggerTargets: ReadonlySet<string>,
   expectedLocalWebsites: ReadonlySet<string>,
+  records: {
+    dependentApps: DependentAppsByResource | undefined;
+    runAppIds: ReadonlySet<string> | undefined;
+  },
 ) {
-  const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("IdP services");
+  const changeSet = createChangeSet<
+    CreateService,
+    UpdateService,
+    DeleteService,
+    never,
+    UnchangedService
+  >("IdP services");
   const conflicts: OwnerConflict[] = [];
   const unmanaged: UnmanagedResource[] = [];
   const resourceOwners = new Set<string>();
@@ -434,11 +464,19 @@ async function planServices(
   for (const idp of idps) {
     const namespaceName = idp.name;
     const existing = existingServices[namespaceName];
-    const metaRequest = await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "idp", namespaceName),
-      appName,
-      appId,
-    });
+    const metaRequest = addDependencyRecords(
+      await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "idp", namespaceName),
+        appName,
+        appId,
+      }),
+      {
+        key: eventSourceKey.idp(namespaceName),
+        dependentApps: records.dependentApps,
+        runAppIds: records.runAppIds,
+        pinned: idp.publishEvents !== undefined,
+      },
+    );
     let authorization: string | undefined;
     switch (idp.authorization) {
       case "insecure":
@@ -457,14 +495,11 @@ async function planServices(
 
     const lang = convertLang(idp.lang);
     const userAuthPolicy = idp.userAuthPolicy;
-    const isIdpUserTriggerTarget = idpUserTriggerTargets.has(namespaceName);
-    if (isIdpUserTriggerTarget && idp.publishEvents === false) {
-      throw new Error(
-        `IdP service "${namespaceName}" has "publishEvents: false", but executors with idpUser triggers subscribe to it. ` +
-          `Either remove "publishEvents: false" or remove the matching executor triggers.`,
-      );
-    }
-    const publishEvents = idp.publishEvents ?? isIdpUserTriggerTarget;
+    const publishEvents = resolvePublishEvents({
+      explicit: idp.publishEvents,
+      subscribed: idpUserTriggerTargets.has(namespaceName),
+      conflict: publishEventsConflict.idpService(namespaceName),
+    });
     const emailConfig = idp.emailConfig;
     if (!idp.permission) {
       logger.warn(`IdP service "${namespaceName}" has no permission configured.`);
@@ -526,7 +561,7 @@ async function planServices(
         hasMatchingSdkVersion(existing.allLabels, metaRequest.labels) &&
         areIdPServicesEqual(existing.resource, desired)
       ) {
-        changeSet.unchanged.push({ name: namespaceName });
+        changeSet.unchanged.push({ name: namespaceName, metaRequest });
       } else {
         changeSet.updates.push({
           name: namespaceName,
