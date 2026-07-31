@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { Code, ConnectError } from "@connectrpc/connect";
 import * as path from "pathe";
 import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
@@ -8,6 +9,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { statusCommand } from "./status";
+import { writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
@@ -23,38 +25,18 @@ vi.mock("#/cli/shared/context", () => ({
   loadWorkspaceId: vi.fn().mockResolvedValue("12345678-1234-4abc-8def-123456789012"),
 }));
 
-vi.mock("#/cli/shared/client", () => ({
+vi.mock("#/cli/shared/client", async (importOriginal) => ({
+  ...(await importOriginal()),
   initOperatorClient: vi.fn(),
 }));
-
-function writeDiff(number: number, description: string): void {
-  const dir = path.join(state.migrationsDir, number.toString().padStart(4, "0"));
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, "diff.json"),
-    JSON.stringify({
-      version: 1,
-      namespace: "tailordb",
-      createdAt: new Date().toISOString(),
-      description,
-      changes: [],
-      hasBreakingChanges: false,
-      breakingChanges: [],
-      hasWarnings: false,
-      warnings: [],
-      requiresMigrationScript: false,
-    }),
-  );
-}
 
 describe("tailordb migration status --json", () => {
   aroundEach(async (runTest) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-status-json-test-"));
     state.migrationsDir = path.join(tmpDir, "migrations");
-    fs.mkdirSync(path.join(state.migrationsDir, "0000"), { recursive: true });
-    fs.writeFileSync(path.join(state.migrationsDir, "0000", "schema.json"), "{}");
-    writeDiff(1, "Add users");
-    writeDiff(2, "Add orders");
+    writeInitialSchema(state.migrationsDir, {});
+    writeDiff(state.migrationsDir, 1, [], { description: "Add users" });
+    writeDiff(state.migrationsDir, 2, [], { description: "Add orders" });
 
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
@@ -106,6 +88,69 @@ describe("tailordb migration status --json", () => {
             description: "Add orders",
           },
         ],
+      },
+    ]);
+  });
+
+  test("treats metadata NotFound as no applied migrations", async () => {
+    state.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    await runCommand(statusCommand, []);
+
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        namespace: "tailordb",
+        currentMigration: 0,
+        pendingMigrations: [{ number: 1 }, { number: 2 }],
+      },
+    ]);
+  });
+
+  test("propagates metadata errors other than NotFound", async () => {
+    state.getMetadata.mockRejectedValue(new ConnectError("unavailable", Code.Unavailable));
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/unavailable/);
+  });
+
+  test("keeps reporting healthy namespaces when another namespace fails", async () => {
+    vi.mocked(loadConfig).mockResolvedValue({
+      config: {
+        path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
+        db: {
+          tailordb: { migration: { directory: state.migrationsDir } },
+          analyticsdb: { migration: { directory: state.migrationsDir } },
+        },
+      },
+    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    state.getMetadata.mockImplementation(({ trn }: { trn: string }) =>
+      trn.endsWith("analyticsdb")
+        ? Promise.reject(new ConnectError("unavailable", Code.Unavailable))
+        : Promise.resolve({ metadata: { labels: { "sdk-migration": "m0001" } } }),
+    );
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/analyticsdb/);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        namespace: "tailordb",
+        currentMigration: 1,
+        pendingMigrations: [{ number: 2 }],
+      },
+      {
+        namespace: "analyticsdb",
+        error: expect.stringContaining("unavailable"),
       },
     ]);
   });

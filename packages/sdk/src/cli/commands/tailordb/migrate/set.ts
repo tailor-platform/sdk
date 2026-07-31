@@ -11,10 +11,15 @@ import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
-import { assertDefined } from "#/utils/assert";
-import { getNamespacesWithMigrations } from "./config";
-import { formatMigrationNumber, isValidMigrationNumber } from "./snapshot";
-import { MIGRATION_LABEL_KEY, parseMigrationLabelNumber } from "./types";
+import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
+import { parseMigrationNumberArg } from "./migration-number";
+import { fetchRemoteMigrationNumber } from "./remote-state";
+import {
+  assertMigrationNumberExists,
+  assertValidMigrationFiles,
+  formatMigrationNumber,
+} from "./snapshot";
+import { MIGRATION_LABEL_KEY, sanitizeMigrationLabel } from "./types";
 
 export interface SetOptions {
   configPath?: string;
@@ -33,51 +38,20 @@ async function set(options: SetOptions): Promise<void> {
   logBetaWarning("tailordb migration");
 
   // 1. Validate migration number format
-  const numberStr = options.number;
-
-  // Accept either 4-digit format (0001) or integer (1)
-  let migrationNumber: number;
-  if (isValidMigrationNumber(numberStr)) {
-    // 4-digit format
-    migrationNumber = parseInt(numberStr, 10);
-  } else {
-    // Try parsing as integer
-    migrationNumber = parseInt(numberStr, 10);
-    if (isNaN(migrationNumber) || migrationNumber < 0) {
-      throw new Error(
-        `Invalid migration number format: ${numberStr}. Expected 4-digit format (e.g., 0001) or integer (e.g., 1).`,
-      );
-    }
-  }
+  const migrationNumber = parseMigrationNumberArg(options.number);
 
   // 2. Load configuration
   const { config } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);
 
-  // 3. Get namespaces with migrations
+  // 3. Determine target namespace
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
+  const target = selectTargetNamespace(namespacesWithMigrations, options.namespace);
+  const targetNamespace = target.namespace;
 
-  if (namespacesWithMigrations.length === 0) {
-    throw new Error("No TailorDB services with migrations configuration found");
-  }
-
-  // 4. Determine target namespace
-  let targetNamespace: string;
-  if (options.namespace) {
-    if (!namespacesWithMigrations.some((ns) => ns.namespace === options.namespace)) {
-      throw new Error(
-        `Namespace "${options.namespace}" not found or does not have migrations configured`,
-      );
-    }
-    targetNamespace = options.namespace;
-  } else if (namespacesWithMigrations.length === 1) {
-    const [ns] = namespacesWithMigrations;
-    targetNamespace = assertDefined(ns, "namespace with migrations missing").namespace;
-  } else {
-    throw new Error(
-      `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations.map((ns) => ns.namespace).join(", ")}`,
-    );
-  }
+  // 4. Validate the local migration history and the requested number
+  assertValidMigrationFiles(target.migrationsDir, targetNamespace);
+  assertMigrationNumberExists(target.migrationsDir, migrationNumber);
 
   // 5. Initialize client
   const accessToken = await loadAccessToken({
@@ -91,20 +65,16 @@ async function set(options: SetOptions): Promise<void> {
 
   // 6. Get current migration number
   const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
-  let currentMigration: number;
-  try {
-    const { metadata } = await client.getMetadata({ trn });
-    const label = metadata?.labels[MIGRATION_LABEL_KEY];
-    currentMigration = label ? (parseMigrationLabelNumber(label) ?? 0) : 0;
-  } catch {
-    currentMigration = 0;
-  }
+  const current = await fetchRemoteMigrationNumber(client, trn);
+  const currentMigration = current ?? 0;
 
   // 7. Display warning and confirmation
   logger.newline();
   logger.warn("This operation will change the migration checkpoint.");
   logger.log(`Namespace: ${styles.bold(targetNamespace)}`);
-  logger.log(`Current migration: ${styles.bold(formatMigrationNumber(currentMigration))}`);
+  logger.log(
+    `Current migration: ${current === null ? "<unset>" : styles.bold(formatMigrationNumber(current))}`,
+  );
   logger.log(`New migration: ${styles.bold(formatMigrationNumber(migrationNumber))}`);
   logger.newline();
 
@@ -137,7 +107,7 @@ async function set(options: SetOptions): Promise<void> {
   // 9. Update migration label
   await writeMetadataLabels(client, {
     trn,
-    labels: { [MIGRATION_LABEL_KEY]: `m${formatMigrationNumber(migrationNumber)}` },
+    labels: { [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) },
   });
 
   logger.success(
@@ -148,6 +118,9 @@ async function set(options: SetOptions): Promise<void> {
 export const setCommand = defineAppCommand({
   name: "set",
   description: "Set migration checkpoint to a specific number.",
+  notes: `The migration number must be a 4-digit value (e.g. \`0001\`) or a bare integer (e.g. \`1\`) within 0–9999, and must exist in the local migration history; \`0\` is always accepted as the baseline. The local history is validated first, so a gapped history is rejected.
+
+Metadata lookup failures (authentication, permission, or network errors) are reported as errors; only a not-yet-deployed namespace is treated as having no checkpoint.`,
   args: z.strictObject({
     ...deploymentArgs,
     ...confirmationArgs,

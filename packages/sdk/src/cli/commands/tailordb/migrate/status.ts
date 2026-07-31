@@ -11,13 +11,13 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
 import { getNamespacesWithMigrations } from "./config";
+import { fetchRemoteMigrationNumber } from "./remote-state";
 import {
   getMigrationFiles,
   loadDiff,
   getMigrationFilePath,
   formatMigrationNumber,
 } from "./snapshot";
-import { MIGRATION_LABEL_KEY, parseMigrationLabelNumber } from "./types";
 
 export interface StatusOptions {
   configPath?: string;
@@ -40,7 +40,18 @@ interface MigrationStatusInfo {
   pendingMigrations: PendingMigrationStatusInfo[];
 }
 
-async function collectMigrationStatuses(options: StatusOptions): Promise<MigrationStatusInfo[]> {
+interface MigrationStatusFailure {
+  namespace: string;
+  error: string;
+}
+
+type MigrationStatusRow = MigrationStatusInfo | MigrationStatusFailure;
+
+function isStatusFailure(row: MigrationStatusRow): row is MigrationStatusFailure {
+  return "error" in row;
+}
+
+async function collectMigrationStatuses(options: StatusOptions): Promise<MigrationStatusRow[]> {
   const { config } = await loadConfig(options.configPath);
   const configDir = path.dirname(config.path);
 
@@ -69,18 +80,18 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     profile: options.profile,
   });
 
-  const statuses: MigrationStatusInfo[] = [];
+  const rows: MigrationStatusRow[] = [];
 
   for (const { namespace, migrationsDir } of targetNamespaces) {
     const trn = resourceTrn(workspaceId, "tailordb", namespace);
-    let currentMigration: number;
+    let current: number | null;
     try {
-      const { metadata } = await client.getMetadata({ trn });
-      const label = metadata?.labels[MIGRATION_LABEL_KEY];
-      currentMigration = label ? (parseMigrationLabelNumber(label) ?? 0) : 0;
-    } catch {
-      currentMigration = 0;
+      current = await fetchRemoteMigrationNumber(client, trn);
+    } catch (error) {
+      rows.push({ namespace, error: error instanceof Error ? error.message : String(error) });
+      continue;
     }
+    const currentMigration = current ?? 0;
 
     const migrationFiles = getMigrationFiles(migrationsDir);
     const availableNumbers = migrationFiles
@@ -109,7 +120,7 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       };
     });
 
-    statuses.push({
+    rows.push({
       namespace,
       currentMigration,
       currentMigrationLabel: formatMigrationNumber(currentMigration),
@@ -117,18 +128,22 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     });
   }
 
-  return statuses;
+  return rows;
 }
 
-function printMigrationStatuses(statuses: MigrationStatusInfo[]): void {
-  for (const statusInfo of statuses) {
+function printMigrationStatuses(rows: MigrationStatusRow[]): void {
+  for (const row of rows) {
     logger.newline();
-    logger.info(`Namespace: ${styles.bold(statusInfo.namespace)}`);
-    logger.log(`  Current migration: ${styles.bold(statusInfo.currentMigrationLabel)}`);
+    logger.info(`Namespace: ${styles.bold(row.namespace)}`);
+    if (isStatusFailure(row)) {
+      logger.error(`  Failed to read migration state: ${row.error}`);
+      continue;
+    }
+    logger.log(`  Current migration: ${styles.bold(row.currentMigrationLabel)}`);
 
-    if (statusInfo.pendingMigrations.length > 0) {
+    if (row.pendingMigrations.length > 0) {
       logger.log("  Pending migrations:");
-      for (const pending of statusInfo.pendingMigrations) {
+      for (const pending of row.pendingMigrations) {
         if (pending.description) {
           logger.log(`    - ${pending.label}: ${pending.description}`);
         } else {
@@ -150,19 +165,26 @@ function printMigrationStatuses(statuses: MigrationStatusInfo[]): void {
 async function status(options: StatusOptions): Promise<void> {
   logBetaWarning("tailordb migration");
 
-  const statuses = await collectMigrationStatuses(options);
+  const rows = await collectMigrationStatuses(options);
   if (options.json) {
-    logger.out(statuses);
-    return;
+    logger.out(rows);
+  } else {
+    printMigrationStatuses(rows);
   }
 
-  printMigrationStatuses(statuses);
+  const failures = rows.filter(isStatusFailure);
+  if (failures.length > 0) {
+    throw new Error(
+      `Failed to read migration state:\n${failures.map((f) => `  - ${f.namespace}: ${f.error}`).join("\n")}`,
+    );
+  }
 }
 
 export const statusCommand = defineAppCommand({
   name: "status",
   description:
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
+  notes: `Metadata lookup failures (authentication, permission, or network errors) are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.`,
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {
