@@ -118,4 +118,40 @@ describe("tailordb migration status --json", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/unavailable/);
   });
+
+  test("keeps reporting healthy namespaces when another namespace fails", async () => {
+    vi.mocked(loadConfig).mockResolvedValue({
+      config: {
+        path: path.join(path.dirname(state.migrationsDir), "tailor.config.ts"),
+        db: {
+          tailordb: { migration: { directory: state.migrationsDir } },
+          analyticsdb: { migration: { directory: state.migrationsDir } },
+        },
+      },
+    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    state.getMetadata.mockImplementation(({ trn }: { trn: string }) =>
+      trn.endsWith("analyticsdb")
+        ? Promise.reject(new ConnectError("unavailable", Code.Unavailable))
+        : Promise.resolve({ metadata: { labels: { "sdk-migration": "m0001" } } }),
+    );
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/analyticsdb/);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        namespace: "tailordb",
+        currentMigration: 1,
+        pendingMigrations: [{ number: 2 }],
+      },
+      {
+        namespace: "analyticsdb",
+        error: expect.stringContaining("unavailable"),
+      },
+    ]);
+  });
 });
