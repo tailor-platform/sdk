@@ -31,11 +31,13 @@ type RecomputedResource = {
  * what keeps a declared value from prompting forever.
  * @param workspaceId - Workspace being deployed to
  * @param application - Application whose resources are listed
- * @returns One entry per resource that leaves `publishEvents` unset
+ * @param jobsByWorkflow - Job names each workflow runs, keyed by its main job
+ * @returns One entry per value that leaves `publishEvents` unset
  */
 function recomputedResources(
   workspaceId: string,
   application: Readonly<Application>,
+  jobsByWorkflow: Record<string, string[]>,
 ): RecomputedResource[] {
   const resources: RecomputedResource[] = [];
 
@@ -79,8 +81,9 @@ function recomputedResources(
   // A workflow carries two values: its own execution events and the ones its jobs
   // publish. Different triggers drive them, so each is asked about on its own —
   // a subscriber of one must not answer for the other.
-  const jobs = application.workflowService?.jobs ?? [];
-  const anyJobRecomputed = jobs.some((job) => job.publishEvents === undefined);
+  const explicitByJob = new Map(
+    (application.workflowService?.jobs ?? []).map((job) => [job.name, job.publishEvents]),
+  );
   for (const workflow of Object.values(application.workflowService?.workflows ?? {})) {
     const trn = resourceTrn(workspaceId, "workflow", workflow.name);
     if (workflow.publishEvents === undefined) {
@@ -91,7 +94,11 @@ function recomputedResources(
         label: `Workflow "${workflow.name}"`,
       });
     }
-    if (anyJobRecomputed) {
+    // Only the jobs this workflow runs decide whether its job records matter.
+    // Asking across every job in the config prompts about workflows whose jobs all
+    // declare the value, which the owner cannot act on.
+    const jobNames = jobsByWorkflow[workflow.mainJob.name] ?? [];
+    if (jobNames.some((jobName) => explicitByJob.get(jobName) === undefined)) {
       resources.push({
         trn,
         key: eventSourceKey.workflowJobs(workflow.name),
@@ -121,6 +128,7 @@ function recomputedResources(
  * @param params.application - Application being planned
  * @param params.runAppIds - Stable ids of every application in the run
  * @param params.subscribedKeys - Resources this run subscribes to, by resource key
+ * @param params.jobsByWorkflow - Job names each workflow runs, keyed by its main job
  * @returns Recorded dependencies missing from the run
  */
 export async function fetchMissingDependentApps(params: {
@@ -129,10 +137,11 @@ export async function fetchMissingDependentApps(params: {
   application: Readonly<Application>;
   runAppIds: ReadonlySet<string>;
   subscribedKeys: ReadonlySet<string>;
+  jobsByWorkflow: Record<string, string[]>;
 }): Promise<MissingDependentApp[]> {
-  const { client, workspaceId, application, runAppIds, subscribedKeys } = params;
+  const { client, workspaceId, application, runAppIds, subscribedKeys, jobsByWorkflow } = params;
   const found = await Promise.all(
-    recomputedResources(workspaceId, application)
+    recomputedResources(workspaceId, application, jobsByWorkflow)
       .filter(({ key }) => !subscribedKeys.has(key))
       .map(async ({ trn, scope, label }) => {
         const metadata = await getOrNull(() => client.getMetadata({ trn }));

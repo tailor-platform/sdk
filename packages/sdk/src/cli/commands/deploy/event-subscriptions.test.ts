@@ -180,6 +180,21 @@ describe("collectEventSubscriptions", () => {
     ).toThrow("declares nothing external that could hold it, so check the name");
   });
 
+  test("names the jobs, not the workflow, for a job execution subscription", () => {
+    // The trigger subscribes to the jobs' events, so naming the workflow would
+    // read as if its own publishEvents were at stake.
+    expect(() =>
+      collectEventSubscriptions([
+        target({
+          configPath: "buyer/tailor.config.ts",
+          executors: {
+            "sync-jobs": { kind: "workflowJobExecution", workflowName: "orders" },
+          },
+        }),
+      ]),
+    ).toThrow('Jobs of workflow "orders"');
+  });
+
   test.each([{ kind: "workflowExecution" }, { kind: "workflowJobExecution" }])(
     "says a workflow cannot be declared external ($kind)",
     ({ kind }) => {

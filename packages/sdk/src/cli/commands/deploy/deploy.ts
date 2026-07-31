@@ -1653,7 +1653,12 @@ function eventSourceLookup(
     case "workflowExecution":
     case "workflowJobExecution":
       return {
-        resource: publishEventsConflict.workflow(trigger.workflowName).resource,
+        // A job trigger subscribes to the jobs' events, not the workflow's own, so
+        // naming the workflow would read as if its publishEvents were at stake.
+        resource:
+          trigger.kind === "workflowExecution"
+            ? publishEventsConflict.workflow(trigger.workflowName).resource
+            : `Jobs of workflow "${trigger.workflowName}"`,
         trigger,
         declaredBy: (target) => declaresWorkflow(target, trigger.workflowName),
         pinned: (target) =>
@@ -2578,6 +2583,7 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
             application: target.application,
             runAppIds: runInputs.runAppIds ?? new Set<string>(),
             subscribedKeys: subscribedResourceKeys(runInputs.eventSubscriptions, target),
+            jobsByWorkflow: target.workflowBuildResult?.mainJobDeps ?? {},
           }),
         ),
       )

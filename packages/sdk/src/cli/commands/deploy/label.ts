@@ -367,8 +367,6 @@ export async function buildMetaRequest(
 export type ResourceDependencyParams = {
   /** Key identifying the resource, e.g. `workflow:nightly`. */
   key: string;
-  /** Labels currently stored on the resource. */
-  existingLabels: Record<string, string> | undefined;
   /** Dependents the run resolved, keyed by resource. */
   dependentApps: DependentAppsByResource | undefined;
   /** Stable ids of every application taking part in the run. */
@@ -382,27 +380,22 @@ export type ResourceDependencyParams = {
 /**
  * Fold a resource's dependency records into the write already planned for it.
  *
- * Adds to `labels` and `remove` rather than replacing them, so whatever
- * {@link buildMetaRequest} asked for — dropping a stale `sdk-app-id`, for
- * instance — still happens.
+ * The reconciliation is attached rather than computed, so it runs against the
+ * labels read at write time. Whatever {@link buildMetaRequest} asked for —
+ * dropping a stale `sdk-app-id`, for instance — still happens alongside it.
  * @param write - The resource's planned metadata write, mutated in place
- * @param params - The resource's key, current labels, and the run's inputs
+ * @param params - The resource's key and the run's inputs
  * @returns The same write, for use as an expression
  */
 export function addDependencyRecords(
   write: MetadataLabelWrite,
   params: ResourceDependencyParams,
 ): MetadataLabelWrite {
-  const { key, existingLabels, dependentApps, runAppIds, pinned, scope } = params;
-  const records = dependencyLabelWrite({
-    existingLabels,
-    dependentApps: dependentApps?.get(key),
-    runAppIds,
-    pinned,
-    scope,
-  });
-  write.labels = { ...write.labels, ...records.labels };
-  write.remove = [...(write.remove ?? []), ...records.remove];
+  const { key, dependentApps, runAppIds, pinned, scope } = params;
+  write.dependencies = [
+    ...(write.dependencies ?? []),
+    { dependentApps: dependentApps?.get(key), runAppIds, pinned, scope },
+  ];
   return write;
 }
 
@@ -423,7 +416,18 @@ export interface MetadataLabelWrite {
   labels?: Record<string, string>;
   /** Label keys to delete. Absent keys are ignored. */
   remove?: ReadonlyArray<string>;
+  /**
+   * Dependency records to reconcile against the labels found at write time.
+   *
+   * Which records to drop depends on what is already there, and
+   * {@link writeMetadataLabels} reads that anyway — resolving it here rather than
+   * while planning saves every planner a second read of the same resource.
+   */
+  dependencies?: ReadonlyArray<PendingDependencyRecords>;
 }
+
+/** A dependency-record reconciliation waiting on the resource's current labels. */
+export type PendingDependencyRecords = Omit<DependencyLabelParams, "existingLabels">;
 
 /**
  * Write metadata labels as a change against the resource's current labels.
@@ -450,12 +454,19 @@ export async function writeMetadataLabels(
   client: MetadataLabelClient,
   write: MetadataLabelWrite,
 ): Promise<void> {
-  const { trn, labels, remove } = write;
-  if (!Object.keys(labels ?? {}).length && !(remove ?? []).length) return;
+  const { trn, labels, remove, dependencies } = write;
+  if (!Object.keys(labels ?? {}).length && !(remove ?? []).length && !dependencies?.length) return;
   const current = await getOrNull(() => client.getMetadata({ trn }));
   const currentLabels = current?.metadata?.labels ?? {};
-  const merged: Record<string, string> = { ...currentLabels, ...labels };
-  for (const key of remove ?? []) {
+  const resolved = (dependencies ?? []).map((pending) =>
+    dependencyLabelWrite({ ...pending, existingLabels: currentLabels }),
+  );
+  const merged: Record<string, string> = {
+    ...currentLabels,
+    ...labels,
+    ...Object.assign({}, ...resolved.map((records) => records.labels)),
+  };
+  for (const key of [...(remove ?? []), ...resolved.flatMap((records) => records.remove)]) {
     delete merged[key];
   }
   if (areSameLabels(currentLabels, merged)) return;

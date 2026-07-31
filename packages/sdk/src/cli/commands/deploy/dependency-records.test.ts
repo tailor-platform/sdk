@@ -46,7 +46,7 @@ function application(spec: AppSpec): Readonly<Application> {
       workflows: Object.fromEntries(
         Object.entries(spec.workflows ?? {}).map(([name, publishEvents]) => [
           name,
-          { name, publishEvents },
+          { name, publishEvents, mainJob: { name: "main-job" } },
         ]),
       ),
       jobs: Object.entries(spec.jobs ?? {}).map(([name, publishEvents]) => ({
@@ -90,6 +90,7 @@ describe("fetchMissingDependentApps", () => {
       application: application({ types: { Order: undefined } }),
       runAppIds: new Set(),
       subscribedKeys: new Set(),
+      jobsByWorkflow: { "main-job": ["process-order"] },
     });
 
     expect(missing).toEqual([
@@ -111,6 +112,7 @@ describe("fetchMissingDependentApps", () => {
       application: application({ types: { Order: true } }),
       runAppIds: new Set(),
       subscribedKeys: new Set(),
+      jobsByWorkflow: { "main-job": ["process-order"] },
     });
 
     expect(missing).toEqual([]);
@@ -126,6 +128,7 @@ describe("fetchMissingDependentApps", () => {
       application: application({ workflows: { nightly: undefined } }),
       runAppIds: new Set([buyer]),
       subscribedKeys: new Set(),
+      jobsByWorkflow: { "main-job": ["process-order"] },
     });
 
     expect(missing).toEqual([]);
@@ -145,6 +148,7 @@ describe("fetchMissingDependentApps", () => {
       }),
       runAppIds: new Set(),
       subscribedKeys: new Set(),
+      jobsByWorkflow: { "main-job": ["process-order"] },
     });
 
     expect(missing).toEqual([
@@ -172,6 +176,7 @@ describe("fetchMissingDependentApps", () => {
       application: application(spec),
       runAppIds: new Set(),
       subscribedKeys: new Set(),
+      jobsByWorkflow: { "main-job": ["process-order"] },
     });
 
     expect(missing).toEqual([{ resource: label, appId: buyer, reason: "publish-events" }]);
@@ -191,6 +196,7 @@ describe("fetchMissingDependentApps and the run's own subscribers", () => {
       application: application({ types: { Order: undefined } }),
       runAppIds: new Set(),
       subscribedKeys: new Set(["tailordb:db:type:Order"]),
+      jobsByWorkflow: { "main-job": ["process-order"] },
     });
 
     expect(missing).toEqual([]);
@@ -206,6 +212,7 @@ describe("fetchMissingDependentApps and the run's own subscribers", () => {
       application: application({ types: { Order: undefined } }),
       runAppIds: new Set(),
       subscribedKeys: new Set(["tailordb:db:type:Invoice"]),
+      jobsByWorkflow: { "main-job": ["process-order"] },
     });
 
     expect(missing).toHaveLength(1);
@@ -228,6 +235,7 @@ describe("fetchMissingDependentApps and the two values a workflow carries", () =
       }),
       runAppIds: new Set(),
       subscribedKeys: new Set(["workflow:nightly"]),
+      jobsByWorkflow: { "main-job": ["process-order"] },
     });
 
     expect(missing).toEqual([
@@ -247,8 +255,51 @@ describe("fetchMissingDependentApps and the two values a workflow carries", () =
       }),
       runAppIds: new Set(),
       subscribedKeys: new Set(["workflow:nightly:jobs"]),
+      jobsByWorkflow: { "main-job": ["process-order"] },
     });
 
     expect(missing).toEqual([]);
+  });
+});
+
+describe("fetchMissingDependentApps and which jobs a workflow runs", () => {
+  const base = {
+    workspaceId,
+    runAppIds: new Set<string>(),
+    subscribedKeys: new Set<string>(),
+  };
+
+  test("asks about the job records only for a workflow that runs an unset job", async () => {
+    // Another workflow's unset job says nothing about this one. Asking across
+    // every job in the config prompts about a workflow the owner cannot act on.
+    const client = clientRecording(["trn:v1:workspace:ws:workflow:pinned-jobs"], "jobs");
+
+    const missing = await fetchMissingDependentApps({
+      ...base,
+      client,
+      application: application({
+        workflows: { "pinned-jobs": undefined },
+        jobs: { "declared-job": true, "unset-job": undefined },
+      }),
+      jobsByWorkflow: { "main-job": ["declared-job"] },
+    });
+
+    expect(missing.map((entry) => entry.resource)).not.toContain('Jobs of workflow "pinned-jobs"');
+  });
+
+  test("asks once the workflow does run an unset job", async () => {
+    const client = clientRecording(["trn:v1:workspace:ws:workflow:runs-unset"], "jobs");
+
+    const missing = await fetchMissingDependentApps({
+      ...base,
+      client,
+      application: application({
+        workflows: { "runs-unset": true },
+        jobs: { "declared-job": true, "unset-job": undefined },
+      }),
+      jobsByWorkflow: { "main-job": ["declared-job", "unset-job"] },
+    });
+
+    expect(missing.map((entry) => entry.resource)).toContain('Jobs of workflow "runs-unset"');
   });
 });
