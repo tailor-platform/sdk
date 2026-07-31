@@ -1,4 +1,5 @@
 import { getOrNull } from "#/cli/shared/client";
+import { eventSourceLabel } from "#/cli/shared/publish-events";
 import {
   type DependencyScope,
   eventSourceKey,
@@ -48,7 +49,7 @@ function recomputedResources(
           trn: tailorDBTypeTrn(workspaceId, service.namespace, typeName),
           key: eventSourceKey.tailorDBType(service.namespace, typeName),
           scope: "resource",
-          label: `TailorDB type "${typeName}"`,
+          label: eventSourceLabel.tailorDBType(typeName),
         });
       }
     }
@@ -61,7 +62,7 @@ function recomputedResources(
           trn: resolverTrn(workspaceId, service.namespace, resolver.name),
           key: eventSourceKey.resolver(service.namespace, resolver.name),
           scope: "resource",
-          label: `Resolver "${resolver.name}"`,
+          label: eventSourceLabel.resolver(resolver.name),
         });
       }
     }
@@ -73,7 +74,7 @@ function recomputedResources(
         trn: resourceTrn(workspaceId, "idp", idp.name),
         key: eventSourceKey.idp(idp.name),
         scope: "resource",
-        label: `IdP service "${idp.name}"`,
+        label: eventSourceLabel.idpService(idp.name),
       });
     }
   }
@@ -91,7 +92,7 @@ function recomputedResources(
         trn,
         key: eventSourceKey.workflow(workflow.name),
         scope: "resource",
-        label: `Workflow "${workflow.name}"`,
+        label: eventSourceLabel.workflow(workflow.name),
       });
     }
     // Only the jobs this workflow runs decide whether its job records matter.
@@ -103,7 +104,7 @@ function recomputedResources(
         trn,
         key: eventSourceKey.workflowJobs(workflow.name),
         scope: "jobs",
-        label: `Jobs of workflow "${workflow.name}"`,
+        label: eventSourceLabel.workflowJobs(workflow.name),
       });
     }
   }

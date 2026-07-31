@@ -8,13 +8,19 @@ export type PublishEventsConflict = {
   subscribesTo?: string;
 };
 
-/** How each event-publishing resource is named in user-facing messages. */
-const eventSourceLabel = {
+/**
+ * How each event-publishing resource is named in user-facing messages.
+ *
+ * Every message naming one of these reads from here, so a conflict error and the
+ * confirmation that lists the same resource cannot drift apart.
+ */
+export const eventSourceLabel = {
   tailorDBType: (name: string) => `TailorDB type "${name}"`,
   resolver: (name: string) => `Resolver "${name}"`,
   idpService: (name: string) => `IdP service "${name}"`,
   workflow: (name: string) => `Workflow "${name}"`,
   workflowJob: (name: string) => `Job "${name}"`,
+  workflowJobs: (workflowName: string) => `Jobs of workflow "${workflowName}"`,
 } as const;
 
 /** Opt-out conflict details per event-publishing resource. */
