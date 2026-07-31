@@ -101,6 +101,7 @@ const V2_NEXT_5 = "2.0.0-next.5";
 const V2_NEXT_6 = "2.0.0-next.6";
 const V2_NEXT_7 = "2.0.0-next.7";
 const V2_NEXT_9 = "2.0.0-next.9";
+const V2_NEXT_11 = "2.0.0-next.11";
 /**
  * Sentinel `prereleaseUntil` for a codemod whose exact `2.0.0-next.N` release is not
  * known yet. `pnpm codemod:resolve-pending`, run in CI against the release PR, replaces
@@ -719,7 +720,7 @@ export const allCodemods: CodemodPackage[] = [
       "Rename the `defineIdp` option `publishUserEvents` to `publishEvents`, matching the field name TailorDB types, resolvers, and workflows already use.",
     since: "1.5.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_PENDING,
+    prereleaseUntil: V2_NEXT_11,
     // No legacyPatterns: a shorthand rewrite keeps `publishUserEvents` as the
     // value identifier, so the token survives a successful migration. What the
     // transform cannot reach is reported by reviewFindings instead.
@@ -831,7 +832,7 @@ export const allCodemods: CodemodPackage[] = [
       "`tailor.workflow.startJobFunction` and the `StartJobFunctionOptions` type are removed in v2. Use the canonical `execJobFunction` / `ExecJobFunctionOptions`: `Exec*` blocks and returns the job's result, while `Start*` returns only an execution ID. The codemod rewrites member-access call sites on the ambient `tailor.workflow` global and on a `workflow` value imported from @tailor-platform/sdk/runtime(/workflow), and renames `StartJobFunctionOptions` imports along with the type references that resolve to them.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_PENDING,
+    prereleaseUntil: V2_NEXT_11,
     scriptPath: "v2/exec-job-function-rename/scripts/transform.js",
     filePatterns: ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"],
     legacyPatterns: ["startJobFunction", "StartJobFunctionOptions"],
@@ -1042,7 +1043,7 @@ export const allCodemods: CodemodPackage[] = [
       "An unset `publishEvents` is recomputed on every `deploy` from the executors taking part in the run, in both directions: adding a subscribing trigger turns publishing on, and removing the last one turns it back off. Previously a workflow or job kept publishing once it had been enabled, so a workflow whose subscribing trigger is already gone stops publishing on the next `deploy` — declare `publishEvents: true` on it if something outside this project consumes those events. `deploy` also stops instead of applying when a subscription cannot be satisfied: when a trigger names a resource no config in the run declares, when a workflow or job combines `publishEvents: false` with a subscribing trigger, and when a config that resolves without an `id` subscribes across configs. Each of those errors names the resource and both ways to resolve it.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_PENDING,
+    prereleaseUntil: V2_NEXT_11,
     notice: true,
   },
   {
@@ -1431,7 +1432,7 @@ export const allCodemods: CodemodPackage[] = [
       "The global platform mocks exported from `@tailor-platform/sdk/test` (`setupTailordbMock`, `setupWorkflowMock`, `setupWaitPointMock`, `setupInvokerMock`, `setupTailorErrorsMock`) and the bundled-output helper `createImportMain` are removed in v2. Use the `tailor-runtime` environment from `@tailor-platform/sdk/vitest` together with `mockTailordb` / `mockWorkflow`: the environment injects `TailorErrors` for you, `setWaitHandler` / `setResolveHandler` replace the wait-point stubs, and the invoker is driven through `globalThis.tailor.context.getInvoker` (or passed directly to `.body()` when testing the TypeScript source). No codemod ships for this migration: it replaces per-test global stubs with a Vitest environment plus disposable mocks, which changes the Vitest config, the setup shape, and the assertions of every affected test. The other `@tailor-platform/sdk/test` exports (`createTailorDBHook`, `createStandardSchema`, `unauthenticatedTailorUser`) are unchanged.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_PENDING,
+    prereleaseUntil: V2_NEXT_11,
     suspiciousPatterns: [
       "setupTailordbMock",
       "setupWorkflowMock",
@@ -1485,7 +1486,7 @@ export const allCodemods: CodemodPackage[] = [
       'The name-keyed option types exported from `@tailor-platform/sdk/cli` — `GetWorkflowOptions`, `StartWorkflowOptions`, `ListWorkflowExecutionsOptions`, `GetExecutorOptions`, `TriggerExecutorOptions`, `ListExecutorJobsOptions`, `GetExecutorJobOptions`, `WatchExecutorJobOptions` — are removed in v2, together with the function overloads that accepted them. Pass the workflow or executor definition itself instead: `{ workflow: myWorkflow, invoker: "admin" }` / `{ executor: myExecutor }`, matching the `*TypedOptions` shape that types `arg` and `payload` from the definition. No codemod ships for this migration: rewriting a name string into a definition requires importing the module that defines the workflow or executor, which a source-local transform cannot resolve.',
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_PENDING,
+    prereleaseUntil: V2_NEXT_11,
     suspiciousPatterns: [
       ["@tailor-platform/sdk/cli", "executorName"],
       ["@tailor-platform/sdk/cli", "workflowName"],
@@ -1558,7 +1559,7 @@ export const allCodemods: CodemodPackage[] = [
       "The `Env` interface in `tailor.d.ts` is generated from the type of each `defineConfig({ env })` value (`string`, `number`, or `boolean`) instead of the value itself, so the generated file no longer carries whatever the config resolved to when it was generated. Keys that aren't valid TypeScript identifiers are quoted, which previously produced a file that failed to parse. Run `tailor generate` to refresh the file, then widen any code that depended on the old literal types. If a `tailor.d.ts` you already committed contains a sensitive value, treat that value as exposed and rotate it; keep secrets in Secret Manager rather than `env`.",
     since: "1.0.0",
     until: "2.0.0",
-    prereleaseUntil: V2_NEXT_PENDING,
+    prereleaseUntil: V2_NEXT_11,
     examples: [
       {
         lang: "ts",
