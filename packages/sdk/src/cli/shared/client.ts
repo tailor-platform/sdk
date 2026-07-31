@@ -192,9 +192,9 @@ async function bearerTokenInterceptor(accessToken: string): Promise<Interceptor>
  * Create an interceptor that retries failed unary requests with backoff.
  *
  * Retries unary methods on `Unavailable`/`ResourceExhausted`, and
- * `Aborted`/`Internal` only for methods declared idempotent, up to 3 attempts.
- * Workspace creation is excluded because it has no idempotency key and a lost
- * response is ambiguous.
+ * `Aborted`/`Internal` only for methods declared side-effect-free or idempotent,
+ * up to 3 attempts. Workspace creation is excluded because it has no idempotency
+ * key and a lost response is ambiguous.
  * As a targeted exception for the deploy/apply flow, a post-retry `AlreadyExists`
  * from an allowlisted Create (see `RETRY_SAFE_CREATE_METHODS`) is treated as
  * success, since it means a prior attempt already committed the resource
