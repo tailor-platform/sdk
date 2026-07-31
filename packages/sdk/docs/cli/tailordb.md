@@ -97,7 +97,7 @@ tailor tailordb migration <command>
 | Command                                                       | Description                                                                                                                                                                                                                                                                            |
 | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot.                                                                                                                                                              |
-| [`tailordb migration script`](#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.                                                                                                                                   |
+| [`tailordb migration script`](#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none. When migrate.ts already exists, running the command clears a previously recorded --no-script acknowledgment.                      |
 | [`tailordb migration set`](#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                                                                                                                                                                                         |
 | [`tailordb migration status`](#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                                                                                                                                                   |
 | [`tailordb migration sync`](#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                                                                                                                                                                                  |
@@ -128,7 +128,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 #### tailordb migration script
 
-Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.
+Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none. When migrate.ts already exists, running the command clears a previously recorded --no-script acknowledgment.
 
 **Usage**
 
@@ -252,12 +252,13 @@ tailor tailordb migration validate [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                           | Required | Default              | Env                            |
-| ------------------------------- | ----- | --------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                          | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                     | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (validates all namespaces if not specified) | No       | -                    | -                              |
+| Option                          | Alias | Description                                                                                                                                                | Required | Default              | Env                            |
+| ------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                                                                                                               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                                                                                                          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                                                                                                 | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (validates all namespaces if not specified)                                                                                      | No       | -                    | -                              |
+| `--strict`                      | -     | Additionally fail when a migration not yet applied to the remote has data-loss warnings but neither a migrate.ts nor a recorded --no-script acknowledgment | No       | `false`              | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

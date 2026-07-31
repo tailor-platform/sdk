@@ -472,4 +472,114 @@ describe("tailordb migration validate", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/not found or does not have migrations configured/);
   });
+
+  const removalWarning = { typeName: "User", fieldName: "email", reason: "Field removed" };
+
+  test("--strict fails when a pending migration has unacknowledged warnings", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
+
+    const result = await runCommand(validateCommand, ["--strict"]);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(false);
+    expect(report.warningAcknowledgments).toEqual({
+      valid: false,
+      missing: [{ migrationNumber: 1, warnings: [removalWarning] }],
+    });
+  });
+
+  test("--strict names the affected field and shows the acknowledgment command", async () => {
+    using stderr = captureStderr();
+    writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
+
+    const result = await runCommand(validateCommand, ["--strict"]);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain("User.email");
+    expect(stderr.output).toContain(
+      'tailor tailordb migration script 0001 --namespace tailordb --no-script --reason "..."',
+    );
+  });
+
+  test("--strict accepts warnings acknowledged with a recorded reason", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], {
+      hasWarnings: true,
+      warnings: [removalWarning],
+      scriptSkipped: {
+        reason: "data no longer needed",
+        acknowledgedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+
+    const result = await runCommand(validateCommand, ["--strict"]);
+
+    expect(result.success).toBe(true);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(true);
+    expect(report.warningAcknowledgments).toEqual({ valid: true, missing: [] });
+  });
+
+  test("--strict accepts warnings covered by a migrate.ts", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
+    fs.writeFileSync(
+      path.join(state.migrationsDir, "0001", "migrate.ts"),
+      "export async function main() {}",
+    );
+
+    const result = await runCommand(validateCommand, ["--strict"]);
+
+    expect(result.success).toBe(true);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.warningAcknowledgments).toEqual({ valid: true, missing: [] });
+  });
+
+  test("--strict ignores warnings on migrations already applied to the remote", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001" } },
+    });
+
+    const result = await runCommand(validateCommand, ["--strict"]);
+
+    expect(result.success).toBe(true);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.warningAcknowledgments).toEqual({ valid: true, missing: [] });
+  });
+
+  test("--strict treats an undeployed namespace's migrations as pending", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
+    state.getMetadata.mockRejectedValue(new ConnectError("not found", Code.NotFound));
+
+    const result = await runCommand(validateCommand, ["--strict"]);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.warningAcknowledgments).toEqual({
+      valid: false,
+      missing: [{ migrationNumber: 1, warnings: [removalWarning] }],
+    });
+  });
+
+  test("without --strict, unacknowledged warnings do not fail validation", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(true);
+    const [report] = JSON.parse(stdout.output);
+    expect(report).not.toHaveProperty("warningAcknowledgments");
+  });
 });

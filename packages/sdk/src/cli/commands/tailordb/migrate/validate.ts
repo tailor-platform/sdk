@@ -13,7 +13,12 @@ import { logger, styles } from "#/cli/shared/logger";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
-import { formatDiffSummary, formatMigrationDiff, type MigrationDiff } from "./diff-calculator";
+import {
+  formatDiffSummary,
+  formatMigrationDiff,
+  type MigrationDiff,
+  type WarningChangeInfo,
+} from "./diff-calculator";
 import {
   checkMigrationDiffs,
   logRemoteDriftGuidance,
@@ -42,6 +47,7 @@ export interface ValidateOptions {
   workspaceId?: string;
   profile?: string;
   json?: boolean;
+  strict?: boolean;
 }
 
 interface MigrationFilesReport {
@@ -75,6 +81,17 @@ interface FailedRemoteSchemaReport {
 
 type RemoteSchemaReport = CompletedRemoteSchemaReport | FailedRemoteSchemaReport;
 
+interface UnacknowledgedWarningMigration {
+  migrationNumber: number;
+  warnings: WarningChangeInfo[];
+}
+
+interface WarningAcknowledgmentsReport {
+  valid: boolean;
+  /** Pending migrations with data-loss warnings but no migrate.ts and no recorded acknowledgment */
+  missing: UnacknowledgedWarningMigration[];
+}
+
 interface NamespaceValidationReport {
   namespace: string;
   valid: boolean;
@@ -83,6 +100,8 @@ interface NamespaceValidationReport {
   localSchema?: LocalSchemaReport;
   /** Omitted when the migration files are invalid */
   remoteSchema?: RemoteSchemaReport;
+  /** Present only with --strict; omitted when the remote migration checkpoint is unknown */
+  warningAcknowledgments?: WarningAcknowledgmentsReport;
 }
 
 interface BuildValidationReportsOptions {
@@ -90,6 +109,8 @@ interface BuildValidationReportsOptions {
   migrationFileErrors: Map<string, string>;
   localResults: MigrationCheckResult[];
   remoteResults?: RemoteSchemaVerificationResult[];
+  /** Per-namespace candidates for the --strict warning acknowledgment check */
+  unacknowledgedWarnings?: Map<string, UnacknowledgedWarningMigration[]>;
 }
 
 interface CollectedValidationReports {
@@ -124,6 +145,24 @@ function assertRequiredMigrationScripts(migrationsDir: string, namespace: string
 }
 
 /**
+ * Collect migrations with data-loss warnings that have neither a migrate.ts
+ * nor a recorded --no-script acknowledgment
+ * @param {string} migrationsDir - Migrations directory path
+ * @returns {UnacknowledgedWarningMigration[]} Unacknowledged warning migrations in the local history
+ */
+function collectUnacknowledgedWarnings(migrationsDir: string): UnacknowledgedWarningMigration[] {
+  const result: UnacknowledgedWarningMigration[] = [];
+  for (const file of getMigrationFiles(migrationsDir)) {
+    if (file.type !== "diff") continue;
+    const diff = loadDiff(file.path);
+    if (!diff.hasWarnings || diff.scriptSkipped) continue;
+    if (fs.existsSync(getMigrationFilePath(migrationsDir, file.number, "migrate"))) continue;
+    result.push({ migrationNumber: file.number, warnings: diff.warnings });
+  }
+  return result;
+}
+
+/**
  * Build per-namespace reports from the checks that completed
  * @param {BuildValidationReportsOptions} options - Completed validation results
  * @returns {NamespaceValidationReport[]} Validation reports per namespace
@@ -132,6 +171,7 @@ function buildValidationReports(
   options: BuildValidationReportsOptions,
 ): NamespaceValidationReport[] {
   const { targetNamespaces, migrationFileErrors, localResults, remoteResults } = options;
+  const { unacknowledgedWarnings } = options;
 
   return targetNamespaces.map((target) => {
     const fileError = migrationFileErrors.get(target.namespace);
@@ -174,12 +214,28 @@ function buildValidationReports(
       ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
     };
 
+    // Only migrations not yet applied to the remote need an acknowledgment;
+    // for applied ones the data is already gone and there is nothing to act on.
+    const candidates = unacknowledgedWarnings?.get(target.namespace);
+    let warningAcknowledgments: WarningAcknowledgmentsReport | undefined;
+    if (candidates !== undefined) {
+      const missing = candidates.filter(
+        (candidate) => candidate.migrationNumber > remote.remoteMigrationNumber,
+      );
+      warningAcknowledgments = { valid: missing.length === 0, missing };
+    }
+
     return {
       namespace: target.namespace,
-      valid: !localSchema.hasDiff && !remoteSchema.hasDrift && !checkpointMissingLocal,
+      valid:
+        !localSchema.hasDiff &&
+        !remoteSchema.hasDrift &&
+        !checkpointMissingLocal &&
+        warningAcknowledgments?.valid !== false,
       migrationFiles: { valid: true },
       localSchema,
       remoteSchema,
+      ...(warningAcknowledgments ? { warningAcknowledgments } : {}),
     };
   });
 }
@@ -229,6 +285,9 @@ async function collectValidationReports(
 
   const migrationFileErrors = new Map<string, string>();
   const checkableNamespaces: NamespaceWithMigrations[] = [];
+  const unacknowledgedWarnings = options.strict
+    ? new Map<string, UnacknowledgedWarningMigration[]>()
+    : undefined;
   for (const target of targetNamespaces) {
     try {
       assertValidMigrationFiles(target.migrationsDir, target.namespace);
@@ -236,6 +295,10 @@ async function collectValidationReports(
       // reported per namespace instead of aborting the run for every namespace.
       reconstructSnapshotFromMigrations(target.migrationsDir);
       assertRequiredMigrationScripts(target.migrationsDir, target.namespace);
+      unacknowledgedWarnings?.set(
+        target.namespace,
+        collectUnacknowledgedWarnings(target.migrationsDir),
+      );
       checkableNamespaces.push(target);
     } catch (error) {
       migrationFileErrors.set(
@@ -250,6 +313,7 @@ async function collectValidationReports(
     targetNamespaces,
     migrationFileErrors,
     localResults,
+    ...(unacknowledgedWarnings ? { unacknowledgedWarnings } : {}),
   };
 
   if (checkableNamespaces.length === 0) {
@@ -341,6 +405,24 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
         `  Remote schema: ${styles.success("OK")} (remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)})`,
       );
     }
+
+    const acknowledgments = report.warningAcknowledgments;
+    if (acknowledgments) {
+      if (acknowledgments.valid) {
+        logger.log(`  Warning acknowledgments: ${styles.success("OK")}`);
+      } else {
+        logger.log(
+          `  Warning acknowledgments: ${styles.error("missing for pending migration(s) with possible data loss")}`,
+        );
+        for (const migration of acknowledgments.missing) {
+          const label = formatMigrationNumber(migration.migrationNumber);
+          for (const warning of migration.warnings) {
+            const field = warning.fieldName ? `.${warning.fieldName}` : "";
+            logger.log(`    ${label}: ${warning.typeName}${field}: ${warning.reason}`);
+          }
+        }
+      }
+    }
   }
   logger.newline();
 }
@@ -359,6 +441,22 @@ function printResolutionHints(reports: NamespaceValidationReport[]): void {
   }
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
     logRemoteDriftGuidance();
+  }
+  const missingAcknowledgments = reports.filter(
+    (r) => r.warningAcknowledgments && !r.warningAcknowledgments.valid,
+  );
+  if (missingAcknowledgments.length > 0) {
+    logger.info(
+      "For each migration listed, either add a data migration script with 'tailor tailordb migration script <number>' or record why none is needed:",
+    );
+    for (const report of missingAcknowledgments) {
+      for (const migration of report.warningAcknowledgments?.missing ?? []) {
+        logger.info(
+          `  tailor tailordb migration script ${formatMigrationNumber(migration.migrationNumber)} --namespace ${report.namespace} --no-script --reason "..."`,
+          { mode: "plain" },
+        );
+      }
+    }
   }
 }
 
@@ -402,6 +500,10 @@ export const validateCommand = defineAppCommand({
       alias: "n",
       description: "Target TailorDB namespace (validates all namespaces if not specified)",
     }),
+    strict: arg(z.boolean().default(false), {
+      description:
+        "Additionally fail when a migration not yet applied to the remote has data-loss warnings but neither a migrate.ts nor a recorded --no-script acknowledgment",
+    }),
   }),
   run: async (args) => {
     await validate({
@@ -410,6 +512,7 @@ export const validateCommand = defineAppCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       json: logger.jsonMode,
+      strict: args.strict,
     });
   },
 });
