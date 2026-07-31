@@ -184,6 +184,7 @@ export const statusCommand = defineAppCommand({
   name: "status",
   description:
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
+  notes: `Metadata lookup failures (authentication, permission, or network errors) are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.`,
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {
