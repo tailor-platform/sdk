@@ -89,7 +89,7 @@ describe("fetchMissingDependentApps", () => {
     });
 
     expect(missing).toEqual([
-      { appName: 'TailorDB type "Order"', appId: buyer, reason: "publish-events" },
+      { resource: 'TailorDB type "Order"', appId: buyer, reason: "publish-events" },
     ]);
     expect(client.getMetadata.mock.calls.map((call) => call[0].trn)).not.toContain(
       "trn:v1:workspace:ws:application:supplier",
@@ -141,7 +141,7 @@ describe("fetchMissingDependentApps", () => {
     });
 
     expect(missing).toEqual([
-      { appName: 'Workflow "nightly"', appId: buyer, reason: "publish-events" },
+      { resource: 'Workflow "nightly"', appId: buyer, reason: "publish-events" },
     ]);
   });
 
@@ -166,6 +166,6 @@ describe("fetchMissingDependentApps", () => {
       runAppIds: new Set(),
     });
 
-    expect(missing).toEqual([{ appName: label, appId: buyer, reason: "publish-events" }]);
+    expect(missing).toEqual([{ resource: label, appId: buyer, reason: "publish-events" }]);
   });
 });

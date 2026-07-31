@@ -246,8 +246,12 @@ export async function confirmImportantResourceDeletion(
 
 /** An application recorded as needing to take part in this deploy, but absent. */
 export interface MissingDependentApp {
-  /** Application whose resources are applied differently without the dependent. */
-  appName: string;
+  /**
+   * The resource whose value is applied differently without the dependent, named
+   * as messages name it, e.g. `TailorDB type "Order"`. Records live on the
+   * resource, so this identifies one of those rather than an application.
+   */
+  resource: string;
   /** Stable id of the absent application. */
   appId: string;
   /** Why it has to take part in the same deploy. */
@@ -273,7 +277,7 @@ export async function confirmMissingDependentApps(
   logger.warn("Configs recorded as depending on this deploy are missing:");
   for (const entry of missing) {
     logger.log(
-      `    • application id ${styles.info(entry.appId)} depends on ${styles.bold(entry.appName)} (${entry.reason})`,
+      `    • application id ${styles.info(entry.appId)} depends on ${styles.bold(entry.resource)} (${entry.reason})`,
     );
   }
   logger.newline();

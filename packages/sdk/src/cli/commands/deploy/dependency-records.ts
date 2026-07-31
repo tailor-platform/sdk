@@ -101,7 +101,7 @@ export async function fetchMissingDependentApps(params: {
       return recordedDependencies(metadata?.metadata?.labels)
         .filter((dependency) => !runAppIds.has(dependency.appId))
         .map((dependency) => ({
-          appName: label,
+          resource: label,
           appId: dependency.appId,
           reason: dependency.reason,
         }));
