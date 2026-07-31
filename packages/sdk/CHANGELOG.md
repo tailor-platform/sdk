@@ -1,5 +1,31 @@
 # @tailor-platform/sdk
 
+## 1.85.0
+
+### Minor Changes
+
+- [#1910](https://github.com/tailor-platform/sdk/pull/1910) [`3153400`](https://github.com/tailor-platform/sdk/commit/3153400e27d8fefcdc6d7c0d0c5ab902f4bb73a3) Thanks [@dqn](https://github.com/dqn)! - Add an `--upsert` flag to seed. Without it, seeding a workspace that already holds some of the rows fails the whole batch for that type on the first duplicate id and inserts nothing. With `--upsert`, every TailorDB row must include an `id`; rows with new ids are inserted, rows with existing ids are updated, and omitted optional fields keep their stored values. Built-In IdP users are created or updated by name, with separate counts for each result. Default behavior is unchanged.
+
+- [#1891](https://github.com/tailor-platform/sdk/pull/1891) [`1c323c3`](https://github.com/tailor-platform/sdk/commit/1c323c3809c825293d3aef7c5ac4605755d39baf) Thanks [@dqn](https://github.com/dqn)! - Add `tailordb migration validate` command that runs the same schema checks as `deploy` without applying anything: migration file integrity (including required `migrate.ts` scripts), local types vs. the latest migration snapshot, and remote schema vs. the migration checkpoint. Issues are reported per namespace with type/field-level detail, `--json` emits a machine-readable report, and the command exits with a non-zero code when drift is found, making it usable as a CI safety gate before deploying.
+  
+  As part of this, `deploy`'s remote schema verification now propagates migration state lookup failures instead of silently skipping verification; only a not-yet-deployed namespace is still treated as a first apply.
+
+### Patch Changes
+
+- [#1911](https://github.com/tailor-platform/sdk/pull/1911) [`62faf2f`](https://github.com/tailor-platform/sdk/commit/62faf2fd3c1260a7aa1aa809db77f31f66ca3b42) Thanks [@dqn](https://github.com/dqn)! - Use each importing file's nearest tsconfig `paths` aliases as a fallback when bundling resolvers, executors, workflows, auth hooks, HTTP adapters, TailorDB hooks and validators, functions, seeds, queries, and migration scripts. A local dependency belonging to a different TypeScript project could previously leave an import unresolved when the bundle entry's project could not resolve it. Normal bundle resolution still takes precedence, so the importing file's aliases apply only when the import would otherwise be unresolved.
+
+- [#1911](https://github.com/tailor-platform/sdk/pull/1911) [`8afbff1`](https://github.com/tailor-platform/sdk/commit/8afbff1c7b12d0fdedb03e0601b81c851dcafb4f) Thanks [@dqn](https://github.com/dqn)! - Fail the build when a bundled file imports a module that cannot be resolved. Previously such an import was silently left in the bundle and only failed at runtime after deploy, including when the tsconfig selected for the build did not declare an alias used by the source. The error names the unresolved specifier, the importing file, and the `tsconfig.json` the build used. Imports explicitly marked as external by a bundler, such as the platform-provided `tailordb` module, remain unaffected.
+
+- [#1937](https://github.com/tailor-platform/sdk/pull/1937) [`648351e`](https://github.com/tailor-platform/sdk/commit/648351ea7ea7b42f18650c1766b5e3c9ff8de83f) Thanks [@dqn](https://github.com/dqn)! - Retry transient connection interruptions for read-only CLI requests
+
+- [#1920](https://github.com/tailor-platform/sdk/pull/1920) [`26626e0`](https://github.com/tailor-platform/sdk/commit/26626e0f05d269a36d0d75cc73a70150fc94f3aa) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove the `undici` dependency. Running the CLI no longer replaces the process-wide HTTP stack with a bundled `undici` build.
+
+- [#1928](https://github.com/tailor-platform/sdk/pull/1928) [`0c97bc7`](https://github.com/tailor-platform/sdk/commit/0c97bc787eb4157626ddd21bbce52e14b015b854) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency globals to v17.8.0
+
+- [#1935](https://github.com/tailor-platform/sdk/pull/1935) [`174eae9`](https://github.com/tailor-platform/sdk/commit/174eae988236ef32a98bcc294150a67ae6eda58d) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @0no-co/graphql.web to v1.3.3
+
+- [#1936](https://github.com/tailor-platform/sdk/pull/1936) [`54a2690`](https://github.com/tailor-platform/sdk/commit/54a2690b1223318f82d5358e41995ab93368ec86) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update oxc
+
 ## 1.84.0
 
 ### Minor Changes
