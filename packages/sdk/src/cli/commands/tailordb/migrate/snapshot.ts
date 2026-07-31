@@ -901,6 +901,10 @@ function latestMigrationNumber(files: { number: number }[]): number {
 /**
  * Assert that a migration number exists in the local migration history.
  * 0 is always accepted as the baseline snapshot.
+ *
+ * Returns the latest migration number so callers that need it (e.g. sync's
+ * post-sync hint) can reuse this function's directory scan instead of
+ * scanning the migrations directory a second time.
  * @param {string} migrationsDir - Migrations directory path
  * @param {number} migrationNumber - Migration number to check
  * @returns {number} The latest migration number in the history
