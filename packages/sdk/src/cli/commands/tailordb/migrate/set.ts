@@ -14,7 +14,11 @@ import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { parseMigrationNumberArg } from "./migration-number";
 import { fetchRemoteMigrationNumber } from "./remote-state";
-import { assertMigrationNumberExists, formatMigrationNumber } from "./snapshot";
+import {
+  assertMigrationNumberExists,
+  assertValidMigrationFiles,
+  formatMigrationNumber,
+} from "./snapshot";
 import { MIGRATION_LABEL_KEY, MIGRATION_LABEL_PREFIX } from "./types";
 
 export interface SetOptions {
@@ -45,7 +49,8 @@ async function set(options: SetOptions): Promise<void> {
   const target = selectTargetNamespace(namespacesWithMigrations, options.namespace);
   const targetNamespace = target.namespace;
 
-  // 4. Validate the number exists in the local migration history
+  // 4. Validate the local migration history and the requested number
+  assertValidMigrationFiles(target.migrationsDir, targetNamespace);
   assertMigrationNumberExists(target.migrationsDir, migrationNumber);
 
   // 5. Initialize client

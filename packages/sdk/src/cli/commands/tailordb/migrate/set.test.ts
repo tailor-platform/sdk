@@ -151,7 +151,17 @@ describe("tailordb migration set", () => {
     const result = await runCommand(setCommand, ["1", "--yes"]);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(/does not exist in working tree/);
+    expect(String(result.error)).toMatch(/Migration file validation failed/);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("rejects when the history has a gap below the target number", async () => {
+    fs.rmSync(path.join(state.migrationsDir, "0001"), { recursive: true, force: true });
+
+    const result = await runCommand(setCommand, ["2", "--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/Migration file validation failed/);
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
