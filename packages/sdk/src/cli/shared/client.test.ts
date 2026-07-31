@@ -1,5 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { aroundEach, describe, test, expect, vi } from "vitest";
@@ -346,6 +347,67 @@ describe("retryInterceptor", () => {
 
     expect(res).toBe(okResponse);
     expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("retries Aborted for no-side-effect methods then succeeds", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("socket disconnected", Code.Aborted))
+      .mockResolvedValueOnce(okResponse);
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.getWorkspace)),
+    );
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry Aborted for methods without an idempotency declaration", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("operation aborted", Code.Aborted))
+      .mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.updateTailorDBType))),
+    ).rejects.toThrow("operation aborted");
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  test("methods eligible for Aborted retries remain read-only", () => {
+    type RetryMethodDescriptor = Pick<
+      (typeof OperatorService.method)[keyof typeof OperatorService.method],
+      "idempotency" | "name"
+    >;
+    const findNonReadOnlyMethods = (methods: readonly RetryMethodDescriptor[]) =>
+      methods
+        .filter(
+          ({ idempotency }) =>
+            idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
+            idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT,
+        )
+        .filter(({ name }) => !/^(Download|Get|List)/.test(name))
+        .map(({ name }) => name);
+
+    const methods = Object.values(OperatorService.method);
+    expect(
+      methods.some(
+        ({ idempotency }) =>
+          idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
+          idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT,
+      ),
+    ).toBe(true);
+    expect(findNonReadOnlyMethods(methods)).toEqual([]);
+
+    const mutatingSentinel = {
+      ...OperatorService.method.getWorkspace,
+      name: "UpdateFutureResource",
+      idempotency: MethodOptions_IdempotencyLevel.IDEMPOTENT,
+    };
+    expect(findNonReadOnlyMethods([...methods, mutatingSentinel])).toEqual([
+      "UpdateFutureResource",
+    ]);
   });
 
   test("does not retry workspace creation when the outcome is ambiguous", async () => {
