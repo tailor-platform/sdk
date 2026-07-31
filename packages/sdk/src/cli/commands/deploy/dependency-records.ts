@@ -1,5 +1,6 @@
 import { getOrNull } from "#/cli/shared/client";
 import {
+  type DependencyScope,
   eventSourceKey,
   recordedDependencies,
   resolverTrn,
@@ -10,13 +11,15 @@ import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { MissingDependentApp } from "./confirm";
 
-/** One resource whose `publishEvents` this run would recompute. */
+/** One value this run would recompute, and where its records live. */
 type RecomputedResource = {
-  /** TRN carrying the resource's dependency records. */
+  /** TRN carrying the dependency records. */
   trn: string;
   /** Key the run's own subscriptions are recorded under. */
   key: string;
-  /** How the resource is named in the confirmation, e.g. `Workflow "nightly"`. */
+  /** Which of the resource's values this entry concerns. */
+  scope: DependencyScope;
+  /** How it is named in the confirmation, e.g. `Workflow "nightly"`. */
   label: string;
 };
 
@@ -42,6 +45,7 @@ function recomputedResources(
         resources.push({
           trn: tailorDBTypeTrn(workspaceId, service.namespace, typeName),
           key: eventSourceKey.tailorDBType(service.namespace, typeName),
+          scope: "resource",
           label: `TailorDB type "${typeName}"`,
         });
       }
@@ -54,6 +58,7 @@ function recomputedResources(
         resources.push({
           trn: resolverTrn(workspaceId, service.namespace, resolver.name),
           key: eventSourceKey.resolver(service.namespace, resolver.name),
+          scope: "resource",
           label: `Resolver "${resolver.name}"`,
         });
       }
@@ -65,21 +70,33 @@ function recomputedResources(
       resources.push({
         trn: resourceTrn(workspaceId, "idp", idp.name),
         key: eventSourceKey.idp(idp.name),
+        scope: "resource",
         label: `IdP service "${idp.name}"`,
       });
     }
   }
 
-  // A workflowJobExecution trigger records on the workflow, so a workflow that
-  // pins its own value still carries records for jobs that leave theirs unset.
+  // A workflow carries two values: its own execution events and the ones its jobs
+  // publish. Different triggers drive them, so each is asked about on its own —
+  // a subscriber of one must not answer for the other.
   const jobs = application.workflowService?.jobs ?? [];
   const anyJobRecomputed = jobs.some((job) => job.publishEvents === undefined);
   for (const workflow of Object.values(application.workflowService?.workflows ?? {})) {
-    if (workflow.publishEvents === undefined || anyJobRecomputed) {
+    const trn = resourceTrn(workspaceId, "workflow", workflow.name);
+    if (workflow.publishEvents === undefined) {
       resources.push({
-        trn: resourceTrn(workspaceId, "workflow", workflow.name),
+        trn,
         key: eventSourceKey.workflow(workflow.name),
+        scope: "resource",
         label: `Workflow "${workflow.name}"`,
+      });
+    }
+    if (anyJobRecomputed) {
+      resources.push({
+        trn,
+        key: eventSourceKey.workflowJobs(workflow.name),
+        scope: "jobs",
+        label: `Jobs of workflow "${workflow.name}"`,
       });
     }
   }
@@ -117,9 +134,9 @@ export async function fetchMissingDependentApps(params: {
   const found = await Promise.all(
     recomputedResources(workspaceId, application)
       .filter(({ key }) => !subscribedKeys.has(key))
-      .map(async ({ trn, label }) => {
+      .map(async ({ trn, scope, label }) => {
         const metadata = await getOrNull(() => client.getMetadata({ trn }));
-        return recordedDependencies(metadata?.metadata?.labels)
+        return recordedDependencies(metadata?.metadata?.labels, scope)
           .filter((dependency) => !runAppIds.has(dependency.appId))
           .map((dependency) => ({
             resource: label,

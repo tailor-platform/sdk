@@ -156,6 +156,19 @@ export function isOwnedByApp(
 // value cannot hold a delimited list (values are `^$|^[a-z][a-z0-9_-]{0,62}$`).
 const dependedByAppLabelPrefix = "sdk-depended-by-app-";
 
+// A workflow carries two independent values: its own publishExecutionEvents and
+// the one its jobs get. Different trigger kinds drive them, so their records need
+// separate namespaces on the one TRN — collapsing them lets a subscriber of one
+// suppress the confirmation for the other.
+const jobDependedByAppLabelPrefix = "sdk-job-depended-by-app-";
+
+/** Which of a resource's values a dependency record concerns. */
+export type DependencyScope = "resource" | "jobs";
+
+function prefixFor(scope: DependencyScope): string {
+  return scope === "jobs" ? jobDependedByAppLabelPrefix : dependedByAppLabelPrefix;
+}
+
 /** Why a dependent config has to take part in the same deploy. */
 export type DeployDependencyReason = "publish-events";
 
@@ -167,10 +180,14 @@ const RECORDABLE_APP_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 /**
  * Build the label key recording that an application depends on this deploy.
  * @param appId - Stable id of the dependent application
+ * @param scope - Which of the resource's values the record concerns
  * @returns Label key, or undefined when the id cannot form a valid key
  */
-export function dependedByAppLabelKey(appId: string): string | undefined {
-  return RECORDABLE_APP_ID.test(appId) ? `${dependedByAppLabelPrefix}${appId}` : undefined;
+export function dependedByAppLabelKey(
+  appId: string,
+  scope: DependencyScope = "resource",
+): string | undefined {
+  return RECORDABLE_APP_ID.test(appId) ? `${prefixFor(scope)}${appId}` : undefined;
 }
 
 /** An application recorded as depending on this deploy. */
@@ -188,17 +205,20 @@ export type RecordedDependency = {
  * label the SDK could not have produced cannot raise a confirmation prompt that
  * naming no config in the run makes unanswerable.
  * @param labels - Labels currently stored on the remote resource
+ * @param scope - Which of the resource's values to read records for
  * @returns Recorded dependencies, in label-key order
  */
 export function recordedDependencies(
   labels: Record<string, string> | undefined,
+  scope: DependencyScope = "resource",
 ): RecordedDependency[] {
   if (!labels) return [];
+  const prefix = prefixFor(scope);
   return Object.entries(labels)
     .toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .flatMap(([key, reason]) => {
-      if (!key.startsWith(dependedByAppLabelPrefix)) return [];
-      const appId = key.slice(dependedByAppLabelPrefix.length);
+      if (!key.startsWith(prefix)) return [];
+      const appId = key.slice(prefix.length);
       return RECORDABLE_APP_ID.test(appId) ? [{ appId, reason }] : [];
     });
 }
@@ -214,9 +234,10 @@ export const eventSourceKey = {
   resolver: (namespace: string, resolverName: string) =>
     `pipeline:${namespace}:resolver:${resolverName}`,
   idp: (name: string) => `idp:${name}`,
-  // A workflowJobExecution trigger names a workflow too, and which jobs it runs is
-  // only known once bundled, so both workflow triggers record on the workflow.
   workflow: (name: string) => `workflow:${name}`,
+  // A workflowJobExecution trigger names a workflow, but drives the jobs' value
+  // rather than the workflow's own, so it aggregates separately.
+  workflowJobs: (name: string) => `workflow:${name}:jobs`,
 } as const;
 
 /**
@@ -241,6 +262,8 @@ export type DependencyLabelParams = {
    * recomputed, so no absent config can change it.
    */
   pinned: boolean;
+  /** Which of the resource's values these records concern. */
+  scope?: DependencyScope;
 };
 
 /**
@@ -263,12 +286,12 @@ export type DependencyLabelParams = {
 export function dependencyLabelWrite(
   params: DependencyLabelParams,
 ): Required<Pick<MetadataLabelWrite, "labels" | "remove">> {
-  const { existingLabels, dependentApps, runAppIds, pinned } = params;
+  const { existingLabels, dependentApps, runAppIds, pinned, scope = "resource" } = params;
   if (pinned) {
     return {
       labels: {},
-      remove: recordedDependencies(existingLabels).flatMap(
-        ({ appId }) => dependedByAppLabelKey(appId) ?? [],
+      remove: recordedDependencies(existingLabels, scope).flatMap(
+        ({ appId }) => dependedByAppLabelKey(appId, scope) ?? [],
       ),
     };
   }
@@ -277,7 +300,7 @@ export function dependencyLabelWrite(
 
   const labels: Record<string, string> = {};
   for (const [appId, reason] of dependents) {
-    const key = dependedByAppLabelKey(appId);
+    const key = dependedByAppLabelKey(appId, scope);
     if (!key) {
       throw new Error(
         `Application id "${appId}" cannot be recorded as a dependency of this deploy. ` +
@@ -288,9 +311,9 @@ export function dependencyLabelWrite(
     labels[key] = reason;
   }
 
-  const remove = recordedDependencies(existingLabels).flatMap(({ appId }) => {
+  const remove = recordedDependencies(existingLabels, scope).flatMap(({ appId }) => {
     if (!inRun.has(appId) || dependents.has(appId)) return [];
-    const key = dependedByAppLabelKey(appId);
+    const key = dependedByAppLabelKey(appId, scope);
     return key ? [key] : [];
   });
 
@@ -352,6 +375,8 @@ export type ResourceDependencyParams = {
   runAppIds: ReadonlySet<string> | undefined;
   /** Whether the resource declares `publishEvents`. */
   pinned: boolean;
+  /** Which of the resource's values these records concern. */
+  scope?: DependencyScope;
 };
 
 /**
@@ -368,12 +393,13 @@ export function addDependencyRecords(
   write: MetadataLabelWrite,
   params: ResourceDependencyParams,
 ): MetadataLabelWrite {
-  const { key, existingLabels, dependentApps, runAppIds, pinned } = params;
+  const { key, existingLabels, dependentApps, runAppIds, pinned, scope } = params;
   const records = dependencyLabelWrite({
     existingLabels,
     dependentApps: dependentApps?.get(key),
     runAppIds,
     pinned,
+    scope,
   });
   write.labels = { ...write.labels, ...records.labels };
   write.remove = [...(write.remove ?? []), ...records.remove];

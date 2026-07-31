@@ -1660,7 +1660,10 @@ function eventSourceLookup(
           trigger.kind === "workflowExecution"
             ? pinsWorkflow(target, trigger.workflowName)
             : pinsEveryWorkflowJob(target),
-        keyIn: () => eventSourceKey.workflow(trigger.workflowName),
+        keyIn: () =>
+          trigger.kind === "workflowExecution"
+            ? eventSourceKey.workflow(trigger.workflowName)
+            : eventSourceKey.workflowJobs(trigger.workflowName),
         narrowOwners: (candidates) =>
           candidates.filter((target) => declaresWorkflow(target, trigger.workflowName)),
         // A workflow has no `external` declaration to check.

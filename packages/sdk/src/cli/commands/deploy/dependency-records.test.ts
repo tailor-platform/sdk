@@ -60,17 +60,20 @@ function application(spec: AppSpec): Readonly<Application> {
 /**
  * A client whose named TRNs each carry one record for `buyer`.
  * @param trns - TRNs that answer with a record
+ * @param scope - Which namespace the record sits in
  * @returns Operator client stub exposing its getMetadata mock
  */
 function clientRecording(
   trns: string[],
+  scope: "resource" | "jobs" = "resource",
 ): OperatorClient & { getMetadata: ReturnType<typeof vi.fn> } {
   const set = new Set(trns);
+  const key = scope === "jobs" ? `sdk-job-depended-by-app-${buyer}` : buyerKey;
   return {
     getMetadata: vi
       .fn()
       .mockImplementation(({ trn }: { trn: string }) =>
-        set.has(trn) ? { metadata: { labels: { [buyerKey]: "publish-events" } } } : {},
+        set.has(trn) ? { metadata: { labels: { [key]: "publish-events" } } } : {},
       ),
   } as unknown as OperatorClient & { getMetadata: ReturnType<typeof vi.fn> };
 }
@@ -128,10 +131,10 @@ describe("fetchMissingDependentApps", () => {
     expect(missing).toEqual([]);
   });
 
-  test("reads a pinned workflow while any of its jobs leaves the value unset", async () => {
-    // A workflowJobExecution trigger records on the workflow, so the workflow's
-    // own declaration does not settle whether its records still matter.
-    const client = clientRecording([`trn:v1:workspace:ws:workflow:nightly`]);
+  test("reads a pinned workflow's job records while any job leaves the value unset", async () => {
+    // The jobs' value is driven by workflowJobExecution subscribers, so the
+    // workflow's own declaration does not settle whether their records matter.
+    const client = clientRecording([`trn:v1:workspace:ws:workflow:nightly`], "jobs");
 
     const missing = await fetchMissingDependentApps({
       client,
@@ -145,7 +148,7 @@ describe("fetchMissingDependentApps", () => {
     });
 
     expect(missing).toEqual([
-      { resource: 'Workflow "nightly"', appId: buyer, reason: "publish-events" },
+      { resource: 'Jobs of workflow "nightly"', appId: buyer, reason: "publish-events" },
     ]);
   });
 
@@ -206,5 +209,46 @@ describe("fetchMissingDependentApps and the run's own subscribers", () => {
     });
 
     expect(missing).toHaveLength(1);
+  });
+});
+
+describe("fetchMissingDependentApps and the two values a workflow carries", () => {
+  test("still reports the job records while only the workflow's own value is subscribed", async () => {
+    // A workflowExecution subscriber keeps the workflow's own events on, but says
+    // nothing about the jobs — their value is driven by workflowJobExecution
+    // subscribers, and all of those are absent here.
+    const client = clientRecording(["trn:v1:workspace:ws:workflow:nightly"], "jobs");
+
+    const missing = await fetchMissingDependentApps({
+      client,
+      workspaceId,
+      application: application({
+        workflows: { nightly: undefined },
+        jobs: { "process-order": undefined },
+      }),
+      runAppIds: new Set(),
+      subscribedKeys: new Set(["workflow:nightly"]),
+    });
+
+    expect(missing).toEqual([
+      { resource: 'Jobs of workflow "nightly"', appId: buyer, reason: "publish-events" },
+    ]);
+  });
+
+  test("skips the job records once the jobs themselves are subscribed in the run", async () => {
+    const client = clientRecording(["trn:v1:workspace:ws:workflow:nightly"], "jobs");
+
+    const missing = await fetchMissingDependentApps({
+      client,
+      workspaceId,
+      application: application({
+        workflows: { nightly: true },
+        jobs: { "process-order": undefined },
+      }),
+      runAppIds: new Set(),
+      subscribedKeys: new Set(["workflow:nightly:jobs"]),
+    });
+
+    expect(missing).toEqual([]);
   });
 });
