@@ -1,5 +1,13 @@
 # @tailor-platform/sdk-codemod
 
+## 0.3.9
+
+### Patch Changes
+
+- [#1901](https://github.com/tailor-platform/sdk/pull/1901) [`7d1974f`](https://github.com/tailor-platform/sdk/commit/7d1974f52952a8f39a7adfc06644404b2510f1c3) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency politty to v0.11.6
+
+- [#1903](https://github.com/tailor-platform/sdk/pull/1903) [`83c5bc4`](https://github.com/tailor-platform/sdk/commit/83c5bc453a77a734599b665ebe2873ff6b305f1d) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @ast-grep/napi to v0.45.0
+
 ## 0.3.8
 
 ### Patch Changes

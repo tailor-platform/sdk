@@ -46,6 +46,14 @@ export declare type CreateWorkflowRequest = Message<"tailor.v1.CreateWorkflowReq
    * @generated from field: optional tailor.v1.ConcurrencyPolicy concurrency_policy = 6;
    */
   concurrencyPolicy?: ConcurrencyPolicy;
+
+  /**
+   * Enable publishing workflow-execution events
+   * (workflow.workflow_execution.*).
+   *
+   * @generated from field: bool publish_execution_events = 7;
+   */
+  publishExecutionEvents: boolean;
 };
 
 /**
@@ -103,6 +111,14 @@ export declare type UpdateWorkflowRequest = Message<"tailor.v1.UpdateWorkflowReq
    * @generated from field: optional tailor.v1.ConcurrencyPolicy concurrency_policy = 6;
    */
   concurrencyPolicy?: ConcurrencyPolicy;
+
+  /**
+   * Enable publishing workflow-execution events
+   * (workflow.workflow_execution.*).
+   *
+   * @generated from field: bool publish_execution_events = 7;
+   */
+  publishExecutionEvents: boolean;
 };
 
 /**
@@ -316,6 +332,14 @@ export declare type CreateWorkflowJobFunctionRequest = Message<"tailor.v1.Create
    * @generated from field: optional string script_ref = 4;
    */
   scriptRef?: string;
+
+  /**
+   * Enable publishing job-execution events
+   * (workflow.workflow_execution.job_execution.*).
+   *
+   * @generated from field: bool publish_execution_events = 5;
+   */
+  publishExecutionEvents: boolean;
 };
 
 /**
@@ -365,6 +389,14 @@ export declare type UpdateWorkflowJobFunctionRequest = Message<"tailor.v1.Update
    * @generated from field: optional string script_ref = 4;
    */
   scriptRef?: string;
+
+  /**
+   * Enable publishing job-execution events
+   * (workflow.workflow_execution.job_execution.*).
+   *
+   * @generated from field: bool publish_execution_events = 5;
+   */
+  publishExecutionEvents: boolean;
 };
 
 /**
@@ -747,6 +779,90 @@ export declare type TestResumeWorkflowResponse = Message<"tailor.v1.TestResumeWo
  * Use `create(TestResumeWorkflowResponseSchema)` to create a new message.
  */
 export declare const TestResumeWorkflowResponseSchema: GenMessage<TestResumeWorkflowResponse>;
+
+/**
+ * @generated from message tailor.v1.StartWorkflowRequest
+ */
+export declare type StartWorkflowRequest = Message<"tailor.v1.StartWorkflowRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string workflow_id = 2;
+   */
+  workflowId: string;
+
+  /**
+   * @generated from field: tailor.v1.AuthInvoker auth_invoker = 3;
+   */
+  authInvoker?: AuthInvoker;
+
+  /**
+   * @generated from field: optional string arg = 4;
+   */
+  arg?: string;
+};
+
+/**
+ * Describes the message tailor.v1.StartWorkflowRequest.
+ * Use `create(StartWorkflowRequestSchema)` to create a new message.
+ */
+export declare const StartWorkflowRequestSchema: GenMessage<StartWorkflowRequest>;
+
+/**
+ * @generated from message tailor.v1.StartWorkflowResponse
+ */
+export declare type StartWorkflowResponse = Message<"tailor.v1.StartWorkflowResponse"> & {
+  /**
+   * @generated from field: string execution_id = 1;
+   */
+  executionId: string;
+};
+
+/**
+ * Describes the message tailor.v1.StartWorkflowResponse.
+ * Use `create(StartWorkflowResponseSchema)` to create a new message.
+ */
+export declare const StartWorkflowResponseSchema: GenMessage<StartWorkflowResponse>;
+
+/**
+ * @generated from message tailor.v1.ResumeWorkflowExecutionRequest
+ */
+export declare type ResumeWorkflowExecutionRequest = Message<"tailor.v1.ResumeWorkflowExecutionRequest"> & {
+  /**
+   * @generated from field: string workspace_id = 1;
+   */
+  workspaceId: string;
+
+  /**
+   * @generated from field: string execution_id = 2;
+   */
+  executionId: string;
+};
+
+/**
+ * Describes the message tailor.v1.ResumeWorkflowExecutionRequest.
+ * Use `create(ResumeWorkflowExecutionRequestSchema)` to create a new message.
+ */
+export declare const ResumeWorkflowExecutionRequestSchema: GenMessage<ResumeWorkflowExecutionRequest>;
+
+/**
+ * @generated from message tailor.v1.ResumeWorkflowExecutionResponse
+ */
+export declare type ResumeWorkflowExecutionResponse = Message<"tailor.v1.ResumeWorkflowExecutionResponse"> & {
+  /**
+   * @generated from field: string execution_id = 1;
+   */
+  executionId: string;
+};
+
+/**
+ * Describes the message tailor.v1.ResumeWorkflowExecutionResponse.
+ * Use `create(ResumeWorkflowExecutionResponseSchema)` to create a new message.
+ */
+export declare const ResumeWorkflowExecutionResponseSchema: GenMessage<ResumeWorkflowExecutionResponse>;
 
 /**
  * @generated from message tailor.v1.CreateWorkflowJobFunctionExecutionPolicyRequest

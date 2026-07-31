@@ -75,6 +75,49 @@ export const AuthAccessTokenTriggerSchema = z.object({
     .describe("Auth access token event types to trigger on"),
 });
 
+const workflowNameSchema = z
+  .string()
+  .refine((value) => value.trim().length > 0, "Workflow name cannot be blank")
+  .describe("Workflow name to subscribe to.");
+
+export const WorkflowExecutionTriggerSchema = z.object({
+  kind: z.literal("workflowExecution").describe("Workflow execution event trigger"),
+  events: z
+    .array(
+      z.enum([
+        "workflow.workflow_execution.started",
+        "workflow.workflow_execution.completed",
+        "workflow.workflow_execution.retried",
+        "workflow.workflow_execution.resumed",
+        "workflow.workflow_execution.wait_started",
+        "workflow.workflow_execution.wait_resolved",
+      ]),
+    )
+    .min(1)
+    .transform((arr) => [...new Set(arr)])
+    .describe("Workflow execution event types to trigger on"),
+  workflowName: workflowNameSchema,
+  condition: functionSchema.optional().describe("Condition function to filter events"),
+});
+
+export const WorkflowJobExecutionTriggerSchema = z.object({
+  kind: z.literal("workflowJobExecution").describe("Workflow job execution event trigger"),
+  events: z
+    .array(
+      z.enum([
+        "workflow.workflow_execution.job_execution.started",
+        "workflow.workflow_execution.job_execution.completed",
+        "workflow.workflow_execution.job_execution.wait_started",
+        "workflow.workflow_execution.job_execution.wait_resolved",
+      ]),
+    )
+    .min(1)
+    .transform((arr) => [...new Set(arr)])
+    .describe("Workflow job execution event types to trigger on"),
+  workflowName: workflowNameSchema,
+  condition: functionSchema.optional().describe("Condition function to filter events"),
+});
+
 export const TriggerSchema = z.discriminatedUnion("kind", [
   TailorDBTriggerSchema,
   ResolverExecutedTriggerSchema,
@@ -82,6 +125,8 @@ export const TriggerSchema = z.discriminatedUnion("kind", [
   IncomingWebhookTriggerSchema,
   IdpUserTriggerSchema,
   AuthAccessTokenTriggerSchema,
+  WorkflowExecutionTriggerSchema,
+  WorkflowJobExecutionTriggerSchema,
 ]);
 
 export const FunctionOperationSchema = z.object({

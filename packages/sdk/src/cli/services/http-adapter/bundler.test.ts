@@ -231,7 +231,7 @@ export default createHttpAdapter({
         [{ name: "bad", sourceFile, methods: ["get"], hasOutput: false }],
         process.cwd(),
       ),
-    ).rejects.toThrow(/Node module/);
+    ).rejects.toThrow(/"node:fs" is not available in the Tailor Platform runtime/);
   });
 
   test("rejects bundles where an imported helper introduces async/await", async () => {

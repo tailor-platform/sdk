@@ -1,10 +1,12 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { MethodOptions_IdempotencyLevel } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, type UnaryRequest } from "@connectrpc/connect";
 import { OperatorService } from "@tailor-platform/tailor-proto/service_pb";
 import { aroundEach, describe, test, expect, vi } from "vitest";
 import { reportCrash } from "#/cli/crashreport/index";
 import {
+  closeConnectionPool,
   concurrencyLimitInterceptor,
   createTransport,
   fetchAll,
@@ -330,6 +332,67 @@ describe("retryInterceptor", () => {
 
     expect(res).toBe(okResponse);
     expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("retries Aborted for no-side-effect methods then succeeds", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("socket disconnected", Code.Aborted))
+      .mockResolvedValueOnce(okResponse);
+
+    const res = await settle(
+      retryInterceptor()(next)(makeUnaryReq(OperatorService.method.getWorkspace)),
+    );
+
+    expect(res).toBe(okResponse);
+    expect(next).toHaveBeenCalledTimes(2);
+  });
+
+  test("does not retry Aborted for methods without an idempotency declaration", async () => {
+    const next = vi
+      .fn()
+      .mockRejectedValueOnce(new ConnectError("operation aborted", Code.Aborted))
+      .mockResolvedValueOnce(okResponse);
+
+    await expect(
+      settle(retryInterceptor()(next)(makeUnaryReq(OperatorService.method.updateTailorDBType))),
+    ).rejects.toThrow("operation aborted");
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  test("methods eligible for Aborted retries remain read-only", () => {
+    type RetryMethodDescriptor = Pick<
+      (typeof OperatorService.method)[keyof typeof OperatorService.method],
+      "idempotency" | "name"
+    >;
+    const findNonReadOnlyMethods = (methods: readonly RetryMethodDescriptor[]) =>
+      methods
+        .filter(
+          ({ idempotency }) =>
+            idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
+            idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT,
+        )
+        .filter(({ name }) => !/^(Download|Get|List)/.test(name))
+        .map(({ name }) => name);
+
+    const methods = Object.values(OperatorService.method);
+    expect(
+      methods.some(
+        ({ idempotency }) =>
+          idempotency === MethodOptions_IdempotencyLevel.NO_SIDE_EFFECTS ||
+          idempotency === MethodOptions_IdempotencyLevel.IDEMPOTENT,
+      ),
+    ).toBe(true);
+    expect(findNonReadOnlyMethods(methods)).toEqual([]);
+
+    const mutatingSentinel = {
+      ...OperatorService.method.getWorkspace,
+      name: "UpdateFutureResource",
+      idempotency: MethodOptions_IdempotencyLevel.IDEMPOTENT,
+    };
+    expect(findNonReadOnlyMethods([...methods, mutatingSentinel])).toEqual([
+      "UpdateFutureResource",
+    ]);
   });
 
   test("does not retry workspace creation when the outcome is ambiguous", async () => {
@@ -779,5 +842,64 @@ describe("fetchMachineUserToken", () => {
     await expect(
       fetchMachineUserToken("https://example.com", "client-id", "client-secret"),
     ).rejects.toThrow("Failed to fetch machine user token: 500 Internal Server Error");
+  });
+});
+
+describe("closeConnectionPool", () => {
+  const currentGeneration = Symbol.for("undici.globalDispatcher.2");
+  const legacyGeneration = Symbol.for("undici.globalDispatcher.1");
+  const globals = globalThis as Record<symbol, unknown>;
+  const setDispatcher = (key: symbol, value: unknown) => {
+    globals[key] = value;
+  };
+
+  aroundEach(async (runTest) => {
+    const originals = [currentGeneration, legacyGeneration].map(
+      (key) => [key, Object.hasOwn(globals, key), globals[key]] as const,
+    );
+    await runTest();
+    for (const [key, existed, value] of originals) {
+      if (existed) {
+        globals[key] = value;
+      } else {
+        delete globals[key];
+      }
+    }
+  });
+
+  test("closes only the newest dispatcher generation", async () => {
+    const closeCurrent = vi.fn().mockResolvedValue(undefined);
+    const closeLegacy = vi.fn().mockResolvedValue(undefined);
+    setDispatcher(currentGeneration, { close: closeCurrent });
+    setDispatcher(legacyGeneration, { close: closeLegacy });
+
+    await closeConnectionPool();
+
+    expect(closeCurrent).toHaveBeenCalledTimes(1);
+    expect(closeLegacy).not.toHaveBeenCalled();
+  });
+
+  test("falls back to the legacy dispatcher generation", async () => {
+    const closeLegacy = vi.fn().mockResolvedValue(undefined);
+    setDispatcher(currentGeneration, undefined);
+    setDispatcher(legacyGeneration, { close: closeLegacy });
+
+    await closeConnectionPool();
+
+    expect(closeLegacy).toHaveBeenCalledTimes(1);
+  });
+
+  test("resolves when no dispatcher is installed", async () => {
+    setDispatcher(currentGeneration, undefined);
+    setDispatcher(legacyGeneration, undefined);
+
+    await expect(closeConnectionPool()).resolves.toBeUndefined();
+  });
+
+  test("resolves when the dispatcher exposes a non-callable close", async () => {
+    setDispatcher(currentGeneration, { close: "not a function" });
+    setDispatcher(legacyGeneration, undefined);
+
+    await expect(closeConnectionPool()).resolves.toBeUndefined();
   });
 });

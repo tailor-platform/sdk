@@ -66,7 +66,11 @@ import { planSecretManager } from "./secret-manager";
 import { planStaticWebsite } from "./staticwebsite";
 import { formatTailorDBResourceChangeEntries, planTailorDB } from "./tailordb";
 import { validatePlan } from "./validate-plan";
-import { formatWorkflowChangeEntries, planWorkflow } from "./workflow";
+import {
+  formatWorkflowChangeEntries,
+  planWorkflow,
+  type WorkflowEventSubscribers,
+} from "./workflow";
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 import { resolveDeployWorkspace } from "./workspace";
 import type { PlanContext } from "./types";
@@ -187,6 +191,50 @@ function collectExecutorUsedResolvers(
     }
   }
   return usedResolvers;
+}
+
+/**
+ * Resolve which workflows this target's executors subscribe to, per event
+ * granularity level.
+ *
+ * Scoped to the owning target: unlike TailorDB, Auth and IdP, a workflow has no
+ * `external` declaration, so no supported configuration shares a workflow and a
+ * subscribing executor across configs.
+ * @param target - Deployment target being planned
+ * @returns Subscribers keyed by event granularity level
+ */
+function collectWorkflowEventSubscribers(target: BuiltDeploymentTarget): {
+  execution: WorkflowEventSubscribers;
+  jobExecution: WorkflowEventSubscribers;
+} {
+  const execution = { workflowNames: new Set<string>() };
+  const jobExecution = { workflowNames: new Set<string>() };
+  for (const executor of Object.values(target.application.executorService?.executors ?? {})) {
+    const { trigger } = executor;
+    if (trigger.kind !== "workflowExecution" && trigger.kind !== "workflowJobExecution") {
+      continue;
+    }
+    const subscribers = trigger.kind === "workflowExecution" ? execution : jobExecution;
+    subscribers.workflowNames.add(trigger.workflowName);
+  }
+  return { execution, jobExecution };
+}
+
+/**
+ * Collect explicit `publishEvents` values declared on this target's workflow jobs.
+ * @param target - Deployment target being planned
+ * @returns Explicit flags keyed by job name
+ */
+function collectWorkflowJobPublishEvents(
+  target: BuiltDeploymentTarget,
+): ReadonlyMap<string, boolean> {
+  const jobPublishEvents = new Map<string, boolean>();
+  for (const job of target.application.workflowService?.jobs ?? []) {
+    if (job.publishEvents !== undefined) {
+      jobPublishEvents.set(job.name, job.publishEvents);
+    }
+  }
+  return jobPublishEvents;
 }
 
 function collectExpectedLocalStaticWebsiteNames(
@@ -1239,6 +1287,10 @@ async function planDeploymentTarget(
           workflowService?.workflows ?? {},
           workflowBuildResult?.mainJobDeps ?? {},
           unchangedWorkflowJobs,
+          {
+            ...collectWorkflowEventSubscribers(target),
+            jobPublishEvents: collectWorkflowJobPublishEvents(target),
+          },
         ),
       ),
       withSpan("plan.workflowExecutionPolicy", () =>

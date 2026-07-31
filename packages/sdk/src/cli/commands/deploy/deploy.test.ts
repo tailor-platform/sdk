@@ -115,6 +115,7 @@ function emptyResults(): PlanResults {
       changeSet: createChangeSet("Workflows"),
       unchangedWorkflowJobNames: new Set<string>(),
       jobFunctionDeletes: [],
+      jobFunctionPublishEvents: new Map<string, boolean>(),
       ...emptyOwnership(),
       appName: "my-app",
       appId: undefined,

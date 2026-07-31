@@ -4,6 +4,7 @@ import * as path from "pathe";
 import * as rolldown from "rolldown";
 import { computeBundlerContextHash, withCache, type BundleCache } from "#/cli/cache/bundle-cache";
 import { withBundleConcurrency } from "#/cli/shared/bundle-concurrency";
+import { createBundleLog } from "#/cli/shared/bundle-log";
 import { createLogLevelTreeshakeOptions } from "#/cli/shared/bundle-log-level";
 import { composeFunctionTreeshakeOptions } from "#/cli/shared/function-treeshake";
 import { logger, styles } from "#/cli/shared/logger";
@@ -11,6 +12,7 @@ import { platformBundleDefinePlugin } from "#/cli/shared/platform-bundle-plugin"
 import { resolveTSConfigWithFallback } from "#/cli/shared/resolve-tsconfig";
 import { INVOKER_EXPR } from "#/cli/shared/runtime-exprs";
 import { serializeTriggerContext, type TriggerContext } from "#/cli/shared/trigger-context";
+import { createTsconfigPathsPlugin } from "#/cli/shared/tsconfig-paths-plugin";
 import { createVirtualEntry } from "#/cli/shared/virtual-entry";
 import ml from "#/utils/multiline";
 import { findAllJobs } from "./job-detector";
@@ -275,7 +277,7 @@ async function bundleSingleJob(
     name: job.name,
     sourceFile: job.sourceFile,
     contextHash,
-    async build(cachePlugins) {
+    async build(cachePlugins, trackDependency) {
       const absoluteSourcePath = path.resolve(job.sourceFile);
 
       const entryContent = ml /* js */ `
@@ -287,7 +289,12 @@ async function bundleSingleJob(
           return await ${job.exportName}.body(input, { env, invoker });
         }
       `;
-      const entry = createVirtualEntry(`workflow-job:${job.name}`, entryContent);
+      const entry = createVirtualEntry(
+        `workflow-job:${job.name}`,
+        entryContent,
+        "js",
+        absoluteSourcePath,
+      );
 
       // Pre-compute once to avoid redundant realpathSync calls per module
       const resolvedSourceFile = safeRealpath(job.sourceFile);
@@ -350,10 +357,12 @@ async function bundleSingleJob(
       const plugins: rolldown.Plugin[] = [
         entry.plugin,
         transformPlugin,
+        createTsconfigPathsPlugin({ onTsconfigRead: trackDependency }),
         platformBundleDefinePlugin,
         ...cachePlugins,
       ];
 
+      const bundleLog = createBundleLog({ tsconfig });
       const result = await rolldown.build({
         input: entry.input,
         write: false,
@@ -374,8 +383,9 @@ async function bundleSingleJob(
         treeshake: composeFunctionTreeshakeOptions([
           createLogLevelTreeshakeOptions(bundleLogLevel),
         ]),
-        logLevel: "silent",
+        ...bundleLog.options,
       } as rolldown.BuildOptions);
+      bundleLog.assertAllResolved();
 
       return result.output[0].code;
     },

@@ -10,7 +10,10 @@ import {
 } from "#/cli/shared/trigger-context";
 import { findAllJobs } from "./job-detector";
 import { transformWorkflowSource } from "./source-transformer";
-import { transformFunctionTriggers as transformFunctionTriggersWithContext } from "./trigger-transformer";
+import {
+  createTriggerTransformPlugin,
+  transformFunctionTriggers as transformFunctionTriggersWithContext,
+} from "./trigger-transformer";
 import { findAllWorkflows } from "./workflow-detector";
 
 function parseProgram(source: string) {
@@ -1253,5 +1256,26 @@ unknown.trigger(fetchCustomer.trigger({ customerId: "123" }));
       );
       expect(result).toContain("unknown.trigger(");
     });
+  });
+});
+
+describe("AST Transformer - createTriggerTransformPlugin", () => {
+  test("returns undefined when the trigger context has no workflow bindings", () => {
+    expect(createTriggerTransformPlugin({ modules: new Map() })).toBeUndefined();
+  });
+
+  test("returns undefined when no trigger context is provided", () => {
+    expect(createTriggerTransformPlugin(undefined)).toBeUndefined();
+  });
+
+  test("returns a plugin when the trigger context has workflow bindings", () => {
+    const modules = new Map([
+      [
+        normalizeFilePath(path.resolve("test.ts")),
+        { localBindings: new Map(), exports: new Map() } satisfies TriggerModuleBindings,
+      ],
+    ]);
+
+    expect(createTriggerTransformPlugin({ modules })).toBeDefined();
   });
 });
