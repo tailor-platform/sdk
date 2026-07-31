@@ -13,7 +13,10 @@ import {
   type RelatedFunctionRegistryChanges,
 } from "./grouped-display";
 import {
+  addDependencyRecords,
   buildMetaRequest,
+  type DependentAppsByResource,
+  eventSourceKey,
   hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
@@ -361,6 +364,10 @@ export type WorkflowEventPublishing = {
   jobExecution?: WorkflowEventSubscribers;
   /** `publishEvents` declared on jobs, keyed by job name. */
   jobPublishEvents?: ReadonlyMap<string, boolean>;
+  /** Dependents the run resolved, keyed by resource. */
+  dependentApps?: DependentAppsByResource;
+  /** Stable ids of every application taking part in the run. */
+  runAppIds?: ReadonlySet<string>;
 };
 
 const NO_EVENT_SUBSCRIBERS: WorkflowEventSubscribers = {
@@ -469,6 +476,7 @@ export async function planWorkflow(
   const retainedWorkflowJobNames = new Set<string>();
 
   const executionSubscribers = eventPublishing.execution ?? NO_EVENT_SUBSCRIBERS;
+  const { dependentApps, runAppIds } = eventPublishing;
   const existingJobFunctions = await fetchExistingJobFunctions(client, workspaceId);
   const jobFunctionPublishEvents = resolveJobPublishEvents({
     workflows,
@@ -497,11 +505,20 @@ export async function planWorkflow(
 
   for (const workflow of Object.values(workflows)) {
     const existing = existingWorkflows[workflow.name];
-    const metaRequest = await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "workflow", workflow.name),
-      appName,
-      appId,
-    });
+    const metaRequest = addDependencyRecords(
+      await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "workflow", workflow.name),
+        appName,
+        appId,
+      }),
+      {
+        key: eventSourceKey.workflow(workflow.name),
+        existingLabels: existing?.allLabels,
+        dependentApps,
+        runAppIds,
+        pinned: workflow.publishEvents !== undefined,
+      },
+    );
     // Get jobs used by this workflow from mainJobDeps
     const usedJobNames = mainJobDeps[workflow.mainJob.name];
     if (!usedJobNames) {

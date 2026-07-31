@@ -532,7 +532,13 @@ describe("formatResolverChangeEntries", () => {
     const entries = formatResolverChangeEntries(
       {
         creates: [],
-        updates: [{ name: "add", request: { workspaceId: "ws", namespaceName: "my-resolver" } }],
+        updates: [
+          {
+            name: "add",
+            request: { workspaceId: "ws", namespaceName: "my-resolver" },
+            metaRequest: { trn: "trn:x" },
+          },
+        ],
         deletes: [],
         replaces: [],
       },
@@ -607,6 +613,7 @@ describe("applyPipeline phase separation", () => {
               request: { workspaceId: "test-workspace", namespaceName: "test-pipeline" },
             },
           ],
+          unchanged: [],
           title: "Pipeline Services",
           isEmpty: () => false,
           lines: () => [],
@@ -624,6 +631,7 @@ describe("applyPipeline phase separation", () => {
               },
             },
           ],
+          unchanged: [],
           title: "Pipeline Resolvers",
           isEmpty: () => false,
           lines: () => [],

@@ -1,7 +1,7 @@
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
-import type { DeployDependencyReason } from "./label";
+import type { DependentAppsByResource } from "./label";
 import type { ApplyPhase } from "./phase";
 
 export type { ApplyPhase };
@@ -38,7 +38,11 @@ export interface PlanContext {
   runAppIds?: ReadonlySet<string>;
   /**
    * Applications that have to take part in the same deploy for this config's
-   * resources to be applied the same way, keyed by application id.
+   * resources to be applied the same way, keyed by resource.
+   *
+   * A planner looks up the resource it is applying and folds the result into that
+   * resource's own labels, so a record lives on the thing whose `publishEvents`
+   * is at stake rather than on the application.
    */
-  dependentApps?: ReadonlyMap<string, DeployDependencyReason>;
+  dependentApps?: DependentAppsByResource;
 }

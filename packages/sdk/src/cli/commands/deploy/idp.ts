@@ -30,7 +30,10 @@ import { assertDefined } from "#/utils/assert";
 import { createChangeSet } from "./change-set";
 import { areNormalizedEqual } from "./compare";
 import {
+  addDependencyRecords,
   buildMetaRequest,
+  type DependentAppsByResource,
+  eventSourceKey,
   hasMatchingSdkVersion,
   type MetadataLabelWrite,
   resourceTrn,
@@ -216,6 +219,8 @@ export async function planIdP(context: PlanContext) {
     forRemoval,
     forceApplyAll = false,
     idpUserTriggerTargets,
+    dependentApps,
+    runAppIds,
   } = context;
   const idps = forRemoval ? [] : application.idpServices;
   const expectedLocalWebsites = expectedLocalStaticWebsiteNames(context);
@@ -232,6 +237,7 @@ export async function planIdP(context: PlanContext) {
     idps,
     idpUserTriggerTargets ?? new Set<string>(),
     expectedLocalWebsites,
+    { dependentApps, runAppIds },
   );
   const deletedServices = serviceChangeSet.deletes.map((del) => del.name);
   const clientChangeSet = await planClients(
@@ -412,6 +418,10 @@ async function planServices(
   idps: ReadonlyArray<IdP>,
   idpUserTriggerTargets: ReadonlySet<string>,
   expectedLocalWebsites: ReadonlySet<string>,
+  records: {
+    dependentApps: DependentAppsByResource | undefined;
+    runAppIds: ReadonlySet<string> | undefined;
+  },
 ) {
   const changeSet = createChangeSet<CreateService, UpdateService, DeleteService>("IdP services");
   const conflicts: OwnerConflict[] = [];
@@ -435,11 +445,20 @@ async function planServices(
   for (const idp of idps) {
     const namespaceName = idp.name;
     const existing = existingServices[namespaceName];
-    const metaRequest = await buildMetaRequest({
-      trn: resourceTrn(workspaceId, "idp", namespaceName),
-      appName,
-      appId,
-    });
+    const metaRequest = addDependencyRecords(
+      await buildMetaRequest({
+        trn: resourceTrn(workspaceId, "idp", namespaceName),
+        appName,
+        appId,
+      }),
+      {
+        key: eventSourceKey.idp(namespaceName),
+        existingLabels: existing?.allLabels,
+        dependentApps: records.dependentApps,
+        runAppIds: records.runAppIds,
+        pinned: idp.publishEvents !== undefined,
+      },
+    );
     let authorization: string | undefined;
     switch (idp.authorization) {
       case "insecure":

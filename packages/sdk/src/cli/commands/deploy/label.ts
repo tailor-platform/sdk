@@ -53,6 +53,52 @@ export function resourceTrn(workspaceId: string, kind: ResourceKind, name: strin
   return `${trnPrefix(workspaceId)}:${kind}:${name}`;
 }
 
+/**
+ * Build the TRN for a resource nested inside another.
+ *
+ * The platform reads everything after the workspace id as alternating key/value
+ * pairs and matches the pair list against one resource type, so a nested
+ * resource is the parent's pair followed by its own. A TailorDB type is
+ * `tailordb:<namespace>:type:<name>`, distinct from the namespace's own
+ * `tailordb:<namespace>`.
+ * @param workspaceId - Workspace ID
+ * @param parent - Parent kind and name, e.g. the namespace holding the resource
+ * @param child - Nested key and name, e.g. `["type", "Order"]`
+ * @returns Fully-qualified TRN string
+ */
+function nestedResourceTrn(
+  workspaceId: string,
+  parent: readonly [ResourceKind, string],
+  child: readonly [NestedResourceKey, string],
+): string {
+  return `${trnPrefix(workspaceId)}:${parent[0]}:${parent[1]}:${child[0]}:${child[1]}`;
+}
+
+/** Key naming a resource nested inside a namespace in a TRN. */
+type NestedResourceKey = "type" | "resolver";
+
+/**
+ * Build the TRN for one TailorDB type.
+ * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace holding the type
+ * @param typeName - Type name
+ * @returns Fully-qualified TRN string
+ */
+export function tailorDBTypeTrn(workspaceId: string, namespace: string, typeName: string): string {
+  return nestedResourceTrn(workspaceId, ["tailordb", namespace], ["type", typeName]);
+}
+
+/**
+ * Build the TRN for one resolver.
+ * @param workspaceId - Workspace ID
+ * @param namespace - Resolver namespace holding the resolver
+ * @param resolverName - Resolver name
+ * @returns Fully-qualified TRN string
+ */
+export function resolverTrn(workspaceId: string, namespace: string, resolverName: string): string {
+  return nestedResourceTrn(workspaceId, ["pipeline", namespace], ["resolver", resolverName]);
+}
+
 export const sdkNameLabelKey = "sdk-name";
 export const sdkVersionLabelKey = "sdk-version";
 export const sdkAppIdLabelKey = "sdk-app-id";
@@ -157,14 +203,44 @@ export function recordedDependencies(
     });
 }
 
+/**
+ * Key one event-publishing resource for the dependency records.
+ *
+ * Planners rebuild the same string from the resource they are applying, so the
+ * shape is the TRN's tail rather than anything new to keep in step.
+ */
+export const eventSourceKey = {
+  tailorDBType: (namespace: string, typeName: string) => `tailordb:${namespace}:type:${typeName}`,
+  resolver: (namespace: string, resolverName: string) =>
+    `pipeline:${namespace}:resolver:${resolverName}`,
+  idp: (name: string) => `idp:${name}`,
+  // A workflowJobExecution trigger names a workflow too, and which jobs it runs is
+  // only known once bundled, so both workflow triggers record on the workflow.
+  workflow: (name: string) => `workflow:${name}`,
+} as const;
+
+/**
+ * Dependent application ids and reasons, keyed by the resource that carries them.
+ * The key is the TRN's tail, e.g. `tailordb:db:type:Order` or `workflow:nightly`.
+ */
+export type DependentAppsByResource = ReadonlyMap<
+  string,
+  ReadonlyMap<string, DeployDependencyReason>
+>;
+
 /** Inputs deciding which dependency records a deploy writes and drops. */
 export type DependencyLabelParams = {
-  /** Labels currently stored on the application. */
+  /** Labels currently stored on the resource. */
   existingLabels: Record<string, string> | undefined;
-  /** Applications this run found depending on the one being planned. */
+  /** Applications this run found depending on the resource being planned. */
   dependentApps: ReadonlyMap<string, DeployDependencyReason> | undefined;
   /** Stable ids of every application taking part in the run. */
   runAppIds: ReadonlySet<string> | undefined;
+  /**
+   * Whether the resource declares `publishEvents`. A declared value is not
+   * recomputed, so no absent config can change it.
+   */
+  pinned: boolean;
 };
 
 /**
@@ -173,16 +249,29 @@ export type DependencyLabelParams = {
  * A record for an application outside the run appears in neither list, so
  * {@link writeMetadataLabels} keeps it: it was written when both took part, and
  * dropping it would lose the only signal that this partial deploy is about to
- * change how the config's resources are applied. A record for an application
- * that does take part is rewritten or dropped, so a dependency that no longer
- * exists disappears on the next deploy including both.
+ * change how the resource is applied. A record for an application that does take
+ * part is rewritten or dropped, so a dependency that no longer exists disappears
+ * on the next deploy including both.
+ *
+ * A resource that declares `publishEvents` drops every record instead. Nothing
+ * about it depends on which configs the run covers, so a record could only
+ * produce a prompt about a change that cannot happen — and one the owner could
+ * never clear on its own, since clearing needs the dependent to take part.
  * @param params - Existing labels and the run's dependency inputs
  * @returns Labels to set and label keys to delete
  */
 export function dependencyLabelWrite(
   params: DependencyLabelParams,
 ): Required<Pick<MetadataLabelWrite, "labels" | "remove">> {
-  const { existingLabels, dependentApps, runAppIds } = params;
+  const { existingLabels, dependentApps, runAppIds, pinned } = params;
+  if (pinned) {
+    return {
+      labels: {},
+      remove: recordedDependencies(existingLabels).flatMap(
+        ({ appId }) => dependedByAppLabelKey(appId) ?? [],
+      ),
+    };
+  }
   const dependents = dependentApps ?? new Map<string, DeployDependencyReason>();
   const inRun = runAppIds ?? new Set<string>();
 
@@ -193,7 +282,7 @@ export function dependencyLabelWrite(
       throw new Error(
         `Application id "${appId}" cannot be recorded as a dependency of this deploy. ` +
           `Ids are written by deploy as lowercase UUIDs; restore the generated value in the ` +
-          `config's "id", or set publishEvents explicitly on the resources it subscribes to.`,
+          `config's "id".`,
       );
     }
     labels[key] = reason;
@@ -249,6 +338,46 @@ export async function buildMetaRequest(
     },
     remove: appId ? undefined : [sdkAppIdLabelKey],
   };
+}
+
+/** What a planner knows about the resource it is recording dependencies for. */
+export type ResourceDependencyParams = {
+  /** Key identifying the resource, e.g. `workflow:nightly`. */
+  key: string;
+  /** Labels currently stored on the resource. */
+  existingLabels: Record<string, string> | undefined;
+  /** Dependents the run resolved, keyed by resource. */
+  dependentApps: DependentAppsByResource | undefined;
+  /** Stable ids of every application taking part in the run. */
+  runAppIds: ReadonlySet<string> | undefined;
+  /** Whether the resource declares `publishEvents`. */
+  pinned: boolean;
+};
+
+/**
+ * Fold a resource's dependency records into the write already planned for it.
+ *
+ * Adds to `labels` and `remove` rather than replacing them, so whatever
+ * {@link buildMetaRequest} asked for — dropping a stale `sdk-app-id`, for
+ * instance — still happens.
+ * @param write - The resource's planned metadata write, mutated in place
+ * @param params - The resource's key, current labels, and the run's inputs
+ * @returns The same write, for use as an expression
+ */
+export function addDependencyRecords(
+  write: MetadataLabelWrite,
+  params: ResourceDependencyParams,
+): MetadataLabelWrite {
+  const { key, existingLabels, dependentApps, runAppIds, pinned } = params;
+  const records = dependencyLabelWrite({
+    existingLabels,
+    dependentApps: dependentApps?.get(key),
+    runAppIds,
+    pinned,
+  });
+  write.labels = { ...write.labels, ...records.labels };
+  write.remove = [...(write.remove ?? []), ...records.remove];
+  return write;
 }
 
 /**
