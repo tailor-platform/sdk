@@ -1563,6 +1563,107 @@ describe("snapshot", () => {
       expect(loaded.changes.length).toBe(1);
     });
 
+    test("derives warnings from removal changes in a legacy diff.json", () => {
+      // Legacy diff.json written before warning-tier support: removals are
+      // recorded in changes but the warnings field does not exist yet.
+      const legacyDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_removed",
+            typeName: "User",
+            fieldName: "legacyCode",
+            before: { type: "string" },
+          },
+          {
+            kind: "type_removed",
+            typeName: "OldType",
+            before: { name: "OldType", pluralForm: "OldTypes", fields: {} },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        requiresMigrationScript: false,
+      };
+
+      const filePath = path.join(testDir, "legacy_removal_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.hasWarnings).toBe(true);
+      expect(loaded.warnings).toEqual([
+        {
+          typeName: "User",
+          fieldName: "legacyCode",
+          reason: "Field removed (existing data will be dropped in the post-migration phase)",
+        },
+        {
+          typeName: "OldType",
+          reason:
+            "Type removed (all records of this type will be dropped in the post-migration phase)",
+        },
+      ]);
+    });
+
+    test("does not derive a warning for a removal already recorded as breaking", () => {
+      const legacyDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_removed",
+            typeName: "User",
+            fieldName: "legacyCode",
+            before: { type: "string" },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ typeName: "User", fieldName: "legacyCode", reason: "Field removed" }],
+        requiresMigrationScript: true,
+      };
+
+      const filePath = path.join(testDir, "legacy_breaking_removal_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.hasWarnings).toBe(false);
+      expect(loaded.warnings).toEqual([]);
+    });
+
+    test("keeps a recorded empty warnings array authoritative over changes", () => {
+      const diff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_removed",
+            typeName: "User",
+            fieldName: "legacyCode",
+            before: { type: "string" },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: false,
+      };
+
+      const filePath = path.join(testDir, "recorded_empty_warnings_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(diff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.hasWarnings).toBe(false);
+      expect(loaded.warnings).toEqual([]);
+    });
+
     test("derives hasWarnings from warnings array regardless of stored flag", () => {
       // A hand-edited diff.json could end up with mismatched warnings and
       // hasWarnings; the loader must reconcile to the array.
