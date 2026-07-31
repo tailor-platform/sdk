@@ -248,9 +248,16 @@ node seed/exec.mjs -m admin
 
 # With other options
 node seed/exec.mjs -m admin --truncate --yes
+
+# Update rows that already exist instead of failing on duplicate ids
+node seed/exec.mjs --upsert
 ```
 
 The `--machine-user` option is required at runtime if `machineUserName` is not configured in the generator options.
+
+Without `--upsert`, a row whose id already exists fails the whole batch for that type, so nothing is written. With `--upsert`, every TailorDB row must include an `id`; rows with new ids are inserted and rows with existing ids are updated. Optional fields absent from an existing row keep their stored values, while required fields must still be present. Built-In IdP users are looked up by name, so new users are created and existing users are updated.
+
+The machine user selected for `--upsert` needs read permission for every seeded TailorDB type. Existing ids are detected with a read query, so a row hidden by read permissions is treated as new and its insert fails as a duplicate.
 
 The generated files are compatible with gql-ingest for bulk data import.
 
