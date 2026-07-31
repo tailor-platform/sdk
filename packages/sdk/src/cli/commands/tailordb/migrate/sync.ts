@@ -8,7 +8,6 @@ import { logBetaWarning } from "#/cli/shared/beta";
 import {
   fetchAll,
   fetchAllTolerant,
-  getOrNull,
   initOperatorClient,
   type OperatorClient,
 } from "#/cli/shared/client";
@@ -19,17 +18,21 @@ import { logger, styles } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { PluginManager } from "#/plugin/manager";
-import { assertDefined } from "#/utils/assert";
-import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
+import {
+  getNamespacesWithMigrations,
+  selectTargetNamespace,
+  type NamespaceWithMigrations,
+} from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { parseMigrationNumberArg } from "./migration-number";
+import { fetchRemoteMigrationNumber } from "./remote-state";
 import {
+  assertMigrationNumberExists,
   assertValidMigrationFiles,
   compareLocalTypesWithSnapshot,
   createSnapshotFromLocalTypes,
   formatMigrationNumber,
   reconstructSnapshotFromMigrations,
-  getLatestMigrationNumber,
 } from "./snapshot";
 import {
   compareSnapshotWithRemote,
@@ -40,8 +43,7 @@ import {
 import {
   handleOptionalToRequiredError,
   MIGRATION_LABEL_KEY,
-  MIGRATION_LABEL_PREFIX,
-  parseMigrationLabelNumber,
+  sanitizeMigrationLabel,
 } from "./types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
@@ -208,62 +210,6 @@ async function assertMigrationsReproduceLocalTypes(
   );
 }
 
-interface RemoteMigrationState {
-  /** Labels currently stored on the namespace metadata (empty when none exist) */
-  labels: Record<string, string>;
-  /** Current migration number parsed from the label, or null when unset/unparseable */
-  current: number | null;
-}
-
-/**
- * Fetch the namespace's metadata labels and current migration number.
- *
- * Only GetMetadata NotFound is treated as "metadata does not exist yet".
- * Any other failure aborts the sync (which has not mutated anything at this
- * point): the fetched labels are written back verbatim at the end, so
- * proceeding with empty labels after a transient error would wipe the
- * namespace's existing metadata.
- * @param client - Operator client
- * @param trn - Namespace TRN
- * @returns Existing labels and the parsed current migration number
- */
-async function fetchRemoteMigrationState(
-  client: OperatorClient,
-  trn: string,
-): Promise<RemoteMigrationState> {
-  const metadata = await getOrNull(async () => {
-    const { metadata } = await client.getMetadata({ trn });
-    return metadata;
-  });
-  const labels = metadata?.labels ?? {};
-  const label = labels[MIGRATION_LABEL_KEY];
-  return { labels, current: label ? parseMigrationLabelNumber(label) : null };
-}
-
-function selectTargetNamespace(
-  namespacesWithMigrations: NamespaceWithMigrations[],
-  requested: string | undefined,
-): NamespaceWithMigrations {
-  if (namespacesWithMigrations.length === 0) {
-    throw new Error("No TailorDB services with migrations configuration found");
-  }
-  if (requested) {
-    const found = namespacesWithMigrations.find((ns) => ns.namespace === requested);
-    if (!found) {
-      throw new Error(`Namespace "${requested}" not found or does not have migrations configured`);
-    }
-    return found;
-  }
-  if (namespacesWithMigrations.length > 1) {
-    throw new Error(
-      `Multiple TailorDB services found. Please specify namespace with --namespace flag: ${namespacesWithMigrations
-        .map((ns) => ns.namespace)
-        .join(", ")}`,
-    );
-  }
-  return assertDefined(namespacesWithMigrations[0], "namespace with migrations missing");
-}
-
 /**
  * Sync remote TailorDB schema to a specific migration snapshot.
  *
@@ -292,12 +238,7 @@ async function sync(options: SyncOptions): Promise<void> {
 
   assertValidMigrationFiles(target.migrationsDir, target.namespace);
 
-  const latest = getLatestMigrationNumber(target.migrationsDir);
-  if (targetVersion > latest) {
-    throw new Error(
-      `Migration ${formatMigrationNumber(targetVersion)} does not exist in working tree (latest is ${formatMigrationNumber(latest)}).`,
-    );
-  }
+  const latest = assertMigrationNumberExists(target.migrationsDir, targetVersion);
 
   const snapshot = reconstructSnapshotFromMigrations(target.migrationsDir, targetVersion);
   if (!snapshot) {
@@ -318,7 +259,7 @@ async function sync(options: SyncOptions): Promise<void> {
   });
 
   const trn = resourceTrn(workspaceId, "tailordb", target.namespace);
-  const remoteState = await fetchRemoteMigrationState(client, trn);
+  const current = await fetchRemoteMigrationNumber(client, trn);
   const remoteTypes = await fetchRemoteTypes(client, workspaceId, target.namespace);
   const existingTypeNames = new Set(remoteTypes.map((t) => t.name));
   const { creates, updates, deletes } = compareSnapshotWithRemote(snapshot, existingTypeNames);
@@ -344,7 +285,6 @@ async function sync(options: SyncOptions): Promise<void> {
     (p) => !desiredGqlPermissionTypes.has(p.typeName),
   );
 
-  const current = remoteState.current;
   logger.newline();
   logger.info(`Namespace: ${styles.bold(target.namespace)}`);
   logger.log(
@@ -483,7 +423,7 @@ async function sync(options: SyncOptions): Promise<void> {
   await writeMetadataLabels(client, {
     trn,
     labels: {
-      [MIGRATION_LABEL_KEY]: `${MIGRATION_LABEL_PREFIX}${formatMigrationNumber(targetVersion)}`,
+      [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(targetVersion),
     },
   });
 
