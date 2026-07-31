@@ -9,6 +9,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { statusCommand } from "./status";
+import { writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
 
 const state = vi.hoisted(() => ({
   migrationsDir: "",
@@ -29,34 +30,13 @@ vi.mock("#/cli/shared/client", async (importOriginal) => ({
   initOperatorClient: vi.fn(),
 }));
 
-function writeDiff(number: number, description: string): void {
-  const dir = path.join(state.migrationsDir, number.toString().padStart(4, "0"));
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(
-    path.join(dir, "diff.json"),
-    JSON.stringify({
-      version: 1,
-      namespace: "tailordb",
-      createdAt: new Date().toISOString(),
-      description,
-      changes: [],
-      hasBreakingChanges: false,
-      breakingChanges: [],
-      hasWarnings: false,
-      warnings: [],
-      requiresMigrationScript: false,
-    }),
-  );
-}
-
 describe("tailordb migration status --json", () => {
   aroundEach(async (runTest) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-status-json-test-"));
     state.migrationsDir = path.join(tmpDir, "migrations");
-    fs.mkdirSync(path.join(state.migrationsDir, "0000"), { recursive: true });
-    fs.writeFileSync(path.join(state.migrationsDir, "0000", "schema.json"), "{}");
-    writeDiff(1, "Add users");
-    writeDiff(2, "Add orders");
+    writeInitialSchema(state.migrationsDir, {});
+    writeDiff(state.migrationsDir, 1, [], { description: "Add users" });
+    writeDiff(state.migrationsDir, 2, [], { description: "Add orders" });
 
     vi.mocked(loadConfig).mockResolvedValue({
       config: {
