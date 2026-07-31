@@ -1036,6 +1036,16 @@ export const allCodemods: CodemodPackage[] = [
     ].join("\n"),
   },
   {
+    id: "v2/publish-events-recomputed-per-deploy",
+    name: "publishEvents recomputed from the executors in each deploy",
+    description:
+      "An unset `publishEvents` is recomputed on every `deploy` from the executors taking part in the run, in both directions: adding a subscribing trigger turns publishing on, and removing the last one turns it back off. Previously a workflow or job kept publishing once it had been enabled, so a workflow whose subscribing trigger is already gone stops publishing on the next `deploy` — declare `publishEvents: true` on it if something outside this project consumes those events. `deploy` also stops instead of applying when a subscription cannot be satisfied: when a trigger names a resource no config in the run declares, when a workflow or job combines `publishEvents: false` with a subscribing trigger, and when a config that resolves without an `id` subscribes across configs. Each of those errors names the resource and both ways to resolve it.",
+    since: "1.0.0",
+    until: "2.0.0",
+    prereleaseUntil: V2_NEXT_PENDING,
+    notice: true,
+  },
+  {
     id: "v2/cli-token-keyring-storage",
     name: "CLI tokens stored in the OS keyring",
     description:
