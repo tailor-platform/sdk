@@ -67,6 +67,8 @@ describe("planWorkflow", () => {
       label?: string;
       resource?: Record<string, unknown>;
       sdkVersion?: string;
+      /** Extra labels the workflow's own TRN answers with. */
+      extraLabels?: Record<string, string>;
     }>,
     jobFunctionLabels?: Record<string, MockJobFunction>,
   ): OperatorClient {
@@ -120,12 +122,15 @@ describe("planWorkflow", () => {
         const workflow = existingWorkflows.find((w) => w.name === name);
         return {
           metadata: {
-            labels: workflow?.label
-              ? {
-                  [sdkNameLabelKey]: workflow.label,
-                  "sdk-version": workflow.sdkVersion ?? "v1-0-0",
-                }
-              : {},
+            labels: {
+              ...(workflow?.label
+                ? {
+                    [sdkNameLabelKey]: workflow.label,
+                    "sdk-version": workflow.sdkVersion ?? "v1-0-0",
+                  }
+                : {}),
+              ...workflow?.extraLabels,
+            },
           },
         };
       }),
@@ -1092,6 +1097,60 @@ describe("planWorkflow", () => {
         'Skipped deleting workflow job function "job-a" because it is still referenced.',
       );
       warn.mockRestore();
+    });
+  });
+
+  describe("dependency records and job-level publishing", () => {
+    const dependent = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
+    const dependentKey = `sdk-depended-by-app-${dependent}`;
+
+    /**
+     * Plan one workflow carrying a record, with the jobs it runs declaring
+     * `publishEvents` or not.
+     * @param jobPublishEvents - Explicit job values, keyed by job name
+     * @returns The workflow's planned metadata write
+     */
+    async function planWith(jobPublishEvents: ReadonlyMap<string, boolean>) {
+      const workflow = { ...createMockWorkflow("orders", "main-job"), publishEvents: true };
+      const client = createMockClient([
+        { id: "wf-1", name: "orders", extraLabels: { [dependentKey]: "publish-events" } },
+      ]);
+      const result = await planWorkflow(
+        client,
+        workspaceId,
+        appName,
+        undefined,
+        { orders: workflow },
+        { "main-job": ["main-job", "child-job"] },
+        new Set(),
+        {
+          jobPublishEvents,
+          dependentApps: new Map(),
+          runAppIds: new Set<string>(),
+        },
+      );
+      const [entry] = [...result.changeSet.updates, ...result.changeSet.unchanged];
+      return entry?.metaRequest;
+    }
+
+    test("keeps the record while a job it runs leaves publishEvents unset", async () => {
+      // fetchMissingDependentApps reads this workflow precisely because a job of it
+      // is still recomputed, so dropping the record here would leave it with nothing
+      // to find and the confirmation would never fire for job-level changes.
+      const write = await planWith(new Map([["main-job", true]]));
+
+      expect(write?.remove ?? []).not.toContain(dependentKey);
+    });
+
+    test("drops the record once the workflow and all its jobs declare the value", async () => {
+      const write = await planWith(
+        new Map([
+          ["main-job", true],
+          ["child-job", true],
+        ]),
+      );
+
+      expect(write?.remove ?? []).toContain(dependentKey);
     });
   });
 });
