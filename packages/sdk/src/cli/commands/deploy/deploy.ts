@@ -252,6 +252,24 @@ export function collectEventSubscriptions(
 }
 
 /**
+ * Key the resources this run subscribes to among the target's own.
+ *
+ * A resource with a subscriber in the run resolves to `true` from that subscriber
+ * alone, so no absent config can change it.
+ * @param subscriptions - Subscriptions resolved across the run
+ * @param owner - Deployment target being planned
+ * @returns Resource keys the run subscribes to
+ */
+function subscribedResourceKeys(
+  subscriptions: ReadonlyArray<EventSubscription>,
+  owner: BuiltDeploymentTarget,
+): ReadonlySet<string> {
+  return new Set(
+    ownedSubscriptions(subscriptions, owner).flatMap((subscription) => subscription.key ?? []),
+  );
+}
+
+/**
  * Select the subscriptions pointing at resources the given target declares.
  * @param subscriptions - Subscriptions resolved across the run
  * @param owner - Deployment target being planned
@@ -2556,6 +2574,7 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
             workspaceId,
             application: target.application,
             runAppIds: runInputs.runAppIds ?? new Set<string>(),
+            subscribedKeys: subscribedResourceKeys(runInputs.eventSubscriptions, target),
           }),
         ),
       )

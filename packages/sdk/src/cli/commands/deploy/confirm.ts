@@ -274,18 +274,19 @@ export async function confirmMissingDependentApps(
 ): Promise<void> {
   if (missing.length === 0) return;
 
-  logger.warn("Configs recorded as depending on this deploy are missing:");
+  logger.warn("Applications recorded as depending on this deploy are missing:");
   for (const entry of missing) {
     logger.log(
       `    • application id ${styles.info(entry.appId)} depends on ${styles.bold(entry.resource)} (${entry.reason})`,
     );
   }
   logger.newline();
-  logger.log("  Applying without them turns off event publishing they enabled.");
-  logger.log("  To keep it, add their configs to --config, or set publishEvents explicitly.");
+  logger.log("  Applying without them turns off event publishing on the resources above:");
+  logger.log("  nothing in this deploy subscribes to them, so the value resolves to false.");
+  logger.log("  To keep it, add their configs to --config, or declare publishEvents there.");
 
   if (yes) {
-    logger.warn("Continuing without them (--yes flag specified); event publishing may turn off.");
+    logger.warn("Continuing without them (--yes flag specified); event publishing turns off.");
     return;
   }
 
