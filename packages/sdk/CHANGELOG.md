@@ -1,5 +1,112 @@
 # @tailor-platform/sdk
 
+## 2.0.0-next.11
+
+### Major Changes
+
+- [#1915](https://github.com/tailor-platform/sdk/pull/1915) [`dc691ec`](https://github.com/tailor-platform/sdk/commit/dc691ec1e2181400c6715233f0588a1b5150038f) Thanks [@toiroakr](https://github.com/toiroakr)! - Generate the `Env` interface in `tailor.d.ts` from the type of each `defineConfig({ env })` value instead of the value itself. The resolved value used to be written in as a literal type, so running `generate` or `deploy` with real environment variables loaded stamped those values into a file that is normally committed.
+  
+  ```diff
+   interface Env {
+  -  API_BASE: "https://api.example.com";
+  -  RETRIES: 3;
+  -  VERBOSE: true;
+  +  API_BASE: string;
+  +  RETRIES: number;
+  +  VERBOSE: boolean;
+   }
+  ```
+  
+  `env` keys that aren't valid TypeScript identifiers (for example `"API-BASE"`) are now quoted as well; previously they were emitted bare and produced a `tailor.d.ts` that failed to parse.
+  
+  Run `tailor generate` after upgrading to refresh the file. Code that relied on the literal narrowing — comparing `env.STAGE` against a literal union, for example — has to widen its own types or read the value through a local narrowing check. If a `tailor.d.ts` you already committed contains a sensitive value, treat that value as exposed and rotate it; keep secrets in [Secret Manager](https://github.com/tailor-platform/sdk/blob/main/packages/sdk/docs/services/secret.md) rather than `env`.
+
+- [#1918](https://github.com/tailor-platform/sdk/pull/1918) [`470c2c0`](https://github.com/tailor-platform/sdk/commit/470c2c034645c6e72ba4c346f7a5ef6fe8bd5d68) Thanks [@toiroakr](https://github.com/toiroakr)! - Reject `defineConfig({ env })` values that look like credentials. `env` values are deployed as plaintext, so a token left there is readable by anyone who can read the application's configuration.
+  
+  ```
+  ✖ Secret detected in 'env' in /path/to/tailor.config.ts:
+    - env.SLACK_BOT_TOKEN (matched slack: SLACK_TOKEN)
+      https://github.com/secretlint/secretlint/blob/master/packages/%40secretlint/secretlint-rule-slack/README.md#SLACK_TOKEN
+  ```
+  
+  Each finding names the pattern that matched and links to its description.
+  
+  Detection recognizes the credential formats published by common providers, such as Slack, GitHub and AWS. Move such values to `defineSecretManager()`. A value that is only long and random-looking, with no recognizable provider format, is reported as a warning and does not fail the command.
+  
+  When the detection is wrong about a value, allow it where it is defined and state why it is safe to deploy as plaintext:
+  
+  ```ts
+  export default defineConfig({
+    name: "my-app",
+    env: {
+      slackRelayUrl: {
+        value: process.env.SLACK_RELAY_URL ?? "",
+        allowSecretReason: "Public relay endpoint; the token it proxies stays in Secret Manager.",
+      },
+    },
+  });
+  ```
+  
+  `env` entries therefore accept either a plain `string | number | boolean` or, for the string and number values detection can flag, `{ value, allowSecretReason }`. Application code is unaffected: it still reads `env.slackRelayUrl` as the value itself, and the reason never reaches the deployed application.
+
+- [#1926](https://github.com/tailor-platform/sdk/pull/1926) [`a7343a5`](https://github.com/tailor-platform/sdk/commit/a7343a5976ece5ae66febe713ae04e97dfd9bee5) Thanks [@toiroakr](https://github.com/toiroakr)! - Rename the `defineIdp` option `publishUserEvents` to `publishEvents`, so all four services that publish events use one field name. A codemod rewrites the option key on `defineIdp` calls, including aliased and namespace imports, and rewrites a shorthand `{ publishUserEvents }` to `{ publishEvents: publishUserEvents }` so it keeps reading the same local. Occurrences it cannot rewrite — an options object built outside the call, a computed key, or a type declaration of the option — are reported for manual migration.
+
+- [#1924](https://github.com/tailor-platform/sdk/pull/1924) [`aca3544`](https://github.com/tailor-platform/sdk/commit/aca35440085dc100fe06153fe4f0eeab5b200f72) Thanks [@toiroakr](https://github.com/toiroakr)! - Settle how `publishEvents` resolves across TailorDB types, resolvers, IdPs, and workflows.
+  
+  - An unset `publishEvents` is now recomputed on every `deploy` from the executors taking part in the run, in both directions: adding a subscribing trigger turns publishing on, and removing the last one turns it back off. Previously a workflow or job kept publishing forever once it had been enabled, with nothing in the config showing that state.
+  - An executor in another config enables publishing the same way, as long as both configs take part in the same `deploy`. `deploy` records that dependency on the subscribed resource, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — and fails outright in a non-interactive environment. Declaring `publishEvents` on the resource clears the record, since a declared value no longer depends on which configs are deployed together.
+  - Subscribing to a resource no config in the run declares now fails with an explanation instead of creating an executor whose events never arrive. This includes workflow subscriptions, which were not checked at all before.
+  - Subscribing across configs from a config that resolves without an `id` — one that re-exports `defineConfig()` from another file — fails on a run that applies changes. The record names the dependent config by that id, so without one the dependency cannot be recorded and the owning config's next solo deploy would turn publishing off unannounced.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`a4cdee0`](https://github.com/tailor-platform/sdk/commit/a4cdee079707105213f8e5833dcaa613f39c8464) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove the APIs that were marked `@deprecated` on the way to v2, so 2.0.0 ships without deprecated aliases. Each removal has migration coverage in `tailor upgrade`:
+  
+  - `@tailor-platform/sdk/cli` no longer re-exports `kyselyTypePlugin`, `enumConstantsPlugin`, `fileUtilsPlugin`, and `seedPlugin`. Import them from `@tailor-platform/sdk/plugin/kysely-type`, `/plugin/enum-constants`, `/plugin/file-utils`, and `/plugin/seed` (codemod `v2/plugin-cli-import`).
+  - `tailor.workflow.startJobFunction` and the `StartJobFunctionOptions` type are removed; use the canonical `execJobFunction` / `ExecJobFunctionOptions` (new codemod `v2/exec-job-function-rename`). `mockWorkflow()` no longer exposes the `startJobFunction` alias — assert on its `execJobFunction` mock instead — and `v2/workflow-trigger-rename` now rewrites `triggerJobFunction` straight to `execJobFunction`.
+  - `@tailor-platform/sdk/test` no longer exports the platform-global mocks `setupTailordbMock`, `setupWorkflowMock`, `setupWaitPointMock`, `setupInvokerMock`, and `setupTailorErrorsMock`, nor the bundled-output helper `createImportMain`. Use the `tailor-runtime` environment from `@tailor-platform/sdk/vitest` with `mockTailordb` / `mockWorkflow` (migration guidance: `v2/sdk-test-mocks-to-vitest`). `createTailorDBHook`, `createStandardSchema`, and `unauthenticatedTailorUser` are unchanged.
+  - The programmatic CLI functions no longer accept name-keyed options: `GetWorkflowOptions`, `StartWorkflowOptions`, `ListWorkflowExecutionsOptions`, `GetExecutorOptions`, `TriggerExecutorOptions`, `ListExecutorJobsOptions`, `GetExecutorJobOptions`, and `WatchExecutorJobOptions` are removed along with the overloads that took them. Pass the definition itself — `startWorkflow({ workflow: myWorkflow, invoker: "admin" })`, `watchExecutorJob({ executor: myExecutor, jobId })` — which also types `arg` and `payload` from the definition (migration guidance: `v2/cli-typed-options`). The name-keyed entry points remain available as CLI commands (`tailor workflow start <name>`, `tailor executor trigger <name>`).
+
+### Minor Changes
+
+- [#1910](https://github.com/tailor-platform/sdk/pull/1910) [`3153400`](https://github.com/tailor-platform/sdk/commit/3153400e27d8fefcdc6d7c0d0c5ab902f4bb73a3) Thanks [@dqn](https://github.com/dqn)! - Add an `--upsert` flag to `tailor seed apply`. Without it, seeding a workspace that already holds some of the rows fails the whole batch for that type on the first duplicate id and inserts nothing. With `--upsert`, every TailorDB row must include an `id` (and any field its type requires); rows with new ids are inserted, rows with existing ids are updated, and omitted optional fields keep their stored values. Built-In IdP users are created or updated by name, with separate counts for each result. Default behavior is unchanged.
+
+### Patch Changes
+
+- [#1932](https://github.com/tailor-platform/sdk/pull/1932) [`7ec64b3`](https://github.com/tailor-platform/sdk/commit/7ec64b30ddf8d2a4850a2da31e9afbe3b1502d1c) Thanks [@toiroakr](https://github.com/toiroakr)! - Tell you when a config resolves without an `id`, and stop the commands that need one from misreporting what they did.
+  
+  Which application owns a deployed resource is decided by the application id recorded on it. `deploy` writes an `id` into your config so this keeps working, but only into an inline `defineConfig({...})` call — a config that re-exports one from another file resolves without an id, and nothing said so. `remove` and a local `--dry-run` also run without one.
+  
+  - The recorded id is now cleared when the config has none, so ownership settles after one deploy. Previously it was left in place, so the next deploy again saw the resources as another application's and again asked to re-tag them; `--yes` silenced the prompt without settling anything, and CI failed outright because the prompt cannot be answered there.
+  - Commands that decide ownership now warn when the config resolved without an id, and say how to add one.
+  - That prompt no longer claims the id "was regenerated" when the config simply has none. It now says ownership falls back to the application name and asks whether to proceed on that basis.
+  - `remove` no longer reports that it removed everything when it skipped resources tagged with your application name that it could not prove it owns. It says what was left behind and why. Orphaned workflow job functions and the application itself are covered too.
+  - An application another config owns is no longer re-tagged without asking. It is now confirmed the same way as every other resource, and `deploy` writes the labels you agreed to — an auth connection whose configuration was otherwise unchanged used to keep its old id, so the same question came back every time.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`e1fd100`](https://github.com/tailor-platform/sdk/commit/e1fd100567da6c2903c1ad9697ecd4956b445cef) Thanks [@toiroakr](https://github.com/toiroakr)! - Skip caching a bundle instead of failing the build when a dependency file cannot be hashed for a reason other than being missing (e.g. a permission error). Bundle cache restoration already tolerated this; saving a new cache entry now does too.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`e1fd100`](https://github.com/tailor-platform/sdk/commit/e1fd100567da6c2903c1ad9697ecd4956b445cef) Thanks [@toiroakr](https://github.com/toiroakr)! - Document tsconfig `paths` alias support and the unresolved-import build failure in the Configuration guide.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`e1fd100`](https://github.com/tailor-platform/sdk/commit/e1fd100567da6c2903c1ad9697ecd4956b445cef) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix `deploy`/`generate` failing to bundle any resolver, executor, workflow job, auth hook, or HTTP adapter with "Could not resolve `node:async_hooks`". A workflow job's test-only invoker propagation is unreachable code once bundled for the Tailor Platform runtime, but still needed resolving before this fix.
+
+- [#1929](https://github.com/tailor-platform/sdk/pull/1929) [`493e0db`](https://github.com/tailor-platform/sdk/commit/493e0db4f89799a02cbd223b24e2928335eca1a7) Thanks [@toiroakr](https://github.com/toiroakr)! - Stop `deploy` and the migration commands from deleting metadata labels they do not manage.
+  
+  Writing labels replaces the whole label map on the platform, so every write the SDK made from labels it had read earlier deleted anything written in between — by another CLI invocation, the console, or a tool such as Terraform. Labels are now read again immediately before each write and the intended change is applied to what is found, so unrelated labels survive.
+  
+  A write that would leave the labels exactly as they are is skipped, so deploying an unchanged project no longer rewrites the label map of every resource it manages.
+  
+  Releasing ownership of a managed vault (`secret create` / `update` / `delete` on a vault declared in `defineSecretManager()`) now also drops the application id label, and keeps any label added since the check ran. Previously the id was left behind, so the vault stayed owned by the config: removing it from `defineSecretManager()` and deploying deleted the vault together with every secret in it, which is exactly what releasing ownership is supposed to prevent.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`b837eea`](https://github.com/tailor-platform/sdk/commit/b837eea64fd382c9fd87d422b49d4c0796cae6e9) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `status` discriminator field (`"ok"` | `"error"`) to `tailordb migration status --json` output rows
+
+- Fix `tailor seed apply --upsert` for the Built-In IdP `_User` entity: a seed row with no attributes beyond `name` is now counted as skipped instead of triggering a no-op update, no success line is printed when every `_User` row fails, and a lookup failure is no longer swallowed when the following create also fails (the error now reports both). Also documents that `--upsert` updates run through the same update path as any other write, so update hooks, validation, and `recordUpdatedTrigger` executors apply to updated rows.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`e1fd100`](https://github.com/tailor-platform/sdk/commit/e1fd100567da6c2903c1ad9697ecd4956b445cef) Thanks [@toiroakr](https://github.com/toiroakr)! - Share the tsconfig `paths` alias lookup cache across every resolver, executor, workflow job, auth hook, and HTTP adapter bundled in one command, instead of each bundle reading and parsing its ancestor tsconfigs from scratch. A project with many resolvers or executors bundles noticeably faster as a result.
+
+- [#1939](https://github.com/tailor-platform/sdk/pull/1939) [`80142c3`](https://github.com/tailor-platform/sdk/commit/80142c35cda8bc7aff539855c2d1df5b84db4c65) Thanks [@dqn](https://github.com/dqn)! - Fix `tailordb migration set` accepting invalid or out-of-range checkpoint numbers. Numbers above 9999 wrote a label the SDK later reads back as "no checkpoint", silently marking every migration as pending again; malformed input like `1abc` was truncated to its leading digits; and numbers beyond the latest local migration were accepted without validation. The command now uses the same strict argument parsing as `migration script`/`migration sync` and rejects numbers that do not exist in the local migration history (`0` remains valid as the baseline).
+  
+  Also, `tailordb migration status` and `migration set` no longer render metadata lookup failures (authentication, permission, or network errors) as "all migrations pending": only a not-yet-deployed namespace reads as checkpoint `0000`, and every other error propagates.
+
+- [#1808](https://github.com/tailor-platform/sdk/pull/1808) [`e1fd100`](https://github.com/tailor-platform/sdk/commit/e1fd100567da6c2903c1ad9697ecd4956b445cef) Thanks [@toiroakr](https://github.com/toiroakr)! - Apply the same import-rebasing guard to a bundler's inline virtual entry that the on-disk generated-entry resolver already used, so a specifier that cannot be rebased (a relative import, an absolute path, or another virtual module) falls through to normal resolution instead of failing the build.
+
 ## 2.0.0-next.10
 
 ### Minor Changes
