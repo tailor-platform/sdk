@@ -11,7 +11,7 @@ name: Lockfile Audit
 # scheduled lockfile-audit-fix workflow.
 on:
   push:
-    branches: [main, v2]
+    branches: [main]
     paths:
       - pnpm-lock.yaml
   pull_request:
