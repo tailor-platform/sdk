@@ -79,6 +79,7 @@ describe("tailordb migration set", () => {
     await runTest();
 
     vi.restoreAllMocks();
+    vi.mocked(prompt.confirm).mockReset();
     state.getMetadata.mockReset();
     state.setMetadata.mockReset();
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -176,14 +177,26 @@ describe("tailordb migration set", () => {
         },
       });
 
-    const result = await runCommand(setCommand, ["1", "--yes"]);
+    const result = await runCommand(setCommand, ["1"]);
 
     expect(result.success).toBe(true);
+    expect(prompt.confirm).toHaveBeenCalledTimes(1);
     expect(state.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
         labels: { "sdk-migration": "m0001", "sdk-name": "my-app", "added-later": "yes" },
       }),
     );
+  });
+
+  test("shows <unset> instead of 0000 when no checkpoint label exists", async () => {
+    state.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const result = await runCommand(setCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    const output = stderr.mock.calls.map((call) => String(call[0])).join("");
+    expect(output).toContain("Current migration: <unset>");
   });
 
   test("still sets the label when namespace metadata does not exist yet", async () => {
