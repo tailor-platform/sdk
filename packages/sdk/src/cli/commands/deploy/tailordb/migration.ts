@@ -23,6 +23,7 @@ import {
   type PendingMigration,
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
+  sanitizeMigrationLabel,
 } from "#/cli/commands/tailordb/migrate/types";
 import { isNotFoundError, type OperatorClient } from "#/cli/shared/client";
 import { logger, styles } from "#/cli/shared/logger";
@@ -253,7 +254,7 @@ export async function updateMigrationLabel(
 
   await writeMetadataLabels(client, {
     trn,
-    labels: { [MIGRATION_LABEL_KEY]: `m${formatMigrationNumber(migrationNumber)}` },
+    labels: { [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) },
   });
 }
 

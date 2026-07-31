@@ -19,7 +19,7 @@ import {
   assertValidMigrationFiles,
   formatMigrationNumber,
 } from "./snapshot";
-import { MIGRATION_LABEL_KEY, MIGRATION_LABEL_PREFIX } from "./types";
+import { MIGRATION_LABEL_KEY, sanitizeMigrationLabel } from "./types";
 
 export interface SetOptions {
   configPath?: string;
@@ -105,9 +105,7 @@ async function set(options: SetOptions): Promise<void> {
   // 9. Update migration label
   await writeMetadataLabels(client, {
     trn,
-    labels: {
-      [MIGRATION_LABEL_KEY]: `${MIGRATION_LABEL_PREFIX}${formatMigrationNumber(migrationNumber)}`,
-    },
+    labels: { [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) },
   });
 
   logger.success(
