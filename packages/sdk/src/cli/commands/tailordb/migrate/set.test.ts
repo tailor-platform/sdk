@@ -118,6 +118,19 @@ describe("tailordb migration set", () => {
     );
   });
 
+  test("accepts 0 even when no migrations directory exists", async () => {
+    fs.rmSync(state.migrationsDir, { recursive: true, force: true });
+
+    const result = await runCommand(setCommand, ["0", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.objectContaining({ "sdk-migration": "m0000" }),
+      }),
+    );
+  });
+
   test.each(["abc", "1abc", "00", "01"])(
     "rejects invalid migration number format %j",
     async (input) => {

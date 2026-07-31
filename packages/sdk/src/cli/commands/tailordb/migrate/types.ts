@@ -20,7 +20,7 @@ export const MAX_LABEL_LENGTH = 63;
 /**
  * Prefix added to migration numbers in labels (required because migration names start with numbers)
  */
-export const MIGRATION_LABEL_PREFIX = "m";
+const MIGRATION_LABEL_PREFIX = "m";
 
 /**
  * Label key for storing migration state in TailorDB Service metadata

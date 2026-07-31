@@ -6,9 +6,8 @@ import { MIGRATION_LABEL_KEY, parseMigrationLabelNumber } from "./types";
  *
  * Only a namespace that has not been deployed yet reads as "no current
  * migration". Every other lookup failure must propagate: treating it as
- * unset would misreport a transient error as "no checkpoint" — callers
- * would show every migration as pending, and one acting on that empty
- * state could overwrite the namespace's existing metadata.
+ * unset would misreport a transient error as "no checkpoint", showing
+ * every migration as pending to callers.
  * @param client - Operator client
  * @param trn - Namespace TRN
  * @returns Parsed current migration number, or null when unset or unparseable
