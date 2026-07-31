@@ -43,7 +43,7 @@ import {
 import {
   handleOptionalToRequiredError,
   MIGRATION_LABEL_KEY,
-  MIGRATION_LABEL_PREFIX,
+  sanitizeMigrationLabel,
 } from "./types";
 import type { TailorDBType as ProtoTailorDBType } from "@tailor-platform/tailor-proto/tailordb_resource_pb";
 
@@ -423,7 +423,7 @@ async function sync(options: SyncOptions): Promise<void> {
   await writeMetadataLabels(client, {
     trn,
     labels: {
-      [MIGRATION_LABEL_KEY]: `${MIGRATION_LABEL_PREFIX}${formatMigrationNumber(targetVersion)}`,
+      [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(targetVersion),
     },
   });
 
