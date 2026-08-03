@@ -7,8 +7,6 @@ on:
       - pnpm-workspace.yaml
       - .github/workflows/**
       - .github/scripts/renovate-policy-check.mjs
-      - .github/scripts/lockfile-audit-fix-normalize.mjs
-      - .github/scripts/lockfile-audit-fix-normalize.test.mjs
       - "**/package.json"
 
 concurrency:
@@ -31,6 +29,3 @@ jobs:
 
       - name: Run policy check
         run: node .github/scripts/renovate-policy-check.mjs
-
-      - name: Test lockfile normalize script
-        run: node --test .github/scripts/lockfile-audit-fix-normalize.test.mjs
