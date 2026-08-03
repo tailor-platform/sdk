@@ -2,8 +2,9 @@ name: Skip changeset check
 description: >-
   Decides whether an automated pnpm-lock.yaml change needs a changeset, by
   diffing importer `dependencies` (never `devDependencies`) between a
-  before/after snapshot. devDependencies-only bumps and
-  minimumReleaseAgeExclude pruning don't affect consumers.
+  before/after snapshot. devDependencies-only bumps and pnpm-workspace.yaml
+  policy-list pruning (minimumReleaseAgeExclude, orphaned overrides) don't
+  affect consumers.
 
 inputs:
   before-lockfile:
