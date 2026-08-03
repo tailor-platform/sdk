@@ -243,3 +243,62 @@ export async function confirmImportantResourceDeletion(
     `);
   }
 }
+
+/** An application recorded as needing to take part in this deploy, but absent. */
+export interface MissingDependentApp {
+  /**
+   * The resource whose value is applied differently without the dependent, named
+   * as messages name it, e.g. `TailorDB type "Order"`. Records live on the
+   * resource, so this identifies one of those rather than an application.
+   */
+  resource: string;
+  /** Stable id of the absent application. */
+  appId: string;
+  /** Why it has to take part in the same deploy. */
+  reason: string;
+}
+
+/**
+ * Confirm continuing without an application recorded as a dependency.
+ *
+ * A previous deploy recorded that another config's executors make this config's
+ * resources publish events. Applying this config alone resolves those flags from
+ * a smaller set of executors, which turns publishing off.
+ * @param missing - Recorded dependencies absent from this deploy
+ * @param yes - Whether `--yes` was passed
+ * @returns Promise that resolves when the deploy may continue
+ */
+export async function confirmMissingDependentApps(
+  missing: MissingDependentApp[],
+  yes: boolean,
+): Promise<void> {
+  if (missing.length === 0) return;
+
+  logger.warn("Applications recorded as depending on this deploy are missing:");
+  for (const entry of missing) {
+    logger.log(
+      `    • application id ${styles.info(entry.appId)} depends on ${styles.bold(entry.resource)} (${entry.reason})`,
+    );
+  }
+  logger.newline();
+  logger.log("  Applying without them turns off event publishing on the resources above:");
+  logger.log("  nothing in this deploy subscribes to them, so the value resolves to false.");
+  logger.log("  To keep it, add their configs to --config, or set publishEvents on");
+  logger.log("  the resources above.");
+
+  if (yes) {
+    logger.warn("Continuing without them (--yes flag specified); applying turns publishing off.");
+    return;
+  }
+
+  const confirmed = await prompt.confirm({
+    message: "Continue without them?",
+    default: false,
+  });
+  if (!confirmed) {
+    throw new Error(ml`
+      Apply cancelled. Add the missing configs to --config, or set publishEvents
+      explicitly on the resources that should keep publishing.
+    `);
+  }
+}

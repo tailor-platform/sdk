@@ -9,13 +9,13 @@ vi.mock("./label", async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>;
   return {
     ...original,
-    buildMetaRequest: vi.fn().mockResolvedValue({
+    buildMetaRequest: vi.fn().mockImplementation(async () => ({
       trn: "trn:v1:workspace:test-workspace:idp:idp-a",
       labels: {
         "sdk-name": "test-app",
         "sdk-version": "v1-0-0",
       },
-    }),
+    })),
   };
 });
 
@@ -447,6 +447,53 @@ describe("planIdP / publishEvents auto-configuration", () => {
     expect(result.changeSet.service.creates[0]!.request.publishUserEvents).toBe(true);
   });
 
+  test("explicit publishEvents:true stays true without a subscribing executor", async () => {
+    const app = createMockApplication({ idpServices: [{ publishEvents: true }] });
+    const client = createMockClient({ services: [], clients: { "idp-a": [] } });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(),
+    });
+
+    expect(result.changeSet.service.creates[0]!.request.publishUserEvents).toBe(true);
+  });
+
+  test("turns a remote opt-in back off once nothing subscribes", async () => {
+    const app = createMockApplication({ idpServices: [{ publishEvents: undefined }] });
+    const client = createMockClient({
+      services: [createMatchingRemoteService({ publishEvents: true })],
+      clients: defaultIdpClientSecret,
+    });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(),
+    });
+
+    expect(result.changeSet.service.updates).toHaveLength(1);
+    expect(result.changeSet.service.updates[0]!.request.publishUserEvents).toBe(false);
+  });
+
+  test("keeps a remote opt-in while an executor still subscribes", async () => {
+    const app = createMockApplication({ idpServices: [{ publishEvents: undefined }] });
+    const client = createMockClient({
+      services: [createMatchingRemoteService({ publishEvents: true })],
+      clients: defaultIdpClientSecret,
+    });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: app,
+      idpUserTriggerTargets: new Set(["idp-a"]),
+    });
+
+    expect(result.changeSet.service.updates).toHaveLength(0);
+    expect(result.changeSet.service.unchanged).toHaveLength(1);
+  });
+
   test("explicit publishEvents:false throws when executor targets the IdP", async () => {
     const app = createMockApplication({ idpServices: [{ publishEvents: false }] });
     const client = createMockClient({ services: [], clients: { "idp-a": [] } });
@@ -510,5 +557,37 @@ describe("planIdP / publishEvents auto-configuration", () => {
     );
     expect(byName.get("idp-a")?.publishUserEvents).toBe(true);
     expect(byName.get("idp-b")?.publishUserEvents).toBe(false);
+  });
+});
+
+describe("planIdP and an unchanged service's dependency records", () => {
+  const buyer = "0191b0f4-1c4e-7d3a-9f2b-8c5a4e6d7b81";
+
+  test("carries the metadata write on a service whose definition is unchanged", async () => {
+    // Only the cross-config subscription changed, so the definition matches and
+    // the service is planned as unchanged. Dropping its write here would leave the
+    // record on the remote resource and prompt about a config already deployed.
+    const client = createMockClient({
+      services: [createMatchingRemoteService()],
+      clients: defaultIdpClientSecret,
+    });
+
+    const result = await planIdP({
+      ...createContext(client),
+      application: createMockApplication({ idpServices: [{ publishEvents: undefined }] }),
+      idpUserTriggerTargets: new Set(["idp-a"]),
+      dependentApps: new Map([["idp:idp-a", new Map([[buyer, "publish-events" as const]])]]),
+      runAppIds: new Set([buyer]),
+    });
+
+    expect(result.changeSet.service.unchanged).toHaveLength(1);
+    expect(result.changeSet.service.unchanged[0]?.metaRequest?.dependencies).toEqual([
+      {
+        dependentApps: new Map([[buyer, "publish-events"]]),
+        runAppIds: new Set([buyer]),
+        pinned: false,
+        scope: undefined,
+      },
+    ]);
   });
 });

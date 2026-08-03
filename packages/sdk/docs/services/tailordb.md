@@ -515,12 +515,12 @@ db.table("User", {
 **Behavior:**
 
 - When `publishEvents: true`, record creation/update/deletion events are published
-- When not specified, it is **automatically set to `true`** if an executor uses this type with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`
-- When explicitly set to `false` while an executor uses this type, an error is thrown during `tailor deploy`
+- When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this type with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
+- When explicitly set to `false` while an executor taking part in the same run uses this type, `deploy` fails
 
 **Use cases:**
 
-1. **Auto-detection (recommended)**: Don't set `publishEvents` - the SDK automatically enables it when needed by executors
+1. **Auto-detection (recommended)**: Don't set `publishEvents` - `deploy` enables it while an executor taking part in the same run needs it
 
    ```typescript
    // publishEvents is automatically enabled because an executor uses this type
@@ -545,7 +545,7 @@ db.table("User", {
    });
    ```
 
-3. **Explicit disable**: Disable event publishing for a type that doesn't need it (error if executor uses it)
+3. **Explicit disable**: Disable event publishing for a type that doesn't need it (error if an executor taking part in the same run uses it)
 
    ```typescript
    db.table("TempData", {
@@ -554,6 +554,8 @@ db.table("User", {
      publishEvents: false, // Explicitly disable
    });
    ```
+
+**Sharing a type across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the type to keep it on regardless of which configs take part.
 
 #### GraphQL Operations
 

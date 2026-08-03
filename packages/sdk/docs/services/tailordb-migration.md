@@ -322,6 +322,8 @@ tailor deploy --no-schema-check
 
 `tailor tailordb migration set <N>` updates the `sdk-migration` label on the deployed namespace's metadata. **It does not modify any data or schema.** It only changes which migrations the next `apply` will consider pending.
 
+The migration number is validated before anything is sent to the remote: it must be a 4-digit value (e.g. `0001`) or a bare integer (e.g. `1`) within 0–9999, and must exist in the working tree's migration history, which is itself validated (a gapped history is rejected). `0` is always accepted as the baseline (even when no migrations directory exists yet), provided the history passes validation.
+
 | Movement                         | Effect on next `apply`                                                    | Effect on data                                                |
 | -------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | Forward (e.g., `0001` → `0003`)  | Migrations `0002` and `0003` are skipped — they will not run.             | None.                                                         |
