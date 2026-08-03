@@ -154,15 +154,17 @@ test("keeps every override when the lockfile has no packages block", () => {
   assert.match(stdout, /keeping every override/);
 });
 
-test("leaves neighbouring top-level keys intact when the block empties", () => {
-  const { result } = run(`overrides:
+test("removes the overrides key itself once the block empties", () => {
+  const { result } = run(`minimumReleaseAge: 4320
+
+overrides:
   ghost-pkg@1: 2.0.0
 
 blockExoticSubdeps: true
 `);
 
-  assert.deepEqual(overrideKeys(result), []);
-  assert.match(result, /^blockExoticSubdeps: true$/m);
+  assert.doesNotMatch(result, /^overrides:/m);
+  assert.equal(result, "minimumReleaseAge: 4320\n\nblockExoticSubdeps: true\n");
 });
 
 test("is idempotent", () => {

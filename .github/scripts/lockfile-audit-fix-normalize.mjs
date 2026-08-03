@@ -273,6 +273,14 @@ function pruneOrphanedOverrides(lines, lockPath) {
   }
   kept.push(...comments);
 
+  // A childless `overrides:` parses as null rather than an empty map. pnpm
+  // tolerates that, but nothing should have to rely on it, so the key leaves
+  // with its last entry. The blank line that separated the block sits before
+  // `overrides:`, outside it, so dropping the whole block keeps the spacing.
+  if (!kept.some((l) => l.trim() !== "" && !l.trim().startsWith("#"))) {
+    return [...lines.slice(0, startIdx), ...lines.slice(endIdx)];
+  }
+
   return [...lines.slice(0, startIdx + 1), ...kept, ...lines.slice(endIdx)];
 }
 
