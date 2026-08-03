@@ -7,14 +7,13 @@ name: Lockfile Audit Auto-fix
 # regression-only check in lockfile-audit.yml), while still keeping
 # pnpm-lock.yaml free of known-vulnerable dependency versions.
 #
-# Also prunes pnpm-workspace.yaml of entries that have outlived their purpose
-# — minimumReleaseAgeExclude entries whose pinned version is now older than
-# minimumReleaseAge on its own, and overrides whose package has left the
-# dependency tree. Nothing else, Renovate included, ever removes either kind,
-# so both lists only grow over time unless swept here.
+# Also prunes pnpm-workspace.yaml of policy entries that have outlived their
+# purpose (see lockfile-audit-fix-normalize.mjs for what qualifies). Nothing
+# else, Renovate included, ever removes them, so those lists only grow over
+# time unless swept here.
 #
-# When the resulting change only touches devDependencies and/or those policy
-# lists, no published package's consumers are affected, so the PR gets the
+# When the resulting change only touches devDependencies and/or that pruning,
+# no published package's consumers are affected, so the PR gets the
 # skip-changeset label instead of a changeset.
 on:
   schedule:
