@@ -514,9 +514,9 @@ describe("renderTagWorkflow", () => {
 describe("seed validation step", () => {
   test.each([
     ["pnpm", "pnpm exec tailor seed validate"],
-    ["npm", "npx tailor seed validate"],
+    ["npm", "npx @tailor-platform/sdk seed validate"],
     ["yarn", "yarn tailor seed validate"],
-    ["bun", "bunx tailor seed validate"],
+    ["bun", "bun run tailor seed validate"],
   ] as const)(
     "uses the installed CLI for %s in branch and tag workflows",
     (packageManager, run) => {

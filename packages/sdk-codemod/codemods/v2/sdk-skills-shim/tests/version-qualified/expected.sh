@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
-npx tailor skills add
-pnpm dlx tailor skills add --help
+npx @tailor-platform/sdk skills add
+pnpm dlx @tailor-platform/sdk skills add --help
 tailor-sdk-skills-helper run

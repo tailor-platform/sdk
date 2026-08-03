@@ -324,9 +324,9 @@ jobs:
           run_tailor_cli() {
             case "__PACKAGE_MANAGER__" in
               pnpm) pnpm exec tailor "$@" ;;
-              npm) npx tailor "$@" ;;
+              npm) npx @tailor-platform/sdk "$@" ;;
               yarn) yarn tailor "$@" ;;
-              bun) bunx tailor "$@" ;;
+              bun) bun run tailor "$@" ;;
               *)
                 echo "::error::Unsupported package-manager '__PACKAGE_MANAGER__' (expected pnpm, npm, yarn, or bun)"
                 exit 1
