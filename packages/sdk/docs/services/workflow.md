@@ -362,7 +362,9 @@ export const { lineApproval } = createWaitPoints((define) => ({
 const result = await lineApproval.with({ lineId: line.id }).wait({ message: "Please approve" });
 ```
 
-The key has to come before the type arguments because TypeScript stops inferring it as a literal type once `Payload` and `Result` are given explicitly, and the param names can only be read off a literal. `createWaitPoint` takes its type arguments first, so it cannot type `$params` at all and rejects such a key at declaration — one wait point per key is what it is for, and a key with `$params` stands for a family of them.
+The key has to come before the type arguments because TypeScript stops inferring it as a literal type once `Payload` and `Result` are given explicitly, and the param names can only be read off a literal. `createWaitPoint` takes its type arguments first, so it cannot type `$params` at all, and `deploy` rejects such a key — one wait point per key is what it is for, and a key with `$params` stands for a family of them.
+
+`deploy` checks every declared key against the grammar above, so a key the platform would reject is reported before anything is deployed.
 
 A parameterized wait point exposes only `.with()` — there is no way to wait on the unsubstituted key.
 

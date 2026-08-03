@@ -1,6 +1,7 @@
 // oxlint-disable vitest/expect-expect -- Type-only assertions are checked by TypeScript.
 import { afterEach, describe, expect, test, expectTypeOf } from "vitest";
 import { setupWaitPointMock, setupWorkflowMock } from "#/utils/test/mock";
+import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
 import { createWaitPoint, createWaitPoints } from "./wait-point";
 import type { TailorRuntime } from "#/runtime/index";
 import type { TypeLevelError } from "#/types/helpers";
@@ -246,36 +247,12 @@ describe("createWaitPoint", () => {
     expect(resolveCalls[0]).toEqual({ executionId: "exec-1", key: "my-step" });
   });
 
-  test("rejects keys outside the platform grammar", () => {
-    expect(() => createWaitPoint<undefined, string>("myStep")).toThrow('segment "myStep"');
-    expect(() => createWaitPoint<undefined, string>("my_step")).toThrow('segment "my_step"');
-    expect(() => createWaitPoint<undefined, string>("ab")).toThrow("must match");
-    expect(() => createWaitPoint<undefined, string>("-my-step")).toThrow("must match");
-    expect(() => createWaitPoint<undefined, string>("my-step-")).toThrow("must match");
-  });
-
-  test("reports a key of only hyphens as a grammar failure, not a $params one", () => {
-    // It has no $params, so the literal-segment message would name a feature
-    // the key never used.
-    expect(() => createWaitPoint<undefined, string>("---")).toThrow("must match");
-    expect(() => createWaitPoint<undefined, string>("")).toThrow("must match");
-  });
-
   test("accepts a run of hyphens, which the key grammar allows", async () => {
     const { waitCalls } = setupWaitPointMock({ onWait: () => "ok" });
 
     const wp = createWaitPoint<undefined, string>("my--step");
     await wp.wait();
     expect(waitCalls[0]).toEqual({ key: "my--step", payload: undefined });
-  });
-
-  test("rejects a $param key, which only createWaitPoints can type", () => {
-    // The type arguments block key-literal inference, so the params could never
-    // be read off the key here. Say so at the declaration rather than handing
-    // back a wait point whose `.with()` is invisible.
-    expect(() => createWaitPoint<undefined, string>("line-approval-$lineId")).toThrow(
-      "Declare it through createWaitPoints instead",
-    );
   });
 });
 
@@ -314,21 +291,6 @@ describe("$param keys", () => {
       // @ts-expect-error a widened string cannot be checked for $params
       bad: define(key)<undefined, string>(),
     }));
-  });
-
-  test("rejects an identity-less key at the call site", () => {
-    expect(() =>
-      createWaitPoints((define) => ({
-        // @ts-expect-error a key made only of $params carries no identity of its own
-        bad: define("$itemId")<undefined, string>(),
-      })),
-    ).toThrow("needs at least one literal segment");
-    expect(() =>
-      createWaitPoints((define) => ({
-        // @ts-expect-error the same $param cannot appear twice
-        bad: define("a-$x-b-$x")<undefined, string>(),
-      })),
-    ).toThrow('parameter "$x" appears more than once');
   });
 
   test("with() substitutes params into the key", async () => {
@@ -416,40 +378,51 @@ describe("$param keys", () => {
     expect(waitCalls[0]?.key).toBe("line--approval-a1");
   });
 
-  test("rejects a $param key whose fixed part breaks the grammar", () => {
-    expect(() =>
-      createWaitPoints((define) => ({
-        bad: define("-line-$lineId")<undefined, string>(),
-      })),
-    ).toThrow("must match");
-    expect(() =>
-      createWaitPoints((define) => ({
-        bad: define("line-$lineId-")<undefined, string>(),
-      })),
-    ).toThrow("must match");
+  test("points a $param key at the declaration that can type it", () => {
+    // A $param key on createWaitPoint is one `deploy` rejects, and the registry
+    // is process-wide, so put it back before another test file runs the
+    // deploy-time check over everything declared so far.
+    const mark = getRegisteredWaitPoints().length;
+    try {
+      // `.with()` is invisible to a createWaitPoint caller, so telling them to
+      // bind through it would be advice they cannot follow.
+      const fromCreateWaitPoint = createWaitPoint<undefined, string>("unbound-probe-$id");
+      expect(() => fromCreateWaitPoint.wait()).toThrow(
+        "Declare it through createWaitPoints instead",
+      );
+
+      const wps = createWaitPoints((define) => ({
+        bound: define("unbound-define-$id")<undefined, string>(),
+      }));
+      expect(() => (wps.bound as unknown as { wait: () => void }).wait()).toThrow(
+        "Bind them first",
+      );
+    } finally {
+      restoreWaitPointRegistry(mark);
+    }
+
+    // Nothing declared above is left behind for the deploy-time check that
+    // another test file runs over the whole registry.
+    expect(getRegisteredWaitPoints()).toHaveLength(mark);
   });
 
-  test("rejects a key whose literal part cannot fit the limit", () => {
-    expect(() =>
-      createWaitPoints((define) => ({
-        tooLong: define(`${"a".repeat(62)}-$id`)<undefined, string>(),
-      })),
-    ).toThrow("cannot fit in 63 characters");
-  });
+  test("registers every declared key with the declaration it came from", () => {
+    const before = getRegisteredWaitPoints().length;
 
-  test("rejects $params taken from a property name", () => {
-    expect(() =>
-      createWaitPoints((define) => ({
-        "line-approval-$lineId": define<undefined, string>(),
-      })),
-    ).toThrow("cannot come from a property name");
-  });
+    createWaitPoint<undefined, string>("registered-plain");
+    createWaitPoints((define) => ({
+      // Every key here has to be one `deploy` accepts: the registry is
+      // process-wide, so a bad key declared in a unit test would reach the
+      // deploy-time check another test file runs.
+      "registered-property": define<undefined, string>(),
+      fromKey: define("registered-$lineId")<undefined, string>(),
+    }));
 
-  test("rejects property names outside the platform grammar", () => {
-    expect(() =>
-      createWaitPoints((define) => ({
-        managerApproval: define<undefined, string>(),
-      })),
-    ).toThrow('segment "managerApproval"');
+    // The keys the platform rules run against at deploy time.
+    expect(getRegisteredWaitPoints().slice(before)).toEqual([
+      { key: "registered-plain", declaredBy: "createWaitPoint" },
+      { key: "registered-$lineId", declaredBy: "define" },
+      { key: "registered-property", declaredBy: "property" },
+    ]);
   });
 });

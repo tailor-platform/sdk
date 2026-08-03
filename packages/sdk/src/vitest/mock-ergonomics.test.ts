@@ -206,6 +206,15 @@ describe("ergonomic runtime mocks", () => {
     expect(lineOne.resolve).toHaveBeenCalledWith("execution-1", callback);
   });
 
+  test("an unconfigured parameterized wait mock still answers with a promise", () => {
+    using wf = mockWorkflow();
+    const lineOne = wf.waitPointWith(lineApproval, { lineId: "one" });
+
+    // Its type promises one, and `waitPoint()` gives one, so falling through
+    // to the platform mock must not hand back a raw value.
+    expect(lineOne.wait({ message: "unconfigured" })).toBeInstanceOf(Promise);
+  });
+
   test("records a no-payload parameterized wait the same way waitPoint does", async () => {
     using wf = mockWorkflow();
     const noPayload = wf.waitPointWith(silentStep, { lineId: "one" });

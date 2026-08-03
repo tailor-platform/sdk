@@ -399,8 +399,11 @@ export function mockWorkflow() {
         };
       }
 
+      // A bound wait point resolves what the invoker returns, so an unmocked
+      // spy has to hand back a promise too — otherwise calling this mock
+      // directly yields a raw value where its type promises one.
       const waitSpy = vi.fn((payload?: unknown) =>
-        slot.originalWait(key, payload),
+        Promise.resolve(slot.originalWait(key, payload)),
       ) as unknown as Mock<WaitPointInstance<Payload, Result>["wait"]>;
       const resolveSpy = vi.fn(
         (executionId: string, callback: (payload: unknown) => unknown | Promise<unknown>) =>

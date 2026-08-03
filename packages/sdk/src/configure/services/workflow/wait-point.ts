@@ -1,4 +1,5 @@
 import { brandValue } from "#/utils/brand";
+import { registerWaitPoint } from "#/utils/wait-point-registry";
 import {
   attachWaitPointInvoker,
   attachWaitPointKey,
@@ -6,10 +7,9 @@ import {
   type WaitPointInvoker,
 } from "./wait-point-invoker";
 import type { JsonCompatible, Prettify, TypeLevelError } from "#/types/helpers";
+import type { WaitPointDeclaration } from "#/utils/wait-point-registry";
 
 const KEY_REGEX = /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/;
-const LITERAL_SEGMENT_REGEX = /^[a-z0-9]+$/;
-const PARAM_NAME_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const PARAM_VALUE_REGEX = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 const MAX_KEY_LENGTH = 63;
 const KEY_GRAMMAR = "[a-z0-9-] (3-63 characters; must start and end with [a-z0-9])";
@@ -80,67 +80,6 @@ function parseKey(key: string): ParsedKey {
     segments,
     paramNames: segments.filter((s) => s.startsWith("$")).map((s) => s.slice(1)),
   };
-}
-
-function validateKey(key: string): ParsedKey {
-  const parsed = parseKey(key);
-  const seen = new Set<string>();
-  let literals = 0;
-
-  for (const segment of parsed.segments) {
-    if (segment.startsWith("$")) {
-      const name = segment.slice(1);
-      if (!PARAM_NAME_REGEX.test(name)) {
-        throw new Error(
-          `Invalid wait point key "${key}": "${segment}" is not a usable parameter name. Use letters, digits and underscores, starting with a letter or underscore.`,
-        );
-      }
-      if (seen.has(name)) {
-        throw new Error(
-          `Invalid wait point key "${key}": parameter "$${name}" appears more than once.`,
-        );
-      }
-      seen.add(name);
-      continue;
-    }
-    // An empty segment comes from a run of hyphens, which the key grammar allows
-    // inside a key. Leave the placement rules to the whole-key checks below.
-    if (segment === "") continue;
-    if (!LITERAL_SEGMENT_REGEX.test(segment)) {
-      throw new Error(
-        `Invalid wait point key "${key}": segment "${segment}" may only contain [a-z0-9]. Wait point keys accept ${KEY_GRAMMAR}, with $params standing in for runtime values.`,
-      );
-    }
-    literals += 1;
-  }
-
-  // Only a key that actually carries $params can be identity-less in this
-  // sense; without them, an empty run of segments is a plain grammar failure.
-  if (literals === 0 && parsed.paramNames.length > 0) {
-    throw new Error(
-      `Invalid wait point key "${key}": it needs at least one literal segment alongside its $params, otherwise the key carries no identity of its own and can collide with an unrelated wait point.`,
-    );
-  }
-
-  if (parsed.paramNames.length === 0) {
-    if (!KEY_REGEX.test(key)) {
-      throw new Error(`Invalid wait point key "${key}": must match ${KEY_GRAMMAR}.`);
-    }
-    return parsed;
-  }
-
-  // Every param value is itself `[a-z0-9]`-bounded, so the shortest instance of
-  // the pattern is valid exactly when every instance is.
-  const shortest = parsed.segments.map((s) => (s.startsWith("$") ? "0" : s)).join("-");
-  if (shortest.length > MAX_KEY_LENGTH) {
-    throw new Error(
-      `Wait point key "${key}" cannot fit in ${MAX_KEY_LENGTH} characters: even single-character parameter values produce ${shortest.length}.`,
-    );
-  }
-  if (!KEY_REGEX.test(shortest)) {
-    throw new Error(`Invalid wait point key "${key}": must match ${KEY_GRAMMAR}.`);
-  }
-  return parsed;
 }
 
 function composeKey(key: string, parsed: ParsedKey, params: Record<string, unknown>): string {
@@ -219,11 +158,19 @@ function createWaitPointInstance(initialKey: string): WaitPointWithSetter {
   };
 }
 
-function createParameterizedWaitPointInstance(key: string, parsed: ParsedKey): object {
+function createParameterizedWaitPointInstance(
+  key: string,
+  parsed: ParsedKey,
+  declaredBy: WaitPointDeclaration,
+): object {
   const invoker = createWaitPointInvoker();
   const unbound = () => {
+    // Only a `define` declaration types `.with()`, so pointing anywhere else
+    // at it would be advice the caller cannot follow.
     throw new Error(
-      `Wait point key "${key}" has $params, so it identifies no single suspension on its own. Bind them first: waitPoint.with({ ... }).wait(...).`,
+      declaredBy === "define"
+        ? `Wait point key "${key}" has $params, so it identifies no single suspension on its own. Bind them first: waitPoint.with({ ... }).wait(...).`
+        : `Wait point key "${key}" has $params, which createWaitPoint cannot type. Declare it through createWaitPoints instead: createWaitPoints((define) => ({ myWaitPoint: define("${key}")<Payload, Result>() })).`,
     );
   };
   const instance = brandValue(
@@ -363,10 +310,11 @@ type DefineFn = {
   <Payload = undefined, Result = undefined>(): WaitPointDef<Payload, Result>;
 };
 
-function createKeyedWaitPoint(key: string): unknown {
-  const parsed = validateKey(key);
+function createKeyedWaitPoint(key: string, declaredBy: WaitPointDeclaration): unknown {
+  registerWaitPoint({ key, declaredBy });
+  const parsed = parseKey(key);
   return parsed.paramNames.length > 0
-    ? createParameterizedWaitPointInstance(key, parsed)
+    ? createParameterizedWaitPointInstance(key, parsed, declaredBy)
     : createWaitPointInstance(key).instance;
 }
 
@@ -374,16 +322,15 @@ function createKeyedWaitPoint(key: string): unknown {
  * Create a single typed wait point with a fixed key.
  *
  * The key must match `[a-z0-9-]` (3-63 characters, starting and ending with
- * `[a-z0-9]`). For a key with `$params`, use {@link createWaitPoints}: binding
- * params needs the key inferred as a literal type, which only its `define`
- * offers.
+ * `[a-z0-9]`), which `deploy` reports on. For a key with `$params`, use
+ * {@link createWaitPoints}: binding params needs the key inferred as a literal
+ * type, which only its `define` offers.
  *
  * `Payload` and `Result` must be JsonValue-compatible.
  * Functions and objects with a `toJSON` method are rejected at the type level;
  * class instances exposing methods are rejected via the property walk.
  * @param key - The wait point key used to match wait and resolve calls
  * @returns A WaitPointInstance with typed `.wait()` and `.resolve()` methods
- * @throws If the key does not match the wait point key grammar, or carries `$params`
  * @example
  * export const approval = createWaitPoint<{ message: string }, { approved: boolean }>("approval");
  *
@@ -393,19 +340,14 @@ function createKeyedWaitPoint(key: string): unknown {
 export function createWaitPoint<Payload = undefined, Result = undefined>(
   key: string,
 ): WaitPointDef<Payload, Result> {
-  const parsed = validateKey(key);
-  if (parsed.paramNames.length > 0) {
-    throw new Error(
-      `Invalid wait point key "${key}": createWaitPoint takes its type arguments first, which stops TypeScript inferring the key as a literal, so it cannot type the $params. Declare it through createWaitPoints instead: createWaitPoints((define) => ({ myWaitPoint: define("${key}")<Payload, Result>() })).`,
-    );
-  }
-  return createWaitPointInstance(key).instance as unknown as WaitPointDef<Payload, Result>;
+  return createKeyedWaitPoint(key, "createWaitPoint") as WaitPointDef<Payload, Result>;
 }
 
 /**
  * Create a group of typed wait points for human-in-the-loop workflows.
  * Property names become the wait point keys, so they must match
- * `[a-z0-9-]` — pass an explicit key to `define` when they do not.
+ * `[a-z0-9-]`, which `deploy` reports on — pass an explicit key to `define`
+ * when they do not.
  *
  * The return type is the same as the builder's return type, so JSDoc on each
  * property is preserved and visible in IDE autocompletion.
@@ -415,7 +357,6 @@ export function createWaitPoint<Payload = undefined, Result = undefined>(
  * class instances exposing methods are rejected via the property walk.
  * @param builder - Callback that receives a `define` factory and returns an object of wait points
  * @returns The same object returned by the builder (with correct keys set on each instance)
- * @throws If a property name or explicit key does not match the wait point key grammar
  * @example
  * export const waitPoints = createWaitPoints(define => ({
  *   // Preceding JSDoc on this property is shown in IDE autocompletion
@@ -446,7 +387,7 @@ export function createWaitPoints<
       setters.set(instance, setKey);
       return instance;
     }
-    return createKeyedWaitPoint(key);
+    return createKeyedWaitPoint(key, "define");
   }) as DefineFn;
 
   const result = builder(define);
@@ -454,12 +395,7 @@ export function createWaitPoints<
   for (const propName of Object.keys(result)) {
     const setter = setters.get(result[propName] as unknown as object);
     if (!setter) continue;
-    const parsed = validateKey(propName);
-    if (parsed.paramNames.length > 0) {
-      throw new Error(
-        `Invalid wait point key "${propName}": $params cannot come from a property name. Pass the key to define instead, e.g. define("${propName}")<Payload, Result>().`,
-      );
-    }
+    registerWaitPoint({ key: propName, declaredBy: "property" });
     setter(propName);
   }
 
