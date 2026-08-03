@@ -93,8 +93,10 @@ jobs:
             # Pruning an orphaned override edits pnpm-workspace.yaml, which
             # leaves the restored lockfile's `overrides:` snapshot stale — a
             # frozen install legitimately fails there and has to be redone
-            # unfrozen, or the two files get committed out of sync.
-            pnpm install --frozen-lockfile || pnpm install || true
+            # unfrozen, or the two files get committed out of sync. The
+            # unfrozen retry is not allowed to fail quietly: at that point the
+            # workspace really is uninstallable and must not reach a PR.
+            pnpm install --frozen-lockfile || pnpm install
           fi
 
       - name: Check for lockfile changes

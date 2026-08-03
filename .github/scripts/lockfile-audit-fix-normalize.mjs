@@ -208,13 +208,15 @@ function readLockfileOutsideOverrides(lockPath) {
   return [...lines.slice(0, overrides.startIdx), ...lines.slice(overrides.endIdx)].join("\n");
 }
 
-// Any mention counts as present — importer specifiers, resolved
-// `name@version` keys and peer-dependency suffixes alike — so this only ever
-// errs toward keeping an override. The leading boundary is what stops a `uri`
-// override from matching `fast-uri@3.1.4`.
+// Any mention counts as present, so this only ever errs toward keeping an
+// override. Two forms have to be accepted: `name@version` (resolved package
+// keys and peer-dependency suffixes) and a bare `name:` / `'@scope/name':`
+// key, which is the only form a workspace link ever takes — it gets no
+// `packages:` entry to carry a version. The leading boundary is what stops a
+// `uri` override from matching `fast-uri@3.1.4`.
 function isMentioned(haystack, name) {
   const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(^|[^a-zA-Z0-9@._/-])${escaped}@`, "m").test(haystack);
+  return new RegExp(`(^|[^a-zA-Z0-9@._/-])${escaped}(@|["']?\\s*:)`, "m").test(haystack);
 }
 
 function pruneOrphanedOverrides(lines, lockPath) {

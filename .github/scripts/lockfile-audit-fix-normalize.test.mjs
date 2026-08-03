@@ -1,4 +1,3 @@
-#!/usr/bin/env node --test
 // Fixture tests for lockfile-audit-fix-normalize.mjs, driven as a subprocess
 // so the script stays a plain top-level program.
 //
@@ -32,6 +31,12 @@ importers:
       '@scope/live':
         specifier: 1.0.0
         version: 1.0.0
+      '@scope/linked':
+        specifier: workspace:^
+        version: link:packages/linked
+      linked-tool:
+        specifier: workspace:*
+        version: link:packages/tool
 
 packages:
 
@@ -92,13 +97,25 @@ test("drops overrides whose package left the dependency tree", () => {
   assert.match(stdout, /Dropping orphaned override entry "ghost-pkg@1"/);
 });
 
-test("keeps overrides reachable through importers or peer-dependency suffixes", () => {
+test("keeps overrides reachable through resolved keys or dep paths", () => {
   const { result } = run(`overrides:
   "@scope/live@<1": 1.0.0
   parent-pkg>child-pkg: 3.0.0
 `);
 
   assert.deepEqual(overrideKeys(result), ['"@scope/live@<1"', "parent-pkg>child-pkg"]);
+});
+
+// A workspace link has no `packages:` entry, so the importer key is the only
+// place its name ever appears — and it appears without a version.
+test("keeps overrides on workspace-linked packages", () => {
+  const { stdout, result } = run(`overrides:
+  "@scope/linked@<1": 1.0.0
+  linked-tool@<1: 1.0.0
+`);
+
+  assert.deepEqual(overrideKeys(result), ['"@scope/linked@<1"', "linked-tool@<1"]);
+  assert.doesNotMatch(stdout, /Dropping orphaned override entry/);
 });
 
 test("does not confuse a package name with a longer one ending in it", () => {
