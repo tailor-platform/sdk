@@ -26,7 +26,7 @@
     }
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && politty generate-shim --entry ../dist/cli.js",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "typecheck": "tsc --noEmit",

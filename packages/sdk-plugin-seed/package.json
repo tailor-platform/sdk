@@ -9,16 +9,17 @@
     "directory": "packages/sdk-plugin-seed"
   },
   "bin": {
-    "tailor-seed": "./dist/index.js"
+    "tailor-seed": "./bin/cli.mjs"
   },
   "files": [
+    "bin",
     "CHANGELOG.md",
     "dist",
     "README.md"
   ],
   "type": "module",
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && politty generate-shim --entry ../dist/index.js",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "typecheck": "tsc --noEmit",
