@@ -5,10 +5,8 @@
  * At runtime this delegates to `globalThis.tailor.workflow`. Use `mockWorkflow`
  * from `@tailor-platform/sdk/vitest` to mock these calls in unit tests.
  *
- * The canonical names (`startWorkflow`, `execJobFunction`,
- * `resumeWorkflowExecution`) mirror the public `tailor.v1` RPC vocabulary:
- * `Exec*` is a blocking call that returns the job's result, while `Start*`
- * returns only an execution ID.
+ * `execJobFunction` blocks until the job finishes and returns its result, while
+ * `startWorkflow` returns only an execution ID.
  * @example
  * import { workflow } from "@tailor-platform/sdk/runtime";
  *
@@ -76,9 +74,6 @@ export interface PlatformWorkflowAPI {
 
   /**
    * Executes a job function and returns its result via durable suspend/replay.
-   *
-   * Canonical name under the platform verb convention: `Exec*` blocks and
-   * returns the job's result, while `Start*` returns only an execution ID.
    * @param jobName - Job name as defined in the workflow
    * @param args - Arguments forwarded to the job
    * @param options - Optional execution options (e.g. `executionPolicyKey`)
