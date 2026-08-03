@@ -144,7 +144,8 @@ const READ_OR_LOCAL_COMMAND_PATHS = new Set([
 ]);
 
 /**
- * Recursively list `*.ts` files under `dir`, excluding tests and fixtures.
+ * Recursively list `*.ts` files under `dir`, excluding tests and test-only
+ * fixtures/bundler workspaces.
  * Paths are returned relative to `dir` with forward slashes.
  * @param dir - Root directory to walk
  * @returns Relative file paths
@@ -154,6 +155,7 @@ function listCommandSourceFiles(dir: string): string[] {
   const out: string[] = [];
   for (const entry of entries) {
     if (entry.name === "__test_fixtures__") continue;
+    if (entry.name === "__test_bundler__") continue;
     const child = path.join(dir, entry.name);
     if (entry.isDirectory()) {
       const nested = listCommandSourceFiles(child).map((p) => `${entry.name}/${p}`);
