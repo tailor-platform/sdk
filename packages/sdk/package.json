@@ -195,7 +195,7 @@
     "@toiroakr/lines-db": "0.10.1",
     "@toiroakr/read-multiline": "0.4.1",
     "@urql/core": "6.0.3",
-    "amaro": "1.1.10",
+    "amaro": "1.1.11",
     "chalk": "5.6.2",
     "confbox": "0.2.4",
     "date-fns": "4.4.0",
