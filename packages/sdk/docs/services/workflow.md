@@ -269,7 +269,7 @@ Pass the key to `define` when the property name you want to read at the call sit
 
 ```typescript
 export const waitPoints = createWaitPoints((define) => ({
-  managerApproval: define("manager-approval")<{ amount: number }, { approved: boolean }>(),
+  managerApproval: define.for("manager-approval")<{ amount: number }, { approved: boolean }>(),
 }));
 
 await waitPoints.managerApproval.wait({ amount: 50000 });
@@ -355,7 +355,7 @@ Write `$paramName` as a whole `-`-delimited segment of the key to leave a slot f
 
 ```typescript
 export const { lineApproval } = createWaitPoints((define) => ({
-  lineApproval: define("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
+  lineApproval: define.for("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
 }));
 
 // Suspends on "line-approval-<lineId>", so parallel lines never collide

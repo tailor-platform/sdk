@@ -6,7 +6,7 @@ Support wait point keys with runtime values. Write `$paramName` in a key passed 
 
 ```typescript
 export const { lineApproval } = createWaitPoints((define) => ({
-  lineApproval: define("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
+  lineApproval: define.for("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
 }));
 
 await lineApproval.with({ lineId: line.id }).wait({ message: "Please approve" });
@@ -19,7 +19,7 @@ The key has to come before the `Payload` / `Result` type arguments, because Type
 Wait point keys are now checked by `deploy` instead of failing when the job creates the suspension. Keys must match `[a-z0-9-]`, be 3 to 63 characters long, and start and end with `[a-z0-9]`. A key that never worked — a camelCase `createWaitPoints` property name, say — was rejected by the platform once the job ran; `deploy` now reports it before anything is deployed. Inside `createWaitPoints`, pass a valid key to `define` to keep the property name you read at the call site:
 
 ```typescript
-managerApproval: define("manager-approval")<{ amount: number }, { approved: boolean }>(),
+managerApproval: define.for("manager-approval")<{ amount: number }, { approved: boolean }>(),
 ```
 
-A wait point is now a callable value, so that one definition serves both of `define`'s argument orders. `typeof waitPoint` is `"function"` rather than `"object"`, and `JSON.stringify(waitPoint)` returns `undefined` rather than `"{}"`. Property access, `Object.keys`, and spreading are unchanged, so this only matters to code that inspects a definition at runtime.
+This works for a key without `$params` too, which is the way to keep a property name that reads well at the call site while the key stays within the platform grammar.

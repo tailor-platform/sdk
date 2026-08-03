@@ -33,11 +33,11 @@ const approval = createWaitPoint<{ message: string }, { approved: boolean }>(
 );
 
 const { lineApproval, silentStep } = createWaitPoints((define) => ({
-  lineApproval: define("mock-ergonomics-line-$lineId")<
+  lineApproval: define.for("mock-ergonomics-line-$lineId")<
     { message: string },
     { approved: boolean }
   >(),
-  silentStep: define("mock-ergonomics-silent-$lineId")<undefined, { seen: boolean }>(),
+  silentStep: define.for("mock-ergonomics-silent-$lineId")<undefined, { seen: boolean }>(),
 }));
 
 describe("ergonomic runtime mocks", () => {

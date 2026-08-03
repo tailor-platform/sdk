@@ -254,6 +254,17 @@ describe("createWaitPoint", () => {
     await wp.wait();
     expect(waitCalls[0]).toEqual({ key: "my--step", payload: undefined });
   });
+
+  test("reads a bare $ as a literal, the way the type does", async () => {
+    const { waitCalls } = setupWaitPointMock({ onWait: () => "ok" });
+
+    // `$` on its own names no param. The type says so, so the value has to
+    // agree: `.wait()` rather than a `.with()` the type never showed.
+    // `deploy` is what rejects the key.
+    const wp = createWaitPoint<undefined, string>("my-$");
+    await wp.wait();
+    expect(waitCalls[0]).toEqual({ key: "my-$", payload: undefined });
+  });
 });
 
 describe("$param keys", () => {
@@ -263,7 +274,10 @@ describe("$param keys", () => {
 
   test("derives the params object from the key", () => {
     const wps = createWaitPoints((define) => ({
-      lineApproval: define("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
+      lineApproval: define.for("line-approval-$lineId")<
+        { message: string },
+        { approved: boolean }
+      >(),
     }));
     type Params = Parameters<typeof wps.lineApproval.with>[0];
     expectTypeOf<Params>().toEqualTypeOf<{ lineId: string }>();
@@ -271,7 +285,7 @@ describe("$param keys", () => {
 
   test("derives every param in a multi-param key", () => {
     const wps = createWaitPoints((define) => ({
-      lineApproval: define("order-$orderId-line-$lineNo")<undefined, { approved: boolean }>(),
+      lineApproval: define.for("order-$orderId-line-$lineNo")<undefined, { approved: boolean }>(),
     }));
     type Params = Parameters<typeof wps.lineApproval.with>[0];
     expectTypeOf<Params>().toEqualTypeOf<{ orderId: string; lineNo: string }>();
@@ -279,7 +293,7 @@ describe("$param keys", () => {
 
   test("a key without $params keeps the unparameterized surface", () => {
     const wps = createWaitPoints((define) => ({
-      approval: define("my-approval")<undefined, { approved: boolean }>(),
+      approval: define.for("my-approval")<undefined, { approved: boolean }>(),
     }));
     expectTypeOf(wps.approval.wait).toBeFunction();
     expectTypeOf(wps.approval).not.toHaveProperty("with");
@@ -289,7 +303,7 @@ describe("$param keys", () => {
     const key: string = "line-approval";
     createWaitPoints((define) => ({
       // @ts-expect-error a widened string cannot be checked for $params
-      bad: define(key)<undefined, string>(),
+      bad: define.for(key)<undefined, string>(),
     }));
   });
 
@@ -299,7 +313,10 @@ describe("$param keys", () => {
     });
 
     const wps = createWaitPoints((define) => ({
-      lineApproval: define("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
+      lineApproval: define.for("line-approval-$lineId")<
+        { message: string },
+        { approved: boolean }
+      >(),
     }));
 
     const result = await wps.lineApproval
@@ -316,7 +333,7 @@ describe("$param keys", () => {
     const { waitCalls } = setupWaitPointMock({ onWait: () => ({ approved: true }) });
 
     const wps = createWaitPoints((define) => ({
-      lineApproval: define("line-approval-$lineId")<undefined, { approved: boolean }>(),
+      lineApproval: define.for("line-approval-$lineId")<undefined, { approved: boolean }>(),
     }));
 
     await Promise.all([
@@ -335,7 +352,7 @@ describe("$param keys", () => {
     });
 
     const wps = createWaitPoints((define) => ({
-      lineApproval: define("line-approval-$lineId")<undefined, { approved: boolean }>(),
+      lineApproval: define.for("line-approval-$lineId")<undefined, { approved: boolean }>(),
     }));
 
     await wps.lineApproval.with({ lineId: "a1" }).resolve("exec-1", () => ({ approved: true }));
@@ -345,7 +362,7 @@ describe("$param keys", () => {
 
   test("rejects param values that would break the key grammar", () => {
     const wps = createWaitPoints((define) => ({
-      lineApproval: define("line-approval-$lineId")<undefined, { approved: boolean }>(),
+      lineApproval: define.for("line-approval-$lineId")<undefined, { approved: boolean }>(),
     }));
 
     expect(() => wps.lineApproval.with({ lineId: "" })).toThrow('for parameter "lineId"');
@@ -361,7 +378,7 @@ describe("$param keys", () => {
 
   test("rejects a composed key longer than the platform limit", () => {
     const wps = createWaitPoints((define) => ({
-      lineApproval: define("line-approval-$lineId")<undefined, { approved: boolean }>(),
+      lineApproval: define.for("line-approval-$lineId")<undefined, { approved: boolean }>(),
     }));
 
     expect(() => wps.lineApproval.with({ lineId: "a".repeat(50) })).toThrow("the limit is 63");
@@ -371,7 +388,7 @@ describe("$param keys", () => {
     const { waitCalls } = setupWaitPointMock({ onWait: () => ({ approved: true }) });
 
     const wps = createWaitPoints((define) => ({
-      lineApproval: define("line--approval-$lineId")<undefined, { approved: boolean }>(),
+      lineApproval: define.for("line--approval-$lineId")<undefined, { approved: boolean }>(),
     }));
 
     await wps.lineApproval.with({ lineId: "a1" }).wait();
@@ -392,7 +409,7 @@ describe("$param keys", () => {
       );
 
       const wps = createWaitPoints((define) => ({
-        bound: define("unbound-define-$id")<undefined, string>(),
+        bound: define.for("unbound-define-$id")<undefined, string>(),
       }));
       expect(() => (wps.bound as unknown as { wait: () => void }).wait()).toThrow(
         "Bind them first",
@@ -415,7 +432,7 @@ describe("$param keys", () => {
       // process-wide, so a bad key declared in a unit test would reach the
       // deploy-time check another test file runs.
       "registered-property": define<undefined, string>(),
-      fromKey: define("registered-$lineId")<undefined, string>(),
+      fromKey: define.for("registered-$lineId")<undefined, string>(),
     }));
 
     // The keys the platform rules run against at deploy time.

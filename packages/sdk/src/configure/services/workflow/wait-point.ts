@@ -78,7 +78,9 @@ function parseKey(key: string): ParsedKey {
   const segments = key.split("-");
   return {
     segments,
-    paramNames: segments.filter((s) => s.startsWith("$")).map((s) => s.slice(1)),
+    // A bare "$" names nothing, and the type level excludes it, so counting it
+    // here would hand back a value shaped unlike the type describing it.
+    paramNames: segments.filter((s) => s.startsWith("$") && s.length > 1).map((s) => s.slice(1)),
   };
 }
 
@@ -124,16 +126,6 @@ function createBoundWaitPoint(invoker: WaitPointInvoker, readKey: () => string) 
   };
 }
 
-// One value has to serve both of `define`'s call shapes: `define<P, R>()` uses
-// it directly, while `define(key)<P, R>()` calls it — so calling returns the
-// same instance rather than building a new one.
-function asSelfReturning<T extends object>(props: T): T {
-  const self = function () {
-    return self;
-  } as unknown as T;
-  return Object.assign(self, props);
-}
-
 /**
  * Create a WaitPointInstance that delegates to the platform runtime.
  * Use `mockWorkflow` from `@tailor-platform/sdk/vitest` to mock
@@ -145,7 +137,7 @@ function createWaitPointInstance(initialKey: string): WaitPointWithSetter {
   let key = initialKey;
   const invoker = createWaitPointInvoker();
   const instance = brandValue(
-    asSelfReturning(createBoundWaitPoint(invoker, () => key)),
+    createBoundWaitPoint(invoker, () => key),
     "wait-point",
   ) as InternalWaitPointInstance;
   attachWaitPointInvoker(instance, invoker);
@@ -170,11 +162,11 @@ function createParameterizedWaitPointInstance(
     throw new Error(
       declaredBy === "define"
         ? `Wait point key "${key}" has $params, so it identifies no single suspension on its own. Bind them first: waitPoint.with({ ... }).wait(...).`
-        : `Wait point key "${key}" has $params, which createWaitPoint cannot type. Declare it through createWaitPoints instead: createWaitPoints((define) => ({ myWaitPoint: define("${key}")<Payload, Result>() })).`,
+        : `Wait point key "${key}" has $params, which createWaitPoint cannot type. Declare it through createWaitPoints instead: createWaitPoints((define) => ({ myWaitPoint: define.for("${key}")<Payload, Result>() })).`,
     );
   };
   const instance = brandValue(
-    asSelfReturning({
+    {
       with(params: Record<string, unknown>) {
         const composed = composeKey(key, parsed, params);
         return attachWaitPointKey(
@@ -184,7 +176,7 @@ function createParameterizedWaitPointInstance(
       },
       wait: unbound,
       resolve: unbound,
-    }),
+    },
     "wait-point",
   );
   attachWaitPointInvoker(instance, invoker);
@@ -306,8 +298,15 @@ type WaitPointFactory<Key extends string> = <
  * `Payload extends JsonCompatible<Payload>` as circular.
  */
 type DefineFn = {
-  <const Key extends string>(key: Key): WaitPointFactory<Key>;
   <Payload = undefined, Result = undefined>(): WaitPointDef<Payload, Result>;
+  /**
+   * Use a key of your own instead of the property name — the only way to give
+   * a key `$params`, since the key has to be read as a literal type and giving
+   * `Payload` / `Result` explicitly would stop that.
+   * @param key - The wait point key
+   * @returns A factory taking the type arguments
+   */
+  for<const Key extends string>(key: Key): WaitPointFactory<Key>;
 };
 
 function createKeyedWaitPoint(key: string, declaredBy: WaitPointDeclaration): unknown {
@@ -336,7 +335,6 @@ function createKeyedWaitPoint(key: string, declaredBy: WaitPointDeclaration): un
  *
  * await approval.wait({ message: "Please approve" });
  */
-/* @__NO_SIDE_EFFECTS__ */
 export function createWaitPoint<Payload = undefined, Result = undefined>(
   key: string,
 ): WaitPointDef<Payload, Result> {
@@ -362,7 +360,7 @@ export function createWaitPoint<Payload = undefined, Result = undefined>(
  *   // Preceding JSDoc on this property is shown in IDE autocompletion
  *   approval: define<{ message: string }, { approved: boolean }>(),
  *   // A key with $params is bound per call through `.with()`
- *   lineApproval: define("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
+ *   lineApproval: define.for("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
  * }));
  *
  * await waitPoints.approval.wait({ message: "Please approve" });
@@ -370,7 +368,6 @@ export function createWaitPoint<Payload = undefined, Result = undefined>(
  *
  * // For 2-level access, use destructured export with JSDoc attached to the export itself.
  */
-/* @__NO_SIDE_EFFECTS__ */
 /* oxlint-disable no-explicit-any -- constraint needs `any` for assignability */
 export function createWaitPoints<
   T extends Record<
@@ -381,14 +378,19 @@ export function createWaitPoints<
   /* oxlint-enable no-explicit-any */
   const setters = new Map<object, (key: string) => void>();
 
-  const define = ((key?: string) => {
-    if (key === undefined) {
+  const define = Object.assign(
+    () => {
       const { instance, setKey } = createWaitPointInstance("__pending__");
       setters.set(instance, setKey);
       return instance;
-    }
-    return createKeyedWaitPoint(key, "define");
-  }) as DefineFn;
+    },
+    {
+      for: (key: string) => {
+        const instance = createKeyedWaitPoint(key, "define");
+        return () => instance;
+      },
+    },
+  ) as unknown as DefineFn;
 
   const result = builder(define);
 

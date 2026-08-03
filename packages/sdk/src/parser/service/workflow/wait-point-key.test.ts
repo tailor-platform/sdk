@@ -66,6 +66,9 @@ describe("checkWaitPointKey", () => {
 
   test("rejects a $param name outside the identifier grammar", () => {
     expect(check("line-$1", "define")).toContain("is not a usable parameter name");
+    // A bare `$` names nothing. The configure side does not read it as a param
+    // at all, so this is the only place that reports it.
+    expect(check("line-$", "define")).toContain("is not a usable parameter name");
   });
 
   test("rejects a $param key whose fixed part breaks the grammar", () => {

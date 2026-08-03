@@ -22,8 +22,8 @@ export function checkWaitPointKey(waitPoint: RegisteredWaitPoint): string | unde
 
   if (paramSegments.length > 0 && declaredBy !== "define") {
     return declaredBy === "property"
-      ? `Invalid wait point key "${key}": $params cannot come from a property name. Pass the key to define instead, e.g. define("${key}")<Payload, Result>().`
-      : `Invalid wait point key "${key}": createWaitPoint takes its type arguments first, which stops TypeScript inferring the key as a literal, so it cannot type the $params. Declare it through createWaitPoints instead: createWaitPoints((define) => ({ myWaitPoint: define("${key}")<Payload, Result>() })).`;
+      ? `Invalid wait point key "${key}": $params cannot come from a property name. Pass the key to define instead, e.g. define.for("${key}")<Payload, Result>().`
+      : `Invalid wait point key "${key}": createWaitPoint takes its type arguments first, which stops TypeScript inferring the key as a literal, so it cannot type the $params. Declare it through createWaitPoints instead: createWaitPoints((define) => ({ myWaitPoint: define.for("${key}")<Payload, Result>() })).`;
   }
 
   const seen = new Set<string>();
