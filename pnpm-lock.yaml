@@ -518,8 +518,8 @@ importers:
         specifier: 6.0.3
         version: 6.0.3(graphql@17.0.2)
       amaro:
-        specifier: 1.1.10
-        version: 1.1.10
+        specifier: 1.1.11
+        version: 1.1.11
       chalk:
         specifier: 5.6.2
         version: 5.6.2
@@ -2914,8 +2914,8 @@ packages:
   ajv@6.15.0:
     resolution: {integrity: sha512-fgFx7Hfoq60ytK2c7DhnF8jIvzYgOMxfugjLOSMHjLIPgenqa7S7oaagATUq99mV6IYvN2tRmC0wnTYX6iPbMw==}
 
-  amaro@1.1.10:
-    resolution: {integrity: sha512-ceFv+QA3SlhFsn0hu8Q8oyj36YZdIgoJFpyS2sGJGK2dyncwcMWuBlNzhXfc1oLWtbDWM2Ol2rrzOYa+HNyEjg==}
+  amaro@1.1.11:
+    resolution: {integrity: sha512-Tg8KzTpeCUQ23RNSuA2GeVRxHhkHyq8U9jNpKRjiMQKY2C9iJ7pLlGw2iRy4nNMYtB+tkLghk3swCo13O68zDg==}
     engines: {node: '>=22'}
 
   ansi-regex@5.0.1:
@@ -5755,7 +5755,7 @@ snapshots:
   '@toiroakr/lines-db@0.10.1':
     dependencies:
       '@standard-schema/spec': 1.1.0
-      amaro: 1.1.10
+      amaro: 1.1.11
 
   '@toiroakr/read-multiline@0.4.1': {}
 
@@ -6098,7 +6098,7 @@ snapshots:
       json-schema-traverse: 0.4.1
       uri-js: 4.4.1
 
-  amaro@1.1.10: {}
+  amaro@1.1.11: {}
 
   ansi-regex@5.0.1: {}
 
