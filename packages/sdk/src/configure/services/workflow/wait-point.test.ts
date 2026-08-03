@@ -245,4 +245,211 @@ describe("createWaitPoint", () => {
     await wp.resolve("exec-1", () => ({ ok: true }));
     expect(resolveCalls[0]).toEqual({ executionId: "exec-1", key: "my-step" });
   });
+
+  test("rejects keys outside the platform grammar", () => {
+    expect(() => createWaitPoint<undefined, string>("myStep")).toThrow('segment "myStep"');
+    expect(() => createWaitPoint<undefined, string>("my_step")).toThrow('segment "my_step"');
+    expect(() => createWaitPoint<undefined, string>("ab")).toThrow("must match");
+    expect(() => createWaitPoint<undefined, string>("-my-step")).toThrow("must match");
+    expect(() => createWaitPoint<undefined, string>("my-step-")).toThrow("must match");
+  });
+
+  test("reports a key of only hyphens as a grammar failure, not a $params one", () => {
+    // It has no $params, so the literal-segment message would name a feature
+    // the key never used.
+    expect(() => createWaitPoint<undefined, string>("---")).toThrow("must match");
+    expect(() => createWaitPoint<undefined, string>("")).toThrow("must match");
+  });
+
+  test("accepts a run of hyphens, which the key grammar allows", async () => {
+    const { waitCalls } = setupWaitPointMock({ onWait: () => "ok" });
+
+    const wp = createWaitPoint<undefined, string>("my--step");
+    await wp.wait();
+    expect(waitCalls[0]).toEqual({ key: "my--step", payload: undefined });
+  });
+
+  test("rejects a $param key, which only createWaitPoints can type", () => {
+    // The type arguments block key-literal inference, so the params could never
+    // be read off the key here. Say so at the declaration rather than handing
+    // back a wait point whose `.with()` is invisible.
+    expect(() => createWaitPoint<undefined, string>("line-approval-$lineId")).toThrow(
+      "Declare it through createWaitPoints instead",
+    );
+  });
+});
+
+describe("$param keys", () => {
+  afterEach(() => {
+    delete TailorGlobal.tailor;
+  });
+
+  test("derives the params object from the key", () => {
+    const wps = createWaitPoints((define) => ({
+      lineApproval: define("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
+    }));
+    type Params = Parameters<typeof wps.lineApproval.with>[0];
+    expectTypeOf<Params>().toEqualTypeOf<{ lineId: string }>();
+  });
+
+  test("derives every param in a multi-param key", () => {
+    const wps = createWaitPoints((define) => ({
+      lineApproval: define("order-$orderId-line-$lineNo")<undefined, { approved: boolean }>(),
+    }));
+    type Params = Parameters<typeof wps.lineApproval.with>[0];
+    expectTypeOf<Params>().toEqualTypeOf<{ orderId: string; lineNo: string }>();
+  });
+
+  test("a key without $params keeps the unparameterized surface", () => {
+    const wps = createWaitPoints((define) => ({
+      approval: define("my-approval")<undefined, { approved: boolean }>(),
+    }));
+    expectTypeOf(wps.approval.wait).toBeFunction();
+    expectTypeOf(wps.approval).not.toHaveProperty("with");
+  });
+
+  test("rejects a key that is not a literal", () => {
+    const key: string = "line-approval";
+    createWaitPoints((define) => ({
+      // @ts-expect-error a widened string cannot be checked for $params
+      bad: define(key)<undefined, string>(),
+    }));
+  });
+
+  test("rejects an identity-less key at the call site", () => {
+    expect(() =>
+      createWaitPoints((define) => ({
+        // @ts-expect-error a key made only of $params carries no identity of its own
+        bad: define("$itemId")<undefined, string>(),
+      })),
+    ).toThrow("needs at least one literal segment");
+    expect(() =>
+      createWaitPoints((define) => ({
+        // @ts-expect-error the same $param cannot appear twice
+        bad: define("a-$x-b-$x")<undefined, string>(),
+      })),
+    ).toThrow('parameter "$x" appears more than once');
+  });
+
+  test("with() substitutes params into the key", async () => {
+    const { waitCalls } = setupWaitPointMock({
+      onWait: () => ({ approved: true }),
+    });
+
+    const wps = createWaitPoints((define) => ({
+      lineApproval: define("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
+    }));
+
+    const result = await wps.lineApproval
+      .with({ lineId: "0191f3a2-7c4e" })
+      .wait({ message: "please" });
+
+    expect(result).toEqual({ approved: true });
+    expect(waitCalls).toEqual([
+      { key: "line-approval-0191f3a2-7c4e", payload: { message: "please" } },
+    ]);
+  });
+
+  test("with() keeps concurrent bindings apart", async () => {
+    const { waitCalls } = setupWaitPointMock({ onWait: () => ({ approved: true }) });
+
+    const wps = createWaitPoints((define) => ({
+      lineApproval: define("line-approval-$lineId")<undefined, { approved: boolean }>(),
+    }));
+
+    await Promise.all([
+      wps.lineApproval.with({ lineId: "a1" }).wait(),
+      wps.lineApproval.with({ lineId: "a2" }).wait(),
+    ]);
+
+    expect(waitCalls.map((c) => c.key)).toEqual(["line-approval-a1", "line-approval-a2"]);
+  });
+
+  test("with() substitutes params for resolve too", async () => {
+    const { resolveCalls } = setupWaitPointMock({
+      onResolve: async (_execId, _key, callback) => {
+        callback(undefined);
+      },
+    });
+
+    const wps = createWaitPoints((define) => ({
+      lineApproval: define("line-approval-$lineId")<undefined, { approved: boolean }>(),
+    }));
+
+    await wps.lineApproval.with({ lineId: "a1" }).resolve("exec-1", () => ({ approved: true }));
+
+    expect(resolveCalls).toEqual([{ executionId: "exec-1", key: "line-approval-a1" }]);
+  });
+
+  test("rejects param values that would break the key grammar", () => {
+    const wps = createWaitPoints((define) => ({
+      lineApproval: define("line-approval-$lineId")<undefined, { approved: boolean }>(),
+    }));
+
+    expect(() => wps.lineApproval.with({ lineId: "" })).toThrow('for parameter "lineId"');
+    expect(() => wps.lineApproval.with({ lineId: "Line1" })).toThrow('for parameter "lineId"');
+    expect(() => wps.lineApproval.with({ lineId: "line_1" })).toThrow('for parameter "lineId"');
+    expect(() => wps.lineApproval.with({ lineId: "-a" })).toThrow('for parameter "lineId"');
+    expect(() => wps.lineApproval.with({ lineId: "a-" })).toThrow('for parameter "lineId"');
+    // @ts-expect-error param values must be strings
+    expect(() => wps.lineApproval.with({ lineId: 1 })).toThrow("needs a string");
+    // @ts-expect-error every param must be supplied
+    expect(() => wps.lineApproval.with({})).toThrow("needs a string");
+  });
+
+  test("rejects a composed key longer than the platform limit", () => {
+    const wps = createWaitPoints((define) => ({
+      lineApproval: define("line-approval-$lineId")<undefined, { approved: boolean }>(),
+    }));
+
+    expect(() => wps.lineApproval.with({ lineId: "a".repeat(50) })).toThrow("the limit is 63");
+  });
+
+  test("accepts a run of hyphens alongside $params", async () => {
+    const { waitCalls } = setupWaitPointMock({ onWait: () => ({ approved: true }) });
+
+    const wps = createWaitPoints((define) => ({
+      lineApproval: define("line--approval-$lineId")<undefined, { approved: boolean }>(),
+    }));
+
+    await wps.lineApproval.with({ lineId: "a1" }).wait();
+    expect(waitCalls[0]?.key).toBe("line--approval-a1");
+  });
+
+  test("rejects a $param key whose fixed part breaks the grammar", () => {
+    expect(() =>
+      createWaitPoints((define) => ({
+        bad: define("-line-$lineId")<undefined, string>(),
+      })),
+    ).toThrow("must match");
+    expect(() =>
+      createWaitPoints((define) => ({
+        bad: define("line-$lineId-")<undefined, string>(),
+      })),
+    ).toThrow("must match");
+  });
+
+  test("rejects a key whose literal part cannot fit the limit", () => {
+    expect(() =>
+      createWaitPoints((define) => ({
+        tooLong: define(`${"a".repeat(62)}-$id`)<undefined, string>(),
+      })),
+    ).toThrow("cannot fit in 63 characters");
+  });
+
+  test("rejects $params taken from a property name", () => {
+    expect(() =>
+      createWaitPoints((define) => ({
+        "line-approval-$lineId": define<undefined, string>(),
+      })),
+    ).toThrow("cannot come from a property name");
+  });
+
+  test("rejects property names outside the platform grammar", () => {
+    expect(() =>
+      createWaitPoints((define) => ({
+        managerApproval: define<undefined, string>(),
+      })),
+    ).toThrow('segment "managerApproval"');
+  });
 });

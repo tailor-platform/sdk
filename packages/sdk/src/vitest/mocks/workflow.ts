@@ -1,5 +1,9 @@
 import { type Mock, vi } from "vitest";
 import { START_DEFAULT } from "#/configure/services/workflow/registry";
+import {
+  getWaitPointInvoker,
+  getWaitPointKey,
+} from "#/configure/services/workflow/wait-point-invoker";
 import { platformSerialize } from "#/utils/test/platform-serialize";
 import {
   clearWorkflowTestEnv,
@@ -8,7 +12,11 @@ import {
 } from "../../configure/services/workflow/test-env-key";
 import { tailorRoot, withDispose } from "./shared";
 import type { WorkflowJob } from "#/configure/services/workflow/job";
-import type { WaitPointInstance } from "#/configure/services/workflow/wait-point";
+import type {
+  ParameterizedWaitPointInstance,
+  WaitPointInstance,
+} from "#/configure/services/workflow/wait-point";
+import type { WaitPointInvoker } from "#/configure/services/workflow/wait-point-invoker";
 import type { Workflow } from "#/configure/services/workflow/workflow";
 import type { ExecJobFunctionOptions, StartWorkflowOptions } from "#/runtime/workflow";
 import type { TailorEnv } from "../../runtime/types";
@@ -42,6 +50,27 @@ interface StartedJob {
   args: unknown;
   options?: ExecJobFunctionOptions;
 }
+
+type InvokerWait = WaitPointInvoker["wait"];
+type InvokerResolve = WaitPointInvoker["resolve"];
+
+interface KeyDispatcherSlot {
+  perKey: Map<string, unknown>;
+  originalWait: (key: string, payload: unknown) => unknown;
+  originalResolve: (
+    key: string,
+    executionId: string,
+    callback: (payload: unknown) => unknown | Promise<unknown>,
+  ) => Promise<void>;
+}
+
+// `invoker.wait`/`resolve` may already be an enclosing scope's dispatcher. Keep
+// the base methods so a nested scope falls through to the platform mock rather
+// than to the outer scope's per-key mocks — the same split `replaceProcedure`
+// makes, where the default implementation calls the base while `restore` puts
+// back the immediately preceding scope.
+const baseInvokerWait = new WeakMap<InvokerWait, InvokerWait>();
+const baseInvokerResolve = new WeakMap<InvokerResolve, InvokerResolve>();
 
 interface ScopedMock {
   mockClear(): unknown;
@@ -121,7 +150,73 @@ export function mockWorkflow() {
   const jobSpies = new Map<object, unknown>();
   const workflowSpies = new Map<object, unknown>();
   const waitPointMocks = new Map<object, unknown>();
+  const keyDispatchers = new Map<object, KeyDispatcherSlot>();
   const scopedMocks = new Set<ScopedMock>();
+
+  // A parameterized wait point's `wait`/`resolve` live on the throwaway object
+  // returned by `.with()`, so there is nothing stable to spy on. Intercept the
+  // definition's invoker instead and dispatch on the resolved key.
+  const installKeyDispatcher = (definition: object): KeyDispatcherSlot => {
+    const cached = keyDispatchers.get(definition);
+    if (cached) return cached;
+
+    const invoker = getWaitPointInvoker(definition);
+    if (!invoker) {
+      throw new Error(
+        "waitPointWith expects a wait point definition created by createWaitPoint or createWaitPoints.",
+      );
+    }
+    const record = invoker as unknown as Record<string, unknown>;
+    const prevWait = invoker.wait;
+    const prevResolve = invoker.resolve;
+    const baseWait = baseInvokerWait.get(prevWait) ?? prevWait;
+    const baseResolve = baseInvokerResolve.get(prevResolve) ?? prevResolve;
+    const slot: KeyDispatcherSlot = {
+      perKey: new Map(),
+      originalWait: (key, payload) => baseWait.call(invoker, key, payload),
+      originalResolve: (key, executionId, callback) =>
+        baseResolve.call(invoker, key, executionId, callback),
+    };
+
+    const dispatchWait: InvokerWait = (key, payload) => {
+      const mock = slot.perKey.get(key) as { wait: Mock } | undefined;
+      if (!mock) return slot.originalWait(key, payload);
+      // A bound wait point always fills the payload slot, so `.wait()` arrives
+      // here as an explicit `undefined`. Drop it, or the recorded call would be
+      // `[undefined]` where `waitPoint()` — whose mock replaces `.wait` itself —
+      // records no argument, and `toHaveBeenCalledWith()` would fail.
+      return payload === undefined ? mock.wait() : mock.wait(payload);
+    };
+    const dispatchResolve: InvokerResolve = async (key, executionId, callback) => {
+      const mock = slot.perKey.get(key) as { resolve: Mock } | undefined;
+      if (!mock) return slot.originalResolve(key, executionId, callback);
+      await mock.resolve(executionId, callback);
+    };
+    baseInvokerWait.set(dispatchWait, baseWait);
+    baseInvokerResolve.set(dispatchResolve, baseResolve);
+    record.wait = dispatchWait;
+    record.resolve = dispatchResolve;
+
+    const eachSpy = (fn: (spy: Mock) => unknown) => {
+      for (const mock of slot.perKey.values()) {
+        const pair = mock as { wait: Mock; resolve: Mock };
+        fn(pair.wait);
+        fn(pair.resolve);
+      }
+    };
+    scopedMocks.add({
+      mockClear: () => eachSpy((spy) => spy.mockClear()),
+      mockReset: () => eachSpy((spy) => spy.mockReset()),
+      restore: () => {
+        record.wait = prevWait;
+        record.resolve = prevResolve;
+        keyDispatchers.delete(definition);
+      },
+    });
+
+    keyDispatchers.set(definition, slot);
+    return slot;
+  };
 
   const defaultExecJob = (
     jobName: string,
@@ -273,6 +368,62 @@ export function mockWorkflow() {
       };
 
       waitPointMocks.set(definition, waitPointMock);
+      return waitPointMock;
+    },
+
+    /**
+     * Get stable, typed mocks for one param binding of a parameterized wait point.
+     * Calls made with other bindings fall through to the platform mock.
+     * @param definition - Parameterized wait point definition to mock
+     * @param params - Param binding to intercept, as passed to `.with()`
+     * @returns Typed wait point mock control object
+     */
+    waitPointWith<Params extends object, Payload, Result>(
+      definition: ParameterizedWaitPointInstance<Params, Payload, Result>,
+      params: Params,
+    ) {
+      const key = getWaitPointKey(definition.with(params));
+      if (key === undefined) {
+        throw new Error(
+          "waitPointWith expects a wait point declared with $params. Use waitPoint() for a wait point with a fixed key.",
+        );
+      }
+      const slot = installKeyDispatcher(definition);
+
+      const existing = slot.perKey.get(key);
+      if (existing) {
+        return existing as {
+          wait: Mock<WaitPointInstance<Payload, Result>["wait"]>;
+          resolve: Mock<WaitPointInstance<Payload, Result>["resolve"]>;
+          setResolvePayload(payload: WaitPayload<Payload>): void;
+        };
+      }
+
+      const waitSpy = vi.fn((payload?: unknown) =>
+        slot.originalWait(key, payload),
+      ) as unknown as Mock<WaitPointInstance<Payload, Result>["wait"]>;
+      const resolveSpy = vi.fn(
+        (executionId: string, callback: (payload: unknown) => unknown | Promise<unknown>) =>
+          slot.originalResolve(key, executionId, callback),
+      ) as unknown as Mock<WaitPointInstance<Payload, Result>["resolve"]>;
+      const waitPointMock = {
+        wait: waitSpy,
+        resolve: resolveSpy,
+
+        /**
+         * Invoke the next and subsequent resolve callbacks with a wait payload.
+         * @param payload - Payload originally supplied to the wait point
+         */
+        setResolvePayload(payload: WaitPayload<Payload>): void {
+          (resolveSpy as unknown as Mock).mockImplementation(
+            async (_executionId: string, callback: (p: unknown) => unknown) => {
+              const result = await callback(platformSerialize(payload));
+              platformSerialize(result);
+            },
+          );
+        },
+      };
+      slot.perKey.set(key, waitPointMock);
       return waitPointMock;
     },
 
