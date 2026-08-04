@@ -7,15 +7,14 @@ name: Lockfile Audit Auto-fix
 # regression-only check in lockfile-audit.yml), while still keeping
 # pnpm-lock.yaml free of known-vulnerable dependency versions.
 #
-# Also prunes pnpm-workspace.yaml's minimumReleaseAgeExclude list of entries
-# that have outlived their purpose (the pinned version is now older than
-# minimumReleaseAge on its own, so the bypass is a no-op) — nothing else,
-# Renovate included, ever removes those, so the list only grows over time
-# unless swept here.
+# Also prunes pnpm-workspace.yaml of policy entries that have outlived their
+# purpose (see lockfile-audit-fix-normalize.mjs for what qualifies). Nothing
+# else, Renovate included, ever removes them, so those lists only grow over
+# time unless swept here.
 #
-# When the resulting change only touches devDependencies and/or the
-# minimumReleaseAgeExclude list, no published package's consumers are
-# affected, so the PR gets the skip-changeset label instead of a changeset.
+# When the resulting change only touches devDependencies and/or that pruning,
+# no published package's consumers are affected, so the PR gets the
+# skip-changeset label instead of a changeset.
 on:
   schedule:
     - cron: "0 3 * * *" # daily, 03:00 UTC
@@ -91,7 +90,13 @@ jobs:
             cp /tmp/lock-safe.yaml pnpm-lock.yaml
             cp /tmp/workspace-safe.yaml pnpm-workspace.yaml
             node .github/scripts/lockfile-audit-fix-normalize.mjs | tee -a /tmp/normalize.log
-            pnpm install --frozen-lockfile || true
+            # Pruning an orphaned override edits pnpm-workspace.yaml, which
+            # leaves the restored lockfile's `overrides:` snapshot stale — a
+            # frozen install legitimately fails there and has to be redone
+            # unfrozen, or the two files get committed out of sync. The
+            # unfrozen retry is not allowed to fail quietly: at that point the
+            # workspace really is uninstallable and must not reach a PR.
+            pnpm install --frozen-lockfile || pnpm install
           fi
 
       - name: Check for lockfile changes
@@ -122,19 +127,24 @@ jobs:
           {
             echo "body<<BODY_EOF"
             echo "Automated fix from the daily lockfile audit (\`pnpm audit --fix\`)."
-            echo ""
-            echo "Fixed advisories:"
-            while IFS= read -r id; do
-              [ -z "$id" ] && continue
-              jq -r --arg id "$id" \
-                '.advisories[] | select(.github_advisory_id == $id) | "- [\(.github_advisory_id)](https://github.com/advisories/\(.github_advisory_id)): \(.title) (`\(.module_name)`, severity: \(.severity))"' \
-                /tmp/before-audit.json
-            done <<< "$FIXED_IDS"
+            if [ -n "$FIXED_IDS" ]; then
+              echo ""
+              echo "Fixed advisories:"
+              while IFS= read -r id; do
+                [ -z "$id" ] && continue
+                jq -r --arg id "$id" \
+                  '.advisories[] | select(.github_advisory_id == $id) | "- [\(.github_advisory_id)](https://github.com/advisories/\(.github_advisory_id)): \(.title) (`\(.module_name)`, severity: \(.severity))"' \
+                  /tmp/before-audit.json
+              done <<< "$FIXED_IDS"
+            fi
             if [ "$REMAINING" != "0" ]; then
               echo ""
               echo "$REMAINING advisories remain and could not be auto-fixed (no compatible patched version in range, or still blocked by \`minimumReleaseAge\`)."
             fi
-            PRUNED=$(grep -o 'Dropping stale exclude entry "[^"]*"' /tmp/normalize.log 2>/dev/null | sed -E 's/Dropping stale exclude entry "(.*)"/\1/' | sort -u)
+            # No matches is the normal case, so the greps below must not be
+            # allowed to fail the step: `grep` exits 1 on no match, which a
+            # pipefail shell would surface through the assignment.
+            PRUNED=$(grep -o 'Dropping stale exclude entry "[^"]*"' /tmp/normalize.log 2>/dev/null | sed -E 's/Dropping stale exclude entry "(.*)"/\1/' | sort -u || true)
             if [ -n "$PRUNED" ]; then
               echo ""
               echo "Removed \`minimumReleaseAgeExclude\` entries that are no longer needed (the pinned version is now old enough on its own):"
@@ -142,6 +152,15 @@ jobs:
                 [ -z "$p" ] && continue
                 echo "- \`$p\`"
               done <<< "$PRUNED"
+            fi
+            ORPHANED=$(grep -o 'Dropping orphaned override entry "[^"]*"' /tmp/normalize.log 2>/dev/null | sed -E 's/Dropping orphaned override entry "(.*)"/\1/' | sort -u || true)
+            if [ -n "$ORPHANED" ]; then
+              echo ""
+              echo "Removed \`overrides\` entries whose package is no longer in the dependency tree (the pin protects nothing, and Renovate keeps filing no-op bump PRs against it):"
+              while IFS= read -r p; do
+                [ -z "$p" ] && continue
+                echo "- \`$p\`"
+              done <<< "$ORPHANED"
             fi
             echo "BODY_EOF"
           } >> "$GITHUB_OUTPUT"

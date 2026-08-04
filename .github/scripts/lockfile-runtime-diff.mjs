@@ -3,7 +3,7 @@
 // `devDependencies`) between a before/after snapshot, to tell whether an
 // automated lockfile change touched any published package's runtime
 // dependencies. Used to decide whether the `skip-changeset` label applies:
-// devDependencies-only bumps and minimumReleaseAgeExclude pruning don't
+// devDependencies-only bumps and pnpm-workspace.yaml policy pruning don't
 // affect consumers and don't need a changeset.
 
 import { readFileSync, appendFileSync, existsSync } from "node:fs";

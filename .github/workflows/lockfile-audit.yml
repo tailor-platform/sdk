@@ -9,14 +9,22 @@ name: Lockfile Audit
 # change, so pre-existing vulnerabilities elsewhere in the lockfile don't
 # block unrelated PRs. Those are instead picked up and auto-fixed by the
 # scheduled lockfile-audit-fix workflow.
+#
+# Also the PR-time home for the auto-fix normalizer's tests: that script only
+# ever runs on a schedule, so without this its changes would reach main
+# untested.
 on:
   push:
     branches: [main]
     paths:
       - pnpm-lock.yaml
+      - .github/scripts/lockfile-audit-fix-normalize.mjs
+      - .github/scripts/lockfile-audit-fix-normalize.test.mjs
   pull_request:
     paths:
       - pnpm-lock.yaml
+      - .github/scripts/lockfile-audit-fix-normalize.mjs
+      - .github/scripts/lockfile-audit-fix-normalize.test.mjs
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -103,3 +111,24 @@ jobs:
             exit 1
           fi
           echo "No new advisories introduced by this change."
+
+  normalize-tests:
+    name: Test auto-fix normalizer
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24.18.1"
+
+      - name: Run tests
+        run: node --test .github/scripts/lockfile-audit-fix-normalize.test.mjs
