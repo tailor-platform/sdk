@@ -7,8 +7,10 @@
  */
 
 import { stat } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
 import { LinesDB, ErrorFormatter, JsonlReader, JsonlWriter } from "@toiroakr/lines-db";
+// `pathe`, not `node:path`: the file paths reported back are printed and returned
+// to the caller, and these stay separator-stable across platforms.
+import { basename, dirname, join } from "pathe";
 import type { ValidationErrorDetail } from "@toiroakr/lines-db";
 
 export { defineSchema } from "@toiroakr/lines-db";
