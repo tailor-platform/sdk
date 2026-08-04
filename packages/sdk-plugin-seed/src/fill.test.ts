@@ -3,8 +3,9 @@ import * as os from "node:os";
 import { fillSeedData } from "@tailor-platform/sdk/seed";
 import * as path from "pathe";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
+import { z } from "zod";
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const uuid = z.uuid();
 
 // The generated data dir lives outside the workspace, so the schema files it
 // holds import the SDK by resolved URL instead of by package name.
@@ -85,7 +86,7 @@ describe("fillSeedData", () => {
     expect(Object.keys(rows[0] ?? {})).toEqual(["id", "name"]);
     expect(Object.keys(rows[1] ?? {})).toEqual(["id", "name", "note"]);
     for (const row of rows) {
-      expect(row.id).toMatch(UUID_PATTERN);
+      expect(uuid.safeParse(row.id).success, `id: ${String(row.id)}`).toBe(true);
       // The hook computes these before validation; only the named fields are written back.
       expect(row).not.toHaveProperty("createdAt");
       expect(row).not.toHaveProperty("updatedAt");
@@ -109,7 +110,7 @@ describe("fillSeedData", () => {
     expect(rows[1]?.createdAt).toEqual(expect.any(String));
     for (const row of rows) {
       expect(Object.keys(row)).toEqual(["id", "name", "createdAt"]);
-      expect(row.id).toMatch(UUID_PATTERN);
+      expect(uuid.safeParse(row.id).success, `id: ${String(row.id)}`).toBe(true);
       expect(row).not.toHaveProperty("updatedAt");
     }
   });
@@ -157,7 +158,8 @@ describe("fillSeedData", () => {
     const result = await fillSeedData({ path: widgetPath });
 
     expect(result.valid && result.filled.map(({ table }) => table)).toEqual(["Widget"]);
-    expect((await readRows(widgetPath))[0]?.id).toMatch(UUID_PATTERN);
+    const widgetId = (await readRows(widgetPath))[0]?.id;
+    expect(uuid.safeParse(widgetId).success, `id: ${String(widgetId)}`).toBe(true);
     expect((await readRows(gadgetPath))[0]).not.toHaveProperty("id");
   });
 });
