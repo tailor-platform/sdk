@@ -11,8 +11,9 @@ export const seedFillCommand = defineAppCommand({
   description: "Fill in the values a record gets on create for JSONL seed data rows missing them.",
   notes:
     "Rows are validated first: invalid data is reported and left untouched. Only the named fields " +
-    "are written, so every other value each line already held is kept as it is. A field a type does " +
-    "not have is skipped for that type, so one field list covers a whole data directory.",
+    "take a new value, so every other field keeps the value its line already had, though a rewritten " +
+    "file has its key order and JSON formatting normalized. A field the type does not give every row " +
+    "a value for is skipped for that type, so one field list covers a whole data directory.",
   args: z.strictObject({
     ...configArg,
     fields: arg(z.string().default("id"), {

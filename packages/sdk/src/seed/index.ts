@@ -188,17 +188,20 @@ async function sortRowKeys(file: string, fieldOrder: string[]): Promise<void> {
  * it is ever seeded.
  *
  * Resolves the given path (directory or `.jsonl` file) and validates it first:
- * invalid data is reported and left untouched. Only the named fields are
- * written, so every other value each line already held stays exactly as it was,
- * and lines keep the order the file lists them in. A file is rewritten only
- * when it is missing one of the fields, and a field the type does not give every
- * row a value for — one it does not declare, or one the platform assigns such as
- * a serial field — is skipped for that type, so one field list covers a whole
+ * invalid data is reported and left untouched. Only the named fields take a new
+ * value, so every other field keeps the value its line already had, and lines
+ * keep the order the file lists them in. A file is rewritten only when it is
+ * missing one of the fields, and a field the type does not give every row a
+ * value for — one it does not declare, or one the platform assigns such as a
+ * serial field — is skipped for that type, so one field list covers a whole
  * data directory.
  *
  * A rewritten file gets its keys ordered the way the type declares its fields,
  * so a filled-in field lands where the type puts it rather than at the end of
- * the line. Keys the type does not declare follow the declared ones.
+ * the line. Keys the type does not declare follow the declared ones. Reordering
+ * writes the file back through JSON serialization, so its formatting is
+ * normalized too: a line that was not already in that form comes back
+ * reformatted even where none of its values changed.
  *
  * A field whose value comes from the type's `id`, a field default, or a create
  * hook that returns its input is only filled in where it is missing. A field

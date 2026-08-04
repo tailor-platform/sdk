@@ -60,9 +60,9 @@ A relation in seed data points at a field of the row it references — usually i
 tailor seed fill --fields id,createdAt
 ```
 
-Only the named fields are written. Every other value the line already held stays exactly as it was — fields you did not name are not baked into the file, optional fields the line omits stay omitted, and lines keep the order the file lists them in. A field a type does not have is skipped for that type, so one field list covers a whole data directory: `--fields id` leaves the IdP `_User` data alone, whose rows are identified by `name` rather than an id. A file that is missing none of the named fields is not rewritten at all.
+Only the named fields take a new value. Every other field keeps the value its line already had — fields you did not name are not baked into the file, optional fields the line omits stay omitted, and lines keep the order the file lists them in. One field list covers a whole data directory: `--fields id` leaves the IdP `_User` data alone, whose rows are identified by `name` rather than an id. A file that is missing none of the named fields is not rewritten at all.
 
-A rewritten file gets its keys ordered the way the type declares its fields, so `id` lands at the front of the line and a `createdAt` next to the other timestamps, wherever the line happened to be missing them. Keys the type does not declare follow the declared ones.
+A rewritten file gets its keys ordered the way the type declares its fields, so `id` lands at the front of the line and a `createdAt` next to the other timestamps, wherever the line happened to be missing them. Keys the type does not declare follow the declared ones. Reordering means the file goes back through JSON serialization, so its formatting is normalized as well — a line that was not already in that form comes back reformatted even where none of its values changed. It is the values that are preserved, not the bytes.
 
 Only a field the type gives every row a value for can be filled. A field the platform assigns — a `serial` field, for instance — has no value to fill in from here, so naming it fills nothing and reports it:
 
