@@ -136,8 +136,8 @@ function formatValidationErrors(errors: ValidationErrorDetail[], verbose: boolea
 
 /**
  * Validate JSONL seed data against schema definitions.
- * Resolves the given path (directory or `.jsonl` file), runs LinesDB
- * validation, and returns formatted output and error messages.
+ * Resolves the given path (directory or `.jsonl` file), validates the rows it
+ * holds, and returns formatted output and error messages.
  * @param options - Validation options including path and verbose flag
  * @returns Validation result with output messages and optional error details
  */
