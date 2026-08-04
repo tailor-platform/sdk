@@ -56,6 +56,37 @@ describe("createTailorDBHook", () => {
       const result = createTailorDBHook(type)({ nickname: null });
       expect(result.nickname).toBeNull();
     });
+
+    test("keeps a field the data does not carry as an undefined key", () => {
+      const type = db.table("Test", {
+        name: db.string(),
+        nickname: db.string({ optional: true }),
+      });
+      const result = createTailorDBHook(type)({ name: "alice" });
+      // The key has to stay: a database schema inferred from these records reads
+      // the `undefined` as a null and makes the column nullable, which is what
+      // lets a row that omits the field be inserted at all.
+      expect(Object.hasOwn(result, "nickname")).toBe(true);
+      expect(result.nickname).toBeUndefined();
+    });
+
+    test("does not take a field named after an Object member off the prototype", () => {
+      const type = db.table("Test", {
+        name: db.string(),
+        toString: db.string({ optional: true }),
+      });
+      const result = createTailorDBHook(type)({ name: "alice" });
+      expect(Object.entries(result)).toContainEqual(["toString", undefined]);
+    });
+
+    test("passes through a field named after an Object member when the data carries it", () => {
+      const type = db.table("Test", {
+        name: db.string(),
+        toString: db.string({ optional: true }),
+      });
+      const result = createTailorDBHook(type)({ name: "alice", toString: "kept" });
+      expect(Object.entries(result)).toContainEqual(["toString", "kept"]);
+    });
   });
 
   describe("single nested object field", () => {
@@ -288,5 +319,23 @@ describe("createStandardSchema", () => {
     const result = schema["~standard"].validate({ name: 42 });
     expect(result).toHaveProperty("issues");
     expect((result as { issues: unknown[] }).issues.length).toBeGreaterThan(0);
+  });
+
+  test("returns a value when a field named after an Object member is omitted", () => {
+    const type = db.table("Test", {
+      name: db.string(),
+      toString: db.string({ optional: true }),
+    });
+    const schemaType = t.object({
+      id: t.uuid(),
+      name: t.string(),
+      toString: t.string({ optional: true }),
+    });
+    const schema = createStandardSchema(schemaType, createTailorDBHook(type));
+
+    // The validator reads the hooked record by key, so `toString` has to resolve
+    // to the field rather than to `Object.prototype.toString`.
+    const result = schema["~standard"].validate({ name: "alice" });
+    expect(result).toHaveProperty("value");
   });
 });
