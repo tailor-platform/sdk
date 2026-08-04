@@ -153,7 +153,9 @@ describe("fillSeedData", () => {
   });
 
   test("keeps an undeclared key named after an Object member", async () => {
-    const jsonlPath = await writeTable("Widget", ['{"name":"first","toString":"kept"}']);
+    const jsonlPath = await writeTable("Widget", [
+      '{"name":"first","toString":"kept","__proto__":"kept"}',
+    ]);
 
     const result = await fillSeedData({ path: dataDir });
 
@@ -161,8 +163,7 @@ describe("fillSeedData", () => {
       { table: "Widget", file: jsonlPath, fields: ["id"], count: 1 },
     ]);
     const rows = await readRows(jsonlPath);
-    expect(rows[0]?.toString).toBe("kept");
-    expect(Object.keys(rows[0] ?? {})).toEqual(["id", "name", "toString"]);
+    expect(Object.keys(rows[0] ?? {})).toEqual(["id", "name", "toString", "__proto__"]);
   });
 
   test("does not fill a field the platform assigns, such as a serial", async () => {
