@@ -252,6 +252,9 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
       for (const field of tableFields) {
         producedFields.add(field);
       }
+      if (tableFields.length === 0) {
+        continue;
+      }
       const file = join(dataDir, `${table}.jsonl`);
       const rows = await JsonlReader.read(file);
       const missingFields = tableFields.filter((field) =>
