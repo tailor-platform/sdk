@@ -10,10 +10,11 @@ export const seedFillCommand = defineAppCommand({
   name: "fill",
   description: "Fill in the values a record gets on create for JSONL seed data rows missing them.",
   notes:
-    "Rows are validated first: invalid data is reported and left untouched. Only the named fields " +
-    "take a new value, so every other field keeps the value its line already had, though a rewritten " +
-    "file has its key order and JSON formatting normalized. A field the type does not give every row " +
-    "a value for is skipped for that type, so one field list covers a whole data directory.",
+    "The values come from the type itself, and nothing is validated, so rows can be filled while the " +
+    "data around them is still incomplete — run `tailor seed validate` when it is ready. A value " +
+    "already in the file is never replaced, and a line that gains nothing is left byte for byte as " +
+    "it was. A field the type gives no value to is skipped, so one field list covers a whole data " +
+    "directory.",
   args: z.strictObject({
     ...configArg,
     fields: arg(z.string().default("id"), {
@@ -47,19 +48,12 @@ export const seedFillCommand = defineAppCommand({
       targetPath = path.join(context.distPath, "data");
     }
 
-    const result = await fillSeedData({ path: targetPath, fields, verbose: args.verbose });
+    const result = await fillSeedData({ path: targetPath, fields });
     if (result.output) {
       logger.log(result.output);
     }
     if (args.json) {
-      logger.out({
-        valid: result.valid,
-        path: targetPath,
-        filled: result.valid ? result.filled : [],
-      });
-    }
-    if (!result.valid) {
-      throw new Error(result.error);
+      logger.out({ path: targetPath, filled: result.filled });
     }
   },
 });

@@ -39,6 +39,9 @@ tailor seed fill
 tailor seed fill --fields id,createdAt
 tailor seed fill ./seed/data/User.jsonl
 
+# Fill, then check the result
+tailor seed fill && tailor seed validate
+
 # Update existing rows (matched by id, or by name for _User) instead of failing on duplicates
 tailor seed apply --upsert
 ```
@@ -60,18 +63,24 @@ A relation in seed data points at a field of the row it references — usually i
 tailor seed fill --fields id,createdAt
 ```
 
-Only the named fields take a new value. Every other field keeps the value its line already had — fields you did not name are not baked into the file, optional fields the line omits stay omitted, and lines keep the order the file lists them in. One field list covers a whole data directory: `--fields id` leaves the IdP `_User` data alone, whose rows are identified by `name` rather than an id. A file that is missing none of the named fields is not rewritten at all.
+The values come from the type itself — its `id`, its field defaults, its create hooks — applied to each row on its own.
 
-A rewritten file gets its keys ordered the way the type declares its fields, so `id` lands at the front of the line and a `createdAt` next to the other timestamps, wherever the line happened to be missing them. Keys the type does not declare follow the declared ones. Reordering means the file goes back through JSON serialization, so its formatting is normalized as well — a line that was not already in that form comes back reformatted even where none of its values changed. It is the values that are preserved, not the bytes.
+**Nothing is validated.** That is deliberate: the ids are what you need in order to write the rows that reference them, so waiting for the data to be valid would be waiting for the thing this command gives you. A row can be filled while a required field is still missing, or while another file references an id that does not exist yet. Run `tailor seed validate` once the data is ready.
 
-Only a field the type gives every row a value for can be filled. A field the platform assigns — a `serial` field, for instance — has no value to fill in from here, so naming it fills nothing and reports it:
+Only the named fields are written, and only into a row that has no value for them, so **a value already in the file is never replaced** — a row that already carries a `createdAt` keeps it. A field the type gives no value to is skipped: `--fields id` leaves the IdP `_User` data alone, whose rows are identified by `name`, and a field the platform assigns rather than the type — a `serial` field — has nothing to fill in from here:
 
 ```
 ⚠ No seed data produces a value for: invoiceNumber
 ✓ Nothing to fill
 ```
 
-A field whose value comes from the type's `id`, a field default, or a create hook that returns its input is only filled in where it is missing — a row that already carries a `createdAt` keeps it. A field whose create hook ignores the current value (a computed field such as a formatted address) is recomputed for every row of a file that gets rewritten.
+**A line that gains nothing is left exactly as it was, byte for byte.** Only the lines that take a value are rewritten, and those get their keys in the order the type declares its fields, so a filled-in `id` lands at the front of the line and a `createdAt` next to the other timestamps. Keys the type does not declare follow the declared ones.
+
+The values are read from the schema files `seedPlugin` generates next to the data, so a project that has not run `tailor generate` since upgrading gets told to:
+
+```
+./seed/data/Customer.schema.ts does not export `hook`. Run `tailor generate` to regenerate the seed schema files.
+```
 
 The data is validated first and nothing is written when validation fails, so a run over the whole data directory stops rather than replacing an id that existing rows already reference. Naming a single `.jsonl` file limits the run to that file, which does not see the rows in other files that reference it — fill a referenced type before writing the rows that reference it, and run `tailor seed validate` when you are done.
 

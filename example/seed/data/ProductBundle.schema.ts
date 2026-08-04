@@ -8,7 +8,7 @@ const schemaType = t.object({
   ...productBundle.omitFields(["id"]),
 });
 
-const hook = createTailorDBHook(productBundle);
+export const hook = createTailorDBHook(productBundle);
 
 export const schema = defineSchema(
   createStandardSchema(schemaType, hook),

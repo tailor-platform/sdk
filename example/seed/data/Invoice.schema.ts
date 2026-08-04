@@ -8,7 +8,7 @@ const schemaType = t.object({
   ...invoice.omitFields(["id","invoiceNumber","sequentialId"]),
 });
 
-const hook = createTailorDBHook(invoice);
+export const hook = createTailorDBHook(invoice);
 
 export const schema = defineSchema(
   createStandardSchema(schemaType, hook),

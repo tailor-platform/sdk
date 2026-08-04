@@ -8,7 +8,7 @@ const schemaType = t.object({
   ...order.omitFields(["id"]),
 });
 
-const hook = createTailorDBHook(order);
+export const hook = createTailorDBHook(order);
 
 export const schema = defineSchema(
   createStandardSchema(schemaType, hook),

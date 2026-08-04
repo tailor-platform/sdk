@@ -6,12 +6,13 @@
  * seed-specific utility functions used by the code generator.
  */
 
-import { stat } from "node:fs/promises";
-import { LinesDB, ErrorFormatter, JsonlReader, JsonlWriter } from "@toiroakr/lines-db";
+import { readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
+import { LinesDB, ErrorFormatter, findSchemaFile } from "@toiroakr/lines-db";
 // `pathe`, not `node:path`: the file paths reported back are printed and returned
 // to the caller, and these stay separator-stable across platforms.
 import { basename, dirname, join } from "pathe";
-import type { ValidationErrorDetail } from "@toiroakr/lines-db";
+import type { JsonObject, ValidationErrorDetail } from "@toiroakr/lines-db";
 
 export { defineSchema } from "@toiroakr/lines-db";
 export type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
@@ -54,13 +55,12 @@ type FillSeedDataOptions = {
   path: string;
   /** Fields to fill. Defaults to `id`. */
   fields?: readonly string[];
-  /** Show verbose error output */
-  verbose?: boolean;
 };
 
-type FillSeedDataResult =
-  | { valid: true; output: string; filled: FilledSeedFile[] }
-  | { valid: false; output: string; error: string };
+type FillSeedDataResult = {
+  output: string;
+  filled: FilledSeedFile[];
+};
 
 async function resolveSeedDataTarget(resolvedPath: string): Promise<SeedDataTarget> {
   const stats = await stat(resolvedPath);
@@ -71,6 +71,13 @@ async function resolveSeedDataTarget(resolvedPath: string): Promise<SeedDataTarg
     return { dataDir: dirname(resolvedPath), tableName: basename(resolvedPath, ".jsonl") };
   }
   throw new Error(`Invalid path: ${resolvedPath}. Must be a directory or .jsonl file.`);
+}
+
+async function listSeedTables(dataDir: string): Promise<string[]> {
+  const entries = await readdir(dataDir);
+  return entries
+    .filter((entry) => entry.endsWith(".jsonl"))
+    .map((entry) => basename(entry, ".jsonl"));
 }
 
 function formatWarnings(warnings: string[]): string[] {
@@ -162,144 +169,168 @@ export async function validateSeedData(
   };
 }
 
-// `Object.hasOwn`, not `field in row`: a field named `toString` would otherwise
-// read as present on every row.
-function hasValue(row: Record<string, unknown>, field: string): boolean {
-  return Object.hasOwn(row, field) && row[field] !== null && row[field] !== undefined;
+// A row's own value for a field, or undefined when the row has none.
+function ownValue(row: Record<string, unknown>, field: string): unknown {
+  return Object.hasOwn(row, field) ? row[field] : undefined;
 }
 
-async function sortRowKeys(file: string, fieldOrder: string[]): Promise<void> {
+function isBlank(value: unknown): boolean {
+  return value === undefined || value === null;
+}
+
+/** A JSONL line, kept as text so an untouched line is written back verbatim. */
+type SeedLine = {
+  text: string;
+  /** Line separator the file used after this line, kept so CRLF survives. */
+  eol: string;
+  row: JsonObject | undefined;
+};
+
+function splitLines(content: string): SeedLine[] {
+  if (content === "") {
+    return [];
+  }
+  return content.split("\n").map((raw, index, all) => {
+    const eol = index === all.length - 1 ? "" : "\n";
+    const text = raw.endsWith("\r") ? raw.slice(0, -1) : raw;
+    const carriage = raw.endsWith("\r") ? "\r" : "";
+    let row: JsonObject | undefined;
+    if (text.trim() !== "") {
+      try {
+        const parsed: unknown = JSON.parse(text);
+        row =
+          parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+            ? (parsed as JsonObject)
+            : undefined;
+      } catch {
+        row = undefined;
+      }
+    }
+    return { text, eol: `${carriage}${eol}`, row };
+  });
+}
+
+// Keys go in the order the hook produced them, which is the order the type
+// declares its fields. Keys the type does not declare follow the declared ones.
+function serializeRow(row: JsonObject, fieldOrder: string[]): string {
   const rank = new Map(fieldOrder.map((field, index) => [field, index]));
-  // Undeclared keys all rank past the declared ones and, the sort being stable,
-  // keep the order the line had them in.
   const rankOf = (key: string): number => rank.get(key) ?? fieldOrder.length;
-  const rows = await JsonlReader.read(file);
-  await JsonlWriter.write(
-    file,
-    // `Object.entries` / `Object.fromEntries` stay on own properties, so a row
-    // holding `__proto__` or `toString` keeps that key.
-    rows.map((row) =>
-      Object.fromEntries(Object.entries(row).toSorted(([a], [b]) => rankOf(a) - rankOf(b))),
-    ),
+  return JSON.stringify(
+    Object.fromEntries(Object.entries(row).toSorted(([a], [b]) => rankOf(a) - rankOf(b))),
   );
 }
 
+type SeedHook = (row: unknown) => Record<string, unknown>;
+
+async function loadSeedHook(dataDir: string, table: string): Promise<SeedHook | undefined> {
+  const schemaPath = await findSchemaFile(dataDir, table);
+  if (!schemaPath) {
+    return undefined;
+  }
+  const loaded: unknown = await import(pathToFileURL(schemaPath).href);
+  const hook = (loaded as { hook?: unknown }).hook;
+  if (typeof hook !== "function") {
+    throw new Error(
+      `${schemaPath} does not export \`hook\`. Run \`tailor generate\` to regenerate the seed schema files.`,
+    );
+  }
+  return hook as SeedHook;
+}
+
 /**
- * Write the values a record gets on create into JSONL seed data rows that are
- * missing them, so a row can be referenced by `id` or carry a timestamp before
- * it is ever seeded.
+ * Fill in the values a record gets on create for the JSONL seed data rows that
+ * are missing them, so a row can be referenced by `id` or carry a timestamp
+ * before it is ever seeded.
  *
- * Resolves the given path (directory or `.jsonl` file) and validates it first:
- * invalid data is reported and left untouched. Only the named fields take a new
- * value, so every other field keeps the value its line already had, and lines
- * keep the order the file lists them in. A file is rewritten only when it is
- * missing one of the fields, and a field the type does not give every row a
- * value for — one it does not declare, or one the platform assigns such as a
- * serial field — is skipped for that type, so one field list covers a whole
- * data directory.
+ * The values come from the type's own create-time behavior — its `id`, its field
+ * defaults, and its create hooks — applied to each row on its own. Nothing is
+ * validated, so a row can be filled while the data around it is still
+ * incomplete: that is what lets you get the ids you need in order to write the
+ * rows that reference them. Run `validateSeedData` when the data is ready.
  *
- * A rewritten file gets its keys ordered the way the type declares its fields,
- * so a filled-in field lands where the type puts it rather than at the end of
- * the line. Keys the type does not declare follow the declared ones. Reordering
- * writes the file back through JSON serialization, so its formatting is
- * normalized too: a line that was not already in that form comes back
- * reformatted even where none of its values changed.
- *
- * A field whose value comes from the type's `id`, a field default, or a create
- * hook that returns its input is only filled in where it is missing. A field
- * whose create hook ignores its input is recomputed for every row of a file
- * that gets rewritten.
+ * Only the named fields are written, and only into a row that has no value for
+ * them, so a value already in the file is never replaced. A line that gains
+ * nothing is written back exactly as it was, byte for byte; a line that does get
+ * a value is re-serialized with its keys in the order the type declares its
+ * fields, so a filled-in `id` lands at the front. A field the type gives no
+ * value to — one it does not declare, or one the platform assigns such as a
+ * serial field — is skipped, so one field list covers a whole data directory.
  * @param options - Fill options including path, fields, and verbose flag
- * @returns Which files received which fields, or validation error details
+ * @returns Which files received which fields
  */
 export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSeedDataResult> {
-  const { path: resolvedPath, fields = DEFAULT_FILL_FIELDS, verbose = false } = options;
+  const { path: resolvedPath, fields = DEFAULT_FILL_FIELDS } = options;
   if (fields.length === 0) {
     throw new Error("No fields to fill. Name at least one field.");
   }
   const { dataDir, tableName } = await resolveSeedDataTarget(resolvedPath);
+  const tables = tableName ? [tableName] : await listSeedTables(dataDir);
 
-  const db = LinesDB.create({ dataDir });
-  try {
-    const result = await db.initialize({ tableName, detailedValidate: true });
+  const warnings: string[] = [];
+  const filled: FilledSeedFile[] = [];
+  const producedFields = new Set<string>();
 
-    if (!result.valid) {
-      return {
-        valid: false,
-        output: formatWarnings(result.warnings).join("\n"),
-        error: formatValidationErrors(result.errors, verbose),
-      };
+  for (const table of tables) {
+    const hook = await loadSeedHook(dataDir, table);
+    if (!hook) {
+      warnings.push(`No schema file for ${table}, so nothing can be filled in there`);
+      continue;
     }
+    const file = join(dataDir, `${table}.jsonl`);
+    const lines = splitLines(await readFile(file, "utf-8"));
 
-    // Decide every file's write-back before writing any of it, so a field no
-    // seeded type produces is reported against the whole run.
-    const plans: { filled: FilledSeedFile; fieldOrder: string[] }[] = [];
-    const producedFields = new Set<string>();
-    let inspectedTables = 0;
-    for (const table of tableName ? [tableName] : db.getTableNames()) {
-      const columns = db.getSchema(table)?.columns;
-      if (!columns) {
+    const written = new Set<string>();
+    let count = 0;
+    let fieldOrder: string[] = [];
+    for (const line of lines) {
+      const row = line.row;
+      if (!row) {
         continue;
       }
-      inspectedTables += 1;
-      // A field is fillable only where the type gives every row a value for it.
-      // A serial field is declared but left to the platform, so filling it would
-      // write nulls over the file rather than a value.
-      const producedRows = db.find(table);
-      const tableFields = fields.filter(
-        (field) => producedRows.length > 0 && producedRows.every((row) => hasValue(row, field)),
-      );
-      for (const field of tableFields) {
+      const hooked = hook(row);
+      fieldOrder = Object.keys(hooked);
+      const gained = fields.filter((field) => {
+        const value = ownValue(hooked, field);
+        if (isBlank(value)) {
+          return false;
+        }
         producedFields.add(field);
-      }
-      if (tableFields.length === 0) {
-        continue;
-      }
-      const file = join(dataDir, `${table}.jsonl`);
-      const rows = await JsonlReader.read(file);
-      const missingFields = tableFields.filter((field) =>
-        rows.some((row) => !hasValue(row, field)),
-      );
-      if (missingFields.length === 0) {
-        continue;
-      }
-      plans.push({
-        filled: {
-          table,
-          file,
-          fields: missingFields,
-          count: rows.filter((row) => missingFields.some((field) => !hasValue(row, field))).length,
-        },
-        fieldOrder: columns.map((column) => column.name),
+        return isBlank(ownValue(row, field));
       });
+      if (gained.length === 0) {
+        continue;
+      }
+      for (const field of gained) {
+        row[field] = hooked[field] as JsonObject[string];
+        written.add(field);
+      }
+      line.text = serializeRow(row, fieldOrder);
+      count += 1;
     }
 
-    const warnings = [...result.warnings];
-    const unproducedFields = fields.filter((field) => !producedFields.has(field));
-    if (inspectedTables > 0 && unproducedFields.length > 0) {
-      warnings.push(`No seed data produces a value for: ${unproducedFields.join(", ")}`);
+    if (count === 0) {
+      continue;
     }
-
-    for (const { filled, fieldOrder } of plans) {
-      await db.sync(filled.table, { fields: filled.fields });
-      await sortRowKeys(filled.file, fieldOrder);
-    }
-
-    const filled = plans.map((plan) => plan.filled);
-    const outputLines = formatWarnings(warnings);
-    outputLines.push(
-      filled.length === 0
-        ? "✓ Nothing to fill"
-        : filled
-            .map(
-              ({ file, fields: tableFields, count }) =>
-                `✓ ${file}: filled ${tableFields.join(", ")} in ${count} row(s)`,
-            )
-            .join("\n"),
-    );
-
-    return { valid: true, output: outputLines.join("\n"), filled };
-  } finally {
-    await db.close();
+    await writeFile(file, lines.map((line) => `${line.text}${line.eol}`).join(""));
+    filled.push({ table, file, fields: [...written], count });
   }
+
+  const unproducedFields = fields.filter((field) => !producedFields.has(field));
+  if (tables.length > 0 && unproducedFields.length > 0) {
+    warnings.push(`No seed data produces a value for: ${unproducedFields.join(", ")}`);
+  }
+
+  const outputLines = formatWarnings(warnings);
+  outputLines.push(
+    filled.length === 0
+      ? "\u2713 Nothing to fill"
+      : filled
+          .map(
+            ({ file, fields: tableFields, count }) =>
+              `\u2713 ${file}: filled ${tableFields.join(", ")} in ${count} row(s)`,
+          )
+          .join("\n"),
+  );
+
+  return { output: outputLines.join("\n"), filled };
 }

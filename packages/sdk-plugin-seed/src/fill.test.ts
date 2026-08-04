@@ -37,7 +37,8 @@ const schemaType = t.object({
   ...type.omitFields(["id", "createdAt", "updatedAt", "serialNumber"]),
 });
 
-export const schema = defineSchema(createStandardSchema(schemaType, createTailorDBHook(type)));
+export const hook = createTailorDBHook(type);
+export const schema = defineSchema(createStandardSchema(schemaType, hook));
 `;
 }
 
@@ -75,10 +76,7 @@ describe("fillSeedData", () => {
 
     const result = await fillSeedData({ path: dataDir });
 
-    expect(result.valid).toBe(true);
-    expect(result.valid && result.filled).toEqual([
-      { table: "Widget", file: jsonlPath, fields: ["id"], count: 2 },
-    ]);
+    expect(result.filled).toEqual([{ table: "Widget", file: jsonlPath, fields: ["id"], count: 2 }]);
 
     const rows = await readRows(jsonlPath);
     expect(rows.map((row) => row.name)).toEqual(["second", "first"]);
@@ -102,7 +100,7 @@ describe("fillSeedData", () => {
 
     const result = await fillSeedData({ path: dataDir, fields: ["id", "createdAt"] });
 
-    expect(result.valid && result.filled).toEqual([
+    expect(result.filled).toEqual([
       { table: "Widget", file: jsonlPath, fields: ["id", "createdAt"], count: 2 },
     ]);
 
@@ -124,8 +122,7 @@ describe("fillSeedData", () => {
 
     const result = await fillSeedData({ path: dataDir });
 
-    expect(result.valid).toBe(true);
-    expect(result.valid && result.filled).toEqual([]);
+    expect(result.filled).toEqual([]);
     expect(result.output).toContain("Nothing to fill");
     await expect(readFile(jsonlPath, "utf-8")).resolves.toBe(before);
   });
@@ -136,20 +133,40 @@ describe("fillSeedData", () => {
 
     const result = await fillSeedData({ path: dataDir, fields: ["nope"] });
 
-    expect(result.valid && result.filled).toEqual([]);
+    expect(result.filled).toEqual([]);
     expect(result.output).toContain("No seed data produces a value for: nope");
     await expect(readFile(jsonlPath, "utf-8")).resolves.toBe(before);
   });
 
-  test("reports invalid data and writes nothing", async () => {
-    const jsonlPath = await writeTable("Widget", ['{"name":42}']);
-    const before = await readFile(jsonlPath, "utf-8");
+  test("fills a row while the data around it is still invalid", async () => {
+    // `name` is required and wrongly typed here: filling must not depend on the
+    // data being ready, since the ids are what you need to make it ready.
+    const jsonlPath = await writeTable("Widget", ['{"name":42}', '{"unrelated":"row"}']);
 
     const result = await fillSeedData({ path: dataDir });
 
-    expect(result.valid).toBe(false);
-    expect(result.valid === false && result.error).toContain("Widget.jsonl");
-    await expect(readFile(jsonlPath, "utf-8")).resolves.toBe(before);
+    expect(result.filled).toEqual([{ table: "Widget", file: jsonlPath, fields: ["id"], count: 2 }]);
+    const rows = await readRows(jsonlPath);
+    expect(rows[0]?.name).toBe(42);
+    expect(rows[1]?.unrelated).toBe("row");
+    for (const row of rows) {
+      expect(uuid.safeParse(row.id).success, `id: ${String(row.id)}`).toBe(true);
+    }
+  });
+
+  test("leaves a line that gains nothing byte for byte", async () => {
+    const jsonlPath = await writeTable("Widget", [
+      '{ "id":"11111111-1111-1111-1111-111111111111",  "name":"spaced" }',
+      '{"name":"gains an id"}',
+    ]);
+
+    const result = await fillSeedData({ path: dataDir });
+
+    expect(result.filled).toEqual([{ table: "Widget", file: jsonlPath, fields: ["id"], count: 1 }]);
+    const lines = (await readFile(jsonlPath, "utf-8")).split("\n");
+    // Untouched: the odd spacing survives because the line was never re-serialized.
+    expect(lines[0]).toBe('{ "id":"11111111-1111-1111-1111-111111111111",  "name":"spaced" }');
+    expect(JSON.parse(lines[1] ?? "{}")).toEqual({ id: expect.any(String), name: "gains an id" });
   });
 
   test("keeps an undeclared key named after an Object member", async () => {
@@ -159,9 +176,7 @@ describe("fillSeedData", () => {
 
     const result = await fillSeedData({ path: dataDir });
 
-    expect(result.valid && result.filled).toEqual([
-      { table: "Widget", file: jsonlPath, fields: ["id"], count: 1 },
-    ]);
+    expect(result.filled).toEqual([{ table: "Widget", file: jsonlPath, fields: ["id"], count: 1 }]);
     const rows = await readRows(jsonlPath);
     expect(Object.keys(rows[0] ?? {})).toEqual(["id", "name", "toString", "__proto__"]);
   });
@@ -172,7 +187,7 @@ describe("fillSeedData", () => {
 
     const result = await fillSeedData({ path: dataDir, fields: ["serialNumber"] });
 
-    expect(result.valid && result.filled).toEqual([]);
+    expect(result.filled).toEqual([]);
     expect(result.output).toContain("No seed data produces a value for: serialNumber");
     await expect(readFile(jsonlPath, "utf-8")).resolves.toBe(before);
   });
@@ -183,7 +198,7 @@ describe("fillSeedData", () => {
 
     const result = await fillSeedData({ path: widgetPath });
 
-    expect(result.valid && result.filled.map(({ table }) => table)).toEqual(["Widget"]);
+    expect(result.filled.map(({ table }) => table)).toEqual(["Widget"]);
     const widgetId = (await readRows(widgetPath))[0]?.id;
     expect(uuid.safeParse(widgetId).success, `id: ${String(widgetId)}`).toBe(true);
     expect((await readRows(gadgetPath))[0]).not.toHaveProperty("id");

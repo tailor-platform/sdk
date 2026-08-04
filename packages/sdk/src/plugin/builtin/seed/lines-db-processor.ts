@@ -185,7 +185,7 @@ export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath:
 
     ${schemaTypeCode}
 
-    const hook = createTailorDBHook(${exportName});
+    export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
       createStandardSchema(schemaType, hook),${schemaOptionsCode}
@@ -248,7 +248,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
 
     ${schemaTypeCode}
 
-    const hook = createTailorDBHook(${exportName});
+    export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
       createStandardSchema(schemaType, hook),${schemaOptionsCode}
@@ -277,7 +277,7 @@ export function generateLinesDbSchemaFileWithPluginAPI(
 
     ${schemaTypeCode}
 
-    const hook = createTailorDBHook(${exportName});
+    export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
       createStandardSchema(schemaType, hook),${schemaOptionsCode}
