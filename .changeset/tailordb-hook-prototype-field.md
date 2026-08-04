@@ -9,4 +9,6 @@
    Expected a string: received function toString() { [native code] }
 ```
 
+A field named `__proto__` is recorded as a data property rather than assigned, so its value is kept instead of being swallowed by the inherited setter.
+
 A field the data does not carry still lands as an `undefined` key, which is what keeps a column inferred from these records nullable.

@@ -87,6 +87,22 @@ describe("createTailorDBHook", () => {
       const result = createTailorDBHook(type)({ name: "alice", toString: "kept" });
       expect(Object.entries(result)).toContainEqual(["toString", "kept"]);
     });
+
+    test.each([
+      ["the data carries it", '{"__proto__":"kept"}', "kept"],
+      ["the data omits it", '{"name":"alice"}', undefined],
+    ])("records a `__proto__` field as a data property when %s", (_label, json, expected) => {
+      const type = db.table("Test", {
+        name: db.string(),
+        // A quoted key in an object literal would set the prototype instead.
+        ["__proto__"]: db.string({ optional: true }),
+      });
+      const result = createTailorDBHook(type)(JSON.parse(json));
+      // Assigning would go through the inherited setter: the value would be lost
+      // and an object value would replace the record's prototype.
+      expect(Object.entries(result)).toContainEqual(["__proto__", expected]);
+      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+    });
   });
 
   describe("single nested object field", () => {

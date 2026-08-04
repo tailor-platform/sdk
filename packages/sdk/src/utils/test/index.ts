@@ -3,6 +3,18 @@ import type { TailorDBType } from "#/configure/services/tailordb/schema";
 import type { TailorField } from "#/configure/types/type";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
+// Not `record[key] = value`: assigning to `__proto__` goes through the inherited
+// setter, which mutates the prototype instead of recording the field and leaves
+// no own property behind for the value to be read from.
+function setField(record: Record<string, unknown>, key: string, value: unknown): void {
+  Object.defineProperty(record, key, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 /**
  * Creates a hook function that processes TailorDB type fields
  * - Uses existing id from data if provided, otherwise generates UUID for id fields
@@ -53,10 +65,10 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
               ? now.toISOString()
               : field.metadata.default;
         }
-        // Assigned even when there is no value: the key carrying `undefined` is
-        // what tells a schema inferred from the record that the column is
-        // nullable, and it shadows a same-named member of `Object.prototype`.
-        hooked[key] = hookedValue;
+        // Set even when there is no value: the key carrying `undefined` is what
+        // tells a schema inferred from the record that the column is nullable,
+        // and it shadows a same-named member of `Object.prototype`.
+        setField(hooked, key, hookedValue);
         return hooked;
       },
       {} as Record<string, unknown>,
@@ -73,7 +85,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
       });
       if (overrides && typeof overrides === "object") {
         for (const [key, value] of Object.entries(overrides as Record<string, unknown>)) {
-          hooked[key] = value instanceof Date ? value.toISOString() : value;
+          setField(hooked, key, value instanceof Date ? value.toISOString() : value);
         }
       }
     }
