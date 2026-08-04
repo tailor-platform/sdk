@@ -7,7 +7,7 @@
     "generate": "tailor generate",
     "deploy": "tailor deploy",
     "seed": "tailor seed apply",
-    "seed:fill": "tailor seed fill && tailor seed validate",
+    "seed:fill": "tailor seed fill",
     "seed:validate": "tailor seed validate",
     "test": "vitest --project unit",
     "test:unit": "vitest --project unit",

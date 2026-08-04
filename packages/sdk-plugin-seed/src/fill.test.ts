@@ -192,6 +192,28 @@ describe("fillSeedData", () => {
     await expect(readFile(jsonlPath, "utf-8")).resolves.toBe(before);
   });
 
+  test("writes nothing when a schema file predates the current generator", async () => {
+    const widgetPath = await writeTable("Widget", ['{"name":"widget"}']);
+    const stalePath = await writeTable("Gadget", ['{"name":"gadget"}']);
+    // A schema file generated before the hook was exported.
+    await writeFile(
+      path.join(dataDir, "Gadget.schema.ts"),
+      (await readFile(path.join(dataDir, "Gadget.schema.ts"), "utf-8")).replace(
+        "export const hook =",
+        "const hook =",
+      ),
+    );
+    const widgetBefore = await readFile(widgetPath, "utf-8");
+
+    await expect(fillSeedData({ path: dataDir })).rejects.toThrow(
+      /Gadget\.schema\.ts does not export `hook`\. Run `tailor generate`/,
+    );
+    // Widget sorts before Gadget in neither direction that matters: whichever is
+    // reached first, nothing is written once any schema file is stale.
+    await expect(readFile(widgetPath, "utf-8")).resolves.toBe(widgetBefore);
+    expect((await readRows(stalePath))[0]).not.toHaveProperty("id");
+  });
+
   test("fills only the named file when given a .jsonl path", async () => {
     const widgetPath = await writeTable("Widget", ['{"name":"widget"}']);
     const gadgetPath = await writeTable("Gadget", ['{"name":"gadget"}']);

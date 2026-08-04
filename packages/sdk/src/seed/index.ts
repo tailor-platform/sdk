@@ -255,7 +255,11 @@ async function loadSeedHook(dataDir: string, table: string): Promise<SeedHook | 
  * fields, so a filled-in `id` lands at the front. A field the type gives no
  * value to — one it does not declare, or one the platform assigns such as a
  * serial field — is skipped, so one field list covers a whole data directory.
- * @param options - Fill options including path, fields, and verbose flag
+ *
+ * The values are read from the schema files generated next to the data, and all
+ * of them are read before anything is written: a file that predates the current
+ * generator stops the run with nothing filled in anywhere.
+ * @param options - Fill options including path and fields
  * @returns Which files received which fields
  */
 export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSeedDataResult> {
@@ -270,12 +274,19 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
   const filled: FilledSeedFile[] = [];
   const producedFields = new Set<string>();
 
+  // Every hook loads before anything is written, so a schema file that predates
+  // `tailor generate` stops the run instead of leaving half the files filled.
+  const hooks: { table: string; hook: SeedHook }[] = [];
   for (const table of tables) {
     const hook = await loadSeedHook(dataDir, table);
     if (!hook) {
       warnings.push(`No schema file for ${table}, so nothing can be filled in there`);
       continue;
     }
+    hooks.push({ table, hook });
+  }
+
+  for (const { table, hook } of hooks) {
     const file = join(dataDir, `${table}.jsonl`);
     const lines = splitLines(await readFile(file, "utf-8"));
 

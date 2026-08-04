@@ -76,7 +76,7 @@ Only the named fields are written, and only into a row that has no value for the
 
 **A line that gains nothing is left exactly as it was, byte for byte.** Only the lines that take a value are rewritten, and those get their keys in the order the type declares its fields, so a filled-in `id` lands at the front of the line and a `createdAt` next to the other timestamps. Keys the type does not declare follow the declared ones.
 
-The values are read from the schema files `seedPlugin` generates next to the data, so a project that has not run `tailor generate` since upgrading gets told to:
+The values are read from the schema files `seedPlugin` generates next to the data. Every one of them is read before anything is written, so a project that has not run `tailor generate` since upgrading is told which file to regenerate and keeps its data untouched:
 
 ```
 ./seed/data/Customer.schema.ts does not export `hook`. Run `tailor generate` to regenerate the seed schema files.
