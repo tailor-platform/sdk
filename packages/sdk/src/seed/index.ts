@@ -9,7 +9,7 @@
 import { stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { LinesDB, ErrorFormatter, JsonlReader, JsonlWriter } from "@toiroakr/lines-db";
-import type { JsonObject, ValidationErrorDetail } from "@toiroakr/lines-db";
+import type { ValidationErrorDetail } from "@toiroakr/lines-db";
 
 export { defineSchema } from "@toiroakr/lines-db";
 export type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
@@ -160,30 +160,25 @@ export async function validateSeedData(
   };
 }
 
-function isMissing(row: JsonObject, field: string): boolean {
-  const value = row[field];
-  return value === undefined || value === null;
+// `Object.hasOwn`, not `field in row`: a field named `toString` would otherwise
+// read as present on every row.
+function hasValue(row: Record<string, unknown>, field: string): boolean {
+  return Object.hasOwn(row, field) && row[field] !== null && row[field] !== undefined;
 }
 
 async function sortRowKeys(file: string, fieldOrder: string[]): Promise<void> {
+  const rank = new Map(fieldOrder.map((field, index) => [field, index]));
+  // Undeclared keys all rank past the declared ones and, the sort being stable,
+  // keep the order the line had them in.
+  const rankOf = (key: string): number => rank.get(key) ?? fieldOrder.length;
   const rows = await JsonlReader.read(file);
   await JsonlWriter.write(
     file,
-    rows.map((row) => {
-      const sorted: JsonObject = {};
-      for (const field of fieldOrder) {
-        const value = row[field];
-        if (value !== undefined) {
-          sorted[field] = value;
-        }
-      }
-      for (const [key, value] of Object.entries(row)) {
-        if (!(key in sorted)) {
-          sorted[key] = value;
-        }
-      }
-      return sorted;
-    }),
+    // `Object.entries` / `Object.fromEntries` stay on own properties, so a row
+    // holding `__proto__` or `toString` keeps that key.
+    rows.map((row) =>
+      Object.fromEntries(Object.entries(row).toSorted(([a], [b]) => rankOf(a) - rankOf(b))),
+    ),
   );
 }
 
@@ -196,8 +191,10 @@ async function sortRowKeys(file: string, fieldOrder: string[]): Promise<void> {
  * invalid data is reported and left untouched. Only the named fields are
  * written, so every other value each line already held stays exactly as it was,
  * and lines keep the order the file lists them in. A file is rewritten only
- * when it is missing one of the fields, and a field a type does not have is
- * skipped for that type — so one field list covers a whole data directory.
+ * when it is missing one of the fields, and a field the type does not give every
+ * row a value for — one it does not declare, or one the platform assigns such as
+ * a serial field — is skipped for that type, so one field list covers a whole
+ * data directory.
  *
  * A rewritten file gets its keys ordered the way the type declares its fields,
  * so a filled-in field lands where the type puts it rather than at the end of
@@ -240,14 +237,20 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
         continue;
       }
       inspectedTables += 1;
-      const tableFields = fields.filter((field) => columns.some((column) => column.name === field));
+      // A field is fillable only where the type gives every row a value for it.
+      // A serial field is declared but left to the platform, so filling it would
+      // write nulls over the file rather than a value.
+      const producedRows = db.find(table);
+      const tableFields = fields.filter(
+        (field) => producedRows.length > 0 && producedRows.every((row) => hasValue(row, field)),
+      );
       for (const field of tableFields) {
         producedFields.add(field);
       }
       const file = join(dataDir, `${table}.jsonl`);
       const rows = await JsonlReader.read(file);
       const missingFields = tableFields.filter((field) =>
-        rows.some((row) => isMissing(row, field)),
+        rows.some((row) => !hasValue(row, field)),
       );
       if (missingFields.length === 0) {
         continue;
@@ -257,7 +260,7 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
           table,
           file,
           fields: missingFields,
-          count: rows.filter((row) => missingFields.some((field) => isMissing(row, field))).length,
+          count: rows.filter((row) => missingFields.some((field) => !hasValue(row, field))).length,
         },
         fieldOrder: columns.map((column) => column.name),
       });

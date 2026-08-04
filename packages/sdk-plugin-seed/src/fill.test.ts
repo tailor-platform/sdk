@@ -28,12 +28,13 @@ import { createStandardSchema, createTailorDBHook } from "${sdkUrls.test}";
 
 const type = db.table("${typeName}", "${typeName}", {
   name: db.string(),
+  serialNumber: db.int().serial({ start: 1 }),
   ...db.fields.timestamps(),
 });
 
 const schemaType = t.object({
   ...type.pickFields(["id", "createdAt", "updatedAt"], { optional: true }),
-  ...type.omitFields(["id", "createdAt", "updatedAt"]),
+  ...type.omitFields(["id", "createdAt", "updatedAt", "serialNumber"]),
 });
 
 export const schema = defineSchema(createStandardSchema(schemaType, createTailorDBHook(type)));
@@ -148,6 +149,30 @@ describe("fillSeedData", () => {
 
     expect(result.valid).toBe(false);
     expect(result.valid === false && result.error).toContain("Widget.jsonl");
+    await expect(readFile(jsonlPath, "utf-8")).resolves.toBe(before);
+  });
+
+  test("keeps an undeclared key named after an Object member", async () => {
+    const jsonlPath = await writeTable("Widget", ['{"name":"first","toString":"kept"}']);
+
+    const result = await fillSeedData({ path: dataDir });
+
+    expect(result.valid && result.filled).toEqual([
+      { table: "Widget", file: jsonlPath, fields: ["id"], count: 1 },
+    ]);
+    const rows = await readRows(jsonlPath);
+    expect(rows[0]?.toString).toBe("kept");
+    expect(Object.keys(rows[0] ?? {})).toEqual(["id", "name", "toString"]);
+  });
+
+  test("does not fill a field the platform assigns, such as a serial", async () => {
+    const jsonlPath = await writeTable("Widget", ['{"name":"first"}']);
+    const before = await readFile(jsonlPath, "utf-8");
+
+    const result = await fillSeedData({ path: dataDir, fields: ["serialNumber"] });
+
+    expect(result.valid && result.filled).toEqual([]);
+    expect(result.output).toContain("No seed data produces a value for: serialNumber");
     await expect(readFile(jsonlPath, "utf-8")).resolves.toBe(before);
   });
 

@@ -64,6 +64,13 @@ Only the named fields are written. Every other value the line already held stays
 
 A rewritten file gets its keys ordered the way the type declares its fields, so `id` lands at the front of the line and a `createdAt` next to the other timestamps, wherever the line happened to be missing them. Keys the type does not declare follow the declared ones.
 
+Only a field the type gives every row a value for can be filled. A field the platform assigns — a `serial` field, for instance — has no value to fill in from here, so naming it fills nothing and reports it:
+
+```
+⚠ No seed data produces a value for: invoiceNumber
+✓ Nothing to fill
+```
+
 A field whose value comes from the type's `id`, a field default, or a create hook that returns its input is only filled in where it is missing — a row that already carries a `createdAt` keeps it. A field whose create hook ignores the current value (a computed field such as a formatted address) is recomputed for every row of a file that gets rewritten.
 
 The data is validated first and nothing is written when validation fails, so a run over the whole data directory stops rather than replacing an id that existing rows already reference. Naming a single `.jsonl` file limits the run to that file, which does not see the rows in other files that reference it — fill a referenced type before writing the rows that reference it, and run `tailor seed validate` when you are done.
