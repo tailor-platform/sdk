@@ -6,7 +6,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
-import { createMigrationTestDependencies } from "./test-runtime";
+import { assertCloneTargetRegion, createMigrationTestDependencies } from "./test-runtime";
 import type {
   MigrationTestDependencies,
   MigrationTestOptions,
@@ -52,6 +52,13 @@ export async function runMigrationTest(
     if (!prepared.pendingNamespaces.includes(namespace)) {
       throw new Error(`Assertion namespace "${namespace}" has no pending migrations.`);
     }
+  }
+  if (options.data === "clone" && options.targetWorkspaceId) {
+    const target = assertDefined(
+      prepared.designatedTarget,
+      "designated clone target was not loaded during preparation",
+    );
+    assertCloneTargetRegion(prepared.temporaryWorkspace.region, target.region);
   }
   const temporary = options.targetWorkspaceId === undefined;
   const workspace = temporary

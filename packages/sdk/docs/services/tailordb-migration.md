@@ -272,7 +272,7 @@ The command performs the following sequence:
 
 Both the pre-migration and final TailorDB schemas come from committed migration snapshots. Ungenerated changes in the current type source are not included in the rehearsal.
 
-Executors are omitted from the baseline deployment so loading fixture or cloned records cannot trigger current event handlers against the older schema. The final deployment restores the configured executors after the pending migrations finish. Static websites and their workspace-bound custom domains are not deployed to the migration-test workspace.
+Executors are omitted from the baseline deployment so loading fixture or cloned records cannot trigger current event handlers against the older schema. Auth user profiles are also deferred until the pending migrations finish, while configured machine users remain available to run seed and migration scripts. The final deployment restores the configured executors and user profiles. Static websites are deployed so configuration references to their URLs resolve, but their workspace-bound custom domains are omitted from migration-test deployments.
 
 ### Seed mode
 
@@ -282,13 +282,13 @@ Seed mode is the default and uses the JSONL files produced by the configured `se
 tailor tailordb migration test --data seed
 ```
 
-Rows are loaded only for types present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations are removed before insertion so current fixtures can be loaded into the baseline schema. Missing type files are treated as empty. IdP `_User` fixtures are not loaded by this command.
+Rows are loaded only for types present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations, including timestamp and nested fields, are removed before insertion so current fixtures can be loaded into the baseline schema. Missing type files are treated as empty. IdP `_User` fixtures are not loaded by this command.
 
 Use `--machine-user` to override the seed plugin's `machineUserName`, the namespace migration setting, and the first configured Auth machine user for seed and assertion execution.
 
 ### Clone mode
 
-Clone mode copies TailorDB records from the source workspace after the identical application, namespace names, and pre-migration schemas exist in the target:
+Clone mode copies TailorDB records from the source workspace after the identical application, namespace names, and pre-migration schemas exist in the target. For namespaces without migration history, the command reproduces the deployed source schema rather than uncommitted local type changes:
 
 ```bash
 tailor tailordb migration test --data clone

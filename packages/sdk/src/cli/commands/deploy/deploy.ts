@@ -2697,17 +2697,19 @@ export function deploy(options?: DeployOptions) {
  * Deploy TailorDB baseline snapshots for an isolated migration test.
  * @param options - Deploy execution options
  * @param baselines - Baseline snapshots keyed by TailorDB namespace
+ * @param baselineSnapshots - All schema snapshots that must match the source before data loading
  * @returns Deploy result
  */
 export function deployMigrationTestBaseline(
   options: DeployOptions,
   baselines: ReadonlyMap<string, TailorDBMigrationTestBaseline>,
+  baselineSnapshots: TailorDBMigrationTestSnapshots = new Map(
+    [...baselines].map(([namespace, baseline]) => [namespace, baseline.snapshot]),
+  ),
 ) {
   return deployInternal(options, undefined, {
     migrationTestBaselines: baselines,
-    migrationTestSnapshots: new Map(
-      [...baselines].map(([namespace, baseline]) => [namespace, baseline.snapshot]),
-    ),
+    migrationTestSnapshots: baselineSnapshots,
     suppressResultOutput: true,
   });
 }

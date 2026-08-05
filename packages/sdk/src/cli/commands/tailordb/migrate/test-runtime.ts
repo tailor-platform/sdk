@@ -11,7 +11,9 @@ import { resourceTrn } from "#/cli/commands/deploy/label";
 import { getMigrationMachineUser } from "#/cli/commands/deploy/tailordb/migration";
 import { bundleSeedScript } from "#/cli/commands/generate/seed/bundler";
 import {
+  fetchRemoteSchemaSnapshot,
   toTailorDBDeployInput,
+  type TailorDBDeployInput,
   verifyRemoteSchema,
 } from "#/cli/commands/tailordb/migrate/schema-checks";
 import { createValidatedWorkspaceWithClient } from "#/cli/commands/workspace/create";
@@ -32,6 +34,7 @@ import {
   normalizeSchemaSnapshot,
   reconstructSnapshotFromMigrations,
   type NormalizedSchemaSnapshot,
+  type SnapshotFieldConfig,
 } from "./snapshot";
 import type { LoadedApplicationNamespaces } from "#/cli/shared/tailordb-namespaces";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
@@ -40,7 +43,7 @@ import type {
   MigrationTestOptions,
   PreparedMigrationTest,
 } from "./test-types";
-import type { JsonObject } from "type-fest";
+import type { JsonObject, JsonValue } from "type-fest";
 
 const CLONE_POLL_INTERVAL = 1_000;
 const CLONE_TIMEOUT = 5 * 60 * 1_000;
@@ -101,6 +104,55 @@ function assertAssertionScript(assertionPath: string): void {
 }
 
 /**
+ * Require a designated clone target to share the source workspace's region.
+ * @param sourceRegion - Source workspace region
+ * @param targetRegion - Target workspace region
+ */
+export function assertCloneTargetRegion(sourceRegion: string, targetRegion: string): void {
+  if (sourceRegion !== targetRegion) {
+    throw new Error(
+      `Clone mode requires source and target workspaces in the same region (source: ${sourceRegion}, target: ${targetRegion}).`,
+    );
+  }
+}
+
+interface CreateBaselineSnapshotsOptions {
+  client: OperatorClient;
+  workspaceId: string;
+  dataMode: MigrationTestOptions["data"];
+  inputs: ReadonlyArray<TailorDBDeployInput>;
+  baselines: PreparedMigrationTest["baselines"];
+}
+
+/**
+ * Build the schema overrides used before migration-test data is loaded.
+ * @param options - Source workspace, local inputs, and migration baselines
+ * @returns Schema snapshots keyed by namespace
+ */
+export async function createMigrationTestBaselineSnapshots(
+  options: CreateBaselineSnapshotsOptions,
+): Promise<Map<string, NormalizedSchemaSnapshot>> {
+  const snapshots = new Map(
+    [...options.baselines].map(([namespace, baseline]) => [namespace, baseline.snapshot]),
+  );
+  if (options.dataMode !== "clone") return snapshots;
+
+  const unmigratedInputs = options.inputs.filter((input) => !snapshots.has(input.namespace));
+  const remoteSnapshots = await Promise.all(
+    unmigratedInputs.map((input) =>
+      fetchRemoteSchemaSnapshot(options.client, options.workspaceId, input.namespace),
+    ),
+  );
+  unmigratedInputs.forEach((input, index) => {
+    snapshots.set(
+      input.namespace,
+      assertDefined(remoteSnapshots[index], `remote snapshot missing for "${input.namespace}"`),
+    );
+  });
+  return snapshots;
+}
+
+/**
  * Wait for an application-data clone operation to reach a terminal state.
  * @param client - Operator client
  * @param options - Clone operation identifiers and polling limits
@@ -154,9 +206,6 @@ export function loadSnapshotSeedData(
   const data: SeedData = {};
   for (const typeName of typeNames) {
     const snapshotType = snapshot?.types[typeName];
-    const allowedFields = snapshotType
-      ? new Set(["id", "createdAt", "updatedAt", ...Object.keys(snapshotType.fields)])
-      : undefined;
     const jsonlPath = path.join(dataDir, `${typeName}.jsonl`);
     let content: string;
     try {
@@ -185,15 +234,39 @@ export function loadSnapshotSeedData(
             );
           }
           const row = value as JsonObject;
-          return allowedFields
-            ? (Object.fromEntries(
-                Object.entries(row).filter(([fieldName]) => allowedFields.has(fieldName)),
-              ) as JsonObject)
-            : row;
+          return snapshotType ? projectSeedObject(row, snapshotType.fields, new Set(["id"])) : row;
         })
       : [];
   }
   return data;
+}
+
+function projectSeedObject(
+  value: JsonObject,
+  fields: Readonly<Record<string, SnapshotFieldConfig>>,
+  implicitFields: ReadonlySet<string> = new Set(),
+): JsonObject {
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([fieldName, fieldValue]) => {
+      const field = fields[fieldName];
+      if (!field) return implicitFields.has(fieldName) ? [[fieldName, fieldValue]] : [];
+      return [[fieldName, projectSeedValue(fieldValue, field)]];
+    }),
+  ) as JsonObject;
+}
+
+function projectSeedValue(value: JsonValue, field: SnapshotFieldConfig): JsonValue {
+  const fields = field.fields;
+  if (!fields) return value;
+  if (field.array) {
+    if (!Array.isArray(value)) return value;
+    return value.map((entry) => (isJsonObject(entry) ? projectSeedObject(entry, fields) : entry));
+  }
+  return isJsonObject(value) ? projectSeedObject(value, fields) : value;
+}
+
+function isJsonObject(value: JsonValue): value is JsonObject {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 /**
@@ -316,12 +389,15 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     throw new Error("The migration test target workspace must differ from the source workspace.");
   }
 
-  const [workspaceResponse, applicationResponse] = await Promise.all([
+  const [workspaceResponse, applicationResponse, targetWorkspaceResponse] = await Promise.all([
     client.getWorkspace({ workspaceId: sourceWorkspaceId }),
     client.getApplication({
       workspaceId: sourceWorkspaceId,
       applicationName: loaded.config.name,
     }),
+    options.data === "clone" && options.targetWorkspaceId
+      ? client.getWorkspace({ workspaceId: options.targetWorkspaceId })
+      : Promise.resolve(undefined),
   ]);
   const sourceWorkspace = assertDefined(
     workspaceResponse.workspace,
@@ -331,6 +407,12 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     applicationResponse.application,
     `application "${loaded.config.name}" not found in source workspace`,
   );
+  const designatedTarget = targetWorkspaceResponse
+    ? assertDefined(
+        targetWorkspaceResponse.workspace,
+        `target workspace "${options.targetWorkspaceId}" not found`,
+      )
+    : undefined;
 
   const remoteChecks = await verifyRemoteSchema(
     client,
@@ -390,6 +472,14 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     throw new Error("No pending TailorDB migrations found in the source workspace.");
   }
 
+  const baselineSnapshots = await createMigrationTestBaselineSnapshots({
+    client,
+    workspaceId: sourceWorkspaceId,
+    dataMode: options.data,
+    inputs,
+    baselines,
+  });
+
   const prepared: PreparedMigrationTest = {
     sourceWorkspaceId,
     sourceApplicationName: loaded.config.name,
@@ -400,8 +490,12 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       ...(sourceWorkspace.folderId ? { folderId: sourceWorkspace.folderId } : {}),
     },
     baselines,
+    baselineSnapshots,
     targetSnapshots,
     pendingNamespaces,
+    ...(designatedTarget
+      ? { designatedTarget: { id: designatedTarget.id, region: designatedTarget.region } }
+      : {}),
   };
   return {
     state: { client, loaded, options, ...(seedContext ? { seedContext } : {}) },
@@ -440,6 +534,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
           yes: true,
         },
         prepared.baselines,
+        prepared.baselineSnapshots,
       );
     },
     seedData: async ({ prepared, targetWorkspaceId }) => {

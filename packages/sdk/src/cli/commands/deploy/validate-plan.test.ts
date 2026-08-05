@@ -76,6 +76,7 @@ function emptyInput(): ValidatePlanInput {
       resourceOwners: new Set(),
     },
     auth: {
+      userProfileDeletesBeforeTailorDB: false,
       connectionStateScope: {
         workspaceId: "workspace-id",
         applicationId: "application-id",

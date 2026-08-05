@@ -134,6 +134,12 @@ export async function applyAuth(
     ]);
   };
 
+  const applyUserProfileDeletes = async () => {
+    await Promise.all(
+      changeSet.userProfileConfig.deletes.map((del) => client.deleteUserProfileConfig(del.request)),
+    );
+  };
+
   const applyCreateUpdateDependents = async () => {
     await applyAuthConnections(
       client,
@@ -250,6 +256,9 @@ export async function applyAuth(
   if (phase === "create-update-prerequisites" || phase === "create-update") {
     await applyServices();
     await applyMachineUsers();
+    if (result.userProfileDeletesBeforeTailorDB) {
+      await applyUserProfileDeletes();
+    }
   }
   if (phase === "create-update-dependents" || phase === "create-update") {
     await applyCreateUpdateDependents();
@@ -285,9 +294,9 @@ export async function applyAuth(
     );
 
     // UserProfileConfigs
-    await Promise.all(
-      changeSet.userProfileConfig.deletes.map((del) => client.deleteUserProfileConfig(del.request)),
-    );
+    if (!result.userProfileDeletesBeforeTailorDB) {
+      await applyUserProfileDeletes();
+    }
 
     // IdPConfigs
     await Promise.all(
@@ -350,7 +359,14 @@ export async function planAuth(context: PlanContext) {
     connectionResult,
   ] = await Promise.all([
     planIdPConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
-    planUserProfileConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
+    planUserProfileConfigs(
+      client,
+      workspaceId,
+      auths,
+      deletedServices,
+      forceApplyAll,
+      context.migrationTestBaselines !== undefined,
+    ),
     planTenantConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
     planMachineUsers(client, workspaceId, auths, deletedServices, forceApplyAll),
     planAuthHooks(client, workspaceId, auths, deletedServices, forceApplyAll),
@@ -366,7 +382,6 @@ export async function planAuth(context: PlanContext) {
     planSCIMResources(client, workspaceId, auths, deletedServices),
     planAuthConnections(client, workspaceId, application.name, application.id, auths),
   ]);
-
   return {
     changeSet: {
       service: serviceChangeSet,
@@ -384,6 +399,7 @@ export async function planAuth(context: PlanContext) {
     unmanaged: [...unmanaged, ...connectionResult.unmanaged],
     resourceOwners: new Set([...resourceOwners, ...connectionResult.resourceOwners]),
     connectionStateScope: connectionResult.stateScope,
+    userProfileDeletesBeforeTailorDB: context.migrationTestBaselines !== undefined,
   };
 }
 
@@ -858,6 +874,7 @@ async function planUserProfileConfigs(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
   forceApplyAll = false,
+  deferUserProfiles = false,
 ) {
   const changeSet = createChangeSet<
     CreateUserProfileConfig,
@@ -875,7 +892,7 @@ async function planUserProfileConfigs(
       });
     });
     if (!existing) {
-      const userProfileForUpdate = auth.userProfile;
+      const userProfileForUpdate = deferUserProfiles ? undefined : auth.userProfile;
       if (userProfileForUpdate) {
         changeSet.creates.push({
           name,
@@ -889,7 +906,7 @@ async function planUserProfileConfigs(
       continue;
     }
 
-    const userProfileForUpdate = auth.userProfile;
+    const userProfileForUpdate = deferUserProfiles ? undefined : auth.userProfile;
     if (userProfileForUpdate) {
       const desired = protoUserProfileConfig(userProfileForUpdate);
       if (

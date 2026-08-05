@@ -30,8 +30,13 @@ export interface PreparedMigrationTest {
     folderId?: string;
   };
   baselines: ReadonlyMap<string, MigrationTestBaseline>;
+  baselineSnapshots: TailorDBMigrationTestSnapshots;
   targetSnapshots: TailorDBMigrationTestSnapshots;
   pendingNamespaces: string[];
+  designatedTarget?: {
+    id: string;
+    region: string;
+  };
 }
 
 interface MigrationTestWorkspace {

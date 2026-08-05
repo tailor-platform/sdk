@@ -23,12 +23,14 @@ import {
   formatMigrationNumber,
   formatSchemaDrifts,
   createSnapshotType,
+  createSnapshotFromRemoteTypes,
   getLatestMigrationNumber,
   type RemoteGqlPermission,
   type SchemaSnapshot,
   type SnapshotGqlOperations,
   type SnapshotSettings,
   type TailorDBSnapshotType,
+  type NormalizedSchemaSnapshot,
 } from "./snapshot";
 import {
   MIGRATION_LABEL_KEY,
@@ -112,6 +114,25 @@ async function fetchRemoteGqlPermissions(
     });
     return [permissions, nextPageToken];
   });
+}
+
+/**
+ * Fetch a namespace's deployed schema as a normalized snapshot.
+ * @param client - Operator client instance
+ * @param workspaceId - Workspace ID
+ * @param namespace - TailorDB namespace
+ * @returns The deployed schema snapshot
+ */
+export async function fetchRemoteSchemaSnapshot(
+  client: OperatorClient,
+  workspaceId: string,
+  namespace: string,
+): Promise<NormalizedSchemaSnapshot> {
+  const [remoteTypes, remoteGqlPermissions] = await Promise.all([
+    fetchRemoteTypes(client, workspaceId, namespace),
+    fetchRemoteGqlPermissions(client, workspaceId, namespace),
+  ]);
+  return createSnapshotFromRemoteTypes(remoteTypes, namespace, remoteGqlPermissions);
 }
 
 type RemoteTailorDBSettings = NonNullable<NonNullable<ProtoTailorDBType["schema"]>["settings"]>;

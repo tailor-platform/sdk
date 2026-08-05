@@ -80,6 +80,7 @@ function emptyResults(): PlanResults {
       ...emptyOwnership(),
     },
     auth: {
+      userProfileDeletesBeforeTailorDB: false,
       connectionStateScope: {
         workspaceId: "workspace-id",
         applicationId: "application-id",

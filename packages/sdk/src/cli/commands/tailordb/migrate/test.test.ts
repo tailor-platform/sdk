@@ -16,6 +16,7 @@ const prepared: PreparedMigrationTest = {
   },
   baselines: new Map(),
   targetSnapshots: new Map(),
+  baselineSnapshots: new Map(),
   pendingNamespaces: ["tailordb"],
 };
 
@@ -98,6 +99,26 @@ describe("tailordb migration test", () => {
       }),
     );
     expect(dependencies.seedData).not.toHaveBeenCalled();
+  });
+
+  test("rejects a cross-region designated clone target before baseline deployment", async () => {
+    const events: string[] = [];
+    const dependencies = createDependencies(events);
+    const targetWorkspaceId = "55555555-5555-4555-8555-555555555555";
+    vi.mocked(dependencies.prepare).mockImplementationOnce(async () => {
+      events.push("prepare");
+      return {
+        ...prepared,
+        designatedTarget: { id: targetWorkspaceId, region: "us-west" },
+      };
+    });
+
+    await expect(
+      runMigrationTest({ data: "clone", targetWorkspaceId, yes: true }, dependencies),
+    ).rejects.toThrow(/same region/i);
+
+    expect(events).toEqual(["prepare"]);
+    expect(dependencies.deployBaseline).not.toHaveBeenCalled();
   });
 
   test("requires explicit acknowledgment for a designated target and never deletes it", async () => {

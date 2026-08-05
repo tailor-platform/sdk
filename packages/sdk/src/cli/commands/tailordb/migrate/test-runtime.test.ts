@@ -5,6 +5,8 @@ import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { normalizeSchemaSnapshot } from "./snapshot";
 import {
+  assertCloneTargetRegion,
+  createMigrationTestBaselineSnapshots,
   loadSnapshotSeedData,
   sortSeedTypesForSnapshot,
   waitForCloneApplicationData,
@@ -57,7 +59,7 @@ describe("migration test runtime", () => {
     temporaryDirectories.push(dataDir);
     fs.writeFileSync(
       path.join(dataDir, "Customer.jsonl"),
-      '{"id":"customer-1","name":"Ada","email":"pending@example.com"}\n',
+      '{"id":"customer-1","name":"Ada","email":"pending@example.com","createdAt":"2026-08-05T00:00:00Z","updatedAt":"2026-08-05T00:00:00Z","profile":{"displayName":"Ada","timezone":"UTC"},"addresses":[{"city":"Tokyo","country":"JP"}]}\n',
     );
     const snapshot = normalizeSchemaSnapshot({
       version: 1,
@@ -67,7 +69,20 @@ describe("migration test runtime", () => {
         Customer: {
           name: "Customer",
           pluralForm: "Customers",
-          fields: { name: { type: "string", required: true } },
+          fields: {
+            name: { type: "string", required: true },
+            profile: {
+              type: "nested",
+              required: true,
+              fields: { displayName: { type: "string", required: true } },
+            },
+            addresses: {
+              type: "nested",
+              required: true,
+              array: true,
+              fields: { city: { type: "string", required: true } },
+            },
+          },
         },
         Order: {
           name: "Order",
@@ -78,9 +93,62 @@ describe("migration test runtime", () => {
     });
 
     expect(loadSnapshotSeedData(dataDir, ["Customer", "Order"], snapshot)).toEqual({
-      Customer: [{ id: "customer-1", name: "Ada" }],
+      Customer: [
+        {
+          id: "customer-1",
+          name: "Ada",
+          profile: { displayName: "Ada" },
+          addresses: [{ city: "Tokyo" }],
+        },
+      ],
       Order: [],
     });
+  });
+
+  test("rejects a designated clone target in a different region", () => {
+    expect(() => assertCloneTargetRegion("asia-northeast", "us-west")).toThrow(/same region/i);
+    expect(() => assertCloneTargetRegion("asia-northeast", "asia-northeast")).not.toThrow();
+  });
+
+  test("reproduces source schemas for clone namespaces without migrations", async () => {
+    const migrationSnapshot = normalizeSchemaSnapshot({
+      version: 1,
+      namespace: "primary",
+      createdAt: "2026-08-05T00:00:00.000Z",
+      types: {},
+    });
+    const client = {
+      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }),
+      listTailorDBGQLPermissions: vi.fn().mockResolvedValue({ permissions: [], nextPageToken: "" }),
+    } as unknown as OperatorClient;
+
+    const snapshots = await createMigrationTestBaselineSnapshots({
+      client,
+      workspaceId: "source",
+      dataMode: "clone",
+      inputs: [
+        { namespace: "primary", config: { files: [] }, types: {} },
+        {
+          namespace: "audit",
+          config: { files: [] },
+          types: {
+            LocalOnly: {
+              name: "LocalOnly",
+              pluralForm: "LocalOnly",
+              fields: {},
+            },
+          },
+        },
+      ],
+      baselines: new Map([["primary", { migrationNumber: 0, snapshot: migrationSnapshot }]]),
+    });
+
+    expect(snapshots.get("primary")).toBe(migrationSnapshot);
+    expect(snapshots.get("audit")?.types).toEqual({});
+    expect(client.listTailorDBTypes).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "source", namespaceName: "audit" }),
+    );
+    expect(client.listTailorDBTypes).toHaveBeenCalledTimes(1);
   });
 
   test("rejects malformed baseline seed rows with their file and line", () => {

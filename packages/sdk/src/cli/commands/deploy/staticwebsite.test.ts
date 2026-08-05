@@ -118,7 +118,7 @@ function createContext(
 }
 
 describe("planStaticWebsite", () => {
-  test("omits static websites from migration-test deployments", async () => {
+  test("keeps static websites but omits custom domains from migration-test deployments", async () => {
     const client = createMockClient([]);
     const context = {
       ...createContext(client, createMockApplication({ customDomains: ["example.com"] })),
@@ -127,7 +127,7 @@ describe("planStaticWebsite", () => {
 
     const result = await planStaticWebsite(context);
 
-    expect(result.changeSet.creates).toHaveLength(0);
+    expect(result.changeSet.creates).toHaveLength(1);
     expect(result.customDomainChangeSet.creates).toHaveLength(0);
   });
 
