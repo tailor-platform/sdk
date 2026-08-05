@@ -117,8 +117,9 @@ function typeLevelIssues(type: TailorDBType<any, any> | undefined, hooked: unkno
 
 /**
  * Creates the standard schema definition used to validate seed rows.
- * Runs the hook, then the type's own `validate`, then the field schema, so both
- * levels of validation report through the same result.
+ * Runs the hook, then the type's own `validate`, and the field schema only when
+ * that reported nothing, so both levels of validation report as issues rather
+ * than by throwing.
  * @template T - The output type after validation
  * @param schemaType - TailorDB field schema for validation
  * @param hook - Hook function to transform data before validation

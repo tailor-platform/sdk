@@ -174,6 +174,17 @@ function ownValue(row: Record<string, unknown>, field: string): unknown {
   return Object.hasOwn(row, field) ? row[field] : undefined;
 }
 
+// Not `row[field] = value`: a field named `__proto__` goes through the inherited
+// setter, which leaves no own property for the serializer to read back.
+function setField(row: JsonObject, field: string, value: JsonObject[string]): void {
+  Object.defineProperty(row, field, {
+    value,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 function isBlank(value: unknown): boolean {
   if (value === undefined || value === null) {
     return true;
@@ -323,7 +334,7 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
         continue;
       }
       for (const field of gained) {
-        row[field] = hooked[field] as JsonObject[string];
+        setField(row, field, hooked[field] as JsonObject[string]);
         written.add(field);
       }
       line.text = serializeRow(row, fieldOrder);
