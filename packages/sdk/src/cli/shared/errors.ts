@@ -43,12 +43,7 @@ type CLIErrorInternal = Error & {
   format(): string;
 };
 
-/**
- * Quote an argument value for safe copy-paste into the current platform's shell
- * @param {string} value - Argument value to quote
- * @returns {string} The value, quoted unless it only contains shell-safe characters
- */
-export function shellQuote(value: string): string {
+function shellQuote(value: string): string {
   if (process.platform === "win32") {
     if (/^[A-Za-z0-9_./:=@+\\-]+$/.test(value)) return value;
     return `"${value.replaceAll('"', '\\"')}"`;
@@ -57,12 +52,28 @@ export function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
+function needsArgvRendering(argv: readonly string[]): boolean {
+  // cmd.exe/PowerShell expand %, $, and ! even inside double quotes, so no
+  // quoting can keep such values literal on Windows.
+  return process.platform === "win32" && argv.some((value) => /[%$!]/.test(value));
+}
+
+/**
+ * Render an argv array as a copyable command line for the current platform's shell
+ * @param {readonly string[]} argv - Executable name followed by its arguments
+ * @returns {string} A shell-quoted command line, or an `argv [...]` JSON rendering when the platform shell cannot keep a value literal
+ */
+export function formatCopyableCommand(argv: readonly string[]): string {
+  if (needsArgvRendering(argv)) {
+    return `argv ${JSON.stringify(argv)}`;
+  }
+  return argv.map(shellQuote).join(" ");
+}
+
 function formatNextAction(next: CLIErrorNextAction): string {
   const argv = [next.command, ...next.args];
-  if (process.platform === "win32" && argv.some((value) => /[%$!]/.test(value))) {
-    return `with argv ${JSON.stringify(argv)}`;
-  }
-  return `\`${argv.map(shellQuote).join(" ")}\``;
+  const rendered = formatCopyableCommand(argv);
+  return needsArgvRendering(argv) ? `with ${rendered}` : `\`${rendered}\``;
 }
 
 /**

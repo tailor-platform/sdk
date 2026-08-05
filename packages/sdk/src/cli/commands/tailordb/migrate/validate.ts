@@ -13,7 +13,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
 import {
-  formatConfigArg,
+  formatMigrationScriptCommand,
   getNamespacesWithMigrations,
   type NamespaceWithMigrations,
 } from "./config";
@@ -461,7 +461,12 @@ function printResolutionHints(reports: NamespaceValidationReport[], configPath?:
     for (const report of missingAcknowledgments) {
       for (const migration of report.warningAcknowledgments?.missing ?? []) {
         logger.info(
-          `  tailor tailordb migration script ${formatMigrationNumber(migration.migrationNumber)} --namespace ${report.namespace}${formatConfigArg(configPath)} --no-script --reason "..."`,
+          `  ${formatMigrationScriptCommand({
+            migrationNumber: migration.migrationNumber,
+            namespace: report.namespace,
+            configPath,
+            noScript: true,
+          })}`,
           { mode: "plain" },
         );
       }

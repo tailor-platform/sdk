@@ -10,9 +10,11 @@ import {
   AuthInvokerSchema,
   type AuthInvoker,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
-import * as path from "pathe";
 import { bundleMigrationScript } from "#/cli/commands/tailordb/migrate/bundler";
-import { type NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
+import {
+  formatMigrationScriptCommand,
+  type NamespaceWithMigrations,
+} from "#/cli/commands/tailordb/migrate/config";
 import {
   loadDiff,
   getMigrationFiles,
@@ -146,15 +148,12 @@ export async function detectPendingMigrations(
       const scriptPath = getMigrationFilePath(migrationsDir, file.number, "migrate");
       const hasScript = fs.existsSync(scriptPath);
       if (diff.requiresMigrationScript && !hasScript && !diff.scriptSkipped) {
-        const configArg = configPath
-          ? ` --config "${path.relative(process.cwd(), configPath) || configPath}"`
-          : "";
-        const scriptCmd = `tailor tailordb migration script ${file.number} --namespace ${namespace}${configArg}`;
+        const commandOptions = { migrationNumber: file.number, namespace, configPath };
         throw new Error(
           `Migration ${namespace}/${formatMigrationNumber(file.number)} requires a migration script but migrate.ts was not found.\n` +
             `To resolve, either:\n` +
-            `  - Add a script: ${scriptCmd}\n` +
-            `  - Or record that no script is needed: ${scriptCmd} --no-script --reason "<why no data migration is needed>"`,
+            `  - Add a script: ${formatMigrationScriptCommand(commandOptions)}\n` +
+            `  - Or record that no script is needed: ${formatMigrationScriptCommand({ ...commandOptions, noScript: true })}`,
         );
       }
       if (diff.scriptSkipped) {

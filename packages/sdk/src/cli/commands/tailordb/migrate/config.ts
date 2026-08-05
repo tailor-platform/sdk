@@ -4,8 +4,9 @@
 
 import * as path from "pathe";
 import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
-import { shellQuote } from "#/cli/shared/errors";
+import { formatCopyableCommand } from "#/cli/shared/errors";
 import { assertDefined } from "#/utils/assert";
+import { formatMigrationNumber } from "./migration-number";
 import type { AppConfig } from "#/configure/config/types";
 
 // ============================================================================
@@ -35,16 +36,44 @@ function hasMigrationConfig(dbConfig: unknown): dbConfig is { migration: { direc
   return typeof (migration as { directory: unknown }).directory === "string";
 }
 
+export interface MigrationScriptCommandOptions {
+  migrationNumber: number;
+  namespace: string;
+  /** Config path the current run used; omitted from the command when it resolves to the default */
+  configPath?: string;
+  /** Append `--no-script --reason` with a placeholder reason */
+  noScript?: boolean;
+}
+
 /**
- * Format the --config argument for remediation commands so they target the
- * same config the current run used. The `--config=<value>` form keeps a
- * leading-hyphen path bound as the option value.
- * @param {string} [configPath] - Config path passed to the command, if any
- * @returns {string} Leading-space --config argument, or an empty string when the default config is in use
+ * Build the copyable `tailor tailordb migration script` command for
+ * remediation hints, reproducing the current run's invocation context.
+ * The `--config=<value>` form keeps a leading-hyphen path bound as the
+ * option value.
+ * @param {MigrationScriptCommandOptions} options - Target migration and invocation context
+ * @returns {string} Command line quoted for the current platform's shell
  */
-export function formatConfigArg(configPath?: string): string {
-  if (!configPath || configPath === DEFAULT_CONFIG_PATH) return "";
-  return ` --config=${shellQuote(path.relative(process.cwd(), configPath) || configPath)}`;
+export function formatMigrationScriptCommand(options: MigrationScriptCommandOptions): string {
+  const { migrationNumber, namespace, configPath, noScript } = options;
+  const argv = [
+    "tailor",
+    "tailordb",
+    "migration",
+    "script",
+    formatMigrationNumber(migrationNumber),
+    "--namespace",
+    namespace,
+  ];
+  const relativeConfigPath = configPath
+    ? path.relative(process.cwd(), configPath) || configPath
+    : undefined;
+  if (relativeConfigPath !== undefined && relativeConfigPath !== DEFAULT_CONFIG_PATH) {
+    argv.push(`--config=${relativeConfigPath}`);
+  }
+  if (noScript) {
+    argv.push("--no-script", "--reason", "<reason>");
+  }
+  return formatCopyableCommand(argv);
 }
 
 /**
