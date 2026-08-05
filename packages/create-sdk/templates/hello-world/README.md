@@ -9,9 +9,9 @@ This project was bootstrapped with [Create Tailor Platform SDK](https://www.npmj
 1. Create a new workspace:
 
 ```bash
-npx tailor login
-npx tailor workspace create --name <workspace-name> --region <workspace-region>
-npx tailor workspace list
+npx @tailor-platform/sdk login
+npx @tailor-platform/sdk workspace create --name <workspace-name> --region <workspace-region>
+npx @tailor-platform/sdk workspace list
 # For yarn: yarn tailor <command>
 # For pnpm: pnpm tailor <command>
 # For bun: bun tailor <command>

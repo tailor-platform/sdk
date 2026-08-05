@@ -45,12 +45,27 @@ const NODE_FLAG_PATTERN = new RegExp(
   "g",
 );
 const ENV_FILE_FLAG = /^--env-file(?:-if-exists)?$/;
-// A package runner immediately before `node` already resolves project binaries.
+// A package runner immediately before `node` already resolves the invocation, so
+// the rewrite follows it instead of adding one. Its name decides what it resolves.
 const RUNNER_PREFIX_PATTERN = new RegExp(
-  `(?<![\\w.-])(?:pnpm|npm|yarn|bunx|bun|npx)(?:${SPACE}(?:run|exec|dlx))?${SPACE}$`,
+  `(?<![\\w.-])(pnpm|npm|yarn|bunx|bun|npx)(?:${SPACE}(run|exec|dlx))?${SPACE}$`,
 );
 // Keeps the lookbehind on a fixed slice instead of the whole preceding file.
 const RUNNER_PREFIX_WINDOW = 64;
+
+const CLI_BINARY = "tailor";
+const CLI_PACKAGE = "@tailor-platform/sdk";
+// A runner that installs a name it cannot resolve locally needs the package
+// name: `npx tailor` reaches an unrelated `tailor` package on npm whenever the
+// SDK is not installed in the project.
+const PACKAGE_RUNNER = `npx ${CLI_PACKAGE}`;
+
+/** Whether a runner installs names it cannot resolve from the project. */
+function installsMissingNames(runner: string, subcommand: string | undefined): boolean {
+  if (runner === "npx" || runner === "bunx") return true;
+  if (subcommand === "dlx") return true;
+  return runner === "npm" && subcommand === "exec";
+}
 
 /** Translate the leading `node` flags into flags the CLI command accepts. */
 function carriedOverFlags(nodeFlags: string): string {
@@ -64,16 +79,21 @@ function carriedOverFlags(nodeFlags: string): string {
  * Rewrite runner invocations. The runner spells validation as its first
  * positional argument, so a consumed `validate` selects the subcommand.
  */
-function rewrite(value: string, prefix = ""): string {
+function rewrite(value: string, inventedHead = CLI_BINARY): string {
   return value.replace(
     RUNNER_PATTERN,
     (_match, nodeFlags: string, _quote, validate: string | undefined, offset: number) => {
       const command = validate ? "validate" : "apply";
-      // A package runner already in front of `node` stays; prefixing again
-      // would produce `pnpm pnpm tailor`.
+      // A package runner already in front of `node` stays; prefixing again would
+      // produce `pnpm pnpm tailor`.
       const before = value.slice(Math.max(0, offset - RUNNER_PREFIX_WINDOW), offset);
-      const runner = RUNNER_PREFIX_PATTERN.test(before) ? "" : prefix;
-      return `${runner}tailor seed ${command}${carriedOverFlags(nodeFlags)}`;
+      const existing = RUNNER_PREFIX_PATTERN.exec(before);
+      const head = existing
+        ? installsMissingNames(existing[1]!, existing[2])
+          ? CLI_PACKAGE
+          : CLI_BINARY
+        : inventedHead;
+      return `${head} seed ${command}${carriedOverFlags(nodeFlags)}`;
     },
   );
 }
@@ -89,7 +109,7 @@ function transformText(source: string): string | null {
  * node_modules rather than the PATH.
  */
 function transformSourceText(source: string): string | null {
-  const updated = rewrite(source, "npx ");
+  const updated = rewrite(source, PACKAGE_RUNNER);
   if (FORK_PATTERN.test(source) && updated.includes("exec.mjs")) return null;
   return updated === source ? null : updated;
 }
@@ -160,7 +180,7 @@ export function reviewFindings(
       file: relativePath,
       line: index + 1,
       message:
-        'Replace the fork()-based seed runner call with execSync("npx tailor seed apply"), forwarding env/stdio, and unwind the surrounding await/Promise plumbing.',
+        'Replace the fork()-based seed runner call with execSync("npx @tailor-platform/sdk seed apply"), forwarding env/stdio, and unwind the surrounding await/Promise plumbing.',
       excerpt: lines[index]!.trim(),
     };
   });

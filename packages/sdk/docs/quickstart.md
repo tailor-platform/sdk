@@ -33,13 +33,13 @@ cd example-app
 Before deploying your app, you need to create a workspace:
 
 ```bash
-npx tailor login
-npx tailor workspace create --name <workspace-name> --region <workspace-region>
-npx tailor workspace list
+npx @tailor-platform/sdk login
+npx @tailor-platform/sdk workspace create --name <workspace-name> --region <workspace-region>
+npx @tailor-platform/sdk workspace list
 
 # Or with Bun:
-# bunx tailor login
-# bunx tailor workspace create --name <workspace-name> --region <workspace-region>
+# bun tailor login
+# bun tailor workspace create --name <workspace-name> --region <workspace-region>
 
 # OR
 # Create a new workspace using Tailor Platform Console

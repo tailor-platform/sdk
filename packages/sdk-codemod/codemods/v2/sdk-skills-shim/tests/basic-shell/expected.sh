@@ -2,4 +2,5 @@
 set -euo pipefail
 
 pnpm exec tailor skills add
-npx tailor skills add --help
+npx @tailor-platform/sdk skills add --help
+npm exec @tailor-platform/sdk skills add
