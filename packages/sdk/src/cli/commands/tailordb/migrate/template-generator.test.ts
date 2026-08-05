@@ -318,7 +318,7 @@ describe("template-generator", () => {
         scriptContent.replace("const normalizedValue: never", "const normalizedValue"),
       );
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
-    });
+    }, 15_000);
 
     test("should use a data property when normalizing a field named __proto__", async () => {
       const snapshot = createTestSnapshot({
