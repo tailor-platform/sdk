@@ -514,7 +514,7 @@ describe("tailordb migration validate", () => {
 
     expect(result.success).toBe(false);
     expect(stderr.output).toContain(
-      'tailor tailordb migration script 0001 --namespace tailordb --config custom.config.ts --no-script --reason "..."',
+      'tailor tailordb migration script 0001 --namespace tailordb --config=custom.config.ts --no-script --reason "..."',
     );
   });
 
@@ -526,7 +526,17 @@ describe("tailordb migration validate", () => {
     const result = await runCommand(validateCommand, ["--strict", "--config", "weird $config.ts"]);
 
     expect(result.success).toBe(false);
-    expect(stderr.output).toContain("--config 'weird $config.ts' --no-script");
+    expect(stderr.output).toContain("--config='weird $config.ts' --no-script");
+  });
+
+  test("--strict keeps a leading-hyphen config path bound as the option value", async () => {
+    using stderr = captureStderr();
+    writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
+
+    const result = await runCommand(validateCommand, ["--strict", "--config=-local.config.ts"]);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain("--config=-local.config.ts --no-script");
   });
 
   test("--strict accepts warnings acknowledged with a recorded reason", async () => {
