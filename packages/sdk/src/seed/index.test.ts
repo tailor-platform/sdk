@@ -139,6 +139,43 @@ describe("backfillSeedIds", () => {
     expect(readFileSync(path.join(dir, "Customer.jsonl"), "utf-8")).toBe(content);
   });
 
+  test("does not rewrite other tables' files when backfilling", async () => {
+    const spacedUserLines = '{"name": "john@example.com", "password": "Password1!"}\n\n';
+    const dir = makeDataDir({
+      "Customer.schema.ts": customerSchema,
+      "Customer.jsonl": '{"name":"Acme","email":"a@acme.com"}\n',
+      "_User.schema.ts": userSchema,
+      "_User.jsonl": spacedUserLines,
+    });
+
+    await backfillSeedIds({ path: dir });
+
+    expect(readFileSync(path.join(dir, "_User.jsonl"), "utf-8")).toBe(spacedUserLines);
+  });
+
+  test("rejects a table whose schema file is missing", async () => {
+    const content = '{"name":"Acme","email":"a@acme.com"}\n';
+    const dir = makeDataDir({ "Customer.jsonl": content });
+
+    await expect(backfillSeedIds({ path: dir })).rejects.toThrow(
+      /Schema file not found for table 'Customer'/,
+    );
+    expect(readFileSync(path.join(dir, "Customer.jsonl"), "utf-8")).toBe(content);
+  });
+
+  test("rejects a table whose schema file fails to load", async () => {
+    const content = '{"name":"Acme","email":"a@acme.com"}\n';
+    const dir = makeDataDir({
+      "Customer.schema.ts": 'throw new Error("broken schema");\n',
+      "Customer.jsonl": content,
+    });
+
+    await expect(backfillSeedIds({ path: dir })).rejects.toThrow(
+      /Failed to load schema for table 'Customer'/,
+    );
+    expect(readFileSync(path.join(dir, "Customer.jsonl"), "utf-8")).toBe(content);
+  });
+
   test("rejects a file path", async () => {
     const dir = makeDataDir({
       "Customer.schema.ts": customerSchema,

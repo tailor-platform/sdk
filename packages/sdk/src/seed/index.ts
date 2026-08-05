@@ -8,7 +8,7 @@
 
 import { readFile, stat } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { LinesDB, ErrorFormatter } from "@toiroakr/lines-db";
+import { LinesDB, ErrorFormatter, SchemaLoader } from "@toiroakr/lines-db";
 import type { ValidationErrorDetail } from "@toiroakr/lines-db";
 
 export { defineSchema } from "@toiroakr/lines-db";
@@ -171,6 +171,11 @@ export async function backfillSeedIds(
 
     const backfilled: Record<string, number> = {};
     for (const table of db.getTableNames()) {
+      // Loading a table whose schema file is missing or broken falls back to
+      // schema inference, which cannot mint ids — surface that instead of
+      // reporting the table as already backfilled
+      await SchemaLoader.loadSchema(join(dataDir, `${table}.jsonl`));
+
       const schema = db.getSchema(table);
       if (!schema?.columns.some((column) => column.name === "id")) {
         continue;
@@ -186,7 +191,9 @@ export async function backfillSeedIds(
       return { backfilled, output: "✓ All rows already have an id" };
     }
 
-    await db.sync();
+    for (const [table] of entries) {
+      await db.sync(table);
+    }
 
     const outputLines = entries.map(
       ([table, count]) => `✓ ${table}: ${count} ${count === 1 ? "id" : "ids"} backfilled`,
