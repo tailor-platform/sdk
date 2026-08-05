@@ -1584,6 +1584,28 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(setMetadata).not.toHaveBeenCalled();
   });
 
+  test("parses applied migrations before remote mutations with --no-schema-check", async () => {
+    const migrationDir = path.join(tmpDir, "0001");
+    fs.mkdirSync(migrationDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(migrationDir, "diff.json"),
+      JSON.stringify({
+        ...createMockMigrationDiff({ namespace: "test-tailordb" }),
+        version: 3,
+      }),
+    );
+    const planResult = makePlanResult(true);
+    addSentinelTypeCreate(planResult);
+    const { client, setMetadata } = createMigrationClient({ "sdk-migration": "m0001" });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /supports migration file format versions 1-2/,
+    );
+    expect(client.createTailorDBService).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+    expect(setMetadata).not.toHaveBeenCalled();
+  });
+
   test.each([
     [
       "last migration",

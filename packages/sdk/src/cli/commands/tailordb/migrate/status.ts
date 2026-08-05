@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
@@ -11,11 +10,11 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
 import { getNamespacesWithMigrations } from "./config";
-import { fetchRemoteMigrationNumber } from "./remote-state";
+import { fetchRemoteMigrationState } from "./remote-state";
 import {
   getMigrationFiles,
   loadDiff,
-  getMigrationFilePath,
+  loadSnapshot,
   formatMigrationNumber,
   UnsupportedMigrationFileVersionError,
 } from "./snapshot";
@@ -86,10 +85,26 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
   const rows: MigrationStatusRow[] = [];
 
   for (const { namespace, migrationsDir } of targetNamespaces) {
-    const trn = resourceTrn(workspaceId, "tailordb", namespace);
-    let current: number | null;
+    const migrationFiles = getMigrationFiles(migrationsDir);
+    const descriptions = new Map<number, string>();
+    let localHistoryId: string | null = null;
     try {
-      current = await fetchRemoteMigrationNumber(client, trn);
+      for (const file of migrationFiles) {
+        if (file.type === "schema") {
+          const snapshot = loadSnapshot(file.path);
+          if (file.number === 0) {
+            localHistoryId = snapshot.rebaseline?.historyId ?? null;
+          }
+          continue;
+        }
+        try {
+          const diff = loadDiff(file.path);
+          if (diff.description) descriptions.set(file.number, diff.description);
+        } catch (error) {
+          if (error instanceof UnsupportedMigrationFileVersionError) throw error;
+          // A malformed optional description must not hide migration status.
+        }
+      }
     } catch (error) {
       rows.push({
         status: "error",
@@ -98,45 +113,53 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       });
       continue;
     }
-    const currentMigration = current ?? 0;
 
-    const migrationFiles = getMigrationFiles(migrationsDir);
+    const trn = resourceTrn(workspaceId, "tailordb", namespace);
+    let remoteState;
+    try {
+      remoteState = await fetchRemoteMigrationState(client, trn);
+    } catch (error) {
+      rows.push({
+        status: "error",
+        namespace,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
+    const currentMigration = remoteState.number ?? 0;
+
+    if (remoteState.historyIdInvalid) {
+      rows.push({
+        status: "error",
+        namespace,
+        error: "Remote migration history ID is invalid.",
+      });
+      continue;
+    }
+
+    const hasRemoteMigrationState = remoteState.number !== null || remoteState.historyId !== null;
+    if (hasRemoteMigrationState && remoteState.historyId !== localHistoryId) {
+      rows.push({
+        status: "error",
+        namespace,
+        error:
+          `Remote migration history ID ${remoteState.historyId ?? "<unset>"} does not match ` +
+          `local migration history ID ${localHistoryId ?? "<unset>"}.`,
+      });
+      continue;
+    }
+
     const availableNumbers = migrationFiles
       .map((f) => f.number)
       .filter((n, i, arr) => arr.indexOf(n) === i) // deduplicate
       .toSorted((a, b) => a - b);
     const pendingNumbers = availableNumbers.filter((n) => n > currentMigration);
 
-    let pendingMigrations: PendingMigrationStatusInfo[];
-    try {
-      pendingMigrations = pendingNumbers.map((num) => {
-        const diffPath = getMigrationFilePath(migrationsDir, num, "diff");
-        let description: string | undefined;
-
-        if (fs.existsSync(diffPath)) {
-          try {
-            const diff = loadDiff(diffPath);
-            description = diff.description;
-          } catch (error) {
-            if (error instanceof UnsupportedMigrationFileVersionError) throw error;
-            // A malformed optional description must not hide migration status.
-          }
-        }
-
-        return {
-          number: num,
-          label: formatMigrationNumber(num),
-          ...(description ? { description } : {}),
-        };
-      });
-    } catch (error) {
-      rows.push({
-        status: "error",
-        namespace,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      continue;
-    }
+    const pendingMigrations = pendingNumbers.map((num) => ({
+      number: num,
+      label: formatMigrationNumber(num),
+      ...(descriptions.has(num) ? { description: descriptions.get(num) } : {}),
+    }));
 
     rows.push({
       status: "ok",

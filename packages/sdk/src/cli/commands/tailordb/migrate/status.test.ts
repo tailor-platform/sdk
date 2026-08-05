@@ -16,6 +16,22 @@ const state = vi.hoisted(() => ({
   getMetadata: vi.fn(),
 }));
 
+function markHistoryAsRebaselined(historyId = "hlocal"): void {
+  const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+  fs.writeFileSync(
+    schemaPath,
+    JSON.stringify({
+      ...schema,
+      rebaseline: {
+        historyId,
+        replacedHistoryId: null,
+        replacedLatestMigration: 0,
+      },
+    }),
+  );
+}
+
 vi.mock("#/cli/shared/config-loader", () => ({
   loadConfig: vi.fn(),
 }));
@@ -149,6 +165,97 @@ describe("tailordb migration status --json", () => {
         status: "error",
         namespace: "tailordb",
         error: expect.stringContaining("This SDK supports migration file format versions 1-2"),
+      },
+    ]);
+  });
+
+  test.each([
+    ["baseline", "0000/schema.json"],
+    ["applied diff", "0001/diff.json"],
+  ])("reports unsupported versions in the %s", async (_description, relativePath) => {
+    const filePath = path.join(state.migrationsDir, relativePath);
+    const contents = JSON.parse(fs.readFileSync(filePath, "utf-8")) as Record<string, unknown>;
+    fs.writeFileSync(filePath, JSON.stringify({ ...contents, version: 3 }));
+    state.getMetadata.mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0002" } },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "error",
+        namespace: "tailordb",
+        error: expect.stringContaining("This SDK supports migration file format versions 1-2"),
+      },
+    ]);
+  });
+
+  test("reports a remote migration history mismatch", async () => {
+    markHistoryAsRebaselined();
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-history": "hremote" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "error",
+        namespace: "tailordb",
+        error: expect.stringMatching(/remote migration history .*hremote.*local.*hlocal/i),
+      },
+    ]);
+  });
+
+  test("accepts a matching remote migration history", async () => {
+    markHistoryAsRebaselined();
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-history": "hlocal" },
+      },
+    });
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "ok",
+        namespace: "tailordb",
+        currentMigration: 1,
+      },
+    ]);
+  });
+
+  test("does not report a history mismatch for an undeployed namespace", async () => {
+    markHistoryAsRebaselined();
+    state.getMetadata.mockRejectedValue(new ConnectError("metadata not found", Code.NotFound));
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(true);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "ok",
+        namespace: "tailordb",
+        currentMigration: 0,
       },
     ]);
   });

@@ -143,8 +143,7 @@ export async function validateAndDetectMigrations(
     for (const { namespace, migrationsDir } of namespacesWithMigrations) {
       assertValidMigrationFiles(migrationsDir, namespace);
       migrationHistoryIds[namespace] =
-        reconstructSnapshotFromMigrations(migrationsDir, INITIAL_SCHEMA_NUMBER)?.rebaseline
-          ?.historyId ?? null;
+        reconstructSnapshotFromMigrations(migrationsDir)?.rebaseline?.historyId ?? null;
     }
 
     // Check for schema diffs if not skipped
