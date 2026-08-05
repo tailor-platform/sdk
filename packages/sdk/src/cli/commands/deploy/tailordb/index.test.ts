@@ -1269,6 +1269,59 @@ describe("applyPreMigrationFieldAdjustments", () => {
 
     expect(fields.keep!.required).toBe(true);
   });
+
+  test("expands a rename into keep-old-field plus relaxed new field", () => {
+    // Post-state schema: the old field is already gone, the new field is present.
+    const fields: Record<string, ProtoField> = {
+      displayName: { type: "string", required: true, unique: true },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "displayName",
+        {
+          kind: "field_renamed",
+          typeName: "User",
+          fieldName: "displayName",
+          previousFieldName: "fullName",
+          before: { type: "string", required: false },
+          after: { type: "string", required: true, unique: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.fullName).toBeDefined();
+    expect(fields.fullName!.type).toBe("string");
+    expect(fields.fullName!.required).toBe(false);
+    expect(fields.displayName!.required).toBe(false);
+    expect(fields.displayName!.unique).toBe(false);
+  });
+
+  test("keeps a rename target's unique constraint when the old field was already unique", () => {
+    const fields: Record<string, ProtoField> = {
+      code: { type: "string", required: true, unique: true },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "code",
+        {
+          kind: "field_renamed",
+          typeName: "Item",
+          fieldName: "code",
+          previousFieldName: "sku",
+          before: { type: "string", required: true, unique: true },
+          after: { type: "string", required: true, unique: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.sku).toBeDefined();
+    expect(fields.code!.required).toBe(false);
+    expect(fields.code!.unique).toBe(true);
+  });
 });
 
 describe("applyPreMigrationIndexAdjustments", () => {

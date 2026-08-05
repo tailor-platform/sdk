@@ -39,6 +39,7 @@ import {
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
 import { formatMigrationNumber } from "./migration-number";
+import { isRenameCompatible, type FieldRenameSpec } from "./rename-detection";
 import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
 import type {
   TailorDBType,
@@ -703,6 +704,19 @@ function applyDiffToSnapshot(
         }
         break;
       }
+      case "field_renamed": {
+        const existing = types[change.typeName];
+        if (existing) {
+          const fields = copySnapshotRecord(existing.fields);
+          delete fields[change.previousFieldName];
+          fields[change.fieldName] = change.after;
+          types[change.typeName] = {
+            ...existing,
+            fields,
+          };
+        }
+        break;
+      }
       case "index_added":
       case "index_modified": {
         const existing = types[change.typeName];
@@ -1171,12 +1185,40 @@ function compareTypeFields(
   typeName: string,
   prevType: TailorDBSnapshotType,
   currType: TailorDBSnapshotType,
+  fieldRenames: readonly FieldRenameSpec[] = [],
 ): void {
   const prevFieldNames = new Set(Object.keys(prevType.fields));
   const currFieldNames = new Set(Object.keys(currType.fields));
+  const renamedFromNames = new Set(fieldRenames.map((r) => r.fromFieldName));
+  const renamedToNames = new Set(fieldRenames.map((r) => r.toFieldName));
+
+  for (const rename of fieldRenames) {
+    const prevField = assertDefined(
+      prevType.fields[rename.fromFieldName],
+      `renamed field "${rename.fromFieldName}" missing from prevType`,
+    );
+    const currField = assertDefined(
+      currType.fields[rename.toFieldName],
+      `renamed field "${rename.toFieldName}" missing from currType`,
+    );
+    ctx.changes.push({
+      kind: "field_renamed",
+      typeName,
+      fieldName: rename.toFieldName,
+      previousFieldName: rename.fromFieldName,
+      before: prevField,
+      after: currField,
+    });
+    ctx.breakingChanges.push({
+      typeName,
+      fieldName: rename.toFieldName,
+      reason: `Field renamed from ${rename.fromFieldName} to ${rename.toFieldName} (existing values must be copied by the migration script)`,
+    });
+  }
 
   // Check for added fields
   for (const fieldName of currFieldNames) {
+    if (renamedToNames.has(fieldName)) continue;
     if (!prevFieldNames.has(fieldName)) {
       const currField = assertDefined(
         currType.fields[fieldName],
@@ -1198,6 +1240,7 @@ function compareTypeFields(
 
   // Check for removed fields
   for (const fieldName of prevFieldNames) {
+    if (renamedFromNames.has(fieldName)) continue;
     if (!currFieldNames.has(fieldName)) {
       const prevField = assertDefined(
         prevType.fields[fieldName],
@@ -1707,22 +1750,112 @@ function compareTypeScripts(
 }
 
 /**
+ * Options for {@link compareSnapshots}.
+ */
+export interface CompareSnapshotsOptions {
+  /**
+   * Confirmed field renames. Each spec replaces the corresponding
+   * `field_removed` + `field_added` pair with a single breaking
+   * `field_renamed` change. Specs are validated against both snapshots.
+   */
+  fieldRenames?: readonly FieldRenameSpec[];
+}
+
+/**
+ * Assert that every rename spec matches a compatible removed + added field
+ * pair between the two snapshots.
+ * @param {NormalizedSchemaSnapshot} previous - Previous schema snapshot
+ * @param {NormalizedSchemaSnapshot} current - Current schema snapshot
+ * @param {readonly FieldRenameSpec[]} fieldRenames - Rename specs to validate
+ */
+function assertValidFieldRenames(
+  previous: NormalizedSchemaSnapshot,
+  current: NormalizedSchemaSnapshot,
+  fieldRenames: readonly FieldRenameSpec[],
+): void {
+  const seen = new Set<string>();
+  for (const rename of fieldRenames) {
+    const { typeName, fromFieldName, toFieldName } = rename;
+    const label = `${typeName}.${fromFieldName}:${toFieldName}`;
+    for (const key of [`${typeName}.${fromFieldName}`, `${typeName}.${toFieldName}`]) {
+      if (seen.has(key)) {
+        throw new Error(`Field "${key}" appears in more than one rename.`);
+      }
+      seen.add(key);
+    }
+
+    const prevType = previous.types[typeName];
+    const currType = current.types[typeName];
+    if (!prevType || !currType) {
+      throw new Error(
+        `Cannot rename ${label}: type "${typeName}" must exist in both the previous and the current schema.`,
+      );
+    }
+    const prevField = prevType.fields[fromFieldName];
+    if (!prevField) {
+      throw new Error(
+        `Cannot rename ${label}: field "${fromFieldName}" does not exist in the previous schema.`,
+      );
+    }
+    if (currType.fields[fromFieldName]) {
+      throw new Error(
+        `Cannot rename ${label}: field "${fromFieldName}" still exists in the current schema.`,
+      );
+    }
+    const currField = currType.fields[toFieldName];
+    if (!currField) {
+      throw new Error(
+        `Cannot rename ${label}: field "${toFieldName}" does not exist in the current schema.`,
+      );
+    }
+    if (prevType.fields[toFieldName]) {
+      throw new Error(
+        `Cannot rename ${label}: field "${toFieldName}" already exists in the previous schema.`,
+      );
+    }
+    if (!isRenameCompatible(prevField, currField)) {
+      throw new Error(
+        `Cannot rename ${label}: the fields are not rename-compatible ` +
+          `(the field type, array-ness, and foreign key target must match, ` +
+          `enum values must not be removed, and serial fields cannot be renamed).`,
+      );
+    }
+  }
+}
+
+/**
  * Compare two snapshots and generate a diff
  * @param {SchemaSnapshot} previous - Previous schema snapshot
  * @param {SchemaSnapshot} current - Current schema snapshot
+ * @param {CompareSnapshotsOptions} [options] - Comparison options
  * @returns {MigrationDiff} Migration diff between snapshots
  */
-export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapshot): MigrationDiff {
+export function compareSnapshots(
+  previous: SchemaSnapshot,
+  current: SchemaSnapshot,
+  options?: CompareSnapshotsOptions,
+): MigrationDiff {
   return compareNormalizedSnapshots(
     normalizeSchemaSnapshot(previous),
     normalizeSchemaSnapshot(current),
+    options,
   );
 }
 
 function compareNormalizedSnapshots(
   previous: NormalizedSchemaSnapshot,
   current: NormalizedSchemaSnapshot,
+  options?: CompareSnapshotsOptions,
 ): MigrationDiff {
+  const fieldRenames = options?.fieldRenames ?? [];
+  assertValidFieldRenames(previous, current, fieldRenames);
+  const renamesByType = new Map<string, FieldRenameSpec[]>();
+  for (const rename of fieldRenames) {
+    const list = renamesByType.get(rename.typeName) ?? [];
+    list.push(rename);
+    renamesByType.set(rename.typeName, list);
+  }
+
   const ctx: DiffContext = { changes: [], breakingChanges: [], warnings: [] };
 
   const previousTypeNames = new Set(Object.keys(previous.types));
@@ -1775,7 +1908,7 @@ function compareNormalizedSnapshots(
     compareTypeScripts(ctx, typeName, prevType, currType);
 
     // Compare fields
-    compareTypeFields(ctx, typeName, prevType, currType);
+    compareTypeFields(ctx, typeName, prevType, currType, renamesByType.get(typeName));
 
     // Compare indexes
     compareIndexes(ctx, typeName, prevType.indexes, currType.indexes);
@@ -2954,6 +3087,15 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
       };
     case "field_modified":
       return fieldDriftFromChange(change);
+    // Drift comparison never confirms renames, so this kind cannot occur here;
+    // report it as a plain field mismatch if it ever does.
+    case "field_renamed":
+      return {
+        typeName: change.typeName,
+        kind: "field_mismatch",
+        fieldName: change.fieldName,
+        details: `Field '${change.previousFieldName}' was renamed to '${change.fieldName}'`,
+      };
     case "index_added":
       return {
         typeName: change.typeName,

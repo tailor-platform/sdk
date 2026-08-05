@@ -35,6 +35,8 @@ interface BreakingChangeFieldInfo {
   addedRequiredFields: Map<string, Map<string, SnapshotFieldConfig>>;
   /** Map of typeName -> Map of fieldName -> EnumValueChange for enum value changes */
   enumValueChanges: Map<string, Map<string, EnumValueChange>>;
+  /** Map of typeName -> Map of new fieldName -> SnapshotFieldConfig for renamed fields */
+  renamedFields: Map<string, Map<string, SnapshotFieldConfig>>;
 }
 
 /**
@@ -46,6 +48,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
   const optionalToRequired = new Map<string, Set<string>>();
   const addedRequiredFields = new Map<string, Map<string, SnapshotFieldConfig>>();
   const enumValueChanges = new Map<string, Map<string, EnumValueChange>>();
+  const renamedFields = new Map<string, Map<string, SnapshotFieldConfig>>();
 
   for (const change of diff.changes) {
     if (change.kind === "field_modified") {
@@ -104,10 +107,20 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
           "addedRequiredFields entry missing",
         ).set(change.fieldName, after);
       }
+    } else if (change.kind === "field_renamed") {
+      // The new field is missing from the pre-migration snapshot; inject it so
+      // the copy script can write it (the old field stays readable as-is).
+      if (!renamedFields.has(change.typeName)) {
+        renamedFields.set(change.typeName, new Map());
+      }
+      assertDefined(renamedFields.get(change.typeName), "renamedFields entry missing").set(
+        change.fieldName,
+        change.after,
+      );
     }
   }
 
-  return { optionalToRequired, addedRequiredFields, enumValueChanges };
+  return { optionalToRequired, addedRequiredFields, enumValueChanges, renamedFields };
 }
 
 /**
@@ -129,6 +142,7 @@ function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationD
         optionalToRequired: new Map(),
         addedRequiredFields: new Map(),
         enumValueChanges: new Map(),
+        renamedFields: new Map(),
       };
 
   // Track which utility types are used
@@ -267,6 +281,17 @@ function generateTableType(
   for (const [fieldName, fieldConfig] of addedRequiredFields) {
     // Treat as optional→required change (isOptionalToRequired: true)
     const result = generateFieldType(fieldConfig, true, undefined);
+    fieldLines.push(`    ${fieldName}: ${result.type};`);
+    usedTimestamp = usedTimestamp || result.usedTimestamp;
+    usedColumnType = usedColumnType || result.usedColumnType;
+  }
+
+  // Add rename target fields, which do not exist in the pre-migration snapshot.
+  // A required target reads as nullable until the copy script fills it in
+  // (same shape as optional→required); an optional target is plainly nullable.
+  const renamedFieldsForType = breakingChangeFields.renamedFields.get(type.name) || new Map();
+  for (const [fieldName, fieldConfig] of renamedFieldsForType) {
+    const result = generateFieldType(fieldConfig, fieldConfig.required, undefined);
     fieldLines.push(`    ${fieldName}: ${result.type};`);
     usedTimestamp = usedTimestamp || result.usedTimestamp;
     usedColumnType = usedColumnType || result.usedColumnType;

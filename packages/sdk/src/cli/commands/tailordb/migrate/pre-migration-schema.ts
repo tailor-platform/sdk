@@ -10,6 +10,8 @@
  * - `field_added` with `required: true`: relax to `required: false`.
  * - `field_modified` optional→required, unique constraint added, enum
  *   value removed: keep the looser side until Post-phase.
+ * - `field_renamed`: keep the old field (readable by migrate.ts) and relax
+ *   the new field's required/unique constraints until Post-phase.
  *
  * and the type-level index adjustments:
  *
@@ -41,6 +43,7 @@ const PRE_MIGRATION_FIELD_KINDS = new Set<DiffChange["kind"]>([
   "field_added",
   "field_modified",
   "field_removed",
+  "field_renamed",
 ]);
 
 /**
@@ -104,6 +107,22 @@ export function applyPreMigrationFieldAdjustments(
   for (const [fieldName, change] of typeChanges) {
     if (change.kind === "field_removed") {
       fields[fieldName] = convertFieldConfigToProto(change.before);
+      continue;
+    }
+
+    if (change.kind === "field_renamed") {
+      // Expand the rename into "keep the old field + relax the new field":
+      // the copy script reads the old field while both coexist, and the
+      // Post-phase drops the old field and enforces the new field's
+      // constraints.
+      fields[change.previousFieldName] = convertFieldConfigToProto(change.before);
+      const newField = fields[fieldName];
+      if (newField) {
+        if (change.after.required) newField.required = false;
+        if ((change.after.unique ?? false) && !(change.before.unique ?? false)) {
+          newField.unique = false;
+        }
+      }
       continue;
     }
 

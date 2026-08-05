@@ -131,6 +131,32 @@ tailor tailordb migration script 0002
 
 This writes `migrations/0002/migrate.ts` and `migrations/0002/db.ts` next to the existing `diff.json`. The removed field stays readable inside `migrate.ts` because the pre-migration phase keeps it on the type until the script finishes (see [Per-migration phases](#per-migration-phases)). The next `tailor deploy` runs the script automatically — `migrate.ts` is executed whenever the file exists on disk, regardless of whether the diff itself required it.
 
+### Renaming a field
+
+Renaming a field in a type definition looks like a removal plus an addition to the diff engine. Left as-is, that combination silently drops the old field's data: the removal is only a warning, so nothing forces a data copy.
+
+To prevent that, when `migration generate` finds a removed field and an added field with a compatible shape (same field type, same array-ness, same foreign-key target) in the same type, it asks whether the change is a rename:
+
+```
+? User.fullName was removed and displayName was added with a compatible type. Was it renamed to displayName? (Y/n)
+```
+
+In non-interactive environments (or with `--yes`), no prompt is shown; pass the rename explicitly instead:
+
+```bash
+tailor tailordb migration generate --rename "User.fullName:displayName"
+```
+
+Repeat `--rename` for multiple renames. A `--rename` that does not match a compatible removed + added pair fails with an error.
+
+A confirmed rename is recorded as a single `field_renamed` change and treated as **breaking**, so a migration script is required. The generated `migrate.ts` copies the old field into the new one for every row in batches, and the generated `db.ts` exposes both the old field (readable) and the new field (writable). The copy intentionally overwrites every row without checking for existing values: values of removed fields are retained in storage, so a stale value could otherwise resurface under the new name later.
+
+During deploy, the pre-migration phase keeps the old field and adds the new field with its constraints relaxed, the script copies the data, and the post-migration phase drops the old field and enforces the new field's constraints — all within a single `tailor deploy`.
+
+If you decline the prompt (or pass neither prompt confirmation nor `--rename`), the change stays a plain removal + addition with the usual data-loss warning.
+
+Renaming a **type** is not yet detected; it is still a type removal plus a type addition.
+
 ### Breaking changes without a script
 
 Breaking changes require `migrate.ts`. If it is missing at deploy time (for example, the generated script was deleted), `tailor deploy` fails before applying the migration or anything after it. When there is genuinely nothing to migrate — say, the affected type holds no data yet — record an explicit acknowledgment instead of keeping an empty script:
@@ -228,6 +254,7 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 | Add optional field             | No        | No                | Schema change only                                                                                                                                                                                                                               |
 | Add required field             | Yes       | Yes               | Script populates default values                                                                                                                                                                                                                  |
 | Remove field                   | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the field is dropped. The field stays readable from `migrate.ts` during Pre-migration and is dropped in Post-migration. |
+| Rename field                   | Yes       | Yes               | Confirmed interactively at generate time or via `--rename "Type.old:new"` — see [Renaming a field](#renaming-a-field). Auto-generated script copies values from the old field to the new one; both fields coexist during Pre-migration.          |
 | Change optional → required     | Yes       | Yes               | Script sets defaults for null values                                                                                                                                                                                                             |
 | Change required → optional     | No        | No                | Schema change only                                                                                                                                                                                                                               |
 | Add index (non-unique)         | No        | No                | Schema change only                                                                                                                                                                                                                               |
@@ -264,7 +291,7 @@ When you run `tailor deploy`, the SDK detects pending migrations (anything past 
 
 For each pending migration:
 
-1. **Pre-migration**: Type changes that would be breaking are applied in a relaxed form first. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the type so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped). Breaking type-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
+1. **Pre-migration**: Type changes that would be breaking are applied in a relaxed form first. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the type so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped). For a renamed field, the old field is kept and the new field is added with its constraints relaxed, so the script can read the old field and write the new one. Breaking type-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
 2. **Script execution**: If `migrate.ts` exists on disk for this migration, it is bundled and sent to the platform via the script execution API and runs as the configured machine user inside a transaction. The script is hard-required for breaking changes (`diff.requiresMigrationScript`) — deploy fails if the file is missing, unless a `--no-script` acknowledgment was recorded (see [Breaking changes without a script](#breaking-changes-without-a-script)). It is also executed when present for warning-tier diffs — see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts).
 3. **Post-migration**: Required constraints are enforced; field and type deletions are applied (the columns/tables are physically dropped here); the `sdk-migration` label is bumped to this migration's number.
 

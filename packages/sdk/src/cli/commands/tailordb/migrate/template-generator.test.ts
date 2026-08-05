@@ -179,6 +179,95 @@ describe("template-generator", () => {
       expect(dbTypesContent).toContain("User");
     });
 
+    test("should generate an unconditional batched copy script for field renames", async () => {
+      const renamePreviousSnapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            fullName: { type: "string", required: false },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason: "Field renamed from fullName to displayName",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain("Copy User.fullName into displayName for every row");
+      expect(scriptContent).toContain('.select(["id", "fullName"])');
+      expect(scriptContent).toContain('.orderBy("id", "asc")');
+      expect(scriptContent).toContain(".set({ displayName: row.fullName })");
+      // Unconditional copy: no null filter on the source field
+      expect(scriptContent).not.toContain('.where("fullName", "is not", null)');
+      expect(scriptContent).not.toContain("No data migration needed");
+
+      const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
+      expect(dbTypesContent).toContain("fullName: string | null;");
+      expect(dbTypesContent).toContain("displayName: string | null;");
+    });
+
+    test("should add a null-handling TODO when a rename target becomes required", async () => {
+      const renamePreviousSnapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            fullName: { type: "string", required: false },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason: "Field renamed from fullName to displayName",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain("TODO: fullName is optional but displayName is required");
+
+      const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
+      expect(dbTypesContent).toContain("displayName: ColumnType<string | null, string, string>;");
+    });
+
     test("should include description in diff file if provided", async () => {
       const diff = createMockMigrationDiff();
 

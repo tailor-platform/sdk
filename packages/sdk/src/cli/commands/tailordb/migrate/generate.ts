@@ -17,7 +17,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
 import { logger, styles } from "#/cli/shared/logger";
-import { prompt } from "#/cli/shared/prompt";
+import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { PluginManager } from "#/plugin/manager";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
@@ -26,7 +26,14 @@ import {
   formatDiffSummary,
   formatWarnings,
   hasChanges,
+  type MigrationDiff,
 } from "./diff-calculator";
+import {
+  findRenameCandidates,
+  parseRenameOption,
+  type FieldRenameCandidate,
+  type FieldRenameSpec,
+} from "./rename-detection";
 import {
   createSnapshotFromLocalTypes,
   reconstructSnapshotFromMigrations,
@@ -43,6 +50,8 @@ export interface GenerateOptions {
   name?: string;
   yes?: boolean;
   init?: boolean;
+  /** `--rename Type.old:new` values confirming field renames non-interactively. */
+  renames?: string[];
 }
 
 /**
@@ -132,6 +141,13 @@ export async function generate(options: GenerateOptions): Promise<void> {
     await handleInitOption(namespacesWithMigrations, options.yes);
   }
 
+  // Parse --rename flags up front so malformed values fail before any file is written
+  const renameFlags: RenameFlag[] = (options.renames ?? []).map((raw) => ({
+    raw,
+    spec: parseRenameOption(raw),
+    used: false,
+  }));
+
   // Initialize plugin manager if plugins are provided
   let pluginManager: PluginManager | undefined;
   if (plugins.length > 0) {
@@ -175,8 +191,21 @@ export async function generate(options: GenerateOptions): Promise<void> {
       await generateInitialSnapshot(currentSnapshot, migrationsDir);
     } else {
       // Compare with previous snapshot and generate diff
-      await generateDiffFromSnapshot(previousSnapshot, currentSnapshot, migrationsDir, options);
+      await generateDiffFromSnapshot(
+        previousSnapshot,
+        currentSnapshot,
+        migrationsDir,
+        options,
+        renameFlags,
+      );
     }
+  }
+
+  const unusedRenames = renameFlags.filter((flag) => !flag.used);
+  if (unusedRenames.length > 0) {
+    throw new Error(
+      `--rename did not match any schema change: ${unusedRenames.map((flag) => flag.raw).join(", ")}`,
+    );
   }
 }
 
@@ -199,12 +228,136 @@ async function generateInitialSnapshot(
   logger.log("\nThis is the baseline schema. Future changes will be tracked as diffs.");
 }
 
+/** A parsed `--rename` flag together with its raw value and usage tracking. */
+interface RenameFlag {
+  raw: string;
+  spec: FieldRenameSpec;
+  used: boolean;
+}
+
+function renameCandidateLabels(
+  candidate: FieldRenameCandidate,
+  claimedFields: ReadonlySet<string>,
+): string[] {
+  return candidate.added
+    .filter((added) => !claimedFields.has(`${candidate.typeName}.${added.fieldName}`))
+    .map((added) => added.fieldName);
+}
+
+/**
+ * Ask the user whether a removed field was renamed to one of the compatible
+ * added fields. Returns the confirmed new field name, or undefined.
+ * @param {FieldRenameCandidate} candidate - Candidate to confirm
+ * @param {string[]} addedFieldNames - Added field names still available as rename targets
+ * @returns {Promise<string | undefined>} Confirmed new field name, if any
+ */
+async function promptRenameCandidate(
+  candidate: FieldRenameCandidate,
+  addedFieldNames: string[],
+): Promise<string | undefined> {
+  const oldLabel = `${candidate.typeName}.${candidate.removed.fieldName}`;
+  const [firstFieldName] = addedFieldNames;
+  if (addedFieldNames.length === 1 && firstFieldName) {
+    const isRename = await prompt.confirm({
+      message: `${oldLabel} was removed and ${firstFieldName} was added with a compatible type. Was it renamed to ${firstFieldName}?`,
+      default: true,
+    });
+    return isRename ? firstFieldName : undefined;
+  }
+  const selected = await prompt.select({
+    message: `${oldLabel} was removed. Was it renamed to one of these added fields?`,
+    choices: [
+      ...addedFieldNames.map((fieldName) => ({
+        name: `Yes, renamed to ${fieldName}`,
+        value: fieldName as string | null,
+      })),
+      { name: `No, ${candidate.removed.fieldName} was removed`, value: null },
+    ],
+  });
+  return selected ?? undefined;
+}
+
+/**
+ * Resolve field renames for a diff: apply `--rename` flags, then confirm
+ * remaining candidates interactively (or warn when prompting is unavailable),
+ * and recompute the diff with the confirmed renames.
+ * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
+ * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
+ * @param {MigrationDiff} diff - Diff computed without rename knowledge
+ * @param {GenerateOptions} options - Generate options
+ * @param {RenameFlag[]} renameFlags - Parsed `--rename` flags (marked used when they apply to this namespace)
+ * @returns {Promise<MigrationDiff>} Diff with confirmed renames recorded
+ */
+async function resolveFieldRenames(
+  previousSnapshot: SchemaSnapshot,
+  currentSnapshot: SchemaSnapshot,
+  diff: MigrationDiff,
+  options: GenerateOptions,
+  renameFlags: RenameFlag[],
+): Promise<MigrationDiff> {
+  // Only flags naming a type in this namespace apply here; the rest may
+  // belong to another namespace and are checked for usage after the loop.
+  const applicableFlags = renameFlags.filter(
+    (flag) =>
+      previousSnapshot.types[flag.spec.typeName] || currentSnapshot.types[flag.spec.typeName],
+  );
+  for (const flag of applicableFlags) {
+    flag.used = true;
+  }
+  const confirmed: FieldRenameSpec[] = applicableFlags.map((flag) => flag.spec);
+  const claimedFields = new Set(
+    confirmed.flatMap((spec) => [
+      `${spec.typeName}.${spec.fromFieldName}`,
+      `${spec.typeName}.${spec.toFieldName}`,
+    ]),
+  );
+
+  const candidates = findRenameCandidates(diff).filter(
+    (candidate) =>
+      !claimedFields.has(`${candidate.typeName}.${candidate.removed.fieldName}`) &&
+      renameCandidateLabels(candidate, claimedFields).length > 0,
+  );
+
+  if (candidates.length > 0 && (options.yes || !canPrompt())) {
+    logger.newline();
+    logger.warn("Possible field rename(s) detected; they will be treated as remove + add:");
+    for (const candidate of candidates) {
+      const targets = renameCandidateLabels(candidate, claimedFields).join(", ");
+      logger.warn(`  - ${candidate.typeName}.${candidate.removed.fieldName} → ${targets}?`, {
+        mode: "plain",
+      });
+    }
+    logger.info(
+      'If a field was renamed, re-run with --rename "Type.oldField:newField" to record the rename and scaffold a data copy script.',
+    );
+  } else {
+    for (const candidate of candidates) {
+      const addedFieldNames = renameCandidateLabels(candidate, claimedFields);
+      if (addedFieldNames.length === 0) continue;
+      const newFieldName = await promptRenameCandidate(candidate, addedFieldNames);
+      if (newFieldName) {
+        confirmed.push({
+          typeName: candidate.typeName,
+          fromFieldName: candidate.removed.fieldName,
+          toFieldName: newFieldName,
+        });
+        claimedFields.add(`${candidate.typeName}.${candidate.removed.fieldName}`);
+        claimedFields.add(`${candidate.typeName}.${newFieldName}`);
+      }
+    }
+  }
+
+  if (confirmed.length === 0) return diff;
+  return compareSnapshots(previousSnapshot, currentSnapshot, { fieldRenames: confirmed });
+}
+
 /**
  * Generate diff from previous snapshot
  * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
  * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
  * @param {string} migrationsDir - Migrations directory path
  * @param {GenerateOptions} options - Generate options
+ * @param {RenameFlag[]} renameFlags - Parsed `--rename` flags
  * @returns {Promise<void>} Promise that resolves when diff is generated
  */
 async function generateDiffFromSnapshot(
@@ -212,15 +365,19 @@ async function generateDiffFromSnapshot(
   currentSnapshot: SchemaSnapshot,
   migrationsDir: string,
   options: GenerateOptions,
+  renameFlags: RenameFlag[],
 ): Promise<void> {
   // Calculate diff
-  const diff = compareSnapshots(previousSnapshot, currentSnapshot);
+  let diff = compareSnapshots(previousSnapshot, currentSnapshot);
 
   // Check if there are any changes
   if (!hasChanges(diff)) {
     logger.info("No schema differences detected.");
     return;
   }
+
+  // Recompute the diff with confirmed field renames (via --rename or prompts)
+  diff = await resolveFieldRenames(previousSnapshot, currentSnapshot, diff, options, renameFlags);
 
   // Display diff
   logger.newline();
@@ -352,6 +509,10 @@ export const generateCommand = defineAppCommand({
     init: arg(z.boolean().default(false), {
       description: "Delete existing migrations and start fresh",
     }),
+    rename: arg(z.array(z.string()).optional(), {
+      description:
+        'Record a field rename instead of remove + add (format: "Type.oldField:newField"; repeatable). Renames require a migration script that copies the data.',
+    }),
   }),
   run: async (args) => {
     await generate({
@@ -359,6 +520,7 @@ export const generateCommand = defineAppCommand({
       name: args.name,
       yes: args.yes,
       init: args.init,
+      renames: args.rename,
     });
   },
 });

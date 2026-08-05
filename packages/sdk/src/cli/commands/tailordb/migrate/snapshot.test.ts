@@ -589,6 +589,133 @@ describe("snapshot", () => {
       expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint");
     });
 
+    describe("field renames", () => {
+      function snapshotWithFields(
+        fields: Record<string, { type: string; required: boolean; array?: boolean }>,
+      ): SchemaSnapshot {
+        return {
+          ...createEmptySnapshot(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: { id: { type: "uuid", required: true }, ...fields },
+            },
+          },
+        };
+      }
+
+      const previous = () => snapshotWithFields({ fullName: { type: "string", required: false } });
+      const current = () =>
+        snapshotWithFields({ displayName: { type: "string", required: false } });
+
+      test("records a single breaking field_renamed change", () => {
+        const diff = compareSnapshots(previous(), current(), {
+          fieldRenames: [
+            { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" },
+          ],
+        });
+
+        expect(diff.changes).toEqual([
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false },
+          },
+        ]);
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.requiresMigrationScript).toBe(true);
+        expect(diff.breakingChanges).toEqual([
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason:
+              "Field renamed from fullName to displayName (existing values must be copied by the migration script)",
+          },
+        ]);
+        expect(diff.warnings).toEqual([]);
+      });
+
+      test("without rename specs the same pair stays remove + add", () => {
+        const diff = compareSnapshots(previous(), current());
+
+        expect(diff.changes.map((c) => c.kind).toSorted()).toEqual([
+          "field_added",
+          "field_removed",
+        ]);
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+      });
+
+      test("rejects a rename whose old field is missing from the previous schema", () => {
+        expect(() =>
+          compareSnapshots(previous(), current(), {
+            fieldRenames: [
+              { typeName: "User", fromFieldName: "nickname", toFieldName: "displayName" },
+            ],
+          }),
+        ).toThrow('field "nickname" does not exist in the previous schema');
+      });
+
+      test("rejects a rename whose new field is missing from the current schema", () => {
+        expect(() =>
+          compareSnapshots(previous(), current(), {
+            fieldRenames: [{ typeName: "User", fromFieldName: "fullName", toFieldName: "alias" }],
+          }),
+        ).toThrow('field "alias" does not exist in the current schema');
+      });
+
+      test("rejects a rename between incompatible field types", () => {
+        const incompatibleCurrent = snapshotWithFields({
+          displayName: { type: "integer", required: false },
+        });
+        expect(() =>
+          compareSnapshots(previous(), incompatibleCurrent, {
+            fieldRenames: [
+              { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" },
+            ],
+          }),
+        ).toThrow("not rename-compatible");
+      });
+
+      test("rejects a rename between different array-ness", () => {
+        const arrayCurrent = snapshotWithFields({
+          displayName: { type: "string", required: false, array: true },
+        });
+        expect(() =>
+          compareSnapshots(previous(), arrayCurrent, {
+            fieldRenames: [
+              { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" },
+            ],
+          }),
+        ).toThrow("not rename-compatible");
+      });
+
+      test("rejects a field participating in two renames", () => {
+        expect(() =>
+          compareSnapshots(previous(), current(), {
+            fieldRenames: [
+              { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" },
+              { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" },
+            ],
+          }),
+        ).toThrow("appears in more than one rename");
+      });
+
+      test("rejects a rename whose type does not exist", () => {
+        expect(() =>
+          compareSnapshots(previous(), current(), {
+            fieldRenames: [
+              { typeName: "Ghost", fromFieldName: "fullName", toFieldName: "displayName" },
+            ],
+          }),
+        ).toThrow('type "Ghost" must exist');
+      });
+    });
+
     describe("decimal scale changes", () => {
       function snapshotWithPrice(scale: number | undefined): SchemaSnapshot {
         return {
@@ -1592,6 +1719,43 @@ describe("snapshot", () => {
       expect(loaded.warnings.length).toBe(1);
       expect(loaded.hasWarnings).toBe(true);
     });
+
+    test("loads a diff containing a field_renamed change", () => {
+      const renameDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason: "Field renamed from fullName to displayName",
+          },
+        ],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      };
+
+      const filePath = path.join(testDir, "rename_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(renameDiff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.changes).toEqual(renameDiff.changes);
+      expect(loaded.requiresMigrationScript).toBe(true);
+    });
   });
 
   describe("loadSnapshot validation", () => {
@@ -2043,6 +2207,62 @@ describe("snapshot", () => {
 
       expect(reconstructed?.types.User!.fields.id).toBeDefined();
       expect(reconstructed?.types.User!.fields.email).toBeDefined();
+    });
+
+    test("applies field_renamed diff (old field dropped, new field added)", () => {
+      const initialSnapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              fullName: { type: "string", required: false },
+            },
+          },
+        },
+      };
+
+      const diff: MigrationDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason: "Field renamed from fullName to displayName",
+          },
+        ],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      };
+
+      writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, initialSnapshot);
+      writeDiffToDir(testDir, 1, diff);
+
+      const reconstructed = reconstructSnapshotFromMigrations(testDir);
+
+      expect(reconstructed?.types.User!.fields.fullName).toBeUndefined();
+      expect(reconstructed?.types.User!.fields.displayName).toEqual({
+        type: "string",
+        required: false,
+      });
     });
 
     test("applies added type names that match Object prototype keys", () => {

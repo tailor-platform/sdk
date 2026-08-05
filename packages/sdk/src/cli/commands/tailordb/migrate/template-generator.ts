@@ -17,7 +17,7 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
-import type { MigrationDiff, DiffChange } from "./diff-calculator";
+import type { MigrationDiff, DiffChange, FieldRenamedChange } from "./diff-calculator";
 
 /**
  * Check if a file exists
@@ -252,6 +252,10 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
     return [];
   }
 
+  if (change.kind === "field_renamed") {
+    return [generateFieldRenameCopyScript(change)];
+  }
+
   if (change.kind !== "field_modified") {
     // No data migration needed for type_added, type_removed, or field_removed
     return [];
@@ -329,6 +333,44 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
   }
 
   return scripts;
+}
+
+function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
+  const { typeName, fieldName, previousFieldName, before, after } = change;
+  const requiredTodo =
+    !before.required && after.required
+      ? `
+      // TODO: ${previousFieldName} is optional but ${fieldName} is required.
+      // Replace null values below, or the post-migration phase will fail.`
+      : "";
+
+  return `  // Copy ${typeName}.${previousFieldName} into ${fieldName} for every row.
+  // Overwrite unconditionally: stored values of previously removed fields are
+  // not pruned, so a stale value could otherwise resurface under ${fieldName}.
+  {
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
+        .selectFrom("${typeName}")
+        .select(["id", "${previousFieldName}"])
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      for (const row of rows) {${requiredTodo}
+        await trx
+          .updateTable("${typeName}")
+          .set({ ${fieldName}: row.${previousFieldName} })
+          .where("id", "=", row.id)
+          .execute();
+      }
+      lastId = rows[rows.length - 1]!.id;
+    }
+  }`;
 }
 
 function generateUniqueConstraintScript(change: DiffChange): string | null {
