@@ -83,7 +83,7 @@ function permissionArgument(
   if (imports.callName(call) === "defineIdp") {
     const options = resolveValue(context, call.arguments[1]);
     const property = objectProperty(options, "permission");
-    return property?.type === "Property" ? property.value : null;
+    return property?.value ?? null;
   }
   const callee = unwrapExpression(call.callee);
   if (callee?.type !== "MemberExpression" && callee?.type !== "OptionalMemberExpression") {
@@ -98,7 +98,7 @@ function permissionArgument(
 function isUnconditionalObjectEntry(context: Rule.RuleContext, entry: AstNode): boolean {
   const conditions = objectProperty(entry, "conditions");
   const permit = objectProperty(entry, "permit");
-  if (conditions?.type !== "Property" || permit?.type !== "Property") return false;
+  if (conditions === null || permit === null) return false;
   const conditionsValue = resolveValue(context, conditions.value);
   const permitValue = unwrapExpression(permit.value);
   return (

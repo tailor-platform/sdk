@@ -1,8 +1,5 @@
-import plugin, {
-  type TailorSdkPlugin,
-  type TailorSdkRuleName,
-} from "@tailor-platform/eslint-plugin-sdk";
 import { defineConfig } from "eslint/config";
+import plugin, { type TailorSdkPlugin, type TailorSdkRuleName } from "./index.js";
 
 export const recommendedConfig = defineConfig(plugin.configs.recommended);
 export const typedPlugin: TailorSdkPlugin = plugin;

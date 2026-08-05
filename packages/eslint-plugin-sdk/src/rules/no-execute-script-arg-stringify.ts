@@ -43,7 +43,7 @@ const rule = {
           if (imports.callName(call) !== "executeScript") continue;
           const options = resolveValue(context, call.arguments[0]);
           const property = objectProperty(options, "arg");
-          if (!property || property.type !== "Property") continue;
+          if (property === null) continue;
           if (!isJsonStringifyCall(resolveValue(context, property.value))) continue;
           context.report({ node: property.value, messageId: "stringifiedArg" });
         }

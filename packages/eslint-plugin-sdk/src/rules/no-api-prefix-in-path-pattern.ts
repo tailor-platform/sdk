@@ -25,7 +25,7 @@ const rule = {
           if (imports.callName(call) !== "createHttpAdapter") continue;
           const options = resolveValue(context, call.arguments[0]);
           const property = objectProperty(options, "pathPattern");
-          if (!property || property.type !== "Property") continue;
+          if (property === null) continue;
           const pattern = staticString(property.value);
           if (pattern !== "/api" && !pattern?.startsWith("/api/")) continue;
           context.report({ node: property.value, messageId: "prefixed" });

@@ -2,13 +2,16 @@ import type { Rule } from "eslint";
 
 type WithoutParent<Node> = Node extends unknown ? Omit<Node, "parent"> : never;
 type EstreeNode = WithoutParent<Rule.Node>;
-type ExpressionWrapperType =
-  | "TSAsExpression"
-  | "TSInstantiationExpression"
-  | "TSNonNullExpression"
-  | "TSSatisfiesExpression"
-  | "TSTypeAssertion"
-  | "TypeCastExpression";
+const EXPRESSION_WRAPPER_TYPES = [
+  "TSAsExpression",
+  "TSInstantiationExpression",
+  "TSNonNullExpression",
+  "TSSatisfiesExpression",
+  "TSTypeAssertion",
+  "TypeCastExpression",
+] as const;
+
+type ExpressionWrapperType = (typeof EXPRESSION_WRAPPER_TYPES)[number];
 
 interface ExpressionWrapperNode {
   type: ExpressionWrapperType;
@@ -33,14 +36,7 @@ export type AstIdentifier = Extract<EstreeNode, { type: "Identifier" }>;
 export type AstImportDeclaration = Extract<EstreeNode, { type: "ImportDeclaration" }>;
 export type AstProperty = Extract<EstreeNode, { type: "Property" }>;
 
-const EXPRESSION_WRAPPERS: ReadonlySet<string> = new Set([
-  "TSAsExpression",
-  "TSInstantiationExpression",
-  "TSNonNullExpression",
-  "TSSatisfiesExpression",
-  "TSTypeAssertion",
-  "TypeCastExpression",
-]);
+const EXPRESSION_WRAPPERS: ReadonlySet<string> = new Set(EXPRESSION_WRAPPER_TYPES);
 
 export function unwrapExpression(node: AstNode | null | undefined): AstNode | null | undefined {
   let current = node;

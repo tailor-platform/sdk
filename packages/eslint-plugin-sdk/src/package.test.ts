@@ -23,4 +23,9 @@ describe("package", () => {
       },
     });
   });
+
+  test("typechecks source without rebuilding generated output", () => {
+    expect(packageJson.devDependencies).toMatchObject({ "@types/node": "24.13.3" });
+    expect(packageJson.scripts).not.toHaveProperty("pretypecheck");
+  });
 });
