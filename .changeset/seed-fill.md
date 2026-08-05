@@ -25,6 +25,8 @@ The generated seed schema files now export the type's create hook, which is wher
 
 `createTailorDBHook` from `@tailor-platform/sdk/test` no longer runs the type's own `validate`. Computing the values a record gets on create and deciding whether a record is acceptable are separate jobs, and the second one now sits where the field-level validation already was: `createStandardSchema` takes the type as a third argument and reports type-level issues through its result.
 
+`tailor seed validate` also stops printing two markers on the header of a failed run (`\u2716 \u2717 Found 2 error(s) in ...`), now that it hands the CLI a report that is already formatted.
+
 That also fixes how `tailor seed validate` reports them. A type-level `validate` failure used to end the run at the first offending row with a bare message; it now lands in the same report as every other issue, naming the file and every row that fails.
 
 A test calling `createTailorDBHook` directly to assert a type-level `validate` throws needs to go through `createStandardSchema` instead.
