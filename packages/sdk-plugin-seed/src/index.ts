@@ -7,6 +7,7 @@ import { readPackageJSON } from "pkg-types";
 import { defineCommand, runMain } from "politty";
 import { z } from "zod";
 import { seedApplyCommand } from "./apply";
+import { seedBackfillIdsCommand } from "./backfill-ids";
 import { commonArgs } from "./shared/args";
 import { logger } from "./shared/logger";
 import { seedValidateCommand } from "./validate";
@@ -29,6 +30,7 @@ const mainCommand = defineCommand({
     "Tailor CLI plugin: installed alongside the Tailor CLI, it runs as `tailor seed <command>`.",
   subCommands: {
     apply: seedApplyCommand,
+    "backfill-ids": seedBackfillIdsCommand,
     validate: seedValidateCommand,
   },
 });

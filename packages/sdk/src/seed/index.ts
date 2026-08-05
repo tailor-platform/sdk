@@ -6,9 +6,10 @@
  * seed-specific utility functions used by the code generator.
  */
 
-import { stat } from "node:fs/promises";
-import { basename, dirname } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { LinesDB, ErrorFormatter } from "@toiroakr/lines-db";
+import type { ValidationErrorDetail } from "@toiroakr/lines-db";
 
 export { defineSchema } from "@toiroakr/lines-db";
 export type { ForeignKeyDefinition, IndexDefinition } from "@toiroakr/lines-db";
@@ -70,10 +71,18 @@ export async function validateSeedData(
     return { valid: true, output: outputLines.join("\n") };
   }
 
+  return {
+    valid: false,
+    output: outputLines.join("\n"),
+    error: formatValidationErrors(result.errors, verbose),
+  };
+}
+
+function formatValidationErrors(errors: ValidationErrorDetail[], verbose: boolean): string {
   const formatter = new ErrorFormatter({ verbose });
   const errorLines: string[] = [];
-  const errorsByFile = new Map<string, typeof result.errors>();
-  for (const error of result.errors) {
+  const errorsByFile = new Map<string, ValidationErrorDetail[]>();
+  for (const error of errors) {
     const fileErrors = errorsByFile.get(error.file) || [];
     fileErrors.push(error);
     errorsByFile.set(error.file, fileErrors);
@@ -113,5 +122,99 @@ export async function validateSeedData(
     errorLines.push("");
   }
 
-  return { valid: false, output: outputLines.join("\n"), error: errorLines.join("\n") };
+  return errorLines.join("\n");
+}
+
+type BackfillSeedIdsOptions = {
+  /** Resolved absolute path to a seed data directory */
+  path: string;
+  /** Show verbose error output when validation fails */
+  verbose?: boolean;
+};
+
+type BackfillSeedIdsResult = {
+  /** Number of rows that received an `id`, keyed by table name */
+  backfilled: Record<string, number>;
+  /** Human-readable summary of the backfill */
+  output: string;
+};
+
+/**
+ * Backfill missing `id` values into JSONL seed data.
+ * Loads the data directory through the generated schemas — whose hooks mint
+ * an `id` for rows that lack one — and writes only the `id` field back to
+ * the files. Every other field keeps the value its line already had, so
+ * hook-computed values and omitted optional fields are untouched, and tables
+ * without an `id` field (such as `_User`) are left as they are.
+ * @param options - Backfill options including path and verbose flag
+ * @returns Per-table counts of rows that received an `id`
+ */
+export async function backfillSeedIds(
+  options: BackfillSeedIdsOptions,
+): Promise<BackfillSeedIdsResult> {
+  const { path: dataDir, verbose = false } = options;
+
+  const stats = await stat(dataDir);
+  if (!stats.isDirectory()) {
+    throw new Error(`Invalid path: ${dataDir}. Must be a directory.`);
+  }
+
+  const db = LinesDB.create({ dataDir, writeBackFields: ["id"] });
+  try {
+    const result = await db.initialize({ detailedValidate: true });
+    if (!result.valid) {
+      // Syncing after a failed load would drop the failed rows from their files
+      throw new Error(
+        `Seed data failed validation; fix the errors and re-run.\n\n${formatValidationErrors(result.errors, verbose)}`,
+      );
+    }
+
+    const backfilled: Record<string, number> = {};
+    for (const table of db.getTableNames()) {
+      const schema = db.getSchema(table);
+      if (!schema?.columns.some((column) => column.name === "id")) {
+        continue;
+      }
+      const missing = await countRowsMissingId(join(dataDir, `${table}.jsonl`));
+      if (missing > 0) {
+        backfilled[table] = missing;
+      }
+    }
+
+    const entries = Object.entries(backfilled);
+    if (entries.length === 0) {
+      return { backfilled, output: "✓ All rows already have an id" };
+    }
+
+    await db.sync();
+
+    const outputLines = entries.map(
+      ([table, count]) => `✓ ${table}: ${count} ${count === 1 ? "id" : "ids"} backfilled`,
+    );
+    return { backfilled, output: outputLines.join("\n") };
+  } finally {
+    await db.close();
+  }
+}
+
+async function countRowsMissingId(jsonlPath: string): Promise<number> {
+  let content: string;
+  try {
+    content = await readFile(jsonlPath, "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return 0;
+    }
+    throw error;
+  }
+
+  let missing = 0;
+  for (const line of content.split("\n")) {
+    if (line.trim() === "") continue;
+    const row: unknown = JSON.parse(line);
+    if (row && typeof row === "object" && (row as Record<string, unknown>).id == null) {
+      missing++;
+    }
+  }
+  return missing;
 }
