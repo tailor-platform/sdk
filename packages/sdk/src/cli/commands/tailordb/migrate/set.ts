@@ -13,7 +13,7 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { parseMigrationNumberArg } from "./migration-number";
-import { fetchRemoteMigrationNumber } from "./remote-state";
+import { fetchRemoteMigrationState } from "./remote-state";
 import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
@@ -66,19 +66,26 @@ async function set(options: SetOptions): Promise<void> {
     profile: options.profile,
   });
 
-  // 6. Get current migration number
+  // 6. Get current migration state
   const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
-  const current = await fetchRemoteMigrationNumber(client, trn);
+  const currentState = await fetchRemoteMigrationState(client, trn);
+  const current = currentState.number;
   const currentMigration = current ?? 0;
+  const currentHistoryId = currentState.historyIdInvalid
+    ? "<invalid>"
+    : (currentState.historyId ?? "<unset>");
+  const newHistoryId = historyId ?? "<unset>";
 
   // 7. Display warning and confirmation
   logger.newline();
-  logger.warn("This operation will change the migration checkpoint.");
+  logger.warn("This operation will change TailorDB migration state metadata.");
   logger.log(`Namespace: ${styles.bold(targetNamespace)}`);
   logger.log(
     `Current migration: ${current === null ? "<unset>" : styles.bold(formatMigrationNumber(current))}`,
   );
   logger.log(`New migration: ${styles.bold(formatMigrationNumber(migrationNumber))}`);
+  logger.log(`Current history generation: ${styles.bold(currentHistoryId)}`);
+  logger.log(`New history generation: ${styles.bold(newHistoryId)}`);
   logger.newline();
 
   if (migrationNumber < currentMigration) {
@@ -96,7 +103,7 @@ async function set(options: SetOptions): Promise<void> {
   // 8. Confirmation prompt (unless --yes flag)
   if (!options.yes) {
     const confirmation = await prompt.confirm({
-      message: "Continue with migration checkpoint update?",
+      message: "Continue with migration checkpoint and history generation update?",
       default: false,
     });
 

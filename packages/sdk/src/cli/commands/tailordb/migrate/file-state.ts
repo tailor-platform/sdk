@@ -103,7 +103,7 @@ export function captureFileState(filePaths: ReadonlyArray<string>): string {
 export function captureMigrationFileState(
   namespacesWithMigrations: ReadonlyArray<NamespaceWithMigrations>,
 ): Record<string, string> {
-  const state: Record<string, string> = {};
+  const state = Object.create(null) as Record<string, string>;
   for (const { namespace, migrationsDir } of namespacesWithMigrations.toSorted((a, b) =>
     a.namespace.localeCompare(b.namespace),
   )) {

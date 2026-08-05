@@ -136,7 +136,7 @@ export async function validateAndDetectMigrations(
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   let pendingMigrations: PendingMigration[] = [];
   let checkpointRepairs: MigrationCheckpointRepair[] = [];
-  const migrationHistoryIds: Record<string, string | null> = {};
+  const migrationHistoryIds = Object.create(null) as Record<string, string | null>;
 
   if (namespacesWithMigrations.length > 0) {
     // Validate migration file integrity (sequential numbers, no gaps, no duplicates)
@@ -283,9 +283,9 @@ async function reconcileMigrationLabels(
     const remoteState = await fetchRemoteMigrationState(
       client,
       resourceTrn(workspaceId, "tailordb", namespace),
-    ).catch(() => ({ number: null, historyId: null }));
-    const currentVersion = remoteState.number;
-    if (currentVersion === targetVersion && remoteState.historyId === historyId) {
+    ).catch(() => null);
+    const currentVersion = remoteState?.number ?? null;
+    if (remoteState && currentVersion === targetVersion && remoteState.historyId === historyId) {
       continue;
     }
     await updateMigrationLabel(
@@ -295,10 +295,16 @@ async function reconcileMigrationLabels(
       targetVersion,
       historyId ?? undefined,
     );
-    const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
-    logger.info(
-      `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
-    );
+    if (remoteState) {
+      const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
+      logger.info(
+        `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
+      );
+    } else {
+      logger.info(
+        `Migration label for namespace ${namespace} reconciled to ${formatMigrationNumber(targetVersion)}.`,
+      );
+    }
   }
 }
 

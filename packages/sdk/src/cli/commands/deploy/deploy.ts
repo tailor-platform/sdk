@@ -3,6 +3,7 @@ import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 import { hashFile } from "#/cli/cache/hasher";
 import { createCacheManager } from "#/cli/cache/manager";
+import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/migration-number";
 import { loadApplication, type Application } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
 import { getOrNull, type OperatorClient } from "#/cli/shared/client";
@@ -775,7 +776,7 @@ function buildPlanReport(results: PlanResults): PlanReport {
     results.tailorDB.context.checkpointRepairs.map((repair) => ({
       action: "update",
       symbol: ACTION_SYMBOLS.update,
-      name: `migration checkpoint ${repair.from.toString().padStart(4, "0")} → 0000`,
+      name: `migration checkpoint ${formatMigrationNumber(repair.from)} → ${formatMigrationNumber(repair.to)}`,
       labels: ["migrationCheckpoint"],
       namespace: repair.namespace,
     }));

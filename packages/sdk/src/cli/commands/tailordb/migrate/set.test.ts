@@ -125,6 +125,38 @@ describe("tailordb migration set", () => {
     );
   });
 
+  test("shows the migration history generation change before updating metadata", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+    fs.writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        ...schema,
+        rebaseline: {
+          historyId: "hcurrent",
+          replacedHistoryId: "hprevious",
+          replacedLatestMigration: 2,
+        },
+      }),
+    );
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0002",
+          "sdk-migration-history": "hprevious",
+        },
+      },
+    });
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+
+    const result = await runCommand(setCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    const output = stderr.mock.calls.map((call) => String(call[0])).join("");
+    expect(output).toContain("Current history generation: hprevious");
+    expect(output).toContain("New history generation: hcurrent");
+  });
+
   test("removes a stale remote history generation for a markerless local history", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: {

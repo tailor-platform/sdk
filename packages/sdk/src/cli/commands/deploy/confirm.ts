@@ -1,3 +1,4 @@
+import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/migration-number";
 import { styles, logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import ml from "#/utils/multiline";
@@ -20,10 +21,16 @@ export async function confirmMigrationCheckpointRepairs(
 ): Promise<void> {
   if (repairs.length === 0) return;
 
-  logger.warn("TailorDB migration checkpoints need to be reset before this deployment:");
+  logger.warn(
+    "TailorDB migration checkpoints and history generations need to be updated before this deployment:",
+  );
   for (const repair of repairs.toSorted((a, b) => a.namespace.localeCompare(b.namespace))) {
+    logger.log(`  ${repair.namespace}:`);
     logger.log(
-      `  ${repair.namespace}: ${repair.from.toString().padStart(4, "0")} → ${repair.to.toString().padStart(4, "0")}`,
+      `    Checkpoint: ${formatMigrationNumber(repair.from)} → ${formatMigrationNumber(repair.to)}`,
+    );
+    logger.log(
+      `    History generation: ${repair.fromHistoryId ?? "<unset>"} → ${repair.toHistoryId}`,
     );
   }
   logger.log("  The checkpoint reset itself changes only metadata.");
@@ -31,7 +38,8 @@ export async function confirmMigrationCheckpointRepairs(
 
   if (yes) return;
   const confirmed = await prompt.confirm({
-    message: "Reset these migration checkpoints and continue with the deployment?",
+    message:
+      "Reset these migration checkpoints, align their history generations, and continue with the deployment?",
     default: false,
   });
   if (!confirmed) {

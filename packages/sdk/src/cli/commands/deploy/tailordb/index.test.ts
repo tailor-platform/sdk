@@ -1498,6 +1498,27 @@ describe("applyTailorDB migration label reconciliation", () => {
     } as never);
   }
 
+  test("tracks migration state for a prototype-like namespace", async () => {
+    const config = {
+      path: configPath,
+      name: "test-app",
+      db: Object.fromEntries([["__proto__", { files: [], migration: { directory: "." } }]]),
+    } as unknown as LoadedConfig;
+    const { client } = createMigrationClient({ "sdk-migration": "m0000" });
+
+    const result = await validateAndDetectMigrations(
+      client,
+      "test-workspace",
+      new Map(),
+      config,
+      true,
+      [],
+    );
+
+    expect(Object.hasOwn(result.migrationFileState, "__proto__")).toBe(true);
+    expect(Object.hasOwn(result.migrationHistoryIds, "__proto__")).toBe(true);
+  });
+
   test("forces migration label to working_tree_max when label is ahead of working tree (--no-schema-check)", async () => {
     // Remote label is m0002 but the working tree only has migration 0000.
     // Without reconciliation, the next deploy would reconstruct a snapshot at
@@ -1533,6 +1554,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     getMetadata
       .mockResolvedValueOnce({ metadata: { labels: { "sdk-migration": "m0002" } } })
       .mockRejectedValueOnce(new ConnectError("transient metadata read failure", Code.Internal));
+    using stderr = captureStderr();
 
     await applyTailorDB(client, makePlanResult(true), "create-update");
 
@@ -1541,6 +1563,10 @@ describe("applyTailorDB migration label reconciliation", () => {
         labels: expect.objectContaining({ "sdk-migration": "m0000" }),
       }),
     );
+    expect(stderr.output).toContain(
+      "Migration label for namespace test-tailordb reconciled to 0000.",
+    );
+    expect(stderr.output).not.toContain("<unset> → 0000");
   });
 
   test("revalidates migration file integrity immediately before apply", async () => {
@@ -1743,6 +1769,17 @@ describe("applyTailorDB migration label reconciliation", () => {
     };
   }
 
+  function writeEmptyMigrationsThrough(lastMigration: number): void {
+    for (let migrationNumber = 1; migrationNumber <= lastMigration; migrationNumber += 1) {
+      const migrationDir = path.join(tmpDir, formatMigrationNumber(migrationNumber));
+      fs.mkdirSync(migrationDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(migrationDir, "diff.json"),
+        JSON.stringify(createMockMigrationDiff({ namespace: "test-tailordb" })),
+      );
+    }
+  }
+
   test("revalidates local migration history immediately before apply", async () => {
     const userType = userSnapshotType();
     const userWithEmail: TailorDBSnapshotType = {
@@ -1825,6 +1862,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       replacedHistoryId: null,
       replacedLatestMigration: 5,
     });
+    writeEmptyMigrationsThrough(5);
     const planResult = planWithDeployDerivedSettings(userType);
     const client = schemaVerificationClient(unchangedRemoteSettings());
     vi.mocked(client.getMetadata).mockResolvedValue({
@@ -1897,6 +1935,7 @@ describe("applyTailorDB migration label reconciliation", () => {
       replacedHistoryId: null,
       replacedLatestMigration: 5,
     });
+    writeEmptyMigrationsThrough(5);
     const planResult = planWithDeployDerivedSettings(userType);
     const client = schemaVerificationClient(unchangedRemoteSettings());
     vi.mocked(client.getMetadata).mockResolvedValue({
@@ -1905,10 +1944,11 @@ describe("applyTailorDB migration label reconciliation", () => {
       },
     } as never);
 
-    await expect(runValidation(client, planResult)).rejects.toThrow(
-      "Remote migration checkpoint verification failed",
-    );
-    expect(stderr.output).toContain("not in the local migration history");
+    const result = await runValidation(client, planResult);
+
+    expect(result.checkpointRepairs).toEqual([]);
+    expect(stderr.output).not.toContain("will be reset to 0000");
+    expect(client.listTailorDBTypes).toHaveBeenCalled();
     expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
