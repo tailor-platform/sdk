@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "pathe";
+import ts from "typescript";
 import { describe, expect, test, aroundEach } from "vitest";
 import { SCHEMA_SNAPSHOT_VERSION } from "./diff-calculator";
 import {
@@ -19,6 +20,34 @@ import {
   getMigrationScriptPath,
 } from "./template-generator";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
+
+const packageRoot = path.resolve(import.meta.dirname, "../../../../..");
+
+function getTypeScriptDiagnostics(
+  filePath: string,
+): readonly { code: number; messageText: string }[] {
+  const program = ts.createProgram([filePath], {
+    baseUrl: packageRoot,
+    module: ts.ModuleKind.ESNext,
+    moduleResolution: ts.ModuleResolutionKind.Bundler,
+    noEmit: true,
+    paths: {
+      "@tailor-platform/sdk": ["src/configure/index.ts"],
+      "@tailor-platform/sdk/kysely": ["src/kysely/index.ts"],
+    },
+    skipLibCheck: true,
+    strict: true,
+    target: ts.ScriptTarget.ES2022,
+  });
+
+  return ts
+    .getPreEmitDiagnostics(program)
+    .filter((diagnostic) => diagnostic.file?.fileName === filePath)
+    .map((diagnostic) => ({
+      code: diagnostic.code,
+      messageText: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    }));
+}
 
 describe("template-generator", () => {
   let tempDir: string;
@@ -266,12 +295,29 @@ describe("template-generator", () => {
       expect(scriptContent).toContain(".limit(100)");
       expect(scriptContent).toContain("const sourceValue = row.age");
       expect(scriptContent).toContain("if (sourceValue === null) continue");
-      expect(scriptContent).toContain("const normalizedValue = sourceValue");
+      expect(scriptContent).toContain("const normalizedValue: never = sourceValue");
       expect(scriptContent).toContain(
-        "TODO: Normalize this value to a representation accepted by the active integer type and castable to float",
+        "TODO(tailor-migration-review): Remove this marker and the `never` annotation after reviewing the normalization",
+      );
+      expect(scriptContent).toContain(
+        "Keep the value accepted by the active integer type and castable to float",
       );
       expect(scriptContent).toContain("if (Object.is(normalizedValue, sourceValue)) continue");
       expect(scriptContent).toContain('.set({ ["age"]: normalizedValue })');
+
+      const unresolvedDiagnostics = getTypeScriptDiagnostics(result.migrateFilePath!);
+      expect(unresolvedDiagnostics).toEqual([
+        expect.objectContaining({
+          code: 2322,
+          messageText: "Type 'number' is not assignable to type 'never'.",
+        }),
+      ]);
+
+      await fs.writeFile(
+        result.migrateFilePath!,
+        scriptContent.replace("const normalizedValue: never", "const normalizedValue"),
+      );
+      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     });
 
     test("should use a data property when normalizing a field named __proto__", async () => {

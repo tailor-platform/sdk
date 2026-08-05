@@ -19,6 +19,9 @@ import {
 } from "./snapshot";
 import type { MigrationDiff, DiffChange } from "./diff-calculator";
 
+/** Marker left in generated migration scripts until their normalization logic is reviewed. */
+export const MIGRATION_REVIEW_REQUIRED_MARKER = "TODO(tailor-migration-review)";
+
 /**
  * Check if a file exists
  * @param {string} filePath - Path to check
@@ -352,10 +355,11 @@ function generateFieldTypeChangeScript(
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        // TODO: Normalize this value to a representation accepted by the active ${change.before.type} type and castable to ${change.after.type}.
+        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the normalization.
+        // Keep the value accepted by the active ${change.before.type} type and castable to ${change.after.type}.
         const sourceValue = row.${change.fieldName};
         if (sourceValue === null) continue;
-        const normalizedValue = sourceValue;
+        const normalizedValue: never = sourceValue;
         if (Object.is(normalizedValue, sourceValue)) continue;
         await trx
           .updateTable("${change.typeName}")

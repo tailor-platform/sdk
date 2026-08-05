@@ -272,10 +272,11 @@ export async function main(trx: Transaction): Promise<void> {
       if (rows.length === 0) break;
 
       for (const row of rows) {
-        // TODO: Normalize this value to a representation accepted by the active integer type and castable to float.
+        // TODO(tailor-migration-review): Remove this marker and the `never` annotation after reviewing the normalization.
+        // Keep the value accepted by the active integer type and castable to float.
         const sourceValue = row.age;
         if (sourceValue === null) continue;
-        const normalizedValue = sourceValue;
+        const normalizedValue: never = sourceValue;
         if (Object.is(normalizedValue, sourceValue)) continue;
         await trx
           .updateTable("User")
@@ -289,7 +290,7 @@ export async function main(trx: Transaction): Promise<void> {
 }
 ```
 
-The generated `normalizedValue = sourceValue` is an identity transformation, so it does not write any rows. Leave it unchanged when the existing values are already suitable for the target type. If values need application-specific normalization, replace that expression while keeping the result valid for both the active source type and the target type. The source field contract remains active until the script finishes; for example, an `integer` → `float` script cannot write fractional values during this phase.
+The generated `never` annotation intentionally causes a TypeScript error until you review the normalization. If the existing values are already suitable for the target type, remove the annotation and review marker to accept the identity transformation; it does not write any rows. If values need application-specific normalization, replace the expression and remove the annotation and marker while keeping the result valid for both the active source type and the target type. The source field contract remains active until the script finishes; for example, an `integer` → `float` script cannot write fractional values during this phase.
 
 ### 3-step migration for unsupported changes
 

@@ -43,6 +43,7 @@ import {
   INITIAL_SCHEMA_NUMBER,
   getMigrationFilePath,
 } from "../src/cli/commands/tailordb/migrate/snapshot";
+import { MIGRATION_REVIEW_REQUIRED_MARKER } from "../src/cli/commands/tailordb/migrate/template-generator";
 import {
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
@@ -894,6 +895,9 @@ export type user = typeof user;
 
       const migratePath = getMigrationFilePath(migrationsDir, 7, "migrate");
       const generatedScript = fs.readFileSync(migratePath, "utf-8");
+      const reviewedScript = generatedScript
+        .replaceAll(MIGRATION_REVIEW_REQUIRED_MARKER, "Reviewed")
+        .replaceAll("const normalizedValue: never", "const normalizedValue");
       const defaultNormalization = `        const sourceValue = row.sourceUuid;
         if (sourceValue === null) continue;
         const normalizedValue = sourceValue;`;
@@ -903,8 +907,9 @@ export type user = typeof user;
           sourceValue === "20000000-0000-4000-8000-000000000001"
             ? "20000000-0000-4000-8000-000000000011"
             : sourceValue;`;
-      const editedScript = generatedScript.replace(defaultNormalization, exercisedNormalization);
-      expect(editedScript).not.toBe(generatedScript);
+      const editedScript = reviewedScript.replace(defaultNormalization, exercisedNormalization);
+      expect(editedScript).not.toBe(reviewedScript);
+      expect(editedScript).not.toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
       fs.writeFileSync(migratePath, editedScript);
 
       runDeployCli(configPath, workspaceId, tempDir);
