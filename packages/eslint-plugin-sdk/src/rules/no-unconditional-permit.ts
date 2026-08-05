@@ -1,15 +1,39 @@
-import { memberName, objectProperty, unwrapExpression } from "../lib/ast.js";
-import { configureImportTracker, resolveValue, SDK_CONFIGURE_MODULE } from "../lib/sdk-bindings.js";
+import {
+  type AstArrayExpression,
+  type AstCallExpression,
+  type AstNode,
+  memberName,
+  objectProperty,
+  unwrapExpression,
+} from "../lib/ast.js";
+import {
+  configureImportTracker,
+  type ImportTracker,
+  resolveValue,
+  SDK_CONFIGURE_MODULE,
+} from "../lib/sdk-bindings.js";
+import type { Rule } from "eslint";
 
-const UNSAFE_CONSTANTS = new Set([
+type IdentifierListenerNode = Parameters<NonNullable<Rule.NodeListener["Identifier"]>>[0];
+type MemberExpressionListenerNode = Parameters<
+  NonNullable<Rule.NodeListener["MemberExpression"]>
+>[0];
+type IdentifierParent =
+  | Rule.Node
+  | {
+      type: "OptionalMemberExpression";
+      object: AstNode;
+      computed: boolean;
+    };
+
+const UNSAFE_CONSTANTS: ReadonlySet<string> = new Set([
   "unsafeAllowAllTypePermission",
   "unsafeAllowAllGqlPermission",
   "unsafeAllowAllIdPPermission",
 ]);
 
-function isValueReference(node) {
-  const parent = node.parent;
-  if (!parent) return false;
+function isValueReference(node: IdentifierListenerNode): boolean {
+  const parent = node.parent as IdentifierParent;
   switch (parent.type) {
     case "ImportSpecifier":
     case "ImportDefaultSpecifier":
@@ -25,7 +49,7 @@ function isValueReference(node) {
   }
 }
 
-function isDbReference(imports, node) {
+function isDbReference(imports: ImportTracker, node: AstNode | null | undefined): boolean {
   const object = unwrapExpression(node);
   if (object?.type === "Identifier") return imports.importedAs(object, "db");
   if (object?.type === "MemberExpression" || object?.type === "OptionalMemberExpression") {
@@ -34,7 +58,11 @@ function isDbReference(imports, node) {
   return false;
 }
 
-function isDbTypeReceiver(context, imports, node) {
+function isDbTypeReceiver(
+  context: Rule.RuleContext,
+  imports: ImportTracker,
+  node: AstNode | null | undefined,
+): boolean {
   let current = resolveValue(context, node);
   while (current?.type === "CallExpression") {
     const callee = unwrapExpression(current.callee);
@@ -47,7 +75,11 @@ function isDbTypeReceiver(context, imports, node) {
   return false;
 }
 
-function permissionArgument(context, imports, call) {
+function permissionArgument(
+  context: Rule.RuleContext,
+  imports: ImportTracker,
+  call: AstCallExpression,
+): AstNode | null {
   if (imports.callName(call) === "defineIdp") {
     const options = resolveValue(context, call.arguments[1]);
     const property = objectProperty(options, "permission");
@@ -63,7 +95,7 @@ function permissionArgument(context, imports, call) {
   return call.arguments[0] ?? null;
 }
 
-function isUnconditionalObjectEntry(context, entry) {
+function isUnconditionalObjectEntry(context: Rule.RuleContext, entry: AstNode): boolean {
   const conditions = objectProperty(entry, "conditions");
   const permit = objectProperty(entry, "permit");
   if (conditions?.type !== "Property" || permit?.type !== "Property") return false;
@@ -77,7 +109,7 @@ function isUnconditionalObjectEntry(context, entry) {
   );
 }
 
-function isUnconditionalShorthandEntry(entry) {
+function isUnconditionalShorthandEntry(entry: AstArrayExpression): boolean {
   let permit = true;
   for (const element of entry.elements) {
     if (element === null || element.type === "SpreadElement") return false;
@@ -88,17 +120,18 @@ function isUnconditionalShorthandEntry(entry) {
   return permit;
 }
 
-function reportEntry(context, node) {
+function reportEntry(context: Rule.RuleContext, node: AstNode): void {
   const entry = resolveValue(context, node);
-  if (
-    (entry?.type === "ObjectExpression" && isUnconditionalObjectEntry(context, entry)) ||
-    (entry?.type === "ArrayExpression" && isUnconditionalShorthandEntry(entry))
-  ) {
+  if (entry?.type === "ObjectExpression" && isUnconditionalObjectEntry(context, entry)) {
+    context.report({ node: entry, messageId: "unconditionalEntry" });
+    return;
+  }
+  if (entry?.type === "ArrayExpression" && isUnconditionalShorthandEntry(entry)) {
     context.report({ node: entry, messageId: "unconditionalEntry" });
   }
 }
 
-function reportEntryList(context, node) {
+function reportEntryList(context: Rule.RuleContext, node: AstNode): void {
   const entries = resolveValue(context, node);
   if (entries?.type !== "ArrayExpression") return;
   for (const element of entries.elements) {
@@ -106,7 +139,7 @@ function reportEntryList(context, node) {
   }
 }
 
-function reportUnconditionalEntries(context, node) {
+function reportUnconditionalEntries(context: Rule.RuleContext, node: AstNode): void {
   const value = resolveValue(context, node);
   if (value?.type === "ArrayExpression") {
     reportEntryList(context, value);
@@ -118,7 +151,7 @@ function reportUnconditionalEntries(context, node) {
   }
 }
 
-export default {
+const rule = {
   meta: {
     type: "problem",
     docs: {
@@ -134,17 +167,22 @@ export default {
   },
   create(context) {
     const imports = configureImportTracker(context);
-    const unsafeLocals = new Map();
-    const calls = [];
-    const identifiers = [];
-    const members = [];
+    const unsafeLocals = new Map<string, string>();
+    const calls: AstCallExpression[] = [];
+    const identifiers: IdentifierListenerNode[] = [];
+    const members: MemberExpressionListenerNode[] = [];
 
     return {
       ImportDeclaration(node) {
         imports.track(node);
         if (node.source.value !== SDK_CONFIGURE_MODULE) return;
         for (const specifier of node.specifiers) {
-          if (specifier.type !== "ImportSpecifier" || specifier.importKind === "type") continue;
+          if (
+            specifier.type !== "ImportSpecifier" ||
+            ("importKind" in specifier && specifier.importKind === "type")
+          ) {
+            continue;
+          }
           const imported =
             specifier.imported.type === "Identifier"
               ? specifier.imported.name
@@ -168,6 +206,7 @@ export default {
         for (const node of members) {
           if (!imports.isNamespace(unwrapExpression(node.object))) continue;
           const name = memberName(node);
+          if (name === null) continue;
           context.report({ node, messageId: "unsafeConstant", data: { name } });
         }
         for (const call of calls) {
@@ -177,4 +216,6 @@ export default {
       },
     };
   },
-};
+} satisfies Rule.RuleModule;
+
+export default rule;

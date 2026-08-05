@@ -9,30 +9,27 @@
     "directory": "packages/eslint-plugin-sdk"
   },
   "files": [
-    "index.js",
-    "index.d.ts",
-    "lib/ast.js",
-    "lib/sdk-bindings.js",
-    "rules/no-api-prefix-in-path-pattern.js",
-    "rules/no-execute-script-arg-stringify.js",
-    "rules/no-unconditional-permit.js",
+    "dist",
     "README.md"
   ],
   "type": "module",
-  "main": "./index.js",
-  "types": "./index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./index.d.ts",
-      "import": "./index.js",
-      "default": "./index.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
+    "build": "tsdown",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "typecheck": "tsc --noEmit",
+    "pretest": "pnpm run build",
     "test": "vitest run",
+    "prepack": "pnpm run build",
     "publint": "publint --strict"
   },
   "dependencies": {
@@ -41,6 +38,7 @@
   "devDependencies": {
     "eslint": "10.8.0",
     "oxlint": "1.76.0",
+    "tsdown": "0.22.14",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
   },
