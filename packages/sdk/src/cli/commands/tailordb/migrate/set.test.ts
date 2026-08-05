@@ -125,6 +125,27 @@ describe("tailordb migration set", () => {
     );
   });
 
+  test("removes a stale remote history generation for a markerless local history", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0002",
+          "sdk-migration-history": "hstale",
+          "sdk-name": "my-app",
+        },
+      },
+    });
+
+    const result = await runCommand(setCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },
+      }),
+    );
+  });
+
   test("accepts 4-digit migration numbers", async () => {
     const result = await runCommand(setCommand, ["0001", "--yes"]);
 

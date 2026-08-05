@@ -584,6 +584,29 @@ describe("migration", () => {
       });
     });
 
+    test("removes a stale history generation for a markerless local history", async () => {
+      const setMetadataMock = vi.fn();
+      const client = createMetadataClient(
+        {
+          labels: {
+            "existing-label": "value",
+            [MIGRATION_HISTORY_LABEL_KEY]: "hstale",
+          },
+        },
+        setMetadataMock,
+      );
+
+      await updateMigrationLabel(client, workspaceId, namespace, 1);
+
+      expect(setMetadataMock).toHaveBeenCalledWith({
+        trn: expectedTrn,
+        labels: {
+          "existing-label": "value",
+          [MIGRATION_LABEL_KEY]: "m0001",
+        },
+      });
+    });
+
     test("handles missing metadata gracefully", async () => {
       const setMetadataMock = vi.fn();
       const client = createMetadataClient(null, setMetadataMock);

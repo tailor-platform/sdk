@@ -560,11 +560,12 @@ describe("applyTailorDB: rollback of Pre-migration DDL when migrate.ts fails", (
       new Error("rpc error: code = Aborted desc = original migration failure"),
     );
 
-    // Make rollback's prior-snapshot reconstruction throw (e.g. missing files),
-    // while the pre-phase reconstruction (migration N) still succeeds.
+    // Let preflight capture the baseline, then make rollback's second baseline
+    // reconstruction throw (e.g. files disappeared after preflight).
+    let baselineReads = 0;
     await withOverriddenSnapshot(
       (migrationsDir, maxVersion) => {
-        if ((maxVersion ?? 0) === 0) {
+        if ((maxVersion ?? 0) === 0 && ++baselineReads > 1) {
           throw new Error("rollback snapshot reconstruction failed");
         }
         return snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion);

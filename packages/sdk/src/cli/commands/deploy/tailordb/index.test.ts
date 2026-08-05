@@ -1494,6 +1494,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     planResult.changeSet.type.creates.push({
       name: "Sentinel",
       request: { namespaceName: "test-tailordb" },
+      metaRequest: { trn: "trn:v1:workspace:test-workspace:tailordb:test-tailordb:type:Sentinel" },
     } as never);
   }
 
@@ -1564,6 +1565,23 @@ describe("applyTailorDB migration label reconciliation", () => {
     );
     expect(client.createTailorDBService).not.toHaveBeenCalled();
     expect(client.createTailorDBType).not.toHaveBeenCalled();
+  });
+
+  test("parses the baseline before remote mutations with --no-schema-check", async () => {
+    const planResult = makePlanResult(true);
+    addSentinelTypeCreate(planResult);
+    fs.writeFileSync(path.join(tmpDir, "0000", "schema.json"), "{not-json");
+    planResult.context.migrationFileState = captureMigrationFileState(
+      planResult.context.namespacesWithMigrations,
+    );
+    const { client, setMetadata } = createMigrationClient({ "sdk-migration": "m0000" });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /schema\.json/,
+    );
+    expect(client.createTailorDBService).not.toHaveBeenCalled();
+    expect(client.createTailorDBType).not.toHaveBeenCalled();
+    expect(setMetadata).not.toHaveBeenCalled();
   });
 
   test.each([

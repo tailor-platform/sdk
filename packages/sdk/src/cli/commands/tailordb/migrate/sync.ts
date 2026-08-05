@@ -429,6 +429,7 @@ async function sync(options: SyncOptions): Promise<void> {
         ? { [MIGRATION_HISTORY_LABEL_KEY]: snapshot.rebaseline.historyId }
         : {}),
     },
+    remove: snapshot.rebaseline?.historyId ? undefined : [MIGRATION_HISTORY_LABEL_KEY],
   });
 
   logger.success(

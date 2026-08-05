@@ -265,6 +265,7 @@ export async function updateMigrationLabel(
       [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
       ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
     },
+    remove: historyId ? undefined : [MIGRATION_HISTORY_LABEL_KEY],
   });
 }
 

@@ -222,6 +222,27 @@ describe("tailordb migration sync", () => {
     );
   });
 
+  test("removes a stale remote history generation for a markerless local history", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0002",
+          "sdk-migration-history": "hstale",
+          "sdk-name": "my-app",
+        },
+      },
+    });
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },
+      }),
+    );
+  });
+
   test("reconciles GQL permissions with the snapshot", async () => {
     const gqlPolicy = { conditions: [], actions: ["read"], permit: "allow" };
     writeInitialSchema(state.migrationsDir, {

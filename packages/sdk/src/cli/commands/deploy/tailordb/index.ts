@@ -94,6 +94,7 @@ type ValidateAndDetectResult = {
   checkpointRepairs: MigrationCheckpointRepair[];
   namespacesWithMigrations: NamespaceWithMigrations[];
   migrationFileState: Record<string, string>;
+  migrationHistoryIds: Record<string, string | null>;
 };
 
 export { captureMigrationFileState } from "#/cli/commands/tailordb/migrate/file-state";
@@ -135,11 +136,15 @@ export async function validateAndDetectMigrations(
   const namespacesWithMigrations = getNamespacesWithMigrations(config, configDir);
   let pendingMigrations: PendingMigration[] = [];
   let checkpointRepairs: MigrationCheckpointRepair[] = [];
+  const migrationHistoryIds: Record<string, string | null> = {};
 
   if (namespacesWithMigrations.length > 0) {
     // Validate migration file integrity (sequential numbers, no gaps, no duplicates)
     for (const { namespace, migrationsDir } of namespacesWithMigrations) {
       assertValidMigrationFiles(migrationsDir, namespace);
+      migrationHistoryIds[namespace] =
+        reconstructSnapshotFromMigrations(migrationsDir, INITIAL_SCHEMA_NUMBER)?.rebaseline
+          ?.historyId ?? null;
     }
 
     // Check for schema diffs if not skipped
@@ -247,6 +252,7 @@ export async function validateAndDetectMigrations(
     checkpointRepairs,
     namespacesWithMigrations,
     migrationFileState: captureMigrationFileState(namespacesWithMigrations),
+    migrationHistoryIds,
   };
 }
 
@@ -261,30 +267,35 @@ export async function validateAndDetectMigrations(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param namespacesWithMigrations - Namespaces that have migration directories configured
+ * @param migrationHistoryIds - History generation captured during preflight for each namespace
  */
 async function reconcileMigrationLabels(
   client: OperatorClient,
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
+  migrationHistoryIds: Readonly<Record<string, string | null>>,
 ): Promise<void> {
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     if (getMigrationFiles(migrationsDir).length === 0) {
       continue;
     }
     const targetVersion = getLatestMigrationNumber(migrationsDir);
-    const historyId = reconstructSnapshotFromMigrations(migrationsDir, 0)?.rebaseline?.historyId;
+    const historyId = migrationHistoryIds[namespace] ?? null;
     const remoteState = await fetchRemoteMigrationState(
       client,
       resourceTrn(workspaceId, "tailordb", namespace),
     ).catch(() => ({ number: null, historyId: null }));
     const currentVersion = remoteState.number;
-    if (
-      currentVersion === targetVersion &&
-      (historyId === undefined || remoteState.historyId === historyId)
-    ) {
+    if (currentVersion === targetVersion && remoteState.historyId === historyId) {
       continue;
     }
-    await updateMigrationLabel(client, workspaceId, namespace, targetVersion, historyId);
+    await updateMigrationLabel(
+      client,
+      workspaceId,
+      namespace,
+      targetVersion,
+      historyId ?? undefined,
+    );
     const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
     logger.info(
       `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
@@ -406,7 +417,7 @@ export async function applyTailorDB(
     // Plan-time validation makes dry runs fail fast. Repeat the full validation
     // at the apply boundary because migration files, remote checkpoints, or the
     // remote schema may have changed while waiting for confirmation.
-    const { pendingMigrations, checkpointRepairs, namespacesWithMigrations } =
+    const { pendingMigrations, checkpointRepairs, namespacesWithMigrations, migrationHistoryIds } =
       await validateTailorDBMigrationState(client, result);
 
     for (const repair of checkpointRepairs) {
@@ -532,7 +543,7 @@ export async function applyTailorDB(
           migrationContext.workspaceId,
           migration.namespace,
           migration.number,
-          reconstructSnapshotFromMigrations(migration.migrationsDir, 0)?.rebaseline?.historyId,
+          migrationHistoryIds[migration.namespace] ?? undefined,
         );
       }
 
@@ -648,6 +659,7 @@ export async function applyTailorDB(
         client,
         migrationContext.workspaceId,
         namespacesWithMigrations,
+        migrationHistoryIds,
       );
     }
   } else if (phase === "delete-resources") {
