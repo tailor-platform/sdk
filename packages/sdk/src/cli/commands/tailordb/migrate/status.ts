@@ -73,27 +73,26 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     );
   }
 
-  const accessToken = await loadAccessToken({
-    profile: options.profile,
-  });
-  const client = await initOperatorClient(accessToken);
-  const workspaceId = await loadWorkspaceId({
-    workspaceId: options.workspaceId,
-    profile: options.profile,
-  });
-
-  const rows: MigrationStatusRow[] = [];
+  const localStates = new Map<
+    string,
+    {
+      migrationFiles: ReturnType<typeof getMigrationFiles>;
+      descriptions: Map<number, string>;
+      historyId: string | null;
+    }
+  >();
+  const localFailures = new Map<string, string>();
 
   for (const { namespace, migrationsDir } of targetNamespaces) {
-    const migrationFiles = getMigrationFiles(migrationsDir);
-    const descriptions = new Map<number, string>();
-    let localHistoryId: string | null = null;
     try {
+      const migrationFiles = getMigrationFiles(migrationsDir);
+      const descriptions = new Map<number, string>();
+      let historyId: string | null = null;
       for (const file of migrationFiles) {
         if (file.type === "schema") {
           const snapshot = loadSnapshot(file.path);
           if (file.number === 0) {
-            localHistoryId = snapshot.rebaseline?.historyId ?? null;
+            historyId = snapshot.rebaseline?.historyId ?? null;
           }
           continue;
         }
@@ -105,14 +104,50 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
           // A malformed optional description must not hide migration status.
         }
       }
+      localStates.set(namespace, { migrationFiles, descriptions, historyId });
     } catch (error) {
+      localFailures.set(namespace, error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  if (localStates.size === 0) {
+    return targetNamespaces.map(({ namespace }) => ({
+      status: "error",
+      namespace,
+      error: localFailures.get(namespace) ?? "Failed to read local migration history.",
+    }));
+  }
+
+  const accessToken = await loadAccessToken({
+    profile: options.profile,
+  });
+  const client = await initOperatorClient(accessToken);
+  const workspaceId = await loadWorkspaceId({
+    workspaceId: options.workspaceId,
+    profile: options.profile,
+  });
+
+  const rows: MigrationStatusRow[] = [];
+
+  for (const { namespace } of targetNamespaces) {
+    if (localFailures.has(namespace)) {
       rows.push({
         status: "error",
         namespace,
-        error: error instanceof Error ? error.message : String(error),
+        error: localFailures.get(namespace) ?? "Failed to read local migration history.",
       });
       continue;
     }
+    const localState = localStates.get(namespace);
+    if (!localState) {
+      rows.push({
+        status: "error",
+        namespace,
+        error: "Failed to read local migration history.",
+      });
+      continue;
+    }
+    const { migrationFiles, descriptions, historyId: localHistoryId } = localState;
 
     const trn = resourceTrn(workspaceId, "tailordb", namespace);
     let remoteState;
@@ -178,7 +213,7 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
     logger.newline();
     logger.info(`Namespace: ${styles.bold(row.namespace)}`);
     if (isStatusFailure(row)) {
-      logger.error(`  Failed to read migration state: ${row.error}`);
+      logger.error(`  Migration status error: ${row.error}`);
       continue;
     }
     logger.log(`  Current migration: ${styles.bold(row.currentMigrationLabel)}`);
@@ -218,7 +253,7 @@ async function status(options: StatusOptions): Promise<void> {
   if (failures.length > 0) {
     const namespaces = failures.map((f) => f.namespace).join(", ");
     throw new Error(
-      `Failed to read migration state for ${failures.length} namespace${failures.length === 1 ? "" : "s"}: ${namespaces}`,
+      `Migration status check failed for ${failures.length} namespace${failures.length === 1 ? "" : "s"}: ${namespaces}`,
     );
   }
 }
@@ -228,7 +263,7 @@ export const statusCommand = defineAppCommand({
   description:
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
   notes:
-    "Metadata lookup failures (authentication, permission, or network errors) are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
+    "Every local migration file is checked for a compatible format version, and deployed migration history IDs must match the local baseline. Compatibility errors, history mismatches, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {

@@ -237,7 +237,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Metadata lookup failures (authentication, permission, or network errors) are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.
+Every local migration file is checked for a compatible format version, and deployed migration history IDs must match the local baseline. Compatibility errors, history mismatches, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.
 
 #### tailordb migration sync
 

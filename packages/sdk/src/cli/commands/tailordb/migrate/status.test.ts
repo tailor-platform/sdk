@@ -6,7 +6,8 @@ import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
-import { captureStdout } from "#/cli/shared/test-helpers/capture-output";
+import { loadAccessToken } from "#/cli/shared/context";
+import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { statusCommand } from "./status";
 import { writeDiff, writeInitialSchema } from "./test-helpers/schema-fixtures";
@@ -50,6 +51,8 @@ describe("tailordb migration status --json", () => {
   aroundEach(async (runTest) => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-status-json-test-"));
     state.migrationsDir = path.join(tmpDir, "migrations");
+    vi.mocked(loadAccessToken).mockReset().mockResolvedValue("mock-token");
+    vi.mocked(initOperatorClient).mockReset();
     writeInitialSchema(state.migrationsDir, {});
     writeDiff(state.migrationsDir, 1, [], { description: "Add users" });
     writeDiff(state.migrationsDir, 2, [], { description: "Add orders" });
@@ -136,9 +139,7 @@ describe("tailordb migration status --json", () => {
     const result = await runCommand(statusCommand, []);
 
     expect(result.success).toBe(false);
-    expect(String(result.error)).toMatch(
-      /Failed to read migration state for 1 namespace: tailordb/,
-    );
+    expect(String(result.error)).toMatch(/Migration status check failed for 1 namespace: tailordb/);
     expect(JSON.parse(stdout.output)).toMatchObject([
       {
         status: "error",
@@ -167,6 +168,30 @@ describe("tailordb migration status --json", () => {
         error: expect.stringContaining("This SDK supports migration file format versions 1-2"),
       },
     ]);
+  });
+
+  test("reports unsupported local versions before loading credentials", async () => {
+    fs.writeFileSync(
+      path.join(state.migrationsDir, "0002", "diff.json"),
+      JSON.stringify({ version: 3 }),
+    );
+    vi.mocked(loadAccessToken).mockRejectedValueOnce(new Error("authentication unavailable"));
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "error",
+        namespace: "tailordb",
+        error: expect.stringContaining("This SDK supports migration file format versions 1-2"),
+      },
+    ]);
+    expect(loadAccessToken).not.toHaveBeenCalled();
+    expect(initOperatorClient).not.toHaveBeenCalled();
   });
 
   test.each([
@@ -216,6 +241,24 @@ describe("tailordb migration status --json", () => {
         error: expect.stringMatching(/remote migration history .*hremote.*local.*hlocal/i),
       },
     ]);
+  });
+
+  test("identifies a migration history mismatch in human-readable output", async () => {
+    markHistoryAsRebaselined();
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-history": "hremote" },
+      },
+    });
+    using stderr = captureStderr();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain(
+      "Migration status error: Remote migration history ID hremote does not match local migration history ID hlocal.",
+    );
+    expect(stderr.output).not.toContain("Failed to read migration state");
   });
 
   test("accepts a matching remote migration history", async () => {
@@ -283,7 +326,7 @@ describe("tailordb migration status --json", () => {
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(
-      /Failed to read migration state for 1 namespace: analyticsdb/,
+      /Migration status check failed for 1 namespace: analyticsdb/,
     );
     expect(JSON.parse(stdout.output)).toMatchObject([
       {

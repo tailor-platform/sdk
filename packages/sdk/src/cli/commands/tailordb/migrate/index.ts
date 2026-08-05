@@ -3,6 +3,7 @@
  *
  * Subcommands:
  * - generate: Generate migration files from schema differences
+ * - rebaseline: Collapse the full migration history into a new baseline
  * - script:   Add a migrate.ts template to an existing migration
  * - set:      Set migration checkpoint to a specific number
  * - status:   Show migration status for TailorDB namespaces
