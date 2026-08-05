@@ -29,10 +29,15 @@ import {
   assertValidMigrationFiles,
   compareLocalTypesWithSnapshot,
   createSnapshotFromLocalTypes,
+  DB_TYPES_FILE_NAME,
+  DIFF_FILE_NAME,
   formatMigrationNumber,
   getLatestMigrationNumber,
   loadSnapshot,
+  MIGRATE_FILE_NAME,
+  MIGRATION_NUMBER_PATTERN,
   reconstructSnapshotFromMigrations,
+  SCHEMA_FILE_NAME,
   SCHEMA_SNAPSHOT_VERSION,
   type NormalizedSchemaSnapshot,
 } from "./snapshot";
@@ -46,11 +51,17 @@ export interface RebaselineOptions {
   profile?: string;
 }
 
+const MIGRATION_ARTIFACT_NAMES = new Set([
+  SCHEMA_FILE_NAME,
+  DIFF_FILE_NAME,
+  MIGRATE_FILE_NAME,
+  DB_TYPES_FILE_NAME,
+]);
+
 async function activateBaseline(
   migrationsDir: string,
   snapshot: NormalizedSchemaSnapshot,
   namespace: string,
-  latestMigration: number,
 ): Promise<void> {
   const parentDir = path.dirname(migrationsDir);
   const baseName = path.basename(migrationsDir);
@@ -61,11 +72,12 @@ async function activateBaseline(
 
   try {
     await fsPromises.cp(migrationsDir, stagingDir, { recursive: true });
-    for (let migrationNumber = 0; migrationNumber <= latestMigration; migrationNumber += 1) {
-      await fsPromises.rm(path.join(stagingDir, formatMigrationNumber(migrationNumber)), {
-        recursive: true,
-        force: true,
-      });
+    for (const entry of await fsPromises.readdir(stagingDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !MIGRATION_NUMBER_PATTERN.test(entry.name)) continue;
+      const entryPath = path.join(stagingDir, entry.name);
+      const childNames = await fsPromises.readdir(entryPath);
+      if (!childNames.some((childName) => MIGRATION_ARTIFACT_NAMES.has(childName))) continue;
+      await fsPromises.rm(entryPath, { recursive: true, force: true });
     }
     const stagedSnapshot = {
       ...snapshot,
@@ -239,7 +251,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
   assertLocalTypesReady();
   await assertConnectedWorkspaceReady();
 
-  await activateBaseline(target.migrationsDir, latestSnapshot, target.namespace, latestMigration);
+  await activateBaseline(target.migrationsDir, latestSnapshot, target.namespace);
   try {
     await updateMigrationLabel(client, workspaceId, target.namespace, 0);
   } catch (error) {

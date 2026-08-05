@@ -170,6 +170,9 @@ describe("tailordb migration rebaseline", () => {
     fs.writeFileSync(path.join(state.migrationsDir, "fixtures", "seed.json"), "{}");
     fs.mkdirSync(path.join(state.migrationsDir, "2026"));
     fs.writeFileSync(path.join(state.migrationsDir, "2026", "notes.md"), "not a migration");
+    fs.mkdirSync(path.join(state.migrationsDir, "0005"));
+    fs.writeFileSync(path.join(state.migrationsDir, "0005", "migrate.ts"), "export {};");
+    fs.writeFileSync(path.join(state.migrationsDir, "0005", "db.ts"), "export {};");
     fs.writeFileSync(path.join(state.migrationsDir, "9999"), "not a migration directory");
 
     const result = await runCommand(rebaselineCommand, ["--yes"]);
