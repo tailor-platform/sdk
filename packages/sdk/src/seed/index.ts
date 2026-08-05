@@ -178,9 +178,12 @@ function isBlank(value: unknown): boolean {
   if (value === undefined || value === null) {
     return true;
   }
-  // A nested field the row never had comes back as an object the hook built out
-  // of nothing, and writing `{}` into the line is not filling anything in.
-  return typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  // A nested field the row never had comes back as an object whose keys carry no
+  // value of their own, and writing that into the line fills nothing in.
+  return Object.values(value).every(isBlank);
 }
 
 /** A JSONL line, kept as text so an untouched line is written back verbatim. */
