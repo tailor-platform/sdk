@@ -194,6 +194,45 @@ ${updates.join("\n\n")}
 }
 
 /**
+ * Generate migration test file content
+ * @param {MigrationDiff} diff - Migration diff
+ * @returns {string} Migration test file content
+ */
+export function generateMigrationTestScript(diff: MigrationDiff): string {
+  return `/**
+ * Unit test for the ${diff.namespace} migration script.
+ *
+ * The mock compiles queries to the same SQL as the deployed migration, so the
+ * test verifies the exact statements migrate.ts issues. Stage the rows each
+ * query returns, run main() inside a transaction, then assert the executed
+ * statements.
+ */
+
+import { createKyselyMock } from "@tailor-platform/sdk/vitest";
+import { describe, expect, test } from "vitest";
+import type { Database } from "./db";
+import { main } from "./migrate";
+
+describe("${diff.namespace} migration", () => {
+  test("issues the intended statements", async () => {
+    const mock = createKyselyMock<Database>();
+
+    // Stage the rows each query returns, in execution order:
+    // mock.enqueueResult([{ id: "record-1" }]);
+
+    // Pass a MigrationContext when your main uses env: main(trx, { env: { ... } })
+    await mock.withTx((trx) => main(trx));
+
+    // Replace with assertions on the statements the script must issue:
+    // expect(mock.updates).toHaveLength(1);
+    // expect(mock.updates[0]?.updateValues()).toEqual({ field: "value" });
+    expect(mock.executedQueries.map((query) => query.sql)).toMatchSnapshot();
+  });
+});
+`;
+}
+
+/**
  * Generate scripts for a single change
  * @param {DiffChange} change - Diff change to generate script for
  * @param {boolean} deferUniqueConstraint - Generate the unique check after decimal re-serialization

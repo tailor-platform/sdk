@@ -29,7 +29,7 @@ import {
   reconstructSnapshotFromMigrations,
   INITIAL_SCHEMA_NUMBER,
 } from "./snapshot";
-import { generateMigrationScript } from "./template-generator";
+import { generateMigrationScript, generateMigrationTestScript } from "./template-generator";
 import type { ScriptSkippedInfo } from "./diff-calculator";
 
 export interface ScriptOptions {
@@ -38,12 +38,28 @@ export interface ScriptOptions {
   namespace?: string;
   noScript?: boolean;
   reason?: string;
+  withTest?: boolean;
 }
 
 export interface MarkScriptSkippedOptions {
   migrationsDir: string;
   migrationNumber: number;
   reason: string;
+}
+
+export interface AddMigrationScriptFilesOptions {
+  migrationsDir: string;
+  migrationNumber: number;
+  withTest?: boolean;
+}
+
+export interface AddMigrationScriptFilesResult {
+  /** Created migrate.ts path; undefined when the script already existed. */
+  migratePath?: string;
+  /** Created db.ts path; undefined when the script already existed. */
+  dbTypesPath?: string;
+  /** Created migrate.test.ts path; undefined unless withTest was set. */
+  testPath?: string;
 }
 
 /**
@@ -108,6 +124,67 @@ export function clearMigrationScriptSkipped(diffPath: string): void {
 }
 
 /**
+ * Create migration script files (migrate.ts, db.ts, and optionally migrate.test.ts)
+ * in an existing migration directory. When migrate.ts already exists and withTest
+ * is set, only the test file is added.
+ * @param {AddMigrationScriptFilesOptions} options - Target migration and file selection
+ * @returns {Promise<AddMigrationScriptFilesResult>} Paths of the created files
+ */
+export async function addMigrationScriptFiles(
+  options: AddMigrationScriptFilesOptions,
+): Promise<AddMigrationScriptFilesResult> {
+  const { migrationsDir, migrationNumber, withTest = false } = options;
+  const label = formatMigrationNumber(migrationNumber);
+
+  const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
+  if (!fs.existsSync(diffPath)) {
+    throw new Error(`Migration ${label} not found in ${migrationsDir}. Expected ${diffPath}.`);
+  }
+
+  const migratePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
+  const migrateExists = fs.existsSync(migratePath);
+  if (migrateExists && !withTest) {
+    throw new Error(`Migration script already exists at ${migratePath}.`);
+  }
+
+  const testPath = getMigrationFilePath(migrationsDir, migrationNumber, "test");
+  if (withTest && fs.existsSync(testPath)) {
+    throw new Error(`Migration test already exists at ${testPath}.`);
+  }
+
+  const diff = loadDiff(diffPath);
+  const result: AddMigrationScriptFilesResult = {};
+
+  if (!migrateExists) {
+    // Reconstruct the schema state immediately before this migration so that
+    // db.ts has Kysely types for the previous shape of the data.
+    const previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir, migrationNumber - 1);
+    if (!previousSnapshot) {
+      throw new Error(
+        `Could not reconstruct previous schema for migration ${label}. Make sure migration ${INITIAL_SCHEMA_NUMBER} exists.`,
+      );
+    }
+
+    await fsPromises.writeFile(migratePath, generateMigrationScript(diff));
+    result.migratePath = migratePath;
+    result.dbTypesPath = await writeDbTypesFile(
+      previousSnapshot,
+      migrationsDir,
+      migrationNumber,
+      diff,
+    );
+    clearMigrationScriptSkipped(diffPath);
+  }
+
+  if (withTest) {
+    await fsPromises.writeFile(testPath, generateMigrationTestScript(diff));
+    result.testPath = testPath;
+  }
+
+  return result;
+}
+
+/**
  * Add a migrate.ts template to an existing migration directory.
  * @param {ScriptOptions} options - Command options
  */
@@ -137,6 +214,9 @@ async function script(options: ScriptOptions): Promise<void> {
   );
 
   if (options.noScript) {
+    if (options.withTest) {
+      throw new Error("--with-test cannot be used together with --no-script.");
+    }
     const reason = options.reason?.trim();
     if (!reason) {
       throw new Error("--reason is required with --no-script.");
@@ -157,51 +237,43 @@ async function script(options: ScriptOptions): Promise<void> {
     throw new Error("--reason can only be used together with --no-script.");
   }
 
-  const diffPath = getMigrationFilePath(migrationsDir, migrationNumber, "diff");
-  if (!fs.existsSync(diffPath)) {
-    throw new Error(
-      `Migration ${options.number} not found in ${migrationsDir}. Expected ${diffPath}.`,
-    );
-  }
+  const result = await addMigrationScriptFiles({
+    migrationsDir,
+    migrationNumber,
+    withTest: options.withTest,
+  });
 
-  const migratePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
-  if (fs.existsSync(migratePath)) {
-    throw new Error(`Migration script already exists at ${migratePath}.`);
-  }
-
-  const diff = loadDiff(diffPath);
-
-  // Reconstruct the schema state immediately before this migration so that
-  // db.ts has Kysely types for the previous shape of the data.
-  const previousSnapshot = reconstructSnapshotFromMigrations(migrationsDir, migrationNumber - 1);
-  if (!previousSnapshot) {
-    throw new Error(
-      `Could not reconstruct previous schema for migration ${options.number}. Make sure migration ${INITIAL_SCHEMA_NUMBER} exists.`,
-    );
-  }
-
-  const scriptContent = generateMigrationScript(diff);
-  await fsPromises.writeFile(migratePath, scriptContent);
-  await writeDbTypesFile(previousSnapshot, migrationsDir, migrationNumber, diff);
-  clearMigrationScriptSkipped(diffPath);
-
+  const added = result.migratePath ? "migration script" : "migration test";
   logger.success(
-    `Added migration script for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
+    `Added ${added} for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
   );
-  logger.info(`  Migration script: ${migratePath}`);
-  logger.info(`  DB types: ${getMigrationFilePath(migrationsDir, migrationNumber, "db")}`);
+  if (result.migratePath) {
+    logger.info(`  Migration script: ${result.migratePath}`);
+    logger.info(`  DB types: ${result.dbTypesPath}`);
+  }
+  if (result.testPath) {
+    logger.info(`  Migration test: ${result.testPath}`);
+  }
 
   logger.newline();
-  logger.log("Edit the script to implement your data migration logic.");
-  logger.log("It will be executed by 'tailor deploy' between Pre and Post phases.");
+  if (result.migratePath) {
+    logger.log("Edit the script to implement your data migration logic.");
+    logger.log("It will be executed by 'tailor deploy' between Pre and Post phases.");
+  }
+  if (result.testPath) {
+    logger.log("Fill in the test with the rows to stage and the statements to assert.");
+  }
+
+  const fileToOpen = result.migratePath ?? result.testPath;
+  if (!fileToOpen) return;
 
   const editor = getConfiguredEditorCommand();
   if (!editor) return;
 
   logger.newline();
-  logger.info(`Opening ${path.basename(migratePath)} in ${editor}...`);
+  logger.info(`Opening ${path.basename(fileToOpen)} in ${editor}...`);
   try {
-    await openInConfiguredEditor(migratePath);
+    await openInConfiguredEditor(fileToOpen);
   } catch {
     return;
   }
@@ -247,6 +319,10 @@ export const scriptCommand = defineAppCommand({
     reason: arg(z.string().optional(), {
       description: "Reason why no migration script is needed (used with --no-script)",
     }),
+    "with-test": arg(z.boolean().optional(), {
+      description:
+        "Also add a migrate.test.ts unit-test scaffold; when migrate.ts already exists, only the test is added",
+    }),
   }),
   run: async (args) => {
     await script({
@@ -255,6 +331,7 @@ export const scriptCommand = defineAppCommand({
       namespace: args.namespace,
       noScript: args["no-script"],
       reason: args.reason,
+      withTest: args["with-test"],
     });
   },
 });

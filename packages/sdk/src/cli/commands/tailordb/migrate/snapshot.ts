@@ -81,6 +81,8 @@ export const SCHEMA_FILE_NAME = "schema.json";
 export const DIFF_FILE_NAME = "diff.json";
 /** File name for migration script. */
 export const MIGRATE_FILE_NAME = "migrate.ts";
+/** File name for migration script unit test. */
+export const MIGRATE_TEST_FILE_NAME = "migrate.test.ts";
 /** File name for generated DB type definitions. */
 export const DB_TYPES_FILE_NAME = "db.ts";
 
@@ -203,7 +205,7 @@ export type {
 /**
  * Migration file type
  */
-export type MigrationFileType = "schema" | "diff" | "migrate" | "db";
+export type MigrationFileType = "schema" | "diff" | "migrate" | "test" | "db";
 
 // ============================================================================
 // Migration Number Helpers
@@ -229,6 +231,7 @@ const MIGRATION_FILE_NAMES: Record<MigrationFileType, string> = {
   schema: SCHEMA_FILE_NAME,
   diff: DIFF_FILE_NAME,
   migrate: MIGRATE_FILE_NAME,
+  test: MIGRATE_TEST_FILE_NAME,
   db: DB_TYPES_FILE_NAME,
 };
 

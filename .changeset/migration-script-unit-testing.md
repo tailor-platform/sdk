@@ -1,0 +1,9 @@
+---
+"@tailor-platform/sdk": minor
+---
+
+TailorDB migration scripts can now be unit-tested before deploying:
+
+- The generated `db.ts` exports the `Database` interface, so `createKyselyMock<Database>()` from `@tailor-platform/sdk/vitest` types queries against the migration's schema state.
+- `tailor tailordb migration script <number> --with-test` scaffolds a ready-to-fill `migrate.test.ts` next to the migration script. When `migrate.ts` already exists (e.g. auto-generated for a breaking change), the flag adds only the test file.
+- The migration guide's Testing section now documents the workflow.

@@ -582,6 +582,8 @@ describe("upsertUsers resolver", () => {
 
 Reach for [`mockTailordb`](#mocking-the-tailordb-client) instead when you want to drive the raw query sequence at the `tailordb.Client` level rather than at the Kysely layer.
 
+TailorDB migration scripts (`migrate.ts`) are unit-tested the same way: the generated `db.ts` exports the `Database` interface to type the mock, and `tailor tailordb migration script <N> --with-test` scaffolds a ready-to-fill test. See [Testing Migrations Locally](./services/tailordb-migration.md#testing-migrations-locally).
+
 #### Resolvers that resume a workflow
 
 Resolvers that call `waitPoint.resolve(...)` delegate to `tailor.workflow.resolve` at runtime. With the `tailor-runtime` environment active, use `mockWorkflow().waitPoint(definition)` to invoke the callback with the payload that originally suspended the job:

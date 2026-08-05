@@ -15,6 +15,7 @@ import {
 import {
   generateSchemaFile,
   generateDiffFiles,
+  generateMigrationTestScript,
   migrationScriptExists,
   getMigrationScriptPath,
 } from "./template-generator";
@@ -703,6 +704,27 @@ describe("template-generator", () => {
       await expect(generateDiffFiles(diff, tempDir, 1, previousSnapshot)).rejects.toThrow(
         /Migration file already exists/,
       );
+    });
+  });
+
+  describe("generateMigrationTestScript", () => {
+    test("should generate a test scaffold wired to the mock and generated types", () => {
+      const script = generateMigrationTestScript(createMockMigrationDiff());
+
+      expect(script).toContain('import { createKyselyMock } from "@tailor-platform/sdk/vitest"');
+      expect(script).toContain('import { describe, expect, test } from "vitest"');
+      expect(script).toContain('import type { Database } from "./db"');
+      expect(script).toContain('import { main } from "./migrate"');
+      expect(script).toContain("createKyselyMock<Database>()");
+      expect(script).toContain("mock.withTx((trx) => main(trx))");
+    });
+
+    test("should include the namespace in the suite name", () => {
+      const script = generateMigrationTestScript(
+        createMockMigrationDiff({ namespace: "analyticsdb" }),
+      );
+
+      expect(script).toContain('describe("analyticsdb migration"');
     });
   });
 
