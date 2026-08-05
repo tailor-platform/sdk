@@ -37,13 +37,15 @@ tailor seed validate ./seed/data/User.jsonl
 # Update existing rows (matched by id, or by name for _User) instead of failing on duplicates
 tailor seed apply --upsert
 
-# Backfill missing ids into existing seed files (e.g. to prepare them for --upsert)
+# Backfill missing ids into seed files that have not been applied yet (see below)
 tailor seed backfill-ids
 ```
 
 Without `--upsert`, a row whose id already exists in a target table fails the seed run. With `--upsert`, every row must supply an `id` (and any field the type requires), and a matching row is updated in place instead. Because the update goes through the same write path as any other update, it runs update hooks and validation and updates fields such as `updatedAt`, and it publishes a record-updated event — so an executor using `recordUpdatedTrigger` fires for each existing row that gets updated.
 
 `tailor seed backfill-ids` fills the `id` requirement for seed files that predate ids: it writes a generated `id` into every row that lacks one and changes nothing else — rows that already have an `id` keep it, other fields keep the exact value their line already had, and files without an `id` field (such as `_User.jsonl`) are left untouched.
+
+The backfilled ids are newly generated, so they cannot match rows that an earlier `apply` of the same id-less files already created — TailorDB assigned those rows its own ids, and an `--upsert` with the new ids would insert duplicates instead of updating them. Backfill before the data is first applied, or reseed from scratch afterwards with `tailor seed apply --truncate`.
 
 The machine user used for seeding comes from `--machine-user` or the `machineUserName` seedPlugin option:
 

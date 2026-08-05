@@ -10,7 +10,9 @@ export const seedBackfillIdsCommand = defineAppCommand({
   name: "backfill-ids",
   description:
     "Backfill missing `id` values into JSONL seed data.\n" +
-    "Only the `id` field is written back; every other field keeps the value its line already had.",
+    "Only the `id` field is written back; every other field keeps the value its line already had.\n" +
+    "The ids are newly generated and cannot match rows an earlier `apply` already created, " +
+    "so backfill before the data is first applied (or reseed with `apply --truncate`).",
   args: z.strictObject({
     ...configArg,
     path: arg(z.string().optional(), {

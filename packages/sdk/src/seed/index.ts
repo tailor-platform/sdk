@@ -146,6 +146,10 @@ type BackfillSeedIdsResult = {
  * the files. Every other field keeps the value its line already had, so
  * hook-computed values and omitted optional fields are untouched, and tables
  * without an `id` field (such as `_User`) are left as they are.
+ *
+ * The minted ids are newly generated: they cannot match rows that an earlier
+ * apply of the same id-less files already created, so backfill before the
+ * data is first applied (or truncate and reseed afterwards).
  * @param options - Backfill options including path and verbose flag
  * @returns Per-table counts of rows that received an `id`
  */
