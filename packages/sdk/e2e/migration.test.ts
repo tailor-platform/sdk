@@ -896,7 +896,10 @@ export type user = typeof user;
       const migratePath = getMigrationFilePath(migrationsDir, 7, "migrate");
       const generatedScript = fs.readFileSync(migratePath, "utf-8");
       const reviewedScript = generatedScript
-        .replaceAll(MIGRATION_REVIEW_REQUIRED_MARKER, "Reviewed")
+        .replaceAll(
+          `        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the normalization.\n`,
+          "",
+        )
         .replaceAll("const normalizedValue: never", "const normalizedValue");
       const defaultNormalization = `        const sourceValue = row.sourceUuid;
         if (sourceValue === null) continue;
