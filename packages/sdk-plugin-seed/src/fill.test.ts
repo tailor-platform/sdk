@@ -176,6 +176,24 @@ describe("fillSeedData", () => {
     expect(JSON.parse(lines[1] ?? "{}")).toEqual({ id: expect.any(String), name: "gains an id" });
   });
 
+  test("names the lines it could not read as a JSON object", async () => {
+    const jsonlPath = await writeTable("Widget", [
+      '{"name":"first"',
+      '{"name":"second"}',
+      '["not an object"]',
+    ]);
+
+    const result = await fillSeedData({ path: dataDir });
+
+    expect(result.output).toContain(
+      `${jsonlPath}: line(s) 1, 3 are not JSON objects, so nothing was filled in there`,
+    );
+    expect(result.filled).toEqual([{ table: "Widget", file: jsonlPath, fields: ["id"], count: 1 }]);
+    const lines = (await readFile(jsonlPath, "utf-8")).split("\n");
+    expect(lines[0]).toBe('{"name":"first"');
+    expect(lines[2]).toBe('["not an object"]');
+  });
+
   test("keeps an undeclared key named after an Object member", async () => {
     const jsonlPath = await writeTable("Widget", [
       '{"name":"first","toString":"kept","__proto__":"kept"}',

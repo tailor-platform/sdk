@@ -313,11 +313,15 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
     const lines = splitLines(await readFile(file, "utf-8"));
 
     const written = new Set<string>();
+    const unreadable: number[] = [];
     let count = 0;
     let fieldOrder: string[] = [];
-    for (const line of lines) {
+    for (const [index, line] of lines.entries()) {
       const row = line.row;
       if (!row) {
+        if (line.text.trim() !== "") {
+          unreadable.push(index + 1);
+        }
         continue;
       }
       const hooked = hook(row);
@@ -339,6 +343,12 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
       }
       line.text = serializeRow(row, fieldOrder);
       count += 1;
+    }
+
+    if (unreadable.length > 0) {
+      warnings.push(
+        `${file}: line(s) ${unreadable.join(", ")} are not JSON objects, so nothing was filled in there`,
+      );
     }
 
     if (count === 0) {
