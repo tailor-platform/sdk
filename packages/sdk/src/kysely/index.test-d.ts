@@ -10,6 +10,7 @@ import type {
   Serial,
   Insertable,
   Selectable,
+  TailorDBColumns,
   TailorDBInsertable,
   TailorDBSelectable,
   TailorDBUpdateable,
@@ -214,6 +215,80 @@ describe("TailorDBUpdateable", () => {
     assertType<TailorDBUpdateable<typeof serialFields>>({ status: "SHIPPED" });
     // @ts-expect-error a serial value is assigned by the platform, not by the caller
     assertType<TailorDBUpdateable<typeof serialFields>>({ docNumber: "PO-1" });
+  });
+});
+
+// The column mapping has to match what kyselyTypePlugin writes for the same field.
+// `example/tests/kysely-parity.ts` pins that against real generator output; these cases
+// cover the field kinds the example project does not exercise. Expectations mirror
+// `plugin/builtin/kysely-type/type-processor.test.ts`.
+describe("TailorDBColumns column mapping", () => {
+  test("maps datetime and date to Timestamp", () => {
+    const fields = { when: db.datetime(), day: db.date() };
+
+    expectTypeOf<TailorDBColumns<typeof fields>["when"]>().toEqualTypeOf<Timestamp>();
+    expectTypeOf<TailorDBColumns<typeof fields>["day"]>().toEqualTypeOf<Timestamp>();
+  });
+
+  test("wraps arrays of Timestamp in ArrayColumnType", () => {
+    const fields = {
+      eventDates: db.datetime({ array: true }),
+      optionalDates: db.date({ array: true, optional: true }),
+    };
+
+    expectTypeOf<TailorDBColumns<typeof fields>["eventDates"]>().toEqualTypeOf<
+      ArrayColumnType<Timestamp>
+    >();
+    expectTypeOf<
+      TailorDBColumns<typeof fields>["optionalDates"]
+    >().toEqualTypeOf<ArrayColumnType<Timestamp> | null>();
+  });
+
+  test("leaves arrays of plain scalars as arrays", () => {
+    const fields = { scores: db.int({ array: true, optional: true }) };
+
+    expectTypeOf<TailorDBColumns<typeof fields>["scores"]>().toEqualTypeOf<number[] | null>();
+  });
+
+  test("keeps enum unions and decimal strings", () => {
+    const fields = { role: db.enum(["admin", "user"]), price: db.decimal() };
+
+    expectTypeOf<TailorDBColumns<typeof fields>["role"]>().toEqualTypeOf<"admin" | "user">();
+    expectTypeOf<TailorDBColumns<typeof fields>["price"]>().toEqualTypeOf<string>();
+  });
+
+  test("wraps an object with optional props in ObjectColumnType", () => {
+    const fields = {
+      profile: db.object({ name: db.string(), bio: db.string({ optional: true }) }),
+    };
+
+    expectTypeOf<TailorDBColumns<typeof fields>["profile"]>().toEqualTypeOf<
+      ObjectColumnType<{ name: string; bio?: string | null }>
+    >();
+  });
+
+  test("leaves an all-required object plain, and its array a plain array", () => {
+    const fields = {
+      item: db.object({ name: db.string(), qty: db.int() }),
+      items: db.object({ name: db.string(), qty: db.int() }, { array: true }),
+    };
+
+    expectTypeOf<TailorDBColumns<typeof fields>["item"]>().toEqualTypeOf<{
+      name: string;
+      qty: number;
+    }>();
+    expectTypeOf<TailorDBColumns<typeof fields>["items"]>().toEqualTypeOf<
+      { name: string; qty: number }[]
+    >();
+  });
+
+  test("reads a datetime back as Date", () => {
+    const fields = { when: db.datetime(), createdAt: db.datetime().default("now") };
+
+    expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<{
+      when: Date;
+      createdAt: Date;
+    }>();
   });
 });
 

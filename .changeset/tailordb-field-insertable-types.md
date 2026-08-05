@@ -10,4 +10,6 @@ Supplying a value for a `.serial()` column now fails with the reason instead of 
 Type 'string' is not assignable to type 'TypeLevelError<"assigned by .serial(); remove it from the input">'.
 ```
 
-This applies to the tables `kyselyTypePlugin` generates as well, because it comes from `Serial`. A serial column is now an omittable key on `Insertable`/`Updateable` rather than an absent one, so `keyof Insertable<Table<"MyType">>` includes it; assigning the same values as before still compiles, and passing `undefined` is equivalent to omitting the column.
+This applies to the tables `kyselyTypePlugin` generates as well, because it comes from `Serial`. A serial column is now an omittable key on `Insertable`/`Updateable` rather than an absent one, so `keyof Insertable<Table<"MyType">>` includes it, and copying a whole record into a create input (`{ ...row }`) now reports the serial column instead of silently dropping it. Assigning the same values as before still compiles, and passing `undefined` is equivalent to omitting the column.
+
+`Insertable`, `Selectable` and `Updateable` from the generated `Namespace` also print as a flat object rather than an intersection, so assignability errors name the shape directly.
