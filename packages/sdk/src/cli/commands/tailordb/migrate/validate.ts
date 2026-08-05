@@ -99,15 +99,15 @@ interface CollectedValidationReports {
 }
 
 /**
- * Assert that every migration in the local history whose diff requires a data
- * migration script has a migrate.ts on disk or an explicit skip acknowledgment
+ * Assert that every migration script required by local history exists and that
+ * generated normalization logic has been reviewed
  * @param {string} migrationsDir - Migrations directory path
  * @param {string} namespace - TailorDB namespace (for error messages)
  */
-function assertRequiredMigrationScripts(migrationsDir: string, namespace: string): void {
+function assertMigrationScriptsReady(migrationsDir: string, namespace: string): void {
+  const diffFiles = getMigrationFiles(migrationsDir).filter((file) => file.type === "diff");
   const missing: number[] = [];
-  for (const file of getMigrationFiles(migrationsDir)) {
-    if (file.type !== "diff") continue;
+  for (const file of diffFiles) {
     const diff = loadDiff(file.path);
     if (!diff.requiresMigrationScript || diff.scriptSkipped) continue;
     if (!fs.existsSync(getMigrationFilePath(migrationsDir, file.number, "migrate"))) {
@@ -122,17 +122,9 @@ function assertRequiredMigrationScripts(migrationsDir: string, namespace: string
         `is needed with 'tailor tailordb migration script <number> --no-script --reason "..."'.`,
     );
   }
-}
 
-/**
- * Assert that generated normalization logic in migration scripts has been reviewed
- * @param {string} migrationsDir - Migrations directory path
- * @param {string} namespace - TailorDB namespace (for error messages)
- */
-function assertReviewedMigrationScripts(migrationsDir: string, namespace: string): void {
   const unreviewed: number[] = [];
-  for (const file of getMigrationFiles(migrationsDir)) {
-    if (file.type !== "diff") continue;
+  for (const file of diffFiles) {
     const migrateFilePath = getMigrationFilePath(migrationsDir, file.number, "migrate");
     if (!fs.existsSync(migrateFilePath)) continue;
     if (fs.readFileSync(migrateFilePath, "utf8").includes(MIGRATION_REVIEW_REQUIRED_MARKER)) {
@@ -261,8 +253,7 @@ async function collectValidationReports(
       // Parse the whole history here so malformed snapshot/diff contents are
       // reported per namespace instead of aborting the run for every namespace.
       reconstructSnapshotFromMigrations(target.migrationsDir);
-      assertRequiredMigrationScripts(target.migrationsDir, target.namespace);
-      assertReviewedMigrationScripts(target.migrationsDir, target.namespace);
+      assertMigrationScriptsReady(target.migrationsDir, target.namespace);
       checkableNamespaces.push(target);
     } catch (error) {
       migrationFileErrors.set(
