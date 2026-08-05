@@ -165,7 +165,7 @@ export async function addMigrationScriptFiles(
     if (!fs.existsSync(dbTypesPath)) {
       throw new Error(
         `Generated types not found at ${dbTypesPath}. ` +
-          `The test scaffold imports Database from ./db.ts; restore the file from version control.`,
+          `The test scaffold imports Database from ./db; restore db.ts before adding a test.`,
       );
     }
     const dbTypesContent = fs.readFileSync(dbTypesPath, "utf-8");
