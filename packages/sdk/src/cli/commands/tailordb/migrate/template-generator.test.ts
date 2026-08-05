@@ -215,16 +215,57 @@ describe("template-generator", () => {
 
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
       expect(scriptContent).toContain("Copy User.fullName into displayName for every row");
-      expect(scriptContent).toContain('.select(["id", "fullName"])');
-      expect(scriptContent).toContain('.orderBy("id", "asc")');
-      expect(scriptContent).toContain(".set({ displayName: row.fullName })");
-      // Unconditional copy: no null filter on the source field
-      expect(scriptContent).not.toContain('.where("fullName", "is not", null)');
+      expect(scriptContent).toContain('.set((eb) => ({ displayName: eb.ref("fullName") }))');
+      // Unconditional copy: no filter on the source field
+      expect(scriptContent).not.toContain(".where(");
       expect(scriptContent).not.toContain("No data migration needed");
 
       const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
       expect(dbTypesContent).toContain("fullName: string | null;");
       expect(dbTypesContent).toContain("displayName: string | null;");
+    });
+
+    test("should add a duplicate-resolution block when a rename target gains unique", async () => {
+      const renamePreviousSnapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            fullName: { type: "string", required: false },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false, unique: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason: "Field renamed from fullName to displayName",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      const copyPosition = scriptContent.indexOf('eb.ref("fullName")');
+      const dedupePosition = scriptContent.indexOf(
+        "Ensure displayName values are unique before adding constraint",
+      );
+      expect(copyPosition).toBeGreaterThan(-1);
+      expect(dedupePosition).toBeGreaterThan(copyPosition);
     });
 
     test("should add a null-handling TODO when a rename target becomes required", async () => {
@@ -263,6 +304,7 @@ describe("template-generator", () => {
 
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
       expect(scriptContent).toContain("TODO: fullName is optional but displayName is required");
+      expect(scriptContent).toContain('.set((eb) => ({ displayName: eb.ref("fullName") }))');
 
       const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
       expect(dbTypesContent).toContain("displayName: ColumnType<string | null, string, string>;");

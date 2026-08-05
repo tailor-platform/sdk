@@ -136,17 +136,18 @@ export async function generate(options: GenerateOptions): Promise<void> {
     return;
   }
 
-  // Handle --init option: delete existing migrations directory
-  if (options.init) {
-    await handleInitOption(namespacesWithMigrations, options.yes);
-  }
-
-  // Parse --rename flags up front so malformed values fail before any file is written
+  // Parse --rename flags before any destructive step so a malformed value
+  // fails the command while the migrations directories are still intact
   const renameFlags: RenameFlag[] = (options.renames ?? []).map((raw) => ({
     raw,
     spec: parseRenameOption(raw),
     used: false,
   }));
+
+  // Handle --init option: delete existing migrations directory
+  if (options.init) {
+    await handleInitOption(namespacesWithMigrations, options.yes);
+  }
 
   // Initialize plugin manager if plugins are provided
   let pluginManager: PluginManager | undefined;
@@ -295,12 +296,19 @@ async function resolveFieldRenames(
   options: GenerateOptions,
   renameFlags: RenameFlag[],
 ): Promise<MigrationDiff> {
-  // Only flags naming a type in this namespace apply here; the rest may
-  // belong to another namespace and are checked for usage after the loop.
-  const applicableFlags = renameFlags.filter(
-    (flag) =>
-      previousSnapshot.types[flag.spec.typeName] || currentSnapshot.types[flag.spec.typeName],
-  );
+  // A flag applies here only when this namespace actually removed the old
+  // field and added the new one; another namespace may define a type with the
+  // same name. Flags that match no namespace are reported after the loop.
+  const applicableFlags = renameFlags.filter(({ spec }) => {
+    const prevFields = previousSnapshot.types[spec.typeName]?.fields;
+    const currFields = currentSnapshot.types[spec.typeName]?.fields;
+    return Boolean(
+      prevFields?.[spec.fromFieldName] &&
+      !currFields?.[spec.fromFieldName] &&
+      currFields?.[spec.toFieldName] &&
+      !prevFields[spec.toFieldName],
+    );
+  });
   for (const flag of applicableFlags) {
     flag.used = true;
   }

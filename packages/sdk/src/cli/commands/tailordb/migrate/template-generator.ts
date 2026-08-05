@@ -253,7 +253,13 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
   }
 
   if (change.kind === "field_renamed") {
-    return [generateFieldRenameCopyScript(change)];
+    const scripts = [generateFieldRenameCopyScript(change)];
+    // The unique constraint is deferred to the post-migration phase, so
+    // duplicates in the copied values must be resolved before it is enforced.
+    if (!(change.before.unique ?? false) && (change.after.unique ?? false)) {
+      scripts.push(generateUniqueDedupeScript(change.typeName, change.fieldName));
+    }
+    return scripts;
   }
 
   if (change.kind !== "field_modified") {
@@ -340,37 +346,17 @@ function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
   const requiredTodo =
     !before.required && after.required
       ? `
-      // TODO: ${previousFieldName} is optional but ${fieldName} is required.
-      // Replace null values below, or the post-migration phase will fail.`
+  // TODO: ${previousFieldName} is optional but ${fieldName} is required.
+  // Resolve null values, or the post-migration phase will fail.`
       : "";
 
   return `  // Copy ${typeName}.${previousFieldName} into ${fieldName} for every row.
   // Overwrite unconditionally: stored values of previously removed fields are
-  // not pruned, so a stale value could otherwise resurface under ${fieldName}.
-  {
-    let lastId: string | undefined;
-    while (true) {
-      let query = trx
-        .selectFrom("${typeName}")
-        .select(["id", "${previousFieldName}"])
-        .orderBy("id", "asc")
-        .limit(100);
-      if (lastId) {
-        query = query.where("id", ">", lastId);
-      }
-      const rows = await query.execute();
-      if (rows.length === 0) break;
-
-      for (const row of rows) {${requiredTodo}
-        await trx
-          .updateTable("${typeName}")
-          .set({ ${fieldName}: row.${previousFieldName} })
-          .where("id", "=", row.id)
-          .execute();
-      }
-      lastId = rows[rows.length - 1]!.id;
-    }
-  }`;
+  // not pruned, so a stale value could otherwise resurface under ${fieldName}.${requiredTodo}
+  await trx
+    .updateTable("${typeName}")
+    .set((eb) => ({ ${fieldName}: eb.ref("${previousFieldName}") }))
+    .execute();`;
 }
 
 function generateUniqueConstraintScript(change: DiffChange): string | null {
@@ -379,25 +365,29 @@ function generateUniqueConstraintScript(change: DiffChange): string | null {
   const { before, after } = change;
   if ((before.unique ?? false) || !(after.unique ?? false)) return null;
 
-  return `  // Ensure ${change.fieldName} values are unique before adding constraint
+  return generateUniqueDedupeScript(change.typeName, change.fieldName);
+}
+
+function generateUniqueDedupeScript(typeName: string, fieldName: string): string {
+  return `  // Ensure ${fieldName} values are unique before adding constraint
   {
     const duplicates = await trx
-      .selectFrom("${change.typeName}")
-      .select(["${change.fieldName}"])
-      .groupBy("${change.fieldName}")
+      .selectFrom("${typeName}")
+      .select(["${fieldName}"])
+      .groupBy("${fieldName}")
       .having((eb) => eb.fn.count("id"), ">", 1)
       .execute();
     for (const dup of duplicates) {
       // Keep first record, add suffix to others
       const records = await trx
-        .selectFrom("${change.typeName}")
-        .select(["id", "${change.fieldName}"])
-        .where("${change.fieldName}", "=", dup.${change.fieldName})
+        .selectFrom("${typeName}")
+        .select(["id", "${fieldName}"])
+        .where("${fieldName}", "=", dup.${fieldName})
         .execute();
       for (let i = 1; i < records.length; i++) {
         await trx
-          .updateTable("${change.typeName}")
-          .set({ ${change.fieldName}: \`\${records[i].${change.fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
+          .updateTable("${typeName}")
+          .set({ ${fieldName}: \`\${records[i].${fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
           .where("id", "=", records[i].id)
           .execute();
       }

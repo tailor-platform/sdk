@@ -114,14 +114,14 @@ export function applyPreMigrationFieldAdjustments(
       // Expand the rename into "keep the old field + relax the new field":
       // the copy script reads the old field while both coexist, and the
       // Post-phase drops the old field and enforces the new field's
-      // constraints.
+      // constraints. Unique is always deferred because stored values of a
+      // previously removed field with the new name may still contain
+      // duplicates until the copy overwrites them.
       fields[change.previousFieldName] = convertFieldConfigToProto(change.before);
       const newField = fields[fieldName];
       if (newField) {
         if (change.after.required) newField.required = false;
-        if ((change.after.unique ?? false) && !(change.before.unique ?? false)) {
-          newField.unique = false;
-        }
+        if (change.after.unique ?? false) newField.unique = false;
       }
       continue;
     }

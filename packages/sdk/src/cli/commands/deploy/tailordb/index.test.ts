@@ -1298,7 +1298,9 @@ describe("applyPreMigrationFieldAdjustments", () => {
     expect(fields.displayName!.unique).toBe(false);
   });
 
-  test("keeps a rename target's unique constraint when the old field was already unique", () => {
+  test("relaxes a rename target's unique constraint even when the old field was unique", () => {
+    // Stored values of a previously removed field named `code` may still hold
+    // duplicates, so unique is deferred until the copy overwrites them.
     const fields: Record<string, ProtoField> = {
       code: { type: "string", required: true, unique: true },
     };
@@ -1320,7 +1322,7 @@ describe("applyPreMigrationFieldAdjustments", () => {
 
     expect(fields.sku).toBeDefined();
     expect(fields.code!.required).toBe(false);
-    expect(fields.code!.unique).toBe(true);
+    expect(fields.code!.unique).toBe(false);
   });
 });
 

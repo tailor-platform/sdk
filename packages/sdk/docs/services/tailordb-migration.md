@@ -149,7 +149,7 @@ tailor tailordb migration generate --rename "User.fullName:displayName"
 
 Repeat `--rename` for multiple renames. A `--rename` that does not match a compatible removed + added pair fails with an error.
 
-A confirmed rename is recorded as a single `field_renamed` change and treated as **breaking**, so a migration script is required. The generated `migrate.ts` copies the old field into the new one for every row in batches, and the generated `db.ts` exposes both the old field (readable) and the new field (writable). The copy intentionally overwrites every row without checking for existing values: values of removed fields are retained in storage, so a stale value could otherwise resurface under the new name later.
+A confirmed rename is recorded as a single `field_renamed` change and treated as **breaking**, so a migration script is required. The generated `migrate.ts` copies the old field into the new one with a single set-based update, and the generated `db.ts` exposes both the old field (readable) and the new field (writable). The copy intentionally overwrites every row without checking for existing values: values of removed fields are retained in storage, so a stale value could otherwise resurface under the new name later. If the new field adds a unique constraint, the script also includes a duplicate-resolution block to run before the constraint is enforced.
 
 During deploy, the pre-migration phase keeps the old field and adds the new field with its constraints relaxed, the script copies the data, and the post-migration phase drops the old field and enforces the new field's constraints — all within a single `tailor deploy`.
 
