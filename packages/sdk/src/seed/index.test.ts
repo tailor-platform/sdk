@@ -166,6 +166,18 @@ describe("backfillSeedIds", () => {
     expect(readFileSync(path.join(dir, "_User.jsonl"), "utf-8")).toBe(spacedUserLines);
   });
 
+  test("accepts an empty data file", async () => {
+    const dir = makeDataDir({
+      "Customer.schema.ts": customerSchema,
+      "Customer.jsonl": "",
+    });
+
+    const result = await backfillSeedIds({ path: dir });
+
+    expect(result.backfilled).toEqual({});
+    expect(readFileSync(path.join(dir, "Customer.jsonl"), "utf-8")).toBe("");
+  });
+
   test("rejects a table whose schema file is missing", async () => {
     const content = '{"name":"Acme","email":"a@acme.com"}\n';
     const dir = makeDataDir({ "Customer.jsonl": content });
