@@ -90,6 +90,7 @@ describe("addMigrationScriptFiles", () => {
   test("adds only the test when migrate.ts already exists and withTest is set", async () => {
     setupMigration();
     writeMigrateFile(testDir, 1);
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), "export interface Database {}\n");
     const scriptBefore = fs.readFileSync(migrationFile(MIGRATE_FILE_NAME), "utf-8");
 
     const result = await addMigrationScriptFiles({
@@ -111,6 +112,52 @@ describe("addMigrationScriptFiles", () => {
     await expect(
       addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1 }),
     ).rejects.toThrow(/already exists/);
+  });
+
+  test("updates a legacy db.ts to export Database when adding only the test", async () => {
+    setupMigration();
+    writeMigrateFile(testDir, 1);
+    fs.writeFileSync(
+      migrationFile(DB_TYPES_FILE_NAME),
+      "interface Database {\n  User: {\n    id: string;\n  };\n}\n\nexport type Transaction = unknown;\n",
+    );
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+    });
+
+    expect(result.updatedDbTypesPath).toBe(migrationFile(DB_TYPES_FILE_NAME));
+    const content = fs.readFileSync(migrationFile(DB_TYPES_FILE_NAME), "utf-8");
+    expect(content).toContain("export interface Database {");
+    expect(content).not.toContain("export export");
+    expect(content).toContain("export type Transaction = unknown;");
+  });
+
+  test("leaves an up-to-date db.ts unchanged when adding only the test", async () => {
+    setupMigration();
+    writeMigrateFile(testDir, 1);
+    const dbTypes = "export interface Database {\n  User: {\n    id: string;\n  };\n}\n";
+    fs.writeFileSync(migrationFile(DB_TYPES_FILE_NAME), dbTypes);
+
+    const result = await addMigrationScriptFiles({
+      migrationsDir: testDir,
+      migrationNumber: 1,
+      withTest: true,
+    });
+
+    expect(result.updatedDbTypesPath).toBeUndefined();
+    expect(fs.readFileSync(migrationFile(DB_TYPES_FILE_NAME), "utf-8")).toBe(dbTypes);
+  });
+
+  test("throws when db.ts is missing in test-only mode", async () => {
+    setupMigration();
+    writeMigrateFile(testDir, 1);
+
+    await expect(
+      addMigrationScriptFiles({ migrationsDir: testDir, migrationNumber: 1, withTest: true }),
+    ).rejects.toThrow(/db\.ts/);
   });
 
   test("throws when migrate.test.ts already exists", async () => {
