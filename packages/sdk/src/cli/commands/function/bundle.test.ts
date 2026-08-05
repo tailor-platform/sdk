@@ -282,7 +282,7 @@ export default {
         detected,
       );
 
-      expect(result.bundledCode).toContain("TailorErrorMessage");
+      expect(result.bundledCode).toContain("TailorErrors");
       expect(result.bundledCode).toContain("access denied");
     });
 
@@ -301,7 +301,7 @@ export default {
         detected,
       );
 
-      expect(result.bundledCode).not.toContain("TailorErrorMessage");
+      expect(result.bundledCode).not.toContain("access denied");
     });
 
     test("injects the namespace default when the resolver declares no permission", async () => {
@@ -322,7 +322,7 @@ export default {
         },
       );
 
-      expect(result.bundledCode).toContain("TailorErrorMessage");
+      expect(result.bundledCode).toContain("TailorErrors");
       expect(result.bundledCode).toContain("access denied");
     });
 
@@ -348,7 +348,7 @@ export default {
         },
       );
 
-      expect(result.bundledCode).not.toContain("TailorErrorMessage");
+      expect(result.bundledCode).not.toContain("access denied");
     });
   });
 

@@ -210,7 +210,8 @@ function policyEntryExpr(policy: ResolverPermissionPolicy): string {
 /**
  * Build the permission guard statement injected at resolver entry.
  *
- * Rejects the call with `TailorErrorMessage` when the caller doesn't match
+ * Rejects the call with `TailorErrors` — the only error class the platform
+ * turns back into a message the caller can read — when the caller doesn't match
  * `permission`, evaluated against `context.caller` — the original caller,
  * unaffected by `authInvoker`. `permission` is deny-by-default: a caller is
  * granted only by a matching `permit: true` policy, and a matching
@@ -249,7 +250,8 @@ export function buildResolverPermissionGuardExpr(
       const $reasons = ($matchedDeny.length > 0 ? $matchedDeny : $allowPolicies)
         .map((p) => p.description)
         .filter(Boolean);
-      throw new TailorErrorMessage($reasons.length > 0 ? "access denied: " + $reasons.join("; ") : "access denied");
+      const $message = $reasons.length > 0 ? "access denied: " + $reasons.join("; ") : "access denied";
+      throw new TailorErrors([{ message: $message, path: [] }]);
     }
   }`;
 }

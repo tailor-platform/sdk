@@ -159,7 +159,7 @@ describe("bundleResolvers", () => {
 
     expect(entryContent).toBeDefined();
     expect(entryContent).toContain("caller!==null");
-    expect(entryContent).toContain("TailorErrorMessage");
+    expect(entryContent).toContain("TailorErrors");
     expect(entryContent).toContain("access denied");
   });
 
@@ -188,7 +188,7 @@ describe("bundleResolvers", () => {
     const entryContent = result.get("open");
 
     expect(entryContent).toBeDefined();
-    expect(entryContent).not.toContain("TailorErrorMessage");
+    expect(entryContent).not.toContain("access denied");
   });
 
   test("injects the namespace default into resolvers declaring no permission", async () => {
@@ -224,8 +224,8 @@ describe("bundleResolvers", () => {
     });
 
     expect(result.get("inherits")).toContain("caller!==null");
-    expect(result.get("inherits")).toContain("TailorErrorMessage");
-    expect(result.get("optedOut")).not.toContain("TailorErrorMessage");
+    expect(result.get("inherits")).toContain("access denied");
+    expect(result.get("optedOut")).not.toContain("access denied");
   });
 
   test("rebuilds a cached resolver when the namespace default changes", async () => {
@@ -253,12 +253,12 @@ describe("bundleResolvers", () => {
       });
 
     const unguarded = await bundle();
-    expect(unguarded.get("cached")).not.toContain("TailorErrorMessage");
+    expect(unguarded.get("cached")).not.toContain("access denied");
 
     const guarded = await bundle([
       { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
     ]);
-    expect(guarded.get("cached")).toContain("TailorErrorMessage");
+    expect(guarded.get("cached")).toContain("access denied");
   });
 
   test("resolves tsconfig relative to baseDir, not process.cwd()", async () => {
