@@ -339,7 +339,7 @@ Namespace: tailordb
 
 The error also points you at `migration status`, `migration generate`, `migration sync`, and `migration set` — see [Remote schema drift detected](#remote-schema-drift-detected) for which one applies.
 
-To run the same checks without deploying — plus migration file integrity (numbering, parseable contents, and a `migrate.ts` or a recorded `--no-script` acknowledgment for every migration that requires a script):
+To run the same checks without deploying — plus migration file integrity (numbering, parseable contents, a `migrate.ts` or a recorded `--no-script` acknowledgment for every migration that requires a script, and no unresolved generated normalization review markers):
 
 ```bash
 tailor tailordb migration validate
@@ -414,7 +414,7 @@ Migration numbers are assigned sequentially, so two developers branching off the
 ### CI / CD
 
 - For non-interactive environments, pass `--yes` to `migration generate` and `--yes` to `apply`. `apply` runs migrations automatically when the `migrations/` directory is configured.
-- Run `tailor tailordb migration validate` in CI to catch uncommitted migrations, broken migration files, and remote schema drift before deploying. It exits with a non-zero code when validation fails and supports `--json`.
+- Run `tailor tailordb migration validate` in CI to catch uncommitted migrations, broken migration files, unreviewed generated normalization logic, and remote schema drift before deploying. It exits with a non-zero code when validation fails and supports `--json`.
 - `tailor tailordb migration status` shows applied and pending migrations for a human-readable comparison. Its exit code is non-zero only on errors, so check the output.
 - Avoid running migrations in parallel against the same workspace — there is no locking. Serialize deploys per environment.
 

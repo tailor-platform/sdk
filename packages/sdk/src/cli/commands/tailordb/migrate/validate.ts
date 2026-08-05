@@ -30,6 +30,7 @@ import {
   loadDiff,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
+import { MIGRATION_REVIEW_REQUIRED_MARKER } from "./template-generator";
 import type {
   RemoteSchemaVerificationResult,
   RemoteSchemaVerificationSkipReason,
@@ -119,6 +120,31 @@ function assertRequiredMigrationScripts(migrationsDir: string, namespace: string
         "require a migration script but have no migrate.ts. " +
         "Add one with 'tailor tailordb migration script <number>', or record that no script " +
         `is needed with 'tailor tailordb migration script <number> --no-script --reason "..."'.`,
+    );
+  }
+}
+
+/**
+ * Assert that generated normalization logic in migration scripts has been reviewed
+ * @param {string} migrationsDir - Migrations directory path
+ * @param {string} namespace - TailorDB namespace (for error messages)
+ */
+function assertReviewedMigrationScripts(migrationsDir: string, namespace: string): void {
+  const unreviewed: number[] = [];
+  for (const file of getMigrationFiles(migrationsDir)) {
+    if (file.type !== "diff") continue;
+    const migrateFilePath = getMigrationFilePath(migrationsDir, file.number, "migrate");
+    if (!fs.existsSync(migrateFilePath)) continue;
+    if (fs.readFileSync(migrateFilePath, "utf8").includes(MIGRATION_REVIEW_REQUIRED_MARKER)) {
+      unreviewed.push(file.number);
+    }
+  }
+  if (unreviewed.length > 0) {
+    throw new Error(
+      `Migration(s) ${unreviewed.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
+        "contain generated normalization logic that still requires review in migrate.ts. " +
+        `Review each ${MIGRATION_REVIEW_REQUIRED_MARKER} marker, then remove the marker and its associated ` +
+        "`never` annotation.",
     );
   }
 }
@@ -236,6 +262,7 @@ async function collectValidationReports(
       // reported per namespace instead of aborting the run for every namespace.
       reconstructSnapshotFromMigrations(target.migrationsDir);
       assertRequiredMigrationScripts(target.migrationsDir, target.namespace);
+      assertReviewedMigrationScripts(target.migrationsDir, target.namespace);
       checkableNamespaces.push(target);
     } catch (error) {
       migrationFileErrors.set(
@@ -395,7 +422,7 @@ async function validate(options: ValidateOptions): Promise<void> {
 export const validateCommand = defineAppCommand({
   name: "validate",
   description:
-    "Validate the full migration history and detect schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
+    "Validate the full migration history, unreviewed generated migration scripts, and schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {
