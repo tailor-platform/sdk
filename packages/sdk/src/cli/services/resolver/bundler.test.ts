@@ -125,13 +125,11 @@ describe("bundleResolvers", () => {
     });
 
     await expect(
-      bundleResolvers(
-        "provisioning",
-        {
-          files: ["./src/backend/provisioning/resolver/*.ts"],
-        },
-        tmp.dir,
-      ),
+      bundleResolvers({
+        namespace: "provisioning",
+        config: { files: ["./src/backend/provisioning/resolver/*.ts"] },
+        baseDir: tmp.dir,
+      }),
     ).resolves.toEqual(new Map());
   });
 
@@ -151,11 +149,11 @@ describe("bundleResolvers", () => {
         `};\n`,
     );
 
-    const result = await bundleResolvers(
-      "permissioncheck",
-      { files: ["./src/backend/permissioncheck/resolver/*.ts"] },
-      tmp.dir,
-    );
+    const result = await bundleResolvers({
+      namespace: "permissioncheck",
+      config: { files: ["./src/backend/permissioncheck/resolver/*.ts"] },
+      baseDir: tmp.dir,
+    });
 
     const entryContent = result.get("protected");
 
@@ -181,16 +179,86 @@ describe("bundleResolvers", () => {
         `};\n`,
     );
 
-    const result = await bundleResolvers(
-      "nopermission",
-      { files: ["./src/backend/nopermission/resolver/*.ts"] },
-      tmp.dir,
-    );
+    const result = await bundleResolvers({
+      namespace: "nopermission",
+      config: { files: ["./src/backend/nopermission/resolver/*.ts"] },
+      baseDir: tmp.dir,
+    });
 
     const entryContent = result.get("open");
 
     expect(entryContent).toBeDefined();
     expect(entryContent).not.toContain("TailorErrorMessage");
+  });
+
+  test("injects the namespace default into resolvers declaring no permission", async () => {
+    using tmp = tempCwd("sdk-bundler-default-permission-");
+    writeSdkDependency(tmp.dir);
+    const resolverDir = path.join(tmp.dir, "resolver");
+    fs.mkdirSync(resolverDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(resolverDir, "inherits.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "inherits",\n` +
+        `  body: async () => 1,\n` +
+        `  output: { type: "integer", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+    fs.writeFileSync(
+      path.join(resolverDir, "optedOut.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "optedOut",\n` +
+        `  permission: "allowAnonymous",\n` +
+        `  body: async () => 1,\n` +
+        `  output: { type: "integer", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+
+    const result = await bundleResolvers({
+      namespace: "defaulted",
+      config: { files: ["./resolver/*.ts"] },
+      baseDir: tmp.dir,
+      defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    });
+
+    expect(result.get("inherits")).toContain("caller!==null");
+    expect(result.get("inherits")).toContain("TailorErrorMessage");
+    expect(result.get("optedOut")).not.toContain("TailorErrorMessage");
+  });
+
+  test("rebuilds a cached resolver when the namespace default changes", async () => {
+    using tmp = tempCwd("sdk-bundler-default-permission-cache-");
+    writeSdkDependency(tmp.dir);
+    fs.writeFileSync(
+      path.join(tmp.dir, "resolver.ts"),
+      `export default {\n` +
+        `  operation: "query",\n` +
+        `  name: "cached",\n` +
+        `  body: async () => 1,\n` +
+        `  output: { type: "integer", metadata: {}, fields: {} },\n` +
+        `};\n`,
+    );
+    const cache = createBundleCache(createCacheStore({ cacheDir: path.join(tmp.dir, ".cache") }));
+    const bundle = (
+      defaultPermission?: Parameters<typeof bundleResolvers>[0]["defaultPermission"],
+    ) =>
+      bundleResolvers({
+        namespace: "cache",
+        config: { files: ["./resolver.ts"] },
+        baseDir: tmp.dir,
+        defaultPermission,
+        cache,
+      });
+
+    const unguarded = await bundle();
+    expect(unguarded.get("cached")).not.toContain("TailorErrorMessage");
+
+    const guarded = await bundle([
+      { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
+    ]);
+    expect(guarded.get("cached")).toContain("TailorErrorMessage");
   });
 
   test("resolves tsconfig relative to baseDir, not process.cwd()", async () => {
@@ -210,11 +278,11 @@ describe("bundleResolvers", () => {
           `};\n`,
       );
 
-      await bundleResolvers(
-        "tsconfig-test",
-        { files: ["./src/backend/tsconfig-test/resolver/*.ts"] },
-        otherDir,
-      );
+      await bundleResolvers({
+        namespace: "tsconfig-test",
+        config: { files: ["./src/backend/tsconfig-test/resolver/*.ts"] },
+        baseDir: otherDir,
+      });
 
       expect(resolveTSConfig).toHaveBeenCalledWith(otherDir);
     } finally {
@@ -254,7 +322,12 @@ describe("bundleResolvers", () => {
     );
     const cache = createBundleCache(createCacheStore({ cacheDir: path.join(tmp.dir, ".cache") }));
     const bundle = () =>
-      bundleResolvers("cache", { files: ["./resolver.ts"] }, tmp.dir, undefined, cache);
+      bundleResolvers({
+        namespace: "cache",
+        config: { files: ["./resolver.ts"] },
+        baseDir: tmp.dir,
+        cache,
+      });
     vi.mocked(resolveTSConfig)
       .mockResolvedValueOnce(rootTsconfig)
       .mockResolvedValueOnce(rootTsconfig);
@@ -290,14 +363,12 @@ describe("bundleResolvers", () => {
     );
 
     const build = () =>
-      bundleResolvers(
-        "deterministic",
-        { files: ["./resolver/*.ts"] },
-        tmp.dir,
-        undefined,
-        undefined,
-        true,
-      );
+      bundleResolvers({
+        namespace: "deterministic",
+        config: { files: ["./resolver/*.ts"] },
+        baseDir: tmp.dir,
+        inlineSourcemap: true,
+      });
 
     const first = await build();
     const second = await build();
@@ -356,9 +427,17 @@ describe("bundleResolvers", () => {
         resolveSecondBuildStarted,
       };
 
-      const firstBuild = bundleResolvers("first", { files: ["./first/resolver/*.ts"] }, tmp.dir);
+      const firstBuild = bundleResolvers({
+        namespace: "first",
+        config: { files: ["./first/resolver/*.ts"] },
+        baseDir: tmp.dir,
+      });
       await firstBuildStarted;
-      const secondBuild = bundleResolvers("second", { files: ["./second/resolver/*.ts"] }, tmp.dir);
+      const secondBuild = bundleResolvers({
+        namespace: "second",
+        config: { files: ["./second/resolver/*.ts"] },
+        baseDir: tmp.dir,
+      });
 
       const [firstBundles, secondBundles] = await Promise.all([firstBuild, secondBuild]);
       const firstCode = firstBundles.get("shared");
@@ -394,13 +473,11 @@ describe("bundleResolvers", () => {
       vi.stubEnv("TAILOR_BUNDLE_CONCURRENCY", "2");
       buildTracker = { active: 0, maxActive: 0 };
 
-      await bundleResolvers(
-        "concurrency",
-        {
-          files: ["./src/backend/concurrency/resolver/*.ts"],
-        },
-        tmp.dir,
-      );
+      await bundleResolvers({
+        namespace: "concurrency",
+        config: { files: ["./src/backend/concurrency/resolver/*.ts"] },
+        baseDir: tmp.dir,
+      });
 
       expect(buildTracker.maxActive).toBeGreaterThan(0);
       expect(buildTracker.maxActive).toBeLessThanOrEqual(2);

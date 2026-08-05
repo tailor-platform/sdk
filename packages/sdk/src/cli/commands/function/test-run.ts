@@ -11,6 +11,7 @@ import { AuthInvokerSchema } from "@tailor-platform/tailor-proto/auth_resource_p
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
+import { resolveResolverDefaultPermissionForFile } from "#/cli/services/resolver/default-permission";
 import {
   resolveMachineUserInputSource,
   type MachineUserInputSource,
@@ -149,10 +150,19 @@ When a \`.js\` file is provided, detection and bundling are skipped and the file
       }
 
       logger.info("Bundling...");
+      const baseDir = path.dirname(config.path);
       ({ bundledCode, scriptName } = await bundleForTestRun({
         detected,
         sourceFile: filePath,
-        baseDir: path.dirname(config.path),
+        baseDir,
+        defaultPermission:
+          detected.type === "resolver"
+            ? resolveResolverDefaultPermissionForFile({
+                config: config.resolver,
+                filePath,
+                baseDir,
+              })
+            : undefined,
         env: config.env ?? {},
         inlineSourcemap: config.inlineSourcemap,
         logLevel: config.logLevel,

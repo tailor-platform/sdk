@@ -3,6 +3,7 @@ import {
   INVOKER_EXPR,
   buildExecutorArgsExpr,
   buildResolverOperationHookExpr,
+  buildResolverPermissionAndInputCheckExpr,
   buildResolverPermissionGuardExpr,
 } from "./runtime-exprs";
 
@@ -436,5 +437,35 @@ describe("buildResolverPermissionGuardExpr", () => {
   test("throws at bundle time on a policy with an empty conditions array (schema should reject this, but guard defensively too)", () => {
     const permission = [{ conditions: [], permit: true }] as const;
     expect(() => buildResolverPermissionGuardExpr(permission)).toThrow(/at least one condition/);
+  });
+});
+
+describe("buildResolverPermissionAndInputCheckExpr", () => {
+  const loggedIn = [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }] as const;
+
+  test("guards with the namespace default when the resolver declares no permission", () => {
+    const expr = buildResolverPermissionAndInputCheckExpr({
+      permission: undefined,
+      defaultPermission: loggedIn,
+    });
+    expect(expr).toContain("TailorErrorMessage");
+  });
+
+  test("uses the resolver's own permission instead of the namespace default", () => {
+    const adminOnly = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
+    const expr = buildResolverPermissionAndInputCheckExpr({
+      permission: adminOnly,
+      defaultPermission: loggedIn,
+    });
+    expect(expr).toContain('"ADMIN"');
+    expect(expr).not.toContain("context.caller !== null");
+  });
+
+  test("lets a resolver opt out of the namespace default with allowAnonymous", () => {
+    const expr = buildResolverPermissionAndInputCheckExpr({
+      permission: "allowAnonymous",
+      defaultPermission: loggedIn,
+    });
+    expect(expr).not.toContain("TailorErrorMessage");
   });
 });

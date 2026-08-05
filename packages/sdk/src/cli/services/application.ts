@@ -567,16 +567,17 @@ export async function loadApplication(
 
   // 9. Bundle resolvers
   for (const pipeline of resolverResult.resolverServices) {
-    const resolverBundles = await bundleResolvers(
-      pipeline.namespace,
-      pipeline.config,
+    const resolverBundles = await bundleResolvers({
+      namespace: pipeline.namespace,
+      config: pipeline.config,
       baseDir,
+      defaultPermission: pipeline.defaultPermission,
       startContext,
-      bundleCache,
+      cache: bundleCache,
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
-    );
+    });
     for (const [name, code] of resolverBundles) {
       bundledScripts.resolvers.set(resolverBundleKey(pipeline.namespace, name), code);
     }

@@ -406,6 +406,38 @@ Besides a policy array, `permission` also accepts:
 
 This check is based on `context.user`, the original caller, so it still applies even when `authInvoker` swaps in a machine user for database access.
 
+### Namespace-wide default (`defaultPermission`)
+
+Declaring `permission` on every resolver is the only way to close a whole namespace, and one file that forgets it is enough to leave an opening. Declare `defaultPermission` on the resolver namespace in your config instead, and it applies to every resolver in that namespace:
+
+```typescript
+export default defineConfig({
+  name: "my-app",
+  resolver: {
+    "main-resolver": {
+      files: ["./src/resolver/*.ts"],
+      defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    },
+  },
+});
+```
+
+`defaultPermission` takes the same values as a resolver's own `permission`, including `"allowAnonymous"` — use that to record that a namespace is public by design rather than by oversight.
+
+A resolver's own `permission` **replaces** the namespace default rather than adding to it, so a single resolver opts out of a namespace-wide requirement explicitly:
+
+```typescript
+export default createResolver({
+  name: "healthCheck",
+  operation: "query",
+  permission: "allowAnonymous", // reachable even though the namespace requires a login
+  output: t.string(),
+  body: () => "ok",
+});
+```
+
+When a namespace declares no `defaultPermission` and some of its resolvers declare no `permission` either, `generate` and `deploy` warn that those resolvers are reachable by anonymous callers. Declaring either one silences the warning.
+
 ## Authentication
 
 Specify an `invoker` to execute the resolver with machine user credentials. Pass the machine user name as a plain string — it is type-narrowed to the names you defined in your auth config:

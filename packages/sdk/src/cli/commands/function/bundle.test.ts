@@ -303,6 +303,53 @@ export default {
 
       expect(result.bundledCode).not.toContain("TailorErrorMessage");
     });
+
+    test("injects the namespace default when the resolver declares no permission", async () => {
+      const detected: DetectedFunction = { type: "resolver", name: "inherits" };
+      const result = await bundle(
+        "resolver-inherits.ts",
+        `
+export default {
+  operation: "query",
+  name: "inherits",
+  body: () => 1,
+  output: { type: "integer", metadata: {} },
+};
+`,
+        detected,
+        {
+          defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+        },
+      );
+
+      expect(result.bundledCode).toContain("TailorErrorMessage");
+      expect(result.bundledCode).toContain("access denied");
+    });
+
+    test("lets the resolver's own permission override the namespace default", async () => {
+      const detected: DetectedFunction = {
+        type: "resolver",
+        name: "opted-out",
+        permission: "allowAnonymous",
+      };
+      const result = await bundle(
+        "resolver-opted-out.ts",
+        `
+export default {
+  operation: "query",
+  name: "opted-out",
+  body: () => 1,
+  output: { type: "integer", metadata: {} },
+};
+`,
+        detected,
+        {
+          defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+        },
+      );
+
+      expect(result.bundledCode).not.toContain("TailorErrorMessage");
+    });
   });
 
   describe("executor", () => {
