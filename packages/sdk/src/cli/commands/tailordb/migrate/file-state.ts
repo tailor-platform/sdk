@@ -1,5 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, type Hash } from "node:crypto";
 import * as fs from "node:fs";
+import * as path from "pathe";
 import { formatMigrationNumber, getMigrationFilePath, MIGRATION_NUMBER_PATTERN } from "./snapshot";
 import type { NamespaceWithMigrations } from "./config";
 
@@ -18,6 +19,29 @@ function getMigrationArtifactNumbers(migrationsDir: string): number[] {
       ),
     )
     .toSorted((a, b) => a - b);
+}
+
+function updateHashWithDirectory(hash: Hash, directoryPath: string, prefix = ""): void {
+  const entries = fs
+    .readdirSync(directoryPath, { withFileTypes: true })
+    .toSorted((a, b) => a.name.localeCompare(b.name));
+
+  for (const entry of entries) {
+    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+    const entryPath = path.join(directoryPath, entry.name);
+    if (entry.isDirectory()) {
+      hash.update(`directory\0${relativePath}\0`);
+      updateHashWithDirectory(hash, entryPath, relativePath);
+    } else if (entry.isFile()) {
+      hash.update(`file\0${relativePath}\0`);
+      hash.update(fs.readFileSync(entryPath));
+      hash.update("\0");
+    } else if (entry.isSymbolicLink()) {
+      hash.update(`symlink\0${relativePath}\0${fs.readlinkSync(entryPath)}\0`);
+    } else {
+      hash.update(`other\0${relativePath}\0`);
+    }
+  }
 }
 
 /**
@@ -55,16 +79,9 @@ export function captureMigrationFileState(
     const hash = createHash("sha256");
     const migrationNumbers = getMigrationArtifactNumbers(migrationsDir);
     for (const migrationNumber of migrationNumbers) {
-      for (const kind of MIGRATION_FILE_KINDS) {
-        const filePath = getMigrationFilePath(migrationsDir, migrationNumber, kind);
-        hash.update(`${formatMigrationNumber(migrationNumber)}/${kind}\0`);
-        if (fs.existsSync(filePath)) {
-          hash.update(fs.readFileSync(filePath));
-        } else {
-          hash.update("<missing>");
-        }
-        hash.update("\0");
-      }
+      const migrationDirectoryName = formatMigrationNumber(migrationNumber);
+      hash.update(`migration\0${migrationDirectoryName}\0`);
+      updateHashWithDirectory(hash, path.join(migrationsDir, migrationDirectoryName));
     }
     state[namespace] = hash.digest("hex");
   }

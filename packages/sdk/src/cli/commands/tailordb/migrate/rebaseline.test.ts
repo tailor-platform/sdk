@@ -301,6 +301,21 @@ describe("tailordb migration rebaseline", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
+  test("rejects extra files added to a migration directory while waiting for confirmation", async () => {
+    const notesPath = path.join(state.migrationsDir, "0001", "notes.md");
+    vi.mocked(prompt.confirm).mockImplementation(async () => {
+      fs.writeFileSync(notesPath, "keep me");
+      return true;
+    });
+
+    const result = await runCommand(rebaselineCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/migration files changed while waiting for confirmation/i);
+    expect(fs.readFileSync(notesPath, "utf-8")).toBe("keep me");
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("rejects local type changes made while waiting for confirmation", async () => {
     vi.mocked(prompt.confirm).mockImplementation(async () => {
       state.localTypes = { User: parsedType("User") };
