@@ -397,7 +397,7 @@ When your branch and main each generated the same number, merging or rebasing st
 
 1. **Save your script edits aside.** If you customized `0005/migrate.ts`, keep a copy before touching the directory — during a rebase, `git show REBASE_HEAD:migrations/0005/migrate.ts` prints your branch's version.
 2. **Take main's `0005/` directory in full.** Accept main's version of every conflicting file. Then check for files only your side added: if your migration has a `migrate.ts` and main's does not, that file never conflicts — it silently stays next to main's `diff.json`. Delete such leftovers explicitly.
-3. **Re-run `migration generate`.** With main's migration now part of local history, the diff is computed against the correct base — including main's changes — and your migration lands as the next number (`0006`).
+3. **Finish the rebase or merge, then re-run `migration generate`.** With main's migration now part of local history, the diff is computed against the correct base — including main's changes — and your migration lands as the next number (`0006`).
 4. **Port your script.** Copy the logic saved in step 1 into the newly scaffolded `0006/migrate.ts`.
 
 **When a plain rename is enough.** If the two migrations touch disjoint types and fields, renaming your directory to the next free number (keeping main's `0005/`) can be acceptable. Let the local schema check arbitrate: run `tailor tailordb migration validate` after the rename. If it passes, the renamed history still reproduces your local type definitions and the rename was safe; if it reports a mismatch, discard the rename and re-generate as above.
