@@ -719,12 +719,25 @@ describe("template-generator", () => {
       expect(script).toContain("mock.withTx((trx) => main(trx))");
     });
 
+    test("should snapshot both SQL and bind parameters by default", () => {
+      const script = generateMigrationTestScript(createMockMigrationDiff());
+
+      expect(script).toContain("sql: query.sql");
+      expect(script).toContain("parameters: query.parameters");
+    });
+
     test("should include the namespace in the suite name", () => {
       const script = generateMigrationTestScript(
         createMockMigrationDiff({ namespace: "analyticsdb" }),
       );
 
       expect(script).toContain('describe("analyticsdb migration"');
+    });
+
+    test("should escape the namespace in the suite name", () => {
+      const script = generateMigrationTestScript(createMockMigrationDiff({ namespace: 'we"ird' }));
+
+      expect(script).toContain('describe("we\\"ird migration"');
     });
   });
 

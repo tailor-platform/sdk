@@ -213,7 +213,7 @@ import { describe, expect, test } from "vitest";
 import type { Database } from "./db";
 import { main } from "./migrate";
 
-describe("${diff.namespace} migration", () => {
+describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
   test("issues the intended statements", async () => {
     const mock = createKyselyMock<Database>();
 
@@ -226,7 +226,9 @@ describe("${diff.namespace} migration", () => {
     // Replace with assertions on the statements the script must issue:
     // expect(mock.updates).toHaveLength(1);
     // expect(mock.updates[0]?.updateValues()).toEqual({ field: "value" });
-    expect(mock.executedQueries.map((query) => query.sql)).toMatchSnapshot();
+    expect(
+      mock.executedQueries.map((query) => ({ sql: query.sql, parameters: query.parameters })),
+    ).toMatchSnapshot();
   });
 });
 `;
