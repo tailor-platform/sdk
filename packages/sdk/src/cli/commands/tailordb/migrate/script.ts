@@ -2,8 +2,9 @@
  * Script command for TailorDB migrations
  *
  * Adds a `migrate.ts` (and supporting `db.ts`) template to an existing
- * migration directory. Useful for warning-tier changes where users may
- * want to write a custom data migration even though the change does not
+ * migration directory, optionally with a `migrate.test.ts` unit-test
+ * scaffold. Useful for warning-tier changes where users may want to
+ * write a custom data migration even though the change does not
  * automatically require one.
  */
 
