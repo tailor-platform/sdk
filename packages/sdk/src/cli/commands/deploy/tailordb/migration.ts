@@ -247,7 +247,7 @@ async function executeSingleMigration(
  * @param {string} workspaceId - Workspace ID
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number to set
- * @param historyId - Optional migration history generation to set atomically with the checkpoint
+ * @param historyId - Optional migration history ID to set atomically with the checkpoint
  * @returns {Promise<void>}
  */
 export async function updateMigrationLabel(

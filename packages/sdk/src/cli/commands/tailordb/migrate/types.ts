@@ -28,7 +28,7 @@ const MIGRATION_LABEL_PREFIX = "m";
  */
 export const MIGRATION_LABEL_KEY = "sdk-migration";
 
-/** Label key identifying which migration history generation is deployed. */
+/** Label key identifying which migration history ID is deployed. */
 export const MIGRATION_HISTORY_LABEL_KEY = "sdk-migration-history";
 
 /** Valid migration history ID syntax for metadata label values. */

@@ -193,10 +193,10 @@ describe("confirmMigrationCheckpointRepairs", () => {
       "The checkpoint reset itself changes only metadata",
     );
     expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(
-      "History generation: <unset> → hanalytics",
+      "Migration history ID: <unset> → hanalytics",
     );
     expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(
-      "History generation: <unset> → htailordb",
+      "Migration history ID: <unset> → htailordb",
     );
     expect(vi.mocked(logger.log).mock.calls.flat().join("\n")).toContain(
       "pending schema or data migrations",

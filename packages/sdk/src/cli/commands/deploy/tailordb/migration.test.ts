@@ -565,7 +565,7 @@ describe("migration", () => {
       });
     });
 
-    test("updates the migration checkpoint and history generation atomically", async () => {
+    test("updates the migration checkpoint and history ID atomically", async () => {
       const setMetadataMock = vi.fn();
       const client = createMetadataClient(
         { labels: { "existing-label": "value" } },
@@ -584,7 +584,7 @@ describe("migration", () => {
       });
     });
 
-    test("removes a stale history generation for a markerless local history", async () => {
+    test("removes a stale history ID for a markerless local history", async () => {
       const setMetadataMock = vi.fn();
       const client = createMetadataClient(
         {

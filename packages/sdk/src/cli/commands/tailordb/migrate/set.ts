@@ -84,8 +84,8 @@ async function set(options: SetOptions): Promise<void> {
     `Current migration: ${current === null ? "<unset>" : styles.bold(formatMigrationNumber(current))}`,
   );
   logger.log(`New migration: ${styles.bold(formatMigrationNumber(migrationNumber))}`);
-  logger.log(`Current history generation: ${styles.bold(currentHistoryId)}`);
-  logger.log(`New history generation: ${styles.bold(newHistoryId)}`);
+  logger.log(`Current migration history ID: ${styles.bold(currentHistoryId)}`);
+  logger.log(`New migration history ID: ${styles.bold(newHistoryId)}`);
   logger.newline();
 
   if (migrationNumber < currentMigration) {
@@ -103,7 +103,7 @@ async function set(options: SetOptions): Promise<void> {
   // 8. Confirmation prompt (unless --yes flag)
   if (!options.yes) {
     const confirmation = await prompt.confirm({
-      message: "Continue with migration checkpoint and history generation update?",
+      message: "Continue with migration checkpoint and history ID update?",
       default: false,
     });
 

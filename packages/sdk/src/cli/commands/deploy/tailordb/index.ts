@@ -256,7 +256,7 @@ export async function validateAndDetectMigrations(
 }
 
 /**
- * Reconcile each namespace's migration checkpoint and history generation to
+ * Reconcile each namespace's migration checkpoint and history ID to
  * the working tree after a create-update apply.
  *
  * This records the initial baseline (`0000`), which is deployed via the normal
@@ -266,7 +266,7 @@ export async function validateAndDetectMigrations(
  * @param client - Operator client instance
  * @param workspaceId - Workspace ID
  * @param namespacesWithMigrations - Namespaces that have migration directories configured
- * @param migrationHistoryIds - History generation captured during preflight for each namespace
+ * @param migrationHistoryIds - Migration history ID captured during preflight for each namespace
  */
 async function reconcileMigrationLabels(
   client: OperatorClient,

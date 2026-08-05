@@ -14,7 +14,7 @@ export interface RemoteMigrationState {
 }
 
 /**
- * Fetch the namespace's migration checkpoint and history generation.
+ * Fetch the namespace's migration checkpoint and history ID.
  * @param client - Operator client
  * @param trn - Namespace TRN
  * @returns Parsed migration state with invalid history labels kept distinct from missing labels

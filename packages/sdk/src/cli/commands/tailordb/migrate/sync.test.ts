@@ -193,7 +193,7 @@ describe("tailordb migration sync", () => {
     );
   });
 
-  test("sets the current migration history generation from a re-baselined snapshot", async () => {
+  test("sets the current migration history ID from a re-baselined snapshot", async () => {
     const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
     const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
     fs.writeFileSync(
@@ -222,7 +222,7 @@ describe("tailordb migration sync", () => {
     );
   });
 
-  test("removes a stale remote history generation for a markerless local history", async () => {
+  test("removes a stale remote history ID for a markerless local history", async () => {
     state.getMetadata.mockResolvedValue({
       metadata: {
         labels: {
