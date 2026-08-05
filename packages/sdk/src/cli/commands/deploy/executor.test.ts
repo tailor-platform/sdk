@@ -250,6 +250,22 @@ describe("planExecutor", () => {
   });
 
   describe("delete scenarios", () => {
+    test("deletes owned executors while preparing a migration-test baseline", async () => {
+      const client = createMockClient([{ name: "active-executor", label: appName }]);
+      const application = createMockApplication([createMockExecutor("active-executor")]);
+
+      const result = await planExecutor(
+        buildPlanContext(application, {
+          client,
+          migrationTestBaselines: new Map(),
+        }),
+      );
+
+      expect(result.changeSet.creates).toHaveLength(0);
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.deletes.map((entry) => entry.name)).toEqual(["active-executor"]);
+    });
+
     test("executor is deleted when removed from config", async () => {
       // Existing: executor-a, executor-b
       const client = createMockClient([

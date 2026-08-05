@@ -272,6 +272,8 @@ The command performs the following sequence:
 
 Both the pre-migration and final TailorDB schemas come from committed migration snapshots. Ungenerated changes in the current type source are not included in the rehearsal.
 
+Executors are omitted from the baseline deployment so loading fixture or cloned records cannot trigger current event handlers against the older schema. The final deployment restores the configured executors after the pending migrations finish.
+
 ### Seed mode
 
 Seed mode is the default and uses the JSONL files produced by the configured `seedPlugin`. Run `tailor generate` after adding the plugin or changing seed types, then populate its `data/*.jsonl` files:

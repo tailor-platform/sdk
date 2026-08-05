@@ -119,7 +119,10 @@ export async function planExecutor(context: PlanContext) {
     getTrn: (name) => resourceTrn(workspaceId, "executor", name),
   });
 
-  const executors = forRemoval ? {} : ((await application.executorService?.loadExecutors()) ?? {});
+  const executors =
+    forRemoval || context.migrationTestBaselines
+      ? {}
+      : ((await application.executorService?.loadExecutors()) ?? {});
   for (const executor of Object.values(executors)) {
     const existing = existingExecutors[executor.name];
     const metaRequest = await buildMetaRequest({

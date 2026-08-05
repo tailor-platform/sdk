@@ -37,6 +37,9 @@ export async function runMigrationTest(
   }
 
   const prepared = await dependencies.prepare(options);
+  if (options.targetWorkspaceId?.toLowerCase() === prepared.sourceWorkspaceId.toLowerCase()) {
+    throw new Error("The migration test target workspace must differ from the source workspace.");
+  }
   if (options.assertionPath) {
     const namespace =
       options.assertionNamespace ??

@@ -298,7 +298,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
-  if (options.targetWorkspaceId === sourceWorkspaceId) {
+  if (options.targetWorkspaceId?.toLowerCase() === sourceWorkspaceId.toLowerCase()) {
     throw new Error("The migration test target workspace must differ from the source workspace.");
   }
 

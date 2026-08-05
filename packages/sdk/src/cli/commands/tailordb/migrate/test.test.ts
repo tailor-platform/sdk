@@ -125,6 +125,25 @@ describe("tailordb migration test", () => {
     });
   });
 
+  test("rejects the source workspace as a designated target regardless of UUID casing", async () => {
+    const events: string[] = [];
+    const dependencies = createDependencies(events);
+
+    await expect(
+      runMigrationTest(
+        {
+          data: "seed",
+          targetWorkspaceId: prepared.sourceWorkspaceId.toUpperCase(),
+          yes: true,
+        },
+        dependencies,
+      ),
+    ).rejects.toThrow(/target workspace must differ from the source workspace/i);
+
+    expect(events).toEqual(["prepare"]);
+    expect(dependencies.deployBaseline).not.toHaveBeenCalled();
+  });
+
   test("rejects ambiguous assertion options before creating a workspace", async () => {
     const events: string[] = [];
     const dependencies = createDependencies(events);
