@@ -34,7 +34,7 @@ export type AstArrayExpression = Extract<EstreeNode, { type: "ArrayExpression" }
 export type AstCallExpression = Extract<EstreeNode, { type: "CallExpression" }>;
 export type AstIdentifier = Extract<EstreeNode, { type: "Identifier" }>;
 export type AstImportDeclaration = Extract<EstreeNode, { type: "ImportDeclaration" }>;
-export type AstProperty = Extract<EstreeNode, { type: "Property" }>;
+type AstProperty = Extract<EstreeNode, { type: "Property" }>;
 
 const EXPRESSION_WRAPPERS: ReadonlySet<string> = new Set(EXPRESSION_WRAPPER_TYPES);
 

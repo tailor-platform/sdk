@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest";
 const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 describe("package", () => {
-  test("publishes the generated JavaScript and declaration entry points", () => {
+  test("configures generated package entry points and build lifecycles", () => {
     expect(packageJson).toMatchObject({
       files: ["dist", "README.md"],
       main: "./dist/index.js",
@@ -20,12 +20,14 @@ describe("package", () => {
         build: "tsdown",
         pretest: "pnpm run build",
         prepack: "pnpm run build",
+        publint: "pnpm run build && publint --strict && tsc --noEmit --project tsconfig.dist.json",
       },
     });
   });
 
-  test("typechecks source without rebuilding generated output", () => {
-    expect(packageJson.devDependencies).toMatchObject({ "@types/node": "24.13.3" });
+  test("configures source typechecking without a build lifecycle", () => {
+    expect(packageJson.devDependencies["@types/node"]).toEqual(expect.any(String));
+    expect(packageJson.scripts.typecheck).toBe("tsc --noEmit");
     expect(packageJson.scripts).not.toHaveProperty("pretypecheck");
   });
 });

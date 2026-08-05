@@ -10,7 +10,7 @@ import {
 import type { Rule, Scope, SourceCode } from "eslint";
 
 export const SDK_CONFIGURE_MODULE = "@tailor-platform/sdk";
-export const SDK_CLI_MODULE = "@tailor-platform/sdk/cli";
+const SDK_CLI_MODULE = "@tailor-platform/sdk/cli";
 
 interface ImportBinding {
   binding: AstIdentifier;
