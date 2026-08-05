@@ -55,6 +55,20 @@ export function isRenameCompatible(
     const afterValues = new Set((after.allowedValues ?? []).map((v) => v.value));
     if ((before.allowedValues ?? []).some((v) => !afterValues.has(v.value))) return false;
   }
+  // The stored object is copied wholesale, so nested structures must match:
+  // same member names, same requiredness, recursively compatible members.
+  const beforeNested = before.fields ?? {};
+  const afterNested = after.fields ?? {};
+  const beforeNames = Object.keys(beforeNested);
+  const afterNames = Object.keys(afterNested);
+  if (beforeNames.length !== afterNames.length) return false;
+  for (const name of beforeNames) {
+    const beforeMember = beforeNested[name];
+    const afterMember = afterNested[name];
+    if (!beforeMember || !afterMember) return false;
+    if (beforeMember.required !== afterMember.required) return false;
+    if (!isRenameCompatible(beforeMember, afterMember)) return false;
+  }
   return true;
 }
 

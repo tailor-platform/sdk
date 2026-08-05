@@ -36,6 +36,7 @@ import {
   type FieldRenameSpec,
 } from "./rename-detection";
 import {
+  assertValidFieldRenames,
   createSnapshotFromLocalTypes,
   reconstructSnapshotFromMigrations,
   compareSnapshots,
@@ -143,6 +144,11 @@ export async function generate(options: GenerateOptions): Promise<void> {
     raw,
     spec: parseRenameOption(raw),
   }));
+  // --init regenerates the baseline from scratch, so there is no previous
+  // schema a rename could apply to
+  if (options.init && renameFlags.length > 0) {
+    throw new Error("--rename cannot be used together with --init.");
+  }
 
   // Handle --init option: delete existing migrations directory
   if (options.init) {
@@ -202,6 +208,19 @@ export async function generate(options: GenerateOptions): Promise<void> {
   if (unusedRenames.length > 0) {
     throw new Error(
       `--rename does not match a removed + added field pair: ${unusedRenames.map((flag) => flag.raw).join(", ")}`,
+    );
+  }
+  // Fully validate the applicable specs (compatibility, duplicates) for every
+  // namespace before any file is written, so an invalid spec in a later
+  // namespace cannot leave earlier namespaces partially generated
+  for (const { previousSnapshot, currentSnapshot } of generations) {
+    if (!previousSnapshot) continue;
+    assertValidFieldRenames(
+      previousSnapshot,
+      currentSnapshot,
+      renameFlags
+        .filter(({ spec }) => renameSpecApplies(spec, previousSnapshot, currentSnapshot))
+        .map((flag) => flag.spec),
     );
   }
 

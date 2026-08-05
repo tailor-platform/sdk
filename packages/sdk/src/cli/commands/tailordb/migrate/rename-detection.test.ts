@@ -67,6 +67,33 @@ describe("isRenameCompatible", () => {
     expect(isRenameCompatible(stringField(), stringField({ serial: { start: 1 } }))).toBe(false);
   });
 
+  test("rejects nested renames whose member structure differs", () => {
+    const nested = (fields: Record<string, SnapshotFieldConfig>): SnapshotFieldConfig =>
+      stringField({ type: "nested", fields });
+
+    expect(
+      isRenameCompatible(
+        nested({ legacy: stringField() }),
+        nested({ replacement: stringField({ type: "integer" }) }),
+      ),
+    ).toBe(false);
+    expect(
+      isRenameCompatible(
+        nested({ legacy: stringField() }),
+        nested({ legacy: stringField(), extra: stringField() }),
+      ),
+    ).toBe(false);
+    expect(
+      isRenameCompatible(
+        nested({ legacy: stringField() }),
+        nested({ legacy: stringField({ required: true }) }),
+      ),
+    ).toBe(false);
+    expect(
+      isRenameCompatible(nested({ legacy: stringField() }), nested({ legacy: stringField() })),
+    ).toBe(true);
+  });
+
   test("rejects enum renames that remove values", () => {
     const before = stringField({
       type: "enum",

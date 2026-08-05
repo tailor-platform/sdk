@@ -1763,16 +1763,20 @@ export interface CompareSnapshotsOptions {
 
 /**
  * Assert that every rename spec matches a compatible removed + added field
- * pair between the two snapshots.
- * @param {NormalizedSchemaSnapshot} previous - Previous schema snapshot
- * @param {NormalizedSchemaSnapshot} current - Current schema snapshot
+ * pair between the two snapshots. Exported so `migration generate` can
+ * validate all specs before writing any migration file.
+ * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
+ * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
  * @param {readonly FieldRenameSpec[]} fieldRenames - Rename specs to validate
  */
-function assertValidFieldRenames(
-  previous: NormalizedSchemaSnapshot,
-  current: NormalizedSchemaSnapshot,
+export function assertValidFieldRenames(
+  previousSnapshot: SchemaSnapshot,
+  currentSnapshot: SchemaSnapshot,
   fieldRenames: readonly FieldRenameSpec[],
 ): void {
+  if (fieldRenames.length === 0) return;
+  const previous = normalizeSchemaSnapshot(previousSnapshot);
+  const current = normalizeSchemaSnapshot(currentSnapshot);
   const seen = new Set<string>();
   for (const rename of fieldRenames) {
     const { typeName, fromFieldName, toFieldName } = rename;
