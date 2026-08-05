@@ -2,6 +2,7 @@
  * Types for TailorDB migration execution
  */
 
+import { randomUUID } from "node:crypto";
 import { Code, ConnectError } from "@connectrpc/connect";
 import { logger } from "#/cli/shared/logger";
 import { formatMigrationNumber } from "./migration-number";
@@ -26,6 +27,12 @@ const MIGRATION_LABEL_PREFIX = "m";
  * Label key for storing migration state in TailorDB Service metadata
  */
 export const MIGRATION_LABEL_KEY = "sdk-migration";
+
+/** Label key identifying which migration history generation is deployed. */
+export const MIGRATION_HISTORY_LABEL_KEY = "sdk-migration-history";
+
+/** Valid migration history ID syntax for metadata label values. */
+export const MIGRATION_HISTORY_ID_PATTERN = /^[a-z][a-z0-9_-]{0,62}$/;
 
 // ============================================================================
 // Error Constants
@@ -96,6 +103,23 @@ export function parseMigrationLabelNumber(label: string): number | null {
   if (!/^\d+$/.test(numStr)) return null;
   const num = parseInt(numStr, 10);
   return num > 9999 ? null : num;
+}
+
+/**
+ * Parse and validate a migration history ID stored in metadata.
+ * @param label - Metadata label value
+ * @returns Valid history ID, or null for malformed input
+ */
+export function parseMigrationHistoryId(label: string): string | null {
+  return MIGRATION_HISTORY_ID_PATTERN.test(label) ? label : null;
+}
+
+/**
+ * Create a migration history ID that is valid as a metadata label value.
+ * @returns New migration history ID
+ */
+export function createMigrationHistoryId(): string {
+  return `h${randomUUID().replaceAll("-", "")}`;
 }
 
 // ============================================================================
@@ -186,6 +210,8 @@ export interface MigrationCheckpointRepair {
   namespace: string;
   from: number;
   to: 0;
+  fromHistoryId: string | null;
+  toHistoryId: string;
 }
 
 /**

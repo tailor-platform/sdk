@@ -21,26 +21,57 @@ function getMigrationArtifactNumbers(migrationsDir: string): number[] {
     .toSorted((a, b) => a - b);
 }
 
-function updateHashWithDirectory(hash: Hash, directoryPath: string, prefix = ""): void {
+function updateHashWithDirectory(
+  hash: Hash,
+  directoryPath: string,
+  prefix = "",
+  activeDirectories = new Set<string>(),
+): void {
+  const realDirectoryPath = fs.realpathSync(directoryPath);
+  if (activeDirectories.has(realDirectoryPath)) {
+    hash.update(`directory-cycle\0${prefix}\0${realDirectoryPath}\0`);
+    return;
+  }
+  activeDirectories.add(realDirectoryPath);
   const entries = fs
     .readdirSync(directoryPath, { withFileTypes: true })
     .toSorted((a, b) => a.name.localeCompare(b.name));
 
-  for (const entry of entries) {
-    const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
-    const entryPath = path.join(directoryPath, entry.name);
-    if (entry.isDirectory()) {
-      hash.update(`directory\0${relativePath}\0`);
-      updateHashWithDirectory(hash, entryPath, relativePath);
-    } else if (entry.isFile()) {
-      hash.update(`file\0${relativePath}\0`);
-      hash.update(fs.readFileSync(entryPath));
-      hash.update("\0");
-    } else if (entry.isSymbolicLink()) {
-      hash.update(`symlink\0${relativePath}\0${fs.readlinkSync(entryPath)}\0`);
-    } else {
-      hash.update(`other\0${relativePath}\0`);
+  try {
+    for (const entry of entries) {
+      const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      const entryPath = path.join(directoryPath, entry.name);
+      if (entry.isDirectory()) {
+        hash.update(`directory\0${relativePath}\0`);
+        updateHashWithDirectory(hash, entryPath, relativePath, activeDirectories);
+      } else if (entry.isFile()) {
+        hash.update(`file\0${relativePath}\0`);
+        hash.update(fs.readFileSync(entryPath));
+        hash.update("\0");
+      } else if (entry.isSymbolicLink()) {
+        hash.update(`symlink\0${relativePath}\0${fs.readlinkSync(entryPath)}\0`);
+        try {
+          const target = fs.statSync(entryPath);
+          if (target.isDirectory()) {
+            hash.update("target-directory\0");
+            updateHashWithDirectory(hash, entryPath, `${relativePath}@target`, activeDirectories);
+          } else if (target.isFile()) {
+            hash.update("target-file\0");
+            hash.update(fs.readFileSync(entryPath));
+            hash.update("\0");
+          } else {
+            hash.update("target-other\0");
+          }
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          hash.update("target-missing\0");
+        }
+      } else {
+        hash.update(`other\0${relativePath}\0`);
+      }
     }
+  } finally {
+    activeDirectories.delete(realDirectoryPath);
   }
 }
 

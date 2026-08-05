@@ -226,6 +226,13 @@ export interface TailorDBSnapshotType {
 export type SnapshotSettings = NonNullable<TailorDBSnapshotType["settings"]>;
 export type SnapshotGqlOperations = NonNullable<SnapshotSettings["gqlOperations"]>;
 
+/** Identifies the history transition created by a full rebaseline. */
+export interface RebaselineMarker {
+  historyId: string;
+  replacedHistoryId: string | null;
+  replacedLatestMigration: number;
+}
+
 /**
  * Schema snapshot - full schema state at a point in time.
  * Stored as XXXX/schema.json. Defined here (leaf module) so that
@@ -237,6 +244,7 @@ export interface SchemaSnapshot {
   namespace: string;
   createdAt: string;
   types: Record<string, TailorDBSnapshotType>;
+  rebaseline?: RebaselineMarker;
 }
 
 declare const normalizedSchemaSnapshotBrand: unique symbol;

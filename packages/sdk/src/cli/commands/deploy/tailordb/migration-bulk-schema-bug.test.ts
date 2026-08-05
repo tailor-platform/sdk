@@ -116,6 +116,7 @@ const snapshotFixtures = vi.hoisted(() => {
 
   return {
     reconstructSnapshotFromMigrations: baseSnapshot({
+      0: {},
       1: { SalesOrder: salesOrderAfterMigration1, User: userAfterMigration1 },
       5: { User: userAfterMigration5 },
     }),

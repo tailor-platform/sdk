@@ -837,7 +837,15 @@ describe("printPlanResults", () => {
   test("includes migration checkpoint repairs in JSON dry-run changes and summary", () => {
     using _json = jsonMode();
     const results = emptyResults();
-    results.tailorDB.context.checkpointRepairs = [{ namespace: "tailordb", from: 5, to: 0 }];
+    results.tailorDB.context.checkpointRepairs = [
+      {
+        namespace: "tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "htailordb",
+      },
+    ];
 
     const summary = printPlanResults(results, { dryRun: true });
 
@@ -862,7 +870,15 @@ describe("printPlanResults", () => {
 
   test("includes migration checkpoint repairs in human dry-run output", () => {
     const results = emptyResults();
-    results.tailorDB.context.checkpointRepairs = [{ namespace: "tailordb", from: 5, to: 0 }];
+    results.tailorDB.context.checkpointRepairs = [
+      {
+        namespace: "tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "htailordb",
+      },
+    ];
 
     printPlanResults(results, { dryRun: true });
 

@@ -10,6 +10,7 @@
  */
 
 import { z } from "zod";
+import { MIGRATION_HISTORY_ID_PATTERN } from "./types";
 import type {
   TypeSettingsPatch,
   SnapshotPermissionState,
@@ -53,6 +54,7 @@ import type {
   SnapshotGqlPermission,
   TailorDBSnapshotType,
   SchemaSnapshot,
+  RebaselineMarker,
   SnapshotPermissionOperand,
   SnapshotPermissionCondition,
 } from "./snapshot-types";
@@ -266,11 +268,18 @@ export const tailorDBSnapshotTypeSchema: z.ZodType<TailorDBSnapshotType> = z.loo
 // SchemaSnapshot
 // ============================================================================
 
+const rebaselineMarkerSchema: z.ZodType<RebaselineMarker> = z.looseObject({
+  historyId: z.string().regex(MIGRATION_HISTORY_ID_PATTERN),
+  replacedHistoryId: z.string().regex(MIGRATION_HISTORY_ID_PATTERN).nullable(),
+  replacedLatestMigration: z.number().int().min(0).max(9999),
+});
+
 export const schemaSnapshotSchema: z.ZodType<SchemaSnapshot> = z.looseObject({
   version: z.number(),
   namespace: z.string(),
   createdAt: z.string(),
   types: snapshotRecordSchema(tailorDBSnapshotTypeSchema),
+  rebaseline: rebaselineMarkerSchema.optional(),
 });
 
 // ============================================================================

@@ -18,8 +18,9 @@ import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
   formatMigrationNumber,
+  reconstructSnapshotFromMigrations,
 } from "./snapshot";
-import { MIGRATION_LABEL_KEY, sanitizeMigrationLabel } from "./types";
+import { MIGRATION_HISTORY_LABEL_KEY, MIGRATION_LABEL_KEY, sanitizeMigrationLabel } from "./types";
 
 export interface SetOptions {
   configPath?: string;
@@ -52,6 +53,8 @@ async function set(options: SetOptions): Promise<void> {
   // 4. Validate the local migration history and the requested number
   assertValidMigrationFiles(target.migrationsDir, targetNamespace);
   assertMigrationNumberExists(target.migrationsDir, migrationNumber);
+  const historyId = reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline
+    ?.historyId;
 
   // 5. Initialize client
   const accessToken = await loadAccessToken({
@@ -107,7 +110,10 @@ async function set(options: SetOptions): Promise<void> {
   // 9. Update migration label
   await writeMetadataLabels(client, {
     trn,
-    labels: { [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) },
+    labels: {
+      [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
+      ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
+    },
   });
 
   logger.success(

@@ -151,7 +151,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-Re-baselining removes migrations after 0000 from the working tree and resets the connected workspace checkpoint without changing its schema or data. Every environment must already have applied the latest migration before you run this command.
+Re-baselining removes migrations after 0000 from the working tree, records a new migration history ID, and resets the connected workspace checkpoint without changing its schema or data. Every environment must already have applied the latest migration before you run this command.
 
 #### tailordb migration script
 

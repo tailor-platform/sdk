@@ -181,10 +181,23 @@ describe("tailordb migration rebaseline", () => {
     expect(migrationDirectories()).toEqual(["0000", "2026", "fixtures"]);
     const baseline = JSON.parse(
       fs.readFileSync(path.join(state.migrationsDir, "0000", "schema.json"), "utf-8"),
-    ) as { version: number; types: Record<string, unknown> };
+    ) as {
+      version: number;
+      types: Record<string, unknown>;
+      rebaseline: {
+        historyId: string;
+        replacedHistoryId: string | null;
+        replacedLatestMigration: number;
+      };
+    };
     expect(baseline.version).toBe(2);
     expect(Object.keys(baseline.types).toSorted()).toEqual(["Post", "User"]);
     expect(baseline).toMatchObject({ namespace: "tailordb" });
+    expect(baseline.rebaseline).toEqual({
+      historyId: expect.stringMatching(/^h[a-z0-9_-]+$/),
+      replacedHistoryId: null,
+      replacedLatestMigration: 1,
+    });
     expect(fs.readFileSync(path.join(state.migrationsDir, "README.md"), "utf-8")).toBe(
       "migration notes",
     );
@@ -197,10 +210,67 @@ describe("tailordb migration rebaseline", () => {
     expect(fs.readFileSync(path.join(state.migrationsDir, "9999"), "utf-8")).toBe(
       "not a migration directory",
     );
+    expect(vi.mocked(process.stderr.write).mock.calls.flat().join("")).toContain(
+      "Committed migration files will remain in Git history. Preserve any uncommitted files before continuing.",
+    );
     expect(prompt.confirm).not.toHaveBeenCalled();
     expect(state.setMetadata).toHaveBeenCalledWith(
       expect.objectContaining({
-        labels: { "sdk-migration": "m0000", "sdk-name": "my-app" },
+        labels: {
+          "sdk-migration": "m0000",
+          "sdk-migration-history": baseline.rebaseline.historyId,
+          "sdk-name": "my-app",
+        },
+      }),
+    );
+  });
+
+  test("records the previous generation when re-baselining an existing rebaseline history", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+    fs.writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        ...schema,
+        rebaseline: {
+          historyId: "hprevious",
+          replacedHistoryId: null,
+          replacedLatestMigration: 7,
+        },
+      }),
+    );
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0001",
+          "sdk-migration-history": "hprevious",
+          "sdk-name": "my-app",
+        },
+      },
+    });
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(true);
+    const baseline = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as {
+      rebaseline: {
+        historyId: string;
+        replacedHistoryId: string | null;
+        replacedLatestMigration: number;
+      };
+    };
+    expect(baseline.rebaseline).toEqual({
+      historyId: expect.stringMatching(/^h[a-z0-9_-]+$/),
+      replacedHistoryId: "hprevious",
+      replacedLatestMigration: 1,
+    });
+    expect(baseline.rebaseline.historyId).not.toBe("hprevious");
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: expect.objectContaining({
+          "sdk-migration": "m0000",
+          "sdk-migration-history": baseline.rebaseline.historyId,
+        }),
       }),
     );
   });
@@ -261,6 +331,88 @@ describe("tailordb migration rebaseline", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
+  test("rejects an invalid connected workspace history marker", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-history": "INVALID!" },
+      },
+    });
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/invalid migration history marker/i);
+    expect(migrationDirectories()).toEqual(["0000", "0001"]);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("rejects a connected workspace from a different migration history", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+    fs.writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        ...schema,
+        rebaseline: {
+          historyId: "hcurrent",
+          replacedHistoryId: null,
+          replacedLatestMigration: 7,
+        },
+      }),
+    );
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0001", "sdk-migration-history": "hother" },
+      },
+    });
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/does not match the local migration history/i);
+    expect(migrationDirectories()).toEqual(["0000", "0001"]);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("rejects a connected workspace history change while waiting for confirmation", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+    fs.writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        ...schema,
+        rebaseline: {
+          historyId: "hcurrent",
+          replacedHistoryId: null,
+          replacedLatestMigration: 7,
+        },
+      }),
+    );
+    state.getMetadata
+      .mockResolvedValueOnce({
+        metadata: {
+          labels: { "sdk-migration": "m0001", "sdk-migration-history": "hcurrent" },
+        },
+      })
+      .mockResolvedValueOnce({
+        metadata: {
+          labels: { "sdk-migration": "m0001", "sdk-migration-history": "hcurrent" },
+        },
+      })
+      .mockResolvedValueOnce({
+        metadata: {
+          labels: { "sdk-migration": "m0001", "sdk-migration-history": "hother" },
+        },
+      });
+
+    const result = await runCommand(rebaselineCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/history changed while waiting for confirmation/i);
+    expect(migrationDirectories()).toEqual(["0000", "0001"]);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("does not change local or remote state when confirmation is declined", async () => {
     vi.mocked(prompt.confirm).mockResolvedValue(false);
 
@@ -316,6 +468,25 @@ describe("tailordb migration rebaseline", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
+  test("rejects migration script target changes while waiting for confirmation", async () => {
+    const scriptPath = path.join(state.migrationsDir, "0001", "migrate.ts");
+    const targetPath = path.join(path.dirname(state.migrationsDir), "migration-script.ts");
+    fs.rmSync(scriptPath);
+    fs.writeFileSync(targetPath, "export const version = 1;");
+    fs.symlinkSync(targetPath, scriptPath);
+    vi.mocked(prompt.confirm).mockImplementation(async () => {
+      fs.writeFileSync(targetPath, "export const version = 2;");
+      return true;
+    });
+
+    const result = await runCommand(rebaselineCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/migration files changed while waiting for confirmation/i);
+    expect(fs.readFileSync(targetPath, "utf-8")).toContain("version = 2");
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("rejects local type changes made while waiting for confirmation", async () => {
     vi.mocked(prompt.confirm).mockImplementation(async () => {
       state.localTypes = { User: parsedType("User") };
@@ -340,6 +511,20 @@ describe("tailordb migration rebaseline", () => {
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/specify namespace with --namespace/);
     expect(state.getMetadata).not.toHaveBeenCalled();
+  });
+
+  test("supports a migration directory configured through a symbolic link", async () => {
+    const actualMigrationsDir = state.migrationsDir;
+    const linkedMigrationsDir = path.join(path.dirname(actualMigrationsDir), "linked-migrations");
+    fs.symlinkSync(actualMigrationsDir, linkedMigrationsDir, "dir");
+    state.migrationsDir = linkedMigrationsDir;
+    mockConfig();
+
+    const result = await runCommand(rebaselineCommand, ["--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(migrationDirectories()).toEqual(["0000"]);
+    expect(state.setMetadata).toHaveBeenCalled();
   });
 
   test("keeps the activated baseline when the checkpoint update fails", async () => {

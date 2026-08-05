@@ -21,6 +21,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import {
   type PendingMigration,
+  MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
   sanitizeMigrationLabel,
@@ -246,6 +247,7 @@ async function executeSingleMigration(
  * @param {string} workspaceId - Workspace ID
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number to set
+ * @param historyId - Optional migration history generation to set atomically with the checkpoint
  * @returns {Promise<void>}
  */
 export async function updateMigrationLabel(
@@ -253,12 +255,16 @@ export async function updateMigrationLabel(
   workspaceId: string,
   namespace: string,
   migrationNumber: number,
+  historyId?: string,
 ): Promise<void> {
   const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
   await writeMetadataLabels(client, {
     trn,
-    labels: { [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) },
+    labels: {
+      [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
+      ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
+    },
   });
 }
 

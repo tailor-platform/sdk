@@ -229,6 +229,7 @@ export type {
   TailorDBSnapshotType,
   SchemaSnapshot,
   NormalizedSchemaSnapshot,
+  RebaselineMarker,
 } from "./snapshot-types";
 
 /**

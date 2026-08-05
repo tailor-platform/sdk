@@ -42,6 +42,7 @@ import {
 } from "./snapshot-manifest";
 import {
   handleOptionalToRequiredError,
+  MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_LABEL_KEY,
   sanitizeMigrationLabel,
 } from "./types";
@@ -424,6 +425,9 @@ async function sync(options: SyncOptions): Promise<void> {
     trn,
     labels: {
       [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(targetVersion),
+      ...(snapshot.rebaseline?.historyId
+        ? { [MIGRATION_HISTORY_LABEL_KEY]: snapshot.rebaseline.historyId }
+        : {}),
     },
   });
 

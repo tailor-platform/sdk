@@ -167,8 +167,20 @@ describe("confirmMigrationCheckpointRepairs", () => {
 
     await confirmMigrationCheckpointRepairs(
       [
-        { namespace: "analytics", from: 8, to: 0 },
-        { namespace: "tailordb", from: 5, to: 0 },
+        {
+          namespace: "analytics",
+          from: 8,
+          to: 0,
+          fromHistoryId: null,
+          toHistoryId: "hanalytics",
+        },
+        {
+          namespace: "tailordb",
+          from: 5,
+          to: 0,
+          fromHistoryId: null,
+          toHistoryId: "htailordb",
+        },
       ],
       false,
     );
@@ -189,7 +201,18 @@ describe("confirmMigrationCheckpointRepairs", () => {
     vi.mocked(prompt.confirm).mockResolvedValue(false);
 
     await expect(
-      confirmMigrationCheckpointRepairs([{ namespace: "tailordb", from: 5, to: 0 }], false),
+      confirmMigrationCheckpointRepairs(
+        [
+          {
+            namespace: "tailordb",
+            from: 5,
+            to: 0,
+            fromHistoryId: null,
+            toHistoryId: "htailordb",
+          },
+        ],
+        false,
+      ),
     ).rejects.toThrow(/Apply cancelled/);
   });
 });

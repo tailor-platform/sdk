@@ -1610,6 +1610,56 @@ describe("snapshot", () => {
       expect(loadSnapshot(filePath).version).toBe(version);
     });
 
+    test("loads a valid rebaseline history marker", () => {
+      const filePath = path.join(testDir, "rebaseline_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: SCHEMA_SNAPSHOT_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {},
+          rebaseline: {
+            historyId: "hcurrent",
+            replacedHistoryId: "hprevious",
+            replacedLatestMigration: 42,
+          },
+        }),
+      );
+
+      expect(loadSnapshot(filePath).rebaseline).toEqual({
+        historyId: "hcurrent",
+        replacedHistoryId: "hprevious",
+        replacedLatestMigration: 42,
+      });
+    });
+
+    test.each([
+      ["historyId", { historyId: "INVALID!", replacedHistoryId: null, replacedLatestMigration: 1 }],
+      [
+        "replacedHistoryId",
+        { historyId: "hcurrent", replacedHistoryId: "INVALID!", replacedLatestMigration: 1 },
+      ],
+      [
+        "replacedLatestMigration",
+        { historyId: "hcurrent", replacedHistoryId: null, replacedLatestMigration: 10_000 },
+      ],
+    ])("rejects an invalid rebaseline marker at %s", (field, rebaseline) => {
+      const filePath = path.join(testDir, `invalid_rebaseline_${field}_schema.json`);
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: SCHEMA_SNAPSHOT_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {},
+          rebaseline,
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).toThrow(field);
+    });
+
     test("rejects snapshot formats older than the supported window", () => {
       const version = 0;
       const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);

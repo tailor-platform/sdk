@@ -22,11 +22,11 @@ import {
   buildPreMigrationChangesMap,
   buildPreMigrationIndexChangesMap,
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
+import { fetchRemoteMigrationState } from "#/cli/commands/tailordb/migrate/remote-state";
 import {
   checkMigrationDiffs,
   formatMigrationCheckResults,
   formatRemoteVerificationResults,
-  getRemoteMigrationNumber,
   logRemoteDriftGuidance,
   toTailorDBDeployInput,
   verifyRemoteSchema,
@@ -251,8 +251,8 @@ export async function validateAndDetectMigrations(
 }
 
 /**
- * Force each namespace's `sdk-migration` label to the working tree's latest
- * migration number after a create-update apply.
+ * Reconcile each namespace's migration checkpoint and history generation to
+ * the working tree after a create-update apply.
  *
  * This records the initial baseline (`0000`), which is deployed via the normal
  * flow and never bumps the label itself, and keeps the label `<= working_tree_max`
@@ -272,13 +272,19 @@ async function reconcileMigrationLabels(
       continue;
     }
     const targetVersion = getLatestMigrationNumber(migrationsDir);
-    const currentVersion = await getRemoteMigrationNumber(client, workspaceId, namespace).catch(
-      () => null,
-    );
-    if (currentVersion === targetVersion) {
+    const historyId = reconstructSnapshotFromMigrations(migrationsDir, 0)?.rebaseline?.historyId;
+    const remoteState = await fetchRemoteMigrationState(
+      client,
+      resourceTrn(workspaceId, "tailordb", namespace),
+    ).catch(() => ({ number: null, historyId: null }));
+    const currentVersion = remoteState.number;
+    if (
+      currentVersion === targetVersion &&
+      (historyId === undefined || remoteState.historyId === historyId)
+    ) {
       continue;
     }
-    await updateMigrationLabel(client, workspaceId, namespace, targetVersion);
+    await updateMigrationLabel(client, workspaceId, namespace, targetVersion, historyId);
     const from = currentVersion === null ? "<unset>" : formatMigrationNumber(currentVersion);
     logger.info(
       `Migration label for namespace ${namespace} reconciled: ${from} → ${formatMigrationNumber(targetVersion)}.`,
@@ -351,7 +357,11 @@ async function validateTailorDBMigrationState(
     validation.checkpointRepairs.some(
       (repair) =>
         !approvedRepairs.some(
-          (approved) => approved.namespace === repair.namespace && approved.from === repair.from,
+          (approved) =>
+            approved.namespace === repair.namespace &&
+            approved.from === repair.from &&
+            approved.fromHistoryId === repair.fromHistoryId &&
+            approved.toHistoryId === repair.toHistoryId,
         ),
     );
   if (repairPlanChanged) {
@@ -400,7 +410,13 @@ export async function applyTailorDB(
       await validateTailorDBMigrationState(client, result);
 
     for (const repair of checkpointRepairs) {
-      await updateMigrationLabel(client, migrationContext.workspaceId, repair.namespace, repair.to);
+      await updateMigrationLabel(
+        client,
+        migrationContext.workspaceId,
+        repair.namespace,
+        repair.to,
+        repair.toHistoryId,
+      );
       logger.info(
         `Migration checkpoint for namespace ${repair.namespace} reset: ${formatMigrationNumber(repair.from)} → 0000.`,
       );
@@ -516,6 +532,7 @@ export async function applyTailorDB(
           migrationContext.workspaceId,
           migration.namespace,
           migration.number,
+          reconstructSnapshotFromMigrations(migration.migrationsDir, 0)?.rebaseline?.historyId,
         );
       }
 

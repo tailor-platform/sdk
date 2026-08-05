@@ -12,7 +12,10 @@ import {
   MIGRATE_FILE_NAME,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
-import { MIGRATION_LABEL_KEY } from "#/cli/commands/tailordb/migrate/types";
+import {
+  MIGRATION_HISTORY_LABEL_KEY,
+  MIGRATION_LABEL_KEY,
+} from "#/cli/commands/tailordb/migrate/types";
 import {
   detectPendingMigrations,
   updateMigrationLabel,
@@ -558,6 +561,25 @@ describe("migration", () => {
           "existing-label": "value",
           "another-label": "another-value",
           [MIGRATION_LABEL_KEY]: "m0003",
+        },
+      });
+    });
+
+    test("updates the migration checkpoint and history generation atomically", async () => {
+      const setMetadataMock = vi.fn();
+      const client = createMetadataClient(
+        { labels: { "existing-label": "value" } },
+        setMetadataMock,
+      );
+
+      await updateMigrationLabel(client, workspaceId, namespace, 0, "hcurrent");
+
+      expect(setMetadataMock).toHaveBeenCalledWith({
+        trn: expectedTrn,
+        labels: {
+          "existing-label": "value",
+          [MIGRATION_LABEL_KEY]: "m0000",
+          [MIGRATION_HISTORY_LABEL_KEY]: "hcurrent",
         },
       });
     });

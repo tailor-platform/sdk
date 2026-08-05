@@ -8,7 +8,7 @@
  */
 
 import { resourceTrn } from "#/cli/commands/deploy/label";
-import { fetchAllTolerant, getOrNull, type OperatorClient } from "#/cli/shared/client";
+import { fetchAllTolerant, type OperatorClient } from "#/cli/shared/client";
 import { logger } from "#/cli/shared/logger";
 import {
   hasChanges,
@@ -16,6 +16,7 @@ import {
   formatDiffSummary,
   type MigrationDiff,
 } from "./diff-calculator";
+import { fetchRemoteMigrationState } from "./remote-state";
 import {
   reconstructSnapshotFromMigrations,
   compareLocalTypesWithSnapshot,
@@ -30,11 +31,7 @@ import {
   type SnapshotSettings,
   type TailorDBSnapshotType,
 } from "./snapshot";
-import {
-  MIGRATION_LABEL_KEY,
-  parseMigrationLabelNumber,
-  type RemoteSchemaVerificationResult,
-} from "./types";
+import { type RemoteSchemaVerificationResult } from "./types";
 import type { TailorDBService } from "#/cli/services/tailordb/service";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
@@ -208,49 +205,6 @@ function deployComparableSnapshot(
   return { ...snapshot, types };
 }
 
-type RemoteMigrationNumberState = {
-  /** Whether the namespace metadata exists on the remote */
-  metadataExists: boolean;
-  /** Parsed migration number, or null when the label is unset or unparseable */
-  number: number | null;
-};
-
-async function getRemoteMigrationNumberState(
-  client: OperatorClient,
-  workspaceId: string,
-  namespace: string,
-): Promise<RemoteMigrationNumberState> {
-  // Only NotFound reads as "no migration state yet" (first apply); any other
-  // lookup failure propagates so it cannot silently skip remote verification.
-  const trn = resourceTrn(workspaceId, "tailordb", namespace);
-  const metadata = await getOrNull(async () => {
-    const { metadata } = await client.getMetadata({ trn });
-    return metadata;
-  });
-  if (!metadata) return { metadataExists: false, number: null };
-  const label = metadata.labels[MIGRATION_LABEL_KEY];
-  if (!label) return { metadataExists: true, number: null };
-  return {
-    metadataExists: true,
-    number: parseMigrationLabelNumber(label),
-  };
-}
-
-/**
- * Get the current migration number from remote metadata
- * @param {OperatorClient} client - Operator client instance
- * @param {string} workspaceId - Workspace ID
- * @param {string} namespace - TailorDB namespace
- * @returns {Promise<number | null>} Current migration number, or null if no migration label exists
- */
-export async function getRemoteMigrationNumber(
-  client: OperatorClient,
-  workspaceId: string,
-  namespace: string,
-): Promise<number | null> {
-  return (await getRemoteMigrationNumberState(client, workspaceId, namespace)).number;
-}
-
 /**
  * Verify remote schema matches the expected snapshot state
  * @param {OperatorClient} client - Operator client instance
@@ -271,11 +225,25 @@ export async function verifyRemoteSchema(
 
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     // Get current remote migration number
-    const { metadataExists, number: remoteMigrationNumber } = await getRemoteMigrationNumberState(
+    const remoteState = await fetchRemoteMigrationState(
       client,
-      workspaceId,
-      namespace,
+      resourceTrn(workspaceId, "tailordb", namespace),
     );
+    const { metadataExists, number: remoteMigrationNumber } = remoteState;
+
+    if (
+      remoteState.historyIdInvalid ||
+      (remoteMigrationNumber === null && remoteState.historyId !== null)
+    ) {
+      results.push({
+        namespace,
+        remoteMigrationNumber: remoteMigrationNumber ?? 0,
+        drifts: [],
+        hasDrift: false,
+        checkpointMissingLocal: true,
+      });
+      continue;
+    }
 
     // If no migration label exists, this is likely a first apply - skip verification
     // Remote verification only makes sense when there's an established migration history
@@ -291,10 +259,38 @@ export async function verifyRemoteSchema(
     }
 
     const latestMigrationNumber = getLatestMigrationNumber(migrationsDir);
+    const baselineSnapshot = reconstructSnapshotFromMigrations(migrationsDir, 0);
+    const rebaseline = baselineSnapshot?.rebaseline;
+    const historyMatchesCurrent = rebaseline
+      ? remoteState.historyId === rebaseline.historyId
+      : remoteState.historyId === null;
+    const historyMatchesReplaced = rebaseline
+      ? remoteState.historyId === rebaseline.replacedHistoryId
+      : false;
     const checkpointRepair =
-      remoteMigrationNumber > latestMigrationNumber
-        ? ({ from: remoteMigrationNumber, to: 0 } as const)
+      rebaseline &&
+      historyMatchesReplaced &&
+      remoteMigrationNumber === rebaseline.replacedLatestMigration
+        ? ({
+            from: remoteMigrationNumber,
+            to: 0,
+            fromHistoryId: remoteState.historyId,
+            toHistoryId: rebaseline.historyId,
+          } as const)
         : undefined;
+    const checkpointMissingLocal =
+      (!historyMatchesCurrent && !checkpointRepair) ||
+      (remoteMigrationNumber > latestMigrationNumber && !checkpointRepair);
+    if (checkpointMissingLocal) {
+      results.push({
+        namespace,
+        remoteMigrationNumber,
+        drifts: [],
+        hasDrift: false,
+        checkpointMissingLocal: true,
+      });
+      continue;
+    }
     const expectedMigrationNumber = checkpointRepair?.to ?? remoteMigrationNumber;
 
     // Reconstruct the snapshot that the remote schema must match.

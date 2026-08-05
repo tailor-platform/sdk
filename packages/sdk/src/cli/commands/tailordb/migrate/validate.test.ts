@@ -95,6 +95,22 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
   } as unknown as Awaited<ReturnType<typeof loadConfig>>);
 }
 
+function markHistoryAsRebaselined(): void {
+  const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+  fs.writeFileSync(
+    schemaPath,
+    JSON.stringify({
+      ...schema,
+      rebaseline: {
+        historyId: "htailordb",
+        replacedHistoryId: null,
+        replacedLatestMigration: 5,
+      },
+    }),
+  );
+}
+
 describe("tailordb migration validate", () => {
   let tmpDir: string;
 
@@ -259,6 +275,7 @@ describe("tailordb migration validate", () => {
   test("reports a repairable remote migration checkpoint as valid", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
+    markHistoryAsRebaselined();
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
@@ -276,12 +293,18 @@ describe("tailordb migration validate", () => {
       remoteMigrationNumber: 5,
       hasDrift: false,
       drifts: [],
-      checkpointRepair: { from: 5, to: 0 },
+      checkpointRepair: {
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "htailordb",
+      },
     });
   });
 
   test("explains that deploy will repair a checkpoint whose schema matches the baseline", async () => {
     using stderr = captureStderr();
+    markHistoryAsRebaselined();
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });

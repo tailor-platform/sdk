@@ -96,6 +96,35 @@ describe("tailordb migration set", () => {
     );
   });
 
+  test("sets the current migration history generation from a re-baselined snapshot", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+    fs.writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        ...schema,
+        rebaseline: {
+          historyId: "hcurrent",
+          replacedHistoryId: null,
+          replacedLatestMigration: 2,
+        },
+      }),
+    );
+
+    const result = await runCommand(setCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: {
+          "sdk-migration": "m0001",
+          "sdk-migration-history": "hcurrent",
+          "sdk-name": "my-app",
+        },
+      }),
+    );
+  });
+
   test("accepts 4-digit migration numbers", async () => {
     const result = await runCommand(setCommand, ["0001", "--yes"]);
 

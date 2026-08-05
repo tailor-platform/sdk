@@ -69,6 +69,7 @@ const snapshotFixtures = vi.hoisted(() => {
   });
 
   const typesByMigration: Record<number, unknown> = {
+    0: {},
     // Migration 1 adds a new unique index over (name, org).
     1: { User: userType({ name_org: { fields: ["name", "org"], unique: true } }) },
     // Migration 2 turns the existing name_idx into a unique index.

@@ -1609,7 +1609,14 @@ describe("applyTailorDB migration label reconciliation", () => {
     };
   }
 
-  function writeUserSchemaSnapshot(userType: TailorDBSnapshotType): void {
+  function writeUserSchemaSnapshot(
+    userType: TailorDBSnapshotType,
+    rebaseline?: {
+      historyId: string;
+      replacedHistoryId: string | null;
+      replacedLatestMigration: number;
+    },
+  ): void {
     fs.writeFileSync(
       path.join(tmpDir, "0000", "schema.json"),
       JSON.stringify({
@@ -1617,6 +1624,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         namespace: "test-tailordb",
         createdAt: new Date().toISOString(),
         types: { User: userType },
+        ...(rebaseline ? { rebaseline } : {}),
       }),
     );
   }
@@ -1772,7 +1780,11 @@ describe("applyTailorDB migration label reconciliation", () => {
   test("plans a checkpoint reset when the remote schema matches the local baseline", async () => {
     using stderr = captureStderr();
     const userType = userSnapshotType();
-    writeUserSchemaSnapshot(userType);
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
     const planResult = planWithDeployDerivedSettings(userType);
     const client = schemaVerificationClient(unchangedRemoteSettings());
     vi.mocked(client.getMetadata).mockResolvedValue({
@@ -1781,7 +1793,15 @@ describe("applyTailorDB migration label reconciliation", () => {
 
     const result = await runValidation(client, planResult);
 
-    expect(result.checkpointRepairs).toEqual([{ namespace: "test-tailordb", from: 5, to: 0 }]);
+    expect(result.checkpointRepairs).toEqual([
+      {
+        namespace: "test-tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "hcurrent",
+      },
+    ]);
     expect(stderr.output).toContain("will be reset to 0000");
     expect(client.listTailorDBTypes).toHaveBeenCalled();
     expect(client.setMetadata).not.toHaveBeenCalled();
@@ -1790,7 +1810,11 @@ describe("applyTailorDB migration label reconciliation", () => {
   test("rejects a missing remote checkpoint when the remote schema differs from baseline", async () => {
     using stderr = captureStderr();
     const userType = userSnapshotType();
-    writeUserSchemaSnapshot(userType);
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
     const planResult = planWithDeployDerivedSettings(userType);
     const client = schemaVerificationClient(unchangedRemoteSettings());
     vi.mocked(client.getMetadata).mockResolvedValue({
@@ -1808,6 +1832,90 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
+  test("does not repair a markerless history even when the remote schema matches baseline", async () => {
+    using stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0005" } },
+    } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote migration checkpoint verification failed",
+    );
+    expect(stderr.output).toContain("not in the local migration history");
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("does not repair a checkpoint that already belongs to the current history", async () => {
+    using stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0005", "sdk-migration-history": "hcurrent" },
+      },
+    } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote migration checkpoint verification failed",
+    );
+    expect(stderr.output).toContain("not in the local migration history");
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("rejects an invalid remote migration history marker", async () => {
+    using stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0000", "sdk-migration-history": "INVALID!" },
+      },
+    } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote migration checkpoint verification failed",
+    );
+    expect(stderr.output).toContain("not in the local migration history");
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("rejects a remote history marker whose checkpoint is missing", async () => {
+    using stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration-history": "hprevious" } },
+    } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote migration checkpoint verification failed",
+    );
+    expect(stderr.output).toContain("not in the local migration history");
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("resets a confirmed checkpoint to baseline before applying post-rebaseline migrations", async () => {
     const userType = userSnapshotType();
     const userWithEmail: TailorDBSnapshotType = {
@@ -1817,7 +1925,11 @@ describe("applyTailorDB migration label reconciliation", () => {
         email: { type: "string", required: false },
       },
     };
-    writeUserSchemaSnapshot(userType);
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
     const migrationDir = path.join(tmpDir, "0001");
     fs.mkdirSync(migrationDir, { recursive: true });
     fs.writeFileSync(
@@ -1845,7 +1957,15 @@ describe("applyTailorDB migration label reconciliation", () => {
       },
     ];
     planResult.context.executorUsedTypes = new Set();
-    planResult.context.checkpointRepairs = [{ namespace: "test-tailordb", from: 5, to: 0 }];
+    planResult.context.checkpointRepairs = [
+      {
+        namespace: "test-tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "hcurrent",
+      },
+    ];
     planResult.context.migrationFileState = captureMigrationFileState(
       planResult.context.namespacesWithMigrations,
     );
@@ -1860,32 +1980,91 @@ describe("applyTailorDB migration label reconciliation", () => {
       .mocked(client.setMetadata)
       .mock.calls.map((call) => call[0].labels?.["sdk-migration"]);
     expect(writtenCheckpoints).toEqual(["m0000", "m0001"]);
+    expect(vi.mocked(client.setMetadata).mock.calls[0]?.[0].labels).toMatchObject({
+      "sdk-migration-history": "hcurrent",
+    });
   });
 
   test("rejects an unconfirmed checkpoint number that appears after planning", async () => {
     const userType = userSnapshotType();
-    writeUserSchemaSnapshot(userType);
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
     const planResult = planWithDeployDerivedSettings(userType);
-    planResult.context.checkpointRepairs = [{ namespace: "test-tailordb", from: 5, to: 0 }];
+    planResult.context.checkpointRepairs = [
+      {
+        namespace: "test-tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "hcurrent",
+      },
+    ];
     const client = schemaVerificationClient(unchangedRemoteSettings());
     vi.mocked(client.getMetadata).mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0006" } },
     } as never);
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
-      /repair changed after deployment planning/i,
+      "Remote migration checkpoint verification failed",
+    );
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("rejects when the remote migration history changes after planning", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
+    const planResult = planWithDeployDerivedSettings(userType);
+    planResult.context.checkpointRepairs = [
+      {
+        namespace: "test-tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "hcurrent",
+      },
+    ];
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: {
+        labels: { "sdk-migration": "m0005", "sdk-migration-history": "hother" },
+      },
+    } as never);
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      "Remote migration checkpoint verification failed",
     );
     expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("rejects when a confirmed checkpoint repair disappears after planning", async () => {
     const userType = userSnapshotType();
-    writeUserSchemaSnapshot(userType);
+    writeUserSchemaSnapshot(userType, {
+      historyId: "hcurrent",
+      replacedHistoryId: null,
+      replacedLatestMigration: 5,
+    });
     const planResult = planWithDeployDerivedSettings(userType);
-    planResult.context.checkpointRepairs = [{ namespace: "test-tailordb", from: 5, to: 0 }];
+    planResult.context.checkpointRepairs = [
+      {
+        namespace: "test-tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "hcurrent",
+      },
+    ];
     const client = schemaVerificationClient(unchangedRemoteSettings());
     vi.mocked(client.getMetadata).mockResolvedValue({
-      metadata: { labels: { "sdk-migration": "m0000" } },
+      metadata: {
+        labels: { "sdk-migration": "m0000", "sdk-migration-history": "hcurrent" },
+      },
     } as never);
 
     await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(

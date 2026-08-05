@@ -19,7 +19,7 @@ import { PluginManager } from "#/plugin/manager";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { formatMigrationDiff, hasChanges } from "./diff-calculator";
 import { captureFileState, captureMigrationFileState } from "./file-state";
-import { fetchRemoteMigrationNumber } from "./remote-state";
+import { fetchRemoteMigrationState } from "./remote-state";
 import {
   formatRemoteVerificationResults,
   toTailorDBDeployInput,
@@ -40,8 +40,10 @@ import {
   SCHEMA_FILE_NAME,
   SCHEMA_SNAPSHOT_VERSION,
   type NormalizedSchemaSnapshot,
+  type RebaselineMarker,
 } from "./snapshot";
 import { generateSchemaFile } from "./template-generator";
+import { createMigrationHistoryId } from "./types";
 
 export interface RebaselineOptions {
   configPath?: string;
@@ -62,16 +64,18 @@ async function activateBaseline(
   migrationsDir: string,
   snapshot: NormalizedSchemaSnapshot,
   namespace: string,
+  rebaseline: RebaselineMarker,
 ): Promise<void> {
-  const parentDir = path.dirname(migrationsDir);
-  const baseName = path.basename(migrationsDir);
+  const resolvedMigrationsDir = await fsPromises.realpath(migrationsDir);
+  const parentDir = path.dirname(resolvedMigrationsDir);
+  const baseName = path.basename(resolvedMigrationsDir);
   const stagingDir = await fsPromises.mkdtemp(path.join(parentDir, `.${baseName}-rebaseline-`));
   const backupDir = `${stagingDir}-previous`;
   let movedLiveDirectory = false;
   let activatedStagingDirectory = false;
 
   try {
-    await fsPromises.cp(migrationsDir, stagingDir, { recursive: true });
+    await fsPromises.cp(resolvedMigrationsDir, stagingDir, { recursive: true });
     for (const entry of await fsPromises.readdir(stagingDir, { withFileTypes: true })) {
       if (!entry.isDirectory() || !MIGRATION_NUMBER_PATTERN.test(entry.name)) continue;
       const entryPath = path.join(stagingDir, entry.name);
@@ -84,17 +88,18 @@ async function activateBaseline(
       namespace,
       version: SCHEMA_SNAPSHOT_VERSION,
       createdAt: new Date().toISOString(),
+      rebaseline,
     };
     const result = await generateSchemaFile(stagedSnapshot, stagingDir, 0);
     loadSnapshot(result.filePath);
 
-    await fsPromises.rename(migrationsDir, backupDir);
+    await fsPromises.rename(resolvedMigrationsDir, backupDir);
     movedLiveDirectory = true;
     try {
-      await fsPromises.rename(stagingDir, migrationsDir);
+      await fsPromises.rename(stagingDir, resolvedMigrationsDir);
       activatedStagingDirectory = true;
     } catch (error) {
-      await fsPromises.rename(backupDir, migrationsDir);
+      await fsPromises.rename(backupDir, resolvedMigrationsDir);
       movedLiveDirectory = false;
       throw error;
     }
@@ -112,7 +117,7 @@ async function activateBaseline(
       await fsPromises.rm(stagingDir, { recursive: true, force: true });
     }
     if (!activatedStagingDirectory && movedLiveDirectory && fs.existsSync(backupDir)) {
-      await fsPromises.rename(backupDir, migrationsDir);
+      await fsPromises.rename(backupDir, resolvedMigrationsDir);
     }
   }
 }
@@ -136,6 +141,8 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     );
   }
   const latestMigration = getLatestMigrationNumber(target.migrationsDir);
+  const currentHistoryId =
+    reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline?.historyId ?? null;
   const initialFileState = captureMigrationFileState([target])[target.namespace];
 
   const pluginManager = plugins.length > 0 ? new PluginManager(plugins) : undefined;
@@ -183,15 +190,31 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     profile: options.profile,
   });
 
-  const assertConnectedWorkspaceReady = async (): Promise<void> => {
-    const remoteMigration = await fetchRemoteMigrationNumber(
+  const assertConnectedWorkspaceReady = async (
+    expectedHistoryId: string | null,
+    phase: "initial" | "confirmation",
+  ): Promise<void> => {
+    const remoteState = await fetchRemoteMigrationState(
       client,
       resourceTrn(workspaceId, "tailordb", target.namespace),
     );
+    const remoteMigration = remoteState.number;
     if (remoteMigration !== latestMigration) {
       const actual = remoteMigration === null ? "<unset>" : formatMigrationNumber(remoteMigration);
       throw new Error(
         `The connected workspace must be at the latest migration ${formatMigrationNumber(latestMigration)} before re-baselining; current checkpoint is ${actual}.`,
+      );
+    }
+    if (remoteState.historyIdInvalid) {
+      throw new Error(
+        "Refusing to re-baseline: the connected workspace has an invalid migration history marker.",
+      );
+    }
+    if (remoteState.historyId !== expectedHistoryId) {
+      throw new Error(
+        phase === "confirmation"
+          ? "The connected workspace migration history changed while waiting for confirmation. Run the command again."
+          : "Refusing to re-baseline: the connected workspace does not match the local migration history.",
       );
     }
 
@@ -215,14 +238,16 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     }
   };
 
-  await assertConnectedWorkspaceReady();
+  await assertConnectedWorkspaceReady(currentHistoryId, "initial");
 
   logger.newline();
   logger.warn(`This will replace the migration history for ${styles.bold(target.namespace)}.`);
   logger.log(`  Latest migration: ${formatMigrationNumber(latestMigration)}`);
   logger.log("  New history: 0000/schema.json only");
   logger.log("  migrate.ts and db.ts files will disappear from the working tree.");
-  logger.log("  Git history will continue to retain the removed files.");
+  logger.log(
+    "  Committed migration files will remain in Git history. Preserve any uncommitted files before continuing.",
+  );
   logger.log("  Every other environment must already be at the latest migration.");
   logger.log("  The connected workspace checkpoint will be reset to 0000.");
   logger.newline();
@@ -249,11 +274,22 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     throw new Error("Local TailorDB type or config files changed. Run the command again.");
   }
   assertLocalTypesReady();
-  await assertConnectedWorkspaceReady();
+  await assertConnectedWorkspaceReady(currentHistoryId, "confirmation");
 
-  await activateBaseline(target.migrationsDir, latestSnapshot, target.namespace);
+  const rebaselineMarker: RebaselineMarker = {
+    historyId: createMigrationHistoryId(),
+    replacedHistoryId: currentHistoryId,
+    replacedLatestMigration: latestMigration,
+  };
+  await activateBaseline(target.migrationsDir, latestSnapshot, target.namespace, rebaselineMarker);
   try {
-    await updateMigrationLabel(client, workspaceId, target.namespace, 0);
+    await updateMigrationLabel(
+      client,
+      workspaceId,
+      target.namespace,
+      0,
+      rebaselineMarker.historyId,
+    );
   } catch (error) {
     throw new Error(
       "The local migration history was re-baselined, but the connected workspace checkpoint could not be updated. Run 'tailor tailordb migration set 0' or deploy with schema checks enabled after resolving the connection error.",
@@ -269,7 +305,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
 export const rebaselineCommand = defineAppCommand({
   name: "rebaseline",
   description: "Collapse the full migration history into a new 0000 baseline.",
-  notes: `Re-baselining removes migrations after 0000 from the working tree and resets the connected workspace checkpoint without changing its schema or data. Every environment must already have applied the latest migration before you run this command.`,
+  notes: `Re-baselining removes migrations after 0000 from the working tree, records a new migration history ID, and resets the connected workspace checkpoint without changing its schema or data. Every environment must already have applied the latest migration before you run this command.`,
   args: z.strictObject({
     ...deploymentArgs,
     ...confirmationArgs,
