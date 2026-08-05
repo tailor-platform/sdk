@@ -198,15 +198,7 @@ export async function backfillSeedIds(
 }
 
 async function countRowsMissingId(jsonlPath: string): Promise<number> {
-  let content: string;
-  try {
-    content = await readFile(jsonlPath, "utf-8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return 0;
-    }
-    throw error;
-  }
+  const content = await readFile(jsonlPath, "utf-8");
 
   let missing = 0;
   for (const line of content.split("\n")) {
