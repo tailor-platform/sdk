@@ -285,6 +285,22 @@ describe("tailordb migration rebaseline", () => {
     expect(state.setMetadata).not.toHaveBeenCalled();
   });
 
+  test("rejects orphaned migration artifacts added while waiting for confirmation", async () => {
+    vi.mocked(prompt.confirm).mockImplementation(async () => {
+      const orphanDir = path.join(state.migrationsDir, "0005");
+      fs.mkdirSync(orphanDir);
+      fs.writeFileSync(path.join(orphanDir, "migrate.ts"), "export {};");
+      return true;
+    });
+
+    const result = await runCommand(rebaselineCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/migration files changed while waiting for confirmation/i);
+    expect(migrationDirectories()).toEqual(["0000", "0001", "0005"]);
+    expect(state.setMetadata).not.toHaveBeenCalled();
+  });
+
   test("rejects local type changes made while waiting for confirmation", async () => {
     vi.mocked(prompt.confirm).mockImplementation(async () => {
       state.localTypes = { User: parsedType("User") };

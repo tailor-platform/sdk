@@ -1,9 +1,24 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
-import { formatMigrationNumber, getMigrationFilePath, getMigrationFiles } from "./snapshot";
+import { formatMigrationNumber, getMigrationFilePath, MIGRATION_NUMBER_PATTERN } from "./snapshot";
 import type { NamespaceWithMigrations } from "./config";
 
 const MIGRATION_FILE_KINDS = ["schema", "diff", "migrate", "db"] as const;
+
+function getMigrationArtifactNumbers(migrationsDir: string): number[] {
+  if (!fs.existsSync(migrationsDir)) return [];
+
+  return fs
+    .readdirSync(migrationsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && MIGRATION_NUMBER_PATTERN.test(entry.name))
+    .map((entry) => Number.parseInt(entry.name, 10))
+    .filter((migrationNumber) =>
+      MIGRATION_FILE_KINDS.some((kind) =>
+        fs.existsSync(getMigrationFilePath(migrationsDir, migrationNumber, kind)),
+      ),
+    )
+    .toSorted((a, b) => a - b);
+}
 
 /**
  * Capture an exact set of input files.
@@ -38,9 +53,7 @@ export function captureMigrationFileState(
     a.namespace.localeCompare(b.namespace),
   )) {
     const hash = createHash("sha256");
-    const migrationNumbers = [
-      ...new Set(getMigrationFiles(migrationsDir).map(({ number }) => number)),
-    ].toSorted((a, b) => a - b);
+    const migrationNumbers = getMigrationArtifactNumbers(migrationsDir);
     for (const migrationNumber of migrationNumbers) {
       for (const kind of MIGRATION_FILE_KINDS) {
         const filePath = getMigrationFilePath(migrationsDir, migrationNumber, kind);

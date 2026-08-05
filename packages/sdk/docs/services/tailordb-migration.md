@@ -342,7 +342,7 @@ Then re-baseline one namespace:
 tailor tailordb migration rebaseline --namespace tailordb
 ```
 
-The command validates the migration files, verifies that replaying the latest migration exactly reproduces the local types, and checks that the connected workspace is at that latest migration with no schema drift. After confirmation, it atomically replaces the local history with the reconstructed baseline and resets the connected workspace's `sdk-migration` label to `0000`. Use `--yes` only after arranging the same operational preconditions in non-interactive automation.
+The command validates the migration files, verifies that replaying the latest migration exactly reproduces the local types, and checks that the connected workspace is at that latest migration with no schema drift. After confirmation, it replaces the local history with the reconstructed baseline and resets the connected workspace's `sdk-migration` label to `0000`. Use `--yes` only after arranging the same operational preconditions in non-interactive automation.
 
 Commit the resulting `migrations/` change before generating any new migrations. For another environment still carrying the old checkpoint, the next `tailor deploy` checks whether its remote schema exactly matches the new `0000`. If it does, deploy offers to reset only the checkpoint label to `0000` and then applies any later local migrations. If the schema differs, deploy stops with the normal drift guidance instead of changing the label.
 
