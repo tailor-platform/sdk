@@ -242,10 +242,54 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 | Add type                          | No        | No                | Schema change only                                                                                                                                                                                                                     |
 | Remove type                       | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the type leaves the active schema. The type stays readable from `migrate.ts` during Pre-migration.            |
 | Change foreign key target type    | Yes       | Yes               | Script updates references to the new target                                                                                                                                                                                            |
-| Change field type (verified pair) | Yes       | Yes               | In-place for `uuid` → `string`, `enum` → `string`, `decimal` → `string`, and `integer` → `float`; review the generated normalization TODO                                                                                              |
+| Change field type (verified pair) | Yes       | Yes               | In-place for `uuid` → `string`, `enum` → `string`, `decimal` → `string`, and `integer` → `float`; review the generated normalization scaffold and customize it only when existing values need transformation                           |
 | Change field type (other pair)    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                  |
 | Change array → single value       | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                  |
 | Change single value → array       | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                  |
+
+### Generated normalization script for field type changes
+
+For example, changing `User.age` from `integer` to `float` generates a `migrate.ts` that scans non-null values in batches of 100:
+
+```typescript
+import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  // Normalize User.age from integer to float while the previous type is still active
+  {
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
+        .selectFrom("User")
+        .select(["id", "age"])
+        .where("age", "is not", null)
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        // TODO: Normalize this value to a representation accepted by the active integer type and castable to float.
+        const sourceValue = row.age;
+        if (sourceValue === null) continue;
+        const normalizedValue = sourceValue;
+        if (Object.is(normalizedValue, sourceValue)) continue;
+        await trx
+          .updateTable("User")
+          .set({ ["age"]: normalizedValue })
+          .where("id", "=", row.id)
+          .execute();
+      }
+      lastId = rows[rows.length - 1]!.id;
+    }
+  }
+}
+```
+
+The generated `normalizedValue = sourceValue` is an identity transformation, so it does not write any rows. Leave it unchanged when the existing values are already suitable for the target type. If values need application-specific normalization, replace that expression while keeping the result valid for both the active source type and the target type. The source field contract remains active until the script finishes; for example, an `integer` → `float` script cannot write fractional values during this phase.
 
 ### 3-step migration for unsupported changes
 
