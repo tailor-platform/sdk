@@ -47,7 +47,7 @@ function isBindingReference(
   );
 }
 
-export function variableInitializer(
+function variableInitializer(
   context: Rule.RuleContext,
   node: AstNode | null | undefined,
 ): AstNode | null {
