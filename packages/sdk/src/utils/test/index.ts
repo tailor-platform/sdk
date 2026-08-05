@@ -4,16 +4,33 @@ import type { TailorField } from "#/configure/types/type";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 /**
+ * Options for {@link createTailorDBHook}.
+ */
+export type CreateTailorDBHookOptions = {
+  /**
+   * Run the type's `validate` and throw on the first issue it reports. Turn it
+   * off to compute the create-time values of a record that is not complete yet.
+   * Defaults to `true`.
+   */
+  validate?: boolean;
+};
+
+/**
  * Creates a hook function that processes TailorDB type fields
  * - Uses existing id from data if provided, otherwise generates UUID for id fields
  * - Recursively processes nested types
  * - Executes hooks.create for fields with create hooks
  * @template T - The output type of the hook function
  * @param type - TailorDB type definition
+ * @param options - Hook options
  * @returns A function that transforms input data according to field hooks
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
+export function createTailorDBHook<T extends TailorDBType<any, any>>(
+  type: T,
+  options: CreateTailorDBHookOptions = {},
+) {
+  const { validate = true } = options;
   return (data: unknown, now: Date = new Date()) => {
     const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : undefined;
     const hooked = Object.entries(type.fields).reduce(
@@ -24,7 +41,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
           hooked[key] = obj?.[key] ?? crypto.randomUUID();
         } else if (field.type === "nested") {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const nestedHook = createTailorDBHook({ fields: field.fields } as any);
+          const nestedHook = createTailorDBHook({ fields: field.fields } as any, options);
           if (field.metadata.array) {
             const nestedValue = obj?.[key];
             hooked[key] = Array.isArray(nestedValue)
@@ -75,7 +92,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
     }
 
     // oxlint-disable-next-line typescript/no-unnecessary-condition -- metadata absent in recursive nested calls
-    if (type.metadata?.typeValidate) {
+    if (validate && type.metadata?.typeValidate) {
       const { id: _id, ...newRecord } = hooked;
       // oxlint-disable-next-line typescript/no-unsafe-function-type
       (type.metadata.typeValidate as Function)(

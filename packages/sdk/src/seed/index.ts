@@ -175,7 +175,12 @@ function ownValue(row: Record<string, unknown>, field: string): unknown {
 }
 
 function isBlank(value: unknown): boolean {
-  return value === undefined || value === null;
+  if (value === undefined || value === null) {
+    return true;
+  }
+  // A nested field the row never had comes back as an object the hook built out
+  // of nothing, and writing `{}` into the line is not filling anything in.
+  return typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0;
 }
 
 /** A JSONL line, kept as text so an untouched line is written back verbatim. */
@@ -286,6 +291,9 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
     hooks.push({ table, hook });
   }
 
+  // Every line is decided before any file is written, so a hook that throws on
+  // one table cannot leave another one already rewritten.
+  const writes: { file: string; content: string }[] = [];
   for (const { table, hook } of hooks) {
     const file = join(dataDir, `${table}.jsonl`);
     const lines = splitLines(await readFile(file, "utf-8"));
@@ -322,8 +330,12 @@ export async function fillSeedData(options: FillSeedDataOptions): Promise<FillSe
     if (count === 0) {
       continue;
     }
-    await writeFile(file, lines.map((line) => `${line.text}${line.eol}`).join(""));
+    writes.push({ file, content: lines.map((line) => `${line.text}${line.eol}`).join("") });
     filled.push({ table, file, fields: [...written], count });
+  }
+
+  for (const { file, content } of writes) {
+    await writeFile(file, content);
   }
 
   const unproducedFields = fields.filter((field) => !producedFields.has(field));

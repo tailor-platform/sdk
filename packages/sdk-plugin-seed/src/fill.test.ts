@@ -26,19 +26,28 @@ import { db, t } from "${sdkUrls.root}";
 import { defineSchema } from "${sdkUrls.seed}";
 import { createStandardSchema, createTailorDBHook } from "${sdkUrls.test}";
 
-const type = db.table("${typeName}", "${typeName}", {
-  name: db.string(),
-  serialNumber: db.int().serial({ start: 1 }),
-  ...db.fields.timestamps(),
-});
+const type = db
+  .table("${typeName}", "${typeName}", {
+    name: db.string(),
+    serialNumber: db.int().serial({ start: 1 }),
+    profile: db.object({ nickname: db.string({ optional: true }) }, { optional: true }),
+    ...db.fields.timestamps(),
+  })
+  .validate(({ newRecord }, issues) => {
+    if (!newRecord.name) {
+      issues("name", "Name is required");
+    }
+  });
 
 const schemaType = t.object({
   ...type.pickFields(["id", "createdAt", "updatedAt"], { optional: true }),
   ...type.omitFields(["id", "createdAt", "updatedAt", "serialNumber"]),
 });
 
-export const hook = createTailorDBHook(type);
-export const schema = defineSchema(createStandardSchema(schemaType, hook));
+export const hook = createTailorDBHook(type, { validate: false });
+export const schema = defineSchema(
+  createStandardSchema(schemaType, createTailorDBHook(type)),
+);
 `;
 }
 
@@ -212,6 +221,27 @@ describe("fillSeedData", () => {
     // reached first, nothing is written once any schema file is stale.
     await expect(readFile(widgetPath, "utf-8")).resolves.toBe(widgetBefore);
     expect((await readRows(stalePath))[0]).not.toHaveProperty("id");
+  });
+
+  test("fills a row the type's own validate would reject", async () => {
+    // The type requires `name`; this row has none, which is exactly the state
+    // the fill exists to get ids into.
+    const jsonlPath = await writeTable("Widget", ['{"note":"no name yet"}']);
+
+    const result = await fillSeedData({ path: dataDir });
+
+    expect(result.filled).toEqual([{ table: "Widget", file: jsonlPath, fields: ["id"], count: 1 }]);
+    expect(uuid.safeParse((await readRows(jsonlPath))[0]?.id).success).toBe(true);
+  });
+
+  test("does not write an empty object for a nested field the row never had", async () => {
+    const jsonlPath = await writeTable("Widget", ['{"name":"first"}']);
+
+    const result = await fillSeedData({ path: dataDir, fields: ["id", "profile"] });
+
+    expect(result.filled).toEqual([{ table: "Widget", file: jsonlPath, fields: ["id"], count: 1 }]);
+    expect(result.output).toContain("No seed data produces a value for: profile");
+    expect(await readRows(jsonlPath)).toEqual([{ id: expect.any(String), name: "first" }]);
   });
 
   test("fills only the named file when given a .jsonl path", async () => {

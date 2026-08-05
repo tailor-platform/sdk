@@ -23,4 +23,6 @@ Only the named fields are written, and only into a row that has no value for the
 
 The generated seed schema files now export the type's create hook, which is where the values come from. Run `tailor generate` after upgrading; until then `tailor seed fill` reports which file needs regenerating.
 
+`createTailorDBHook` from `@tailor-platform/sdk/test` takes a `validate` option, so it can compute the create-time values of a record that is not complete yet instead of throwing on the type's own `validate`.
+
 The same operation is available as `fillSeedData` from `@tailor-platform/sdk/seed`.
