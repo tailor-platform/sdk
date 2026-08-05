@@ -222,7 +222,7 @@ export async function main(trx: Transaction): Promise<void> {
 
 The `where("role", "is", null)` guard keeps the script idempotent — rows that already have a value are untouched if the script re-runs.
 
-Complete scripts for other breaking-change patterns live in the repository's [migration fixture templates](https://github.com/tailor-platform/sdk/tree/main/example/tests/migration-fixtures/templates): backfilling fields that become required and migrating rows off a removed enum value ([0005](https://github.com/tailor-platform/sdk/blob/main/example/tests/migration-fixtures/templates/0005/migrate.ts)), and de-duplicating values before a unique constraint is added ([0006](https://github.com/tailor-platform/sdk/blob/main/example/tests/migration-fixtures/templates/0006/migrate.ts)).
+Reference scripts for other breaking-change patterns live in the repository's [migration fixture templates](https://github.com/tailor-platform/sdk/tree/main/example/tests/migration-fixtures/templates): backfilling fields that become required and migrating rows off a removed enum value ([0005](https://github.com/tailor-platform/sdk/blob/main/example/tests/migration-fixtures/templates/0005/migrate.ts)), and de-duplicating values before a unique constraint is added ([0006](https://github.com/tailor-platform/sdk/blob/main/example/tests/migration-fixtures/templates/0006/migrate.ts)). They show the shape of each migration, not drop-in logic — adapt them to your data (the suffix strategy in `0006`, for example, assumes the suffixed names are not already taken).
 
 **Accessing environment variables**
 
@@ -399,7 +399,7 @@ When your branch and main each generated the same number, merging or rebasing st
 3. **Finish the rebase or merge, then re-run `migration generate`.** With main's migration now part of local history, the diff is computed against the correct base — including main's changes — and your migration lands as the next number (`0006`).
 4. **Port your script.** Copy the logic saved in step 1 into the newly scaffolded `0006/migrate.ts`. For a warning-tier change, `migration generate` does not scaffold a script — recreate it first with `tailor tailordb migration script 0006`.
 
-**When a plain rename is enough.** If the two migrations touch disjoint types and fields, renaming your directory to the next free number (keeping main's `0005/`) can be acceptable. Run `tailor tailordb migration validate` after the rename: if it reports a mismatch, the migrations were not disjoint — discard the rename and re-generate as above. A passing check covers only the schema history, not your script: `migrate.ts` now runs after main's migration, so confirm it does not read types or fields that migration removes or changes — when in doubt, re-generate.
+**When a plain rename is enough.** If the two migrations touch disjoint types and fields, renaming your directory to the next free number (keeping main's `0005/`) can be acceptable. Run `tailor tailordb migration validate` after the rename: if it reports a mismatch, the migrations were not disjoint — discard the rename and re-generate as above. A passing check covers only the schema history, not your script: `migrate.ts` now runs after main's migration, so confirm it does not read or write types that migration touches — when in doubt, re-generate.
 
 ### CI / CD
 
