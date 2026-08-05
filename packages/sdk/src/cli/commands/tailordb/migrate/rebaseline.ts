@@ -12,6 +12,7 @@ import { initOperatorClient } from "#/cli/shared/client";
 import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
+import { formatNextAction } from "#/cli/shared/errors";
 import { logger, styles } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
@@ -132,12 +133,16 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     getNamespacesWithMigrations(config, configDir),
     options.namespace,
   );
+  const generateCommand = formatNextAction({
+    command: "tailor",
+    args: ["tailordb", "migration", "generate", "--config", config.path],
+  });
 
   assertValidMigrationFiles(target.migrationsDir, target.namespace);
   const latestSnapshot = reconstructSnapshotFromMigrations(target.migrationsDir);
   if (!latestSnapshot) {
     throw new Error(
-      `No migration history found for namespace "${target.namespace}". Run 'tailor tailordb migration generate' first.`,
+      `No migration history found for namespace "${target.namespace}". Run ${generateCommand} first.`,
     );
   }
   const latestMigration = getLatestMigrationNumber(target.migrationsDir);
@@ -172,7 +177,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
       );
       logger.log(formatMigrationDiff(localDiff));
       throw new Error(
-        "Refusing to re-baseline: the migration history must reproduce the current local schema. Run 'tailor tailordb migration generate' first.",
+        `Refusing to re-baseline: the migration history must reproduce the current local schema. Run ${generateCommand} first.`,
       );
     }
   };
@@ -188,6 +193,29 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
   const workspaceId = await loadWorkspaceId({
     workspaceId: options.workspaceId,
     profile: options.profile,
+  });
+  const remoteContextArgs = [
+    "--config",
+    config.path,
+    "--workspace-id",
+    workspaceId,
+    ...(options.profile ? ["--profile", options.profile] : []),
+  ];
+  const setBaselineCommand = formatNextAction({
+    command: "tailor",
+    args: [
+      "tailordb",
+      "migration",
+      "set",
+      "0",
+      "--namespace",
+      target.namespace,
+      ...remoteContextArgs,
+    ],
+  });
+  const deployCommand = formatNextAction({
+    command: "tailor",
+    args: ["deploy", ...remoteContextArgs],
   });
 
   const assertConnectedWorkspaceReady = async (
@@ -292,7 +320,7 @@ async function rebaseline(options: RebaselineOptions): Promise<void> {
     );
   } catch (error) {
     throw new Error(
-      "The local migration history was re-baselined, but the connected workspace checkpoint could not be updated. Run 'tailor tailordb migration set 0' or deploy with schema checks enabled after resolving the connection error.",
+      `The local migration history was re-baselined, but the connected workspace checkpoint could not be updated. Run ${setBaselineCommand}, or run ${deployCommand} with schema checks enabled after resolving the connection error.`,
       { cause: error },
     );
   }

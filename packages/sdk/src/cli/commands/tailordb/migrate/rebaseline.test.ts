@@ -5,6 +5,7 @@ import { runCommand } from "politty";
 import { aroundEach, describe, expect, test, vi } from "vitest";
 import { initOperatorClient } from "#/cli/shared/client";
 import { loadConfig } from "#/cli/shared/config-loader";
+import { loadWorkspaceId } from "#/cli/shared/context";
 import { prompt } from "#/cli/shared/prompt";
 import { rebaselineCommand } from "./rebaseline";
 import {
@@ -284,6 +285,8 @@ describe("tailordb migration rebaseline", () => {
     expect(String(result.error)).toMatch(
       /migration history must reproduce the current local schema/i,
     );
+    expect(String(result.error)).toContain("tailor tailordb migration generate --config");
+    expect(String(result.error)).toContain(path.dirname(state.migrationsDir));
     expect(migrationDirectories()).toEqual(["0000", "0001"]);
     expect(state.getMetadata).not.toHaveBeenCalled();
     expect(state.setMetadata).not.toHaveBeenCalled();
@@ -529,11 +532,25 @@ describe("tailordb migration rebaseline", () => {
 
   test("keeps the activated baseline when the checkpoint update fails", async () => {
     state.setMetadata.mockRejectedValue(new Error("metadata unavailable"));
+    vi.mocked(loadWorkspaceId).mockResolvedValueOnce("87654321-4321-4cba-8fed-210987654321");
 
-    const result = await runCommand(rebaselineCommand, ["--yes"]);
+    const result = await runCommand(rebaselineCommand, [
+      "--yes",
+      "--namespace",
+      "tailordb",
+      "--workspace-id",
+      "87654321-4321-4cba-8fed-210987654321",
+      "--profile",
+      "staging",
+    ]);
 
     expect(result.success).toBe(false);
     expect(String(result.error)).toMatch(/local migration history was re-baselined/i);
+    expect(String(result.error)).toContain("tailor tailordb migration set 0");
+    expect(String(result.error)).toContain("--namespace tailordb");
+    expect(String(result.error)).toContain("--config");
+    expect(String(result.error)).toContain("--workspace-id 87654321-4321-4cba-8fed-210987654321");
+    expect(String(result.error)).toContain("--profile staging");
     expect(migrationDirectories()).toEqual(["0000"]);
   });
 });
