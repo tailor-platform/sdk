@@ -43,7 +43,12 @@ type CLIErrorInternal = Error & {
   format(): string;
 };
 
-function shellQuote(value: string): string {
+/**
+ * Quote an argument value for safe copy-paste into the current platform's shell
+ * @param {string} value - Argument value to quote
+ * @returns {string} The value, quoted unless it only contains shell-safe characters
+ */
+export function shellQuote(value: string): string {
   if (process.platform === "win32") {
     if (/^[A-Za-z0-9_./:=@+\\-]+$/.test(value)) return value;
     return `"${value.replaceAll('"', '\\"')}"`;

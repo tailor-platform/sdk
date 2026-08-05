@@ -4,6 +4,7 @@
 
 import * as path from "pathe";
 import { DEFAULT_CONFIG_PATH } from "#/cli/shared/args";
+import { shellQuote } from "#/cli/shared/errors";
 import { assertDefined } from "#/utils/assert";
 import type { AppConfig } from "#/configure/config/types";
 
@@ -42,7 +43,7 @@ function hasMigrationConfig(dbConfig: unknown): dbConfig is { migration: { direc
  */
 export function formatConfigArg(configPath?: string): string {
   if (!configPath || configPath === DEFAULT_CONFIG_PATH) return "";
-  return ` --config "${path.relative(process.cwd(), configPath) || configPath}"`;
+  return ` --config ${shellQuote(path.relative(process.cwd(), configPath) || configPath)}`;
 }
 
 /**

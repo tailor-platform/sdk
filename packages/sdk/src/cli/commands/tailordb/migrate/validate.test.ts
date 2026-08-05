@@ -514,8 +514,19 @@ describe("tailordb migration validate", () => {
 
     expect(result.success).toBe(false);
     expect(stderr.output).toContain(
-      'tailor tailordb migration script 0001 --namespace tailordb --config "custom.config.ts" --no-script --reason "..."',
+      'tailor tailordb migration script 0001 --namespace tailordb --config custom.config.ts --no-script --reason "..."',
     );
+  });
+
+  test("--strict shell-quotes a config path with shell-special characters", async () => {
+    using stderr = captureStderr();
+    writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
+    vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+
+    const result = await runCommand(validateCommand, ["--strict", "--config", "weird $config.ts"]);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain("--config 'weird $config.ts' --no-script");
   });
 
   test("--strict accepts warnings acknowledged with a recorded reason", async () => {
