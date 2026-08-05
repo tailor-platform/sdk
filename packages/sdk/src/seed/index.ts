@@ -77,7 +77,8 @@ async function listSeedTables(dataDir: string): Promise<string[]> {
   const entries = await readdir(dataDir);
   return entries
     .filter((entry) => entry.endsWith(".jsonl"))
-    .map((entry) => basename(entry, ".jsonl"));
+    .map((entry) => basename(entry, ".jsonl"))
+    .toSorted();
 }
 
 function formatWarnings(warnings: string[]): string[] {
