@@ -8,11 +8,10 @@ const schemaType = t.object({
   ...user.omitFields(["id"]),
 });
 
-// Values only: a row that is not complete yet still gets its ids and defaults.
-export const hook = createTailorDBHook(user, { validate: false });
+export const hook = createTailorDBHook(user);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, createTailorDBHook(user)),
+  createStandardSchema(schemaType, hook, user),
   {
     foreignKeys: [
       {"column":"email","references":{"table":"_User","column":"name"}},

@@ -44,10 +44,8 @@ const schemaType = t.object({
   ...type.omitFields(["id", "createdAt", "updatedAt", "serialNumber"]),
 });
 
-export const hook = createTailorDBHook(type, { validate: false });
-export const schema = defineSchema(
-  createStandardSchema(schemaType, createTailorDBHook(type)),
-);
+export const hook = createTailorDBHook(type);
+export const schema = defineSchema(createStandardSchema(schemaType, hook, type));
 `;
 }
 

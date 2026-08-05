@@ -4,33 +4,16 @@ import type { TailorField } from "#/configure/types/type";
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 
 /**
- * Options for {@link createTailorDBHook}.
- */
-export type CreateTailorDBHookOptions = {
-  /**
-   * Run the type's `validate` and throw on the first issue it reports. Turn it
-   * off to compute the create-time values of a record that is not complete yet.
-   * Defaults to `true`.
-   */
-  validate?: boolean;
-};
-
-/**
  * Creates a hook function that processes TailorDB type fields
  * - Uses existing id from data if provided, otherwise generates UUID for id fields
  * - Recursively processes nested types
  * - Executes hooks.create for fields with create hooks
  * @template T - The output type of the hook function
  * @param type - TailorDB type definition
- * @param options - Hook options
  * @returns A function that transforms input data according to field hooks
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function createTailorDBHook<T extends TailorDBType<any, any>>(
-  type: T,
-  options: CreateTailorDBHookOptions = {},
-) {
-  const { validate = true } = options;
+export function createTailorDBHook<T extends TailorDBType<any, any>>(type: T) {
   return (data: unknown, now: Date = new Date()) => {
     const obj = data && typeof data === "object" ? (data as Record<string, unknown>) : undefined;
     const hooked = Object.entries(type.fields).reduce(
@@ -41,7 +24,7 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(
           hooked[key] = obj?.[key] ?? crypto.randomUUID();
         } else if (field.type === "nested") {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const nestedHook = createTailorDBHook({ fields: field.fields } as any, options);
+          const nestedHook = createTailorDBHook({ fields: field.fields } as any);
           if (field.metadata.array) {
             const nestedValue = obj?.[key];
             hooked[key] = Array.isArray(nestedValue)
@@ -91,34 +74,47 @@ export function createTailorDBHook<T extends TailorDBType<any, any>>(
       }
     }
 
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- metadata absent in recursive nested calls
-    if (validate && type.metadata?.typeValidate) {
-      const { id: _id, ...newRecord } = hooked;
-      // oxlint-disable-next-line typescript/no-unsafe-function-type
-      (type.metadata.typeValidate as Function)(
-        { newRecord, oldRecord: null, invoker: null },
-        (field: string, message: string) => {
-          throw new Error(`Validation failed on field '${field}': ${message}`);
-        },
-      );
-    }
-
     return hooked as Partial<output<T>>;
   };
 }
 
+// Collect the issues the type's own `validate` reports for a record, so they
+// surface the same way a field's do instead of ending the run.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function typeLevelIssues(type: TailorDBType<any, any> | undefined, hooked: unknown) {
+  // oxlint-disable-next-line typescript/no-unnecessary-condition -- absent on a nested type
+  const typeValidate = type?.metadata?.typeValidate;
+  if (!typeValidate) {
+    return [];
+  }
+  const { id: _id, ...newRecord } = hooked as Record<string, unknown>;
+  const issues: StandardSchemaV1.Issue[] = [];
+  // oxlint-disable-next-line typescript/no-unsafe-function-type
+  (typeValidate as Function)(
+    { newRecord, oldRecord: null, invoker: null },
+    (field: string, message: string) => {
+      issues.push({ message, path: [field] });
+    },
+  );
+  return issues;
+}
+
 /**
- * Creates the standard schema definition for lines-db
- * This returns the first argument for defineSchema with the ~standard section
+ * Creates the standard schema definition used to validate seed rows.
+ * Runs the hook, then the type's own `validate`, then the field schema, so both
+ * levels of validation report through the same result.
  * @template T - The output type after validation
  * @param schemaType - TailorDB field schema for validation
  * @param hook - Hook function to transform data before validation
+ * @param type - TailorDB type definition, when it carries a type-level `validate`
  * @returns Schema object with ~standard section for defineSchema
  */
 export function createStandardSchema<T = Record<string, unknown>>(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   schemaType: TailorField<any, T>,
   hook: (data: unknown) => Partial<T>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type?: TailorDBType<any, any>,
 ) {
   return {
     "~standard": {
@@ -126,6 +122,10 @@ export function createStandardSchema<T = Record<string, unknown>>(
       vendor: "@tailor-platform/sdk",
       validate: (value: unknown) => {
         const hooked = hook(value);
+        const issues = typeLevelIssues(type, hooked);
+        if (issues.length > 0) {
+          return { issues };
+        }
         const result = schemaType.parse({
           value: hooked,
           data: hooked,

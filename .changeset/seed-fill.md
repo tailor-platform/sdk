@@ -23,6 +23,10 @@ Only the named fields are written, and only into a row that has no value for the
 
 The generated seed schema files now export the type's create hook, which is where the values come from. Run `tailor generate` after upgrading; until then `tailor seed fill` reports which file needs regenerating.
 
-`createTailorDBHook` from `@tailor-platform/sdk/test` takes a `validate` option, so it can compute the create-time values of a record that is not complete yet instead of throwing on the type's own `validate`.
+`createTailorDBHook` from `@tailor-platform/sdk/test` no longer runs the type's own `validate`. Computing the values a record gets on create and deciding whether a record is acceptable are separate jobs, and the second one now sits where the field-level validation already was: `createStandardSchema` takes the type as a third argument and reports type-level issues through its result.
+
+That also fixes how `tailor seed validate` reports them. A type-level `validate` failure used to end the run at the first offending row with a bare message; it now lands in the same report as every other issue, naming the file and every row that fails.
+
+A test calling `createTailorDBHook` directly to assert a type-level `validate` throws needs to go through `createStandardSchema` instead.
 
 The same operation is available as `fillSeedData` from `@tailor-platform/sdk/seed`.

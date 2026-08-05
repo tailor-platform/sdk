@@ -8,9 +8,8 @@ const schemaType = t.object({
   ...nestedProfile.omitFields(["id"]),
 });
 
-// Values only: a row that is not complete yet still gets its ids and defaults.
-export const hook = createTailorDBHook(nestedProfile, { validate: false });
+export const hook = createTailorDBHook(nestedProfile);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, createTailorDBHook(nestedProfile)),
+  createStandardSchema(schemaType, hook, nestedProfile),
 );

@@ -8,9 +8,8 @@ const schemaType = t.object({
   ...customer.omitFields(["id"]),
 });
 
-// Values only: a row that is not complete yet still gets its ids and defaults.
-export const hook = createTailorDBHook(customer, { validate: false });
+export const hook = createTailorDBHook(customer);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, createTailorDBHook(customer)),
+  createStandardSchema(schemaType, hook, customer),
 );

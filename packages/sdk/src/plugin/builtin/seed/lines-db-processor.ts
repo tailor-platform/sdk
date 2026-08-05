@@ -185,11 +185,10 @@ export function generateLinesDbSchemaFile(metadata: LinesDbMetadata, importPath:
 
     ${schemaTypeCode}
 
-    // Values only: a row that is not complete yet still gets its ids and defaults.
-    export const hook = createTailorDBHook(${exportName}, { validate: false });
+    export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, createTailorDBHook(${exportName})),${schemaOptionsCode}
+      createStandardSchema(schemaType, hook, ${exportName}),${schemaOptionsCode}
     );
 
     `;
@@ -249,11 +248,10 @@ export function generateLinesDbSchemaFileWithPluginAPI(
 
     ${schemaTypeCode}
 
-    // Values only: a row that is not complete yet still gets its ids and defaults.
-    export const hook = createTailorDBHook(${exportName}, { validate: false });
+    export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, createTailorDBHook(${exportName})),${schemaOptionsCode}
+      createStandardSchema(schemaType, hook, ${exportName}),${schemaOptionsCode}
     );
 
     `;
@@ -279,11 +277,10 @@ export function generateLinesDbSchemaFileWithPluginAPI(
 
     ${schemaTypeCode}
 
-    // Values only: a row that is not complete yet still gets its ids and defaults.
-    export const hook = createTailorDBHook(${exportName}, { validate: false });
+    export const hook = createTailorDBHook(${exportName});
 
     export const schema = defineSchema(
-      createStandardSchema(schemaType, createTailorDBHook(${exportName})),${schemaOptionsCode}
+      createStandardSchema(schemaType, hook, ${exportName}),${schemaOptionsCode}
     );
 
     `;
