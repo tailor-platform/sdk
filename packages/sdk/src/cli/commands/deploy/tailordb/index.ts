@@ -547,13 +547,13 @@ export async function applyTailorDB(
           }
 
           if (remoteMigrationNumber !== migration.number) {
-            await rollbackSingleMigrationAfterFailure(
-              client,
-              changeSet,
-              migration,
-              migrationContext.workspaceId,
-              migrationContext.tailorDBInputs,
-              migrationContext.executorUsedTypes,
+            logger.warn(
+              `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${
+                remoteMigrationNumber === undefined
+                  ? "<unset>"
+                  : formatMigrationNumber(remoteMigrationNumber)
+              }. ` +
+                "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. Repair the checkpoint before retrying.",
             );
             throw error;
           }

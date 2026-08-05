@@ -679,7 +679,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
   });
 
-  test("restores updated types when advancing the migration checkpoint fails", async () => {
+  test("keeps the target schema when the failed checkpoint update reads back an older value", async () => {
     const typeNames = ["GoodsReceipt"];
     const snapshots = (number: number) => ({
       version: 1 as const,
@@ -711,7 +711,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       },
     );
 
-    expect(fieldTypeUpdates(client, "GoodsReceipt").at(-1)).toBe("integer");
+    expect(fieldTypeUpdates(client, "GoodsReceipt").at(-1)).toBe("float");
   });
 
   test("keeps the target schema when checkpoint read-back confirms a lost response", async () => {
