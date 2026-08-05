@@ -123,8 +123,9 @@ type DBFieldsOf<T> = T extends TailorAnyDBType ? T["fields"] : T;
 
 // The column mapping below mirrors the one `kyselyTypePlugin` applies when it writes a
 // table interface (`plugin/builtin/kysely-type/type-processor.ts`), so both surfaces
-// resolve a field to the same column type. `example/tests/kysely-parity.ts` pins the two
-// against each other on real generator output.
+// resolve a field to the same column type — including inside nested objects, where the
+// function runtime also hands back a Date for a date/datetime.
+// `example/tests/kysely-parity.ts` pins the two against each other on real generator output.
 type DBFieldType<F> = F extends TailorAnyDBField ? F["_defined"]["type"] : never;
 type IsArrayDBField<F> = F extends TailorAnyDBField
   ? F["_defined"]["array"] extends true
@@ -140,20 +141,39 @@ type ElementOutput<F> =
       : Unwrapped<F>
     : Unwrapped<F>;
 
-// A nested object's own fields are erased on TailorDBField (`fields` is widened to
-// `Record<string, TailorAnyDBField>`), so its shape can only come from the output type.
-// That is enough for the optional props the generator keys on, but a date/datetime
-// nested inside an object cannot be told apart from a plain union and stays unmapped —
-// see the note on {@link TailorDBColumns}.
-type OptionalPropKeys<O> = {
-  [K in keyof O]-?: undefined extends O[K] ? K : never;
-}[keyof O];
-type HasOptionalProp<O> = [OptionalPropKeys<O>] extends [never] ? false : true;
+type NestedFieldsOf<F> = F extends TailorAnyDBField ? F["fields"] : never;
+
+// Nested props carry the same column mapping as top-level ones, so a datetime inside an
+// object also resolves to Timestamp. The optional marker matches what the output type
+// gives them, which is what the generator emits too.
+// `-readonly` because a field collection is inferred with `const`, and the generated
+// table interfaces declare their nested props mutable.
+type NestedProps<Fields> = {
+  -readonly [K in keyof Fields as null extends output<Fields[K]> ? never : K]: DBColumn<Fields[K]>;
+} & {
+  -readonly [K in keyof Fields as null extends output<Fields[K]> ? K : never]?: DBColumn<Fields[K]>;
+};
+
+// The generator reaches for ObjectColumnType only when the object holds something whose
+// select and insert types differ: a timestamp, an optional prop, or a filled-in one.
+type NestedNeedsColumnType<Fields> = true extends {
+  [K in keyof Fields]: DBFieldType<Fields[K]> extends "date" | "datetime"
+    ? true
+    : null extends output<Fields[K]>
+      ? true
+      : DBFieldType<Fields[K]> extends "nested"
+        ? NestedNeedsColumnType<NestedFieldsOf<Fields[K]>>
+        : Fields[K] extends TailorAnyDBField
+          ? IsAutoFilledDBField<Fields[K]>
+          : false;
+}[keyof Fields]
+  ? true
+  : false;
 
 type NestedColumn<F> =
-  HasOptionalProp<ElementOutput<F>> extends true
-    ? ObjectColumnType<ElementOutput<F>>
-    : ElementOutput<F>;
+  NestedNeedsColumnType<NestedFieldsOf<F>> extends true
+    ? ObjectColumnType<FlattenColumns<NestedProps<NestedFieldsOf<F>>>>
+    : FlattenColumns<NestedProps<NestedFieldsOf<F>>>;
 
 type ElementColumn<F> =
   DBFieldType<F> extends "date" | "datetime"
@@ -200,10 +220,6 @@ type DBColumn<F> = F extends TailorAnyDBField
  * declares them: while `F` is still an unresolved type parameter the mapping stays
  * deferred, so assigning to it inside the function body reports the unevaluated
  * conditional rather than a readable shape.
- *
- * A date or datetime nested inside an object resolves to `string | Date` rather than
- * `Timestamp`, because a nested field's declared type is not recoverable from the table
- * type. Every other position resolves it the same way the generated tables do.
  * @example
  * function createInput<const F extends Record<string, TailorAnyDBField>>(fields: F) {
  *   return (input: TailorDBInsertable<F>) => { ... };

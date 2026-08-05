@@ -267,6 +267,32 @@ describe("TailorDBColumns column mapping", () => {
     >();
   });
 
+  // The runtime hands back a Date for a nested date/datetime too, so the column type has
+  // to be Timestamp there as well — see the deserializer the function runtime applies to
+  // nested JSON values.
+  test("resolves a datetime nested inside an object to Timestamp", () => {
+    const fields = {
+      schedule: db.object({ dueDate: db.datetime(), day: db.date() }),
+      events: db.object(
+        { at: db.datetime(), label: db.string({ optional: true }) },
+        {
+          array: true,
+        },
+      ),
+    };
+
+    expectTypeOf<TailorDBColumns<typeof fields>["schedule"]>().toEqualTypeOf<
+      ObjectColumnType<{ dueDate: Timestamp; day: Timestamp }>
+    >();
+    expectTypeOf<TailorDBSelectable<typeof fields>["schedule"]>().toEqualTypeOf<{
+      dueDate: Date;
+      day: Date;
+    }>();
+    expectTypeOf<TailorDBSelectable<typeof fields>["events"]>().toEqualTypeOf<
+      { at: Date; label: string | null }[]
+    >();
+  });
+
   test("leaves an all-required object plain, and its array a plain array", () => {
     const fields = {
       item: db.object({ name: db.string(), qty: db.int() }),

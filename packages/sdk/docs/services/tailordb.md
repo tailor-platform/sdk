@@ -684,9 +684,7 @@ import { user } from "../tailordb/user";
 type CreateUser = TailorDBInsertable<typeof user>;
 ```
 
-They resolve a field to the same column type the table types `kyselyTypePlugin` generates, so both agree on which keys are required and on what each column reads back as: `.serial()` fields are never caller-supplied, `.default()` and `.hooks({ create })` fields may be omitted on create, optional fields stay optional, `id` is generated, and a date or datetime reads back as `Date`. `TailorDBColumns` exposes the underlying column types if you need to compose them further.
-
-The one exception is a date or datetime **nested inside an object**, which stays `string | Date`. A nested field's declared type is not recoverable from the table type, so the mapping cannot tell it apart from a plain union.
+They resolve a field to the same column type the table types `kyselyTypePlugin` generates, so both agree on which keys are required and on what each column reads back as: `.serial()` fields are never caller-supplied, `.default()` and `.hooks({ create })` fields may be omitted on create, optional fields stay optional, `id` is generated, and a date or datetime reads back as `Date` — including inside a nested object. `TailorDBColumns` exposes the underlying column types if you need to compose them further.
 
 Supplying a value for a `.serial()` field fails with the reason, in these types and in the generated ones alike:
 

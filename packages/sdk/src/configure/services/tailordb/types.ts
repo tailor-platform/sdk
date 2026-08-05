@@ -106,14 +106,16 @@ export interface TailorDBField<
   Defined extends DefinedDBFieldMetadata = DefinedDBFieldMetadata,
   // oxlint-disable-next-line no-explicit-any
   Output = any,
+  // Nested object fields, so a `db.object()` field keeps the shape it was declared with.
+  Nested extends Record<string, TailorAnyDBField> = Record<string, TailorAnyDBField>,
 > extends Omit<TailorField<Defined, Output, DBFieldMetadata, Defined["type"]>, "fields"> {
-  readonly fields: Record<string, TailorAnyDBField>;
+  readonly fields: Nested;
   readonly rawRelation: Readonly<RawRelationConfig> | undefined;
 }
 
 // Helper alias: DB fields can be arbitrarily nested, so we intentionally keep this loose.
 // oxlint-disable-next-line no-explicit-any
-export type TailorAnyDBField = TailorDBField<any, any>;
+export type TailorAnyDBField = TailorDBField<any, any, any>;
 
 /**
  * Minimal structural interface for TailorDBType.

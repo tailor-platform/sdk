@@ -11,7 +11,7 @@ import type { Namespace } from "../generated/tailordb";
 // drift between the two column mappings shows up here as a type error.
 //
 // This file only declares types; `tsc --noEmit` over the example is the assertion.
-import type { ObjectColumnType, TailorDBColumns } from "@tailor-platform/sdk/kysely";
+import type { TailorDBColumns } from "@tailor-platform/sdk/kysely";
 
 type Emitted = Namespace["tailordb"];
 
@@ -42,31 +42,8 @@ export type SalesOrderParity = Assert<
 // Enum union of string literals.
 export type SupplierParity = Assert<Same<TailorDBColumns<typeof supplier>, Emitted["Supplier"]>>;
 
-type NestedProfileColumns = TailorDBColumns<typeof nestedProfile>;
-
-// An object with optional props is wrapped in ObjectColumnType, same as the generator.
-export type NestedUserInfoParity = Assert<
-  Same<NestedProfileColumns["userInfo"], Emitted["NestedProfile"]["userInfo"]>
->;
-export type NestedArchivedParity = Assert<
-  Same<NestedProfileColumns["archived"], Emitted["NestedProfile"]["archived"]>
->;
-
-// KNOWN GAP — a date/datetime *inside* an object stays `string | Date` instead of
-// resolving to `Timestamp`. `TailorDBField` widens its `fields` to
-// `Record<string, TailorAnyDBField>`, so a nested field's declared type is not
-// recoverable from the table type and the mapping cannot tell a datetime prop apart from
-// a plain `string | Date` union. Every other position resolves it correctly.
-//
-// The divergent shape is pinned on purpose: if the erasure is ever lifted, this fails and
-// should be replaced by a comparison against Emitted["NestedProfile"]["metadata"].
-export type NestedMetadataGap = Assert<
-  Same<
-    NestedProfileColumns["metadata"],
-    ObjectColumnType<{
-      created: string | Date;
-      lastUpdated?: string | Date | null;
-      version: number;
-    }>
-  >
+// Objects with optional props are wrapped in ObjectColumnType, and a datetime nested
+// inside one resolves to Timestamp — the runtime hands back a Date there too.
+export type NestedProfileParity = Assert<
+  Same<TailorDBColumns<typeof nestedProfile>, Emitted["NestedProfile"]>
 >;
