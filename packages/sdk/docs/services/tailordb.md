@@ -673,6 +673,53 @@ const schemaType = t.object({
 });
 ```
 
+### Deriving Create/Update Inputs
+
+`TailorDBInsertable`, `TailorDBSelectable` and `TailorDBUpdateable` derive create, read and update shapes from a table or from a bare field collection:
+
+```typescript
+import type { TailorDBInsertable } from "@tailor-platform/sdk/kysely";
+import { user } from "../tailordb/user";
+
+type CreateUser = TailorDBInsertable<typeof user>;
+```
+
+They apply the same rules as the table types `kyselyTypePlugin` generates: `.serial()` fields are never caller-supplied, `.default()` and `.hooks({ create })` fields may be omitted on create, optional fields stay optional, and `id` is generated. `TailorDBColumns` exposes the underlying column types if you need to compose them further.
+
+Supplying a value for a `.serial()` field fails with the reason, in these types and in the generated ones alike:
+
+```
+Type 'string' is not assignable to type 'TypeLevelError<"assigned by .serial(); remove it from the input">'.
+```
+
+Passing `undefined` for such a field is accepted and means the same as omitting it.
+
+Passing a field collection instead of a table is what makes them useful in code that can't name a generated table type — a shared module that lets each project extend a table with its own fields, for example:
+
+```typescript
+import { db, type TailorAnyDBField } from "@tailor-platform/sdk";
+import type { TailorDBInsertable } from "@tailor-platform/sdk/kysely";
+
+function createCompany<const F extends Record<string, TailorAnyDBField>>(extraFields: F) {
+  return (input: TailorDBInsertable<F>) => {
+    // ...
+  };
+}
+
+const create = createCompany({
+  code: db.string().serial({ start: 1, format: "C-%d" }),
+  status: db.string().default("ACTIVE"),
+  name: db.string(),
+});
+
+// `code` is auto-numbered and `status` has a default, so only `name` is required
+create({ name: "Tailor" });
+```
+
+Declare the type parameter as `<const F extends Record<string, TailorAnyDBField>>` so the field types are inferred. A bare `Record<string, TailorAnyDBField>` erases them and nothing is checked.
+
+To ask about a single field rather than derive a whole input type, `IsReadOnlyDBField` and `IsAutoFilledDBField` (from `@tailor-platform/sdk`) report whether callers can never write the field, or may omit it on create and let the platform fill it in.
+
 ### Permissions
 
 Configure Permission and GQLPermission. For details, see the [TailorDB Permission documentation](https://docs.tailor.tech/guides/tailordb/permission).

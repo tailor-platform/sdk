@@ -6,6 +6,7 @@ export {
   type TailorDBType,
 } from "./schema";
 export type { TailorDBInstance } from "./schema";
+export type { IsAutoFilledDBField, IsReadOnlyDBField } from "./types";
 export {
   unsafeAllowAllTypePermission,
   unsafeAllowAllGqlPermission,
