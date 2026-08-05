@@ -101,6 +101,7 @@ tailor tailordb migration <command>
 | [`tailordb migration set`](#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                                                                                                                                                                                         |
 | [`tailordb migration status`](#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                                                                                                                                                   |
 | [`tailordb migration sync`](#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                                                                                                                                                                                  |
+| [`tailordb migration test`](#tailordb-migration-test)         | Test pending migrations with seed fixtures or cloned data in a temporary workspace.                                                                                                                                                                                                    |
 | [`tailordb migration validate`](#tailordb-migration-validate) | Validate the full migration history and detect schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found. |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
@@ -239,6 +240,36 @@ tailor tailordb migration sync [options] <number>
 | `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+#### tailordb migration test
+
+Test pending migrations with seed fixtures or cloned data in a temporary workspace.
+
+**Usage**
+
+```
+tailor tailordb migration test [options]
+```
+
+**Options**
+
+| Option                                        | Alias | Description                                                            | Required | Default              | Env                            |
+| --------------------------------------------- | ----- | ---------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>`               | `-w`  | Workspace ID                                                           | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`                         | `-p`  | Workspace profile                                                      | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`                           | `-c`  | Path to Tailor config file                                             | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                                       | `-y`  | Acknowledge that a designated target workspace may be overwritten      | No       | `false`              | -                              |
+| `--data <DATA>`                               | -     | Data source for the migration test (seed or clone)                     | No       | `"seed"`             | -                              |
+| `--target-workspace-id <TARGET_WORKSPACE_ID>` | -     | Existing throwaway workspace to retain after the test (requires --yes) | No       | -                    | -                              |
+| `--assert <ASSERT>`                           | -     | Path to a TypeScript assertion script to run after migrations          | No       | -                    | -                              |
+| `--assert-namespace <ASSERT_NAMESPACE>`       | -     | TailorDB namespace exposed to the assertion script                     | No       | -                    | -                              |
+| `--machine-user <MACHINE_USER>`               | -     | Machine user for seed and assertion script execution                   | No       | -                    | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs.
 
 #### tailordb migration validate
 

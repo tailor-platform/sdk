@@ -11,6 +11,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   formatMigrationNumber,
+  normalizeSchemaSnapshot,
   type SnapshotFieldConfig,
   type TailorDBSnapshotType,
 } from "#/cli/commands/tailordb/migrate/snapshot";
@@ -205,6 +206,103 @@ describe("planTailorDB (service level)", () => {
   aroundEach(async (runTest) => {
     vi.clearAllMocks();
     await runTest();
+  });
+
+  test("plans and checkpoints a migration-test baseline snapshot instead of current types", async () => {
+    const tailordb = createMockTailorDBService("tailordb");
+    Object.defineProperty(tailordb, "types", {
+      value: {
+        Current: {
+          name: "Current",
+          pluralForm: "Currents",
+          fields: {},
+          forwardRelationships: {},
+          backwardRelationships: {},
+          settings: {},
+          permissions: {},
+          files: {},
+        },
+      },
+    });
+    const baseline = normalizeSchemaSnapshot({
+      version: 1,
+      namespace: "tailordb",
+      createdAt: "2026-08-05T00:00:00.000Z",
+      types: {
+        Legacy: {
+          name: "Legacy",
+          pluralForm: "Legacies",
+          fields: {},
+        },
+      },
+    });
+    const client = createMockClient([]);
+    Object.assign(client, {
+      createTailorDBService: vi.fn().mockResolvedValue({}),
+      createTailorDBType: vi.fn().mockResolvedValue({}),
+      setMetadata: vi.fn().mockResolvedValue({}),
+    });
+
+    const result = await planTailorDB({
+      client,
+      workspaceId,
+      application: createMockApplication([tailordb]),
+      forRemoval: false,
+      config: mockConfig,
+      migrationTestBaselines: new Map([["tailordb", { migrationNumber: 3, snapshot: baseline }]]),
+    });
+
+    expect(Object.keys(result.context.tailorDBInputs[0]!.types)).toEqual(["Legacy"]);
+    expect(result.changeSet.type.creates[0]!.name).toBe("Legacy");
+
+    await applyTailorDB(client, result, "create-update");
+
+    expect(client.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ labels: expect.objectContaining({ "sdk-migration": "m0003" }) }),
+    );
+  });
+
+  test("plans a migration-test target snapshot instead of drifted current types", async () => {
+    const tailordb = createMockTailorDBService("tailordb");
+    Object.defineProperty(tailordb, "types", {
+      value: {
+        Uncommitted: {
+          name: "Uncommitted",
+          pluralForm: "Uncommitted",
+          fields: {},
+          forwardRelationships: {},
+          backwardRelationships: {},
+          settings: {},
+          permissions: {},
+          files: {},
+        },
+      },
+    });
+    const target = normalizeSchemaSnapshot({
+      version: 1,
+      namespace: "tailordb",
+      createdAt: "2026-08-05T00:00:00.000Z",
+      types: {
+        Committed: {
+          name: "Committed",
+          pluralForm: "Committed",
+          fields: {},
+        },
+      },
+    });
+
+    const result = await planTailorDB({
+      client: createMockClient([]),
+      workspaceId,
+      application: createMockApplication([tailordb]),
+      forRemoval: false,
+      config: mockConfig,
+      migrationTestSnapshots: new Map([["tailordb", target]]),
+    });
+
+    expect(Object.keys(result.context.tailorDBInputs[0]!.types)).toEqual(["Committed"]);
+    expect(result.changeSet.type.creates[0]!.name).toBe("Committed");
+    expect(result.context.migrationTestBaselines).toBeUndefined();
   });
 
   describe("rename scenarios (service level)", () => {

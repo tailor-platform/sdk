@@ -84,7 +84,11 @@ import {
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 import { resolveDeployWorkspace } from "./workspace";
 import type { Executor } from "#/types/executor.generated";
-import type { PlanContext } from "./types";
+import type {
+  PlanContext,
+  TailorDBMigrationTestBaseline,
+  TailorDBMigrationTestSnapshots,
+} from "./types";
 
 export interface DeployOptions {
   workspaceId?: string;
@@ -111,6 +115,12 @@ interface DeployCLIContext {
   envFileIfExists?: string;
   verbose?: boolean;
   json?: boolean;
+}
+
+interface DeployInternalContext {
+  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
+  migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  suppressResultOutput?: boolean;
 }
 
 /**
@@ -699,6 +709,8 @@ type PlanDeploymentTargetParams = {
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
+  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
+  migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
 };
 
 type ConfirmDeploymentPlansParams = {
@@ -714,6 +726,8 @@ type PlanDeploymentTargetsParams = {
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
+  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
+  migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
 };
 
@@ -1798,16 +1812,29 @@ function collectDeployRunPlanInputs(
 async function planDeploymentTarget(
   params: PlanDeploymentTargetParams,
 ): Promise<PlannedDeployment> {
-  const { target, targets, runInputs, client, workspaceId, noSchemaCheck } = params;
+  const {
+    target,
+    targets,
+    runInputs,
+    client,
+    workspaceId,
+    noSchemaCheck,
+    migrationTestBaselines,
+    migrationTestSnapshots,
+  } = params;
   const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
     target;
   const owned = ownedSubscriptions(runInputs.eventSubscriptions, target);
 
+  const migrationTestServices = application.tailorDBServices.map((service) => {
+    const snapshot = migrationTestSnapshots?.get(service.namespace);
+    return snapshot ? { ...service, types: snapshot.types, typeSourceInfo: {} } : service;
+  });
   await withSpan("plan.validateTailorDBTypeNames", () =>
     assertUniqueTailorDBTypeNamesWithExternal({
       client,
       workspaceId,
-      tailorDBServices: application.tailorDBServices,
+      tailorDBServices: migrationTestServices,
       externalTailorDBNamespaces: application.externalTailorDBNamespaces,
       plannedExternalTailorDBServices: collectPlannedExternalTailorDBServices(target, targets),
     }),
@@ -1835,6 +1862,8 @@ async function planDeploymentTarget(
       forRemoval: false,
       config,
       noSchemaCheck,
+      migrationTestBaselines,
+      migrationTestSnapshots,
       forceApplyAll,
       ...runInputs,
       idpUserTriggerTargets: subscribedIdps(owned),
@@ -2512,9 +2541,14 @@ async function validateDeploymentPlans(
  * Deploy the configured application to the Tailor platform.
  * @param options - Deploy execution options
  * @param cliContext - Global CLI arguments to preserve in recovery actions
+ * @param internalContext - Internal deployment behavior used by composed CLI workflows
  * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
  */
-async function deployInternal(options?: DeployOptions, cliContext?: DeployCLIContext) {
+async function deployInternal(
+  options?: DeployOptions,
+  cliContext?: DeployCLIContext,
+  internalContext?: DeployInternalContext,
+) {
   return withSpan("deploy", async (rootSpan) => {
     rootSpan.setAttribute("deploy.dry_run", options?.dryRun ?? false);
 
@@ -2595,6 +2629,8 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
       client,
       workspaceId,
       noSchemaCheck: options?.noSchemaCheck,
+      migrationTestBaselines: internalContext?.migrationTestBaselines,
+      migrationTestSnapshots: internalContext?.migrationTestSnapshots,
     });
 
     const yes = options?.yes ?? false;
@@ -2636,10 +2672,12 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
 
     await applyDeploymentPlans(client, workspaceId, deployments);
 
-    if (logger.jsonMode) {
-      logger.out({ summary: planSummary, status: "applied" });
-    } else {
-      logger.success("Successfully applied changes.");
+    if (!internalContext?.suppressResultOutput) {
+      if (logger.jsonMode) {
+        logger.out({ summary: planSummary, status: "applied" });
+      } else {
+        logger.success("Successfully applied changes.");
+      }
     }
 
     return undefined;
@@ -2653,6 +2691,41 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
  */
 export function deploy(options?: DeployOptions) {
   return deployInternal(options);
+}
+
+/**
+ * Deploy TailorDB baseline snapshots for an isolated migration test.
+ * @param options - Deploy execution options
+ * @param baselines - Baseline snapshots keyed by TailorDB namespace
+ * @returns Deploy result
+ */
+export function deployMigrationTestBaseline(
+  options: DeployOptions,
+  baselines: ReadonlyMap<string, TailorDBMigrationTestBaseline>,
+) {
+  return deployInternal(options, undefined, {
+    migrationTestBaselines: baselines,
+    migrationTestSnapshots: new Map(
+      [...baselines].map(([namespace, baseline]) => [namespace, baseline.snapshot]),
+    ),
+    suppressResultOutput: true,
+  });
+}
+
+/**
+ * Deploy pending migrations without emitting deploy's standalone result payload.
+ * @param options - Deploy execution options
+ * @param snapshots - Final committed snapshots keyed by TailorDB namespace
+ * @returns Deploy result
+ */
+export function deployMigrationTestTarget(
+  options: DeployOptions,
+  snapshots: TailorDBMigrationTestSnapshots,
+) {
+  return deployInternal(options, undefined, {
+    migrationTestSnapshots: snapshots,
+    suppressResultOutput: true,
+  });
 }
 
 /**

@@ -347,6 +347,21 @@ async function validateTailorDBMigrationState(
   result: TailorDBPlanResult,
 ): Promise<ValidateAndDetectResult> {
   const { context } = result;
+  if (context.migrationTestBaselines) {
+    const currentMigrationFileState = captureMigrationFileState(
+      getNamespacesWithMigrations(context.config, path.dirname(context.config.path)),
+    );
+    if (!migrationFileStatesEqual(context.migrationFileState, currentMigrationFileState)) {
+      throw new Error(
+        "Migration files changed after deployment planning. Run the migration test again to create a fresh plan.",
+      );
+    }
+    return {
+      pendingMigrations: [],
+      namespacesWithMigrations: [],
+      migrationFileState: currentMigrationFileState,
+    };
+  }
   const typesByNamespace = new Map<string, Record<string, TailorDBSnapshotType>>();
   for (const tailordb of context.tailorDBInputs) {
     typesByNamespace.set(tailordb.namespace, tailordb.types);
@@ -619,7 +634,16 @@ export async function applyTailorDB(
     // Skip when pending migrations ran: each already bumped the label, and
     // re-pinning to working_tree_max could mask one left intentionally pending
     // (e.g. a missing script). --no-schema-check always re-pins to repair drift.
-    if (
+    if (migrationContext.migrationTestBaselines) {
+      for (const [namespace, baseline] of migrationContext.migrationTestBaselines) {
+        await updateMigrationLabel(
+          client,
+          migrationContext.workspaceId,
+          namespace,
+          baseline.migrationNumber,
+        );
+      }
+    } else if (
       namespacesWithMigrations.length > 0 &&
       (migrationContext.noSchemaCheck || pendingMigrations.length === 0)
     ) {
@@ -1172,10 +1196,22 @@ export async function planTailorDB(context: PlanContext) {
     forceApplyAll = false,
   } = context;
   const tailordbs: TailorDBDeployInput[] = [];
+  const migrationTestSnapshots =
+    context.migrationTestSnapshots ??
+    (context.migrationTestBaselines
+      ? new Map(
+          [...context.migrationTestBaselines].map(([namespace, baseline]) => [
+            namespace,
+            baseline.snapshot,
+          ]),
+        )
+      : undefined);
   if (!forRemoval) {
     for (const tailordb of application.tailorDBServices) {
       await tailordb.loadTypes();
-      tailordbs.push(toTailorDBDeployInput(tailordb));
+      const input = toTailorDBDeployInput(tailordb);
+      const snapshot = migrationTestSnapshots?.get(tailordb.namespace);
+      tailordbs.push(snapshot ? { ...input, types: snapshot.types } : input);
     }
   }
   const executors = forRemoval
@@ -1194,16 +1230,44 @@ export async function planTailorDB(context: PlanContext) {
   for (const tailordb of tailordbs) {
     typesByNamespace.set(tailordb.namespace, tailordb.types);
   }
+  const migrationTestBaselines = context.migrationTestBaselines;
+  if (migrationTestSnapshots) {
+    for (const namespace of migrationTestSnapshots.keys()) {
+      if (!tailordbs.some((tailordb) => tailordb.namespace === namespace)) {
+        throw new Error(
+          `Migration test snapshot targets unknown TailorDB namespace "${namespace}".`,
+        );
+      }
+    }
+    const namespaceByType = new Map<string, string>();
+    for (const tailordb of tailordbs) {
+      for (const typeName of Object.keys(tailordb.types)) {
+        const existingNamespace = namespaceByType.get(typeName);
+        if (existingNamespace) {
+          throw new Error(
+            `Migration test snapshot has duplicate TailorDB type name "${typeName}" in namespaces "${existingNamespace}" and "${tailordb.namespace}".`,
+          );
+        }
+        namespaceByType.set(typeName, tailordb.namespace);
+      }
+    }
+  }
+  const migrationConfig = getNamespacesWithMigrations(config, path.dirname(config.path));
   const { namespacesWithMigrations, migrationFileState } = forRemoval
     ? { namespacesWithMigrations: [], migrationFileState: {} }
-    : await validateAndDetectMigrations(
-        client,
-        workspaceId,
-        typesByNamespace,
-        config,
-        noSchemaCheck ?? false,
-        tailordbs,
-      );
+    : migrationTestBaselines
+      ? {
+          namespacesWithMigrations: migrationConfig,
+          migrationFileState: captureMigrationFileState(migrationConfig),
+        }
+      : await validateAndDetectMigrations(
+          client,
+          workspaceId,
+          typesByNamespace,
+          config,
+          noSchemaCheck ?? false,
+          tailordbs,
+        );
 
   const {
     changeSet: serviceChangeSet,
@@ -1253,6 +1317,7 @@ export async function planTailorDB(context: PlanContext) {
       executorUsedTypes,
       config,
       noSchemaCheck: noSchemaCheck ?? false,
+      ...(migrationTestBaselines ? { migrationTestBaselines } : {}),
       namespacesWithMigrations,
       migrationFileState,
     },
