@@ -182,6 +182,12 @@ export type RemoteSchemaVerificationSkipReason =
   | "no_migration_label"
   | "no_snapshot";
 
+export interface MigrationCheckpointRepair {
+  namespace: string;
+  from: number;
+  to: 0;
+}
+
 /**
  * Result of remote schema verification for a single namespace
  */
@@ -192,6 +198,8 @@ export interface RemoteSchemaVerificationResult {
   hasDrift: boolean;
   /** Set when the remote migration checkpoint does not exist in the local migration history */
   checkpointMissingLocal?: boolean;
+  /** Safe checkpoint reset offered after the remote schema matched the local baseline */
+  checkpointRepair?: Omit<MigrationCheckpointRepair, "namespace">;
   /** Set when verification could not run (no remote migration label, or no snapshot at the remote migration number) */
   skipped?: RemoteSchemaVerificationSkipReason;
 }

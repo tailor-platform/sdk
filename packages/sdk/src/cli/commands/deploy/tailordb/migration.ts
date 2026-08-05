@@ -107,6 +107,7 @@ async function getCurrentMigrationNumber(
  * @param {string} workspaceId - Workspace ID
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
  * @param {string} [configPath] - Config file path, included in remediation guidance when provided
+ * @param {ReadonlyMap<string, number>} [currentMigrationOverrides] - Confirmed current migration numbers to use instead of remote metadata
  * @returns {Promise<PendingMigration[]>} List of pending migrations
  */
 export async function detectPendingMigrations(
@@ -114,12 +115,15 @@ export async function detectPendingMigrations(
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
   configPath?: string,
+  currentMigrationOverrides?: ReadonlyMap<string, number>,
 ): Promise<PendingMigration[]> {
   const pendingMigrations: PendingMigration[] = [];
 
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     // Get current applied migration number
-    const currentMigration = await getCurrentMigrationNumber(client, workspaceId, namespace);
+    const currentMigration =
+      currentMigrationOverrides?.get(namespace) ??
+      (await getCurrentMigrationNumber(client, workspaceId, namespace));
 
     // Get all migration files
     const migrationFiles = getMigrationFiles(migrationsDir);

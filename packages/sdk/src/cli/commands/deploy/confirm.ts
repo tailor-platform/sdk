@@ -1,6 +1,7 @@
 import { styles, logger } from "#/cli/shared/logger";
 import { prompt } from "#/cli/shared/prompt";
 import ml from "#/utils/multiline";
+import type { MigrationCheckpointRepair } from "#/cli/commands/tailordb/migrate/types";
 
 export interface OwnerConflict {
   resourceType: string;
@@ -11,6 +12,31 @@ export interface OwnerConflict {
 export interface UnmanagedResource {
   resourceType: string;
   resourceName: string;
+}
+
+export async function confirmMigrationCheckpointRepairs(
+  repairs: ReadonlyArray<MigrationCheckpointRepair>,
+  yes: boolean,
+): Promise<void> {
+  if (repairs.length === 0) return;
+
+  logger.warn("TailorDB migration checkpoints need to be reset before this deployment:");
+  for (const repair of repairs.toSorted((a, b) => a.namespace.localeCompare(b.namespace))) {
+    logger.log(
+      `  ${repair.namespace}: ${repair.from.toString().padStart(4, "0")} → ${repair.to.toString().padStart(4, "0")}`,
+    );
+  }
+  logger.log("  The checkpoint reset itself changes only metadata.");
+  logger.log("  This deployment may still apply pending schema or data migrations afterward.");
+
+  if (yes) return;
+  const confirmed = await prompt.confirm({
+    message: "Reset these migration checkpoints and continue with the deployment?",
+    default: false,
+  });
+  if (!confirmed) {
+    throw new Error("Apply cancelled: migration checkpoint reset was not confirmed.");
+  }
 }
 
 /**

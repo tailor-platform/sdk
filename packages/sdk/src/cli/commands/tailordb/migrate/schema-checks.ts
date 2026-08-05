@@ -290,21 +290,17 @@ export async function verifyRemoteSchema(
       continue;
     }
 
-    if (remoteMigrationNumber > getLatestMigrationNumber(migrationsDir)) {
-      results.push({
-        namespace,
-        remoteMigrationNumber,
-        drifts: [],
-        hasDrift: false,
-        checkpointMissingLocal: true,
-      });
-      continue;
-    }
+    const latestMigrationNumber = getLatestMigrationNumber(migrationsDir);
+    const checkpointRepair =
+      remoteMigrationNumber > latestMigrationNumber
+        ? ({ from: remoteMigrationNumber, to: 0 } as const)
+        : undefined;
+    const expectedMigrationNumber = checkpointRepair?.to ?? remoteMigrationNumber;
 
-    // Reconstruct snapshot at the remote migration version
+    // Reconstruct the snapshot that the remote schema must match.
     const expectedSnapshot = reconstructSnapshotFromMigrations(
       migrationsDir,
-      remoteMigrationNumber,
+      expectedMigrationNumber,
     );
     if (!expectedSnapshot) {
       // No snapshots exist - skip verification
@@ -341,6 +337,7 @@ export async function verifyRemoteSchema(
       remoteMigrationNumber,
       drifts,
       hasDrift: drifts.length > 0,
+      ...(checkpointRepair && drifts.length === 0 ? { checkpointRepair } : {}),
     });
   }
 

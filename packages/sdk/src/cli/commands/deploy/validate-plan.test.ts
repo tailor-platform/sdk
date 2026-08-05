@@ -51,6 +51,7 @@ function emptyInput(): ValidatePlanInput {
         noSchemaCheck: false,
         namespacesWithMigrations: [],
         migrationFileState: {},
+        checkpointRepairs: [],
       },
     },
     staticWebsite: {

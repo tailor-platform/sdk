@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   generateCommand,
   migrationCommand,
+  rebaselineCommand,
   scriptCommand,
   setCommand,
   statusCommand,
@@ -16,12 +17,24 @@ describe("migration CLI commands", () => {
       expect(migrationCommand.description).toContain("migration");
     });
 
-    test.each(["generate", "script", "set", "status", "sync", "validate"])(
+    test.each(["generate", "rebaseline", "script", "set", "status", "sync", "validate"])(
       "should have %s subcommand",
       (subCommand) => {
         expect(migrationCommand.subCommands).toHaveProperty(subCommand);
       },
     );
+  });
+
+  describe("rebaselineCommand", () => {
+    test("should expose the deployment target and confirmation args", () => {
+      expect(rebaselineCommand.name).toBe("rebaseline");
+      const shape = rebaselineCommand.args.shape;
+      expect(shape).toHaveProperty("namespace");
+      expect(shape).toHaveProperty("workspace-id");
+      expect(shape).toHaveProperty("profile");
+      expect(shape).toHaveProperty("config");
+      expect(shape).toHaveProperty("yes");
+    });
   });
 
   describe("generateCommand", () => {

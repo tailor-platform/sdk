@@ -1156,6 +1156,7 @@ describe("applyTailorDB phase separation", () => {
         noSchemaCheck: true, // Skip migration checks in unit tests
         namespacesWithMigrations: [],
         migrationFileState: {},
+        checkpointRepairs: [],
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
@@ -1443,6 +1444,7 @@ describe("applyTailorDB migration label reconciliation", () => {
         migrationFileState: captureMigrationFileState([
           { namespace: "test-tailordb", migrationsDir: tmpDir },
         ]),
+        checkpointRepairs: [],
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
   }
@@ -1767,7 +1769,7 @@ describe("applyTailorDB migration label reconciliation", () => {
     expect(client.createTailorDBType).not.toHaveBeenCalled();
   });
 
-  test("rejects a remote migration checkpoint missing from local history", async () => {
+  test("plans a checkpoint reset when the remote schema matches the local baseline", async () => {
     using stderr = captureStderr();
     const userType = userSnapshotType();
     writeUserSchemaSnapshot(userType);
@@ -1777,12 +1779,119 @@ describe("applyTailorDB migration label reconciliation", () => {
       metadata: { labels: { "sdk-migration": "m0005" } },
     } as never);
 
+    const result = await runValidation(client, planResult);
+
+    expect(result.checkpointRepairs).toEqual([{ namespace: "test-tailordb", from: 5, to: 0 }]);
+    expect(stderr.output).toContain("will be reset to 0000");
+    expect(client.listTailorDBTypes).toHaveBeenCalled();
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("rejects a missing remote checkpoint when the remote schema differs from baseline", async () => {
+    using stderr = captureStderr();
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0005" } },
+    } as never);
+    vi.mocked(client.listTailorDBTypes).mockResolvedValue({
+      tailordbTypes: [],
+      nextPageToken: "",
+    } as never);
+
     await expect(runValidation(client, planResult)).rejects.toThrow(
-      "Remote migration checkpoint verification failed",
+      "Remote schema verification failed",
     );
-    expect(stderr.output).toContain("Pull the latest migration files");
-    expect(stderr.output).not.toContain("migration sync");
-    expect(client.listTailorDBTypes).not.toHaveBeenCalled();
+    expect(stderr.output).toContain("Remote schema drift detected");
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("resets a confirmed checkpoint to baseline before applying post-rebaseline migrations", async () => {
+    const userType = userSnapshotType();
+    const userWithEmail: TailorDBSnapshotType = {
+      ...userType,
+      fields: {
+        ...userType.fields,
+        email: { type: "string", required: false },
+      },
+    };
+    writeUserSchemaSnapshot(userType);
+    const migrationDir = path.join(tmpDir, "0001");
+    fs.mkdirSync(migrationDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(migrationDir, "diff.json"),
+      JSON.stringify(
+        createMockMigrationDiff({
+          namespace: "test-tailordb",
+          changes: [
+            {
+              kind: "field_added",
+              typeName: "User",
+              fieldName: "email",
+              after: { type: "string", required: false },
+            },
+          ],
+        }),
+      ),
+    );
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [] },
+        types: { User: userWithEmail },
+      },
+    ];
+    planResult.context.executorUsedTypes = new Set();
+    planResult.context.checkpointRepairs = [{ namespace: "test-tailordb", from: 5, to: 0 }];
+    planResult.context.migrationFileState = captureMigrationFileState(
+      planResult.context.namespacesWithMigrations,
+    );
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0005" } },
+    } as never);
+
+    await applyTailorDB(client, planResult, "create-update");
+
+    const writtenCheckpoints = vi
+      .mocked(client.setMetadata)
+      .mock.calls.map((call) => call[0].labels?.["sdk-migration"]);
+    expect(writtenCheckpoints).toEqual(["m0000", "m0001"]);
+  });
+
+  test("rejects an unconfirmed checkpoint number that appears after planning", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    planResult.context.checkpointRepairs = [{ namespace: "test-tailordb", from: 5, to: 0 }];
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0006" } },
+    } as never);
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /repair changed after deployment planning/i,
+    );
+    expect(client.setMetadata).not.toHaveBeenCalled();
+  });
+
+  test("rejects when a confirmed checkpoint repair disappears after planning", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const planResult = planWithDeployDerivedSettings(userType);
+    planResult.context.checkpointRepairs = [{ namespace: "test-tailordb", from: 5, to: 0 }];
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0000" } },
+    } as never);
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow(
+      /repair changed after deployment planning/i,
+    );
+    expect(client.setMetadata).not.toHaveBeenCalled();
   });
 
   test("sets the migration label to 0000 on the first apply (no prior label, schema check enabled)", async () => {
@@ -1996,6 +2105,7 @@ describe("applyTailorDB type apply concurrency", () => {
         noSchemaCheck: true,
         namespacesWithMigrations: [],
         migrationFileState: {},
+        checkpointRepairs: [],
       },
     } as unknown as Awaited<ReturnType<typeof planTailorDB>>;
 

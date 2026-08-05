@@ -179,6 +179,7 @@ describe("migration flow: breaking index changes across Pre/Post phases", () => 
         executorUsedTypes: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
+        checkpointRepairs: [],
         namespacesWithMigrations: [
           {
             namespace: "test-ns",

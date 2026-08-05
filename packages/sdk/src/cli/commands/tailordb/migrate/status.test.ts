@@ -132,6 +132,27 @@ describe("tailordb migration status --json", () => {
     ]);
   });
 
+  test("reports unsupported pending migration file versions", async () => {
+    fs.writeFileSync(
+      path.join(state.migrationsDir, "0002", "diff.json"),
+      JSON.stringify({ version: 3 }),
+    );
+    using stdout = captureStdout();
+    using _stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    using _json = jsonMode();
+
+    const result = await runCommand(statusCommand, []);
+
+    expect(result.success).toBe(false);
+    expect(JSON.parse(stdout.output)).toMatchObject([
+      {
+        status: "error",
+        namespace: "tailordb",
+        error: expect.stringContaining("This SDK supports migration file format versions 1-2"),
+      },
+    ]);
+  });
+
   test("keeps reporting healthy namespaces when another namespace fails", async () => {
     vi.mocked(loadConfig).mockResolvedValue({
       config: {

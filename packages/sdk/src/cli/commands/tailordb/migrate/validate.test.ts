@@ -256,44 +256,44 @@ describe("tailordb migration validate", () => {
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
-  test("fails when the remote migration checkpoint is not in the local history", async () => {
+  test("reports a repairable remote migration checkpoint as valid", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
     state.listTailorDBTypes.mockResolvedValue({
-      tailordbTypes: [remoteType("User", ["id", "name", "email"])],
+      tailordbTypes: [remoteType("User", ["id", "name"])],
       nextPageToken: "",
     });
 
     const result = await runCommand(validateCommand, []);
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
     const [report] = JSON.parse(stdout.output);
-    expect(report.valid).toBe(false);
+    expect(report.valid).toBe(true);
     expect(report.remoteSchema).toEqual({
       remoteMigrationNumber: 5,
       hasDrift: false,
       drifts: [],
-      checkpointMissingLocal: true,
+      checkpointRepair: { from: 5, to: 0 },
     });
   });
 
-  test("only suggests obtaining missing history when the remote checkpoint is ahead", async () => {
+  test("explains that deploy will repair a checkpoint whose schema matches the baseline", async () => {
     using stderr = captureStderr();
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
     state.listTailorDBTypes.mockResolvedValue({
-      tailordbTypes: [remoteType("User", ["id", "name", "email"])],
+      tailordbTypes: [remoteType("User", ["id", "name"])],
       nextPageToken: "",
     });
 
     const result = await runCommand(validateCommand, []);
 
-    expect(result.success).toBe(false);
-    expect(stderr.output).toContain("Pull the latest migration files");
+    expect(result.success).toBe(true);
+    expect(stderr.output).toContain("next deploy will reset the checkpoint to 0000");
     expect(stderr.output).not.toContain("migration sync");
   });
 

@@ -17,6 +17,7 @@ import {
   loadDiff,
   getMigrationFilePath,
   formatMigrationNumber,
+  UnsupportedMigrationFileVersionError,
 } from "./snapshot";
 
 export interface StatusOptions {
@@ -106,25 +107,36 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       .toSorted((a, b) => a - b);
     const pendingNumbers = availableNumbers.filter((n) => n > currentMigration);
 
-    const pendingMigrations = pendingNumbers.map((num) => {
-      const diffPath = getMigrationFilePath(migrationsDir, num, "diff");
-      let description: string | undefined;
+    let pendingMigrations: PendingMigrationStatusInfo[];
+    try {
+      pendingMigrations = pendingNumbers.map((num) => {
+        const diffPath = getMigrationFilePath(migrationsDir, num, "diff");
+        let description: string | undefined;
 
-      if (fs.existsSync(diffPath)) {
-        try {
-          const diff = loadDiff(diffPath);
-          description = diff.description;
-        } catch {
-          // Ignore errors loading diff
+        if (fs.existsSync(diffPath)) {
+          try {
+            const diff = loadDiff(diffPath);
+            description = diff.description;
+          } catch (error) {
+            if (error instanceof UnsupportedMigrationFileVersionError) throw error;
+            // A malformed optional description must not hide migration status.
+          }
         }
-      }
 
-      return {
-        number: num,
-        label: formatMigrationNumber(num),
-        ...(description ? { description } : {}),
-      };
-    });
+        return {
+          number: num,
+          label: formatMigrationNumber(num),
+          ...(description ? { description } : {}),
+        };
+      });
+    } catch (error) {
+      rows.push({
+        status: "error",
+        namespace,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      continue;
+    }
 
     rows.push({
       status: "ok",

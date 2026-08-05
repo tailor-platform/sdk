@@ -36,6 +36,7 @@ import {
   type SnapshotTypeSettingsState,
   type TypeScriptsState,
   type WarningChangeInfo,
+  MIN_SUPPORTED_MIGRATION_FILE_VERSION,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
 import { formatMigrationNumber } from "./migration-number";
@@ -95,6 +96,36 @@ export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
  * Must stay in sync with the platform's default decimal scale.
  */
 export const DEFAULT_DECIMAL_SCALE = 6;
+
+export class UnsupportedMigrationFileVersionError extends Error {}
+
+function assertSupportedMigrationFileVersion(filePath: string, raw: unknown): void {
+  if (typeof raw !== "object" || raw === null || !("version" in raw)) return;
+  const version = raw.version;
+  if (typeof version !== "number") return;
+  if (
+    Number.isInteger(version) &&
+    version >= MIN_SUPPORTED_MIGRATION_FILE_VERSION &&
+    version <= SCHEMA_SNAPSHOT_VERSION
+  ) {
+    return;
+  }
+
+  const supportedRange = `${MIN_SUPPORTED_MIGRATION_FILE_VERSION}-${SCHEMA_SNAPSHOT_VERSION}`;
+  let guidance: string;
+  if (version > SCHEMA_SNAPSHOT_VERSION) {
+    guidance = `Upgrade to an SDK that supports migration file format version ${version}.`;
+  } else if (version < MIN_SUPPORTED_MIGRATION_FILE_VERSION) {
+    guidance =
+      "Re-baseline with an SDK that still supports this migration history, then upgrade the SDK.";
+  } else {
+    guidance = "Restore the migration file from version control or regenerate it.";
+  }
+  throw new UnsupportedMigrationFileVersionError(
+    `Unsupported migration file format version ${version} at ${filePath}. ` +
+      `This SDK supports migration file format versions ${supportedRange}. ${guidance}`,
+  );
+}
 
 function createSnapshotRecord<T>(): Record<string, T> {
   return Object.create(null) as Record<string, T>;
@@ -512,6 +543,7 @@ export function loadSnapshot(filePath: string): NormalizedSchemaSnapshot {
   } catch (error) {
     throw new Error(`Invalid schema snapshot at ${filePath}: ${String(error)}`, { cause: error });
   }
+  assertSupportedMigrationFileVersion(filePath, raw);
   const result = schemaSnapshotSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(`Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`, {
@@ -535,6 +567,7 @@ export function loadDiff(filePath: string): MigrationDiff {
   } catch (error) {
     throw new Error(`Invalid migration diff at ${filePath}: ${String(error)}`, { cause: error });
   }
+  assertSupportedMigrationFileVersion(filePath, raw);
   const result = migrationDiffSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(`Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`, {

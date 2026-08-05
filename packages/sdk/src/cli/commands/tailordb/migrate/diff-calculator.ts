@@ -21,7 +21,10 @@ import type {
 /**
  * Current schema snapshot format version
  */
-export const SCHEMA_SNAPSHOT_VERSION = 1 as const;
+export const SCHEMA_SNAPSHOT_VERSION = 2 as const;
+
+/** Oldest migration file format this SDK can replay. */
+export const MIN_SUPPORTED_MIGRATION_FILE_VERSION = 1 as const;
 
 /**
  * Change kind in migration diff

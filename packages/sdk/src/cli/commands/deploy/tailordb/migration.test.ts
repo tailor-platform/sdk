@@ -305,6 +305,25 @@ describe("migration", () => {
       expect(result[0]!.namespace).toBe("tailordb");
     });
 
+    test("uses an approved checkpoint override without reading remote metadata", async () => {
+      const client = createMockClient({ tailordb: 5 });
+      writeDiffFile(testDir, 1, createMockMigrationDiff());
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const result = await detectPendingMigrations(
+        client,
+        workspaceId,
+        namespacesWithMigrations,
+        undefined,
+        new Map([["tailordb", 0]]),
+      );
+
+      expect(result.map((migration) => migration.number)).toEqual([1]);
+      expect(client.getMetadata).not.toHaveBeenCalled();
+    });
+
     test("detects multiple pending migrations", async () => {
       const client = createMockClient({ tailordb: 1 });
       writeDiffFile(testDir, 2, createMockMigrationDiff());

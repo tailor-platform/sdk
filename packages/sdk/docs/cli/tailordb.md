@@ -94,14 +94,15 @@ tailor tailordb migration <command>
 
 **Commands**
 
-| Command                                                       | Description                                                                                                                                                                                                                                                                            |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`tailordb migration generate`](#tailordb-migration-generate) | Generate migration files by detecting schema differences between current local types and the previous migration snapshot.                                                                                                                                                              |
-| [`tailordb migration script`](#tailordb-migration-script)     | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.                                                                                                                                   |
-| [`tailordb migration set`](#tailordb-migration-set)           | Set migration checkpoint to a specific number.                                                                                                                                                                                                                                         |
-| [`tailordb migration status`](#tailordb-migration-status)     | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                                                                                                                                                   |
-| [`tailordb migration sync`](#tailordb-migration-sync)         | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                                                                                                                                                                                  |
-| [`tailordb migration validate`](#tailordb-migration-validate) | Validate the full migration history and detect schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found. |
+| Command                                                           | Description                                                                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`tailordb migration generate`](#tailordb-migration-generate)     | Generate migration files by detecting schema differences between current local types and the previous migration snapshot.                                                                                                                                                              |
+| [`tailordb migration rebaseline`](#tailordb-migration-rebaseline) | Collapse the full migration history into a new 0000 baseline.                                                                                                                                                                                                                          |
+| [`tailordb migration script`](#tailordb-migration-script)         | Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.                                                                                                                                   |
+| [`tailordb migration set`](#tailordb-migration-set)               | Set migration checkpoint to a specific number.                                                                                                                                                                                                                                         |
+| [`tailordb migration status`](#tailordb-migration-status)         | Show the current migration status for TailorDB namespaces, including applied and pending migrations.                                                                                                                                                                                   |
+| [`tailordb migration sync`](#tailordb-migration-sync)             | Sync remote TailorDB schema to a specific migration snapshot (recovery from --no-schema-check drift).                                                                                                                                                                                  |
+| [`tailordb migration validate`](#tailordb-migration-validate)     | Validate the full migration history and detect schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found. |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -125,6 +126,32 @@ tailor tailordb migration generate [options]
 | `--init`            | -     | Delete existing migrations and start fresh | No       | `false`              | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+#### tailordb migration rebaseline
+
+Collapse the full migration history into a new 0000 baseline.
+
+**Usage**
+
+```
+tailor tailordb migration rebaseline [options]
+```
+
+**Options**
+
+| Option                          | Alias | Description                                                       | Required | Default              | Env                            |
+| ------------------------------- | ----- | ----------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                      | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                 | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                        | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--yes`                         | `-y`  | Skip confirmation prompts                                         | No       | `false`              | -                              |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (required if multiple namespaces exist) | No       | -                    | -                              |
+
+See [Global Options](../cli-reference.md#global-options) for options available to all commands.
+
+**Notes**
+
+Re-baselining removes migrations after 0000 from the working tree and resets the connected workspace checkpoint without changing its schema or data. Every environment must already have applied the latest migration before you run this command.
 
 #### tailordb migration script
 
