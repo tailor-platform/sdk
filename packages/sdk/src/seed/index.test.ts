@@ -139,6 +139,19 @@ describe("backfillSeedIds", () => {
     expect(readFileSync(path.join(dir, "Customer.jsonl"), "utf-8")).toBe(content);
   });
 
+  test("backfills a table named __proto__", async () => {
+    const dir = makeDataDir({
+      "__proto__.schema.ts": customerSchema,
+      "__proto__.jsonl": '{"name":"Acme","email":"a@acme.com"}\n',
+    });
+
+    const result = await backfillSeedIds({ path: dir });
+
+    expect(result.backfilled).toEqual(Object.fromEntries([["__proto__", 1]]));
+    const row = JSON.parse(readFileSync(path.join(dir, "__proto__.jsonl"), "utf-8").trim());
+    expect(row.id).toMatch(UUID_PATTERN);
+  });
+
   test("does not rewrite other tables' files when backfilling", async () => {
     const spacedUserLines = '{"name": "john@example.com", "password": "Password1!"}\n\n';
     const dir = makeDataDir({

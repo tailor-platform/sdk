@@ -169,7 +169,8 @@ export async function backfillSeedIds(
       );
     }
 
-    const backfilled: Record<string, number> = {};
+    // Map keeps a table named __proto__ from hitting the inherited setter
+    const missingByTable = new Map<string, number>();
     for (const table of db.getTableNames()) {
       // Loading a table whose schema file is missing or broken falls back to
       // schema inference, which cannot mint ids — surface that instead of
@@ -182,20 +183,20 @@ export async function backfillSeedIds(
       }
       const missing = await countRowsMissingId(join(dataDir, `${table}.jsonl`));
       if (missing > 0) {
-        backfilled[table] = missing;
+        missingByTable.set(table, missing);
       }
     }
 
-    const entries = Object.entries(backfilled);
-    if (entries.length === 0) {
+    const backfilled = Object.fromEntries(missingByTable);
+    if (missingByTable.size === 0) {
       return { backfilled, output: "✓ All rows already have an id" };
     }
 
-    for (const [table] of entries) {
+    for (const table of missingByTable.keys()) {
       await db.sync(table);
     }
 
-    const outputLines = entries.map(
+    const outputLines = [...missingByTable].map(
       ([table, count]) => `✓ ${table}: ${count} ${count === 1 ? "id" : "ids"} backfilled`,
     );
     return { backfilled, output: outputLines.join("\n") };
