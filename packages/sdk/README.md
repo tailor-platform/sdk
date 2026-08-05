@@ -53,10 +53,10 @@ For more details, see the [Quickstart Guide](./docs/quickstart.md).
 Install the `tailor` skill from the locally installed SDK package:
 
 ```bash
-npx tailor skills add
+npx @tailor-platform/sdk skills add
 
 # Or refresh all skills owned by this CLI
-npx tailor skills sync
+npx @tailor-platform/sdk skills sync
 ```
 
 This sources the skill from `node_modules/@tailor-platform/sdk/agent-skills`

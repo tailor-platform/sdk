@@ -264,7 +264,7 @@ jobs:
           fi
       - id: tailor-setup-base-pnpm
         if: steps.tailor-detect-base-package-manager.outputs['package-manager'] == 'pnpm'
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: ${{ steps.tailor-detect-base-package-manager.outputs['pnpm-version'] }}
           package_json_file: .tailor-erd-base/package.json
@@ -324,9 +324,9 @@ jobs:
           run_tailor_cli() {
             case "__PACKAGE_MANAGER__" in
               pnpm) pnpm exec tailor "$@" ;;
-              npm) npx tailor "$@" ;;
+              npm) npx @tailor-platform/sdk "$@" ;;
               yarn) yarn tailor "$@" ;;
-              bun) bunx tailor "$@" ;;
+              bun) bun run tailor "$@" ;;
               *)
                 echo "::error::Unsupported package-manager '__PACKAGE_MANAGER__' (expected pnpm, npm, yarn, or bun)"
                 exit 1

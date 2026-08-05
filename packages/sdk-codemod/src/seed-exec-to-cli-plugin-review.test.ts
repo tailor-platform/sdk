@@ -53,7 +53,7 @@ fork("tools/worker.mjs");
 
     expect(transform(source, "setup.ts")).toBe(`import { execSync, fork } from "node:child_process";
 
-execSync("npx tailor seed apply --truncate");
+execSync("npx @tailor-platform/sdk seed apply --truncate");
 fork("tools/worker.mjs");
 `);
     expect(reviewFindings(source, "setup.ts", "setup.ts")).toEqual([]);
@@ -116,7 +116,7 @@ fork("tools/worker.mjs");
     const source = "execSync(`node seed/exec.mjs --skip-idp -m ${name}`);\n";
 
     expect(transform(source, "setup.ts")).toBe(
-      "execSync(`npx tailor seed apply --skip-idp -m ${name}`);\n",
+      "execSync(`npx @tailor-platform/sdk seed apply --skip-idp -m ${name}`);\n",
     );
   });
 
@@ -195,13 +195,22 @@ fork("tools/worker.mjs");
       'execSync("pnpm exec tailor seed apply");\n',
     );
     expect(transform('execSync("npm exec node seed/exec.mjs");\n', "setup.ts")).toBe(
-      'execSync("npm exec tailor seed apply");\n',
+      'execSync("npm exec @tailor-platform/sdk seed apply");\n',
     );
     expect(transform('execSync("yarn dlx node seed/exec.mjs");\n', "setup.ts")).toBe(
-      'execSync("yarn dlx tailor seed apply");\n',
+      'execSync("yarn dlx @tailor-platform/sdk seed apply");\n',
     );
     expect(transform('execSync("bunx node seed/exec.mjs");\n', "setup.ts")).toBe(
-      'execSync("bunx tailor seed apply");\n',
+      'execSync("bunx @tailor-platform/sdk seed apply");\n',
+    );
+  });
+
+  test("names the package when the retained runner installs missing names", () => {
+    expect(transform("npx node seed/exec.mjs\n", "seed.sh")).toBe(
+      "npx @tailor-platform/sdk seed apply\n",
+    );
+    expect(transform("pnpm exec node seed/exec.mjs\n", "seed.sh")).toBe(
+      "pnpm exec tailor seed apply\n",
     );
   });
 
@@ -209,13 +218,13 @@ fork("tools/worker.mjs");
     const source = 'execSync("pnpm node seed/exec.mjs");\nexecSync("node seed/exec.mjs");\n';
 
     expect(transform(source, "setup.ts")).toBe(
-      'execSync("pnpm tailor seed apply");\nexecSync("npx tailor seed apply");\n',
+      'execSync("pnpm tailor seed apply");\nexecSync("npx @tailor-platform/sdk seed apply");\n',
     );
   });
 
   test("still prefixes when a runner name is only a token suffix", () => {
     expect(transform('execSync("mypnpm node seed/exec.mjs");\n', "setup.ts")).toBe(
-      'execSync("mypnpm npx tailor seed apply");\n',
+      'execSync("mypnpm npx @tailor-platform/sdk seed apply");\n',
     );
   });
 
@@ -255,14 +264,14 @@ fork("tools/worker.mjs");
     expect(transform("The generated seed/exec.mjs file\n", "README.md")).toBeNull();
   });
 
-  test("uses npx in the manual migration guidance", () => {
+  test("uses the package-runner form in the manual migration guidance", () => {
     const codemod = allCodemods.find((entry) => entry.id === "v2/seed-exec-to-cli-plugin");
 
     expect(codemod?.prompt).toContain(
-      'execSync("npx tailor seed apply", { env, stdio: "inherit" })',
+      'execSync("npx @tailor-platform/sdk seed apply", { env, stdio: "inherit" })',
     );
     expect(reviewFindings(FORK_SETUP, "setup.ts", "setup.ts")[0]?.message).toContain(
-      'execSync("npx tailor seed apply")',
+      'execSync("npx @tailor-platform/sdk seed apply")',
     );
   });
 
@@ -310,7 +319,7 @@ fork("tools/worker.mjs");
       await Promise.all(
         sourceFiles.map(async (file) => {
           await expect(fs.promises.readFile(path.join(projectDir, file), "utf-8")).resolves.toBe(
-            'execSync("npx tailor seed apply --yes");\n',
+            'execSync("npx @tailor-platform/sdk seed apply --yes");\n',
           );
         }),
       );
