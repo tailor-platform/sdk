@@ -49,6 +49,7 @@ export function isRenameCompatible(
   if (before.type !== after.type) return false;
   if ((before.array ?? false) !== (after.array ?? false)) return false;
   if ((before.foreignKeyType ?? "") !== (after.foreignKeyType ?? "")) return false;
+  if ((before.foreignKeyField ?? "") !== (after.foreignKeyField ?? "")) return false;
   if (before.serial || after.serial) return false;
   if (before.type === "enum") {
     const afterValues = new Set((after.allowedValues ?? []).map((v) => v.value));

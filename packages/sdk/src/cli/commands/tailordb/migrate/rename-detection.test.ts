@@ -38,6 +38,25 @@ describe("isRenameCompatible", () => {
     ).toBe(false);
   });
 
+  test("rejects different foreign key fields", () => {
+    expect(
+      isRenameCompatible(
+        stringField({
+          type: "uuid",
+          foreignKey: true,
+          foreignKeyType: "Company",
+          foreignKeyField: "id",
+        }),
+        stringField({
+          type: "uuid",
+          foreignKey: true,
+          foreignKeyType: "Company",
+          foreignKeyField: "slug",
+        }),
+      ),
+    ).toBe(false);
+  });
+
   test("rejects serial fields", () => {
     expect(isRenameCompatible(stringField({ serial: { start: 1 } }), stringField())).toBe(false);
     expect(isRenameCompatible(stringField(), stringField({ serial: { start: 1 } }))).toBe(false);
