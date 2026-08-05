@@ -21,6 +21,7 @@ import type {
   FieldAddedChange,
   FieldRemovedChange,
   FieldModifiedChange,
+  FieldTypeModifiedChange,
   IndexAddedChange,
   IndexRemovedChange,
   IndexModifiedChange,
@@ -364,6 +365,15 @@ const fieldModifiedChangeSchema = z.looseObject({
   after: snapshotFieldConfigSchema,
 }) as unknown as z.ZodType<FieldModifiedChange>;
 
+const fieldTypeModifiedChangeSchema = z.looseObject({
+  kind: z.literal("field_type_modified"),
+  typeName: z.string(),
+  reason: z.string().optional(),
+  fieldName: z.string(),
+  before: snapshotFieldConfigSchema,
+  after: snapshotFieldConfigSchema,
+}) as unknown as z.ZodType<FieldTypeModifiedChange>;
+
 const indexAddedChangeSchema = z.looseObject({
   kind: z.literal("index_added"),
   typeName: z.string(),
@@ -478,6 +488,7 @@ export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kin
   fieldAddedChangeSchema as unknown as DiscriminableSchema,
   fieldRemovedChangeSchema as unknown as DiscriminableSchema,
   fieldModifiedChangeSchema as unknown as DiscriminableSchema,
+  fieldTypeModifiedChangeSchema as unknown as DiscriminableSchema,
   indexAddedChangeSchema as unknown as DiscriminableSchema,
   indexRemovedChangeSchema as unknown as DiscriminableSchema,
   indexModifiedChangeSchema as unknown as DiscriminableSchema,

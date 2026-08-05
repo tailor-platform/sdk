@@ -8,6 +8,7 @@ import { describe, test, expect, vi, aroundEach } from "vitest";
 import {
   applyPreMigrationFieldAdjustments,
   applyPreMigrationIndexAdjustments,
+  createPreMigrationSnapshotType,
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   formatMigrationNumber,
@@ -29,6 +30,7 @@ import {
 import type {
   FieldDiffChange,
   IndexDiffChange,
+  TypeScriptsModifiedChange,
 } from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { Application } from "#/cli/services/application";
 import type { ExecutorService } from "#/cli/services/executor/service";
@@ -1202,6 +1204,82 @@ describe("applyTailorDB phase separation", () => {
 describe("applyPreMigrationFieldAdjustments", () => {
   type ProtoField = MessageInitShape<typeof TailorDBType_FieldConfigSchema>;
 
+  test("keeps the previous field type until the migration script completes", () => {
+    const fields: Record<string, ProtoField> = {
+      age: { type: "float", required: true, unique: true },
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "age",
+        {
+          kind: "field_type_modified",
+          typeName: "User",
+          fieldName: "age",
+          before: { type: "integer", required: false, unique: false },
+          after: { type: "float", required: true, unique: true },
+        },
+      ],
+    ]);
+
+    applyPreMigrationFieldAdjustments(fields, typeChanges);
+
+    expect(fields.age!.type).toBe("integer");
+    expect(fields.age!.required).toBe(false);
+    expect(fields.age!.unique).toBe(false);
+  });
+
+  test("keeps previous field and type hooks before manifest scripts are aggregated", () => {
+    const previousAge: SnapshotFieldConfig = {
+      type: "integer",
+      required: false,
+      hooks: { update: { expr: "return 1" } },
+    };
+    const targetType: TailorDBSnapshotType = {
+      name: "User",
+      pluralForm: "Users",
+      fields: {
+        age: {
+          type: "float",
+          required: false,
+          hooks: { update: { expr: "return 2" } },
+        },
+      },
+      typeHookExpr: { update: "return { age: 'target-only' }" },
+      typeValidateExpr: "return value.age === 'target-only'",
+    };
+    const typeChanges = new Map<string, FieldDiffChange>([
+      [
+        "age",
+        {
+          kind: "field_type_modified",
+          typeName: "User",
+          fieldName: "age",
+          before: previousAge,
+          after: targetType.fields.age!,
+        },
+      ],
+    ]);
+    const typeScriptsChange: TypeScriptsModifiedChange = {
+      kind: "type_scripts_modified",
+      typeName: "User",
+      before: {
+        typeHookExpr: { update: "return { age: 1 }" },
+        typeValidateExpr: "return Number.isInteger(value.age)",
+      },
+      after: {
+        typeHookExpr: targetType.typeHookExpr,
+        typeValidateExpr: targetType.typeValidateExpr,
+      },
+    };
+
+    const preType = createPreMigrationSnapshotType(targetType, typeChanges, typeScriptsChange);
+
+    expect(preType.fields.age).toEqual(previousAge);
+    expect(preType.typeHookExpr).toEqual(typeScriptsChange.before.typeHookExpr);
+    expect(preType.typeValidateExpr).toBe(typeScriptsChange.before.typeValidateExpr);
+    expect(targetType.fields.age!.type).toBe("float");
+  });
+
   test("re-inserts removed field so migrate.ts can still read it", () => {
     // Simulate the new schema produced by planTailorDB: the removed field
     // has already been stripped from `fields`.
@@ -1765,6 +1843,116 @@ describe("applyTailorDB migration label reconciliation", () => {
       "Remote schema verification failed",
     );
     expect(client.createTailorDBType).not.toHaveBeenCalled();
+  });
+
+  test("rejects a type removed at the current checkpoint when cleanup did not finish", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const migrationDir = path.join(tmpDir, "0001");
+    fs.mkdirSync(migrationDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(migrationDir, "diff.json"),
+      JSON.stringify(
+        createMockMigrationDiff({
+          namespace: "test-tailordb",
+          changes: [{ kind: "type_removed", typeName: "User", before: userType }],
+          hasWarnings: true,
+          warnings: [{ typeName: "User", reason: "Type removed" }],
+        }),
+        null,
+        2,
+      ),
+    );
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [] },
+        types: {},
+      },
+    ];
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001" } },
+    } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote schema verification failed",
+    );
+  });
+
+  test("rejects a stale removed type before a pending migration re-adds the same name", async () => {
+    const userType = userSnapshotType();
+    writeUserSchemaSnapshot(userType);
+    const removalDir = path.join(tmpDir, "0001");
+    fs.mkdirSync(removalDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(removalDir, "diff.json"),
+      JSON.stringify(
+        createMockMigrationDiff({
+          namespace: "test-tailordb",
+          changes: [{ kind: "type_removed", typeName: "User", before: userType }],
+          hasWarnings: true,
+          warnings: [{ typeName: "User", reason: "Type removed" }],
+        }),
+        null,
+        2,
+      ),
+    );
+    const readditionDir = path.join(tmpDir, "0002");
+    fs.mkdirSync(readditionDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(readditionDir, "diff.json"),
+      JSON.stringify(
+        createMockMigrationDiff({
+          namespace: "test-tailordb",
+          changes: [{ kind: "type_added", typeName: "User", after: userType }],
+        }),
+        null,
+        2,
+      ),
+    );
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [] },
+        types: { User: userType },
+      },
+    ];
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+    vi.mocked(client.getMetadata).mockResolvedValue({
+      metadata: { labels: { "sdk-migration": "m0001" } },
+    } as never);
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote schema verification failed",
+    );
+  });
+
+  test("rejects an unrelated remote-only type without a recorded removal", async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "0000", "schema.json"),
+      JSON.stringify({
+        version: 1,
+        namespace: "test-tailordb",
+        createdAt: new Date().toISOString(),
+        types: {},
+      }),
+    );
+    const planResult = makePlanResult();
+    planResult.context.tailorDBInputs = [
+      {
+        namespace: "test-tailordb",
+        config: { files: [] },
+        types: {},
+      },
+    ];
+    const client = schemaVerificationClient(unchangedRemoteSettings());
+
+    await expect(runValidation(client, planResult)).rejects.toThrow(
+      "Remote schema verification failed",
+    );
   });
 
   test("rejects a remote migration checkpoint missing from local history", async () => {

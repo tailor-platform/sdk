@@ -252,7 +252,7 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
     return [];
   }
 
-  if (change.kind !== "field_modified") {
+  if (change.kind !== "field_modified" && change.kind !== "field_type_modified") {
     // No data migration needed for type_added, type_removed, or field_removed
     return [];
   }
@@ -260,8 +260,9 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
   const { before, after } = change;
   const scripts: string[] = [];
 
-  // Note: Type change is rejected as unsupported in generate.ts
-  // No script generation needed here
+  if (change.kind === "field_type_modified") {
+    scripts.push(generateFieldTypeChangeScript(change));
+  }
 
   // Optional to required
   if (!before.required && after.required) {
@@ -331,11 +332,63 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
   return scripts;
 }
 
+function generateFieldTypeChangeScript(
+  change: Extract<DiffChange, { kind: "field_type_modified" }>,
+): string {
+  return `  // Normalize ${change.typeName}.${change.fieldName} from ${change.before.type} to ${change.after.type} while the previous type is still active
+  {
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
+        .selectFrom("${change.typeName}")
+        .select(["id", "${change.fieldName}"])
+        .where("${change.fieldName}", "is not", null)
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        // TODO: Normalize this value to a representation accepted by the active ${change.before.type} type and castable to ${change.after.type}.
+        const sourceValue = row.${change.fieldName};
+        if (sourceValue === null) continue;
+        const normalizedValue = sourceValue;
+        if (Object.is(normalizedValue, sourceValue)) continue;
+        await trx
+          .updateTable("${change.typeName}")
+          .set({ [${JSON.stringify(change.fieldName)}]: normalizedValue })
+          .where("id", "=", row.id)
+          .execute();
+      }
+      lastId = rows[rows.length - 1]!.id;
+    }
+  }`;
+}
+
 function generateUniqueConstraintScript(change: DiffChange): string | null {
-  if (change.kind !== "field_modified") return null;
+  if (change.kind !== "field_modified" && change.kind !== "field_type_modified") return null;
 
   const { before, after } = change;
   if ((before.unique ?? false) || !(after.unique ?? false)) return null;
+
+  const duplicateResolution =
+    change.kind === "field_type_modified"
+      ? `      if (records.length > 1) {
+        throw new Error(
+          "TODO: Resolve duplicate ${change.typeName}.${change.fieldName} values before adding the unique constraint",
+        );
+      }`
+      : `      // Keep first record, add suffix to others
+      for (let i = 1; i < records.length; i++) {
+        await trx
+          .updateTable("${change.typeName}")
+          .set({ ${change.fieldName}: \`\${records[i].${change.fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
+          .where("id", "=", records[i].id)
+          .execute();
+      }`;
 
   return `  // Ensure ${change.fieldName} values are unique before adding constraint
   {
@@ -346,19 +399,13 @@ function generateUniqueConstraintScript(change: DiffChange): string | null {
       .having((eb) => eb.fn.count("id"), ">", 1)
       .execute();
     for (const dup of duplicates) {
-      // Keep first record, add suffix to others
+      // Load every record in this duplicate group before resolving it
       const records = await trx
         .selectFrom("${change.typeName}")
         .select(["id", "${change.fieldName}"])
         .where("${change.fieldName}", "=", dup.${change.fieldName})
         .execute();
-      for (let i = 1; i < records.length; i++) {
-        await trx
-          .updateTable("${change.typeName}")
-          .set({ ${change.fieldName}: \`\${records[i].${change.fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
-          .where("id", "=", records[i].id)
-          .execute();
-      }
+${duplicateResolution}
     }
   }`;
 }

@@ -225,8 +225,137 @@ describe("template-generator", () => {
       expect(result.dbTypesFilePath).toBeUndefined();
     });
 
-    // Note: Type change and array-to-single-value change are rejected as unsupported in
-    // generate.ts before reaching generateDiffFiles, so no test is needed for those cases here.
+    test("should scaffold a batched normalization for a compatible field type change", async () => {
+      const snapshotWithIntegerAge = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            age: { type: "integer", required: false },
+          },
+        },
+      });
+
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_type_modified",
+            typeName: "User",
+            fieldName: "age",
+            before: { type: "integer", required: false },
+            after: { type: "float", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "age",
+            reason: "Field type changed from integer to float",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithIntegerAge);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain("Normalize User.age from integer to float");
+      expect(scriptContent).toContain('.where("age", "is not", null)');
+      expect(scriptContent).toContain('.orderBy("id", "asc")');
+      expect(scriptContent).toContain(".limit(100)");
+      expect(scriptContent).toContain("const sourceValue = row.age");
+      expect(scriptContent).toContain("if (sourceValue === null) continue");
+      expect(scriptContent).toContain("const normalizedValue = sourceValue");
+      expect(scriptContent).toContain(
+        "TODO: Normalize this value to a representation accepted by the active integer type and castable to float",
+      );
+      expect(scriptContent).toContain("if (Object.is(normalizedValue, sourceValue)) continue");
+      expect(scriptContent).toContain('.set({ ["age"]: normalizedValue })');
+    });
+
+    test("should use a data property when normalizing a field named __proto__", async () => {
+      const snapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: Object.fromEntries([["__proto__", { type: "integer", required: false }]]),
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_type_modified",
+            typeName: "User",
+            fieldName: "__proto__",
+            before: { type: "integer", required: false },
+            after: { type: "float", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "__proto__",
+            reason: "Field type changed from integer to float",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshot);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent).toContain('.set({ ["__proto__"]: normalizedValue })');
+    });
+
+    test("should fail closed on unresolved duplicates when a type change adds unique", async () => {
+      const snapshotWithIntegerAge = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            age: { type: "integer", required: false, unique: false },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_type_modified",
+            typeName: "User",
+            fieldName: "age",
+            before: { type: "integer", required: false, unique: false },
+            after: { type: "float", required: false, unique: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "age",
+            reason: "Field type changed from integer to float",
+          },
+          {
+            typeName: "User",
+            fieldName: "age",
+            reason: "Unique constraint added to field",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, snapshotWithIntegerAge);
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+
+      expect(scriptContent).toContain("Normalize User.age from integer to float");
+      expect(scriptContent).toContain(
+        "TODO: Resolve duplicate User.age values before adding the unique constraint",
+      );
+    });
+
+    // Array-to-single-value changes remain unsupported until rename-based
+    // expand-contract migrations are available.
 
     test("should generate migration script for unique constraint addition", async () => {
       const snapshotWithoutUnique = createTestSnapshot({
