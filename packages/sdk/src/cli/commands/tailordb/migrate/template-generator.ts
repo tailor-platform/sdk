@@ -256,7 +256,13 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
     const scripts = [generateFieldRenameCopyScript(change)];
     // The unique constraint is deferred to the post-migration phase, so
     // duplicates in the copied values must be resolved before it is enforced.
-    if (!(change.before.unique ?? false) && (change.after.unique ?? false)) {
+    // A previously unique source still needs the check when the copy itself
+    // can collapse distinct values (e.g. a decreased decimal scale rounds
+    // 1.231 and 1.232 both to 1.23).
+    if (
+      (change.after.unique ?? false) &&
+      (!(change.before.unique ?? false) || renameCopyCanCollapseValues(change))
+    ) {
       scripts.push(generateUniqueDedupeScript(change.typeName, change.fieldName));
     }
     return scripts;
@@ -339,6 +345,12 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
   }
 
   return scripts;
+}
+
+function renameCopyCanCollapseValues(change: FieldRenamedChange): boolean {
+  const { before, after } = change;
+  if (before.type !== "decimal" || after.type !== "decimal") return false;
+  return (after.scale ?? DEFAULT_DECIMAL_SCALE) < (before.scale ?? DEFAULT_DECIMAL_SCALE);
 }
 
 function generateFieldRenameCopyScript(change: FieldRenamedChange): string {

@@ -268,6 +268,53 @@ describe("template-generator", () => {
       expect(dedupePosition).toBeGreaterThan(copyPosition);
     });
 
+    test.each([
+      ["decreases", 2, true],
+      ["keeps", 3, false],
+    ])(
+      "unique-to-unique decimal rename that %s scale adds a dedupe block: %s",
+      async (_label, afterScale, expectDedupe) => {
+        const renamePreviousSnapshot = createTestSnapshot({
+          Item: {
+            name: "Item",
+            pluralForm: "Items",
+            fields: {
+              price: { type: "decimal", required: true, unique: true, scale: 3 },
+            },
+          },
+        });
+        const diff = createMockMigrationDiff({
+          changes: [
+            {
+              kind: "field_renamed",
+              typeName: "Item",
+              fieldName: "unitPrice",
+              previousFieldName: "price",
+              before: { type: "decimal", required: true, unique: true, scale: 3 },
+              after: { type: "decimal", required: true, unique: true, scale: afterScale },
+            },
+          ],
+          hasBreakingChanges: true,
+          breakingChanges: [
+            {
+              typeName: "Item",
+              fieldName: "unitPrice",
+              reason: "Field renamed from price to unitPrice",
+            },
+          ],
+          requiresMigrationScript: true,
+        });
+
+        const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+        const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+        expect(scriptContent).toContain('eb.ref("price")');
+        expect(
+          scriptContent.includes("Ensure unitPrice values are unique before adding constraint"),
+        ).toBe(expectDedupe);
+      },
+    );
+
     test("should add a null-handling TODO when a rename target becomes required", async () => {
       const renamePreviousSnapshot = createTestSnapshot({
         User: {

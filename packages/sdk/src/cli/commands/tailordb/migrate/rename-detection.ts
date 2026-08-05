@@ -9,7 +9,7 @@
  */
 
 import type { FieldAddedChange, FieldRemovedChange, MigrationDiff } from "./diff-calculator";
-import type { SnapshotFieldConfig } from "./snapshot-types";
+import type { SchemaSnapshot, SnapshotFieldConfig } from "./snapshot-types";
 
 /**
  * A confirmed field rename to record in the migration diff.
@@ -90,6 +90,31 @@ export function findRenameCandidates(diff: MigrationDiff): FieldRenameCandidate[
     }
   }
   return candidates;
+}
+
+/**
+ * Whether a rename spec matches a removed + added field pair between two
+ * snapshots: the old field existed before and is gone now, and the new field
+ * exists now but did not before. Field compatibility is checked separately
+ * when the diff is recomputed with the spec.
+ * @param {FieldRenameSpec} spec - Rename spec to test
+ * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
+ * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
+ * @returns {boolean} True if the spec matches a removed + added pair
+ */
+export function renameSpecApplies(
+  spec: FieldRenameSpec,
+  previousSnapshot: SchemaSnapshot,
+  currentSnapshot: SchemaSnapshot,
+): boolean {
+  const prevFields = previousSnapshot.types[spec.typeName]?.fields;
+  const currFields = currentSnapshot.types[spec.typeName]?.fields;
+  return Boolean(
+    prevFields?.[spec.fromFieldName] &&
+    !currFields?.[spec.fromFieldName] &&
+    currFields?.[spec.toFieldName] &&
+    !prevFields[spec.toFieldName],
+  );
 }
 
 const RENAME_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+):([^.:\s]+)$/;

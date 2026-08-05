@@ -31,6 +31,7 @@ import {
 import {
   findRenameCandidates,
   parseRenameOption,
+  renameSpecApplies,
   type FieldRenameCandidate,
   type FieldRenameSpec,
 } from "./rename-detection";
@@ -141,7 +142,6 @@ export async function generate(options: GenerateOptions): Promise<void> {
   const renameFlags: RenameFlag[] = (options.renames ?? []).map((raw) => ({
     raw,
     spec: parseRenameOption(raw),
-    used: false,
   }));
 
   // Handle --init option: delete existing migrations directory
@@ -159,7 +159,9 @@ export async function generate(options: GenerateOptions): Promise<void> {
   const { defineApplication } = await import("#/cli/services/application");
   const application = defineApplication({ config, pluginManager });
 
-  // Process each namespace
+  // Load every namespace's snapshots first so --rename flags can be validated
+  // against all of them before any migration file is written
+  const generations: NamespaceGeneration[] = [];
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     logger.info(`Processing namespace: ${styles.bold(namespace)}`);
 
@@ -179,14 +181,31 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
     const localTypesObj = tailordbService.types;
 
-    // Create snapshot from current local types
-    const currentSnapshot = createSnapshotFromLocalTypes(localTypesObj, namespace);
+    generations.push({
+      namespace,
+      migrationsDir,
+      // Create snapshot from current local types
+      currentSnapshot: createSnapshotFromLocalTypes(localTypesObj, namespace),
+      // Returns null when the migrations directory is missing or empty;
+      // throws when existing migration files are invalid.
+      previousSnapshot: reconstructSnapshotFromMigrations(migrationsDir),
+    });
+  }
 
-    // Returns null when the migrations directory is missing or empty;
-    // throws when existing migration files are invalid.
-    const previousSnapshot: SchemaSnapshot | null =
-      reconstructSnapshotFromMigrations(migrationsDir);
+  const unusedRenames = renameFlags.filter(
+    (flag) =>
+      !generations.some(
+        ({ previousSnapshot, currentSnapshot }) =>
+          previousSnapshot && renameSpecApplies(flag.spec, previousSnapshot, currentSnapshot),
+      ),
+  );
+  if (unusedRenames.length > 0) {
+    throw new Error(
+      `--rename does not match a removed + added field pair: ${unusedRenames.map((flag) => flag.raw).join(", ")}`,
+    );
+  }
 
+  for (const { migrationsDir, currentSnapshot, previousSnapshot } of generations) {
     if (!previousSnapshot) {
       // First migration - generate initial schema snapshot
       await generateInitialSnapshot(currentSnapshot, migrationsDir);
@@ -200,13 +219,6 @@ export async function generate(options: GenerateOptions): Promise<void> {
         renameFlags,
       );
     }
-  }
-
-  const unusedRenames = renameFlags.filter((flag) => !flag.used);
-  if (unusedRenames.length > 0) {
-    throw new Error(
-      `--rename did not match any schema change: ${unusedRenames.map((flag) => flag.raw).join(", ")}`,
-    );
   }
 }
 
@@ -229,11 +241,18 @@ async function generateInitialSnapshot(
   logger.log("\nThis is the baseline schema. Future changes will be tracked as diffs.");
 }
 
-/** A parsed `--rename` flag together with its raw value and usage tracking. */
+/** A parsed `--rename` flag together with its raw value. */
 interface RenameFlag {
   raw: string;
   spec: FieldRenameSpec;
-  used: boolean;
+}
+
+/** Snapshots collected for one namespace before any migration file is written. */
+interface NamespaceGeneration {
+  namespace: string;
+  migrationsDir: string;
+  currentSnapshot: SchemaSnapshot;
+  previousSnapshot: SchemaSnapshot | null;
 }
 
 function renameCandidateLabels(
@@ -286,7 +305,7 @@ async function promptRenameCandidate(
  * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
  * @param {MigrationDiff} diff - Diff computed without rename knowledge
  * @param {GenerateOptions} options - Generate options
- * @param {RenameFlag[]} renameFlags - Parsed `--rename` flags (marked used when they apply to this namespace)
+ * @param {RenameFlag[]} renameFlags - Parsed `--rename` flags (already validated against all namespaces)
  * @returns {Promise<MigrationDiff>} Diff with confirmed renames recorded
  */
 async function resolveFieldRenames(
@@ -298,21 +317,10 @@ async function resolveFieldRenames(
 ): Promise<MigrationDiff> {
   // A flag applies here only when this namespace actually removed the old
   // field and added the new one; another namespace may define a type with the
-  // same name. Flags that match no namespace are reported after the loop.
-  const applicableFlags = renameFlags.filter(({ spec }) => {
-    const prevFields = previousSnapshot.types[spec.typeName]?.fields;
-    const currFields = currentSnapshot.types[spec.typeName]?.fields;
-    return Boolean(
-      prevFields?.[spec.fromFieldName] &&
-      !currFields?.[spec.fromFieldName] &&
-      currFields?.[spec.toFieldName] &&
-      !prevFields[spec.toFieldName],
-    );
-  });
-  for (const flag of applicableFlags) {
-    flag.used = true;
-  }
-  const confirmed: FieldRenameSpec[] = applicableFlags.map((flag) => flag.spec);
+  // same name. Flags that match no namespace are rejected before generation.
+  const confirmed: FieldRenameSpec[] = renameFlags
+    .filter(({ spec }) => renameSpecApplies(spec, previousSnapshot, currentSnapshot))
+    .map((flag) => flag.spec);
   const claimedFields = new Set(
     confirmed.flatMap((spec) => [
       `${spec.typeName}.${spec.fromFieldName}`,

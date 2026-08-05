@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { findRenameCandidates, isRenameCompatible, parseRenameOption } from "./rename-detection";
+import {
+  findRenameCandidates,
+  isRenameCompatible,
+  parseRenameOption,
+  renameSpecApplies,
+} from "./rename-detection";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
 import type { SnapshotFieldConfig } from "./snapshot-types";
 
@@ -180,6 +185,54 @@ describe("findRenameCandidates", () => {
 
     expect(candidates).toHaveLength(1);
     expect(candidates[0]!.added.map((a) => a.fieldName)).toEqual(["displayName", "nickname"]);
+  });
+});
+
+describe("renameSpecApplies", () => {
+  const snapshot = (
+    fields: Record<string, SnapshotFieldConfig>,
+  ): Parameters<typeof renameSpecApplies>[1] => ({
+    version: 1,
+    namespace: "tailordb",
+    createdAt: new Date().toISOString(),
+    types: { User: { name: "User", pluralForm: "Users", fields } },
+  });
+  const spec = { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" };
+
+  test("matches a removed + added pair", () => {
+    expect(
+      renameSpecApplies(
+        spec,
+        snapshot({ fullName: stringField() }),
+        snapshot({ displayName: stringField() }),
+      ),
+    ).toBe(true);
+  });
+
+  test("does not match when the old field still exists", () => {
+    expect(
+      renameSpecApplies(
+        spec,
+        snapshot({ fullName: stringField() }),
+        snapshot({ fullName: stringField(), displayName: stringField() }),
+      ),
+    ).toBe(false);
+  });
+
+  test("does not match when the new field is missing", () => {
+    expect(renameSpecApplies(spec, snapshot({ fullName: stringField() }), snapshot({}))).toBe(
+      false,
+    );
+  });
+
+  test("does not match when the type does not exist", () => {
+    expect(
+      renameSpecApplies(
+        { ...spec, typeName: "Ghost" },
+        snapshot({ fullName: stringField() }),
+        snapshot({ displayName: stringField() }),
+      ),
+    ).toBe(false);
   });
 });
 
