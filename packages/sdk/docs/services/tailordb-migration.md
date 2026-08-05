@@ -216,7 +216,6 @@ existing `User` rows have no `role` value yet, so the script assigns one before 
 import type { Transaction } from "./db";
 
 export async function main(trx: Transaction): Promise<void> {
-  // Populate role for existing User records
   await trx.updateTable("User").set({ role: "MANAGER" }).where("role", "is", null).execute();
 }
 ```
@@ -395,12 +394,12 @@ Migration numbers are assigned sequentially, so two developers branching off the
 
 When your branch and main each generated the same number, merging or rebasing stops with an add/add conflict on `migrations/0005/diff.json`. Resolve it by re-generating your migration on top of main's:
 
-1. **Save your script edits aside.** If you customized `0005/migrate.ts`, keep a copy before touching the directory — during a rebase, `git show REBASE_HEAD:migrations/0005/migrate.ts` prints your branch's version.
+1. **Save your script edits aside.** If you customized `0005/migrate.ts`, keep a copy before touching the directory — during a rebase, `git show ORIG_HEAD:migrations/0005/migrate.ts` prints the version from your pre-rebase branch tip.
 2. **Take main's `0005/` directory in full.** Accept main's version of every conflicting file. Then check for files only your side added: if your migration has a `migrate.ts` and main's does not, that file never conflicts — it silently stays next to main's `diff.json`. Delete such leftovers explicitly.
 3. **Finish the rebase or merge, then re-run `migration generate`.** With main's migration now part of local history, the diff is computed against the correct base — including main's changes — and your migration lands as the next number (`0006`).
-4. **Port your script.** Copy the logic saved in step 1 into the newly scaffolded `0006/migrate.ts`.
+4. **Port your script.** Copy the logic saved in step 1 into the newly scaffolded `0006/migrate.ts`. For a warning-tier change, `migration generate` does not scaffold a script — recreate it first with `tailor tailordb migration script 0006`.
 
-**When a plain rename is enough.** If the two migrations touch disjoint types and fields, renaming your directory to the next free number (keeping main's `0005/`) can be acceptable. Let the local schema check arbitrate: run `tailor tailordb migration validate` after the rename. If it passes, the renamed history still reproduces your local type definitions and the rename was safe; if it reports a mismatch, discard the rename and re-generate as above.
+**When a plain rename is enough.** If the two migrations touch disjoint types and fields, renaming your directory to the next free number (keeping main's `0005/`) can be acceptable. Run `tailor tailordb migration validate` after the rename: if it reports a mismatch, the migrations were not disjoint — discard the rename and re-generate as above. A passing check covers only the schema history, not your script: `migrate.ts` now runs after main's migration, so confirm it does not read types or fields that migration removes or changes — when in doubt, re-generate.
 
 ### CI / CD
 
