@@ -143,11 +143,20 @@ export async function waitForCloneApplicationData(
  * Load generated JSONL seed rows for the types in a baseline snapshot.
  * @param dataDir - Directory containing `<Type>.jsonl` files
  * @param typeNames - Baseline type names to load
+ * @param snapshot - Baseline schema used to remove fields introduced by pending migrations
  * @returns Seed rows keyed by type name
  */
-export function loadSnapshotSeedData(dataDir: string, typeNames: string[]): SeedData {
+export function loadSnapshotSeedData(
+  dataDir: string,
+  typeNames: string[],
+  snapshot?: NormalizedSchemaSnapshot,
+): SeedData {
   const data: SeedData = {};
   for (const typeName of typeNames) {
+    const snapshotType = snapshot?.types[typeName];
+    const allowedFields = snapshotType
+      ? new Set(["id", "createdAt", "updatedAt", ...Object.keys(snapshotType.fields)])
+      : undefined;
     const jsonlPath = path.join(dataDir, `${typeName}.jsonl`);
     let content: string;
     try {
@@ -175,7 +184,12 @@ export function loadSnapshotSeedData(dataDir: string, typeNames: string[]): Seed
               `Invalid seed row in ${jsonlPath} at line ${index + 1}: expected a JSON object`,
             );
           }
-          return value as JsonObject;
+          const row = value as JsonObject;
+          return allowedFields
+            ? (Object.fromEntries(
+                Object.entries(row).filter(([fieldName]) => allowedFields.has(fieldName)),
+              ) as JsonObject)
+            : row;
         })
       : [];
   }
@@ -454,7 +468,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
       );
       for (const [namespace, snapshot] of seedSnapshots) {
         const { order, selfRefTypes } = sortSeedTypesForSnapshot(snapshot);
-        const data = loadSnapshotSeedData(dataDir, order);
+        const data = loadSnapshotSeedData(dataDir, order, snapshot);
         const typesWithData = order.filter((typeName) => (data[typeName]?.length ?? 0) > 0);
         if (typesWithData.length === 0) continue;
         const bundled = await bundleSeedScript(

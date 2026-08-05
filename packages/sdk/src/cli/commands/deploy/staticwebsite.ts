@@ -184,7 +184,8 @@ export async function planStaticWebsite(context: PlanContext) {
   // Track owned website names to plan custom domains afterward
   const ownedWebsiteNames = new Set<string>();
 
-  const staticWebsiteServices = forRemoval ? [] : application.staticWebsiteServices;
+  const staticWebsiteServices =
+    forRemoval || context.migrationTestSnapshots ? [] : application.staticWebsiteServices;
   for (const websiteService of staticWebsiteServices) {
     const config = websiteService;
     const name = websiteService.name;

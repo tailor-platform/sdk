@@ -52,13 +52,33 @@ describe("migration test runtime", () => {
     });
   });
 
-  test("loads JSONL for baseline types and treats a missing file as empty", () => {
+  test("loads JSONL for baseline types, removes pending fields, and treats a missing file as empty", () => {
     const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "migration-test-seed-"));
     temporaryDirectories.push(dataDir);
-    fs.writeFileSync(path.join(dataDir, "Customer.jsonl"), '{"id":"customer-1"}\n');
+    fs.writeFileSync(
+      path.join(dataDir, "Customer.jsonl"),
+      '{"id":"customer-1","name":"Ada","email":"pending@example.com"}\n',
+    );
+    const snapshot = normalizeSchemaSnapshot({
+      version: 1,
+      namespace: "tailordb",
+      createdAt: "2026-08-05T00:00:00.000Z",
+      types: {
+        Customer: {
+          name: "Customer",
+          pluralForm: "Customers",
+          fields: { name: { type: "string", required: true } },
+        },
+        Order: {
+          name: "Order",
+          pluralForm: "Orders",
+          fields: {},
+        },
+      },
+    });
 
-    expect(loadSnapshotSeedData(dataDir, ["Customer", "Order"])).toEqual({
-      Customer: [{ id: "customer-1" }],
+    expect(loadSnapshotSeedData(dataDir, ["Customer", "Order"], snapshot)).toEqual({
+      Customer: [{ id: "customer-1", name: "Ada" }],
       Order: [],
     });
   });

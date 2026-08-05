@@ -118,6 +118,19 @@ function createContext(
 }
 
 describe("planStaticWebsite", () => {
+  test("omits static websites from migration-test deployments", async () => {
+    const client = createMockClient([]);
+    const context = {
+      ...createContext(client, createMockApplication({ customDomains: ["example.com"] })),
+      migrationTestSnapshots: new Map(),
+    };
+
+    const result = await planStaticWebsite(context);
+
+    expect(result.changeSet.creates).toHaveLength(0);
+    expect(result.customDomainChangeSet.creates).toHaveLength(0);
+  });
+
   test.each([
     {
       name: "marks website unchanged when remote state matches desired state",
