@@ -46,6 +46,25 @@ export interface GenerateOptions {
 }
 
 /**
+ * Build the safety-critical manual migration guidance for unsupported changes.
+ * @returns Lines to write through the CLI logger
+ */
+export function getUnsupportedMigrationHintLines(): string[] {
+  return [
+    "These changes require a manual 3-step migration process:",
+    "  Migration 1: Add an optional temporary field with the desired structure",
+    "               If the old field is required, make the old field optional",
+    "               For each non-null old value, copy and convert it to the temporary field",
+    "               and set the old field to null in the same update",
+    "               Verify every old value is null before continuing",
+    "  Migration 2: Remove the old field",
+    "  Migration 3: Add the field with the original name and new structure,",
+    "               migrate data from the temporary field, then remove it",
+    "  Important: Reusing the name while stored old values remain can make subsequent reads fail",
+  ];
+}
+
+/**
  * Handle --init option: delete existing migrations directories
  * @param {NamespaceWithMigrations[]} namespaces - Namespaces with migrations
  * @param {boolean} skipConfirmation - Whether to skip confirmation prompt
@@ -240,12 +259,9 @@ async function generateDiffFromSnapshot(
     // Show 3-step migration hint if any unsupported change requires it
     if (unsupportedChanges.some((change) => change.showThreeStepHint)) {
       logger.newline();
-      logger.info("These changes require a manual 3-step migration process:");
-      logger.info("  Migration 1: Add a new field with the desired structure");
-      logger.info("               and migrate data from old field to new field");
-      logger.info("  Migration 2: Remove the old field");
-      logger.info("  Migration 3: Add the field with the original name and new structure,");
-      logger.info("               migrate data from temporary field, then remove temporary field");
+      for (const line of getUnsupportedMigrationHintLines()) {
+        logger.info(line);
+      }
     }
 
     const details = unsupportedChanges
