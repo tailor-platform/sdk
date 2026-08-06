@@ -20,7 +20,7 @@ import { logger, styles } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { PluginManager } from "#/plugin/manager";
 import {
-  formatConfigArg,
+  formatMigrationScriptCommand,
   getNamespacesWithMigrations,
   type NamespaceWithMigrations,
 } from "./config";
@@ -380,11 +380,13 @@ async function acknowledgeWarnings(options: AcknowledgeWarningsOptions): Promise
     }
   }
 
-  const scriptCmd = `tailor tailordb migration script ${label} --namespace ${namespace}${formatConfigArg(configPath)}`;
+  const commandOptions = { migrationNumber, namespace, configPath };
   logger.log("To add a custom migrate.ts, run:");
-  logger.log(`  ${styles.bold(scriptCmd)}`);
+  logger.log(`  ${styles.bold(formatMigrationScriptCommand(commandOptions))}`);
   logger.log("To record that this migration intentionally has no script, run:");
-  logger.log(`  ${styles.bold(`${scriptCmd} --no-script --reason "..."`)}`);
+  logger.log(
+    `  ${styles.bold(formatMigrationScriptCommand({ ...commandOptions, noScript: true }))}`,
+  );
 }
 
 /**

@@ -502,7 +502,7 @@ describe("tailordb migration validate", () => {
     expect(result.success).toBe(false);
     expect(stderr.output).toContain("User.email");
     expect(stderr.output).toContain(
-      'tailor tailordb migration script 0001 --namespace tailordb --no-script --reason "..."',
+      "tailor tailordb migration script 0001 --namespace tailordb --no-script --reason '<reason>'",
     );
   });
 
@@ -514,7 +514,7 @@ describe("tailordb migration validate", () => {
 
     expect(result.success).toBe(false);
     expect(stderr.output).toContain(
-      'tailor tailordb migration script 0001 --namespace tailordb --config=custom.config.ts --no-script --reason "..."',
+      "tailor tailordb migration script 0001 --namespace tailordb --config=custom.config.ts --no-script --reason '<reason>'",
     );
   });
 
@@ -526,7 +526,7 @@ describe("tailordb migration validate", () => {
     const result = await runCommand(validateCommand, ["--strict", "--config", "weird $config.ts"]);
 
     expect(result.success).toBe(false);
-    expect(stderr.output).toContain("--config='weird $config.ts' --no-script");
+    expect(stderr.output).toContain("'--config=weird $config.ts' --no-script");
   });
 
   test("--strict keeps a leading-hyphen config path bound as the option value", async () => {
@@ -537,6 +537,23 @@ describe("tailordb migration validate", () => {
 
     expect(result.success).toBe(false);
     expect(stderr.output).toContain("--config=-local.config.ts --no-script");
+  });
+
+  test("--strict renders the hint as argv for Windows-expandable config paths", async () => {
+    using stderr = captureStderr();
+    writeDiff(state.migrationsDir, 1, [], { hasWarnings: true, warnings: [removalWarning] });
+    vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+
+    const result = await runCommand(validateCommand, [
+      "--strict",
+      "--config",
+      "%APPDATA%.config.ts",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(stderr.output).toContain(
+      'argv ["tailor","tailordb","migration","script","0001","--namespace","tailordb","--config=%APPDATA%.config.ts","--no-script","--reason","<reason>"]',
+    );
   });
 
   test("--strict accepts warnings acknowledged with a recorded reason", async () => {

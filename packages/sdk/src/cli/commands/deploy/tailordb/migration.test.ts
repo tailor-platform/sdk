@@ -381,9 +381,37 @@ describe("migration", () => {
       );
 
       expect(error).not.toBeNull();
-      expect(error!.message).toContain("tailordb migration script 1 --namespace tailordb");
-      expect(error!.message).toContain("--no-script");
-      expect(error!.message).toContain(`--config "${path.join("custom", "tailor.config.ts")}"`);
+      expect(error!.message).toContain("tailordb migration script 0001 --namespace tailordb");
+      expect(error!.message).toContain("--no-script --reason '<reason>'");
+      expect(error!.message).toContain(`--config=${path.join("custom", "tailor.config.ts")}`);
+    });
+
+    test("omits --config from the hint for the default config path", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const error = await detectPendingMigrations(
+        client,
+        workspaceId,
+        namespacesWithMigrations,
+        path.join(process.cwd(), "tailor.config.ts"),
+      ).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+
+      expect(error).not.toBeNull();
+      expect(error!.message).toContain("tailordb migration script 0001 --namespace tailordb");
+      expect(error!.message).not.toContain("--config");
     });
 
     test("throws before returning later migrations when a script is missing", async () => {

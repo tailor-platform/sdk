@@ -96,7 +96,7 @@ describe("tailordb migration generate with warning-tier changes", () => {
     expect(result.success).toBe(true);
     expect(loadDiff(generatedDiffPath()).scriptSkipped).toBeUndefined();
     expect(prompt.text).not.toHaveBeenCalled();
-    expect(stderr.output).toContain('--no-script --reason "..."');
+    expect(stderr.output).toContain("--no-script --reason '<reason>'");
   });
 
   test("includes the active --config in the follow-up commands", async () => {
@@ -107,7 +107,7 @@ describe("tailordb migration generate with warning-tier changes", () => {
 
     expect(result.success).toBe(true);
     expect(stderr.output).toContain(
-      'tailor tailordb migration script 0001 --namespace tailordb --config=custom.config.ts --no-script --reason "..."',
+      "tailor tailordb migration script 0001 --namespace tailordb --config=custom.config.ts --no-script --reason '<reason>'",
     );
   });
 
@@ -119,7 +119,7 @@ describe("tailordb migration generate with warning-tier changes", () => {
     expect(result.success).toBe(true);
     expect(prompt.confirm).not.toHaveBeenCalled();
     expect(loadDiff(generatedDiffPath()).scriptSkipped).toBeUndefined();
-    expect(stderr.output).toContain('--no-script --reason "..."');
+    expect(stderr.output).toContain("--no-script --reason '<reason>'");
   });
 
   test("does not prompt when interactive input is unavailable", async () => {
