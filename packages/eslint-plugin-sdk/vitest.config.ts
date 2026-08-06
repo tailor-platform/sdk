@@ -7,7 +7,8 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
-          include: ["src/index.test.ts", "src/package.test.ts", "src/rules/*.test.ts"],
+          include: ["src/**/*.test.ts"],
+          globalSetup: ["./vitest.global-setup.ts"],
         },
       },
     ],

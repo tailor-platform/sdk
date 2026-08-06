@@ -21,6 +21,7 @@ export interface ImportTracker {
   track(node: AstImportDeclaration): void;
   callName(call: AstCallExpression): string | null;
   importedAs(node: AstNode | null | undefined, importedName: string): boolean;
+  importedNames(): ReadonlyMap<string, string>;
   isNamespace(node: AstNode | null | undefined): boolean;
 }
 
@@ -127,6 +128,10 @@ function createImportTracker(
       if (node?.type !== "Identifier") return false;
       const entry = named.get(node.name);
       return entry?.imported === importedName && isBindingReference(context, node, entry.binding);
+    },
+
+    importedNames() {
+      return new Map(Array.from(named, ([local, entry]) => [local, entry.imported]));
     },
 
     isNamespace,
