@@ -11,6 +11,10 @@
   "scripts": {
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vitest": "4.1.10"
   }
 }

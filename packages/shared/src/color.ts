@@ -1,4 +1,3 @@
-import { Stream } from "node:stream";
 import { stripVTControlCharacters, styleText } from "node:util";
 
 /** Applies a style to text */
@@ -32,13 +31,21 @@ export const color = {
   cyanBright: style("cyanBright"),
 };
 
-// Ask styleText whether the destination gets colors, so the TTY / NO_COLOR /
-// FORCE_COLOR rules stay Node's rather than being reimplemented here. It returns
-// the text unchanged when the stream has no color support, and throws for values
-// that are not streams, which is why test doubles are filtered out first.
-const PROBE = "?";
-const supportsColor = (stream: NodeJS.WriteStream): boolean =>
-  stream instanceof Stream && styleText("red", PROBE, { stream }) !== PROBE;
+// Node's rules for whether a destination gets colors, applied by hand. Asking
+// styleText instead would be shorter but only correct on Node: Bun ignores both
+// the stream option and NO_COLOR (reproduced on 1.3.14), so it reports every
+// destination as color-capable and escapes end up in redirected output.
+//
+// FORCE_COLOR decides on its own when set, which is how CI keeps colors through
+// a pipe. NO_COLOR counts as set at any non-empty value, "0" included.
+const supportsColor = (stream: NodeJS.WriteStream): boolean => {
+  const forced = process.env.FORCE_COLOR;
+  if (forced !== undefined) return forced !== "0" && forced !== "false";
+  if (process.env.NODE_DISABLE_COLORS !== undefined) return false;
+  if ((process.env.NO_COLOR ?? "") !== "") return false;
+  if (process.env.TERM === "dumb") return false;
+  return stream.isTTY === true;
+};
 
 /**
  * Prepares styled text for the stream it is written to.
