@@ -203,7 +203,7 @@
     "find-up-simple": "1.0.1",
     "get-east-asian-width": "1.6.0",
     "get-tsconfig": "4.14.1",
-    "globals": "17.8.0",
+    "globals": "17.9.0",
     "graphql": "17.0.2",
     "inflection": "3.0.2",
     "kysely": "0.29.4",
