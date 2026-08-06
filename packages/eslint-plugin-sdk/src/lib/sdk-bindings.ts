@@ -21,7 +21,7 @@ export interface ImportTracker {
   track(node: AstImportDeclaration): void;
   callName(call: AstCallExpression): string | null;
   importedAs(node: AstNode | null | undefined, importedName: string): boolean;
-  importedNames(): ReadonlyMap<string, string>;
+  importedName(node: AstNode | null | undefined): string | null;
   isNamespace(node: AstNode | null | undefined): boolean;
 }
 
@@ -88,6 +88,12 @@ function createImportTracker(
     return binding !== undefined && isBindingReference(context, node, binding);
   };
 
+  const importedName = (node: AstNode | null | undefined): string | null => {
+    if (node?.type !== "Identifier") return null;
+    const entry = named.get(node.name);
+    return entry && isBindingReference(context, node, entry.binding) ? entry.imported : null;
+  };
+
   return {
     track(node) {
       if (typeof node.source.value !== "string" || !modules.has(node.source.value)) return;
@@ -112,10 +118,7 @@ function createImportTracker(
 
     callName(call) {
       const callee = unwrapExpression(call.callee);
-      if (callee?.type === "Identifier") {
-        const entry = named.get(callee.name);
-        return entry && isBindingReference(context, callee, entry.binding) ? entry.imported : null;
-      }
+      if (callee?.type === "Identifier") return importedName(callee);
       if (callee?.type !== "MemberExpression" && callee?.type !== "OptionalMemberExpression") {
         return null;
       }
@@ -124,15 +127,9 @@ function createImportTracker(
       return memberName(callee);
     },
 
-    importedAs(node, importedName) {
-      if (node?.type !== "Identifier") return false;
-      const entry = named.get(node.name);
-      return entry?.imported === importedName && isBindingReference(context, node, entry.binding);
-    },
+    importedAs: (node, name) => importedName(node) === name,
 
-    importedNames() {
-      return new Map(Array.from(named, ([local, entry]) => [local, entry.imported]));
-    },
+    importedName,
 
     isNamespace,
   };

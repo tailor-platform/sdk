@@ -2,4 +2,4 @@
 "@tailor-platform/eslint-plugin-sdk": patch
 ---
 
-Build the plugin when the package is installed so the lint rules load on a fresh checkout, and verify the published type declarations against the same type checks consumers run.
+Build the package during install so the plugin entry point exists without running a separate build step first.

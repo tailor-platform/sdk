@@ -26,10 +26,9 @@
     "build": "tsdown",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
-    "typecheck": "tsc --noEmit && tsc --noEmit --project tsconfig.dist.json",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "prepare": "pnpm run build",
-    "prepack": "pnpm run build",
     "publint": "publint --strict"
   },
   "dependencies": {

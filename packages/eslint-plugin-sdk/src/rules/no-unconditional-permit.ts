@@ -165,15 +165,9 @@ const rule = {
         if (UNSAFE_CONSTANTS.has(memberName(node) ?? "")) members.push(node);
       },
       "Program:exit"() {
-        const importedNames = imports.importedNames();
         for (const node of identifiers) {
-          const name = importedNames.get(node.name);
-          if (
-            name === undefined ||
-            !UNSAFE_CONSTANTS.has(name) ||
-            !isValueReference(node) ||
-            !imports.importedAs(node, name)
-          ) {
+          const name = imports.importedName(node);
+          if (name === null || !UNSAFE_CONSTANTS.has(name) || !isValueReference(node)) {
             continue;
           }
           context.report({ node, messageId: "unsafeConstant", data: { name } });

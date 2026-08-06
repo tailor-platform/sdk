@@ -30,7 +30,7 @@ pre-commit:
     checks:
       glob: "*.{ts,js}"
       run: >-
-        pnpm --filter=@tailor-platform/sdk --filter=@tailor-platform/eslint-plugin-sdk run build &&
+        pnpm --filter=@tailor-platform/sdk run build &&
         pnpm --filter=@tailor-platform/sdk --filter=example run generate &&
         pnpm --filter=@tailor-platform/sdk --filter=example run lint &&
         pnpm run lint:vitest &&

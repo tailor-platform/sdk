@@ -1,11 +1,20 @@
 import { spawnSync } from "node:child_process";
-import { dirname } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const packageDir = dirname(fileURLToPath(import.meta.url));
+
+// Invoke tsdown's JS bin script via `node` directly rather than the
+// platform-specific `.bin/` shim, which is `.cmd`/`.ps1` on Windows.
+const tsdownBinScript = resolve(
+  dirname(createRequire(import.meta.url).resolve("tsdown/package.json")),
+  "dist/run.mjs",
+);
+
 export default function setup(): void {
-  const result = spawnSync("pnpm", ["run", "build"], {
-    cwd: dirname(fileURLToPath(import.meta.url)),
-    encoding: "utf8",
+  const result = spawnSync(process.execPath, [tsdownBinScript], {
+    cwd: packageDir,
     stdio: "inherit",
   });
   if (result.status !== 0) {

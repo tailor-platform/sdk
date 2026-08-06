@@ -1,8 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "tsBuildInfoFile": "./.dist.tsbuildinfo",
-    "skipLibCheck": false
-  },
-  "include": ["test-dist/**/*.ts"]
-}
