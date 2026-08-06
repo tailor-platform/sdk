@@ -14,7 +14,7 @@ describe("plugin", () => {
       "no-execute-script-arg-stringify",
       "no-unconditional-permit",
     ]);
-    expect(plugin.configs.recommended.plugins["tailor-sdk"]).toBe(plugin);
+    expect(plugin.configs.recommended.plugins?.["tailor-sdk"]).toBe(plugin);
     expect(plugin.configs.recommended.rules).toEqual({
       "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
       "tailor-sdk/no-execute-script-arg-stringify": "warn",
@@ -40,7 +40,7 @@ describe("plugin", () => {
   });
 
   test("keeps scaffolded Oxlint rules aligned with the recommended config", () => {
-    const templatesDir = resolve(packageDir, "../create-sdk/templates");
+    const templatesDir = resolve(packageDir, "../../create-sdk/templates");
     const templates = readdirSync(templatesDir, { withFileTypes: true }).filter((entry) =>
       entry.isDirectory(),
     );

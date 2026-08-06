@@ -6,9 +6,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, expect } from "vitest";
 
-const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const pluginUrl = pathToFileURL(resolve(packageDir, "index.js")).href;
-const tempDirs = [];
+const packageDir = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const pluginUrl = pathToFileURL(resolve(packageDir, "dist/index.js")).href;
+const tempDirs: string[] = [];
 
 // Invoke oxlint's JS bin script via `node` directly rather than the
 // platform-specific `.bin/` shim, which is `.cmd`/`.ps1` on Windows.
@@ -23,7 +23,7 @@ afterEach(() => {
   }
 });
 
-export function lint(source, rule, filename = "fixture.ts") {
+export function lint(source: string, rule: string, filename = "fixture.ts") {
   const dir = mkdtempSync(join(tmpdir(), "tailor-sdk-lint-"));
   tempDirs.push(dir);
   const file = join(dir, filename);
@@ -49,14 +49,19 @@ export function lint(source, rule, filename = "fixture.ts") {
   };
 }
 
-export function expectViolation(source, rule, message, filename) {
+export function expectViolation(
+  source: string,
+  rule: string,
+  message: string,
+  filename?: string,
+): void {
   const result = lint(source, rule, filename);
   expect({ status: result.status, output: result.output }).toMatchObject({ status: 1 });
   expect(result.output).toContain(`tailor-sdk(${rule})`);
   expect(result.output).toContain(message);
 }
 
-export function expectClean(source, rule, filename) {
+export function expectClean(source: string, rule: string, filename?: string): void {
   const result = lint(source, rule, filename);
   expect({ status: result.status, output: result.output }).toMatchObject({ status: 0 });
 }

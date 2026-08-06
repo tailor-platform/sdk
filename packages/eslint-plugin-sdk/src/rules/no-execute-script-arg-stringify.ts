@@ -1,15 +1,25 @@
-import { memberName, objectProperty, unwrapExpression } from "../lib/ast.js";
+import {
+  type AstCallExpression,
+  type AstNode,
+  memberName,
+  objectProperty,
+  unwrapExpression,
+} from "../lib/ast.js";
 import { cliImportTracker, resolveValue } from "../lib/sdk-bindings.js";
+import type { Rule } from "eslint";
 
-function isJsonStringifyCall(node) {
+function isJsonStringifyCall(node: AstNode | null | undefined): boolean {
   if (node?.type !== "CallExpression") return false;
   const callee = unwrapExpression(node.callee);
+  if (callee?.type !== "MemberExpression" && callee?.type !== "OptionalMemberExpression") {
+    return false;
+  }
   if (memberName(callee) !== "stringify") return false;
   const object = unwrapExpression(callee.object);
   return object?.type === "Identifier" && object.name === "JSON";
 }
 
-export default {
+const rule = {
   meta: {
     type: "problem",
     docs: {
@@ -23,7 +33,7 @@ export default {
   },
   create(context) {
     const imports = cliImportTracker(context);
-    const calls = [];
+    const calls: AstCallExpression[] = [];
 
     return {
       ImportDeclaration: (node) => imports.track(node),
@@ -33,11 +43,13 @@ export default {
           if (imports.callName(call) !== "executeScript") continue;
           const options = resolveValue(context, call.arguments[0]);
           const property = objectProperty(options, "arg");
-          if (!property || property.type !== "Property") continue;
+          if (property === null) continue;
           if (!isJsonStringifyCall(resolveValue(context, property.value))) continue;
           context.report({ node: property.value, messageId: "stringifiedArg" });
         }
       },
     };
   },
-};
+} satisfies Rule.RuleModule;
+
+export default rule;
