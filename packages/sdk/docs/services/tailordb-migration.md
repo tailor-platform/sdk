@@ -196,6 +196,34 @@ export async function main(trx: Transaction): Promise<void> {
 }
 ```
 
+**Worked example: backfilling a new required enum field**
+
+Adding a required field is a breaking change, so `migration generate` scaffolds `migrate.ts`. Given this type change:
+
+```typescript
+// tailordb/user.ts
+export const user = db.table("User", {
+  name: db.string(),
+  email: db.string(),
+  role: db.enum(["MANAGER", "STAFF"]), // ← new required field
+  ...db.fields.timestamps(),
+});
+```
+
+existing `User` rows have no `role` value yet, so the script assigns one before the post-migration phase enforces the constraint:
+
+```typescript
+import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  await trx.updateTable("User").set({ role: "MANAGER" }).where("role", "is", null).execute();
+}
+```
+
+The `where("role", "is", null)` guard keeps the script idempotent — rows that already have a value are untouched if the script re-runs.
+
+Reference scripts for other breaking-change patterns live in the repository's [migration fixture templates](https://github.com/tailor-platform/sdk/tree/main/example/tests/migration-fixtures/templates): backfilling fields that become required and migrating rows off a removed enum value ([0005](https://github.com/tailor-platform/sdk/blob/main/example/tests/migration-fixtures/templates/0005/migrate.ts)), and de-duplicating values before a unique constraint is added ([0006](https://github.com/tailor-platform/sdk/blob/main/example/tests/migration-fixtures/templates/0006/migrate.ts)). They show the shape of each migration, not drop-in logic — adapt them to your data (the suffix strategy in `0006`, for example, assumes the suffixed names are not already taken).
+
 **Accessing environment variables**
 
 The migration `main` receives an optional second argument exposing the variables defined in `defineConfig({ env })` — the same values available via `context.env` in resolvers. The `MigrationContext` type is exported from the generated `./db`:
@@ -359,8 +387,19 @@ The main use case is recovering from drift after a `deploy --no-schema-check` fr
 Migration numbers are assigned sequentially, so two developers branching off the same point and each generating `0005` will collide. Conventions that work:
 
 - **Don't generate migrations on long-lived feature branches.** Generate them just before merge, after rebasing onto main.
-- **Resolve collisions by re-generating.** If your branch has `0005` but main now has `0005` from another PR, delete your `0005/` directory, rebase, and run `migration generate` again. Re-edit the resulting `migrate.ts`.
+- **Resolve collisions by re-generating.** If your branch has `0005` but main now has `0005` from another PR, regenerate yours as `0006` — see [Resolving a migration number conflict](#resolving-a-migration-number-conflict).
 - **Treat migration files as merge-conflict-prone.** They are committed JSON and TypeScript, so review them in PRs. The `diff.json` is the source of truth — if review focuses there, regenerating after rebase is straightforward.
+
+### Resolving a migration number conflict
+
+When your branch and main each generated the same number, merging or rebasing stops with an add/add conflict on `migrations/0005/diff.json`. Resolve it by re-generating your migration on top of main's:
+
+1. **Save your script edits aside.** If you customized `0005/migrate.ts`, keep a copy before touching the directory — during a rebase, `git show ORIG_HEAD:migrations/0005/migrate.ts` prints the version from your pre-rebase branch tip.
+2. **Take main's `0005/` directory in full.** Accept main's version of every conflicting file. Then check for files only your side added: if your migration has a `migrate.ts` and main's does not, that file never conflicts — it silently stays next to main's `diff.json`. Delete such leftovers explicitly.
+3. **Finish the rebase or merge, then re-run `migration generate`.** With main's migration now part of local history, the diff is computed against the correct base — including main's changes — and your migration lands as the next number (`0006`).
+4. **Port your script.** Copy the logic saved in step 1 into the newly scaffolded `0006/migrate.ts`. For a warning-tier change, `migration generate` does not scaffold a script — recreate it first with `tailor tailordb migration script 0006`.
+
+**When a plain rename is enough.** If the two migrations touch disjoint types and fields, renaming your directory to the next free number (keeping main's `0005/`) can be acceptable. Run `tailor tailordb migration validate` after the rename: if it reports a mismatch, the migrations were not disjoint — discard the rename and re-generate as above. A passing check covers only the schema history, not your script: `migrate.ts` now runs after main's migration, so confirm it does not read or write types that migration touches — when in doubt, re-generate.
 
 ### CI / CD
 
