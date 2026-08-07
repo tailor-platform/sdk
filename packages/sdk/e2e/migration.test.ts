@@ -150,7 +150,7 @@ function runMigrationTestCli(
   cwd: string,
 ): void {
   const sdkRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
+  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
   execFileSync(
     "node",
     [
