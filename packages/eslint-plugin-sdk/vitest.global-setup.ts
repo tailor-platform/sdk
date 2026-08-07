@@ -17,7 +17,9 @@ export default function setup(): void {
     cwd: packageDir,
     stdio: "inherit",
   });
+  if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error("Failed to build the plugin that rule tests lint fixtures with.");
+    const reason = result.signal ?? `exit code ${result.status}`;
+    throw new Error(`Failed to build the plugin that rule tests lint fixtures with (${reason}).`);
   }
 }

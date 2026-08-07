@@ -28,7 +28,7 @@
     "lint:fix": "oxlint . --fix",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "prepare": "pnpm run build",
+    "prepare": "tsdown",
     "publint": "publint --strict"
   },
   "dependencies": {
