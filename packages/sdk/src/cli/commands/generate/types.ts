@@ -74,11 +74,7 @@ export type HasDependency<
 // Re-exported from parser module
 // ========================================
 
-export type {
-  UserDefinedTypeSource,
-  PluginGeneratedTypeSource,
-  TypeSourceInfoEntry,
-} from "#/parser/service/tailordb/types";
+export type { TypeSourceInfoEntry } from "#/parser/service/tailordb/types";
 
 // ========================================
 // Method interfaces for each dependency

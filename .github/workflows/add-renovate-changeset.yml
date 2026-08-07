@@ -70,6 +70,7 @@ jobs:
 
       - name: Create changeset file
         if: steps.existing.outputs.found == 'false' && steps.changeset_check.outputs.has-runtime-changes == 'true'
+        id: create_changeset
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -89,7 +90,7 @@ jobs:
           } > "$FILENAME"
 
       - name: Commit changeset
-        if: steps.existing.outputs.found == 'false' && steps.changeset_check.outputs.has-runtime-changes == 'true'
+        if: steps.existing.outputs.found == 'false' && steps.create_changeset.outcome == 'success'
         uses: suzuki-shunsuke/commit-action@06e3b49d4706498d325d29bd85adc82ecf2f5d8f # v1.0.0
         with:
           app_id: ${{ secrets.TAILOR_GITHUB_APP_ID }}
@@ -100,7 +101,7 @@ jobs:
           fail_on_self_push: false
 
       - name: Add skip-changeset label
-        if: steps.existing.outputs.found == 'false' && steps.changeset_check.outputs.has-runtime-changes == 'false'
+        if: steps.existing.outputs.found == 'false' && steps.create_changeset.outcome != 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

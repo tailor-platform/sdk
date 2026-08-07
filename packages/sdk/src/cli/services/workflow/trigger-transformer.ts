@@ -360,7 +360,7 @@ export function transformFunctionTriggers(
 export function createTriggerTransformPlugin(
   triggerContext: TriggerContext | undefined,
 ): Plugin | undefined {
-  if (!triggerContext) return undefined;
+  if (!triggerContext || triggerContext.modules.size === 0) return undefined;
 
   return {
     name: "trigger-transform",

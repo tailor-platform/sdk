@@ -4,7 +4,7 @@
  * Do not edit by hand: changes will be overwritten on the next `sdk generate`.
  */
 import { readFileSync } from "node:fs";
-import { join, isAbsolute } from "node:path";
+import { dirname, join, isAbsolute } from "node:path";
 import { parseArgs, styleText } from "node:util";
 import { createInterface } from "node:readline";
 import {
@@ -77,6 +77,7 @@ const { values, positionals } = parseArgs({
     namespace: { type: "string", short: "n" },
     "skip-idp": { type: "boolean", default: false },
     truncate: { type: "boolean", default: false },
+    upsert: { type: "boolean", default: false },
     yes: { type: "boolean", default: false },
     profile: { type: "string", short: "p" },
     help: { type: "boolean", short: "h", default: false },
@@ -96,6 +97,7 @@ Options:
   -n, --namespace <ns>      Process all types in specified namespace (excludes _User)
   --skip-idp                Skip IdP user (_User) entity
   --truncate                Truncate tables before seeding
+  --upsert                  Update existing rows instead of failing on duplicate ids
   --yes                     Skip confirmation prompts (for truncate)
   -p, --profile <name>      Workspace profile name
   -h, --help                Show help
@@ -109,6 +111,7 @@ Examples:
   node exec.mjs --truncate --yes                    # Truncate all tables without confirmation, then seed all
   node exec.mjs --truncate --namespace <namespace>  # Truncate tailordb, then seed tailordb
   node exec.mjs --truncate User Order               # Truncate User and Order, then seed them
+  node exec.mjs --upsert                            # Seed all, updating rows whose id already exists
   node exec.mjs validate                            # Validate all seed data
   node exec.mjs validate ./data/User.jsonl          # Validate specific file
   `);
@@ -132,6 +135,47 @@ const promptConfirmation = (question) => {
 
 const configDir = import.meta.dirname;
 const configPath = join(configDir, "../../tailor.config.ts");
+
+const loadSeedData = (
+  dataDir,
+  typeNames,
+  { requireId = false, requiredFieldsByType = {} } = {},
+) => {
+  const data = {};
+  for (const typeName of typeNames) {
+    const jsonlPath = join(dataDir, `${typeName}.jsonl`);
+    try {
+      const lines = readFileSync(jsonlPath, "utf-8").split("\n");
+      const records = [];
+      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+        if (lines[lineIndex].trim() === "") continue;
+        const record = JSON.parse(lines[lineIndex]);
+        if (requireId && (record?.id === undefined || record?.id === null)) {
+          throw new Error(
+            `${jsonlPath}:${lineIndex + 1}: \`id\` is required with --upsert`,
+          );
+        }
+        const missingRequiredField = (requiredFieldsByType[typeName] || []).find(
+          (field) => record?.[field] === undefined || record?.[field] === null,
+        );
+        if (missingRequiredField) {
+          throw new Error(
+            `${jsonlPath}:${lineIndex + 1}: field \`${missingRequiredField}\` is required with --upsert`,
+          );
+        }
+        records.push(record);
+      }
+      data[typeName] = records;
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        data[typeName] = [];
+      } else {
+        throw error;
+      }
+    }
+  }
+  return data;
+};
 
 // Determine machine user name (CLI argument takes precedence over config default)
 const defaultMachineUser = "admin";
@@ -162,6 +206,12 @@ const namespaceDeps = {
 };
 const namespaceSelfRefTypes = {
   "main-db": ["Category"]
+};
+const requiredFieldsByType = {
+  "Category": ["name","slug"],
+  "Order": ["productId","userId","quantity","totalPrice","status"],
+  "Product": ["name","price","status"],
+  "User": ["name","email","role"]
 };
 const entities = Object.values(namespaceEntities).flat();
 const hasIdpUser = false;
@@ -232,6 +282,25 @@ if (skipIdp) {
   }
 }
 
+const selectedTailorDbTypes = entities.filter(
+  (entity) => !entitiesToProcess || entitiesToProcess.includes(entity),
+);
+const loadSelectedTailorDbSeedData = () =>
+  loadSeedData(join(configDir, "data"), selectedTailorDbTypes, {
+    requireId: values.upsert,
+    requiredFieldsByType: values.upsert ? requiredFieldsByType : {},
+  });
+let tailorDbSeedData;
+if (values.upsert) {
+  try {
+    tailorDbSeedData = loadSelectedTailorDbSeedData();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(styleText("red", `\n✗ Seed data generation failed: ${message}`));
+    process.exit(1);
+  }
+}
+
 // Get application info
 const appInfo = await show({ configPath, profile: values.profile });
 const authNamespace = appInfo.auth;
@@ -293,29 +362,6 @@ if (skipIdp) {
   console.log(styleText("dim", `  Skipping IdP user (_User)`));
 }
 
-// Load seed data from JSONL files
-const loadSeedData = (dataDir, typeNames) => {
-  const data = {};
-  for (const typeName of typeNames) {
-    const jsonlPath = join(dataDir, `${typeName}.jsonl`);
-    try {
-      const content = readFileSync(jsonlPath, "utf-8").trim();
-      if (content) {
-        data[typeName] = content.split("\n").map((line) => JSON.parse(line));
-      } else {
-        data[typeName] = [];
-      }
-    } catch (error) {
-      if (error.code === "ENOENT") {
-        data[typeName] = [];
-      } else {
-        throw error;
-      }
-    }
-  }
-  return data;
-};
-
 // Topological sort for dependency order
 const topologicalSort = (types, deps) => {
   const visited = new Set();
@@ -340,10 +386,17 @@ const topologicalSort = (types, deps) => {
 };
 
 // Seed TailorDB types via testExecScript
-const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes) => {
-  const dataDir = join(configDir, "data");
+const seedViaTestExecScript = async (
+  namespace,
+  typesToSeed,
+  deps,
+  selfRefTypes,
+  seedDataByType,
+) => {
   const sortedTypes = topologicalSort(typesToSeed, deps);
-  const data = loadSeedData(dataDir, sortedTypes);
+  const data = Object.fromEntries(
+    sortedTypes.map((type) => [type, seedDataByType[type] || []]),
+  );
 
   // Skip if no data
   const typesWithData = sortedTypes.filter((t) => data[t] && data[t].length > 0);
@@ -352,10 +405,10 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
     return { success: true, processed: {} };
   }
 
-  console.log(styleText("cyan", `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch insert...`));
+  console.log(styleText("cyan", `  [${namespace}] Seeding ${typesWithData.length} types via Kysely batch ${values.upsert ? "upsert" : "insert"}...`));
 
   // Bundle seed script
-  const bundled = await bundleSeedScript(namespace, typesWithData);
+  const bundled = await bundleSeedScript(namespace, typesWithData, dirname(configPath));
 
   // Chunk seed data to fit within gRPC message size limits
   const chunks = chunkSeedData({
@@ -388,7 +441,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
       workspaceId,
       name: `seed-${namespace}.ts`,
       code: bundled.bundledCode,
-      arg: JSON.stringify({ data: chunk.data, order: chunk.order, selfRefTypes }),
+      arg: JSON.stringify({ data: chunk.data, order: chunk.order, selfRefTypes, upsert: values.upsert }),
       invoker: {
         namespace: authNamespace,
         machineUserName,
@@ -416,9 +469,23 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
       }
 
       const processed = parsed.processed || {};
-      for (const [type, count] of Object.entries(processed)) {
-        allProcessed[type] = (allProcessed[type] || 0) + count;
-        console.log(styleText("green", `    ✓ ${type}: ${count} rows inserted`));
+      for (const [type, counts] of Object.entries(processed)) {
+        const previous = allProcessed[type] || { inserted: 0, updated: 0, skipped: 0 };
+        const current = {
+          inserted: Number(counts.inserted) || 0,
+          updated: Number(counts.updated) || 0,
+          skipped: Number(counts.skipped) || 0,
+        };
+        allProcessed[type] = {
+          inserted: previous.inserted + current.inserted,
+          updated: previous.updated + current.updated,
+          skipped: previous.skipped + current.skipped,
+        };
+        const skipped = current.skipped > 0 ? `, ${current.skipped} skipped` : "";
+        const message = values.upsert
+          ? `${current.inserted} inserted, ${current.updated} updated${skipped}`
+          : `${current.inserted} rows inserted`;
+        console.log(styleText("green", `    ✓ ${type}: ${message}`));
       }
 
       if (!parsed.success) {
@@ -447,6 +514,7 @@ const seedViaTestExecScript = async (namespace, typesToSeed, deps, selfRefTypes)
 // Main execution
 try {
   let allSuccess = true;
+  tailorDbSeedData ??= loadSelectedTailorDbSeedData();
 
   // Determine which namespaces and types to process
   const namespacesToProcess = hasNamespace
@@ -465,7 +533,13 @@ try {
 
     if (typesToSeed.length === 0) continue;
 
-    const result = await seedViaTestExecScript(namespace, typesToSeed, nsDeps, nsSelfRefTypes);
+    const result = await seedViaTestExecScript(
+      namespace,
+      typesToSeed,
+      nsDeps,
+      nsSelfRefTypes,
+      tailorDbSeedData,
+    );
     if (!result.success) {
       allSuccess = false;
     }
