@@ -8,22 +8,22 @@ TailorDB provides:
 
 - Type-safe schema definitions using TypeScript
 - Automatic GraphQL API generation (CRUD operations)
-- Relations between types with automatic index and foreign key constraints
+- Relations between tables with automatic index and foreign key constraints
 - Permission system for access control
 - Field-level hooks and validations
 
 For the official Tailor Platform documentation, see [TailorDB Guide](https://docs.tailor.tech/guides/tailordb/overview).
 
-## Type Definition
+## Table Definition
 
-Define TailorDB Types in files matching glob patterns specified in `tailor.config.ts`.
+Define TailorDB tables in files matching glob patterns specified in `tailor.config.ts`.
 
 **Definition Rules:**
 
-- **Multiple types per file**: You can define multiple TailorDB types in a single file
+- **Multiple tables per file**: You can define multiple TailorDB tables in a single file
 - **Export method**: Use named exports (`export const`)
 - **Export both value and type**: Always export both the runtime value and TypeScript type
-- **Uniqueness**: Type names must be unique across all TailorDB namespaces in the application
+- **Uniqueness**: Table names must be unique across all TailorDB namespaces in the application
 
 ```typescript
 import { db } from "@tailor-platform/sdk";
@@ -37,7 +37,7 @@ export const user = db.table("User", {
 });
 export type user = typeof user;
 
-// You can define multiple types in the same file
+// You can define multiple tables in the same file
 export const role = db.table("Role", {
   name: db.string().unique(),
 });
@@ -254,8 +254,8 @@ type User {
 }
 ```
 
-- `toward.as` - Customizes the field name for accessing the related type from this type
-- `backward` - Customizes the field name for accessing this type from the related type
+- `toward.as` - Customizes the field name for accessing the related table from this table
+- `backward` - Customizes the field name for accessing this table from the related table
 
 Relation names share the same GraphQL field namespace as fields, files, and other relations on
 the table. The SDK rejects duplicate or empty relation names. When `toward.as` is omitted, the
@@ -356,7 +356,7 @@ export const order = db
   });
 ```
 
-**Note:** `.hooks()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
+**Note:** `.hooks()` can only be called once on a table. Duplicate type-level calls fail at compile time and throw at runtime.
 
 ### Validation
 
@@ -415,7 +415,7 @@ For datetime/date/time fields, pass `"now"` to use the operation timestamp:
 db.datetime().default("now");
 ```
 
-**Note:** `.validate()` can only be called once on a type. Duplicate type-level calls fail at compile time and throw at runtime.
+**Note:** `.validate()` can only be called once on a table. Duplicate type-level calls fail at compile time and throw at runtime.
 
 ### Vector Search
 
@@ -448,14 +448,14 @@ export const user = db.table("User", {
 
 `db.fields.timestamps()` adds non-null `createdAt` and `updatedAt` datetime fields. Both fields are populated when a record is created; provided values are preserved so seed data can use historical timestamps. `updatedAt` is also refreshed automatically when a record is updated.
 
-## Type Modifiers
+## Table Modifiers
 
-Type builder methods that set one type-level configuration can be called only once on the same type. Duplicate calls fail at compile time and throw at runtime. This applies to `.description()`, `.hooks()`, `.validate()`, `.features()`, `.indexes()`, `.files()`, `.permission()`, and `.gqlPermission()`.
+Table builder methods that set one type-level configuration can be called only once on the same table. Duplicate calls fail at compile time and throw at runtime. This applies to `.description()`, `.hooks()`, `.validate()`, `.features()`, `.indexes()`, `.files()`, `.permission()`, and `.gqlPermission()`.
 
 Conditional assignment is still supported when only one branch calls the method:
 
 ```typescript
-let user = db.type("User", {
+let user = db.table("User", {
   name: db.string(),
 });
 
@@ -502,7 +502,7 @@ db.table("User", {
 
 #### Event Publishing
 
-Enable event publishing for a type to trigger executors on record changes:
+Enable event publishing for a table to trigger executors on record changes:
 
 ```typescript
 db.table("User", {
@@ -515,15 +515,15 @@ db.table("User", {
 **Behavior:**
 
 - When `publishEvents: true`, record creation/update/deletion events are published
-- When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this type with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
-- When explicitly set to `false` while an executor taking part in the same run uses this type, `deploy` fails
+- When not specified, `deploy` sets it from the executors taking part in the same run: `true` while one of them uses this table with `recordCreatedTrigger`, `recordUpdatedTrigger`, or `recordDeletedTrigger`, and `false` once none does. Removing the last such trigger turns publishing back off on the next `deploy`
+- When explicitly set to `false` while an executor taking part in the same run uses this table, `deploy` fails
 
 **Use cases:**
 
 1. **Auto-detection (recommended)**: Don't set `publishEvents` - `deploy` enables it while an executor taking part in the same run needs it
 
    ```typescript
-   // publishEvents is automatically enabled because an executor uses this type
+   // publishEvents is automatically enabled because an executor uses this table
    export const order = db.table("Order", {
      status: db.string(),
    });
@@ -545,7 +545,7 @@ db.table("User", {
    });
    ```
 
-3. **Explicit disable**: Disable event publishing for a type that doesn't need it (error if an executor taking part in the same run uses it)
+3. **Explicit disable**: Disable event publishing for a table that doesn't need it (error if an executor taking part in the same run uses it)
 
    ```typescript
    db.table("TempData", {
@@ -555,14 +555,14 @@ db.table("User", {
    });
    ```
 
-**Sharing a type across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the type to keep it on regardless of which configs take part.
+**Sharing a table across configs:** an executor in another config auto-enables publishing the same way, as long as both configs take part in the same `deploy` (`--config a,b`). `deploy` records that dependency, so deploying the owning config alone later asks for confirmation instead of silently turning publishing off — it fails outright in a non-interactive environment. Set `publishEvents: true` on the table to keep it on regardless of which configs take part.
 
 #### GraphQL Operations
 
-Control which GraphQL operations (`create`, `update`, `delete`, `read`) are exposed for a type. All operations are enabled by default.
+Control which GraphQL operations (`create`, `update`, `delete`, `read`) are exposed for a table. All operations are enabled by default.
 
 ```typescript
-db.type("Order", {
+db.table("Order", {
   status: db.string(),
 }).features({
   gqlOperations: {
@@ -571,10 +571,10 @@ db.type("Order", {
 });
 ```
 
-Use the `"query"` alias to disable all mutations at once (read-only type: `create`/`update`/`delete` false, `read` true):
+Use the `"query"` alias to disable all mutations at once (read-only table: `create`/`update`/`delete` false, `read` true):
 
 ```typescript
-db.type("AuditLog", {
+db.table("AuditLog", {
   action: db.string(),
 }).features({
   gqlOperations: "query",
@@ -583,7 +583,7 @@ db.type("AuditLog", {
 
 **Namespace-level default**
 
-Set a default for every type in a TailorDB namespace in `tailor.config.ts`. A type's own `.features({ gqlOperations })` always takes precedence over this default.
+Set a default for every table in a TailorDB namespace in `tailor.config.ts`. A table's own `.features({ gqlOperations })` always takes precedence over this default.
 
 ```typescript
 // tailor.config.ts
@@ -591,13 +591,13 @@ export default defineConfig({
   db: {
     tailordb: {
       files: ["./tailordb/*.ts"],
-      gqlOperations: { delete: false }, // Default for every type in this namespace
+      gqlOperations: { delete: false }, // Default for every table in this namespace
     },
   },
 });
 ```
 
-This default is re-evaluated on every `tailor deploy`, so changing it also updates types that already exist on the platform, not only newly created ones.
+This default is re-evaluated on every `tailor deploy`, so changing it also updates tables that already exist on the platform, not only newly created ones.
 
 ### Field Extraction (`pickFields` / `omitFields`)
 
@@ -679,7 +679,7 @@ Configure Permission and GQLPermission. For details, see the [TailorDB Permissio
 
 **Important**: Following the secure-by-default principle, all operations are denied if permissions are not configured. You must explicitly grant permissions for each operation (create, read, update, delete).
 
-`generate`/`deploy` reject a type that has no `.permission()`, or no `.gqlPermission()` while GraphQL operations are enabled for it (see [GraphQL Operations](#graphql-operations) above). Disable GraphQL exposure entirely with `.features({ gqlOperations: { create: false, update: false, delete: false, read: false } })` if a type only needs record-level permission.
+`generate`/`deploy` reject a table that has no `.permission()`, or no `.gqlPermission()` while GraphQL operations are enabled for it (see [GraphQL Operations](#graphql-operations) above). Disable GraphQL exposure entirely with `.features({ gqlOperations: { create: false, update: false, delete: false, read: false } })` if a table only needs record-level permission.
 
 ```typescript
 db.table("User", {
@@ -723,6 +723,6 @@ db.table("User", {
 
 ## Migrations
 
-When you change a TailorDB type definition, the SDK can generate a migration that captures the diff and, for breaking changes, runs a data transformation script during `tailor deploy`. See the [TailorDB Migrations guide](./tailordb-migration.md) for the full workflow, configuration, supported change types, team coordination, and troubleshooting.
+When you change a TailorDB table definition, the SDK can generate a migration that captures the diff and, for breaking changes, runs a data transformation script during `tailor deploy`. See the [TailorDB Migrations guide](./tailordb-migration.md) for the full workflow, configuration, supported change types, team coordination, and troubleshooting.
 
 For the CLI command reference, see [`tailordb migration`](../cli/tailordb.md#tailordb-migration).
