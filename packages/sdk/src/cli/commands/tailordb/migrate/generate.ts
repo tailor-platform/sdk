@@ -314,7 +314,7 @@ async function generateDiffFromSnapshot(
   );
 
   logger.success(
-    `Generated migration ${styles.bold(result.migrationNumber.toString().padStart(4, "0"))}`,
+    `Generated migration ${styles.bold(formatMigrationNumber(result.migrationNumber))}`,
   );
   logger.info(`  Diff file: ${result.diffFilePath}`);
 
