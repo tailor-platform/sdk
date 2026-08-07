@@ -3,6 +3,7 @@ import { findUpSync } from "find-up-simple";
 import * as path from "pathe";
 import { hashFile } from "#/cli/cache/hasher";
 import { createCacheManager } from "#/cli/cache/manager";
+import { formatMigrationNumber } from "#/cli/commands/tailordb/migrate/migration-number";
 import { loadApplication, type Application } from "#/cli/services/application";
 import { assertUniqueTailorDBTypeNamesWithExternal } from "#/cli/services/tailordb/type-name-validation";
 import { getOrNull, type OperatorClient } from "#/cli/shared/client";
@@ -29,6 +30,7 @@ import {
 import { ensureConfigIdForDeploy, warnMissingAppId } from "./config-id-injector";
 import {
   confirmImportantResourceDeletion,
+  confirmMigrationCheckpointRepairs,
   confirmMissingDependentApps,
   confirmOwnerConflict,
   confirmUnmanagedResources,
@@ -54,6 +56,7 @@ import {
   WORKFLOW_PREFIX,
 } from "./function-registry";
 import {
+  ACTION_SYMBOLS,
   buildGroupedDisplayLines,
   extractServiceActions,
   formatChangeSetEntries,
@@ -716,6 +719,7 @@ type PlanDeploymentTargetParams = {
 type ConfirmDeploymentPlansParams = {
   deployments: PlannedDeployment[];
   yes: boolean;
+  dryRun?: boolean;
   /** Applications recorded as dependencies but absent from this deploy. */
   missingDependentApps?: MissingDependentApp[];
 };
@@ -782,7 +786,18 @@ function buildPlanReport(results: PlanResults): PlanReport {
     results.tailorDB.changeSet.type,
     results.tailorDB.changeSet.gqlPermission,
   );
-  const tailorDBEntries: GroupedDisplayEntry[] = [...tailorDBResourceEntries];
+  const checkpointRepairEntries: GroupedDisplayEntry[] =
+    results.tailorDB.context.checkpointRepairs.map((repair) => ({
+      action: "update",
+      symbol: ACTION_SYMBOLS.update,
+      name: `migration checkpoint ${formatMigrationNumber(repair.from)} → ${formatMigrationNumber(repair.to)}`,
+      labels: ["migrationCheckpoint"],
+      namespace: repair.namespace,
+    }));
+  const tailorDBEntries: GroupedDisplayEntry[] = [
+    ...tailorDBResourceEntries,
+    ...checkpointRepairEntries,
+  ];
   const pipelineEntries: GroupedDisplayEntry[] = [...resolverEntries];
   const namespaceOf = (item: HasName) => {
     if (
@@ -2448,7 +2463,13 @@ function collectDeploymentResourceOwners(
 }
 
 export async function confirmDeploymentPlans(params: ConfirmDeploymentPlansParams): Promise<void> {
-  const { deployments, yes, missingDependentApps = [] } = params;
+  const { deployments, yes, dryRun = false, missingDependentApps = [] } = params;
+  if (!dryRun) {
+    await confirmMigrationCheckpointRepairs(
+      deployments.flatMap((deployment) => deployment.tailorDB.context.checkpointRepairs),
+      yes,
+    );
+  }
   await confirmMissingDependentApps(missingDependentApps, yes);
   const targetAppNames = new Set(deployments.map((deployment) => deployment.application.name));
   const resourceOwners = collectDeploymentResourceOwners(deployments);
@@ -2695,7 +2716,7 @@ async function deployInternal(
     ).flat();
 
     await withSpan("confirm", async () => {
-      await confirmDeploymentPlans({ deployments, yes, missingDependentApps });
+      await confirmDeploymentPlans({ deployments, yes, dryRun, missingDependentApps });
     });
 
     const planSummary = printDeploymentPlans(deployments, { dryRun: options?.dryRun });

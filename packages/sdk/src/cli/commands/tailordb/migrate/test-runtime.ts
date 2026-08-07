@@ -384,7 +384,7 @@ async function assertSourceBaselineFresh(
     inputs,
   );
   const invalidRemote = remoteChecks.find(
-    (check) => check.hasDrift || check.checkpointMissingLocal,
+    (check) => check.hasDrift || check.checkpointMissingLocal || check.checkpointRepair,
   );
   if (invalidRemote) {
     throw new Error(
@@ -541,10 +541,16 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
       `Source namespace "${invalidRemote.namespace}" does not match its migration checkpoint. Run 'tailor tailordb migration validate' first.`,
     );
   }
+  const pendingRepair = remoteChecks.find((check) => check.checkpointRepair);
+  if (pendingRepair) {
+    throw new Error(
+      `Source namespace "${pendingRepair.namespace}" has a pending migration checkpoint repair. Run 'tailor deploy' against the source workspace first.`,
+    );
+  }
 
   const baselines = new Map<
     string,
-    { migrationNumber: number; snapshot: NormalizedSchemaSnapshot }
+    { migrationNumber: number; snapshot: NormalizedSchemaSnapshot; historyId: string | null }
   >();
   const targetSnapshots = new Map<string, NormalizedSchemaSnapshot>();
   const pendingNamespaces: string[] = [];
@@ -570,7 +576,11 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
         `No migration baseline snapshot found for namespace "${namespace.namespace}".`,
       );
     }
-    baselines.set(namespace.namespace, { migrationNumber, snapshot });
+    baselines.set(namespace.namespace, {
+      migrationNumber,
+      snapshot,
+      historyId: snapshot.rebaseline?.historyId ?? null,
+    });
     const targetSnapshot = reconstructSnapshotFromMigrations(namespace.migrationsDir, latest);
     if (!targetSnapshot) {
       throw new Error(`No target migration snapshot found for namespace "${namespace.namespace}".`);
@@ -655,6 +665,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
           targetWorkspaceId,
           namespace,
           baseline.migrationNumber,
+          baseline.historyId ?? undefined,
         );
       }
     },

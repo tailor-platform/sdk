@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
@@ -11,12 +10,13 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
 import { getNamespacesWithMigrations } from "./config";
-import { fetchRemoteMigrationNumber } from "./remote-state";
+import { fetchRemoteMigrationState } from "./remote-state";
 import {
   getMigrationFiles,
   loadDiff,
-  getMigrationFilePath,
+  loadSnapshot,
   formatMigrationNumber,
+  UnsupportedMigrationFileVersionError,
 } from "./snapshot";
 
 export interface StatusOptions {
@@ -73,6 +73,51 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
     );
   }
 
+  const localStates = new Map<
+    string,
+    {
+      migrationFiles: ReturnType<typeof getMigrationFiles>;
+      descriptions: Map<number, string>;
+      historyId: string | null;
+    }
+  >();
+  const localFailures = new Map<string, string>();
+
+  for (const { namespace, migrationsDir } of targetNamespaces) {
+    try {
+      const migrationFiles = getMigrationFiles(migrationsDir);
+      const descriptions = new Map<number, string>();
+      let historyId: string | null = null;
+      for (const file of migrationFiles) {
+        if (file.type === "schema") {
+          const snapshot = loadSnapshot(file.path);
+          if (file.number === 0) {
+            historyId = snapshot.rebaseline?.historyId ?? null;
+          }
+          continue;
+        }
+        try {
+          const diff = loadDiff(file.path);
+          if (diff.description) descriptions.set(file.number, diff.description);
+        } catch (error) {
+          if (error instanceof UnsupportedMigrationFileVersionError) throw error;
+          // A malformed optional description must not hide migration status.
+        }
+      }
+      localStates.set(namespace, { migrationFiles, descriptions, historyId });
+    } catch (error) {
+      localFailures.set(namespace, error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  if (localStates.size === 0) {
+    return targetNamespaces.map(({ namespace }) => ({
+      status: "error",
+      namespace,
+      error: localFailures.get(namespace) ?? "Failed to read local migration history.",
+    }));
+  }
+
   const accessToken = await loadAccessToken({
     profile: options.profile,
   });
@@ -84,11 +129,30 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
 
   const rows: MigrationStatusRow[] = [];
 
-  for (const { namespace, migrationsDir } of targetNamespaces) {
+  for (const { namespace } of targetNamespaces) {
+    if (localFailures.has(namespace)) {
+      rows.push({
+        status: "error",
+        namespace,
+        error: localFailures.get(namespace) ?? "Failed to read local migration history.",
+      });
+      continue;
+    }
+    const localState = localStates.get(namespace);
+    if (!localState) {
+      rows.push({
+        status: "error",
+        namespace,
+        error: "Failed to read local migration history.",
+      });
+      continue;
+    }
+    const { migrationFiles, descriptions, historyId: localHistoryId } = localState;
+
     const trn = resourceTrn(workspaceId, "tailordb", namespace);
-    let current: number | null;
+    let remoteState;
     try {
-      current = await fetchRemoteMigrationNumber(client, trn);
+      remoteState = await fetchRemoteMigrationState(client, trn);
     } catch (error) {
       rows.push({
         status: "error",
@@ -97,34 +161,40 @@ async function collectMigrationStatuses(options: StatusOptions): Promise<Migrati
       });
       continue;
     }
-    const currentMigration = current ?? 0;
+    const currentMigration = remoteState.number ?? 0;
 
-    const migrationFiles = getMigrationFiles(migrationsDir);
+    if (remoteState.historyIdInvalid) {
+      rows.push({
+        status: "error",
+        namespace,
+        error: "Remote migration history ID is invalid.",
+      });
+      continue;
+    }
+
+    const hasRemoteMigrationState = remoteState.number !== null || remoteState.historyId !== null;
+    if (hasRemoteMigrationState && remoteState.historyId !== localHistoryId) {
+      rows.push({
+        status: "error",
+        namespace,
+        error:
+          `Remote migration history ID ${remoteState.historyId ?? "<unset>"} does not match ` +
+          `local migration history ID ${localHistoryId ?? "<unset>"}.`,
+      });
+      continue;
+    }
+
     const availableNumbers = migrationFiles
       .map((f) => f.number)
       .filter((n, i, arr) => arr.indexOf(n) === i) // deduplicate
       .toSorted((a, b) => a - b);
     const pendingNumbers = availableNumbers.filter((n) => n > currentMigration);
 
-    const pendingMigrations = pendingNumbers.map((num) => {
-      const diffPath = getMigrationFilePath(migrationsDir, num, "diff");
-      let description: string | undefined;
-
-      if (fs.existsSync(diffPath)) {
-        try {
-          const diff = loadDiff(diffPath);
-          description = diff.description;
-        } catch {
-          // Ignore errors loading diff
-        }
-      }
-
-      return {
-        number: num,
-        label: formatMigrationNumber(num),
-        ...(description ? { description } : {}),
-      };
-    });
+    const pendingMigrations = pendingNumbers.map((num) => ({
+      number: num,
+      label: formatMigrationNumber(num),
+      ...(descriptions.has(num) ? { description: descriptions.get(num) } : {}),
+    }));
 
     rows.push({
       status: "ok",
@@ -143,7 +213,7 @@ function printMigrationStatuses(rows: MigrationStatusRow[]): void {
     logger.newline();
     logger.info(`Namespace: ${styles.bold(row.namespace)}`);
     if (isStatusFailure(row)) {
-      logger.error(`  Failed to read migration state: ${row.error}`);
+      logger.error(`  Migration status error: ${row.error}`);
       continue;
     }
     logger.log(`  Current migration: ${styles.bold(row.currentMigrationLabel)}`);
@@ -183,7 +253,7 @@ async function status(options: StatusOptions): Promise<void> {
   if (failures.length > 0) {
     const namespaces = failures.map((f) => f.namespace).join(", ");
     throw new Error(
-      `Failed to read migration state for ${failures.length} namespace${failures.length === 1 ? "" : "s"}: ${namespaces}`,
+      `Migration status check failed for ${failures.length} namespace${failures.length === 1 ? "" : "s"}: ${namespaces}`,
     );
   }
 }
@@ -193,7 +263,7 @@ export const statusCommand = defineAppCommand({
   description:
     "Show the current migration status for TailorDB namespaces, including applied and pending migrations.",
   notes:
-    "Metadata lookup failures (authentication, permission, or network errors) are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
+    "Every local migration file is checked for a compatible format version, and deployed migration history IDs must match the local baseline. Compatibility errors, history mismatches, and metadata lookup failures are reported per namespace and make the command exit non-zero; only a not-yet-deployed namespace is treated as having no applied migrations.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {

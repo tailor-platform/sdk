@@ -10,6 +10,7 @@ export type { ApplyPhase };
 export interface TailorDBMigrationTestBaseline {
   migrationNumber: number;
   snapshot: NormalizedSchemaSnapshot;
+  historyId: string | null;
 }
 
 export type TailorDBMigrationTestSnapshots = ReadonlyMap<string, NormalizedSchemaSnapshot>;

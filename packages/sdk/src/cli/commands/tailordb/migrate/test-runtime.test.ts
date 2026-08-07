@@ -140,7 +140,9 @@ describe("migration test runtime", () => {
           },
         },
       ],
-      baselines: new Map([["primary", { migrationNumber: 0, snapshot: migrationSnapshot }]]),
+      baselines: new Map([
+        ["primary", { migrationNumber: 0, snapshot: migrationSnapshot, historyId: null }],
+      ]),
     });
 
     expect(snapshots.get("primary")).toBe(migrationSnapshot);

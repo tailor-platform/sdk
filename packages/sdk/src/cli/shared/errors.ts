@@ -52,7 +52,12 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
-function formatNextAction(next: CLIErrorNextAction): string {
+/**
+ * Format an executable and argv as a shell-safe user-facing command.
+ * @param next - Executable and arguments to format
+ * @returns Shell command, or an argv representation when shell quoting is unsafe
+ */
+export function formatNextAction(next: CLIErrorNextAction): string {
   const argv = [next.command, ...next.args];
   if (process.platform === "win32" && argv.some((value) => /[%$!]/.test(value))) {
     return `with argv ${JSON.stringify(argv)}`;

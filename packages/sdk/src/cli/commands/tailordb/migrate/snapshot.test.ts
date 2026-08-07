@@ -1665,21 +1665,91 @@ describe("snapshot", () => {
   });
 
   describe("loadSnapshot validation", () => {
-    test("loads a snapshot with a different format version", () => {
-      // example/migrations contain snapshots with version 2; the loader must
-      // not pin the version field to the current constant.
-      const filePath = path.join(testDir, "v2_schema.json");
+    test.each([1, 2])("loads supported snapshot format version %s", (version) => {
+      const filePath = path.join(testDir, `v${version}_schema.json`);
       fs.writeFileSync(
         filePath,
         JSON.stringify({
-          version: 2,
+          version,
           namespace,
           createdAt: new Date().toISOString(),
           types: { User: { name: "User", pluralForm: "Users", fields: {} } },
         }),
       );
 
-      expect(loadSnapshot(filePath).version).toBe(2);
+      expect(loadSnapshot(filePath).version).toBe(version);
+    });
+
+    test("loads a valid rebaseline history marker", () => {
+      const filePath = path.join(testDir, "rebaseline_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: SCHEMA_SNAPSHOT_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {},
+          rebaseline: {
+            historyId: "hcurrent",
+            replacedHistoryId: "hprevious",
+            replacedLatestMigration: 42,
+          },
+        }),
+      );
+
+      expect(loadSnapshot(filePath).rebaseline).toEqual({
+        historyId: "hcurrent",
+        replacedHistoryId: "hprevious",
+        replacedLatestMigration: 42,
+      });
+    });
+
+    test.each([
+      ["historyId", { historyId: "INVALID!", replacedHistoryId: null, replacedLatestMigration: 1 }],
+      [
+        "replacedHistoryId",
+        { historyId: "hcurrent", replacedHistoryId: "INVALID!", replacedLatestMigration: 1 },
+      ],
+      [
+        "replacedLatestMigration",
+        { historyId: "hcurrent", replacedHistoryId: null, replacedLatestMigration: 10_000 },
+      ],
+    ])("rejects an invalid rebaseline marker at %s", (field, rebaseline) => {
+      const filePath = path.join(testDir, `invalid_rebaseline_${field}_schema.json`);
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: SCHEMA_SNAPSHOT_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {},
+          rebaseline,
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).toThrow(field);
+    });
+
+    test("rejects snapshot formats older than the supported window", () => {
+      const version = 0;
+      const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
+      fs.writeFileSync(filePath, JSON.stringify({ version }));
+
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadSnapshot(filePath)).toThrow(
+        /re-baseline with an SDK that still supports this migration history, then upgrade/i,
+      );
+    });
+
+    test("rejects snapshot formats newer than the supported window", () => {
+      const version = 3;
+      const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
+      fs.writeFileSync(filePath, JSON.stringify({ version }));
+
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadSnapshot(filePath)).toThrow(
+        /upgrade to an SDK that supports migration file format version 3/i,
+      );
     });
 
     test("rejects an ambiguous permission field-ref operand", () => {
@@ -1955,6 +2025,57 @@ describe("snapshot", () => {
   });
 
   describe("loadDiff validation", () => {
+    test.each([1, 2])("loads supported diff format version %s", (version) => {
+      const filePath = path.join(testDir, `v${version}_diff.json`);
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version,
+          namespace,
+          createdAt: "t",
+          changes: [],
+          hasBreakingChanges: false,
+          breakingChanges: [],
+          requiresMigrationScript: false,
+        }),
+      );
+
+      expect(loadDiff(filePath).version).toBe(version);
+    });
+
+    test("rejects diff formats older than the supported window", () => {
+      const version = 0;
+      const filePath = path.join(testDir, `unsupported_v${version}_diff.json`);
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version,
+          namespace,
+          createdAt: "t",
+          changes: [],
+          hasBreakingChanges: false,
+          breakingChanges: [],
+          requiresMigrationScript: false,
+        }),
+      );
+
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadDiff(filePath)).toThrow(
+        /re-baseline with an SDK that still supports this migration history, then upgrade/i,
+      );
+    });
+
+    test("rejects diff formats newer than the supported window", () => {
+      const version = 3;
+      const filePath = path.join(testDir, `unsupported_v${version}_diff.json`);
+      fs.writeFileSync(filePath, JSON.stringify({ version }));
+
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadDiff(filePath)).toThrow(
+        /upgrade to an SDK that supports migration file format version 3/i,
+      );
+    });
+
     test("throws with file path when JSON is not an object", () => {
       const filePath = path.join(testDir, "corrupt_diff.json");
       fs.writeFileSync(filePath, JSON.stringify([1, 2, 3]));
@@ -2017,7 +2138,8 @@ describe("snapshot", () => {
       expect(fs.existsSync(filePath)).toBe(true);
 
       const loaded = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      expect(loaded.version).toBe(SCHEMA_SNAPSHOT_VERSION);
+      expect(SCHEMA_SNAPSHOT_VERSION).toBe(2);
+      expect(loaded.version).toBe(2);
     });
   });
 
