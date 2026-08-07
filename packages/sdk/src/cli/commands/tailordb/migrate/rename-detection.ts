@@ -8,12 +8,14 @@
  * `field_renamed` change instead.
  */
 
-import type { FieldAddedChange, FieldRemovedChange, MigrationDiff } from "./diff-calculator";
-import type {
-  NormalizedSchemaSnapshot,
-  SchemaSnapshot,
-  SnapshotFieldConfig,
+import {
+  SNAPSHOT_FIELD_BOOLEAN_PROPS,
+  type NormalizedSchemaSnapshot,
+  type SchemaSnapshot,
+  type SnapshotFieldBooleanProp,
+  type SnapshotFieldConfig,
 } from "./snapshot-types";
+import type { FieldAddedChange, FieldRemovedChange, MigrationDiff } from "./diff-calculator";
 
 /**
  * A confirmed field rename to record in the migration diff.
@@ -36,6 +38,13 @@ export interface FieldRenameCandidate {
   added: FieldAddedChange[];
 }
 
+/** Modifiers a rename may change, since the Pre-phase relaxes them. */
+const RENAME_TOLERATED_BOOLEAN_PROPS = new Set<SnapshotFieldBooleanProp>([
+  "index",
+  "unique",
+  "vector",
+]);
+
 /**
  * Whether copying values from `before` into `after` preserves their meaning,
  * i.e. the removed + added pair can be treated as a rename.
@@ -51,7 +60,10 @@ export function isRenameCompatible(
   after: SnapshotFieldConfig,
 ): boolean {
   if (before.type !== after.type) return false;
-  if ((before.array ?? false) !== (after.array ?? false)) return false;
+  for (const prop of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
+    if (RENAME_TOLERATED_BOOLEAN_PROPS.has(prop)) continue;
+    if ((before[prop] ?? false) !== (after[prop] ?? false)) return false;
+  }
   if ((before.foreignKeyType ?? "") !== (after.foreignKeyType ?? "")) return false;
   if ((before.foreignKeyField ?? "") !== (after.foreignKeyField ?? "")) return false;
   if (before.serial || after.serial) return false;

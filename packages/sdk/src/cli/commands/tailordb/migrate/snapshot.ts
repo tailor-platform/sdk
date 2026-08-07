@@ -42,28 +42,29 @@ import { supportsInPlaceFieldTypeChange } from "./field-type-change";
 import { formatMigrationNumber } from "./migration-number";
 import { assertValidFieldRenames, type FieldRenameSpec } from "./rename-detection";
 import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
+import {
+  SNAPSHOT_FIELD_BOOLEAN_PROPS,
+  type NormalizedSchemaSnapshot,
+  type SchemaSnapshot,
+  type SnapshotActionPermission,
+  type SnapshotFieldConfig,
+  type SnapshotGqlAction,
+  type SnapshotGqlPermission,
+  type SnapshotGqlOperations,
+  type SnapshotPermissionOperand,
+  type SnapshotPermissionOperator,
+  type SnapshotIndexConfig,
+  type SnapshotPermissionCondition,
+  type SnapshotRecordPermission,
+  type SnapshotRelationship,
+  type SnapshotSettings,
+  type TailorDBSnapshotType,
+} from "./snapshot-types";
 import type {
   TailorDBType,
   OperatorFieldConfig,
   StandardActionPermission,
 } from "#/parser/service/tailordb/types";
-import type {
-  NormalizedSchemaSnapshot,
-  SchemaSnapshot,
-  SnapshotActionPermission,
-  SnapshotFieldConfig,
-  SnapshotGqlAction,
-  SnapshotGqlPermission,
-  SnapshotGqlOperations,
-  SnapshotPermissionOperand,
-  SnapshotPermissionOperator,
-  SnapshotIndexConfig,
-  SnapshotPermissionCondition,
-  SnapshotRecordPermission,
-  SnapshotRelationship,
-  SnapshotSettings,
-  TailorDBSnapshotType,
-} from "./snapshot-types";
 import type { SchemaDrift } from "./types";
 
 // ============================================================================
@@ -954,8 +955,7 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
   if (oldField.required !== newField.required) return true;
 
   // Compare optional boolean properties (default to false)
-  const booleanProps = ["array", "index", "unique", "foreignKey", "vector"] as const;
-  for (const prop of booleanProps) {
+  for (const prop of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
     if ((oldField[prop] ?? false) !== (newField[prop] ?? false)) return true;
   }
 
@@ -2776,7 +2776,7 @@ function addFieldDifferences(
   addFieldDifference(differences, prefix, "type", remoteField.type, snapshotField.type);
   addFieldDifference(differences, prefix, "required", remoteField.required, snapshotField.required);
 
-  for (const key of ["array", "index", "unique", "foreignKey", "vector"] as const) {
+  for (const key of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
     addBooleanFieldDifference(differences, prefix, key, remoteField, snapshotField);
   }
 
