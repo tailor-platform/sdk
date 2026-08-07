@@ -141,19 +141,20 @@ To prevent that, when `migration generate` finds a removed field and an added fi
 ? User.fullName was removed and displayName was added with a compatible type. Was it renamed to displayName? (Y/n)
 ```
 
-In non-interactive environments (or with `--yes`), no prompt is shown; pass the rename explicitly instead:
+In non-interactive environments (or with `--yes`), no prompt is shown and the command fails while a rename candidate is left unresolved — writing it as remove + add would silently drop the field's data at deploy. Resolve every candidate explicitly: pass the rename, or confirm a genuine removal with `--drop`:
 
 ```bash
 tailor tailordb migration generate --rename "User.fullName:displayName"
+tailor tailordb migration generate --drop "User.fullName"
 ```
 
-Repeat `--rename` for multiple renames. A `--rename` that does not match a compatible removed + added pair fails with an error.
+Repeat `--rename` and `--drop` for multiple fields. A `--rename` that does not match a compatible removed + added pair, or a `--drop` that does not match a removed field, fails with an error.
 
 A confirmed rename is recorded as a single `field_renamed` change and treated as **breaking**, so a migration script is required. The generated `migrate.ts` copies the old field into the new one with a single set-based update, and the generated `db.ts` exposes both the old field (readable) and the new field (writable). The copy intentionally overwrites every row without checking for existing values: values of removed fields are retained in storage, so a stale value could otherwise resurface under the new name later. If the new field adds a unique constraint, the script also includes a duplicate-resolution block to run before the constraint is enforced.
 
 During deploy, the pre-migration phase keeps the old field and adds the new field with its constraints relaxed, the script copies the data, and the post-migration phase drops the old field and enforces the new field's constraints — all within a single `tailor deploy`.
 
-If you decline the prompt (or pass neither prompt confirmation nor `--rename`), the change stays a plain removal + addition with the usual data-loss warning.
+If you decline the prompt (or confirm the removal with `--drop`), the change stays a plain removal + addition with the usual data-loss warning.
 
 Renaming a **type** is not yet detected; it is still a type removal plus a type addition.
 

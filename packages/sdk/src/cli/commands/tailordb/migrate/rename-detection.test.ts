@@ -1,7 +1,9 @@
 import { describe, expect, test } from "vitest";
 import {
+  dropSpecApplies,
   findRenameCandidates,
   isRenameCompatible,
+  parseDropOption,
   parseRenameOption,
   renameSpecApplies,
 } from "./rename-detection";
@@ -261,6 +263,52 @@ describe("renameSpecApplies", () => {
       ),
     ).toBe(false);
   });
+});
+
+describe("dropSpecApplies", () => {
+  const snapshot = (
+    fields: Record<string, SnapshotFieldConfig>,
+  ): Parameters<typeof dropSpecApplies>[1] => ({
+    version: 1,
+    namespace: "tailordb",
+    createdAt: new Date().toISOString(),
+    types: { User: { name: "User", pluralForm: "Users", fields } },
+  });
+  const spec = { typeName: "User", fieldName: "fullName" };
+
+  test("matches a removed field", () => {
+    expect(dropSpecApplies(spec, snapshot({ fullName: stringField() }), snapshot({}))).toBe(true);
+  });
+
+  test("does not match when the field still exists", () => {
+    expect(
+      dropSpecApplies(
+        spec,
+        snapshot({ fullName: stringField() }),
+        snapshot({ fullName: stringField() }),
+      ),
+    ).toBe(false);
+  });
+
+  test("does not match when the field never existed", () => {
+    expect(dropSpecApplies(spec, snapshot({}), snapshot({}))).toBe(false);
+  });
+});
+
+describe("parseDropOption", () => {
+  test("parses Type.field", () => {
+    expect(parseDropOption("User.fullName")).toEqual({
+      typeName: "User",
+      fieldName: "fullName",
+    });
+  });
+
+  test.each(["User", "User.a.b", "User.a:b", "User..a", ""])(
+    "rejects malformed value %j",
+    (value) => {
+      expect(() => parseDropOption(value)).toThrow("Expected format");
+    },
+  );
 });
 
 describe("parseRenameOption", () => {

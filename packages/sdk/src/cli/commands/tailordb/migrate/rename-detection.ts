@@ -156,3 +156,46 @@ export function parseRenameOption(value: string): FieldRenameSpec {
   }
   return { typeName, fromFieldName, toFieldName };
 }
+
+/**
+ * A field removal confirmed as intentional (`--drop Type.field`), so its
+ * rename candidates need no interactive confirmation.
+ */
+export interface FieldDropSpec {
+  typeName: string;
+  fieldName: string;
+}
+
+const DROP_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+)$/;
+
+/**
+ * Parse a `--drop` option value of the form `Type.field`.
+ * @param {string} value - Raw option value
+ * @returns {FieldDropSpec} Parsed drop spec
+ */
+export function parseDropOption(value: string): FieldDropSpec {
+  const match = value.match(DROP_OPTION_PATTERN);
+  const [, typeName, fieldName] = match ?? [];
+  if (!typeName || !fieldName) {
+    throw new Error(`Invalid --drop value "${value}". Expected format: "Type.field".`);
+  }
+  return { typeName, fieldName };
+}
+
+/**
+ * Whether a drop spec matches a field that was removed between two snapshots:
+ * the field existed before and is gone now.
+ * @param {FieldDropSpec} spec - Drop spec to test
+ * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
+ * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
+ * @returns {boolean} True if the spec matches a removed field
+ */
+export function dropSpecApplies(
+  spec: FieldDropSpec,
+  previousSnapshot: SchemaSnapshot,
+  currentSnapshot: SchemaSnapshot,
+): boolean {
+  const prevFields = previousSnapshot.types[spec.typeName]?.fields;
+  const currFields = currentSnapshot.types[spec.typeName]?.fields;
+  return Boolean(prevFields?.[spec.fieldName] && !currFields?.[spec.fieldName]);
+}
