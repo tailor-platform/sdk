@@ -365,10 +365,16 @@ function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
   // TODO: ${previousFieldName} is optional but ${fieldName} is required.
   // Resolve null values, or the post-migration phase will fail.`
       : "";
+  const roundingWarning = renameCopyCanCollapseValues(change)
+    ? `
+  // WARNING: ${fieldName} has a smaller decimal scale than ${previousFieldName}, so
+  // copied values that exceed it may be rounded half-up. Review the resulting
+  // precision before deploying.`
+    : "";
 
   return `  // Copy ${typeName}.${previousFieldName} into ${fieldName} for every row.
   // Overwrite unconditionally: stored values of previously removed fields are
-  // not pruned, so a stale value could otherwise resurface under ${fieldName}.${requiredTodo}
+  // not pruned, so a stale value could otherwise resurface under ${fieldName}.${requiredTodo}${roundingWarning}
   await trx
     .updateTable("${typeName}")
     .set((eb) => ({ ${fieldName}: eb.ref("${previousFieldName}") }))
@@ -480,8 +486,8 @@ function generateDecimalScaleChangeScript(change: DiffChange): string | null {
   const roundingWarning =
     afterScale < beforeScale
       ? `
-  // Values that exceed the new scale may be rounded half-up, so review the
-  // resulting precision before deploying.`
+  // WARNING: Values that exceed the new scale may be rounded half-up, so
+  // review the resulting precision before deploying.`
       : "";
 
   return `  // Re-save existing ${change.typeName} rows so ${change.fieldName} is stored under the new scale.

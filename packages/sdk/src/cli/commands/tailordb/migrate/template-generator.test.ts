@@ -344,6 +344,53 @@ describe("template-generator", () => {
       },
     );
 
+    test.each([
+      ["decreases", 2, true],
+      ["keeps", 3, false],
+    ])(
+      "decimal rename copy that %s scale includes a rounding warning: %s",
+      async (_label, afterScale, expectWarning) => {
+        const renamePreviousSnapshot = createTestSnapshot({
+          Item: {
+            name: "Item",
+            pluralForm: "Items",
+            fields: {
+              ratio: { type: "decimal", required: false, scale: 3 },
+            },
+          },
+        });
+        const diff = createMockMigrationDiff({
+          changes: [
+            {
+              kind: "field_renamed",
+              typeName: "Item",
+              fieldName: "rate",
+              previousFieldName: "ratio",
+              before: { type: "decimal", required: false, scale: 3 },
+              after: { type: "decimal", required: false, scale: afterScale },
+            },
+          ],
+          hasBreakingChanges: true,
+          breakingChanges: [
+            {
+              typeName: "Item",
+              fieldName: "rate",
+              reason: "Field renamed from ratio to rate",
+            },
+          ],
+          requiresMigrationScript: true,
+        });
+
+        const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+        const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+        expect(scriptContent).toContain('eb.ref("ratio")');
+        expect(scriptContent.includes("WARNING: rate has a smaller decimal scale than ratio")).toBe(
+          expectWarning,
+        );
+      },
+    );
+
     test("should add a null-handling TODO when a rename target becomes required", async () => {
       const renamePreviousSnapshot = createTestSnapshot({
         User: {
@@ -855,7 +902,7 @@ describe("template-generator", () => {
       expect(scriptContent).toContain(".set({ price: row.price })");
       expect(scriptContent).toContain('.where("price", "=", row.price)');
       expect(scriptContent).toContain("platform-side");
-      expect(scriptContent).toContain("may be rounded");
+      expect(scriptContent).toContain("WARNING: Values that exceed the new scale may be rounded");
       expect(scriptContent).not.toContain("No data migration needed");
     });
 
