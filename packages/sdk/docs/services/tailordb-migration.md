@@ -482,9 +482,67 @@ Stage the rows each query returns with `mock.enqueueResult(...)` or `mock.setQue
 
 These tests need no platform connection and no `tailor-runtime` environment — they run in a plain Vitest setup. Vitest's default `include` pattern already picks up `migrations/**/migrate.test.ts`; if your config narrows `include`, add the migrations directory. The test file is ignored by `tailor deploy` and never ships to the platform.
 
+### Executing migrate.ts against a local Postgres (PGlite)
+
+A statement-level test verifies what the script issues, not what it does to data (e.g., whether a `where` clause matches the rows you intended). To run `main` against real rows locally, back Kysely with [`@electric-sql/pglite`](https://pglite.dev/) — an in-memory PostgreSQL — via `createKyselyPGlite` from `@tailor-platform/sdk/vitest`:
+
+```bash
+npm install -D @electric-sql/pglite
+```
+
+Create the tables the script touches (matching the shape in the generated `db.ts`), stage rows, then run the script in a transaction:
+
+```typescript
+// migrations/0005/migrate.pglite.test.ts
+import { PGlite } from "@electric-sql/pglite";
+import { sql } from "@tailor-platform/sdk/kysely";
+import { createKyselyPGlite } from "@tailor-platform/sdk/vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import type { Database } from "./db";
+import { main } from "./migrate";
+
+const db = createKyselyPGlite<Database>(new PGlite());
+
+beforeAll(async () => {
+  await sql`
+    CREATE TABLE "User" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "name" text NOT NULL,
+      "email" text
+    )
+  `.execute(db);
+});
+
+afterAll(async () => {
+  await db.destroy();
+});
+
+describe("0005 add required email", () => {
+  test("backfills null emails and keeps existing ones", async () => {
+    await sql`
+      INSERT INTO "User" ("name", "email")
+      VALUES ('a', NULL), ('b', 'b@example.com')
+    `.execute(db);
+
+    await db.transaction().execute((trx) => main(trx));
+
+    const rows = await db.selectFrom("User").select(["name", "email"]).orderBy("name").execute();
+    expect(rows).toEqual([
+      { name: "a", email: "unknown@example.com" },
+      { name: "b", email: "b@example.com" },
+    ]);
+  });
+});
+```
+
+Two caveats keep this from replacing a scratch workspace:
+
+- PGlite runs full PostgreSQL, while TailorDB supports [a subset of it](https://docs.tailor.tech/guides/function/accessing-tailordb#supported-sql-queries) — a statement that passes here can still be rejected on deploy.
+- The `CREATE TABLE` statements are yours, so they can drift from the schema the platform actually has.
+
 ### Beyond unit tests
 
-A unit test verifies which statements the script issues, not how they behave against real data (e.g., whether a `where` clause matches the rows you intended). To cover that:
+A unit test verifies which statements the script issues; a PGlite test verifies what they do to the rows you staged. Neither runs against your actual data. To cover that:
 
 - Run `migration generate` on a clean working copy first, review `diff.json`, then run again after editing types to ensure the diff matches what you intended.
 - For non-trivial migrations, apply against a scratch workspace before promoting to staging or production.

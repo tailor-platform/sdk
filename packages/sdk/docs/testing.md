@@ -582,7 +582,7 @@ describe("upsertUsers resolver", () => {
 
 Reach for [`mockTailordb`](#mocking-the-tailordb-client) instead when you want to drive the raw query sequence at the `tailordb.Client` level rather than at the Kysely layer.
 
-TailorDB migration scripts (`migrate.ts`) are unit-tested the same way: the generated `db.ts` exports the `Database` interface to type the mock, and `tailor tailordb migration script <N> --with-test` scaffolds a ready-to-fill test. See [Testing Migrations Locally](./services/tailordb-migration.md#testing-migrations-locally).
+TailorDB migration scripts (`migrate.ts`) are unit-tested the same way: the generated `db.ts` exports the `Database` interface to type the mock, and `tailor tailordb migration script <N> --with-test` scaffolds a ready-to-fill test. To execute a migration script against real rows in an in-memory Postgres, use `createKyselyPGlite` with `@electric-sql/pglite`. See [Testing Migrations Locally](./services/tailordb-migration.md#testing-migrations-locally).
 
 #### Resolvers that resume a workflow
 
