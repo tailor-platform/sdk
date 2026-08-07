@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { symbols } from "#/cli/shared/logger";
 import { sdkNameLabelKey } from "./label";
 import { applyPipeline, formatResolverChangeEntries, planPipeline } from "./resolver";
 import type { Application } from "#/cli/services/application";
@@ -553,7 +554,7 @@ describe("formatResolverChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "update",
-        symbol: "~",
+        symbol: symbols.update,
         name: "add",
         labels: ["resolver", "function"],
         namespace: "my-resolver",
@@ -580,7 +581,7 @@ describe("formatResolverChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "delete",
-        symbol: "-",
+        symbol: symbols.delete,
         name: "add",
         labels: ["resolver", "function"],
         namespace: "my-resolver",

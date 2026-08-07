@@ -17,6 +17,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { generateTailorDBTypeManifestFromSnapshot } from "#/cli/commands/tailordb/migrate/snapshot-manifest";
 import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
+import { symbols } from "#/cli/shared/logger";
 import { captureStderr } from "#/cli/shared/test-helpers/capture-output";
 import { createConcurrencyProbe } from "#/cli/shared/test-helpers/concurrency-probe";
 import { sdkNameLabelKey } from "../label";
@@ -1028,7 +1029,12 @@ describe("formatTailorDBResourceChangeEntries", () => {
         replaces: [],
       },
       expected: [
-        { action: "create", symbol: "+", name: "Project", labels: ["type", "gqlPermission"] },
+        {
+          action: "create",
+          symbol: symbols.create,
+          name: "Project",
+          labels: ["type", "gqlPermission"],
+        },
       ],
     },
     {
@@ -1041,8 +1047,8 @@ describe("formatTailorDBResourceChangeEntries", () => {
         replaces: [],
       },
       expected: [
-        { action: "create", symbol: "+", name: "Project", labels: ["type"] },
-        { action: "update", symbol: "~", name: "Project", labels: ["gqlPermission"] },
+        { action: "create", symbol: symbols.create, name: "Project", labels: ["type"] },
+        { action: "update", symbol: symbols.update, name: "Project", labels: ["gqlPermission"] },
       ],
     },
     {
@@ -1054,7 +1060,9 @@ describe("formatTailorDBResourceChangeEntries", () => {
         deletes: [],
         replaces: [],
       },
-      expected: [{ action: "create", symbol: "+", name: "Project", labels: ["gqlPermission"] }],
+      expected: [
+        { action: "create", symbol: symbols.create, name: "Project", labels: ["gqlPermission"] },
+      ],
     },
   ])("$name", ({ typeChanges, gqlPermissionChanges, expected }) => {
     const entries = formatTailorDBResourceChangeEntries(typeChanges, gqlPermissionChanges);

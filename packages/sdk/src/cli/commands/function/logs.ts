@@ -121,7 +121,7 @@ export function composeExecutionErrorString(error: FunctionExecutionErrorDisplay
  */
 function formatExecutionErrorFallback(error: FunctionExecutionErrorDisplay): string {
   const composed = composeExecutionErrorString(error);
-  const [headerLine, ...frameLines] = composed.split("\n");
+  const [headerLine = "", ...frameLines] = composed.split("\n");
   return [
     `  ${styles.error(headerLine)}`,
     ...frameLines.map((line) => `  ${styles.dim(line)}`),
