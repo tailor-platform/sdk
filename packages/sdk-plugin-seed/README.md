@@ -18,7 +18,7 @@ The Tailor CLI discovers the plugin automatically from `node_modules/.bin` (or y
 ## Usage
 
 ```bash
-# Seed everything (TailorDB types, then IdP _User)
+# Seed everything (TailorDB tables, then IdP _User)
 tailor seed apply
 
 # Truncate target tables first, without a confirmation prompt
@@ -27,7 +27,7 @@ tailor seed apply --truncate --yes
 # Seed a single TailorDB namespace (excludes _User)
 tailor seed apply --namespace my-db
 
-# Seed specific types only
+# Seed specific tables only
 tailor seed apply User Order
 
 # Validate JSONL seed data against the generated schemas
@@ -57,24 +57,24 @@ A relation in seed data points at a field of the row it references — usually i
 {"id":"0b6b6f5e-3b8a-4d0e-9a1f-2c7d8e5a4b31","name":"Acme Corporation","email":"contact@acme.com"}
 ```
 
-`--fields` names what to fill, so any field the type gives a value to on create can be written the same way — `--fields id,createdAt` also stamps a creation time on rows that have none, which is how you seed records that need to look older than the seed run:
+`--fields` names what to fill, so any field the table gives a value to on create can be written the same way — `--fields id,createdAt` also stamps a creation time on rows that have none, which is how you seed records that need to look older than the seed run:
 
 ```bash
 tailor seed fill --fields id,createdAt
 ```
 
-The values come from the type itself — its `id`, its field defaults, its create hooks — applied to each row on its own.
+The values come from the table itself — its `id`, its field defaults, its create hooks — applied to each row on its own.
 
 **Nothing is validated.** That is deliberate: the ids are what you need in order to write the rows that reference them, so waiting for the data to be valid would be waiting for the thing this command gives you. A row can be filled while a required field is still missing, or while another file references an id that does not exist yet. Run `tailor seed validate` once the data is ready.
 
-Only the named fields are written, and only into a row that has no value for them, so **a value already in the file is never replaced** — a row that already carries a `createdAt` keeps it. A field the type gives no value to is skipped: `--fields id` leaves the IdP `_User` data alone, whose rows are identified by `name`, and a field the platform assigns rather than the type — a `serial` field — has nothing to fill in from here:
+Only the named fields are written, and only into a row that has no value for them, so **a value already in the file is never replaced** — a row that already carries a `createdAt` keeps it. A field the table gives no value to is skipped: `--fields id` leaves the IdP `_User` data alone, whose rows are identified by `name`, and a field the platform assigns rather than the table — a `serial` field — has nothing to fill in from here:
 
 ```
 ⚠ No seed data produces a value for: invoiceNumber
 ✓ Nothing to fill
 ```
 
-**A line that gains nothing is left exactly as it was, byte for byte.** Only the lines that take a value are rewritten, and those get their keys in the order the type declares its fields, so a filled-in `id` lands at the front of the line and a `createdAt` next to the other timestamps. Keys the type does not declare follow the declared ones.
+**A line that gains nothing is left exactly as it was, byte for byte.** Only the lines that take a value are rewritten, and those get their keys in the order the table declares its fields, so a filled-in `id` lands at the front of the line and a `createdAt` next to the other timestamps. Keys the table does not declare follow the declared ones.
 
 The values are read from the schema files `seedPlugin` generates next to the data. Every one of them is read before anything is written, so a project that has not run `tailor generate` since upgrading is told which file to regenerate and keeps its data untouched:
 
@@ -82,9 +82,9 @@ The values are read from the schema files `seedPlugin` generates next to the dat
 ./seed/data/Customer.schema.ts does not export `hook`. Run `tailor generate` to regenerate the seed schema files.
 ```
 
-Naming a single `.jsonl` file limits the run to that file, so a referenced type can be filled on its own before the rows that reference it are written.
+Naming a single `.jsonl` file limits the run to that file, so a referenced table can be filled on its own before the rows that reference it are written.
 
-Without `--upsert`, a row whose id already exists in a target table fails the seed run. With `--upsert`, every row must supply an `id` (and any field the type requires) — run `tailor seed fill` first if some rows have none — and a matching row is updated in place instead. Because the update goes through the same write path as any other update, it runs update hooks and validation and updates fields such as `updatedAt`, and it publishes a record-updated event — so an executor using `recordUpdatedTrigger` fires for each existing row that gets updated.
+Without `--upsert`, a row whose id already exists in a target table fails the seed run. With `--upsert`, every row must supply an `id` (and any field the table requires) — run `tailor seed fill` first if some rows have none — and a matching row is updated in place instead. Because the update goes through the same write path as any other update, it runs update hooks and validation and updates fields such as `updatedAt`, and it publishes a record-updated event — so an executor using `recordUpdatedTrigger` fires for each existing row that gets updated.
 
 The machine user used for seeding comes from `--machine-user` or the `machineUserName` seedPlugin option:
 
