@@ -8,6 +8,7 @@ export default createResolver({
   name: "add",
   description: "Addition operation",
   operation: "query",
+  permission: "allowAnonymous",
   input: {
     a: t
       .int()

@@ -25,6 +25,7 @@ import { createGeneratedEntryResolverPlugin } from "#/cli/shared/virtual-entry";
 import { assertDefined } from "#/utils/assert";
 import ml from "#/utils/multiline";
 import type { LogLevelInput } from "#/configure/config/types";
+import type { Resolver } from "#/types/resolver.generated";
 import type { DetectedFunction } from "./detect";
 
 /** Machine user info resolved from config and API for bundle-time principal context. */
@@ -56,6 +57,8 @@ interface BundleForTestRunOptions {
   machineUser: ResolvedMachineUser;
   /** Workspace ID for user context */
   workspaceId: string;
+  /** For resolvers: the `defaultPermission` of the namespace owning the file */
+  defaultPermission?: Resolver["permission"];
 }
 
 interface BundleForTestRunResult {
@@ -84,7 +87,14 @@ export async function bundleForTestRun(
   const scriptName = `${baseName}.js`;
   const entryPath = path.join(outputDir, `${baseName}.entry.js`);
 
-  const entryContent = generateEntry(detected, sourceFile, env, machineUser, workspaceId);
+  const entryContent = generateEntry({
+    detected,
+    sourceFile,
+    env,
+    machineUser,
+    workspaceId,
+    defaultPermission: options.defaultPermission,
+  });
   fs.writeFileSync(entryPath, entryContent);
 
   const tsconfig = await resolveTSConfigWithFallback(baseDir);
@@ -126,22 +136,25 @@ export async function bundleForTestRun(
   return { bundledCode, scriptName };
 }
 
+type GenerateEntryOptions = {
+  detected: DetectedFunction;
+  /** Absolute path to the source file */
+  sourceFile: string;
+  /** Environment variables for workflow job bundles */
+  env: Record<string, string | number | boolean>;
+  machineUser: ResolvedMachineUser;
+  workspaceId: string;
+  /** For resolvers: the `defaultPermission` of the namespace owning the file */
+  defaultPermission?: Resolver["permission"];
+};
+
 /**
  * Generate entry file content based on the detected function type.
- * @param detected - Detected function info
- * @param sourceFile - Absolute path to the source file
- * @param env - Environment variables for workflow job bundles
- * @param machineUser - Resolved machine user info
- * @param workspaceId - Workspace ID
+ * @param options - Detected function info and the context embedded into the entry
  * @returns Entry file content string
  */
-function generateEntry(
-  detected: DetectedFunction,
-  sourceFile: string,
-  env: Record<string, string | number | boolean>,
-  machineUser: ResolvedMachineUser,
-  workspaceId: string,
-): string {
+function generateEntry(options: GenerateEntryOptions): string {
+  const { detected, sourceFile, env, machineUser, workspaceId, defaultPermission } = options;
   const absoluteSourcePath = path.resolve(sourceFile);
 
   switch (detected.type) {
@@ -163,7 +176,10 @@ function generateEntry(
       // In production, the operationHook injects caller/env into context.
       // For test-run, we embed machine user info since there's no operationHook.
       const principalExpr = buildMachinePrincipalExpr(machineUser, workspaceId);
-      const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr(detected.permission);
+      const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr({
+        permission: detected.permission,
+        defaultPermission,
+      });
       return ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";
         import { t } from "@tailor-platform/sdk";

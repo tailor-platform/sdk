@@ -1,3 +1,4 @@
+import { renderFor } from "@tailor-platform/shared/color";
 import { assertDefined } from "#/utils/assert";
 import { styles, symbols } from "./logger";
 
@@ -173,7 +174,7 @@ export class Spinner {
     this.#frame = (this.#frame + 1) % FRAMES.length;
     const indent = " ".repeat(this.#indent);
     const line = `${indent}${frame} ${this.text}`;
-    this.#stream.write(line);
+    this.#stream.write(renderFor(this.#stream, line));
     this.#stream.write(SYNC_END);
     const cols = this.#stream.columns || 80;
     this.#linesDrawn = Math.max(1, Math.ceil(visibleLength(line) / cols));
@@ -192,7 +193,7 @@ export class Spinner {
 
   #writeLine(content: string): void {
     const indent = " ".repeat(this.#indent);
-    this.#stream.write(`${indent}${content}\n`);
+    this.#stream.write(renderFor(this.#stream, `${indent}${content}\n`));
   }
 }
 

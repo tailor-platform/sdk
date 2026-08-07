@@ -4,7 +4,7 @@ import { gql } from "graphql-request";
 import ml from "multiline-ts";
 import { describe, expect, inject, test } from "vitest";
 import { filterByMetadata, pipelineTrn } from "./metadata";
-import { createGraphQLClient, createOperatorClient } from "./utils";
+import { createAnonymousGraphQLClient, createGraphQLClient, createOperatorClient } from "./utils";
 
 describe("controlplane", async () => {
   const [client, workspaceId] = createOperatorClient();
@@ -507,5 +507,46 @@ describe("dataplane", () => {
       const messageField = responseFields.find((f) => f.name === "message");
       expect(messageField).toBeDefined();
     });
+  });
+});
+
+describe("permission", () => {
+  const anonymousClient = createAnonymousGraphQLClient(inject("url"));
+  const authenticatedClient = createGraphQLClient(inject("url"), inject("token"));
+
+  const addQuery = gql`
+    query {
+      add(a: 1, b: 2)
+    }
+  `;
+  const passThroughQuery = gql`
+    query {
+      passThrough(
+        input: {
+          userInfo: { name: "John Doe", email: "john@example.com" }
+          metadata: { created: "2024-01-01T00:00:00.000Z", version: 1 }
+        }
+      ) {
+        userInfo {
+          name
+        }
+      }
+    }
+  `;
+
+  test("a resolver inheriting the namespace default rejects an anonymous caller", async () => {
+    const result = await anonymousClient.rawRequest(passThroughQuery);
+    expect(result.errors?.[0]?.message).toContain("access denied");
+  });
+
+  test("the same resolver accepts an authenticated caller", async () => {
+    const result = await authenticatedClient.rawRequest(passThroughQuery);
+    expect(result.errors).toBeUndefined();
+  });
+
+  test("a resolver overriding the default with allowAnonymous stays reachable", async () => {
+    const result = await anonymousClient.rawRequest(addQuery);
+    expect(result.errors).toBeUndefined();
+    expect(result.data).toEqual({ add: 3 });
   });
 });

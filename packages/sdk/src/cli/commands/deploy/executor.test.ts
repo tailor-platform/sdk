@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { symbols } from "#/cli/shared/logger";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
@@ -1438,7 +1439,7 @@ describe("formatExecutorChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "update",
-        symbol: "~",
+        symbol: symbols.update,
         name: "user-created",
         labels: ["executor", "function"],
       },
@@ -1473,7 +1474,7 @@ describe("formatExecutorChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "delete",
-        symbol: "-",
+        symbol: symbols.delete,
         name: "user-created",
         labels: ["executor", "function"],
       },

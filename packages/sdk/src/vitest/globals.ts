@@ -7,7 +7,7 @@
  *
  * - `globalThis.tailor` / `globalThis.tailordb` container objects
  * - `globalThis.tailor.context.getInvoker` default stub
- * - the platform error classes (`TailorErrors`, `TailorErrorMessage`,
+ * - the platform error classes (`TailorErrors`,
  *   `TailorDBFileError`)
  * - the `__tailorRuntimeActive` sentinel flag
  *
@@ -56,13 +56,6 @@ class TailorErrorsMock extends Error {
     super(`TailorErrors: ${JSON.stringify({ errors: validated })}`);
     this.name = "TailorErrors";
     this.errors = validated;
-  }
-}
-
-class TailorErrorMessageMock extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "TailorErrorMessage";
   }
 }
 
@@ -129,7 +122,6 @@ export function installPlatformGlobals(global: typeof globalThis): Disposable {
   g.tailordb = {};
 
   g.TailorErrors = TailorErrorsMock;
-  g.TailorErrorMessage = TailorErrorMessageMock;
   g.TailorDBFileError = TailorDBFileErrorMock;
 
   return {
@@ -149,7 +141,6 @@ export function cleanupPlatformGlobals(global: typeof globalThis): void {
   delete g.tailordb;
   delete g.tailor;
   delete g.TailorErrors;
-  delete g.TailorErrorMessage;
   delete g.TailorDBFileError;
   delete g[RUNTIME_FLAG_KEY];
 }

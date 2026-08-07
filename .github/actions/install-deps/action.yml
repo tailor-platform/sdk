@@ -31,12 +31,9 @@ runs:
       run: pnpm install
       shell: bash
 
-    # Build the SDK and CLI plugins so their bin and import entries point to real dist files.
+    # Build the SDK and CLI plugins so their import entries point to real dist
+    # files. Their bins are committed launchers, so pnpm links them at install
+    # time and no re-link after the build is needed.
     - name: Build SDK packages
       run: pnpm --filter @tailor-platform/sdk --filter @tailor-platform/sdk-plugin-seed --filter @tailor-platform/sdk-plugin-tailordb-erd run build
-      shell: bash
-
-    # Re-link workspace bin entries after their targets have been built.
-    - name: Re-link SDK bin entries after build
-      run: pnpm --filter '...@tailor-platform/sdk' --filter '...@tailor-platform/sdk-plugin-seed' --filter '...@tailor-platform/sdk-plugin-tailordb-erd' --filter '!@tailor-platform/sdk' --filter '!@tailor-platform/sdk-plugin-seed' --filter '!@tailor-platform/sdk-plugin-tailordb-erd' rebuild --pending
       shell: bash

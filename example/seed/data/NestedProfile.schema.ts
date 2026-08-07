@@ -8,8 +8,8 @@ const schemaType = t.object({
   ...nestedProfile.omitFields(["id"]),
 });
 
-const hook = createTailorDBHook(nestedProfile);
+export const hook = createTailorDBHook(nestedProfile);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook),
+  createStandardSchema(schemaType, hook, nestedProfile),
 );

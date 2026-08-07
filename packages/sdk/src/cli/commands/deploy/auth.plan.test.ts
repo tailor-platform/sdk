@@ -7,7 +7,7 @@ import {
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { defineApplication } from "#/cli/services/application";
-import { logger } from "#/cli/shared/logger";
+import { logger, symbols } from "#/cli/shared/logger";
 import { defineConfig } from "#/configure/config/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
@@ -695,7 +695,7 @@ describe("formatAuthHookChangeEntries", () => {
       expected: [
         {
           action: "update",
-          symbol: "~",
+          symbol: symbols.update,
           name: "before-login",
           labels: ["authHook", "function"],
           namespace: "my-auth",
@@ -713,14 +713,14 @@ describe("formatAuthHookChangeEntries", () => {
       expected: [
         {
           action: "update",
-          symbol: "~",
+          symbol: symbols.update,
           name: "before-login",
           labels: ["authHook"],
           namespace: "my-auth",
         },
         {
           action: "create",
-          symbol: "+",
+          symbol: symbols.create,
           name: "before-login",
           labels: ["function"],
           namespace: "my-auth",
