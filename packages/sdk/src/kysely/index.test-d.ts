@@ -10,7 +10,6 @@ import type {
   Serial,
   Insertable,
   Selectable,
-  TailorDBColumns,
   TailorDBInsertable,
   TailorDBSelectable,
   TailorDBUpdateable,
@@ -222,12 +221,23 @@ describe("TailorDBUpdateable", () => {
 // `example/tests/kysely-parity.ts` pins that against real generator output; these cases
 // cover the field kinds the example project does not exercise. Expectations mirror
 // `plugin/builtin/kysely-type/type-processor.test.ts`.
-describe("TailorDBColumns column mapping", () => {
+// The column each field resolves to has to match what kyselyTypePlugin writes for it.
+// `example/tests/kysely-parity.ts` pins that against real generator output; these cases
+// cover the field kinds the example project does not exercise, and read the column
+// through the select and insert projections since the map itself is internal.
+// Expectations mirror `plugin/builtin/kysely-type/type-processor.test.ts`.
+describe("column mapping", () => {
   test("maps datetime and date to Timestamp", () => {
     const fields = { when: db.datetime(), day: db.date() };
 
-    expectTypeOf<TailorDBColumns<typeof fields>["when"]>().toEqualTypeOf<Timestamp>();
-    expectTypeOf<TailorDBColumns<typeof fields>["day"]>().toEqualTypeOf<Timestamp>();
+    expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<{
+      when: Date;
+      day: Date;
+    }>();
+    expectTypeOf<TailorDBInsertable<typeof fields>>().toEqualTypeOf<{
+      when: Date | string;
+      day: Date | string;
+    }>();
   });
 
   test("wraps arrays of Timestamp in ArrayColumnType", () => {
@@ -236,35 +246,45 @@ describe("TailorDBColumns column mapping", () => {
       optionalDates: db.date({ array: true, optional: true }),
     };
 
-    expectTypeOf<TailorDBColumns<typeof fields>["eventDates"]>().toEqualTypeOf<
-      ArrayColumnType<Timestamp>
+    expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<{
+      eventDates: Date[];
+      optionalDates: Date[] | null;
+    }>();
+    expectTypeOf<TailorDBInsertable<typeof fields>["eventDates"]>().toEqualTypeOf<
+      (Date | string)[]
     >();
-    expectTypeOf<
-      TailorDBColumns<typeof fields>["optionalDates"]
-    >().toEqualTypeOf<ArrayColumnType<Timestamp> | null>();
   });
 
   test("leaves arrays of plain scalars as arrays", () => {
     const fields = { scores: db.int({ array: true, optional: true }) };
 
-    expectTypeOf<TailorDBColumns<typeof fields>["scores"]>().toEqualTypeOf<number[] | null>();
+    expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<{ scores: number[] | null }>();
   });
 
   test("keeps enum unions and decimal strings", () => {
     const fields = { role: db.enum(["admin", "user"]), price: db.decimal() };
 
-    expectTypeOf<TailorDBColumns<typeof fields>["role"]>().toEqualTypeOf<"admin" | "user">();
-    expectTypeOf<TailorDBColumns<typeof fields>["price"]>().toEqualTypeOf<string>();
+    expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<{
+      role: "admin" | "user";
+      price: string;
+    }>();
   });
 
+  // ObjectColumnType makes an optional nested prop required on read and optional on
+  // write; an unwrapped object would keep it optional on both.
   test("wraps an object with optional props in ObjectColumnType", () => {
     const fields = {
       profile: db.object({ name: db.string(), bio: db.string({ optional: true }) }),
     };
 
-    expectTypeOf<TailorDBColumns<typeof fields>["profile"]>().toEqualTypeOf<
-      ObjectColumnType<{ name: string; bio?: string | null }>
-    >();
+    expectTypeOf<TailorDBSelectable<typeof fields>["profile"]>().toEqualTypeOf<{
+      name: string;
+      bio: string | null;
+    }>();
+    expectTypeOf<TailorDBInsertable<typeof fields>["profile"]>().toEqualTypeOf<{
+      name: string;
+      bio?: string | null;
+    }>();
   });
 
   // The runtime hands back a Date for a nested date/datetime too, so the column type has
@@ -281,9 +301,6 @@ describe("TailorDBColumns column mapping", () => {
       ),
     };
 
-    expectTypeOf<TailorDBColumns<typeof fields>["schedule"]>().toEqualTypeOf<
-      ObjectColumnType<{ dueDate: Timestamp; day: Timestamp }>
-    >();
     expectTypeOf<TailorDBSelectable<typeof fields>["schedule"]>().toEqualTypeOf<{
       dueDate: Date;
       day: Date;
@@ -299,22 +316,16 @@ describe("TailorDBColumns column mapping", () => {
       items: db.object({ name: db.string(), qty: db.int() }, { array: true }),
     };
 
-    expectTypeOf<TailorDBColumns<typeof fields>["item"]>().toEqualTypeOf<{
-      name: string;
-      qty: number;
+    expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<{
+      item: { name: string; qty: number };
+      items: { name: string; qty: number }[];
     }>();
-    expectTypeOf<TailorDBColumns<typeof fields>["items"]>().toEqualTypeOf<
-      { name: string; qty: number }[]
-    >();
   });
 
-  test("reads a datetime back as Date", () => {
-    const fields = { when: db.datetime(), createdAt: db.datetime().default("now") };
+  test("reads a defaulted datetime back as Date", () => {
+    const fields = { createdAt: db.datetime().default("now") };
 
-    expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<{
-      when: Date;
-      createdAt: Date;
-    }>();
+    expectTypeOf<TailorDBSelectable<typeof fields>>().toEqualTypeOf<{ createdAt: Date }>();
   });
 });
 

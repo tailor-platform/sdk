@@ -2,8 +2,13 @@
  * Kysely integration module for generated TailorDB code.
  *
  * Re-exports kysely and function-kysely-tailordb types through a single import path
- * to avoid phantom dependency issues with pnpm, and provides namespace-aware
- * utility types and factory functions used by the code generator.
+ * to avoid phantom dependency issues with pnpm, and provides the namespace-aware
+ * utility types and factory functions the code generator emits against.
+ *
+ * It also holds the `TailorDB*` input types, which hand-written code uses to derive
+ * create/read/update shapes straight from a table or field collection. They live here
+ * rather than in the main entry point because they are built out of kysely's column
+ * types, which the main entry point does not otherwise depend on.
  */
 
 import { TailordbDialect } from "@tailor-platform/function-kysely-tailordb";
@@ -114,10 +119,8 @@ export type NamespaceUpdateable<NS, T extends NamespaceTableName<NS>> = FlattenC
   Updateable<NamespaceTable<NS, T>>
 >;
 
-/**
- * A TailorDB table (`typeof myTable`) or a bare field collection.
- */
-export type TailorDBColumnsSource = TailorAnyDBType | Record<string, TailorAnyDBField>;
+/** What the derived input types accept: a table (`typeof myTable`) or a field collection. */
+type TailorDBColumnsSource = TailorAnyDBType | Record<string, TailorAnyDBField>;
 
 type DBFieldsOf<T> = T extends TailorAnyDBType ? T["fields"] : T;
 
@@ -201,14 +204,21 @@ type DBColumn<F> = F extends TailorAnyDBField
       : NullableColumn<F>
   : never;
 
+// The column map the three derived types are built from. Not exported: it is how the
+// mapping is expressed, not something callers need to name.
+type TailorDBColumns<T extends TailorDBColumnsSource> = {
+  [K in keyof DBFieldsOf<T>]: K extends "id"
+    ? Generated<output<DBFieldsOf<T>[K]>>
+    : DBColumn<DBFieldsOf<T>[K]>;
+};
+
 /**
- * Kysely column types derived from a TailorDB table or field collection.
+ * Create input derived from a TailorDB table (`typeof myTable`) or a field collection.
  *
- * Each field's read type is tagged with how the platform populates it, so
- * {@link Insertable}, {@link Selectable} and {@link Updateable} derive the same
- * shapes they do for the tables `kyselyTypePlugin` generates: `.serial()` fields are
- * never caller-supplied, `.default()` / `.hooks({ create })` fields may be omitted on
- * create, optional fields stay optional, and `id` is platform-generated.
+ * Each field resolves to the column type `kyselyTypePlugin` writes for it, so this and
+ * the generated table types agree: `.serial()` fields are never caller-supplied,
+ * `.default()` / `.hooks({ create })` fields may be omitted, optional fields stay
+ * optional, `id` is platform-generated, and a date or datetime reads back as `Date`.
  *
  * Pass a field collection when the fields are a type parameter — a shared module that
  * lets each project extend a table with its own fields cannot name a generated table
@@ -216,32 +226,25 @@ type DBColumn<F> = F extends TailorAnyDBField
  * types are inferred; a bare `Record<string, TailorAnyDBField>` erases them and nothing
  * is checked.
  *
- * These types are meant to be handed to callers, not consumed inside the generic that
- * declares them: while `F` is still an unresolved type parameter the mapping stays
- * deferred, so assigning to it inside the function body reports the unevaluated
- * conditional rather than a readable shape.
+ * Hand the result to callers rather than consuming it inside the generic that declares
+ * it: while `F` is still an unresolved type parameter the mapping stays deferred, so
+ * assigning to it inside the function body reports the unevaluated conditional rather
+ * than a readable shape.
  * @example
  * function createInput<const F extends Record<string, TailorAnyDBField>>(fields: F) {
  *   return (input: TailorDBInsertable<F>) => { ... };
  * }
  */
-export type TailorDBColumns<T extends TailorDBColumnsSource> = {
-  [K in keyof DBFieldsOf<T>]: K extends "id"
-    ? Generated<output<DBFieldsOf<T>[K]>>
-    : DBColumn<DBFieldsOf<T>[K]>;
-};
-
-/** Create input for a TailorDB table or field collection. See {@link TailorDBColumns}. */
 export type TailorDBInsertable<T extends TailorDBColumnsSource> = FlattenColumns<
   Insertable<TailorDBColumns<T>>
 >;
 
-/** Read shape of a TailorDB table or field collection. See {@link TailorDBColumns}. */
+/** Read shape of a TailorDB table or field collection. See {@link TailorDBInsertable}. */
 export type TailorDBSelectable<T extends TailorDBColumnsSource> = FlattenColumns<
   Selectable<TailorDBColumns<T>>
 >;
 
-/** Update input for a TailorDB table or field collection. See {@link TailorDBColumns}. */
+/** Update input for a TailorDB table or field collection. See {@link TailorDBInsertable}. */
 export type TailorDBUpdateable<T extends TailorDBColumnsSource> = FlattenColumns<
   Updateable<TailorDBColumns<T>>
 >;
