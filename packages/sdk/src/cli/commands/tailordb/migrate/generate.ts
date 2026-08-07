@@ -17,7 +17,7 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { loadConfig } from "#/cli/shared/config-loader";
 import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared/editor";
 import { logger, styles } from "#/cli/shared/logger";
-import { prompt } from "#/cli/shared/prompt";
+import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { PluginManager } from "#/plugin/manager";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
@@ -27,12 +27,15 @@ import {
   formatWarnings,
   hasChanges,
 } from "./diff-calculator";
+import { formatMigrationScriptCommand } from "./hints";
+import { markMigrationScriptSkipped } from "./script";
 import {
   createSnapshotFromLocalTypes,
   reconstructSnapshotFromMigrations,
   compareSnapshots,
   getNextMigrationNumber,
   assertValidMigrationFiles,
+  formatMigrationNumber,
   INITIAL_SCHEMA_NUMBER,
   type SchemaSnapshot,
 } from "./snapshot";
@@ -43,6 +46,25 @@ export interface GenerateOptions {
   name?: string;
   yes?: boolean;
   init?: boolean;
+}
+
+/**
+ * Build the safety-critical manual migration guidance for unsupported changes.
+ * @returns Lines to write through the CLI logger
+ */
+export function getUnsupportedMigrationHintLines(): string[] {
+  return [
+    "These changes require a manual 3-step migration process:",
+    "  Migration 1: Add an optional temporary field with the desired structure",
+    "               If the old field is required, make the old field optional",
+    "               For each non-null old value, copy and convert it to the temporary field",
+    "               and set the old field to null in the same update",
+    "               Verify every old value is null before continuing",
+    "  Migration 2: Remove the old field",
+    "  Migration 3: Add the field with the original name and new structure,",
+    "               migrate data from the temporary field, then remove it",
+    "  Important: Reusing the name while stored old values remain can make subsequent reads fail",
+  ];
 }
 
 /**
@@ -240,12 +262,9 @@ async function generateDiffFromSnapshot(
     // Show 3-step migration hint if any unsupported change requires it
     if (unsupportedChanges.some((change) => change.showThreeStepHint)) {
       logger.newline();
-      logger.info("These changes require a manual 3-step migration process:");
-      logger.info("  Migration 1: Add a new field with the desired structure");
-      logger.info("               and migrate data from old field to new field");
-      logger.info("  Migration 2: Remove the old field");
-      logger.info("  Migration 3: Add the field with the original name and new structure,");
-      logger.info("               migrate data from temporary field, then remove temporary field");
+      for (const line of getUnsupportedMigrationHintLines()) {
+        logger.info(line);
+      }
     }
 
     const details = unsupportedChanges
@@ -292,7 +311,7 @@ async function generateDiffFromSnapshot(
   );
 
   logger.success(
-    `Generated migration ${styles.bold(result.migrationNumber.toString().padStart(4, "0"))}`,
+    `Generated migration ${styles.bold(formatMigrationNumber(result.migrationNumber))}`,
   );
   logger.info(`  Diff file: ${result.diffFilePath}`);
 
@@ -325,14 +344,62 @@ async function generateDiffFromSnapshot(
       return;
     }
   } else if (diff.hasWarnings) {
-    logger.newline();
-    logger.log(
-      `Data loss is possible for this migration but no script was generated. To add a custom migrate.ts, run:`,
-    );
-    logger.log(
-      `  ${styles.bold(`tailor tailordb migration script ${result.migrationNumber.toString().padStart(4, "0")} --namespace ${diff.namespace}`)}`,
-    );
+    await acknowledgeWarnings({
+      namespace: diff.namespace,
+      migrationsDir,
+      migrationNumber: result.migrationNumber,
+      skipPrompt: options.yes,
+      configPath: options.configPath,
+    });
   }
+}
+
+interface AcknowledgeWarningsOptions {
+  namespace: string;
+  migrationsDir: string;
+  migrationNumber: number;
+  skipPrompt?: boolean;
+  configPath?: string;
+}
+
+/**
+ * Offer to record a --no-script acknowledgment for a warning-only migration,
+ * or print the follow-up commands when the session is non-interactive
+ * @param {AcknowledgeWarningsOptions} options - Target migration and prompt behavior
+ */
+async function acknowledgeWarnings(options: AcknowledgeWarningsOptions): Promise<void> {
+  const { namespace, migrationsDir, migrationNumber, skipPrompt, configPath } = options;
+  const label = formatMigrationNumber(migrationNumber);
+
+  logger.newline();
+  logger.log("Data loss is possible for this migration but no script was generated.");
+
+  if (!skipPrompt && canPrompt()) {
+    const record = await prompt.confirm({
+      message: "Record a reason acknowledging that this migration intentionally has no script?",
+      default: true,
+    });
+    if (record) {
+      const reason = await prompt.text({
+        message: "Reason:",
+        validate: (value) => value.trim() !== "" || "Reason must not be empty.",
+      });
+      const scriptSkipped = markMigrationScriptSkipped({ migrationsDir, migrationNumber, reason });
+      logger.success(
+        `Recorded that migration ${styles.bold(label)} intentionally has no migration script`,
+      );
+      logger.info(`  Reason: ${scriptSkipped.reason}`);
+      return;
+    }
+  }
+
+  const commandOptions = { migrationNumber, namespace, configPath };
+  logger.log("To add a custom migrate.ts, run:");
+  logger.log(`  ${styles.bold(formatMigrationScriptCommand(commandOptions))}`);
+  logger.log("To record that this migration intentionally has no script, run:");
+  logger.log(
+    `  ${styles.bold(formatMigrationScriptCommand({ ...commandOptions, noScript: true }))}`,
+  );
 }
 
 /**

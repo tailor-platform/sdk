@@ -13,7 +13,13 @@ import { logger, styles } from "#/cli/shared/logger";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
-import { formatDiffSummary, formatMigrationDiff, type MigrationDiff } from "./diff-calculator";
+import {
+  formatDiffSummary,
+  formatMigrationDiff,
+  type MigrationDiff,
+  type WarningChangeInfo,
+} from "./diff-calculator";
+import { formatMigrationScriptCommand } from "./hints";
 import {
   checkMigrationDiffs,
   logRemoteDriftGuidance,
@@ -30,6 +36,7 @@ import {
   loadDiff,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
+import { MIGRATION_REVIEW_REQUIRED_MARKER } from "./template-generator";
 import type {
   RemoteSchemaVerificationResult,
   RemoteSchemaVerificationSkipReason,
@@ -42,6 +49,7 @@ export interface ValidateOptions {
   workspaceId?: string;
   profile?: string;
   json?: boolean;
+  strict?: boolean;
 }
 
 interface MigrationFilesReport {
@@ -63,6 +71,7 @@ interface CompletedRemoteSchemaReport {
   skipped?: RemoteSchemaVerificationSkipReason;
   /** Set when the remote migration checkpoint does not exist in the local migration history */
   checkpointMissingLocal?: boolean;
+  checkpointRepair?: { from: number; to: 0 };
 }
 
 interface FailedRemoteSchemaReport {
@@ -71,9 +80,21 @@ interface FailedRemoteSchemaReport {
   hasDrift?: never;
   drifts?: never;
   checkpointMissingLocal?: never;
+  checkpointRepair?: never;
 }
 
 type RemoteSchemaReport = CompletedRemoteSchemaReport | FailedRemoteSchemaReport;
+
+interface UnacknowledgedWarningMigration {
+  migrationNumber: number;
+  warnings: WarningChangeInfo[];
+}
+
+interface WarningAcknowledgmentsReport {
+  valid: boolean;
+  /** Pending migrations with data-loss warnings but no migrate.ts and no recorded acknowledgment */
+  missing: UnacknowledgedWarningMigration[];
+}
 
 interface NamespaceValidationReport {
   namespace: string;
@@ -83,6 +104,8 @@ interface NamespaceValidationReport {
   localSchema?: LocalSchemaReport;
   /** Omitted when the migration files are invalid */
   remoteSchema?: RemoteSchemaReport;
+  /** Present only with --strict; omitted when the remote migration checkpoint is unknown */
+  warningAcknowledgments?: WarningAcknowledgmentsReport;
 }
 
 interface BuildValidationReportsOptions {
@@ -90,6 +113,8 @@ interface BuildValidationReportsOptions {
   migrationFileErrors: Map<string, string>;
   localResults: MigrationCheckResult[];
   remoteResults?: RemoteSchemaVerificationResult[];
+  /** Per-namespace candidates for the --strict warning acknowledgment check */
+  unacknowledgedWarnings?: Map<string, UnacknowledgedWarningMigration[]>;
 }
 
 interface CollectedValidationReports {
@@ -98,19 +123,37 @@ interface CollectedValidationReports {
 }
 
 /**
- * Assert that every migration in the local history whose diff requires a data
- * migration script has a migrate.ts on disk or an explicit skip acknowledgment
+ * Walk the local migration history once to assert that every required
+ * migration script exists and generated normalization logic has been
+ * reviewed, and to collect migrations with data-loss warnings that have
+ * neither a migrate.ts nor a recorded --no-script acknowledgment
  * @param {string} migrationsDir - Migrations directory path
  * @param {string} namespace - TailorDB namespace (for error messages)
+ * @returns {UnacknowledgedWarningMigration[]} Unacknowledged warning migrations in the local history
  */
-function assertRequiredMigrationScripts(migrationsDir: string, namespace: string): void {
+function assertMigrationScriptsReady(
+  migrationsDir: string,
+  namespace: string,
+): UnacknowledgedWarningMigration[] {
   const missing: number[] = [];
+  const unreviewed: number[] = [];
+  const unacknowledgedWarnings: UnacknowledgedWarningMigration[] = [];
   for (const file of getMigrationFiles(migrationsDir)) {
     if (file.type !== "diff") continue;
     const diff = loadDiff(file.path);
-    if (!diff.requiresMigrationScript || diff.scriptSkipped) continue;
-    if (!fs.existsSync(getMigrationFilePath(migrationsDir, file.number, "migrate"))) {
+    const migrateFilePath = getMigrationFilePath(migrationsDir, file.number, "migrate");
+    const hasScript = fs.existsSync(migrateFilePath);
+    if (diff.requiresMigrationScript && !diff.scriptSkipped && !hasScript) {
       missing.push(file.number);
+    }
+    if (
+      hasScript &&
+      fs.readFileSync(migrateFilePath, "utf8").includes(MIGRATION_REVIEW_REQUIRED_MARKER)
+    ) {
+      unreviewed.push(file.number);
+    }
+    if (diff.hasWarnings && !diff.scriptSkipped && !hasScript) {
+      unacknowledgedWarnings.push({ migrationNumber: file.number, warnings: diff.warnings });
     }
   }
   if (missing.length > 0) {
@@ -121,6 +164,15 @@ function assertRequiredMigrationScripts(migrationsDir: string, namespace: string
         `is needed with 'tailor tailordb migration script <number> --no-script --reason "..."'.`,
     );
   }
+  if (unreviewed.length > 0) {
+    throw new Error(
+      `Migration(s) ${unreviewed.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
+        "contain generated normalization logic that still requires review in migrate.ts. " +
+        `Review each ${MIGRATION_REVIEW_REQUIRED_MARKER} marker, then remove the marker and its associated ` +
+        "`never` annotation.",
+    );
+  }
+  return unacknowledgedWarnings;
 }
 
 /**
@@ -131,7 +183,13 @@ function assertRequiredMigrationScripts(migrationsDir: string, namespace: string
 function buildValidationReports(
   options: BuildValidationReportsOptions,
 ): NamespaceValidationReport[] {
-  const { targetNamespaces, migrationFileErrors, localResults, remoteResults } = options;
+  const {
+    targetNamespaces,
+    migrationFileErrors,
+    localResults,
+    remoteResults,
+    unacknowledgedWarnings,
+  } = options;
 
   return targetNamespaces.map((target) => {
     const fileError = migrationFileErrors.get(target.namespace);
@@ -172,14 +230,31 @@ function buildValidationReports(
       drifts: remote.drifts,
       ...(remote.skipped ? { skipped: remote.skipped } : {}),
       ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
+      ...(remote.checkpointRepair ? { checkpointRepair: remote.checkpointRepair } : {}),
     };
+
+    // Only migrations not yet applied to the remote need an acknowledgment;
+    // for applied ones the data is already gone and there is nothing to act on.
+    const candidates = unacknowledgedWarnings?.get(target.namespace);
+    let warningAcknowledgments: WarningAcknowledgmentsReport | undefined;
+    if (candidates !== undefined) {
+      const missing = candidates.filter(
+        (candidate) => candidate.migrationNumber > remote.remoteMigrationNumber,
+      );
+      warningAcknowledgments = { valid: missing.length === 0, missing };
+    }
 
     return {
       namespace: target.namespace,
-      valid: !localSchema.hasDiff && !remoteSchema.hasDrift && !checkpointMissingLocal,
+      valid:
+        !localSchema.hasDiff &&
+        !remoteSchema.hasDrift &&
+        !checkpointMissingLocal &&
+        warningAcknowledgments?.valid !== false,
       migrationFiles: { valid: true },
       localSchema,
       remoteSchema,
+      ...(warningAcknowledgments ? { warningAcknowledgments } : {}),
     };
   });
 }
@@ -229,13 +304,17 @@ async function collectValidationReports(
 
   const migrationFileErrors = new Map<string, string>();
   const checkableNamespaces: NamespaceWithMigrations[] = [];
+  const unacknowledgedWarnings = options.strict
+    ? new Map<string, UnacknowledgedWarningMigration[]>()
+    : undefined;
   for (const target of targetNamespaces) {
     try {
       assertValidMigrationFiles(target.migrationsDir, target.namespace);
       // Parse the whole history here so malformed snapshot/diff contents are
       // reported per namespace instead of aborting the run for every namespace.
       reconstructSnapshotFromMigrations(target.migrationsDir);
-      assertRequiredMigrationScripts(target.migrationsDir, target.namespace);
+      const namespaceWarnings = assertMigrationScriptsReady(target.migrationsDir, target.namespace);
+      unacknowledgedWarnings?.set(target.namespace, namespaceWarnings);
       checkableNamespaces.push(target);
     } catch (error) {
       migrationFileErrors.set(
@@ -250,6 +329,7 @@ async function collectValidationReports(
     targetNamespaces,
     migrationFileErrors,
     localResults,
+    ...(unacknowledgedWarnings ? { unacknowledgedWarnings } : {}),
   };
 
   if (checkableNamespaces.length === 0) {
@@ -315,6 +395,10 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
     const remote = report.remoteSchema;
     if (remote?.skipped === "check_failed") {
       logger.log(`  Remote schema: ${styles.error("not checked")}`);
+    } else if (remote?.checkpointRepair) {
+      logger.log(
+        `  Remote schema: ${styles.success("OK")} (next deploy will reset the checkpoint to 0000 from ${formatMigrationNumber(remote.checkpointRepair.from)})`,
+      );
     } else if (remote?.checkpointMissingLocal) {
       logger.log(
         `  Remote schema: ${styles.error(
@@ -341,11 +425,29 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
         `  Remote schema: ${styles.success("OK")} (remote migration: ${formatMigrationNumber(remote.remoteMigrationNumber)})`,
       );
     }
+
+    const acknowledgments = report.warningAcknowledgments;
+    if (acknowledgments) {
+      if (acknowledgments.valid) {
+        logger.log(`  Warning acknowledgments: ${styles.success("OK")}`);
+      } else {
+        logger.log(
+          `  Warning acknowledgments: ${styles.error("missing for pending migration(s) with possible data loss")}`,
+        );
+        for (const migration of acknowledgments.missing) {
+          const label = formatMigrationNumber(migration.migrationNumber);
+          for (const warning of migration.warnings) {
+            const field = warning.fieldName ? `.${warning.fieldName}` : "";
+            logger.log(`    ${label}: ${warning.typeName}${field}: ${warning.reason}`);
+          }
+        }
+      }
+    }
   }
   logger.newline();
 }
 
-function printResolutionHints(reports: NamespaceValidationReport[]): void {
+function printResolutionHints(reports: NamespaceValidationReport[], configPath?: string): void {
   if (reports.some((r) => r.localSchema?.hasDiff && !r.localSchema.diff)) {
     logger.info("Run 'tailor tailordb migration generate' to create the initial snapshot.");
   }
@@ -359,6 +461,27 @@ function printResolutionHints(reports: NamespaceValidationReport[]): void {
   }
   if (reports.some((r) => r.remoteSchema?.hasDrift)) {
     logRemoteDriftGuidance();
+  }
+  const missingAcknowledgments = reports.filter(
+    (r) => r.warningAcknowledgments && !r.warningAcknowledgments.valid,
+  );
+  if (missingAcknowledgments.length > 0) {
+    logger.info(
+      "For each migration listed, either add a data migration script with 'tailor tailordb migration script <number>' or record why none is needed:",
+    );
+    for (const report of missingAcknowledgments) {
+      for (const migration of report.warningAcknowledgments?.missing ?? []) {
+        logger.info(
+          `  ${formatMigrationScriptCommand({
+            migrationNumber: migration.migrationNumber,
+            namespace: report.namespace,
+            configPath,
+            noScript: true,
+          })}`,
+          { mode: "plain" },
+        );
+      }
+    }
   }
 }
 
@@ -380,7 +503,7 @@ async function validate(options: ValidateOptions): Promise<void> {
     if (invalidCount === 0 && !("remoteError" in collected)) {
       logger.success("All migration validation checks passed.");
     } else {
-      printResolutionHints(reports);
+      printResolutionHints(reports, options.configPath);
     }
   }
 
@@ -395,12 +518,15 @@ async function validate(options: ValidateOptions): Promise<void> {
 export const validateCommand = defineAppCommand({
   name: "validate",
   description:
-    "Validate the full migration history and detect schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
+    "Validate the full migration history, unreviewed generated migration scripts, and schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {
       alias: "n",
       description: "Target TailorDB namespace (validates all namespaces if not specified)",
+    }),
+    strict: arg(z.boolean().default(false), {
+      description: "Also fail when a pending migration can drop data without an acknowledgment",
     }),
   }),
   run: async (args) => {
@@ -410,6 +536,7 @@ export const validateCommand = defineAppCommand({
       workspaceId: args["workspace-id"],
       profile: args.profile,
       json: logger.jsonMode,
+      strict: args.strict,
     });
   },
 });

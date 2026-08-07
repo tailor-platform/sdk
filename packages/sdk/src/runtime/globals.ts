@@ -138,14 +138,6 @@ declare global {
     name: "TailorErrors";
     errors: TailorErrorItem[];
   }
-
-  /**
-   * Single-message error raised by the Tailor Platform Function runtime.
-   */
-  class TailorErrorMessage extends Error {
-    constructor(message: string);
-    name: "TailorErrorMessage";
-  }
 }
 
 export {};

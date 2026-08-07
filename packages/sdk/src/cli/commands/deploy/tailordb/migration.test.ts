@@ -12,7 +12,10 @@ import {
   MIGRATE_FILE_NAME,
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import { createMockMigrationDiff } from "#/cli/commands/tailordb/migrate/test-helpers/migration-diff";
-import { MIGRATION_LABEL_KEY } from "#/cli/commands/tailordb/migrate/types";
+import {
+  MIGRATION_HISTORY_LABEL_KEY,
+  MIGRATION_LABEL_KEY,
+} from "#/cli/commands/tailordb/migrate/types";
 import {
   detectPendingMigrations,
   updateMigrationLabel,
@@ -305,6 +308,25 @@ describe("migration", () => {
       expect(result[0]!.namespace).toBe("tailordb");
     });
 
+    test("uses an approved checkpoint override without reading remote metadata", async () => {
+      const client = createMockClient({ tailordb: 5 });
+      writeDiffFile(testDir, 1, createMockMigrationDiff());
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const result = await detectPendingMigrations(
+        client,
+        workspaceId,
+        namespacesWithMigrations,
+        undefined,
+        new Map([["tailordb", 0]]),
+      );
+
+      expect(result.map((migration) => migration.number)).toEqual([1]);
+      expect(client.getMetadata).not.toHaveBeenCalled();
+    });
+
     test("detects multiple pending migrations", async () => {
       const client = createMockClient({ tailordb: 1 });
       writeDiffFile(testDir, 2, createMockMigrationDiff());
@@ -381,9 +403,37 @@ describe("migration", () => {
       );
 
       expect(error).not.toBeNull();
-      expect(error!.message).toContain("tailordb migration script 1 --namespace tailordb");
-      expect(error!.message).toContain("--no-script");
-      expect(error!.message).toContain(`--config "${path.join("custom", "tailor.config.ts")}"`);
+      expect(error!.message).toContain("tailordb migration script 0001 --namespace tailordb");
+      expect(error!.message).toContain("--no-script --reason '<reason>'");
+      expect(error!.message).toContain(`--config=${path.join("custom", "tailor.config.ts")}`);
+    });
+
+    test("omits --config from the hint for the default config path", async () => {
+      const client = createMockClient({ tailordb: 0 });
+
+      writeDiffFile(
+        testDir,
+        1,
+        createMockMigrationDiff({ hasBreakingChanges: true, requiresMigrationScript: true }),
+      );
+
+      const namespacesWithMigrations: NamespaceWithMigrations[] = [
+        { namespace: "tailordb", migrationsDir: testDir },
+      ];
+
+      const error = await detectPendingMigrations(
+        client,
+        workspaceId,
+        namespacesWithMigrations,
+        path.join(process.cwd(), "tailor.config.ts"),
+      ).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
+
+      expect(error).not.toBeNull();
+      expect(error!.message).toContain("tailordb migration script 0001 --namespace tailordb");
+      expect(error!.message).not.toContain("--config");
     });
 
     test("throws before returning later migrations when a script is missing", async () => {
@@ -539,6 +589,48 @@ describe("migration", () => {
           "existing-label": "value",
           "another-label": "another-value",
           [MIGRATION_LABEL_KEY]: "m0003",
+        },
+      });
+    });
+
+    test("updates the migration checkpoint and history ID atomically", async () => {
+      const setMetadataMock = vi.fn();
+      const client = createMetadataClient(
+        { labels: { "existing-label": "value" } },
+        setMetadataMock,
+      );
+
+      await updateMigrationLabel(client, workspaceId, namespace, 0, "hcurrent");
+
+      expect(setMetadataMock).toHaveBeenCalledWith({
+        trn: expectedTrn,
+        labels: {
+          "existing-label": "value",
+          [MIGRATION_LABEL_KEY]: "m0000",
+          [MIGRATION_HISTORY_LABEL_KEY]: "hcurrent",
+        },
+      });
+    });
+
+    test("removes a stale history ID for a markerless local history", async () => {
+      const setMetadataMock = vi.fn();
+      const client = createMetadataClient(
+        {
+          labels: {
+            "existing-label": "value",
+            [MIGRATION_HISTORY_LABEL_KEY]: "hstale",
+          },
+        },
+        setMetadataMock,
+      );
+
+      await updateMigrationLabel(client, workspaceId, namespace, 1);
+
+      expect(setMetadataMock).toHaveBeenCalledWith({
+        trn: expectedTrn,
+        labels: {
+          "existing-label": "value",
+          [MIGRATION_LABEL_KEY]: "m0001",
         },
       });
     });

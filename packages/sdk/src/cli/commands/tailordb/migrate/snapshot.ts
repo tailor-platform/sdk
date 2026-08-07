@@ -36,8 +36,10 @@ import {
   type SnapshotTypeSettingsState,
   type TypeScriptsState,
   type WarningChangeInfo,
+  MIN_SUPPORTED_MIGRATION_FILE_VERSION,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
+import { supportsInPlaceFieldTypeChange } from "./field-type-change";
 import { formatMigrationNumber } from "./migration-number";
 import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
 import type {
@@ -97,6 +99,36 @@ export const MIGRATION_NUMBER_PATTERN = /^\d{4}$/;
  * Must stay in sync with the platform's default decimal scale.
  */
 export const DEFAULT_DECIMAL_SCALE = 6;
+
+export class UnsupportedMigrationFileVersionError extends Error {}
+
+function assertSupportedMigrationFileVersion(filePath: string, raw: unknown): void {
+  if (typeof raw !== "object" || raw === null || !("version" in raw)) return;
+  const version = raw.version;
+  if (typeof version !== "number") return;
+  if (
+    Number.isInteger(version) &&
+    version >= MIN_SUPPORTED_MIGRATION_FILE_VERSION &&
+    version <= SCHEMA_SNAPSHOT_VERSION
+  ) {
+    return;
+  }
+
+  const supportedRange = `${MIN_SUPPORTED_MIGRATION_FILE_VERSION}-${SCHEMA_SNAPSHOT_VERSION}`;
+  let guidance: string;
+  if (version > SCHEMA_SNAPSHOT_VERSION) {
+    guidance = `Upgrade to an SDK that supports migration file format version ${version}.`;
+  } else if (version < MIN_SUPPORTED_MIGRATION_FILE_VERSION) {
+    guidance =
+      "Re-baseline with an SDK that still supports this migration history, then upgrade the SDK.";
+  } else {
+    guidance = "Restore the migration file from version control or regenerate it.";
+  }
+  throw new UnsupportedMigrationFileVersionError(
+    `Unsupported migration file format version ${version} at ${filePath}. ` +
+      `This SDK supports migration file format versions ${supportedRange}. ${guidance}`,
+  );
+}
 
 function createSnapshotRecord<T>(): Record<string, T> {
   return Object.create(null) as Record<string, T>;
@@ -200,6 +232,7 @@ export type {
   TailorDBSnapshotType,
   SchemaSnapshot,
   NormalizedSchemaSnapshot,
+  RebaselineMarker,
 } from "./snapshot-types";
 
 /**
@@ -515,6 +548,7 @@ export function loadSnapshot(filePath: string): NormalizedSchemaSnapshot {
   } catch (error) {
     throw new Error(`Invalid schema snapshot at ${filePath}: ${String(error)}`, { cause: error });
   }
+  assertSupportedMigrationFileVersion(filePath, raw);
   const result = schemaSnapshotSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(`Invalid schema snapshot at ${filePath}: ${z.prettifyError(result.error)}`, {
@@ -538,6 +572,7 @@ export function loadDiff(filePath: string): MigrationDiff {
   } catch (error) {
     throw new Error(`Invalid migration diff at ${filePath}: ${String(error)}`, { cause: error });
   }
+  assertSupportedMigrationFileVersion(filePath, raw);
   const result = migrationDiffSchema.safeParse(raw);
   if (!result.success) {
     throw new Error(`Invalid migration diff at ${filePath}: ${z.prettifyError(result.error)}`, {
@@ -546,17 +581,46 @@ export function loadDiff(filePath: string): MigrationDiff {
   }
   const parsed = result.data;
   // Backfill fields introduced after the initial diff.json schema so that older
-  // migrations on disk remain readable without manual edits. hasWarnings is
-  // derived from the warnings array to stay consistent even if a hand-edited
-  // diff.json sets one side without the other.
+  // migrations on disk remain readable without manual edits. A missing warnings
+  // field (pre-warning-tier diff.json) is reconstructed from the recorded
+  // removal changes so those migrations keep their data-loss classification.
+  // hasWarnings is derived from the warnings array to stay consistent even if
+  // a hand-edited diff.json sets one side without the other.
   // `warnings` is optional in the schema (backcompat) but cast to required; guard for safety
   // oxlint-disable-next-line typescript/no-unnecessary-condition
-  const warnings = parsed.warnings ?? [];
+  const warnings = parsed.warnings ?? deriveWarningsFromChanges(parsed);
   return {
     ...parsed,
     warnings,
     hasWarnings: warnings.length > 0,
   };
+}
+
+const FIELD_REMOVED_WARNING_REASON =
+  "Field removed (existing data will no longer be accessible through the schema)";
+const TYPE_REMOVED_WARNING_REASON =
+  "Type removed (all records of this type will be deleted during post-migration cleanup)";
+
+/**
+ * Reconstruct data-loss warnings from removal changes for diff.json files
+ * written before the warning tier existed
+ * @param {MigrationDiff} diff - Parsed legacy migration diff
+ * @returns {WarningChangeInfo[]} Warnings equivalent to what diff generation would have recorded
+ */
+function deriveWarningsFromChanges(diff: MigrationDiff): WarningChangeInfo[] {
+  const warnings: WarningChangeInfo[] = [];
+  for (const change of diff.changes) {
+    if (change.kind === "field_removed") {
+      warnings.push({
+        typeName: change.typeName,
+        fieldName: change.fieldName,
+        reason: FIELD_REMOVED_WARNING_REASON,
+      });
+    } else if (change.kind === "type_removed") {
+      warnings.push({ typeName: change.typeName, reason: TYPE_REMOVED_WARNING_REASON });
+    }
+  }
+  return warnings;
 }
 
 /**
@@ -682,7 +746,8 @@ function applyDiffToSnapshot(
         break;
       }
       case "field_added":
-      case "field_modified": {
+      case "field_modified":
+      case "field_type_modified": {
         const existing = types[change.typeName];
         if (existing) {
           const fields = copySnapshotRecord(existing.fields);
@@ -1038,14 +1103,15 @@ function getBreakingFieldChanges(
     });
   }
 
-  // Field type changed - unsupported (requires 3-step migration)
+  // Compatible scalar type changes use a phased in-place migration. Other
+  // pairs still require expand-contract migration support.
   if (oldField && newField && oldField.type !== newField.type) {
+    const supported = supportsInPlaceFieldTypeChange(oldField, newField);
     breakingChanges.push({
       typeName,
       fieldName,
       reason: `Field type changed from ${oldField.type} to ${newField.type}`,
-      unsupported: true,
-      showThreeStepHint: true,
+      ...(!supported && { unsupported: true, showThreeStepHint: true }),
     });
   }
 
@@ -1157,14 +1223,14 @@ function addChange(
     return;
   }
 
-  // Non-breaking removal still risks data loss: surface as a warning so users
+  // Non-breaking removal still risks losing schema access: surface a warning so users
   // can decide whether to add a migration script (e.g. JOIN through a
   // soon-to-be-dropped foreign key before it disappears).
   if (change.kind === "field_removed") {
     ctx.warnings.push({
       typeName: change.typeName,
       fieldName: change.fieldName,
-      reason: "Field removed (existing data will be dropped in the post-migration phase)",
+      reason: FIELD_REMOVED_WARNING_REASON,
     });
   }
 }
@@ -1237,7 +1303,7 @@ function compareTypeFields(
       addChange(
         ctx,
         {
-          kind: "field_modified",
+          kind: prevField.type === currField.type ? "field_modified" : "field_type_modified",
           typeName,
           fieldName,
           before: prevField,
@@ -1752,8 +1818,7 @@ function compareNormalizedSnapshots(
       });
       ctx.warnings.push({
         typeName,
-        reason:
-          "Type removed (all records of this type will be dropped in the post-migration phase)",
+        reason: TYPE_REMOVED_WARNING_REASON,
       });
     }
   }
@@ -2908,7 +2973,7 @@ function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSch
 }
 
 function fieldDriftFromChange(
-  change: Extract<DiffChange, { kind: "field_modified" }>,
+  change: Extract<DiffChange, { kind: "field_modified" | "field_type_modified" }>,
 ): SchemaDrift {
   return (
     compareFields(change.typeName, change.fieldName, change.before, change.after) ?? {
@@ -2956,6 +3021,7 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
         details: `Field '${change.fieldName}' exists in remote but not in snapshot`,
       };
     case "field_modified":
+    case "field_type_modified":
       return fieldDriftFromChange(change);
     case "index_added":
       return {

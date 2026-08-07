@@ -77,7 +77,10 @@ export function loadSeedData(
           }
           const record = value as Record<string, unknown>;
           if (requireId && (record.id === undefined || record.id === null)) {
-            throw new Error(`${jsonlPath}:${index + 1}: \`id\` is required with --upsert`);
+            throw new Error(
+              `${jsonlPath}:${index + 1}: \`id\` is required with --upsert. ` +
+                "Run `tailor seed fill` to write an id into every row that does not have one.",
+            );
           }
           const missingRequiredField = (requiredFieldsByType[typeName] ?? []).find(
             (field) => record[field] === undefined || record[field] === null,

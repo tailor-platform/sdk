@@ -1,7 +1,8 @@
-import { objectProperty, staticString } from "../lib/ast.js";
+import { type AstCallExpression, objectProperty, staticString } from "../lib/ast.js";
 import { configureImportTracker, resolveValue } from "../lib/sdk-bindings.js";
+import type { Rule } from "eslint";
 
-export default {
+const rule = {
   meta: {
     type: "problem",
     docs: {
@@ -14,7 +15,7 @@ export default {
   },
   create(context) {
     const imports = configureImportTracker(context);
-    const calls = [];
+    const calls: AstCallExpression[] = [];
 
     return {
       ImportDeclaration: (node) => imports.track(node),
@@ -24,7 +25,7 @@ export default {
           if (imports.callName(call) !== "createHttpAdapter") continue;
           const options = resolveValue(context, call.arguments[0]);
           const property = objectProperty(options, "pathPattern");
-          if (!property || property.type !== "Property") continue;
+          if (property === null) continue;
           const pattern = staticString(property.value);
           if (pattern !== "/api" && !pattern?.startsWith("/api/")) continue;
           context.report({ node: property.value, messageId: "prefixed" });
@@ -32,4 +33,6 @@ export default {
       },
     };
   },
-};
+} satisfies Rule.RuleModule;
+
+export default rule;

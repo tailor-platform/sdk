@@ -10,6 +10,7 @@
  */
 
 import { z } from "zod";
+import { MIGRATION_HISTORY_ID_PATTERN } from "./types";
 import type {
   TypeSettingsPatch,
   SnapshotPermissionState,
@@ -21,6 +22,7 @@ import type {
   FieldAddedChange,
   FieldRemovedChange,
   FieldModifiedChange,
+  FieldTypeModifiedChange,
   IndexAddedChange,
   IndexRemovedChange,
   IndexModifiedChange,
@@ -53,6 +55,7 @@ import type {
   SnapshotGqlPermission,
   TailorDBSnapshotType,
   SchemaSnapshot,
+  RebaselineMarker,
   SnapshotPermissionOperand,
   SnapshotPermissionCondition,
 } from "./snapshot-types";
@@ -266,11 +269,18 @@ export const tailorDBSnapshotTypeSchema: z.ZodType<TailorDBSnapshotType> = z.loo
 // SchemaSnapshot
 // ============================================================================
 
+const rebaselineMarkerSchema: z.ZodType<RebaselineMarker> = z.looseObject({
+  historyId: z.string().regex(MIGRATION_HISTORY_ID_PATTERN),
+  replacedHistoryId: z.string().regex(MIGRATION_HISTORY_ID_PATTERN).nullable(),
+  replacedLatestMigration: z.number().int().min(0).max(9999),
+});
+
 export const schemaSnapshotSchema: z.ZodType<SchemaSnapshot> = z.looseObject({
   version: z.number(),
   namespace: z.string(),
   createdAt: z.string(),
   types: snapshotRecordSchema(tailorDBSnapshotTypeSchema),
+  rebaseline: rebaselineMarkerSchema.optional(),
 });
 
 // ============================================================================
@@ -363,6 +373,15 @@ const fieldModifiedChangeSchema = z.looseObject({
   before: snapshotFieldConfigSchema,
   after: snapshotFieldConfigSchema,
 }) as unknown as z.ZodType<FieldModifiedChange>;
+
+const fieldTypeModifiedChangeSchema = z.looseObject({
+  kind: z.literal("field_type_modified"),
+  typeName: z.string(),
+  reason: z.string().optional(),
+  fieldName: z.string(),
+  before: snapshotFieldConfigSchema,
+  after: snapshotFieldConfigSchema,
+}) as unknown as z.ZodType<FieldTypeModifiedChange>;
 
 const indexAddedChangeSchema = z.looseObject({
   kind: z.literal("index_added"),
@@ -478,6 +497,7 @@ export const diffChangeSchema: z.ZodType<DiffChange> = z.discriminatedUnion("kin
   fieldAddedChangeSchema as unknown as DiscriminableSchema,
   fieldRemovedChangeSchema as unknown as DiscriminableSchema,
   fieldModifiedChangeSchema as unknown as DiscriminableSchema,
+  fieldTypeModifiedChangeSchema as unknown as DiscriminableSchema,
   indexAddedChangeSchema as unknown as DiscriminableSchema,
   indexRemovedChangeSchema as unknown as DiscriminableSchema,
   indexModifiedChangeSchema as unknown as DiscriminableSchema,

@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, expect, test, vi } from "vitest";
 import { errorToJson, serializeError } from "./error-json";
-import { CLIError } from "./errors";
+import { CLIError, formatCopyableCommand } from "./errors";
 import { CIPromptError } from "./logger";
 
 describe("errorToJson", () => {
@@ -108,6 +108,28 @@ describe("errorToJson", () => {
 
     expect(error.format()).toContain(
       'argv ["tailor","deploy","--config","C:\\\\work\\\\!SECRET!\\\\tailor.config.ts"]',
+    );
+  });
+
+  test("leaves shell-safe copyable command values unquoted", () => {
+    expect(formatCopyableCommand(["tailor", "deploy", "--config=custom.config.ts"])).toBe(
+      "tailor deploy --config=custom.config.ts",
+    );
+  });
+
+  test("single-quotes POSIX-unsafe copyable command values", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("linux");
+
+    expect(formatCopyableCommand(["tailor", "deploy", "--config=weird $config.ts"])).toBe(
+      "tailor deploy '--config=weird $config.ts'",
+    );
+  });
+
+  test("renders copyable commands with Windows expansion characters as argv", () => {
+    using _platform = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+
+    expect(formatCopyableCommand(["tailor", "deploy", "--config=%APPDATA%.config.ts"])).toBe(
+      'argv ["tailor","deploy","--config=%APPDATA%.config.ts"]',
     );
   });
 

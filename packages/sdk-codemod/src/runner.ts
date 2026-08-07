@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as url from "node:url";
 import { parse, Lang } from "@ast-grep/napi";
-import chalk from "chalk";
+import { color, renderFor, type StyleFn } from "@tailor-platform/shared/color";
 import { structuredPatch } from "diff";
 import * as path from "pathe";
 import picomatch from "picomatch";
@@ -118,6 +118,10 @@ async function* walkFiles(root: string, relativeDir = ""): AsyncGenerator<string
   }
 }
 
+function writeDiffLine(line: string, style?: StyleFn): void {
+  process.stderr.write(renderFor(process.stderr, `${style ? style(line) : line}\n`));
+}
+
 /**
  * Print a colorized unified diff for a single file to stderr.
  * @param filePath - Absolute path to the file
@@ -128,20 +132,22 @@ function printDiff(filePath: string, before: string, after: string): void {
   const patch = structuredPatch(filePath, filePath, before, after, "", "", { context: 3 });
   if (patch.hunks.length === 0) return;
 
-  process.stderr.write(`\n${chalk.bold(`--- ${filePath}`)}\n`);
-  process.stderr.write(`${chalk.bold(`+++ ${filePath}`)}\n`);
+  writeDiffLine("");
+  writeDiffLine(`--- ${filePath}`, color.bold);
+  writeDiffLine(`+++ ${filePath}`, color.bold);
 
   for (const hunk of patch.hunks) {
-    process.stderr.write(
-      chalk.cyan(`@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@\n`),
+    writeDiffLine(
+      `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`,
+      color.cyan,
     );
     for (const line of hunk.lines) {
       if (line.startsWith("+")) {
-        process.stderr.write(`${chalk.green(line)}\n`);
+        writeDiffLine(line, color.green);
       } else if (line.startsWith("-")) {
-        process.stderr.write(`${chalk.red(line)}\n`);
+        writeDiffLine(line, color.red);
       } else {
-        process.stderr.write(`${line}\n`);
+        writeDiffLine(line);
       }
     }
   }

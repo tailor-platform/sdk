@@ -7,6 +7,7 @@ import { readPackageJSON } from "pkg-types";
 import { defineCommand, runMain } from "politty";
 import { z } from "zod";
 import { seedApplyCommand } from "./apply";
+import { seedFillCommand } from "./fill";
 import { commonArgs } from "./shared/args";
 import { logger } from "./shared/logger";
 import { seedValidateCommand } from "./validate";
@@ -30,6 +31,7 @@ const mainCommand = defineCommand({
   subCommands: {
     apply: seedApplyCommand,
     validate: seedValidateCommand,
+    fill: seedFillCommand,
   },
 });
 

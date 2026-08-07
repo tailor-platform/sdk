@@ -21,7 +21,10 @@ import type {
 /**
  * Current schema snapshot format version
  */
-export const SCHEMA_SNAPSHOT_VERSION = 1 as const;
+export const SCHEMA_SNAPSHOT_VERSION = 2 as const;
+
+/** Oldest migration file format this SDK can replay. */
+export const MIN_SUPPORTED_MIGRATION_FILE_VERSION = 1 as const;
 
 /**
  * Change kind in migration diff
@@ -108,6 +111,14 @@ export interface FieldRemovedChange extends DiffChangeBase {
 /** A field configuration was modified. */
 export interface FieldModifiedChange extends DiffChangeBase {
   kind: "field_modified";
+  fieldName: string;
+  before: SnapshotFieldConfig;
+  after: SnapshotFieldConfig;
+}
+
+/** A field type changed and must remain on the previous type until Post-phase. */
+export interface FieldTypeModifiedChange extends DiffChangeBase {
+  kind: "field_type_modified";
   fieldName: string;
   before: SnapshotFieldConfig;
   after: SnapshotFieldConfig;
@@ -222,6 +233,7 @@ export type DiffChange =
   | FieldAddedChange
   | FieldRemovedChange
   | FieldModifiedChange
+  | FieldTypeModifiedChange
   | IndexAddedChange
   | IndexRemovedChange
   | IndexModifiedChange
@@ -237,7 +249,11 @@ export type DiffChange =
 /**
  * Field-level diff change (added / removed / modified).
  */
-export type FieldDiffChange = FieldAddedChange | FieldRemovedChange | FieldModifiedChange;
+export type FieldDiffChange =
+  | FieldAddedChange
+  | FieldRemovedChange
+  | FieldModifiedChange
+  | FieldTypeModifiedChange;
 
 /**
  * Index-level diff change (added / removed / modified).
@@ -265,12 +281,12 @@ export interface MigrationDiff {
   warnings: WarningChangeInfo[];
   /** Whether a migration script is required to handle data migration */
   requiresMigrationScript: boolean;
-  /** Explicit acknowledgment that this migration needs no script despite breaking changes */
+  /** Explicit acknowledgment that this migration needs no script despite breaking changes or data-loss warnings */
   scriptSkipped?: ScriptSkippedInfo;
 }
 
 /**
- * Acknowledgment that a migration requiring a script intentionally has none.
+ * Acknowledgment that a migration requiring or recommending a script intentionally has none.
  * Recorded by `tailordb migration script <n> --no-script --reason "..."`.
  */
 export interface ScriptSkippedInfo {
@@ -367,6 +383,7 @@ function formatDiffChange(change: DiffChange): string {
     case "field_removed":
       return `  - ${change.fieldName}: ${change.before.type}`;
     case "field_modified":
+    case "field_type_modified":
       return `  ~ ${change.fieldName}: ${formatFieldModification(change.before, change.after)}`;
     case "index_added":
       return `  + [Index] ${change.indexName}`;
@@ -524,6 +541,7 @@ const DIFF_CHANGE_LABELS: Record<DiffChangeKind, string> = {
   field_added: "field(s) added",
   field_removed: "field(s) removed",
   field_modified: "field(s) modified",
+  field_type_modified: "field type(s) modified",
   index_added: "index(es) added",
   index_removed: "index(es) removed",
   index_modified: "index(es) modified",

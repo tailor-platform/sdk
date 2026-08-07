@@ -3,6 +3,7 @@ import {
   INVOKER_EXPR,
   buildExecutorArgsExpr,
   buildResolverOperationHookExpr,
+  buildResolverPermissionAndInputCheckExpr,
   buildResolverPermissionGuardExpr,
 } from "./runtime-exprs";
 
@@ -245,7 +246,13 @@ describe("INVOKER_EXPR", () => {
 });
 
 describe("buildResolverPermissionGuardExpr", () => {
-  class TailorErrorMessage extends Error {}
+  // Mirrors the platform's TailorErrors: the items are serialized into the
+  // message, which is what the caller ends up reading.
+  class TailorErrors extends Error {
+    constructor(errors: { message: string; path: unknown[] }[]) {
+      super(errors.map((error) => error.message).join("; "));
+    }
+  }
 
   function runGuard(
     permission: Parameters<typeof buildResolverPermissionGuardExpr>[0],
@@ -256,8 +263,8 @@ describe("buildResolverPermissionGuardExpr", () => {
       return;
     }
     // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-    const fn = new Function("context", "TailorErrorMessage", guard);
-    fn({ caller }, TailorErrorMessage);
+    const fn = new Function("context", "TailorErrors", guard);
+    fn({ caller }, TailorErrors);
   }
 
   test("returns undefined when permission is omitted", () => {
@@ -279,14 +286,14 @@ describe("buildResolverPermissionGuardExpr", () => {
     const permission = [
       { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true },
     ] as const;
-    expect(() => runGuard(permission, null)).toThrow(TailorErrorMessage);
+    expect(() => runGuard(permission, null)).toThrow(TailorErrors);
   });
 
   test("permit:false denies matching callers instead of allowing them", () => {
     const permission = [
       { conditions: [[{ user: "_loggedIn" }, "=", true]], permit: false },
     ] as const;
-    expect(() => runGuard(permission, { type: "user" })).toThrow(TailorErrorMessage);
+    expect(() => runGuard(permission, { type: "user" })).toThrow(TailorErrors);
     expect(() => runGuard(permission, null)).not.toThrow();
   });
 
@@ -295,9 +302,7 @@ describe("buildResolverPermissionGuardExpr", () => {
       { conditions: [[{ user: "role" }, "!=", "BANNED"]], permit: true },
     ] as const;
     expect(() => runGuard(permission, { attributes: { role: "MEMBER" } })).not.toThrow();
-    expect(() => runGuard(permission, { attributes: { role: "BANNED" } })).toThrow(
-      TailorErrorMessage,
-    );
+    expect(() => runGuard(permission, { attributes: { role: "BANNED" } })).toThrow(TailorErrors);
   });
 
   test("!= does not let a caller with no such attribute at all through", () => {
@@ -307,8 +312,8 @@ describe("buildResolverPermissionGuardExpr", () => {
     const permission = [
       { conditions: [[{ user: "role" }, "!=", "BANNED"]], permit: true },
     ] as const;
-    expect(() => runGuard(permission, { attributes: null })).toThrow(TailorErrorMessage);
-    expect(() => runGuard(permission, { attributes: {} })).toThrow(TailorErrorMessage);
+    expect(() => runGuard(permission, { attributes: null })).toThrow(TailorErrors);
+    expect(() => runGuard(permission, { attributes: {} })).toThrow(TailorErrors);
   });
 
   test("supports the id operand", () => {
@@ -321,15 +326,13 @@ describe("buildResolverPermissionGuardExpr", () => {
     expect(() =>
       runGuard(permission, { id: "11111111-1111-1111-1111-111111111111" }),
     ).not.toThrow();
-    expect(() => runGuard(permission, { id: "other" })).toThrow(TailorErrorMessage);
+    expect(() => runGuard(permission, { id: "other" })).toThrow(TailorErrors);
   });
 
   test("supports arbitrary user attribute operands", () => {
     const permission = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
     expect(() => runGuard(permission, { attributes: { role: "ADMIN" } })).not.toThrow();
-    expect(() => runGuard(permission, { attributes: { role: "MEMBER" } })).toThrow(
-      TailorErrorMessage,
-    );
+    expect(() => runGuard(permission, { attributes: { role: "MEMBER" } })).toThrow(TailorErrors);
   });
 
   test("ANDs multiple conditions within a policy", () => {
@@ -346,9 +349,9 @@ describe("buildResolverPermissionGuardExpr", () => {
       runGuard(permission, { type: "user", attributes: { role: "ADMIN" } }),
     ).not.toThrow();
     expect(() => runGuard(permission, { type: "user", attributes: { role: "MEMBER" } })).toThrow(
-      TailorErrorMessage,
+      TailorErrors,
     );
-    expect(() => runGuard(permission, null)).toThrow(TailorErrorMessage);
+    expect(() => runGuard(permission, null)).toThrow(TailorErrors);
   });
 
   test("ORs multiple allow policies", () => {
@@ -365,7 +368,7 @@ describe("buildResolverPermissionGuardExpr", () => {
     ).not.toThrow();
     expect(() =>
       runGuard(permission, { attributes: { isServiceAccount: false, role: "MEMBER" } }),
-    ).toThrow(TailorErrorMessage);
+    ).toThrow(TailorErrors);
   });
 
   test("a deny policy overrides a matching allow policy", () => {
@@ -377,15 +380,13 @@ describe("buildResolverPermissionGuardExpr", () => {
       runGuard(permission, { type: "user", attributes: { role: "MEMBER" } }),
     ).not.toThrow();
     expect(() => runGuard(permission, { type: "user", attributes: { role: "BANNED" } })).toThrow(
-      TailorErrorMessage,
+      TailorErrors,
     );
   });
 
   test("denies by default when no allow policy matches", () => {
     const permission = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
-    expect(() => runGuard(permission, { attributes: { role: "GUEST" } })).toThrow(
-      TailorErrorMessage,
-    );
+    expect(() => runGuard(permission, { attributes: { role: "GUEST" } })).toThrow(TailorErrors);
   });
 
   test("includes description in the thrown message when present", () => {
@@ -436,5 +437,35 @@ describe("buildResolverPermissionGuardExpr", () => {
   test("throws at bundle time on a policy with an empty conditions array (schema should reject this, but guard defensively too)", () => {
     const permission = [{ conditions: [], permit: true }] as const;
     expect(() => buildResolverPermissionGuardExpr(permission)).toThrow(/at least one condition/);
+  });
+});
+
+describe("buildResolverPermissionAndInputCheckExpr", () => {
+  const loggedIn = [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }] as const;
+
+  test("guards with the namespace default when the resolver declares no permission", () => {
+    const expr = buildResolverPermissionAndInputCheckExpr({
+      permission: undefined,
+      defaultPermission: loggedIn,
+    });
+    expect(expr).toContain("access denied");
+  });
+
+  test("uses the resolver's own permission instead of the namespace default", () => {
+    const adminOnly = [{ conditions: [[{ user: "role" }, "=", "ADMIN"]], permit: true }] as const;
+    const expr = buildResolverPermissionAndInputCheckExpr({
+      permission: adminOnly,
+      defaultPermission: loggedIn,
+    });
+    expect(expr).toContain('"ADMIN"');
+    expect(expr).not.toContain("context.caller !== null");
+  });
+
+  test("lets a resolver opt out of the namespace default with allowAnonymous", () => {
+    const expr = buildResolverPermissionAndInputCheckExpr({
+      permission: "allowAnonymous",
+      defaultPermission: loggedIn,
+    });
+    expect(expr).not.toContain("access denied");
   });
 });

@@ -310,7 +310,7 @@ describe("snapshot", () => {
         {
           typeName: "OldType",
           reason:
-            "Type removed (all records of this type will be dropped in the post-migration phase)",
+            "Type removed (all records of this type will be deleted during post-migration cleanup)",
         },
       ]);
     });
@@ -412,12 +412,12 @@ describe("snapshot", () => {
         {
           typeName: "User",
           fieldName: "name",
-          reason: "Field removed (existing data will be dropped in the post-migration phase)",
+          reason: "Field removed (existing data will no longer be accessible through the schema)",
         },
       ]);
     });
 
-    test("detects field type change (breaking change)", () => {
+    test("supports cast-compatible field type changes with a migration script", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -426,7 +426,7 @@ describe("snapshot", () => {
             pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
-              age: { type: "string", required: false },
+              age: { type: "integer", required: false },
             },
           },
         },
@@ -439,7 +439,7 @@ describe("snapshot", () => {
             pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
-              age: { type: "number", required: false },
+              age: { type: "float", required: false },
             },
           },
         },
@@ -447,9 +447,46 @@ describe("snapshot", () => {
 
       const diff = compareSnapshots(previous, current);
 
-      expect(diff.changes[0]!.kind).toBe("field_modified");
+      expect(diff.changes[0]!.kind).toBe("field_type_modified");
       expect(diff.hasBreakingChanges).toBe(true);
+      expect(diff.requiresMigrationScript).toBe(true);
       expect(diff.breakingChanges[0]!.reason).toContain("Field type changed");
+      expect(diff.breakingChanges[0]!.unsupported).toBeUndefined();
+    });
+
+    test("rejects cast-incompatible field type changes", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              enabled: { type: "boolean", required: false },
+            },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              enabled: { type: "integer", required: false },
+            },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes[0]!.kind).toBe("field_type_modified");
+      expect(diff.hasBreakingChanges).toBe(true);
+      expect(diff.breakingChanges[0]!.unsupported).toBe(true);
     });
 
     test("normalizes decimal scale at compare entry so missing scale matches platform default", () => {
@@ -1534,6 +1571,39 @@ describe("snapshot", () => {
       expect(loaded.changes[0]!.kind).toBe("type_added");
     });
 
+    test("loads a phased field type change", () => {
+      const diff: MigrationDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_type_modified",
+            typeName: "User",
+            fieldName: "age",
+            before: { type: "integer", required: false },
+            after: { type: "float", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "age",
+            reason: "Field type changed from integer to float",
+          },
+        ],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      };
+
+      const filePath = path.join(testDir, "type_change_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(diff, null, 2));
+
+      expect(loadDiff(filePath).changes[0]!.kind).toBe("field_type_modified");
+    });
+
     test("backfills warnings fields for legacy diff.json", () => {
       // Legacy diff.json written before warning-tier support shipped. The file
       // has no warnings/hasWarnings keys at all.
@@ -1561,6 +1631,80 @@ describe("snapshot", () => {
       expect(loaded.warnings).toEqual([]);
       expect(loaded.hasWarnings).toBe(false);
       expect(loaded.changes.length).toBe(1);
+    });
+
+    test("derives warnings from removal changes in a legacy diff.json", () => {
+      // Legacy diff.json written before warning-tier support: removals are
+      // recorded in changes but the warnings field does not exist yet.
+      const legacyDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_removed",
+            typeName: "User",
+            fieldName: "legacyCode",
+            before: { type: "string" },
+          },
+          {
+            kind: "type_removed",
+            typeName: "OldType",
+            before: { name: "OldType", pluralForm: "OldTypes", fields: {} },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        requiresMigrationScript: false,
+      };
+
+      const filePath = path.join(testDir, "legacy_removal_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.hasWarnings).toBe(true);
+      expect(loaded.warnings).toEqual([
+        {
+          typeName: "User",
+          fieldName: "legacyCode",
+          reason: "Field removed (existing data will no longer be accessible through the schema)",
+        },
+        {
+          typeName: "OldType",
+          reason:
+            "Type removed (all records of this type will be deleted during post-migration cleanup)",
+        },
+      ]);
+    });
+
+    test("keeps a recorded empty warnings array authoritative over changes", () => {
+      const diff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_removed",
+            typeName: "User",
+            fieldName: "legacyCode",
+            before: { type: "string" },
+          },
+        ],
+        hasBreakingChanges: false,
+        breakingChanges: [],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: false,
+      };
+
+      const filePath = path.join(testDir, "recorded_empty_warnings_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(diff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.hasWarnings).toBe(false);
+      expect(loaded.warnings).toEqual([]);
     });
 
     test("derives hasWarnings from warnings array regardless of stored flag", () => {
@@ -1595,21 +1739,91 @@ describe("snapshot", () => {
   });
 
   describe("loadSnapshot validation", () => {
-    test("loads a snapshot with a different format version", () => {
-      // example/migrations contain snapshots with version 2; the loader must
-      // not pin the version field to the current constant.
-      const filePath = path.join(testDir, "v2_schema.json");
+    test.each([1, 2])("loads supported snapshot format version %s", (version) => {
+      const filePath = path.join(testDir, `v${version}_schema.json`);
       fs.writeFileSync(
         filePath,
         JSON.stringify({
-          version: 2,
+          version,
           namespace,
           createdAt: new Date().toISOString(),
           types: { User: { name: "User", pluralForm: "Users", fields: {} } },
         }),
       );
 
-      expect(loadSnapshot(filePath).version).toBe(2);
+      expect(loadSnapshot(filePath).version).toBe(version);
+    });
+
+    test("loads a valid rebaseline history marker", () => {
+      const filePath = path.join(testDir, "rebaseline_schema.json");
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: SCHEMA_SNAPSHOT_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {},
+          rebaseline: {
+            historyId: "hcurrent",
+            replacedHistoryId: "hprevious",
+            replacedLatestMigration: 42,
+          },
+        }),
+      );
+
+      expect(loadSnapshot(filePath).rebaseline).toEqual({
+        historyId: "hcurrent",
+        replacedHistoryId: "hprevious",
+        replacedLatestMigration: 42,
+      });
+    });
+
+    test.each([
+      ["historyId", { historyId: "INVALID!", replacedHistoryId: null, replacedLatestMigration: 1 }],
+      [
+        "replacedHistoryId",
+        { historyId: "hcurrent", replacedHistoryId: "INVALID!", replacedLatestMigration: 1 },
+      ],
+      [
+        "replacedLatestMigration",
+        { historyId: "hcurrent", replacedHistoryId: null, replacedLatestMigration: 10_000 },
+      ],
+    ])("rejects an invalid rebaseline marker at %s", (field, rebaseline) => {
+      const filePath = path.join(testDir, `invalid_rebaseline_${field}_schema.json`);
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version: SCHEMA_SNAPSHOT_VERSION,
+          namespace,
+          createdAt: new Date().toISOString(),
+          types: {},
+          rebaseline,
+        }),
+      );
+
+      expect(() => loadSnapshot(filePath)).toThrow(field);
+    });
+
+    test("rejects snapshot formats older than the supported window", () => {
+      const version = 0;
+      const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
+      fs.writeFileSync(filePath, JSON.stringify({ version }));
+
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadSnapshot(filePath)).toThrow(
+        /re-baseline with an SDK that still supports this migration history, then upgrade/i,
+      );
+    });
+
+    test("rejects snapshot formats newer than the supported window", () => {
+      const version = 3;
+      const filePath = path.join(testDir, `unsupported_v${version}_schema.json`);
+      fs.writeFileSync(filePath, JSON.stringify({ version }));
+
+      expect(() => loadSnapshot(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadSnapshot(filePath)).toThrow(
+        /upgrade to an SDK that supports migration file format version 3/i,
+      );
     });
 
     test("rejects an ambiguous permission field-ref operand", () => {
@@ -1885,6 +2099,57 @@ describe("snapshot", () => {
   });
 
   describe("loadDiff validation", () => {
+    test.each([1, 2])("loads supported diff format version %s", (version) => {
+      const filePath = path.join(testDir, `v${version}_diff.json`);
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version,
+          namespace,
+          createdAt: "t",
+          changes: [],
+          hasBreakingChanges: false,
+          breakingChanges: [],
+          requiresMigrationScript: false,
+        }),
+      );
+
+      expect(loadDiff(filePath).version).toBe(version);
+    });
+
+    test("rejects diff formats older than the supported window", () => {
+      const version = 0;
+      const filePath = path.join(testDir, `unsupported_v${version}_diff.json`);
+      fs.writeFileSync(
+        filePath,
+        JSON.stringify({
+          version,
+          namespace,
+          createdAt: "t",
+          changes: [],
+          hasBreakingChanges: false,
+          breakingChanges: [],
+          requiresMigrationScript: false,
+        }),
+      );
+
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadDiff(filePath)).toThrow(
+        /re-baseline with an SDK that still supports this migration history, then upgrade/i,
+      );
+    });
+
+    test("rejects diff formats newer than the supported window", () => {
+      const version = 3;
+      const filePath = path.join(testDir, `unsupported_v${version}_diff.json`);
+      fs.writeFileSync(filePath, JSON.stringify({ version }));
+
+      expect(() => loadDiff(filePath)).toThrow(/supports migration file format versions 1-2/);
+      expect(() => loadDiff(filePath)).toThrow(
+        /upgrade to an SDK that supports migration file format version 3/i,
+      );
+    });
+
     test("throws with file path when JSON is not an object", () => {
       const filePath = path.join(testDir, "corrupt_diff.json");
       fs.writeFileSync(filePath, JSON.stringify([1, 2, 3]));
@@ -1947,7 +2212,8 @@ describe("snapshot", () => {
       expect(fs.existsSync(filePath)).toBe(true);
 
       const loaded = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-      expect(loaded.version).toBe(SCHEMA_SNAPSHOT_VERSION);
+      expect(SCHEMA_SNAPSHOT_VERSION).toBe(2);
+      expect(loaded.version).toBe(2);
     });
   });
 
@@ -2043,6 +2309,56 @@ describe("snapshot", () => {
 
       expect(reconstructed?.types.User!.fields.id).toBeDefined();
       expect(reconstructed?.types.User!.fields.email).toBeDefined();
+    });
+
+    test("reconstructs the target field type from a phased type change", () => {
+      const initialSnapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              age: { type: "integer", required: false },
+            },
+          },
+        },
+      };
+      const diff: MigrationDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_type_modified",
+            typeName: "User",
+            fieldName: "age",
+            before: { type: "integer", required: false },
+            after: { type: "float", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "age",
+            reason: "Field type changed from integer to float",
+          },
+        ],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      };
+
+      writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, initialSnapshot);
+      writeDiffToDir(testDir, 1, diff);
+
+      const reconstructed = reconstructSnapshotFromMigrations(testDir);
+
+      expect(reconstructed?.types.User!.fields.age!.type).toBe("float");
     });
 
     test("applies added type names that match Object prototype keys", () => {

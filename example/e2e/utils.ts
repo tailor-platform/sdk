@@ -95,3 +95,9 @@ export function createGraphQLClient(appUrl: string, token: string) {
     errorPolicy: "all",
   });
 }
+
+/** A client that sends no credentials, for asserting what anonymous callers can reach. */
+export function createAnonymousGraphQLClient(appUrl: string) {
+  const endpoint = new URL("/query", appUrl).href;
+  return new GraphQLClient(endpoint, { errorPolicy: "all" });
+}

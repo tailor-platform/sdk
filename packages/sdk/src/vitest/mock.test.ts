@@ -452,14 +452,6 @@ describe("mock", () => {
       expect(parsed.errors).toEqual([{ message: "invalid", path: ["field"] }]);
     });
 
-    test("TailorErrorMessage works", () => {
-      const TailorErrorMessage = (globalThis as any).TailorErrorMessage;
-      const err = new TailorErrorMessage("test message");
-
-      expect(err.name).toBe("TailorErrorMessage");
-      expect(err.message).toBe("test message");
-    });
-
     test("TailorDBFileError works", () => {
       const TailorDBFileError = (globalThis as any).TailorDBFileError;
       const err = new TailorDBFileError("not found", "NOT_FOUND");
@@ -982,7 +974,6 @@ describe("mock", () => {
       expect((globalThis as any).tailordb).toBeUndefined();
       expect((globalThis as any).tailor).toBeUndefined();
       expect((globalThis as any).TailorErrors).toBeUndefined();
-      expect((globalThis as any).TailorErrorMessage).toBeUndefined();
       expect((globalThis as any).TailorDBFileError).toBeUndefined();
       expect((globalThis as any)[RUNTIME_FLAG_KEY]).toBeUndefined();
     });

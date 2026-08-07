@@ -61,10 +61,13 @@ export interface AddMigrationScriptFilesResult {
   dbTypesPath?: string;
   /** Created migrate.test.ts path; undefined unless withTest was set. */
   testPath?: string;
+  /** True when a stale --no-script acknowledgment was cleared because migrate.ts already exists. */
+  clearedScriptSkip?: boolean;
 }
 
 /**
- * Record in diff.json that a migration requiring a script intentionally has none.
+ * Record in diff.json that a migration requiring a script, or one with
+ * data-loss warnings, intentionally has none.
  * @param {MarkScriptSkippedOptions} options - Target migration and skip reason
  * @returns {ScriptSkippedInfo} The recorded acknowledgment
  */
@@ -82,8 +85,10 @@ export function markMigrationScriptSkipped(options: MarkScriptSkippedOptions): S
   }
 
   const diff = loadDiff(diffPath);
-  if (!diff.requiresMigrationScript) {
-    throw new Error(`Migration ${label} does not require a migration script; nothing to skip.`);
+  if (!diff.requiresMigrationScript && !diff.hasWarnings) {
+    throw new Error(
+      `Migration ${label} does not require a migration script and has no data-loss warnings; nothing to skip.`,
+    );
   }
   if (diff.scriptSkipped) {
     throw new Error(
@@ -127,7 +132,8 @@ export function clearMigrationScriptSkipped(diffPath: string): void {
 /**
  * Create migration script files (migrate.ts, db.ts, and optionally migrate.test.ts)
  * in an existing migration directory. When migrate.ts already exists and withTest
- * is set, only the test file is added.
+ * is set, only the test file is added. An existing migrate.ts clears a stale
+ * --no-script acknowledgment instead of failing.
  * @param {AddMigrationScriptFilesOptions} options - Target migration and file selection
  * @returns {Promise<AddMigrationScriptFilesResult>} Paths of the created files
  */
@@ -142,9 +148,18 @@ export async function addMigrationScriptFiles(
     throw new Error(`Migration ${label} not found in ${migrationsDir}. Expected ${diffPath}.`);
   }
 
+  const diff = loadDiff(diffPath);
   const migratePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
   const migrateExists = fs.existsSync(migratePath);
-  if (migrateExists && !withTest) {
+  const result: AddMigrationScriptFilesResult = {};
+
+  if (migrateExists && diff.scriptSkipped) {
+    // A hand-placed migrate.ts takes precedence over an earlier --no-script
+    // acknowledgment; clear the stale record instead of failing.
+    clearMigrationScriptSkipped(diffPath);
+    result.clearedScriptSkip = true;
+    if (!withTest) return result;
+  } else if (migrateExists && !withTest) {
     throw new Error(`Migration script already exists at ${migratePath}.`);
   }
 
@@ -152,9 +167,6 @@ export async function addMigrationScriptFiles(
   if (withTest && fs.existsSync(testPath)) {
     throw new Error(`Migration test already exists at ${testPath}.`);
   }
-
-  const diff = loadDiff(diffPath);
-  const result: AddMigrationScriptFilesResult = {};
 
   if (migrateExists && withTest) {
     const dbTypesPath = getMigrationFilePath(migrationsDir, migrationNumber, "db");
@@ -254,6 +266,18 @@ async function script(options: ScriptOptions): Promise<void> {
     withTest: options.withTest,
   });
 
+  if (result.clearedScriptSkip) {
+    logger.success(
+      `Cleared the stale script skip record for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
+    );
+    if (!result.testPath) {
+      logger.info(
+        `  Migration script: ${getMigrationFilePath(migrationsDir, migrationNumber, "migrate")}`,
+      );
+      return;
+    }
+  }
+
   const added = [result.migratePath && "migration script", result.testPath && "migration test"]
     .filter(Boolean)
     .join(" and ");
@@ -315,6 +339,7 @@ export const scriptCommand = defineAppCommand({
   name: "script",
   description:
     "Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.",
+  notes: `When \`migrate.ts\` already exists, running the command clears a previously recorded \`--no-script\` acknowledgment.`,
   args: z.strictObject({
     ...configArg,
     number: arg(z.string(), {

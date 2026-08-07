@@ -5,6 +5,7 @@ import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
 import { silenceLogger } from "#/cli/shared/test-helpers/silence-logger";
 import { createChangeSet } from "./change-set";
 import {
+  adjustApplicationForMigrationTest,
   assertUniqueGlobalResourceNames,
   buildDeploymentTargets,
   confirmDeploymentPlans,
@@ -61,6 +62,7 @@ function emptyResults(): PlanResults {
         noSchemaCheck: false,
         namespacesWithMigrations: [],
         migrationFileState: {},
+        checkpointRepairs: [],
       },
     },
     staticWebsite: {
@@ -833,6 +835,57 @@ describe("printPlanResults", () => {
     });
   });
 
+  test("includes migration checkpoint repairs in JSON dry-run changes and summary", () => {
+    using _json = jsonMode();
+    const results = emptyResults();
+    results.tailorDB.context.checkpointRepairs = [
+      {
+        namespace: "tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "htailordb",
+      },
+    ];
+
+    const summary = printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      summary: { update: number };
+      changes: Array<{
+        action: string;
+        name: string;
+        labels: string[];
+        namespace?: string;
+      }>;
+    };
+    expect(summary.update).toBe(1);
+    expect(payload.summary.update).toBe(1);
+    expect(payload.changes).toContainEqual({
+      action: "update",
+      name: "migration checkpoint 0005 → 0000",
+      labels: ["migrationCheckpoint"],
+      namespace: "tailordb",
+    });
+  });
+
+  test("includes migration checkpoint repairs in human dry-run output", () => {
+    const results = emptyResults();
+    results.tailorDB.context.checkpointRepairs = [
+      {
+        namespace: "tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "htailordb",
+      },
+    ];
+
+    printPlanResults(results, { dryRun: true });
+
+    expect(String(outSpy.mock.calls[0]?.[0])).toContain("migration checkpoint 0005 → 0000");
+  });
+
   test("does not emit JSON for apply --json; still prints plan to stderr", () => {
     using _json = jsonMode();
 
@@ -1005,6 +1058,53 @@ describe("multi-config deployment orchestration", () => {
     releases.forEach((release) => release());
 
     await expect(planPromise).resolves.toHaveLength(2);
+  });
+});
+
+describe("adjustApplicationForMigrationTest", () => {
+  type AdjustedApplication = ReturnType<typeof adjustApplicationForMigrationTest>;
+
+  function migrationTestApplication(): AdjustedApplication {
+    const application = {
+      name: "app",
+      executorService: { executors: {} },
+      authService: { config: { name: "auth-a" }, userProfile: { namespace: "tailordb" } },
+      staticWebsiteServices: [{ name: "site", customDomains: ["example.com"] }],
+      get applications() {
+        return [application];
+      },
+    } as unknown as AdjustedApplication;
+    return application;
+  }
+
+  test("returns the application unchanged outside migration test deploys", () => {
+    const application = migrationTestApplication();
+
+    expect(adjustApplicationForMigrationTest(application, undefined)).toBe(application);
+    expect(adjustApplicationForMigrationTest(application, {})).toBe(application);
+  });
+
+  test("strips executors, user profiles, and custom domains for a baseline deploy", () => {
+    const adjusted = adjustApplicationForMigrationTest(migrationTestApplication(), {
+      migrationTestBaselines: new Map(),
+      migrationTestSnapshots: new Map(),
+    });
+
+    expect(adjusted.executorService).toBeUndefined();
+    expect(adjusted.authService?.userProfile).toBeUndefined();
+    expect(adjusted.authService?.config.name).toBe("auth-a");
+    expect(adjusted.staticWebsiteServices[0]?.customDomains).toBeUndefined();
+    expect(adjusted.applications).toEqual([adjusted]);
+  });
+
+  test("keeps executors and user profiles for the final migration deploy", () => {
+    const adjusted = adjustApplicationForMigrationTest(migrationTestApplication(), {
+      migrationTestSnapshots: new Map(),
+    });
+
+    expect(adjusted.executorService).toBeDefined();
+    expect(adjusted.authService?.userProfile).toBeDefined();
+    expect(adjusted.staticWebsiteServices[0]?.customDomains).toBeUndefined();
   });
 });
 

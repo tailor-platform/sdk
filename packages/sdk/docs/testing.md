@@ -59,7 +59,7 @@ export default defineConfig({
 
 1. **Node.js module blocking** — `import { randomBytes } from "node:crypto"` in production code throws an error with a suggestion for the Web Standard API alternative (`globalThis.crypto`). Test files (`*.test.ts`, `*.spec.ts`) are exempt.
 2. **Node.js globals removal** — Only globals available in the platform runtime are kept (whitelist). `Buffer`, `global`, `setImmediate`, `__dirname`, `__filename`, `performance`, and others are removed.
-3. **Platform API mocks** — the platform error classes (`TailorErrors`, `TailorErrorMessage`, `TailorDBFileError`) and `tailor.context` are always available. The other namespaces (`tailordb.Client`, `tailor.workflow`, `tailor.secretmanager`, …) are mocked when you acquire the corresponding `mockX()` — see below.
+3. **Platform API mocks** — the platform error classes (`TailorErrors`, `TailorDBFileError`) and `tailor.context` are always available. The other namespaces (`tailordb.Client`, `tailor.workflow`, `tailor.secretmanager`, …) are mocked when you acquire the corresponding `mockX()` — see below.
 
 ### Acquiring mocks with `using`
 

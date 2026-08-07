@@ -28,6 +28,27 @@ interface ResolverInfo {
   permission: Resolver["permission"];
 }
 
+export interface BundleResolversOptions {
+  /** Resolver namespace name */
+  namespace: string;
+  /** Resolver file loading configuration */
+  config: FileLoadConfig;
+  /** Directory the config's file patterns are resolved against */
+  baseDir: string;
+  /** The namespace's `defaultPermission`, applied to resolvers declaring none */
+  defaultPermission?: Resolver["permission"];
+  /** Start context for workflow/job transformations */
+  startContext?: StartContext;
+  /** Optional bundle cache for skipping unchanged builds */
+  cache?: BundleCache;
+  /** Whether to enable inline sourcemaps */
+  inlineSourcemap?: boolean;
+  /** Controls which console calls are kept in bundled code */
+  bundleLogLevel?: LogLevel;
+  /** Optional tsconfig lookup cache shared across bundles in this CLI run */
+  tsconfigCache?: TsconfigLookupCache;
+}
+
 /**
  * Bundle resolvers for the specified namespace
  *
@@ -35,26 +56,23 @@ interface ResolverInfo {
  * 1. Uses a transform plugin to add validation wrapper during bundling
  * 2. Creates an in-memory entry module
  * 3. Bundles in a single step with tree-shaking
- * @param namespace - Resolver namespace name
- * @param config - Resolver file loading configuration
- * @param baseDir - Directory the config's file patterns are resolved against
- * @param startContext - Start context for workflow/job transformations
- * @param cache - Optional bundle cache for skipping unchanged builds
- * @param inlineSourcemap - Whether to enable inline sourcemaps
- * @param bundleLogLevel - Controls which console calls are kept in bundled code
- * @param tsconfigCache - Optional tsconfig lookup cache shared across bundles in this CLI run
+ * @param options - Bundle options
  * @returns Map of resolver name to bundled code
  */
 export async function bundleResolvers(
-  namespace: string,
-  config: FileLoadConfig,
-  baseDir: string,
-  startContext?: StartContext,
-  cache?: BundleCache,
-  inlineSourcemap?: boolean,
-  bundleLogLevel: LogLevel = "DEBUG",
-  tsconfigCache?: TsconfigLookupCache,
+  options: BundleResolversOptions,
 ): Promise<Map<string, string>> {
+  const {
+    namespace,
+    config,
+    baseDir,
+    defaultPermission,
+    startContext,
+    cache,
+    inlineSourcemap,
+    bundleLogLevel = "DEBUG",
+    tsconfigCache,
+  } = options;
   const bundledCode = new Map<string, string>();
   const files = loadFilesWithIgnores(config, baseDir);
   if (files.length === 0) {
@@ -89,16 +107,17 @@ export async function bundleResolvers(
   // Process each resolver, capped by TAILOR_BUNDLE_CONCURRENCY to bound native
   // memory use (each rolldown.build allocates its own module graph).
   const results = await withBundleConcurrency(resolvers, (resolver) =>
-    bundleSingleResolver(
+    bundleSingleResolver({
       namespace,
       resolver,
       tsconfig,
+      defaultPermission,
       startContext,
       cache,
       inlineSourcemap,
       bundleLogLevel,
       tsconfigCache,
-    ),
+    }),
   );
 
   for (const [name, code] of results) {
@@ -110,21 +129,34 @@ export async function bundleResolvers(
   return bundledCode;
 }
 
+type BundleSingleResolverOptions = Omit<BundleResolversOptions, "config" | "baseDir"> & {
+  resolver: ResolverInfo;
+  tsconfig: string | undefined;
+};
+
 async function bundleSingleResolver(
-  namespace: string,
-  resolver: ResolverInfo,
-  tsconfig: string | undefined,
-  startContext?: StartContext,
-  cache?: BundleCache,
-  inlineSourcemap?: boolean,
-  bundleLogLevel: LogLevel = "DEBUG",
-  tsconfigCache?: TsconfigLookupCache,
+  options: BundleSingleResolverOptions,
 ): Promise<[string, string]> {
+  const {
+    namespace,
+    resolver,
+    tsconfig,
+    defaultPermission,
+    startContext,
+    cache,
+    inlineSourcemap,
+    bundleLogLevel = "DEBUG",
+    tsconfigCache,
+  } = options;
   const serializedStartContext = serializeStartContext(startContext);
 
   const contextHash = computeBundlerContextHash({
     sourceFile: resolver.sourceFile,
-    extraContext: serializedStartContext,
+    // The namespace default is part of the generated guard but lives in the
+    // config file, not in any resolver source, so a cached bundle would
+    // otherwise survive a change to it. Encoded as a pair rather than joined,
+    // so no separator has to be a character neither value can contain.
+    extraContext: JSON.stringify([serializedStartContext, defaultPermission ?? null]),
     tsconfig,
     inlineSourcemap,
     bundleLogLevel,
@@ -139,7 +171,10 @@ async function bundleSingleResolver(
     contextHash,
     async build(cachePlugins, trackDependency) {
       const absoluteSourcePath = path.resolve(resolver.sourceFile);
-      const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr(resolver.permission);
+      const guardAndInputCheckExpr = buildResolverPermissionAndInputCheckExpr({
+        permission: resolver.permission,
+        defaultPermission,
+      });
 
       const entryContent = ml /* js */ `
         import _internalResolver from "${absoluteSourcePath}";

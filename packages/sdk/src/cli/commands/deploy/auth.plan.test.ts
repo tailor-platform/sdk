@@ -7,11 +7,11 @@ import {
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { describe, expect, test, vi } from "vitest";
 import { defineApplication } from "#/cli/services/application";
-import { logger } from "#/cli/shared/logger";
+import { logger, symbols } from "#/cli/shared/logger";
 import { defineConfig } from "#/configure/config/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { t } from "#/configure/types/type";
-import { formatAuthHookChangeEntries, planAuth } from "./auth";
+import { applyAuth, formatAuthHookChangeEntries, planAuth } from "./auth";
 import type { Application } from "#/cli/services/application";
 import type { OperatorClient } from "#/cli/shared/client";
 import type { PlanContext } from "./types";
@@ -106,6 +106,23 @@ function createMockApplication(): Application {
   } as unknown as Application;
 }
 
+function createMockApplicationWithUserProfile(): Application {
+  const application = createMockApplication();
+  return {
+    ...application,
+    authService: {
+      ...application.authService,
+      userProfile: {
+        namespace: "tailordb",
+        type: { name: "User" },
+        usernameField: "email",
+        attributeList: ["email"],
+        attributes: { email: true },
+      },
+    },
+  } as unknown as Application;
+}
+
 function createMockApplicationWithCustomOAuth2Lifetimes(): Application {
   return {
     name: appName,
@@ -191,6 +208,7 @@ function createMockClient(opts?: {
       machineUserName: string;
     };
   };
+  userProfileConfig?: Record<string, unknown>;
 }): OperatorClient {
   const authServices = opts?.authServices ?? [];
   const authIdPConfigs = opts?.authIdPConfigs ?? [];
@@ -221,7 +239,10 @@ function createMockClient(opts?: {
     }),
     getIdPService: vi.fn().mockImplementation(notFound),
     getIdPClient: vi.fn().mockImplementation(notFound),
-    getUserProfileConfig: vi.fn().mockImplementation(notFound),
+    getUserProfileConfig: opts?.userProfileConfig
+      ? vi.fn().mockResolvedValue(opts.userProfileConfig)
+      : vi.fn().mockImplementation(notFound),
+    deleteUserProfileConfig: vi.fn().mockResolvedValue({}),
     getTenantConfig: vi.fn().mockImplementation(notFound),
     listAuthMachineUsers: vi.fn().mockResolvedValue({
       machineUsers,
@@ -268,6 +289,33 @@ function createContext(
 }
 
 describe("planAuth", () => {
+  test("plans user profiles from the application while keeping machine users", async () => {
+    const strippedApplication = createMockApplication();
+    const emptyTarget = await planAuth(createContext(createMockClient(), strippedApplication));
+
+    expect(emptyTarget.changeSet.userProfileConfig.creates).toHaveLength(0);
+    expect(emptyTarget.changeSet.machineUser.creates).toHaveLength(1);
+
+    const retainedClient = createMockClient({
+      authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
+      machineUsers: [managerMachineUserRemote],
+      userProfileConfig: { provider: "TAILORDB" },
+    });
+    const retainedTarget = await planAuth(createContext(retainedClient, strippedApplication));
+
+    expect(retainedTarget.changeSet.userProfileConfig.deletes).toHaveLength(1);
+    await applyAuth(retainedClient, retainedTarget, "create-update-prerequisites");
+    expect(retainedClient.deleteUserProfileConfig).not.toHaveBeenCalled();
+    await applyAuth(retainedClient, retainedTarget, "delete-resources");
+    expect(retainedClient.deleteUserProfileConfig).toHaveBeenCalledTimes(1);
+
+    const migratedTarget = await planAuth(
+      createContext(createMockClient(), createMockApplicationWithUserProfile()),
+    );
+
+    expect(migratedTarget.changeSet.userProfileConfig.creates).toHaveLength(1);
+  });
+
   test("marks auth service, machine user, and oauth2 client unchanged when remote matches", async () => {
     const client = createMockClient({
       authServices: [{ name: "auth-a", publishSessionEvents: true, label: appName }],
@@ -642,7 +690,7 @@ describe("formatAuthHookChangeEntries", () => {
       expected: [
         {
           action: "update",
-          symbol: "~",
+          symbol: symbols.update,
           name: "before-login",
           labels: ["authHook", "function"],
           namespace: "my-auth",
@@ -660,14 +708,14 @@ describe("formatAuthHookChangeEntries", () => {
       expected: [
         {
           action: "update",
-          symbol: "~",
+          symbol: symbols.update,
           name: "before-login",
           labels: ["authHook"],
           namespace: "my-auth",
         },
         {
           action: "create",
-          symbol: "+",
+          symbol: symbols.create,
           name: "before-login",
           labels: ["function"],
           namespace: "my-auth",

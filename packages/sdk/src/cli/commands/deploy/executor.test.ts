@@ -1,4 +1,5 @@
 import { describe, test, expect, vi, aroundEach } from "vitest";
+import { symbols } from "#/cli/shared/logger";
 import { formatExecutorChangeEntries, planExecutor } from "./executor";
 import { sdkNameLabelKey } from "./label";
 import type { Application } from "#/cli/services/application";
@@ -250,6 +251,20 @@ describe("planExecutor", () => {
   });
 
   describe("delete scenarios", () => {
+    test("deletes owned executors when the executor service is stripped for a migration-test baseline", async () => {
+      const client = createMockClient([{ name: "active-executor", label: appName }]);
+      const application: Application = {
+        ...createMockApplication([createMockExecutor("active-executor")]),
+        executorService: undefined,
+      };
+
+      const result = await planExecutor(buildPlanContext(application, { client }));
+
+      expect(result.changeSet.creates).toHaveLength(0);
+      expect(result.changeSet.updates).toHaveLength(0);
+      expect(result.changeSet.deletes.map((entry) => entry.name)).toEqual(["active-executor"]);
+    });
+
     test("executor is deleted when removed from config", async () => {
       // Existing: executor-a, executor-b
       const client = createMockClient([
@@ -1422,7 +1437,7 @@ describe("formatExecutorChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "update",
-        symbol: "~",
+        symbol: symbols.update,
         name: "user-created",
         labels: ["executor", "function"],
       },
@@ -1457,7 +1472,7 @@ describe("formatExecutorChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "delete",
-        symbol: "-",
+        symbol: symbols.delete,
         name: "user-created",
         labels: ["executor", "function"],
       },

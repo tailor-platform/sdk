@@ -4,7 +4,7 @@ export default defineConfig([
   {
     entry: ["src/index.ts"],
     format: ["esm"],
-    target: "node18",
+    target: "node22",
     platform: "node",
     clean: true,
     outDir: "dist",
@@ -62,7 +62,7 @@ export default defineConfig([
         "codemods/v2/idp-publish-events-rename/scripts/transform.ts",
     },
     format: ["esm"],
-    target: "node18",
+    target: "node22",
     platform: "node",
     outDir: "dist/codemods",
     tsconfig: "./tsconfig.json",

@@ -48,7 +48,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
   const enumValueChanges = new Map<string, Map<string, EnumValueChange>>();
 
   for (const change of diff.changes) {
-    if (change.kind === "field_modified") {
+    if (change.kind === "field_modified" || change.kind === "field_type_modified") {
       const { before, after } = change;
 
       // Check if this is an optional -> required change
