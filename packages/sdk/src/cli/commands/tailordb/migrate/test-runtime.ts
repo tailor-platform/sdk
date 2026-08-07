@@ -20,7 +20,7 @@ import {
   verifyRemoteSchema,
 } from "#/cli/commands/tailordb/migrate/schema-checks";
 import { createValidatedWorkspaceWithClient } from "#/cli/commands/workspace/create";
-import { initOperatorClient, type OperatorClient } from "#/cli/shared/client";
+import { getOrNull, initOperatorClient, type OperatorClient } from "#/cli/shared/client";
 import { loadAccessToken, loadPlatformClientConfig, loadWorkspaceId } from "#/cli/shared/context";
 import { logger } from "#/cli/shared/logger";
 import { executeScript } from "#/cli/shared/script-executor";
@@ -364,6 +364,23 @@ function stateOrThrow(state: RuntimeState | undefined): RuntimeState {
   return assertDefined(state, "migration test runtime was used before preparation");
 }
 
+// A retained target may carry a user profile config referencing types the
+// baseline deploy replaces; deleting it up front lets the baseline's planAuth
+// see no existing config instead of reordering delete phases.
+async function deleteExistingUserProfileConfig(
+  state: RuntimeState,
+  targetWorkspaceId: string,
+): Promise<void> {
+  const auth = state.loaded.application.authService;
+  if (!auth) return;
+  const namespaceName = auth.config.name;
+  const existing = await getOrNull(() =>
+    state.client.getUserProfileConfig({ workspaceId: targetWorkspaceId, namespaceName }),
+  );
+  if (!existing) return;
+  await state.client.deleteUserProfileConfig({ workspaceId: targetWorkspaceId, namespaceName });
+}
+
 function migrationConfig(
   loaded: LoadedApplicationNamespaces,
   namespace: string,
@@ -564,6 +581,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
     },
     deployBaseline: async ({ prepared, targetWorkspaceId }) => {
       const state = stateOrThrow(runtimeState);
+      await deleteExistingUserProfileConfig(state, targetWorkspaceId);
       await deployMigrationTestBaseline(
         {
           configPath: state.loaded.config.path,

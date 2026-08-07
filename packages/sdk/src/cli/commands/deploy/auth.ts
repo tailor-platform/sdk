@@ -256,9 +256,6 @@ export async function applyAuth(
   if (phase === "create-update-prerequisites" || phase === "create-update") {
     await applyServices();
     await applyMachineUsers();
-    if (result.userProfileDeletesBeforeTailorDB) {
-      await applyUserProfileDeletes();
-    }
   }
   if (phase === "create-update-dependents" || phase === "create-update") {
     await applyCreateUpdateDependents();
@@ -294,9 +291,7 @@ export async function applyAuth(
     );
 
     // UserProfileConfigs
-    if (!result.userProfileDeletesBeforeTailorDB) {
-      await applyUserProfileDeletes();
-    }
+    await applyUserProfileDeletes();
 
     // IdPConfigs
     await Promise.all(
@@ -392,7 +387,6 @@ export async function planAuth(context: PlanContext) {
     unmanaged: [...unmanaged, ...connectionResult.unmanaged],
     resourceOwners: new Set([...resourceOwners, ...connectionResult.resourceOwners]),
     connectionStateScope: connectionResult.stateScope,
-    userProfileDeletesBeforeTailorDB: context.migrationTestBaselines !== undefined,
   };
 }
 

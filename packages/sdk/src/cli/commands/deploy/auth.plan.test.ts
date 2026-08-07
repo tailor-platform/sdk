@@ -289,12 +289,9 @@ function createContext(
 }
 
 describe("planAuth", () => {
-  test("defers user profiles until after a migration-test baseline while keeping machine users", async () => {
+  test("plans user profiles from the application while keeping machine users", async () => {
     const strippedApplication = createMockApplication();
-    const emptyTarget = await planAuth({
-      ...createContext(createMockClient(), strippedApplication),
-      migrationTestBaselines: new Map(),
-    });
+    const emptyTarget = await planAuth(createContext(createMockClient(), strippedApplication));
 
     expect(emptyTarget.changeSet.userProfileConfig.creates).toHaveLength(0);
     expect(emptyTarget.changeSet.machineUser.creates).toHaveLength(1);
@@ -304,19 +301,17 @@ describe("planAuth", () => {
       machineUsers: [managerMachineUserRemote],
       userProfileConfig: { provider: "TAILORDB" },
     });
-    const retainedTarget = await planAuth({
-      ...createContext(retainedClient, strippedApplication),
-      migrationTestBaselines: new Map(),
-    });
+    const retainedTarget = await planAuth(createContext(retainedClient, strippedApplication));
 
     expect(retainedTarget.changeSet.userProfileConfig.deletes).toHaveLength(1);
     await applyAuth(retainedClient, retainedTarget, "create-update-prerequisites");
+    expect(retainedClient.deleteUserProfileConfig).not.toHaveBeenCalled();
+    await applyAuth(retainedClient, retainedTarget, "delete-resources");
     expect(retainedClient.deleteUserProfileConfig).toHaveBeenCalledTimes(1);
 
-    const migratedTarget = await planAuth({
-      ...createContext(createMockClient(), createMockApplicationWithUserProfile()),
-      migrationTestSnapshots: new Map(),
-    });
+    const migratedTarget = await planAuth(
+      createContext(createMockClient(), createMockApplicationWithUserProfile()),
+    );
 
     expect(migratedTarget.changeSet.userProfileConfig.creates).toHaveLength(1);
   });
