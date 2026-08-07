@@ -135,7 +135,7 @@ This writes `migrations/0002/migrate.ts` and `migrations/0002/db.ts` next to the
 
 Renaming a field in a type definition looks like a removal plus an addition to the diff engine. Left as-is, that combination silently drops the old field's data: the removal is only a warning, so nothing forces a data copy.
 
-To prevent that, when `migration generate` finds a removed field and an added field with a compatible shape (same field type, same array-ness, same foreign-key target) in the same type, it asks whether the change is a rename:
+To prevent that, when `migration generate` finds a removed field and an added field in the same type whose stored values can be copied without changing their meaning, it asks whether the change is a rename. Serial fields are never rename candidates, and an enum field only qualifies when it keeps every value of the removed field:
 
 ```
 ? User.fullName was removed and displayName was added with a compatible type. Was it renamed to displayName? (Y/n)
