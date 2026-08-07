@@ -6,7 +6,12 @@ import { defineAppCommand } from "#/cli/shared/command";
 import { logger } from "#/cli/shared/logger";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { assertDefined } from "#/utils/assert";
-import { assertCloneTargetRegion, createMigrationTestDependencies } from "./test-runtime";
+import {
+  assertCloneTargetRegion,
+  assertTargetWorkspaceDiffers,
+  createMigrationTestDependencies,
+  resolveAssertionNamespace,
+} from "./test-runtime";
 import type {
   MigrationTestDependencies,
   MigrationTestOptions,
@@ -37,21 +42,9 @@ export async function runMigrationTest(
   }
 
   const prepared = await dependencies.prepare(options);
-  if (options.targetWorkspaceId?.toLowerCase() === prepared.sourceWorkspaceId.toLowerCase()) {
-    throw new Error("The migration test target workspace must differ from the source workspace.");
-  }
+  assertTargetWorkspaceDiffers(prepared.sourceWorkspaceId, options.targetWorkspaceId);
   if (options.assertionPath) {
-    const namespace =
-      options.assertionNamespace ??
-      (prepared.pendingNamespaces.length === 1 ? prepared.pendingNamespaces[0] : undefined);
-    if (!namespace) {
-      throw new Error(
-        "--assert-namespace is required when pending migrations span multiple namespaces.",
-      );
-    }
-    if (!prepared.pendingNamespaces.includes(namespace)) {
-      throw new Error(`Assertion namespace "${namespace}" has no pending migrations.`);
-    }
+    resolveAssertionNamespace(prepared.pendingNamespaces, options.assertionNamespace);
   }
   if (options.data === "clone" && options.targetWorkspaceId) {
     const target = assertDefined(

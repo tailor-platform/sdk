@@ -116,6 +116,43 @@ export function assertCloneTargetRegion(sourceRegion: string, targetRegion: stri
   }
 }
 
+/**
+ * Require the migration test target workspace to differ from the source workspace.
+ * @param sourceWorkspaceId - Source workspace ID
+ * @param targetWorkspaceId - Designated target workspace ID, if any
+ */
+export function assertTargetWorkspaceDiffers(
+  sourceWorkspaceId: string,
+  targetWorkspaceId?: string,
+): void {
+  if (targetWorkspaceId?.toLowerCase() === sourceWorkspaceId.toLowerCase()) {
+    throw new Error("The migration test target workspace must differ from the source workspace.");
+  }
+}
+
+/**
+ * Resolve the namespace an assertion script runs against.
+ * @param pendingNamespaces - Namespaces with pending migrations
+ * @param assertionNamespace - Explicit namespace from `--assert-namespace`, if any
+ * @returns Resolved assertion namespace
+ */
+export function resolveAssertionNamespace(
+  pendingNamespaces: ReadonlyArray<string>,
+  assertionNamespace?: string,
+): string {
+  const namespace =
+    assertionNamespace ?? (pendingNamespaces.length === 1 ? pendingNamespaces[0] : undefined);
+  if (!namespace) {
+    throw new Error(
+      "--assert-namespace is required when pending migrations span multiple namespaces.",
+    );
+  }
+  if (!pendingNamespaces.includes(namespace)) {
+    throw new Error(`Assertion namespace "${namespace}" has no pending migrations.`);
+  }
+  return namespace;
+}
+
 interface CreateBaselineSnapshotsOptions {
   client: OperatorClient;
   workspaceId: string;
@@ -385,9 +422,7 @@ async function prepareMigrationTest(options: MigrationTestOptions): Promise<{
     workspaceId: options.workspaceId,
     profile: options.profile,
   });
-  if (options.targetWorkspaceId?.toLowerCase() === sourceWorkspaceId.toLowerCase()) {
-    throw new Error("The migration test target workspace must differ from the source workspace.");
-  }
+  assertTargetWorkspaceDiffers(sourceWorkspaceId, options.targetWorkspaceId);
 
   const [workspaceResponse, applicationResponse, targetWorkspaceResponse] = await Promise.all([
     client.getWorkspace({ workspaceId: sourceWorkspaceId }),
@@ -657,17 +692,7 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
       machineUser,
     }) => {
       const state = stateOrThrow(runtimeState);
-      const namespace =
-        assertionNamespace ??
-        (prepared.pendingNamespaces.length === 1 ? prepared.pendingNamespaces[0] : undefined);
-      if (!namespace) {
-        throw new Error(
-          "--assert-namespace is required when pending migrations span multiple namespaces.",
-        );
-      }
-      if (!prepared.baselines.has(namespace)) {
-        throw new Error(`Assertion namespace "${namespace}" is not configured for migrations.`);
-      }
+      const namespace = resolveAssertionNamespace(prepared.pendingNamespaces, assertionNamespace);
       const auth = authExecutionContext(state, namespace, machineUser);
       const bundled = await bundleMigrationScript(
         assertionPath,
