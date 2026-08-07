@@ -1678,33 +1678,6 @@ describe("snapshot", () => {
       ]);
     });
 
-    test("does not derive a warning for a removal already recorded as breaking", () => {
-      const legacyDiff = {
-        version: SCHEMA_SNAPSHOT_VERSION,
-        namespace,
-        createdAt: new Date().toISOString(),
-        changes: [
-          {
-            kind: "field_removed",
-            typeName: "User",
-            fieldName: "legacyCode",
-            before: { type: "string" },
-          },
-        ],
-        hasBreakingChanges: true,
-        breakingChanges: [{ typeName: "User", fieldName: "legacyCode", reason: "Field removed" }],
-        requiresMigrationScript: true,
-      };
-
-      const filePath = path.join(testDir, "legacy_breaking_removal_diff.json");
-      fs.writeFileSync(filePath, JSON.stringify(legacyDiff, null, 2));
-
-      const loaded = loadDiff(filePath);
-
-      expect(loaded.hasWarnings).toBe(false);
-      expect(loaded.warnings).toEqual([]);
-    });
-
     test("keeps a recorded empty warnings array authoritative over changes", () => {
       const diff = {
         version: SCHEMA_SNAPSHOT_VERSION,

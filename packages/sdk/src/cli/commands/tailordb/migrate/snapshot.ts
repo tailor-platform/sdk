@@ -571,15 +571,9 @@ const TYPE_REMOVED_WARNING_REASON =
  * @returns {WarningChangeInfo[]} Warnings equivalent to what diff generation would have recorded
  */
 function deriveWarningsFromChanges(diff: MigrationDiff): WarningChangeInfo[] {
-  const breakingFields = new Set(
-    diff.breakingChanges.map((breaking) => `${breaking.typeName}.${breaking.fieldName ?? ""}`),
-  );
   const warnings: WarningChangeInfo[] = [];
   for (const change of diff.changes) {
     if (change.kind === "field_removed") {
-      // Removals classified as breaking are gated by requiresMigrationScript
-      // and were never recorded as warnings.
-      if (breakingFields.has(`${change.typeName}.${change.fieldName}`)) continue;
       warnings.push({
         typeName: change.typeName,
         fieldName: change.fieldName,
