@@ -578,17 +578,46 @@ export function loadDiff(filePath: string): MigrationDiff {
   }
   const parsed = result.data;
   // Backfill fields introduced after the initial diff.json schema so that older
-  // migrations on disk remain readable without manual edits. hasWarnings is
-  // derived from the warnings array to stay consistent even if a hand-edited
-  // diff.json sets one side without the other.
+  // migrations on disk remain readable without manual edits. A missing warnings
+  // field (pre-warning-tier diff.json) is reconstructed from the recorded
+  // removal changes so those migrations keep their data-loss classification.
+  // hasWarnings is derived from the warnings array to stay consistent even if
+  // a hand-edited diff.json sets one side without the other.
   // `warnings` is optional in the schema (backcompat) but cast to required; guard for safety
   // oxlint-disable-next-line typescript/no-unnecessary-condition
-  const warnings = parsed.warnings ?? [];
+  const warnings = parsed.warnings ?? deriveWarningsFromChanges(parsed);
   return {
     ...parsed,
     warnings,
     hasWarnings: warnings.length > 0,
   };
+}
+
+const FIELD_REMOVED_WARNING_REASON =
+  "Field removed (existing data will no longer be accessible through the schema)";
+const TYPE_REMOVED_WARNING_REASON =
+  "Type removed (all records of this type will be deleted during post-migration cleanup)";
+
+/**
+ * Reconstruct data-loss warnings from removal changes for diff.json files
+ * written before the warning tier existed
+ * @param {MigrationDiff} diff - Parsed legacy migration diff
+ * @returns {WarningChangeInfo[]} Warnings equivalent to what diff generation would have recorded
+ */
+function deriveWarningsFromChanges(diff: MigrationDiff): WarningChangeInfo[] {
+  const warnings: WarningChangeInfo[] = [];
+  for (const change of diff.changes) {
+    if (change.kind === "field_removed") {
+      warnings.push({
+        typeName: change.typeName,
+        fieldName: change.fieldName,
+        reason: FIELD_REMOVED_WARNING_REASON,
+      });
+    } else if (change.kind === "type_removed") {
+      warnings.push({ typeName: change.typeName, reason: TYPE_REMOVED_WARNING_REASON });
+    }
+  }
+  return warnings;
 }
 
 /**
@@ -1198,7 +1227,7 @@ function addChange(
     ctx.warnings.push({
       typeName: change.typeName,
       fieldName: change.fieldName,
-      reason: "Field removed (existing data will no longer be accessible through the schema)",
+      reason: FIELD_REMOVED_WARNING_REASON,
     });
   }
 }
@@ -1786,8 +1815,7 @@ function compareNormalizedSnapshots(
       });
       ctx.warnings.push({
         typeName,
-        reason:
-          "Type removed (all records of this type will be deleted during post-migration cleanup)",
+        reason: TYPE_REMOVED_WARNING_REASON,
       });
     }
   }

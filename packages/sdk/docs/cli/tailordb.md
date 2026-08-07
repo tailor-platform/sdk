@@ -181,6 +181,10 @@ tailor tailordb migration script [options] <number>
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
+**Notes**
+
+When `migrate.ts` already exists, running the command clears a previously recorded `--no-script` acknowledgment.
+
 #### tailordb migration set
 
 Set migration checkpoint to a specific number.
@@ -311,12 +315,13 @@ tailor tailordb migration validate [options]
 
 **Options**
 
-| Option                          | Alias | Description                                                           | Required | Default              | Env                            |
-| ------------------------------- | ----- | --------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
-| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                          | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
-| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                     | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
-| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
-| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (validates all namespaces if not specified) | No       | -                    | -                              |
+| Option                          | Alias | Description                                                                | Required | Default              | Env                            |
+| ------------------------------- | ----- | -------------------------------------------------------------------------- | -------- | -------------------- | ------------------------------ |
+| `--workspace-id <WORKSPACE_ID>` | `-w`  | Workspace ID                                                               | No       | -                    | `TAILOR_PLATFORM_WORKSPACE_ID` |
+| `--profile <PROFILE>`           | `-p`  | Workspace profile                                                          | No       | -                    | `TAILOR_PLATFORM_PROFILE`      |
+| `--config <CONFIG>`             | `-c`  | Path to Tailor config file                                                 | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH`           |
+| `--namespace <NAMESPACE>`       | `-n`  | Target TailorDB namespace (validates all namespaces if not specified)      | No       | -                    | -                              |
+| `--strict`                      | -     | Also fail when a pending migration can drop data without an acknowledgment | No       | `false`              | -                              |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

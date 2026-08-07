@@ -131,6 +131,14 @@ tailor tailordb migration script 0002
 
 This writes `migrations/0002/migrate.ts` and `migrations/0002/db.ts` next to the existing `diff.json`. The removed field stays readable inside `migrate.ts` because the pre-migration phase keeps it on the type until the script finishes (see [Per-migration phases](#per-migration-phases)). The next `tailor deploy` runs the script automatically — `migrate.ts` is executed whenever the file exists on disk, regardless of whether the diff itself required it.
 
+If the data loss is intentional and no script is needed, record that decision the same way as for breaking changes (see [Breaking changes without a script](#breaking-changes-without-a-script)):
+
+```bash
+tailor tailordb migration script 0002 --no-script --reason "column no longer needed, data can be dropped"
+```
+
+In an interactive session, `migration generate` offers to record the reason on the spot when it detects warnings. The acknowledgment is stored in `diff.json`, so it is reviewable in the PR, and it satisfies `migration validate --strict` — useful for enforcing in CI that destructive changes are explicitly acknowledged before merge (see [Schema verification](#schema-verification)).
+
 ### Breaking changes without a script
 
 Breaking changes require `migrate.ts`. If it is missing at deploy time (for example, the generated script was deleted), `tailor deploy` fails before applying the migration or anything after it. When there is genuinely nothing to migrate — say, the affected type holds no data yet — record an explicit acknowledgment instead of keeping an empty script:
@@ -139,7 +147,7 @@ Breaking changes require `migrate.ts`. If it is missing at deploy time (for exam
 tailor tailordb migration script 0002 --no-script --reason "no data yet, safe to skip"
 ```
 
-This stores the reason in `migrations/0002/diff.json` (commit the change). The next `tailor deploy` applies the schema change as usual, skips only the script step, and logs the recorded reason. The command refuses to record a skip while `migrate.ts` exists — delete the script first. If `migrate.ts` is added back later, the script takes precedence over the acknowledgment and runs.
+This stores the reason in `migrations/0002/diff.json` (commit the change). The next `tailor deploy` applies the schema change as usual, skips only the script step, and logs the recorded reason. The command refuses to record a skip while `migrate.ts` exists — delete the script first. If `migrate.ts` is added back later, the script takes precedence over the acknowledgment and runs; run `tailor tailordb migration script 0002` again to clear the now-stale acknowledgment from `diff.json`.
 
 ## Configuration
 
@@ -454,6 +462,8 @@ tailor tailordb migration validate
 
 It reports issues per namespace, exits with a non-zero code when any check fails, and supports `--json` for machine-readable output.
 
+With `--strict`, validation additionally fails when a migration not yet applied to the remote has data-loss warnings (see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts)) but neither a `migrate.ts` nor a recorded `--no-script` acknowledgment. The failure names the affected type and field and prints the exact command to record the acknowledgment.
+
 To bypass both checks during deploy (not recommended outside of recovery scenarios):
 
 ```bash
@@ -554,7 +564,7 @@ When your branch and main each generated the same number, merging or rebasing st
 ### CI / CD
 
 - For non-interactive environments, pass `--yes` to `migration generate` and `--yes` to `apply`. `apply` runs migrations automatically when the `migrations/` directory is configured.
-- Run `tailor tailordb migration validate` in CI to catch uncommitted migrations, broken migration files, unreviewed generated normalization logic, and remote schema drift before deploying. It exits with a non-zero code when validation fails and supports `--json`.
+- Run `tailor tailordb migration validate` in CI to catch uncommitted migrations, broken migration files, unreviewed generated normalization logic, and remote schema drift before deploying. It exits with a non-zero code when validation fails and supports `--json`. Add `--strict` to also require an explicit acknowledgment (a `migrate.ts` or a recorded `--no-script` reason) for every pending migration that can drop data, so destructive changes cannot merge unnoticed.
 - `tailor tailordb migration status` validates file-format compatibility across the full local history, compares its history ID with the deployed namespace, and shows applied and pending migrations for a human-readable comparison. Its exit code is non-zero on incompatible files, migration history mismatches, and remote read errors, so check the output.
 - Avoid running migrations in parallel against the same workspace — there is no locking. Serialize deploys per environment.
 

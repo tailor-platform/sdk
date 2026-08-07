@@ -47,7 +47,8 @@ export interface MarkScriptSkippedOptions {
 }
 
 /**
- * Record in diff.json that a migration requiring a script intentionally has none.
+ * Record in diff.json that a migration requiring a script, or one with
+ * data-loss warnings, intentionally has none.
  * @param {MarkScriptSkippedOptions} options - Target migration and skip reason
  * @returns {ScriptSkippedInfo} The recorded acknowledgment
  */
@@ -65,8 +66,10 @@ export function markMigrationScriptSkipped(options: MarkScriptSkippedOptions): S
   }
 
   const diff = loadDiff(diffPath);
-  if (!diff.requiresMigrationScript) {
-    throw new Error(`Migration ${label} does not require a migration script; nothing to skip.`);
+  if (!diff.requiresMigrationScript && !diff.hasWarnings) {
+    throw new Error(
+      `Migration ${label} does not require a migration script and has no data-loss warnings; nothing to skip.`,
+    );
   }
   if (diff.scriptSkipped) {
     throw new Error(
@@ -164,12 +167,22 @@ async function script(options: ScriptOptions): Promise<void> {
     );
   }
 
+  const diff = loadDiff(diffPath);
+
   const migratePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
   if (fs.existsSync(migratePath)) {
+    // A hand-placed migrate.ts takes precedence over an earlier --no-script
+    // acknowledgment; clear the stale record instead of failing.
+    if (diff.scriptSkipped) {
+      clearMigrationScriptSkipped(diffPath);
+      logger.success(
+        `Cleared the stale script skip record for migration ${styles.bold(options.number)} in namespace ${styles.bold(targetNamespace)}`,
+      );
+      logger.info(`  Migration script: ${migratePath}`);
+      return;
+    }
     throw new Error(`Migration script already exists at ${migratePath}.`);
   }
-
-  const diff = loadDiff(diffPath);
 
   // Reconstruct the schema state immediately before this migration so that
   // db.ts has Kysely types for the previous shape of the data.
@@ -230,6 +243,7 @@ export const scriptCommand = defineAppCommand({
   name: "script",
   description:
     "Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.",
+  notes: `When \`migrate.ts\` already exists, running the command clears a previously recorded \`--no-script\` acknowledgment.`,
   args: z.strictObject({
     ...configArg,
     number: arg(z.string(), {
