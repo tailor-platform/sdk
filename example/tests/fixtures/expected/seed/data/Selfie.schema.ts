@@ -8,10 +8,10 @@ const schemaType = t.object({
   ...selfie.omitFields(["id"]),
 });
 
-const hook = createTailorDBHook(selfie);
+export const hook = createTailorDBHook(selfie);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook),
+  createStandardSchema(schemaType, hook, selfie),
   {
     foreignKeys: [
       {"column":"parentID","references":{"table":"Selfie","column":"id"}},

@@ -160,6 +160,20 @@ describe("snapshot-manifest", () => {
       expect(manifest.schema?.fields?.tags?.array).toBe(true);
     });
 
+    test("preserves a field named __proto__", () => {
+      const snapshotType = createTestSnapshotType("User", {
+        fields: Object.fromEntries([
+          ["id", { type: "uuid", required: true }],
+          ["__proto__", { type: "string", required: false }],
+        ]),
+      });
+
+      const manifest = generateTailorDBTypeManifestFromSnapshot(snapshotType);
+
+      expect(Object.hasOwn(manifest.schema?.fields ?? {}, "__proto__")).toBe(true);
+      expect(manifest.schema?.fields?.__proto__?.type).toBe("string");
+    });
+
     test("handles foreign key relationships", () => {
       const snapshotType = createTestSnapshotType("Post", {
         fields: {

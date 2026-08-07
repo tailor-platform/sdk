@@ -126,6 +126,14 @@ export interface FieldRenamedChange extends DiffChangeBase {
   after: SnapshotFieldConfig;
 }
 
+/** A field type changed and must remain on the previous type until Post-phase. */
+export interface FieldTypeModifiedChange extends DiffChangeBase {
+  kind: "field_type_modified";
+  fieldName: string;
+  before: SnapshotFieldConfig;
+  after: SnapshotFieldConfig;
+}
+
 /** An index was added to a type. */
 export interface IndexAddedChange extends DiffChangeBase {
   kind: "index_added";
@@ -236,6 +244,7 @@ export type DiffChange =
   | FieldRemovedChange
   | FieldModifiedChange
   | FieldRenamedChange
+  | FieldTypeModifiedChange
   | IndexAddedChange
   | IndexRemovedChange
   | IndexModifiedChange
@@ -255,7 +264,8 @@ export type FieldDiffChange =
   | FieldAddedChange
   | FieldRemovedChange
   | FieldModifiedChange
-  | FieldRenamedChange;
+  | FieldRenamedChange
+  | FieldTypeModifiedChange;
 
 /**
  * Index-level diff change (added / removed / modified).
@@ -385,6 +395,7 @@ function formatDiffChange(change: DiffChange): string {
     case "field_removed":
       return `  - ${change.fieldName}: ${change.before.type}`;
     case "field_modified":
+    case "field_type_modified":
       return `  ~ ${change.fieldName}: ${formatFieldModification(change.before, change.after)}`;
     case "field_renamed":
       return `  ~ ${change.previousFieldName} → ${change.fieldName}: ${formatFieldType(change.after)} (renamed)`;
@@ -545,6 +556,7 @@ const DIFF_CHANGE_LABELS: Record<DiffChangeKind, string> = {
   field_removed: "field(s) removed",
   field_modified: "field(s) modified",
   field_renamed: "field(s) renamed",
+  field_type_modified: "field type(s) modified",
   index_added: "index(es) added",
   index_removed: "index(es) removed",
   index_modified: "index(es) modified",

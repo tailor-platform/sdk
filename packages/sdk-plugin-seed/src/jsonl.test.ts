@@ -84,6 +84,13 @@ describe("loadSeedData", () => {
     },
   );
 
+  test("points at `tailor seed fill` when an id is missing", () => {
+    const dir = makeDataDir({ "Customer.jsonl": '{"name":"Alice"}\n' });
+    expect(() => loadSeedData(dir, ["Customer"], { requireId: true })).toThrow(
+      /Run `tailor seed fill` to write an id/,
+    );
+  });
+
   test("allows a missing id when requireId is not set", () => {
     const dir = makeDataDir({ "Customer.jsonl": '{"name":"Alice"}\n' });
     expect(loadSeedData(dir, ["Customer"])).toEqual({ Customer: [{ name: "Alice" }] });

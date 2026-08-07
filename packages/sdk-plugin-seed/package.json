@@ -9,16 +9,17 @@
     "directory": "packages/sdk-plugin-seed"
   },
   "bin": {
-    "tailor-seed": "./dist/index.js"
+    "tailor-seed": "./bin/cli.mjs"
   },
   "files": [
+    "bin",
     "CHANGELOG.md",
     "dist",
     "README.md"
   ],
   "type": "module",
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && politty generate-shim --entry ../dist/index.js",
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "typecheck": "tsc --noEmit",
@@ -27,7 +28,6 @@
     "publint": "publint --strict"
   },
   "dependencies": {
-    "chalk": "5.6.2",
     "pathe": "2.0.3",
     "pkg-types": "2.3.1",
     "politty": "0.11.6",
@@ -35,6 +35,7 @@
   },
   "devDependencies": {
     "@tailor-platform/sdk": "workspace:^",
+    "@tailor-platform/shared": "workspace:^",
     "@types/node": "24.13.3",
     "eslint-plugin-zod": "4.9.0",
     "oxlint": "1.76.0",
@@ -44,5 +45,9 @@
   },
   "peerDependencies": {
     "@tailor-platform/sdk": "workspace:^"
+  },
+  "engines": {
+    "bun": ">=1.2.0",
+    "node": ">=22.15.0"
   }
 }

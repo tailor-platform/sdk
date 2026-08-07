@@ -12,6 +12,8 @@
  *   value removed: keep the looser side until Post-phase.
  * - `field_renamed`: keep the old field (readable by migrate.ts) and relax
  *   the new field's required/unique constraints until Post-phase.
+ * - `field_type_modified`: keep the complete previous field config until
+ *   Post-phase so migrate.ts runs against the previous type contract.
  *
  * and the type-level index adjustments:
  *
@@ -28,7 +30,13 @@
 
 import { isBreakingIndexChange } from "./snapshot";
 import { convertFieldConfigToProto, convertIndexToProto } from "./snapshot-manifest";
-import type { DiffChange, FieldDiffChange, IndexDiffChange } from "./diff-calculator";
+import type {
+  DiffChange,
+  FieldDiffChange,
+  IndexDiffChange,
+  TypeScriptsModifiedChange,
+} from "./diff-calculator";
+import type { TailorDBSnapshotType } from "./snapshot-types";
 import type { PendingMigration } from "./types";
 import type { MessageInitShape } from "@bufbuild/protobuf";
 import type {
@@ -42,6 +50,7 @@ import type {
 const PRE_MIGRATION_FIELD_KINDS = new Set<DiffChange["kind"]>([
   "field_added",
   "field_modified",
+  "field_type_modified",
   "field_removed",
   "field_renamed",
 ]);
@@ -65,6 +74,51 @@ function isPreMigrationFieldChange(change: DiffChange): change is FieldDiffChang
  * shape.
  */
 export type PreMigrationChangesMap = Map<string, Map<string, FieldDiffChange>>;
+
+/**
+ * Create the type snapshot used to build a Pre-phase manifest.
+ *
+ * This adjustment happens before manifest generation because field hooks and
+ * validators are aggregated into type-level scripts by the manifest builder.
+ * Replacing only the generated field proto would leave those scripts on the
+ * target field contract while migrate.ts still runs against the previous one.
+ * @param snapshotType - Final snapshot state for this migration
+ * @param typeChanges - Field changes for this type, keyed by field name
+ * @param typeScriptsChange - Type-level scripts changed by the same migration
+ * @returns A snapshot with Pre-phase field contracts
+ */
+export function createPreMigrationSnapshotType(
+  snapshotType: TailorDBSnapshotType,
+  typeChanges: Map<string, FieldDiffChange>,
+  typeScriptsChange?: TypeScriptsModifiedChange,
+): TailorDBSnapshotType {
+  const fields = structuredClone(snapshotType.fields);
+  let hasFieldTypeChange = false;
+
+  for (const [fieldName, change] of typeChanges) {
+    if (change.kind !== "field_type_modified") continue;
+    hasFieldTypeChange = true;
+    fields[fieldName] = structuredClone(change.before);
+  }
+
+  const preSnapshotType = { ...snapshotType, fields };
+  if (!hasFieldTypeChange || !typeScriptsChange) return preSnapshotType;
+
+  const {
+    typeHookExpr: _targetHook,
+    typeValidateExpr: _targetValidate,
+    ...withoutTypeScripts
+  } = preSnapshotType;
+  return {
+    ...withoutTypeScripts,
+    ...(typeScriptsChange.before.typeHookExpr && {
+      typeHookExpr: structuredClone(typeScriptsChange.before.typeHookExpr),
+    }),
+    ...(typeScriptsChange.before.typeValidateExpr !== undefined && {
+      typeValidateExpr: typeScriptsChange.before.typeValidateExpr,
+    }),
+  };
+}
 
 /**
  * Build a map of field changes that require pre-migration schema adjustment.
@@ -133,6 +187,11 @@ export function applyPreMigrationFieldAdjustments(
       if (change.after.required) {
         field.required = false;
       }
+      continue;
+    }
+
+    if (change.kind === "field_type_modified") {
+      fields[fieldName] = convertFieldConfigToProto(change.before);
       continue;
     }
 

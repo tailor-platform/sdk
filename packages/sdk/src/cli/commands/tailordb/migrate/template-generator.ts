@@ -19,6 +19,9 @@ import {
 } from "./snapshot";
 import type { MigrationDiff, DiffChange, FieldRenamedChange } from "./diff-calculator";
 
+/** Marker left in generated migration scripts until their normalization logic is reviewed. */
+export const MIGRATION_REVIEW_REQUIRED_MARKER = "TODO(tailor-migration-review)";
+
 /**
  * Check if a file exists
  * @param {string} filePath - Path to check
@@ -263,12 +266,12 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
       (change.after.unique ?? false) &&
       (!(change.before.unique ?? false) || renameCopyCanCollapseValues(change))
     ) {
-      scripts.push(generateUniqueDedupeScript(change.typeName, change.fieldName));
+      scripts.push(generateUniqueDedupeScript(change.typeName, change.fieldName, "suffix"));
     }
     return scripts;
   }
 
-  if (change.kind !== "field_modified") {
+  if (change.kind !== "field_modified" && change.kind !== "field_type_modified") {
     // No data migration needed for type_added, type_removed, or field_removed
     return [];
   }
@@ -276,8 +279,9 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
   const { before, after } = change;
   const scripts: string[] = [];
 
-  // Note: Type change is rejected as unsupported in generate.ts
-  // No script generation needed here
+  if (change.kind === "field_type_modified") {
+    scripts.push(generateFieldTypeChangeScript(change));
+  }
 
   // Optional to required
   if (!before.required && after.required) {
@@ -371,16 +375,77 @@ function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
     .execute();`;
 }
 
+function generateFieldTypeChangeScript(
+  change: Extract<DiffChange, { kind: "field_type_modified" }>,
+): string {
+  return `  // Normalize ${change.typeName}.${change.fieldName} from ${change.before.type} to ${change.after.type} while the previous type is still active
+  {
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
+        .selectFrom("${change.typeName}")
+        .select(["id", "${change.fieldName}"])
+        .where("${change.fieldName}", "is not", null)
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        // ${MIGRATION_REVIEW_REQUIRED_MARKER}: Remove this marker and the \`never\` annotation after reviewing the normalization.
+        // Keep the value accepted by the active ${change.before.type} type and castable to ${change.after.type}.
+        const sourceValue = row.${change.fieldName};
+        if (sourceValue === null) continue;
+        const normalizedValue: never = sourceValue;
+        if (Object.is(normalizedValue, sourceValue)) continue;
+        await trx
+          .updateTable("${change.typeName}")
+          .set({ [${JSON.stringify(change.fieldName)}]: normalizedValue })
+          .where("id", "=", row.id)
+          .execute();
+      }
+      lastId = rows[rows.length - 1]!.id;
+    }
+  }`;
+}
+
 function generateUniqueConstraintScript(change: DiffChange): string | null {
-  if (change.kind !== "field_modified") return null;
+  if (change.kind !== "field_modified" && change.kind !== "field_type_modified") return null;
 
   const { before, after } = change;
   if ((before.unique ?? false) || !(after.unique ?? false)) return null;
 
-  return generateUniqueDedupeScript(change.typeName, change.fieldName);
+  return generateUniqueDedupeScript(
+    change.typeName,
+    change.fieldName,
+    change.kind === "field_type_modified" ? "throw" : "suffix",
+  );
 }
 
-function generateUniqueDedupeScript(typeName: string, fieldName: string): string {
+function generateUniqueDedupeScript(
+  typeName: string,
+  fieldName: string,
+  resolution: "suffix" | "throw",
+): string {
+  const duplicateResolution =
+    resolution === "throw"
+      ? `      if (records.length > 1) {
+        throw new Error(
+          "TODO: Resolve duplicate ${typeName}.${fieldName} values before adding the unique constraint",
+        );
+      }`
+      : `      // Keep first record, add suffix to others
+      for (let i = 1; i < records.length; i++) {
+        await trx
+          .updateTable("${typeName}")
+          .set({ ${fieldName}: \`\${records[i].${fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
+          .where("id", "=", records[i].id)
+          .execute();
+      }`;
+
   return `  // Ensure ${fieldName} values are unique before adding constraint
   {
     const duplicates = await trx
@@ -390,19 +455,13 @@ function generateUniqueDedupeScript(typeName: string, fieldName: string): string
       .having((eb) => eb.fn.count("id"), ">", 1)
       .execute();
     for (const dup of duplicates) {
-      // Keep first record, add suffix to others
+      // Load every record in this duplicate group before resolving it
       const records = await trx
         .selectFrom("${typeName}")
         .select(["id", "${fieldName}"])
         .where("${fieldName}", "=", dup.${fieldName})
         .execute();
-      for (let i = 1; i < records.length; i++) {
-        await trx
-          .updateTable("${typeName}")
-          .set({ ${fieldName}: \`\${records[i].${fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
-          .where("id", "=", records[i].id)
-          .execute();
-      }
+${duplicateResolution}
     }
   }`;
 }

@@ -5,6 +5,7 @@
 import type { AIGatewayConfig } from "#/configure/services/aigateway/types";
 import type { AuthConfig } from "#/configure/services/auth/types";
 import type { IdPConfig } from "#/configure/services/idp/types";
+import type { ResolverPermission } from "#/configure/services/resolver/permission";
 import type { SecretsConfig } from "#/configure/services/secrets/types";
 import type { StaticWebsiteConfig } from "#/configure/services/staticwebsite/types";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
@@ -40,8 +41,21 @@ export type ExecutorServiceInput = ExecutorServiceConfig;
 /** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
 export type HttpAdapterServiceInput = { files: string[]; ignores?: string[] };
 
-/** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
-export type ResolverServiceConfig = { files: string[]; ignores?: string[] };
+export type ResolverServiceConfig = {
+  /** `files`/`ignores` patterns are resolved relative to this config's own directory, not the invocation directory. */
+  files: string[];
+  ignores?: string[];
+  /**
+   * Access requirement applied to every resolver in this namespace that
+   * declares no `permission` of its own. Takes the same values as a
+   * resolver's `permission`, including `"allowAnonymous"` to record that the
+   * namespace is public by design.
+   *
+   * A resolver's own `permission` replaces this default rather than merging
+   * with it, so a single resolver opts out with `permission: "allowAnonymous"`.
+   */
+  defaultPermission?: ResolverPermission;
+};
 export type ResolverExternalConfig = { external: true };
 export type ResolverServiceInput = {
   [namespace: string]: ResolverServiceConfig | ResolverExternalConfig;

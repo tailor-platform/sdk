@@ -22,6 +22,7 @@ import {
   applyPreMigrationIndexAdjustments,
   buildPreMigrationChangesMap,
   buildPreMigrationIndexChangesMap,
+  createPreMigrationSnapshotType,
 } from "#/cli/commands/tailordb/migrate/pre-migration-schema";
 import {
   checkMigrationDiffs,
@@ -78,6 +79,10 @@ import {
   updateMigrationLabel,
   type MigrationContext,
 } from "./migration";
+import type {
+  FieldDiffChange,
+  TypeScriptsModifiedChange,
+} from "#/cli/commands/tailordb/migrate/diff-calculator";
 import type { PendingMigration } from "#/cli/commands/tailordb/migrate/types";
 import type { LoadedConfig } from "#/cli/shared/config-loader";
 import type { TailorDBServiceConfig } from "#/types/tailordb.generated";
@@ -477,42 +482,92 @@ export async function applyTailorDB(
             await executeMigrations(migrationCtx, [migration]);
           }
         } catch (error) {
-          // Best-effort revert of committed Pre-phase DDL; must not mask the original error.
-          try {
-            await rollbackSingleMigrationPrePhase(
-              client,
-              changeSet,
-              migration,
-              migrationContext.workspaceId,
-              migrationContext.tailorDBInputs,
-              migrationContext.executorUsedTypes,
-            );
-          } catch (rollbackError) {
-            logger.warn(
-              `Failed to roll back migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
-                `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
-            );
-          }
+          await rollbackSingleMigrationAfterFailure(
+            client,
+            changeSet,
+            migration,
+            migrationContext.workspaceId,
+            migrationContext.tailorDBInputs,
+            migrationContext.executorUsedTypes,
+          );
           throw error;
         }
 
-        // Post-migration phase: Apply final types (required: true) and deletions.
-        // Not rolled back on failure: deletions here are irreversible.
-        await executeSingleMigrationPostPhase(
-          client,
-          changeSet,
-          migration,
-          migrationContext.tailorDBInputs,
-          migrationContext.executorUsedTypes,
-        );
+        try {
+          await executeSingleMigrationPostPhase(
+            client,
+            changeSet,
+            migration,
+            migrationContext.tailorDBInputs,
+            migrationContext.executorUsedTypes,
+          );
+        } catch (error) {
+          await rollbackSingleMigrationAfterFailure(
+            client,
+            changeSet,
+            migration,
+            migrationContext.workspaceId,
+            migrationContext.tailorDBInputs,
+            migrationContext.executorUsedTypes,
+          );
+          throw error;
+        }
 
-        // Update migration label only after all phases complete successfully
-        await updateMigrationLabel(
-          client,
-          migrationContext.workspaceId,
-          migration.namespace,
-          migration.number,
-        );
+        try {
+          await updateMigrationLabel(
+            client,
+            migrationContext.workspaceId,
+            migration.namespace,
+            migration.number,
+          );
+        } catch (error) {
+          let remoteMigrationNumber: number | undefined;
+          try {
+            remoteMigrationNumber =
+              (await getRemoteMigrationNumber(
+                client,
+                migrationContext.workspaceId,
+                migration.namespace,
+              )) ?? undefined;
+          } catch (readbackError) {
+            logger.warn(
+              `Could not verify migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} after its update failed: ` +
+                `${readbackError instanceof Error ? readbackError.message : String(readbackError)}. ` +
+                "Leaving the post-migration schema unchanged to avoid rolling back a committed checkpoint.",
+            );
+            throw error;
+          }
+
+          if (remoteMigrationNumber !== undefined && remoteMigrationNumber > migration.number) {
+            throw new Error(
+              `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} advanced concurrently to ${formatMigrationNumber(remoteMigrationNumber)}. ` +
+                "Leaving the post-migration schema unchanged and aborting this deployment.",
+              { cause: error },
+            );
+          }
+
+          if (remoteMigrationNumber !== migration.number) {
+            logger.warn(
+              `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} could not be confirmed after its update failed; remote remains at ${
+                remoteMigrationNumber === undefined
+                  ? "<unset>"
+                  : formatMigrationNumber(remoteMigrationNumber)
+              }. ` +
+                "Leaving the post-migration schema unchanged to avoid rolling back a concurrent deployment. Repair the checkpoint before retrying.",
+            );
+            throw error;
+          }
+        }
+
+        try {
+          await executeSingleMigrationPostPhaseDeletions(client, changeSet, migration);
+        } catch (error) {
+          logger.warn(
+            `Migration checkpoint ${migration.namespace}/${formatMigrationNumber(migration.number)} was committed, but post-checkpoint cleanup failed. ` +
+              "Remove the leftover resources manually before the next deployment; remote schema verification will fail closed until then.",
+          );
+          throw error;
+        }
       }
 
       if (migrationsRequiringScripts.length > 0) {
@@ -752,12 +807,20 @@ function buildSnapshotTypeManifest(
   typeName: string,
   tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
   executorUsedTypes: ReadonlySet<string>,
+  typeChanges?: Map<string, FieldDiffChange>,
 ): MessageInitShape<typeof TailorDBTypeSchema> | undefined {
   const snapshot = migrationSnapshotCache.load(migration);
   const snapshotType = snapshot.types[typeName];
   if (!snapshotType) return undefined;
   const input = tailorDBInputs.find((i) => i.namespace === migration.namespace);
-  return generateTailorDBTypeManifestFromSnapshot(snapshotType, {
+  const typeScriptsChange = migration.diff.changes.find(
+    (change): change is TypeScriptsModifiedChange =>
+      change.kind === "type_scripts_modified" && change.typeName === typeName,
+  );
+  const manifestSnapshotType = typeChanges
+    ? createPreMigrationSnapshotType(snapshotType, typeChanges, typeScriptsChange)
+    : snapshotType;
+  return generateTailorDBTypeManifestFromSnapshot(manifestSnapshotType, {
     subscribed: executorUsedTypes.has(snapshotType.name),
     namespaceGqlOperations: input?.config.gqlOperations,
   });
@@ -810,18 +873,19 @@ async function executeSingleMigrationPrePhase(
     if (!typeName || !affectedTypes.has(typeName) || createdBeforeMigration.has(typeName)) {
       continue;
     }
+    const typeChanges = preMigrationChanges.get(typeName);
     const snapshotType = buildSnapshotTypeManifest(
       migration,
       typeName,
       tailorDBInputs,
       executorUsedTypes,
+      typeChanges,
     );
     if (!snapshotType) continue;
 
     const clonedRequest = structuredClone(create.request);
     clonedRequest.tailordbType = snapshotType;
 
-    const typeChanges = preMigrationChanges.get(typeName);
     if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
       applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
     }
@@ -839,16 +903,17 @@ async function executeSingleMigrationPrePhase(
     if (!typeName || !affectedTypes.has(typeName) || !createdBeforeMigration.has(typeName)) {
       continue;
     }
+    const typeChanges = preMigrationChanges.get(typeName);
     const snapshotType = buildSnapshotTypeManifest(
       migration,
       typeName,
       tailorDBInputs,
       executorUsedTypes,
+      typeChanges,
     );
     if (!snapshotType) continue;
 
     const clonedTypeRequest = structuredClone(snapshotType);
-    const typeChanges = preMigrationChanges.get(typeName);
     if (typeChanges && typeChanges.size > 0 && clonedTypeRequest.schema?.fields) {
       applyPreMigrationFieldAdjustments(clonedTypeRequest.schema.fields, typeChanges);
     }
@@ -868,18 +933,19 @@ async function executeSingleMigrationPrePhase(
   for (const update of changeSet.type.updates) {
     const typeName = update.request.tailordbType?.name;
     if (!typeName || !affectedTypes.has(typeName)) continue;
+    const typeChanges = preMigrationChanges.get(typeName);
     const snapshotType = buildSnapshotTypeManifest(
       migration,
       typeName,
       tailorDBInputs,
       executorUsedTypes,
+      typeChanges,
     );
     if (!snapshotType) continue;
 
     const clonedRequest = structuredClone(update.request);
     clonedRequest.tailordbType = snapshotType;
 
-    const typeChanges = preMigrationChanges.get(typeName);
     if (typeChanges && typeChanges.size > 0 && clonedRequest.tailordbType.schema?.fields) {
       applyPreMigrationFieldAdjustments(clonedRequest.tailordbType.schema.fields, typeChanges);
     }
@@ -944,8 +1010,33 @@ const deletedResources = {
   },
 };
 
+async function rollbackSingleMigrationAfterFailure(
+  client: OperatorClient,
+  changeSet: TailorDBChangeSet,
+  migration: PendingMigration,
+  workspaceId: string,
+  tailorDBInputs: ReadonlyArray<TailorDBDeployInput>,
+  executorUsedTypes: ReadonlySet<string>,
+): Promise<void> {
+  try {
+    await rollbackSingleMigrationPrePhase(
+      client,
+      changeSet,
+      migration,
+      workspaceId,
+      tailorDBInputs,
+      executorUsedTypes,
+    );
+  } catch (rollbackError) {
+    logger.warn(
+      `Failed to roll back migration ${migration.namespace}/${formatMigrationNumber(migration.number)}: ` +
+        `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+    );
+  }
+}
+
 /**
- * Execute post-migration phase for a single migration: Apply final types (with required: true) and deletions
+ * Execute post-migration phase for a single migration: Apply final types (with required: true)
  * @param {OperatorClient} client - Operator client instance
  * @param {TailorDBChangeSet} changeSet - TailorDB change set
  * @param {PendingMigration} migration - Single pending migration
@@ -969,7 +1060,6 @@ async function executeSingleMigrationPostPhase(
     ...preMigrationIndexChanges.keys(),
   ]);
   const affectedTypes = getAffectedTypeNames(migration);
-  const deletedTypeNames = getDeletedTypeNames(migration);
 
   // Types - apply schema as of migration N (= snapshot[N]) with all breaking
   // changes enforced. The prePhase sent the same schema with breaking fields
@@ -1021,38 +1111,35 @@ async function executeSingleMigrationPostPhase(
       "Ensure all existing records have values for fields being changed to required.",
     ]);
   }
+}
 
-  // Delete types that are removed in this migration
+async function executeSingleMigrationPostPhaseDeletions(
+  client: OperatorClient,
+  changeSet: TailorDBChangeSet,
+  migration: PendingMigration,
+): Promise<void> {
+  const deletedTypeNames = getDeletedTypeNames(migration);
   if (deletedTypeNames.size > 0) {
-    // First delete GQL permissions for the types being deleted
     const gqlPermissionsToDelete = changeSet.gqlPermission.deletes.filter((del) => {
       const permKey = `${del.request.namespaceName}/${del.name}`;
       if (deletedResources.gqlPermissions.has(permKey)) return false;
-      // Check if this permission is for a type being deleted in this migration
-      // del.name and del.request.typeName both hold the type name
       const typeName = del.name;
-      if (typeName && deletedTypeNames.has(typeName)) {
-        deletedResources.gqlPermissions.add(permKey);
-        return true;
-      }
-      return false;
+      return deletedTypeNames.has(typeName);
     });
-    await Promise.all(
-      gqlPermissionsToDelete.map((del) => client.deleteTailorDBGQLPermission(del.request)),
-    );
+    for (const del of gqlPermissionsToDelete) {
+      await client.deleteTailorDBGQLPermission(del.request);
+      deletedResources.gqlPermissions.add(`${del.request.namespaceName}/${del.name}`);
+    }
 
-    // Then delete the types
     const typesToDelete = changeSet.type.deletes.filter((del) => {
-      // del.name and del.request.tailordbTypeName both hold the type name
       const typeName = del.name;
       if (!typeName || deletedResources.types.has(typeName)) return false;
-      if (deletedTypeNames.has(typeName)) {
-        deletedResources.types.add(typeName);
-        return true;
-      }
-      return false;
+      return deletedTypeNames.has(typeName);
     });
-    await Promise.all(typesToDelete.map((del) => client.deleteTailorDBType(del.request)));
+    for (const del of typesToDelete) {
+      await client.deleteTailorDBType(del.request);
+      deletedResources.types.add(del.name);
+    }
   }
 }
 
