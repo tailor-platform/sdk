@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { styles } from "./logger";
 
 /**
  * Options for creating a CLI error
@@ -72,25 +72,25 @@ export function formatNextAction(next: CLIErrorNextAction): string {
  */
 function formatError(error: CLIError): string {
   const parts: string[] = [
-    chalk.red(`Error${error.code ? ` [${error.code}]` : ""}: ${error.message}`),
+    styles.error(`Error${error.code ? ` [${error.code}]` : ""}: ${error.message}`),
   ];
 
   if (error.details) {
-    parts.push(`\n  ${chalk.gray("Details:")} ${error.details}`);
+    parts.push(`\n  ${styles.dim("Details:")} ${error.details}`);
   }
 
   if (error.suggestion) {
-    parts.push(`\n  ${chalk.cyan("Suggestion:")} ${error.suggestion}`);
+    parts.push(`\n  ${styles.info("Suggestion:")} ${error.suggestion}`);
   }
 
   if (error.command) {
     parts.push(
-      `\n  ${chalk.gray("Help:")} Run \`tailor ${error.command} --help\` for usage information.`,
+      `\n  ${styles.dim("Help:")} Run \`tailor ${error.command} --help\` for usage information.`,
     );
   }
 
   if (error.next) {
-    parts.push(`\n  ${chalk.cyan("Next:")} Run ${formatNextAction(error.next)}.`);
+    parts.push(`\n  ${styles.info("Next:")} Run ${formatNextAction(error.next)}.`);
   }
 
   return parts.join("");

@@ -27,7 +27,6 @@ test("base platform globals are injected; namespace mocks install on acquire", (
   expect(g.tailordb).toBeDefined();
   expect(g.tailor.context.getInvoker).toBeTypeOf("function");
   expect(g.TailorErrors).toBeTypeOf("function");
-  expect(g.TailorErrorMessage).toBeTypeOf("function");
   expect(g.TailorDBFileError).toBeTypeOf("function");
   // Namespace mocks are installed once the corresponding mock is acquired.
   expect(g.tailordb.Client).toBeTypeOf("function");

@@ -110,6 +110,19 @@ describe("diff-calculator", () => {
         expected: ["~ email: required: false → true"],
       },
       {
+        name: "modified field type",
+        changes: [
+          {
+            kind: "field_type_modified",
+            typeName: "User",
+            fieldName: "age",
+            before: { type: "integer", required: false },
+            after: { type: "float", required: false },
+          },
+        ],
+        expected: ["~ age: type: integer → float"],
+      },
+      {
         name: "type addition",
         changes: [{ kind: "type_added", typeName: "NewType", after: snapshotType("NewType") }],
         expected: ["+ [Type] NewType (new type)"],
@@ -205,13 +218,13 @@ describe("diff-calculator", () => {
         {
           typeName: "User",
           fieldName: "legacyId",
-          reason: "Field removed (existing data will be dropped in the post-migration phase)",
+          reason: "Field removed (existing data will no longer be accessible through the schema)",
         },
       ];
       const result = formatWarnings(warnings);
       expect(result).toContain("Warning: data loss possible:");
       expect(result).toContain(
-        "User.legacyId: Field removed (existing data will be dropped in the post-migration phase)",
+        "User.legacyId: Field removed (existing data will no longer be accessible through the schema)",
       );
     });
 
@@ -220,11 +233,11 @@ describe("diff-calculator", () => {
         {
           typeName: "OldType",
           reason:
-            "Type removed (all records of this type will be dropped in the post-migration phase)",
+            "Type removed (all records of this type will be deleted during post-migration cleanup)",
         },
       ];
       expect(formatWarnings(warnings)).toContain(
-        "OldType: Type removed (all records of this type will be dropped in the post-migration phase)",
+        "OldType: Type removed (all records of this type will be deleted during post-migration cleanup)",
       );
     });
 
@@ -294,6 +307,19 @@ describe("diff-calculator", () => {
           },
         ],
         expected: ["1 field(s) modified"],
+      },
+      {
+        name: "field types modified",
+        changes: [
+          {
+            kind: "field_type_modified",
+            typeName: "User",
+            fieldName: "age",
+            before: { type: "integer", required: false },
+            after: { type: "float", required: false },
+          },
+        ],
+        expected: ["1 field type(s) modified"],
       },
       {
         name: "multiple counts",

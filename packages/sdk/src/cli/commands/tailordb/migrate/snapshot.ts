@@ -39,6 +39,7 @@ import {
   MIN_SUPPORTED_MIGRATION_FILE_VERSION,
   SCHEMA_SNAPSHOT_VERSION,
 } from "./diff-calculator";
+import { supportsInPlaceFieldTypeChange } from "./field-type-change";
 import { formatMigrationNumber } from "./migration-number";
 import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
 import type {
@@ -713,7 +714,8 @@ function applyDiffToSnapshot(
         break;
       }
       case "field_added":
-      case "field_modified": {
+      case "field_modified":
+      case "field_type_modified": {
         const existing = types[change.typeName];
         if (existing) {
           const fields = copySnapshotRecord(existing.fields);
@@ -1069,14 +1071,15 @@ function getBreakingFieldChanges(
     });
   }
 
-  // Field type changed - unsupported (requires 3-step migration)
+  // Compatible scalar type changes use a phased in-place migration. Other
+  // pairs still require expand-contract migration support.
   if (oldField && newField && oldField.type !== newField.type) {
+    const supported = supportsInPlaceFieldTypeChange(oldField, newField);
     breakingChanges.push({
       typeName,
       fieldName,
       reason: `Field type changed from ${oldField.type} to ${newField.type}`,
-      unsupported: true,
-      showThreeStepHint: true,
+      ...(!supported && { unsupported: true, showThreeStepHint: true }),
     });
   }
 
@@ -1188,14 +1191,14 @@ function addChange(
     return;
   }
 
-  // Non-breaking removal still risks data loss: surface as a warning so users
+  // Non-breaking removal still risks losing schema access: surface a warning so users
   // can decide whether to add a migration script (e.g. JOIN through a
   // soon-to-be-dropped foreign key before it disappears).
   if (change.kind === "field_removed") {
     ctx.warnings.push({
       typeName: change.typeName,
       fieldName: change.fieldName,
-      reason: "Field removed (existing data will be dropped in the post-migration phase)",
+      reason: "Field removed (existing data will no longer be accessible through the schema)",
     });
   }
 }
@@ -1268,7 +1271,7 @@ function compareTypeFields(
       addChange(
         ctx,
         {
-          kind: "field_modified",
+          kind: prevField.type === currField.type ? "field_modified" : "field_type_modified",
           typeName,
           fieldName,
           before: prevField,
@@ -1784,7 +1787,7 @@ function compareNormalizedSnapshots(
       ctx.warnings.push({
         typeName,
         reason:
-          "Type removed (all records of this type will be dropped in the post-migration phase)",
+          "Type removed (all records of this type will be deleted during post-migration cleanup)",
       });
     }
   }
@@ -2939,7 +2942,7 @@ function createRemoteComparableSnapshot(snapshot: SchemaSnapshot): NormalizedSch
 }
 
 function fieldDriftFromChange(
-  change: Extract<DiffChange, { kind: "field_modified" }>,
+  change: Extract<DiffChange, { kind: "field_modified" | "field_type_modified" }>,
 ): SchemaDrift {
   return (
     compareFields(change.typeName, change.fieldName, change.before, change.after) ?? {
@@ -2987,6 +2990,7 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
         details: `Field '${change.fieldName}' exists in remote but not in snapshot`,
       };
     case "field_modified":
+    case "field_type_modified":
       return fieldDriftFromChange(change);
     case "index_added":
       return {

@@ -1,7 +1,7 @@
 import { Code, ConnectError } from "@connectrpc/connect";
 import { describe, test, expect, vi, aroundEach } from "vitest";
 import { MAX_PAGE_SIZE, type OperatorClient } from "#/cli/shared/client";
-import { logger } from "#/cli/shared/logger";
+import { logger, symbols } from "#/cli/shared/logger";
 import { sdkNameLabelKey } from "./label";
 import { applyWorkflow, formatWorkflowChangeEntries, planWorkflow } from "./workflow";
 import type { Workflow, WorkflowJob } from "#/types/workflow.generated";
@@ -1185,7 +1185,7 @@ describe("formatWorkflowChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "update",
-        symbol: "~",
+        symbol: symbols.update,
         name: "order-processing",
         labels: ["workflow", "function"],
       },
@@ -1211,7 +1211,7 @@ describe("formatWorkflowChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "update",
-        symbol: "~",
+        symbol: symbols.update,
         name: "process-order",
         labels: ["function"],
       },
@@ -1245,7 +1245,7 @@ describe("formatWorkflowChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "delete",
-        symbol: "-",
+        symbol: symbols.delete,
         name: "order-processing",
         labels: ["workflow", "function"],
       },
@@ -1279,13 +1279,13 @@ describe("formatWorkflowChangeEntries", () => {
     expect(entries).toEqual([
       {
         action: "delete",
-        symbol: "-",
+        symbol: symbols.delete,
         name: "order-processing",
         labels: ["workflow"],
       },
       {
         action: "delete",
-        symbol: "-",
+        symbol: symbols.delete,
         name: "send-notification",
         labels: ["function"],
       },

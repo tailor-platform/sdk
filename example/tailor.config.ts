@@ -138,7 +138,10 @@ export default defineConfig({
     },
   },
   resolver: {
-    "my-resolver": { files: ["./resolvers/*.ts"] },
+    "my-resolver": {
+      files: ["./resolvers/*.ts"],
+      defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    },
   },
   idp: [idp],
   auth,

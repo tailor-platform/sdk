@@ -115,12 +115,14 @@ export function generateTailorDBTypeManifestFromSnapshot(
   }
 
   // Build fields
-  const fields: Record<string, MessageInitShape<typeof TailorDBType_FieldConfigSchema>> = {};
-  for (const [fieldName, fieldConfig] of Object.entries(snapshotType.fields)) {
-    if (fieldName === "id") continue;
-    const fieldProto = convertFieldConfigToProto(fieldConfig);
-    fields[fieldName] = fieldProto;
-  }
+  const fields: Record<
+    string,
+    MessageInitShape<typeof TailorDBType_FieldConfigSchema>
+  > = Object.fromEntries(
+    Object.entries(snapshotType.fields)
+      .filter(([fieldName]) => fieldName !== "id")
+      .map(([fieldName, fieldConfig]) => [fieldName, convertFieldConfigToProto(fieldConfig)]),
+  );
 
   // Build relationships
   const relationships: Record<
