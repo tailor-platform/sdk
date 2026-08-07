@@ -663,7 +663,7 @@ describe("snapshot", () => {
       test("records a single breaking field_renamed change", () => {
         const diff = compareRawSnapshots(previous(), current(), {
           fieldRenames: [
-            { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" },
+            { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
           ],
         });
 
@@ -705,7 +705,7 @@ describe("snapshot", () => {
         expect(() =>
           compareRawSnapshots(previous(), current(), {
             fieldRenames: [
-              { typeName: "User", fromFieldName: "nickname", toFieldName: "displayName" },
+              { typeName: "User", previousFieldName: "nickname", fieldName: "displayName" },
             ],
           }),
         ).toThrow('field "nickname" does not exist in the previous schema');
@@ -714,7 +714,7 @@ describe("snapshot", () => {
       test("rejects a rename whose new field is missing from the current schema", () => {
         expect(() =>
           compareRawSnapshots(previous(), current(), {
-            fieldRenames: [{ typeName: "User", fromFieldName: "fullName", toFieldName: "alias" }],
+            fieldRenames: [{ typeName: "User", previousFieldName: "fullName", fieldName: "alias" }],
           }),
         ).toThrow('field "alias" does not exist in the current schema');
       });
@@ -726,7 +726,7 @@ describe("snapshot", () => {
         expect(() =>
           compareRawSnapshots(previous(), incompatibleCurrent, {
             fieldRenames: [
-              { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" },
+              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
             ],
           }),
         ).toThrow("not rename-compatible");
@@ -739,7 +739,7 @@ describe("snapshot", () => {
         expect(() =>
           compareRawSnapshots(previous(), arrayCurrent, {
             fieldRenames: [
-              { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" },
+              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
             ],
           }),
         ).toThrow("not rename-compatible");
@@ -749,8 +749,8 @@ describe("snapshot", () => {
         expect(() =>
           compareRawSnapshots(previous(), current(), {
             fieldRenames: [
-              { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" },
-              { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" },
+              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
+              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
             ],
           }),
         ).toThrow("appears in more than one rename");
@@ -760,7 +760,7 @@ describe("snapshot", () => {
         expect(() =>
           compareRawSnapshots(previous(), current(), {
             fieldRenames: [
-              { typeName: "Ghost", fromFieldName: "fullName", toFieldName: "displayName" },
+              { typeName: "Ghost", previousFieldName: "fullName", fieldName: "displayName" },
             ],
           }),
         ).toThrow('type "Ghost" must exist');

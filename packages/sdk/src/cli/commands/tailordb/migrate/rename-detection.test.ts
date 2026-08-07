@@ -226,7 +226,7 @@ describe("renameSpecApplies", () => {
     createdAt: new Date().toISOString(),
     types: { User: { name: "User", pluralForm: "Users", fields } },
   });
-  const spec = { typeName: "User", fromFieldName: "fullName", toFieldName: "displayName" };
+  const spec = { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" };
 
   test("matches a removed + added pair", () => {
     expect(
@@ -315,8 +315,8 @@ describe("parseRenameOption", () => {
   test("parses Type.old:new", () => {
     expect(parseRenameOption("User.fullName:displayName")).toEqual({
       typeName: "User",
-      fromFieldName: "fullName",
-      toFieldName: "displayName",
+      previousFieldName: "fullName",
+      fieldName: "displayName",
     });
   });
 

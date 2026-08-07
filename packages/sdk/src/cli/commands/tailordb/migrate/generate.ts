@@ -181,12 +181,12 @@ export async function generate(options: GenerateOptions): Promise<void> {
     dropFlags.map(({ spec }) => `${spec.typeName}.${spec.fieldName}`),
   );
   const conflictingFlags = renameFlags.filter(({ spec }) =>
-    droppedFieldKeys.has(`${spec.typeName}.${spec.fromFieldName}`),
+    droppedFieldKeys.has(`${spec.typeName}.${spec.previousFieldName}`),
   );
   if (conflictingFlags.length > 0) {
     throw new Error(
       `--rename and --drop conflict for: ${conflictingFlags
-        .map(({ spec }) => `${spec.typeName}.${spec.fromFieldName}`)
+        .map(({ spec }) => `${spec.typeName}.${spec.previousFieldName}`)
         .join(", ")}`,
     );
   }
@@ -456,8 +456,8 @@ async function resolveFieldRenames(
   const confirmed: FieldRenameSpec[] = [...flagRenameSpecs];
   const claimedFields = new Set(
     confirmed.flatMap((spec) => [
-      `${spec.typeName}.${spec.fromFieldName}`,
-      `${spec.typeName}.${spec.toFieldName}`,
+      `${spec.typeName}.${spec.previousFieldName}`,
+      `${spec.typeName}.${spec.fieldName}`,
     ]),
   );
   const droppedFields = new Set(flagDropSpecs.map((spec) => `${spec.typeName}.${spec.fieldName}`));
@@ -486,8 +486,8 @@ async function resolveFieldRenames(
       if (newFieldName) {
         confirmed.push({
           typeName: candidate.typeName,
-          fromFieldName: candidate.removed.fieldName,
-          toFieldName: newFieldName,
+          previousFieldName: candidate.removed.fieldName,
+          fieldName: newFieldName,
         });
         claimedFields.add(`${candidate.typeName}.${candidate.removed.fieldName}`);
         claimedFields.add(`${candidate.typeName}.${newFieldName}`);

@@ -1192,30 +1192,30 @@ function compareTypeFields(
 ): void {
   const prevFieldNames = new Set(Object.keys(prevType.fields));
   const currFieldNames = new Set(Object.keys(currType.fields));
-  const renamedFromNames = new Set(fieldRenames.map((r) => r.fromFieldName));
-  const renamedToNames = new Set(fieldRenames.map((r) => r.toFieldName));
+  const renamedFromNames = new Set(fieldRenames.map((r) => r.previousFieldName));
+  const renamedToNames = new Set(fieldRenames.map((r) => r.fieldName));
 
   for (const rename of fieldRenames) {
     const prevField = assertDefined(
-      prevType.fields[rename.fromFieldName],
-      `renamed field "${rename.fromFieldName}" missing from prevType`,
+      prevType.fields[rename.previousFieldName],
+      `renamed field "${rename.previousFieldName}" missing from prevType`,
     );
     const currField = assertDefined(
-      currType.fields[rename.toFieldName],
-      `renamed field "${rename.toFieldName}" missing from currType`,
+      currType.fields[rename.fieldName],
+      `renamed field "${rename.fieldName}" missing from currType`,
     );
     ctx.changes.push({
       kind: "field_renamed",
       typeName,
-      fieldName: rename.toFieldName,
-      previousFieldName: rename.fromFieldName,
+      fieldName: rename.fieldName,
+      previousFieldName: rename.previousFieldName,
       before: prevField,
       after: currField,
     });
     ctx.breakingChanges.push({
       typeName,
-      fieldName: rename.toFieldName,
-      reason: `Field renamed from ${rename.fromFieldName} to ${rename.toFieldName} (existing values must be copied by the migration script)`,
+      fieldName: rename.fieldName,
+      reason: `Field renamed from ${rename.previousFieldName} to ${rename.fieldName} (existing values must be copied by the migration script)`,
     });
   }
 

@@ -23,9 +23,9 @@ import type { FieldAddedChange, FieldRemovedChange, MigrationDiff } from "./diff
 export interface FieldRenameSpec {
   typeName: string;
   /** Field name before the rename. */
-  fromFieldName: string;
+  previousFieldName: string;
   /** Field name after the rename. */
-  toFieldName: string;
+  fieldName: string;
 }
 
 /**
@@ -143,10 +143,10 @@ export function renameSpecApplies(
   const prevFields = previousSnapshot.types[spec.typeName]?.fields;
   const currFields = currentSnapshot.types[spec.typeName]?.fields;
   return Boolean(
-    prevFields?.[spec.fromFieldName] &&
-    !currFields?.[spec.fromFieldName] &&
-    currFields?.[spec.toFieldName] &&
-    !prevFields[spec.toFieldName],
+    prevFields?.[spec.previousFieldName] &&
+    !currFields?.[spec.previousFieldName] &&
+    currFields?.[spec.fieldName] &&
+    !prevFields[spec.fieldName],
   );
 }
 
@@ -164,9 +164,9 @@ export function assertValidFieldRenames(
 ): void {
   const seen = new Set<string>();
   for (const rename of fieldRenames) {
-    const { typeName, fromFieldName, toFieldName } = rename;
-    const label = `${typeName}.${fromFieldName}:${toFieldName}`;
-    for (const key of [`${typeName}.${fromFieldName}`, `${typeName}.${toFieldName}`]) {
+    const { typeName, previousFieldName, fieldName } = rename;
+    const label = `${typeName}.${previousFieldName}:${fieldName}`;
+    for (const key of [`${typeName}.${previousFieldName}`, `${typeName}.${fieldName}`]) {
       if (seen.has(key)) {
         throw new Error(`Field "${key}" appears in more than one rename.`);
       }
@@ -180,26 +180,26 @@ export function assertValidFieldRenames(
         `Cannot rename ${label}: type "${typeName}" must exist in both the previous and the current schema.`,
       );
     }
-    const prevField = prevType.fields[fromFieldName];
+    const prevField = prevType.fields[previousFieldName];
     if (!prevField) {
       throw new Error(
-        `Cannot rename ${label}: field "${fromFieldName}" does not exist in the previous schema.`,
+        `Cannot rename ${label}: field "${previousFieldName}" does not exist in the previous schema.`,
       );
     }
-    if (currType.fields[fromFieldName]) {
+    if (currType.fields[previousFieldName]) {
       throw new Error(
-        `Cannot rename ${label}: field "${fromFieldName}" still exists in the current schema.`,
+        `Cannot rename ${label}: field "${previousFieldName}" still exists in the current schema.`,
       );
     }
-    const currField = currType.fields[toFieldName];
+    const currField = currType.fields[fieldName];
     if (!currField) {
       throw new Error(
-        `Cannot rename ${label}: field "${toFieldName}" does not exist in the current schema.`,
+        `Cannot rename ${label}: field "${fieldName}" does not exist in the current schema.`,
       );
     }
-    if (prevType.fields[toFieldName]) {
+    if (prevType.fields[fieldName]) {
       throw new Error(
-        `Cannot rename ${label}: field "${toFieldName}" already exists in the previous schema.`,
+        `Cannot rename ${label}: field "${fieldName}" already exists in the previous schema.`,
       );
     }
     if (!isRenameCompatible(prevField, currField)) {
@@ -221,16 +221,16 @@ const RENAME_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+):([^.:\s]+)$/;
  */
 export function parseRenameOption(value: string): FieldRenameSpec {
   const match = value.match(RENAME_OPTION_PATTERN);
-  const [, typeName, fromFieldName, toFieldName] = match ?? [];
-  if (!typeName || !fromFieldName || !toFieldName) {
+  const [, typeName, previousFieldName, fieldName] = match ?? [];
+  if (!typeName || !previousFieldName || !fieldName) {
     throw new Error(
       `Invalid --rename value "${value}". Expected format: "Type.oldField:newField".`,
     );
   }
-  if (fromFieldName === toFieldName) {
+  if (previousFieldName === fieldName) {
     throw new Error(`Invalid --rename value "${value}": old and new field names are identical.`);
   }
-  return { typeName, fromFieldName, toFieldName };
+  return { typeName, previousFieldName, fieldName };
 }
 
 /**
