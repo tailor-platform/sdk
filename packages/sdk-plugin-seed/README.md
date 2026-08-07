@@ -18,7 +18,7 @@ The Tailor CLI discovers the plugin automatically from `node_modules/.bin` (or y
 ## Usage
 
 ```bash
-# Seed everything (TailorDB types, then IdP _User)
+# Seed everything (TailorDB tables, then IdP _User)
 tailor seed apply
 
 # Truncate target tables first, without a confirmation prompt
@@ -27,7 +27,7 @@ tailor seed apply --truncate --yes
 # Seed a single TailorDB namespace (excludes _User)
 tailor seed apply --namespace my-db
 
-# Seed specific types only
+# Seed specific tables only
 tailor seed apply User Order
 
 # Validate JSONL seed data against the generated schemas
@@ -38,7 +38,7 @@ tailor seed validate ./seed/data/User.jsonl
 tailor seed apply --upsert
 ```
 
-Without `--upsert`, a row whose id already exists in a target table fails the seed run. With `--upsert`, every row must supply an `id` (and any field the type requires), and a matching row is updated in place instead. Because the update goes through the same write path as any other update, it runs update hooks and validation and updates fields such as `updatedAt`, and it publishes a record-updated event — so an executor using `recordUpdatedTrigger` fires for each existing row that gets updated.
+Without `--upsert`, a row whose id already exists in a target table fails the seed run. With `--upsert`, every row must supply an `id` (and any field the table requires), and a matching row is updated in place instead. Because the update goes through the same write path as any other update, it runs update hooks and validation and updates fields such as `updatedAt`, and it publishes a record-updated event — so an executor using `recordUpdatedTrigger` fires for each existing row that gets updated.
 
 The machine user used for seeding comes from `--machine-user` or the `machineUserName` seedPlugin option:
 

@@ -406,7 +406,7 @@ interface RecordCreatedContext<T> {
   rawEvent: "tailordb.type_record.created"; // Full event type string
   workspaceId: string; // Workspace identifier
   appNamespace: string; // Application/namespace name
-  typeName: string; // TailorDB type name
+  typeName: string; // TailorDB table name
   newRecord: T; // The newly created record
 }
 ```
