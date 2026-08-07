@@ -2703,9 +2703,7 @@ export function deploy(options?: DeployOptions) {
 export function deployMigrationTestBaseline(
   options: DeployOptions,
   baselines: ReadonlyMap<string, TailorDBMigrationTestBaseline>,
-  baselineSnapshots: TailorDBMigrationTestSnapshots = new Map(
-    [...baselines].map(([namespace, baseline]) => [namespace, baseline.snapshot]),
-  ),
+  baselineSnapshots: TailorDBMigrationTestSnapshots,
 ) {
   return deployInternal(options, undefined, {
     migrationTestBaselines: baselines,
