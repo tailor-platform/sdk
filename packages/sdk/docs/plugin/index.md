@@ -97,7 +97,7 @@ export const plugins = definePlugins(
 
 Plugins can generate:
 
-- **Types**: Additional TailorDB tables (e.g., `CustomerHistory`, `Deleted_Customer`)
+- **Tables**: Additional TailorDB tables (e.g., `CustomerHistory`, `Deleted_Customer`)
 - **Executors**: Event handlers triggered by record changes
 - **Field Extensions**: Additional fields added to the source table
 - **Output Files**: TypeScript code and other files via generation-time hooks
