@@ -1668,12 +1668,12 @@ describe("snapshot", () => {
         {
           typeName: "User",
           fieldName: "legacyCode",
-          reason: "Field removed (existing data will be dropped in the post-migration phase)",
+          reason: "Field removed (existing data will no longer be accessible through the schema)",
         },
         {
           typeName: "OldType",
           reason:
-            "Type removed (all records of this type will be dropped in the post-migration phase)",
+            "Type removed (all records of this type will be deleted during post-migration cleanup)",
         },
       ]);
     });
