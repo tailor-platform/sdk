@@ -1,5 +1,38 @@
 # @tailor-platform/sdk
 
+## 2.1.0
+
+### Minor Changes
+
+- [#1976](https://github.com/tailor-platform/sdk/pull/1976) [`aef43a7`](https://github.com/tailor-platform/sdk/commit/aef43a765d2ab26c2eee9bbbe5463e28c845f8dc) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `defaultPermission` to resolver namespaces in `defineConfig`, applying an access requirement to every resolver in the namespace that declares no `permission` of its own — securing a namespace no longer means editing every resolver. It takes the same values as a resolver's `permission`, including `"allowAnonymous"` for a namespace that is public by design, and a resolver's own `permission` replaces it rather than merging with it. `generate` and `deploy` now warn when a namespace declares neither a `defaultPermission` nor a `permission` on each of its resolvers.
+
+### Patch Changes
+
+- [#1982](https://github.com/tailor-platform/sdk/pull/1982) [`287c551`](https://github.com/tailor-platform/sdk/commit/287c55173c75ae6533732fb1128a16e4366961e0) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency get-tsconfig to v4.14.1
+
+- [#1995](https://github.com/tailor-platform/sdk/pull/1995) [`b6ed05d`](https://github.com/tailor-platform/sdk/commit/b6ed05db825886dba844664210f32855572e3f88) Thanks [@renovate](https://github.com/apps/renovate)! - chore(deps): update dependency tsx to v4.23.5
+
+- [#1976](https://github.com/tailor-platform/sdk/pull/1976) [`5d0f513`](https://github.com/tailor-platform/sdk/commit/5d0f5135fb1dc6dc9a467f48a7b5aa3d8ac57e5e) Thanks [@toiroakr](https://github.com/toiroakr)! - Fix a resolver `permission` denial returning `ReferenceError: TailorErrorMessage is not defined` to the caller instead of `access denied`. The generated guard now raises `TailorErrors`, which is the only error class the platform turns back into a message the caller can read.
+  
+  `TailorErrorMessage` no longer exists in the platform runtime, so its ambient global declaration and its Vitest mock are removed as well — together they let code that always failed in production pass both type checking and tests. Code that throws `TailorErrorMessage` now fails to compile; replace it with `TailorErrors`:
+  
+  ```ts
+  throw new TailorErrors([{ message: "not found", path: [] }]);
+  ```
+
+- [#1978](https://github.com/tailor-platform/sdk/pull/1978) [`49aa0d3`](https://github.com/tailor-platform/sdk/commit/49aa0d38fc60224d701d7663483f2137b280841f) Thanks [@toiroakr](https://github.com/toiroakr)! - `createTailorDBHook` now takes each field from the data's own properties. A type declaring a field named after a member of `Object` — `toString`, say — used to get that member as the field's value on every record that omitted the field, so validation rejected otherwise valid rows:
+  
+  ```
+  ✗ Found 1 error(s) in ./seed/data/Customer.jsonl
+     Expected a string: received function toString() { [native code] }
+  ```
+  
+  A field named `__proto__` is recorded as a data property rather than assigned, so its value is kept instead of being swallowed by the inherited setter.
+  
+  A field the data does not carry still lands as an `undefined` key, which is what keeps a column inferred from these records nullable.
+
+- [#1967](https://github.com/tailor-platform/sdk/pull/1967) [`47e4f2b`](https://github.com/tailor-platform/sdk/commit/47e4f2bc37a735de091f83f3c4d453a004daec62) Thanks [@toiroakr](https://github.com/toiroakr)! - Drop internal RPC vocabulary from the JSDoc on the `tailor.workflow` runtime API. The module doc and `execJobFunction`'s own doc described the wire-format history behind the current names, which reached editor tooltips without telling users anything they could act on. The behaviour the text was explaining is kept: `execJobFunction` blocks until the job finishes and returns its result, while `startWorkflow` returns only an execution ID.
+
 ## 2.0.1
 
 ### Patch Changes

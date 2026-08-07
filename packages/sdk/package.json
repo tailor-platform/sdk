@@ -1,6 +1,6 @@
 {
   "name": "@tailor-platform/sdk",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Tailor Platform SDK - The SDK to work with Tailor Platform",
   "license": "MIT",
   "repository": {
@@ -9,9 +9,10 @@
     "directory": "packages/sdk"
   },
   "bin": {
-    "tailor": "./dist/cli/index.mjs"
+    "tailor": "./bin/tailor.mjs"
   },
   "files": [
+    "bin",
     "CHANGELOG.md",
     "dist",
     "docs",
@@ -154,7 +155,7 @@
     "test:coverage": "vitest --coverage",
     "docs:check": "vitest run --project=unit* src/cli/docs.test.ts",
     "docs:update": "POLITTY_DOCS_UPDATE=true vitest run --project=unit* src/cli/docs.test.ts",
-    "build": "tsdown && politty generate-shim --entry ./main.mjs --program tailor && politty generate-worker --bin dist/cli/main.mjs --program tailor --shell zsh --verify",
+    "build": "tsdown && politty generate-shim --entry ../dist/cli/main.mjs --program tailor && politty generate-worker --bin dist/cli/main.mjs --program tailor --shell zsh --verify",
     "lint": "oxlint --type-aware .",
     "check:public-api-jsdoc": "node --experimental-strip-types scripts/check-public-api-jsdoc.ts",
     "check:zod-isolation": "node --experimental-strip-types scripts/check-zod-isolation.ts",
@@ -196,14 +197,13 @@
     "@toiroakr/read-multiline": "0.4.1",
     "@urql/core": "6.0.3",
     "amaro": "1.1.11",
-    "chalk": "5.6.2",
     "confbox": "0.2.4",
     "date-fns": "4.4.0",
     "es-toolkit": "1.50.0",
     "find-up-simple": "1.0.1",
     "get-east-asian-width": "1.6.0",
-    "get-tsconfig": "4.14.0",
-    "globals": "17.8.0",
+    "get-tsconfig": "4.14.1",
+    "globals": "17.9.0",
     "graphql": "17.0.2",
     "inflection": "3.0.2",
     "kysely": "0.29.4",
@@ -226,10 +226,11 @@
   },
   "devDependencies": {
     "@opentelemetry/sdk-trace-base": "2.10.0",
+    "@tailor-platform/shared": "workspace:^",
     "@tailor-platform/tailor-proto": "workspace:^",
     "@types/mime-types": "3.0.1",
     "@types/node": "24.13.3",
-    "@types/semver": "7.7.1",
+    "@types/semver": "7.8.0",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "4.1.10",
     "eslint-plugin-zod": "4.9.0",

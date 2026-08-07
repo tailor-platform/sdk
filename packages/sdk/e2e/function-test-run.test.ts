@@ -11,7 +11,7 @@
  * Prerequisites:
  * - Authentication via TAILOR_PLATFORM_TOKEN env var or `tailor login`
  * - TAILOR_PLATFORM_ORGANIZATION_ID environment variable must be set
- * - packages/sdk must be built (dist/cli/index.mjs must exist)
+ * - packages/sdk must be built (dist/cli/main.mjs must exist)
  *
  * Note: Tests are executed sequentially and share a single workspace.
  */
@@ -43,7 +43,7 @@ const testRunId = Date.now().toString(36);
 const testWorkspaceName = `${E2E_WORKSPACE_PREFIX}${ciRunId ? `${ciRunId}-` : ""}${testRunId}`;
 
 const sdkRoot = path.resolve(__dirname, "..");
-const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
+const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
 const exampleDir = path.resolve(sdkRoot, "..", "..", "example");
 
 let workspaceId: string;

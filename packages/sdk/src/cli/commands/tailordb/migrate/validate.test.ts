@@ -9,6 +9,7 @@ import { loadConfig } from "#/cli/shared/config-loader";
 import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { captureStderr, captureStdout } from "#/cli/shared/test-helpers/capture-output";
 import { jsonMode } from "#/cli/shared/test-helpers/json-mode";
+import { MIGRATION_REVIEW_REQUIRED_MARKER } from "./template-generator";
 import {
   parsedType,
   snapshotType,
@@ -93,6 +94,12 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
     },
     plugins: [],
   } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+}
+
+function writeMigrationFile(number: number, fileName: string, content: string): void {
+  const dir = path.join(state.migrationsDir, number.toString().padStart(4, "0"));
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, fileName), content);
 }
 
 describe("tailordb migration validate", () => {
@@ -363,6 +370,71 @@ describe("tailordb migration validate", () => {
       requiresMigrationScript: true,
       scriptSkipped: { reason: "no data yet", acknowledgedAt: "2026-01-01T00:00:00.000Z" },
     });
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(true);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.migrationFiles).toEqual({ valid: true });
+  });
+
+  test("fails when a migration script still contains a generated review marker", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+    writeMigrationFile(
+      1,
+      "migrate.ts",
+      `// ${MIGRATION_REVIEW_REQUIRED_MARKER}\nexport async function main() {}`,
+    );
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.valid).toBe(false);
+    expect(report.migrationFiles.valid).toBe(false);
+    expect(report.migrationFiles.error).toContain("0001");
+    expect(report.migrationFiles.error).toContain(MIGRATION_REVIEW_REQUIRED_MARKER);
+    expect(state.listTailorDBTypes).not.toHaveBeenCalled();
+  });
+
+  test("accepts a migration script after its generated review marker is removed", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+    writeMigrationFile(1, "migrate.ts", "export async function main() {}");
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(true);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.migrationFiles).toEqual({ valid: true });
+  });
+
+  test("accepts unrelated TODO comments in migration scripts", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+    writeMigrationFile(
+      1,
+      "migrate.ts",
+      "// TODO: Add observability\nexport async function main() {}",
+    );
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(true);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.migrationFiles).toEqual({ valid: true });
+  });
+
+  test("ignores generated review markers outside migrate.ts", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    writeDiff(state.migrationsDir, 1, [], { requiresMigrationScript: true });
+    writeMigrationFile(1, "migrate.ts", "export async function main() {}");
+    writeMigrationFile(1, "db.ts", `// ${MIGRATION_REVIEW_REQUIRED_MARKER}`);
 
     const result = await runCommand(validateCommand, []);
 

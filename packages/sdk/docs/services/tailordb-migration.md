@@ -120,10 +120,10 @@ Some non-breaking changes can still cause data loss — most notably removing a 
 ```
 Warning: data loss possible:
 
-  - User.legacyParentId: Field removed (existing data will be dropped in the post-migration phase)
+  - User.legacyParentId: Field removed (existing data will no longer be accessible through the schema after the post-migration phase)
 ```
 
-No `migrate.ts` is generated automatically because the schema change itself is non-breaking, but the existing data is dropped during the post-migration phase. If you need to preserve or transform that data first (for example, copy a column into another table before it disappears), add a script with:
+No `migrate.ts` is generated automatically because the schema change itself is non-breaking, but the existing data is no longer accessible through the active schema after the post-migration phase. The platform may retain a removed field's underlying stored value, so do not rely on removal to clear data before reusing the same field name. If you need to preserve, transform, or clear that data first, add a script with:
 
 ```bash
 tailor tailordb migration script 0002
@@ -204,6 +204,34 @@ export async function main(trx: Transaction): Promise<void> {
 }
 ```
 
+**Worked example: backfilling a new required enum field**
+
+Adding a required field is a breaking change, so `migration generate` scaffolds `migrate.ts`. Given this type change:
+
+```typescript
+// tailordb/user.ts
+export const user = db.table("User", {
+  name: db.string(),
+  email: db.string(),
+  role: db.enum(["MANAGER", "STAFF"]), // ← new required field
+  ...db.fields.timestamps(),
+});
+```
+
+existing `User` rows have no `role` value yet, so the script assigns one before the post-migration phase enforces the constraint:
+
+```typescript
+import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  await trx.updateTable("User").set({ role: "MANAGER" }).where("role", "is", null).execute();
+}
+```
+
+The `where("role", "is", null)` guard keeps the script idempotent — rows that already have a value are untouched if the script re-runs.
+
+Reference scripts for other breaking-change patterns live in the repository's [migration fixture templates](https://github.com/tailor-platform/sdk/tree/main/example/tests/migration-fixtures/templates): backfilling fields that become required and migrating rows off a removed enum value ([0005](https://github.com/tailor-platform/sdk/blob/main/example/tests/migration-fixtures/templates/0005/migrate.ts)), and de-duplicating values before a unique constraint is added ([0006](https://github.com/tailor-platform/sdk/blob/main/example/tests/migration-fixtures/templates/0006/migrate.ts)). They show the shape of each migration, not drop-in logic — adapt them to your data (the suffix strategy in `0006`, for example, assumes the suffixed names are not already taken).
+
 **Accessing environment variables**
 
 The migration `main` receives an optional second argument exposing the variables defined in `defineConfig({ env })` — the same values available via `context.env` in resolvers. The `MigrationContext` type is exported from the generated `./db`:
@@ -231,38 +259,86 @@ The `env` values are injected at bundle time (the same mechanism as resolvers/ex
 
 ## Supported Schema Changes
 
-| Change Type                    | Breaking? | Migration Script? | Notes                                                                                                                                                                                                                                            |
-| ------------------------------ | --------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Add optional field             | No        | No                | Schema change only                                                                                                                                                                                                                               |
-| Add required field             | Yes       | Yes               | Script populates default values                                                                                                                                                                                                                  |
-| Remove field                   | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the field is dropped. The field stays readable from `migrate.ts` during Pre-migration and is dropped in Post-migration. |
-| Change optional → required     | Yes       | Yes               | Script sets defaults for null values                                                                                                                                                                                                             |
-| Change required → optional     | No        | No                | Schema change only                                                                                                                                                                                                                               |
-| Add index (non-unique)         | No        | No                | Schema change only                                                                                                                                                                                                                               |
-| Add unique index               | Yes       | Yes               | Script must resolve duplicate value combinations across the index fields                                                                                                                                                                         |
-| Change unique index fields     | Yes       | Yes               | Treated like adding a new unique constraint over the new field set                                                                                                                                                                               |
-| Remove index                   | No        | No                | Schema change only (removing the unique constraint from an index is also non-breaking)                                                                                                                                                           |
-| Add unique constraint          | Yes       | Yes               | Script must resolve duplicate values                                                                                                                                                                                                             |
-| Remove unique constraint       | No        | No                | Schema change only                                                                                                                                                                                                                               |
-| Change decimal scale           | Yes       | Yes               | Auto-generated script re-saves existing rows under the new scale. Decreasing scale rounds values half-up and can lose precision. If the same change adds a unique constraint, duplicate handling runs after re-saving.                           |
-| Add enum value                 | No        | No                | Schema change only                                                                                                                                                                                                                               |
-| Remove enum value              | Yes       | Yes               | Script migrates records with removed values                                                                                                                                                                                                      |
-| Add type                       | No        | No                | Schema change only                                                                                                                                                                                                                               |
-| Remove type                    | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the type is dropped. The type stays readable from `migrate.ts` during Pre-migration and is dropped in Post-migration.   |
-| Change foreign key target type | Yes       | Yes               | Script updates references to the new target                                                                                                                                                                                                      |
-| Change field type              | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                            |
-| Change array → single value    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                            |
-| Change single value → array    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                            |
+| Change Type                       | Breaking? | Migration Script? | Notes                                                                                                                                                                                                                                  |
+| --------------------------------- | --------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Add optional field                | No        | No                | Schema change only                                                                                                                                                                                                                     |
+| Add required field                | Yes       | Yes               | Script populates default values                                                                                                                                                                                                        |
+| Remove field                      | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve or clear data before the field leaves the active schema. The field stays readable from `migrate.ts` during Pre-migration. |
+| Change optional → required        | Yes       | Yes               | Script sets defaults for null values                                                                                                                                                                                                   |
+| Change required → optional        | No        | No                | Schema change only                                                                                                                                                                                                                     |
+| Add index (non-unique)            | No        | No                | Schema change only                                                                                                                                                                                                                     |
+| Add unique index                  | Yes       | Yes               | Script must resolve duplicate value combinations across the index fields                                                                                                                                                               |
+| Change unique index fields        | Yes       | Yes               | Treated like adding a new unique constraint over the new field set                                                                                                                                                                     |
+| Remove index                      | No        | No                | Schema change only (removing the unique constraint from an index is also non-breaking)                                                                                                                                                 |
+| Add unique constraint             | Yes       | Yes               | Script must resolve duplicate values                                                                                                                                                                                                   |
+| Remove unique constraint          | No        | No                | Schema change only                                                                                                                                                                                                                     |
+| Change decimal scale              | Yes       | Yes               | Auto-generated script re-saves existing rows under the new scale. Decreasing scale rounds values half-up and can lose precision. If the same change adds a unique constraint, duplicate handling runs after re-saving.                 |
+| Add enum value                    | No        | No                | Schema change only                                                                                                                                                                                                                     |
+| Remove enum value                 | Yes       | Yes               | Script migrates records with removed values                                                                                                                                                                                            |
+| Add type                          | No        | No                | Schema change only                                                                                                                                                                                                                     |
+| Remove type                       | No        | Optional          | Warning tier — no script is auto-generated, but you can add one with `tailordb migration script` to preserve data before the type leaves the active schema. The type stays readable from `migrate.ts` during Pre-migration.            |
+| Change foreign key target type    | Yes       | Yes               | Script updates references to the new target                                                                                                                                                                                            |
+| Change field type (verified pair) | Yes       | Yes               | In-place for `uuid` → `string`, `enum` → `string`, `decimal` → `string`, and `integer` → `float`; review the generated normalization scaffold and customize it only when existing values need transformation                           |
+| Change field type (other pair)    | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                  |
+| Change array → single value       | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                  |
+| Change single value → array       | -         | -                 | **Not supported** — see [3-step migration](#3-step-migration-for-unsupported-changes)                                                                                                                                                  |
+
+### Generated normalization script for field type changes
+
+For example, changing `User.age` from `integer` to `float` generates a `migrate.ts` that scans non-null values in batches of 100:
+
+```typescript
+import type { Transaction } from "./db";
+
+export async function main(trx: Transaction): Promise<void> {
+  // Normalize User.age from integer to float while the previous type is still active
+  {
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
+        .selectFrom("User")
+        .select(["id", "age"])
+        .where("age", "is not", null)
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      for (const row of rows) {
+        // TODO(tailor-migration-review): Remove this marker and the `never` annotation after reviewing the normalization.
+        // Keep the value accepted by the active integer type and castable to float.
+        const sourceValue = row.age;
+        if (sourceValue === null) continue;
+        const normalizedValue: never = sourceValue;
+        if (Object.is(normalizedValue, sourceValue)) continue;
+        await trx
+          .updateTable("User")
+          .set({ ["age"]: normalizedValue })
+          .where("id", "=", row.id)
+          .execute();
+      }
+      lastId = rows[rows.length - 1]!.id;
+    }
+  }
+}
+```
+
+The generated `never` annotation intentionally causes a TypeScript error until you review the normalization. If the existing values are already suitable for the target type, remove the annotation and review marker to accept the identity transformation; it does not write any rows. If values need application-specific normalization, replace the expression and remove the annotation and marker while keeping the result valid for both the active source type and the target type. The source field contract remains active until the script finishes; for example, an `integer` → `float` script cannot write fractional values during this phase.
 
 ### 3-step migration for unsupported changes
 
-Field type changes (e.g., `string` → `integer`) and array-cardinality changes are not detected by the diff engine. Use a 3-step strategy:
+Field type changes outside the verified in-place pairs (for example, `string` → `integer`) and array-cardinality changes are detected but rejected by the diff engine. Use an expand-contract strategy:
 
-1. **Migration N**: Add a new field with the desired type (e.g., `fieldName_new`). Write a script that populates it from the old field.
+1. **Migration N**: Add an optional field with the desired type (e.g., `fieldName_new`). If the old field is required, make it optional in the same migration. Write a script that copies and converts every non-null old value into the temporary field, then sets the old field to `null` in the same row update.
 2. **Migration N+1**: Remove the old field.
 3. **Migration N+2**: Add the field back with the original name and the new type. Script copies from the temporary field, then remove the temporary field in migration N+3 (or in the same step if you can express it).
 
 The same pattern works for switching between scalar and array.
+
+> **Do not skip clearing the old field.** Removing a field from the schema does not necessarily remove its stored JSON value. Re-adding the same name with an incompatible type can deploy successfully while leaving stale values that make subsequent reads fail. Verify that every old value is `null` before removing and re-adding the field name.
 
 ## Automatic Migration Execution
 
@@ -272,9 +348,10 @@ When you run `tailor deploy`, the SDK detects pending migrations (anything past 
 
 For each pending migration:
 
-1. **Pre-migration**: Type changes that would be breaking are applied in a relaxed form first. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the type so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped). Breaking type-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
+1. **Pre-migration**: Type changes that would be breaking are applied in a relaxed form first. A verified in-place field type change keeps its complete previous field contract until Post-migration, including field and type-level hooks or validators changed by the same migration. Newly-required fields are added as optional; fields whose `optional → required` transition is breaking are temporarily kept optional. Fields that are being removed in this migration are temporarily kept on the type so that `migrate.ts` can still read them (for example, to `innerJoin` through a foreign key that is about to be dropped). Breaking type-level index changes are relaxed the same way: a newly-added unique index is withheld, and an index gaining a unique constraint (or a unique index changing its field set) keeps its previous definition, so `migrate.ts` can resolve duplicates first. Non-breaking changes that are part of the same migration are also applied here.
 2. **Script execution**: If `migrate.ts` exists on disk for this migration, it is bundled and sent to the platform via the script execution API and runs as the configured machine user inside a transaction. The script is hard-required for breaking changes (`diff.requiresMigrationScript`) — deploy fails if the file is missing, unless a `--no-script` acknowledgment was recorded (see [Breaking changes without a script](#breaking-changes-without-a-script)). It is also executed when present for warning-tier diffs — see [Warnings and optional migration scripts](#warnings-and-optional-migration-scripts).
-3. **Post-migration**: Required constraints are enforced; field and type deletions are applied (the columns/tables are physically dropped here); the `sdk-migration` label is bumped to this migration's number.
+3. **Post-migration schema**: Required constraints and the target field definitions are applied. Do not assume that removing a field clears its underlying stored JSON value.
+4. **Checkpoint and cleanup**: The `sdk-migration` label is bumped to this migration's number, then removed GQL permissions and types are deleted. Advancing the checkpoint first prevents a failed checkpoint write from requiring the SDK to recreate irreversibly deleted records.
 
 This split is what allows existing rows to be backfilled before the database starts rejecting nulls, and what lets `migrate.ts` traverse foreign-key fields that the same migration removes.
 
@@ -298,7 +375,7 @@ Namespace: tailordb
 
 The error also points you at `migration status`, `migration generate`, `migration sync`, and `migration set` — see [Remote schema drift detected](#remote-schema-drift-detected) for which one applies.
 
-To run the same checks without deploying — plus migration file integrity (numbering, parseable contents, and a `migrate.ts` or a recorded `--no-script` acknowledgment for every migration that requires a script):
+To run the same checks without deploying — plus migration file integrity (numbering, parseable contents, a `migrate.ts` or a recorded `--no-script` acknowledgment for every migration that requires a script, and no unresolved generated normalization review markers):
 
 ```bash
 tailor tailordb migration validate
@@ -369,13 +446,24 @@ The main use case is recovering from drift after a `deploy --no-schema-check` fr
 Migration numbers are assigned sequentially, so two developers branching off the same point and each generating `0005` will collide. Conventions that work:
 
 - **Don't generate migrations on long-lived feature branches.** Generate them just before merge, after rebasing onto main.
-- **Resolve collisions by re-generating.** If your branch has `0005` but main now has `0005` from another PR, delete your `0005/` directory, rebase, and run `migration generate` again. Re-edit the resulting `migrate.ts`.
+- **Resolve collisions by re-generating.** If your branch has `0005` but main now has `0005` from another PR, regenerate yours as `0006` — see [Resolving a migration number conflict](#resolving-a-migration-number-conflict).
 - **Treat migration files as merge-conflict-prone.** They are committed JSON and TypeScript, so review them in PRs. The `diff.json` is the source of truth — if review focuses there, regenerating after rebase is straightforward.
+
+### Resolving a migration number conflict
+
+When your branch and main each generated the same number, merging or rebasing stops with an add/add conflict on `migrations/0005/diff.json`. Resolve it by re-generating your migration on top of main's:
+
+1. **Save your script edits aside.** If you customized `0005/migrate.ts`, keep a copy before touching the directory — during a rebase, `git show ORIG_HEAD:migrations/0005/migrate.ts` prints the version from your pre-rebase branch tip.
+2. **Take main's `0005/` directory in full.** Accept main's version of every conflicting file. Then check for files only your side added: if your migration has a `migrate.ts` and main's does not, that file never conflicts — it silently stays next to main's `diff.json`. Delete such leftovers explicitly.
+3. **Finish the rebase or merge, then re-run `migration generate`.** With main's migration now part of local history, the diff is computed against the correct base — including main's changes — and your migration lands as the next number (`0006`).
+4. **Port your script.** Copy the logic saved in step 1 into the newly scaffolded `0006/migrate.ts`. For a warning-tier change, `migration generate` does not scaffold a script — recreate it first with `tailor tailordb migration script 0006`.
+
+**When a plain rename is enough.** If the two migrations touch disjoint types and fields, renaming your directory to the next free number (keeping main's `0005/`) can be acceptable. Run `tailor tailordb migration validate` after the rename: if it reports a mismatch, the migrations were not disjoint — discard the rename and re-generate as above. A passing check covers only the schema history, not your script: `migrate.ts` now runs after main's migration, so confirm it does not read or write types that migration touches — when in doubt, re-generate.
 
 ### CI / CD
 
 - For non-interactive environments, pass `--yes` to `migration generate` and `--yes` to `apply`. `apply` runs migrations automatically when the `migrations/` directory is configured.
-- Run `tailor tailordb migration validate` in CI to catch uncommitted migrations, broken migration files, and remote schema drift before deploying. It exits with a non-zero code when validation fails and supports `--json`. Add `--strict` to also require an explicit acknowledgment (a `migrate.ts` or a recorded `--no-script` reason) for every pending migration that can drop data, so destructive changes cannot merge unnoticed.
+- Run `tailor tailordb migration validate` in CI to catch uncommitted migrations, broken migration files, unreviewed generated normalization logic, and remote schema drift before deploying. It exits with a non-zero code when validation fails and supports `--json`. Add `--strict` to also require an explicit acknowledgment (a `migrate.ts` or a recorded `--no-script` reason) for every pending migration that can drop data, so destructive changes cannot merge unnoticed.
 - `tailor tailordb migration status` shows applied and pending migrations for a human-readable comparison. Its exit code is non-zero only on errors, so check the output.
 - Avoid running migrations in parallel against the same workspace — there is no locking. Serialize deploys per environment.
 
@@ -405,7 +493,11 @@ After a failure:
 2. Fix `migrate.ts` (or the data it depends on).
 3. Re-run `tailor deploy`. The same migration runs again because its label was never bumped, and the prior-checkpoint schema is a clean baseline to retry against.
 
-If a migration **succeeds in script** but the **post-migration phase** fails (rare; usually a constraint violation the script should have prevented), the pre-migration changes are **not** rolled back: the script's data changes are already committed and the post-migration phase may have dropped removed columns or types, which cannot be reverted without data loss. Investigate, fix, and re-run.
+If a migration **succeeds in script** but its reversible **post-migration schema update** fails (rare; usually a constraint violation the script should have prevented), the SDK makes the same best-effort restoration to the prior-checkpoint schema. The script's committed data changes remain, so write migration scripts to tolerate re-execution.
+
+The checkpoint is advanced only after the reversible post-migration schema updates succeed. If the checkpoint write reports an error, the SDK reads it back: a matching value is treated as committed. Any other observed value leaves the post-migration schema unchanged rather than risk rolling back a concurrent deployment; a value beyond the current migration confirms a concurrent deploy, while an older or missing value means the checkpoint must be repaired before retrying. If read-back also fails, the SDK likewise leaves the post-migration schema unchanged; verify the remote checkpoint before retrying.
+
+Removed types are deleted only after the checkpoint is committed. If that cleanup fails, the checkpoint remains at the new migration and the SDK fails closed: the leftover type is reported as remote schema drift on the next deploy. Remove the leftover GQL permission and type manually, verify the remote schema, and then retry. The SDK does not automatically ignore or delete a same-named remote type because it cannot distinguish failed cleanup from a type recreated after cleanup completed.
 
 ## Rollback Strategy
 

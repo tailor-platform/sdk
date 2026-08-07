@@ -39,6 +39,7 @@ import {
   loadDiff,
   reconstructSnapshotFromMigrations,
 } from "./snapshot";
+import { MIGRATION_REVIEW_REQUIRED_MARKER } from "./template-generator";
 import type {
   RemoteSchemaVerificationResult,
   RemoteSchemaVerificationSkipReason,
@@ -123,15 +124,15 @@ interface CollectedValidationReports {
 }
 
 /**
- * Assert that every migration in the local history whose diff requires a data
- * migration script has a migrate.ts on disk or an explicit skip acknowledgment
+ * Assert that every migration script required by local history exists and that
+ * generated normalization logic has been reviewed
  * @param {string} migrationsDir - Migrations directory path
  * @param {string} namespace - TailorDB namespace (for error messages)
  */
-function assertRequiredMigrationScripts(migrationsDir: string, namespace: string): void {
+function assertMigrationScriptsReady(migrationsDir: string, namespace: string): void {
+  const diffFiles = getMigrationFiles(migrationsDir).filter((file) => file.type === "diff");
   const missing: number[] = [];
-  for (const file of getMigrationFiles(migrationsDir)) {
-    if (file.type !== "diff") continue;
+  for (const file of diffFiles) {
     const diff = loadDiff(file.path);
     if (!diff.requiresMigrationScript || diff.scriptSkipped) continue;
     if (!fs.existsSync(getMigrationFilePath(migrationsDir, file.number, "migrate"))) {
@@ -144,6 +145,23 @@ function assertRequiredMigrationScripts(migrationsDir: string, namespace: string
         "require a migration script but have no migrate.ts. " +
         "Add one with 'tailor tailordb migration script <number>', or record that no script " +
         `is needed with 'tailor tailordb migration script <number> --no-script --reason "..."'.`,
+    );
+  }
+
+  const unreviewed: number[] = [];
+  for (const file of diffFiles) {
+    const migrateFilePath = getMigrationFilePath(migrationsDir, file.number, "migrate");
+    if (!fs.existsSync(migrateFilePath)) continue;
+    if (fs.readFileSync(migrateFilePath, "utf8").includes(MIGRATION_REVIEW_REQUIRED_MARKER)) {
+      unreviewed.push(file.number);
+    }
+  }
+  if (unreviewed.length > 0) {
+    throw new Error(
+      `Migration(s) ${unreviewed.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
+        "contain generated normalization logic that still requires review in migrate.ts. " +
+        `Review each ${MIGRATION_REVIEW_REQUIRED_MARKER} marker, then remove the marker and its associated ` +
+        "`never` annotation.",
     );
   }
 }
@@ -303,7 +321,7 @@ async function collectValidationReports(
       // Parse the whole history here so malformed snapshot/diff contents are
       // reported per namespace instead of aborting the run for every namespace.
       reconstructSnapshotFromMigrations(target.migrationsDir);
-      assertRequiredMigrationScripts(target.migrationsDir, target.namespace);
+      assertMigrationScriptsReady(target.migrationsDir, target.namespace);
       unacknowledgedWarnings?.set(
         target.namespace,
         collectUnacknowledgedWarnings(target.migrationsDir),
@@ -507,7 +525,7 @@ async function validate(options: ValidateOptions): Promise<void> {
 export const validateCommand = defineAppCommand({
   name: "validate",
   description:
-    "Validate the full migration history and detect schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
+    "Validate the full migration history, unreviewed generated migration scripts, and schema drift (local types vs. migration snapshot, remote schema vs. migration checkpoint) without deploying. This includes the migration and schema-drift checks used by 'deploy' and exits with a non-zero code when issues are found.",
   args: z.strictObject({
     ...deploymentArgs,
     namespace: arg(z.string().optional(), {

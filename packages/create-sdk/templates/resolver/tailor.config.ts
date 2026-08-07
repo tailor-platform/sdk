@@ -20,7 +20,14 @@ export default defineConfig({
     },
   }),
   db: { "main-db": { files: ["./src/db/*.ts"] } },
-  resolver: { "main-resolver": { files: ["./src/resolver/*.ts"] } },
+  resolver: {
+    "main-resolver": {
+      files: ["./src/resolver/*.ts"],
+      // Every resolver in this namespace requires an authenticated caller.
+      // A single resolver opts out with `permission: "allowAnonymous"`.
+      defaultPermission: [{ conditions: [[{ user: "_loggedIn" }, "=", true]], permit: true }],
+    },
+  },
 });
 
 export const plugins = definePlugins(kyselyTypePlugin({ distPath: "./src/generated/db.ts" }));

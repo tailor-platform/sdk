@@ -37,7 +37,11 @@ export const seedValidateCommand = defineAppCommand({
       logger.out({ valid: result.valid, path: targetPath });
     }
     if (!result.valid) {
-      throw new Error(result.error);
+      // The report already carries its own markers, and `format()` is what keeps
+      // the CLI from printing an error marker in front of them.
+      const error = new Error(result.error) as Error & { format: () => string };
+      error.format = () => result.error;
+      throw error;
     }
   },
 });

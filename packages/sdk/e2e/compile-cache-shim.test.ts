@@ -1,9 +1,10 @@
 /**
- * E2E tests for the compile-cache bin shim (dist/cli/index.mjs, generated at
- * build time by `politty generate-shim`).
+ * E2E tests for the compile-cache bin shim (bin/tailor.mjs, generated at
+ * build time by `politty generate-shim` and committed so package managers can
+ * link the bin before the package is built).
  *
  * Verifies that:
- * - `tailor`'s `bin` entry (dist/cli/index.mjs) is the generated shim that
+ * - `tailor`'s `bin` entry (bin/tailor.mjs) is the generated shim that
  *   enables Node's on-disk compile cache (via `politty/compile-cache`)
  *   before dynamically importing the real CLI entry (dist/cli/main.mjs).
  * - The shim actually starts the CLI correctly and populates/reuses the
@@ -12,8 +13,7 @@
  * No Platform authentication or network access required.
  *
  * Prerequisites:
- * - packages/sdk must be built (dist/cli/index.mjs and dist/cli/main.mjs
- *   must exist)
+ * - packages/sdk must be built (dist/cli/main.mjs must exist)
  */
 
 import { execFileSync } from "node:child_process";
@@ -31,7 +31,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const sdkRoot = path.resolve(__dirname, "..");
-const shimPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
+const shimPath = path.join(sdkRoot, "bin", "tailor.mjs");
 const mainPath = path.join(sdkRoot, "dist", "cli", "main.mjs");
 const packageJson = JSON.parse(fs.readFileSync(path.join(sdkRoot, "package.json"), "utf-8")) as {
   version: string;
@@ -63,14 +63,14 @@ function collectCacheMtimes(cacheDir: string): string[] {
 
 describe("compile-cache bin shim", () => {
   test("tailor's bin points at the shim, which loads main.mjs", () => {
-    expect(packageJson.bin.tailor).toBe("./dist/cli/index.mjs");
+    expect(packageJson.bin.tailor).toBe("./bin/tailor.mjs");
     expect(fs.existsSync(shimPath)).toBe(true);
     expect(fs.existsSync(mainPath)).toBe(true);
 
     const content = fs.readFileSync(shimPath, "utf-8");
     expect(content).toContain('await import("politty/compile-cache")');
     expect(content).toContain('enableCompileCache("tailor")');
-    expect(content).toContain('await import("./main.mjs")');
+    expect(content).toContain('await import("../dist/cli/main.mjs")');
   });
 
   test("the shim starts the real CLI and reports the correct version", () => {

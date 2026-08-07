@@ -310,7 +310,7 @@ describe("snapshot", () => {
         {
           typeName: "OldType",
           reason:
-            "Type removed (all records of this type will be dropped in the post-migration phase)",
+            "Type removed (all records of this type will be deleted during post-migration cleanup)",
         },
       ]);
     });
@@ -412,12 +412,12 @@ describe("snapshot", () => {
         {
           typeName: "User",
           fieldName: "name",
-          reason: "Field removed (existing data will be dropped in the post-migration phase)",
+          reason: "Field removed (existing data will no longer be accessible through the schema)",
         },
       ]);
     });
 
-    test("detects field type change (breaking change)", () => {
+    test("supports cast-compatible field type changes with a migration script", () => {
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -426,7 +426,7 @@ describe("snapshot", () => {
             pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
-              age: { type: "string", required: false },
+              age: { type: "integer", required: false },
             },
           },
         },
@@ -439,7 +439,7 @@ describe("snapshot", () => {
             pluralForm: "Users",
             fields: {
               id: { type: "uuid", required: true },
-              age: { type: "number", required: false },
+              age: { type: "float", required: false },
             },
           },
         },
@@ -447,9 +447,46 @@ describe("snapshot", () => {
 
       const diff = compareSnapshots(previous, current);
 
-      expect(diff.changes[0]!.kind).toBe("field_modified");
+      expect(diff.changes[0]!.kind).toBe("field_type_modified");
       expect(diff.hasBreakingChanges).toBe(true);
+      expect(diff.requiresMigrationScript).toBe(true);
       expect(diff.breakingChanges[0]!.reason).toContain("Field type changed");
+      expect(diff.breakingChanges[0]!.unsupported).toBeUndefined();
+    });
+
+    test("rejects cast-incompatible field type changes", () => {
+      const previous: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              enabled: { type: "boolean", required: false },
+            },
+          },
+        },
+      };
+      const current: SchemaSnapshot = {
+        ...createEmptySnapshot(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              enabled: { type: "integer", required: false },
+            },
+          },
+        },
+      };
+
+      const diff = compareSnapshots(previous, current);
+
+      expect(diff.changes[0]!.kind).toBe("field_type_modified");
+      expect(diff.hasBreakingChanges).toBe(true);
+      expect(diff.breakingChanges[0]!.unsupported).toBe(true);
     });
 
     test("normalizes decimal scale at compare entry so missing scale matches platform default", () => {
@@ -1534,6 +1571,39 @@ describe("snapshot", () => {
       expect(loaded.changes[0]!.kind).toBe("type_added");
     });
 
+    test("loads a phased field type change", () => {
+      const diff: MigrationDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_type_modified",
+            typeName: "User",
+            fieldName: "age",
+            before: { type: "integer", required: false },
+            after: { type: "float", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "age",
+            reason: "Field type changed from integer to float",
+          },
+        ],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      };
+
+      const filePath = path.join(testDir, "type_change_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(diff, null, 2));
+
+      expect(loadDiff(filePath).changes[0]!.kind).toBe("field_type_modified");
+    });
+
     test("backfills warnings fields for legacy diff.json", () => {
       // Legacy diff.json written before warning-tier support shipped. The file
       // has no warnings/hasWarnings keys at all.
@@ -2144,6 +2214,56 @@ describe("snapshot", () => {
 
       expect(reconstructed?.types.User!.fields.id).toBeDefined();
       expect(reconstructed?.types.User!.fields.email).toBeDefined();
+    });
+
+    test("reconstructs the target field type from a phased type change", () => {
+      const initialSnapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              age: { type: "integer", required: false },
+            },
+          },
+        },
+      };
+      const diff: MigrationDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_type_modified",
+            typeName: "User",
+            fieldName: "age",
+            before: { type: "integer", required: false },
+            after: { type: "float", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "age",
+            reason: "Field type changed from integer to float",
+          },
+        ],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      };
+
+      writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, initialSnapshot);
+      writeDiffToDir(testDir, 1, diff);
+
+      const reconstructed = reconstructSnapshotFromMigrations(testDir);
+
+      expect(reconstructed?.types.User!.fields.age!.type).toBe("float");
     });
 
     test("applies added type names that match Object prototype keys", () => {

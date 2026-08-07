@@ -8,10 +8,10 @@ const schemaType = t.object({
   ...invoice.omitFields(["id","invoiceNumber","sequentialId"]),
 });
 
-const hook = createTailorDBHook(invoice);
+export const hook = createTailorDBHook(invoice);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook),
+  createStandardSchema(schemaType, hook, invoice),
   {
     foreignKeys: [
       {"column":"salesOrderID","references":{"table":"SalesOrder","column":"id"}},

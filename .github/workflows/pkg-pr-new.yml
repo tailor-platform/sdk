@@ -242,7 +242,7 @@ jobs:
       - name: Verify CLI bootstrap (Bun)
         if: matrix.runtime == 'bun'
         working-directory: /tmp/test-init-app
-        run: bun node_modules/@tailor-platform/sdk/dist/cli/index.mjs --version
+        run: bun node_modules/@tailor-platform/sdk/bin/tailor.mjs --version
 
       - name: Typecheck
         working-directory: /tmp/test-init-app
