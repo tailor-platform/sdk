@@ -33,6 +33,7 @@ import { getNamespacesWithMigrations } from "./config";
 import { fetchRemoteMigrationNumber } from "./remote-state";
 import {
   assertValidMigrationFiles,
+  compareSnapshots,
   getLatestMigrationNumber,
   normalizeSchemaSnapshot,
   reconstructSnapshotFromMigrations,
@@ -364,6 +365,62 @@ function stateOrThrow(state: RuntimeState | undefined): RuntimeState {
   return assertDefined(state, "migration test runtime was used before preparation");
 }
 
+// The source is verified during preparation, but the baseline deploy runs in
+// between; a source deploy in that window would make the clone diverge from
+// the already-deployed baseline schemas.
+async function assertSourceBaselineFresh(
+  state: RuntimeState,
+  prepared: PreparedMigrationTest,
+  sourceWorkspaceId: string,
+): Promise<void> {
+  const loaded = state.loaded;
+  const namespaces = getNamespacesWithMigrations(loaded.config, path.dirname(loaded.config.path));
+  const inputs = loaded.application.tailorDBServices.map(toTailorDBDeployInput);
+  const remoteChecks = await verifyRemoteSchema(
+    state.client,
+    sourceWorkspaceId,
+    namespaces,
+    loaded.config,
+    inputs,
+  );
+  const invalidRemote = remoteChecks.find(
+    (check) => check.hasDrift || check.checkpointMissingLocal,
+  );
+  if (invalidRemote) {
+    throw new Error(
+      `Source namespace "${invalidRemote.namespace}" changed after migration test preparation. Run the migration test again.`,
+    );
+  }
+  for (const namespace of namespaces) {
+    const baseline = prepared.baselines.get(namespace.namespace);
+    if (!baseline) continue;
+    const migrationNumber = await fetchRemoteMigrationNumber(
+      state.client,
+      resourceTrn(sourceWorkspaceId, "tailordb", namespace.namespace),
+    );
+    if (migrationNumber !== baseline.migrationNumber) {
+      throw new Error(
+        `Source namespace "${namespace.namespace}" moved from migration ${baseline.migrationNumber} to ${migrationNumber ?? "none"} after migration test preparation. Run the migration test again.`,
+      );
+    }
+  }
+  const unmigratedInputs = inputs.filter((input) => !prepared.baselines.has(input.namespace));
+  for (const input of unmigratedInputs) {
+    const snapshot = prepared.baselineSnapshots.get(input.namespace);
+    if (!snapshot) continue;
+    const current = await fetchRemoteSchemaSnapshot(
+      state.client,
+      sourceWorkspaceId,
+      input.namespace,
+    );
+    if (compareSnapshots(snapshot, current).changes.length > 0) {
+      throw new Error(
+        `Source namespace "${input.namespace}" schema changed after migration test preparation. Run the migration test again.`,
+      );
+    }
+  }
+}
+
 // A retained target may carry a user profile config referencing types the
 // baseline deploy replaces; deleting it up front lets the baseline's planAuth
 // see no existing config instead of reordering delete phases.
@@ -669,8 +726,9 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         }
       }
     },
-    cloneData: async ({ sourceWorkspaceId, targetWorkspaceId, applicationName }) => {
+    cloneData: async ({ prepared, sourceWorkspaceId, targetWorkspaceId, applicationName }) => {
       const state = stateOrThrow(runtimeState);
+      await assertSourceBaselineFresh(state, prepared, sourceWorkspaceId);
       logger.warn(
         "Clone mode copies TailorDB records only; IdP users and file blobs are not copied.",
       );

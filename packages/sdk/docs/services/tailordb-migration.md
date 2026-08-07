@@ -372,6 +372,8 @@ tailor tailordb migration test --data clone
 
 The platform clone API is feature-gated and requires editor access to both same-region workspaces. It copies TailorDB records only: IdP users, file blobs, and metadata labels are not copied. File fields therefore retain references whose blobs are absent. The command polls the asynchronous operation and reports platform failures; if clone is unavailable, use seed mode.
 
+The source schema is re-verified immediately before cloning; if the source workspace was deployed or otherwise changed after the test started, the command aborts instead of cloning data that no longer matches the deployed baseline.
+
 ### Assertions and retained targets
 
 Pass a TypeScript file with `--assert`. Its exported `main` function uses the same Kysely transaction signature as `migrate.ts`, runs after all pending migrations, and must throw when an invariant fails:
