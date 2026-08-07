@@ -37,6 +37,11 @@ export async function runMigrationTest(
   if (options.targetWorkspaceId && !options.yes) {
     throw new Error("--target-workspace-id requires --yes because the target may be overwritten.");
   }
+  if (options.keep && options.targetWorkspaceId) {
+    throw new Error(
+      "--keep applies only to automatically created workspaces; a designated target is always retained.",
+    );
+  }
   if (options.assertionNamespace && !options.assertionPath) {
     throw new Error("--assert is required when --assert-namespace is provided.");
   }
@@ -93,7 +98,9 @@ export async function runMigrationTest(
     failed = true;
   }
 
-  if (temporary) {
+  if (temporary && options.keep) {
+    logger.info(`Keeping temporary workspace ${workspace.name ?? workspace.id}.`);
+  } else if (temporary) {
     try {
       await dependencies.deleteWorkspace(workspace.id);
       deleted = true;
@@ -141,7 +148,7 @@ export const testCommand = defineAppCommand({
   description:
     "Test pending migrations with seed fixtures or cloned data in a temporary workspace.",
   notes:
-    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs.",
+    "The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs.",
   args: z.strictObject({
     ...deploymentArgs,
     yes: arg(z.boolean().default(false), {
@@ -153,6 +160,9 @@ export const testCommand = defineAppCommand({
     }),
     "target-workspace-id": arg(z.uuid().optional(), {
       description: "Existing throwaway workspace to retain after the test (requires --yes)",
+    }),
+    keep: arg(z.boolean().default(false), {
+      description: "Keep the automatically created workspace after the test",
     }),
     assert: arg(z.string().optional(), {
       description: "Path to a TypeScript assertion script to run after migrations",
@@ -173,6 +183,7 @@ export const testCommand = defineAppCommand({
       profile: args.profile,
       data: args.data,
       targetWorkspaceId: args["target-workspace-id"],
+      keep: args.keep,
       assertionPath: args.assert,
       assertionNamespace: args["assert-namespace"],
       machineUser: args["machine-user"],

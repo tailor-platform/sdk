@@ -261,6 +261,7 @@ tailor tailordb migration test [options]
 | `--yes`                                       | `-y`  | Acknowledge that a designated target workspace may be overwritten      | No       | `false`              | -                              |
 | `--data <DATA>`                               | -     | Data source for the migration test (seed or clone)                     | No       | `"seed"`             | -                              |
 | `--target-workspace-id <TARGET_WORKSPACE_ID>` | -     | Existing throwaway workspace to retain after the test (requires --yes) | No       | -                    | -                              |
+| `--keep`                                      | -     | Keep the automatically created workspace after the test                | No       | `false`              | -                              |
 | `--assert <ASSERT>`                           | -     | Path to a TypeScript assertion script to run after migrations          | No       | -                    | -                              |
 | `--assert-namespace <ASSERT_NAMESPACE>`       | -     | TailorDB namespace exposed to the assertion script                     | No       | -                    | -                              |
 | `--machine-user <MACHINE_USER>`               | -     | Machine user for seed and assertion script execution                   | No       | -                    | -                              |
@@ -269,7 +270,7 @@ See [Global Options](../cli-reference.md#global-options) for options available t
 
 **Notes**
 
-The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs.
+The source workspace is read-only. Without --target-workspace-id, the command creates a workspace in the source workspace's region and deletes it after success or failure; pass --keep to retain it for inspection. A designated target is retained and requires --yes. Clone mode copies TailorDB records only; it does not copy IdP users or file blobs.
 
 #### tailordb migration validate
 

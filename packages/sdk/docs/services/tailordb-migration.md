@@ -385,7 +385,13 @@ tailor tailordb migration test \
 
 `--assert-namespace` is inferred when only one namespace has pending migrations and is required otherwise.
 
-To inspect the result after a run, provide an empty designated throwaway workspace. This mode never deletes the target and requires explicit acknowledgment:
+To inspect the result after a run, pass `--keep` so the automatically created workspace survives instead of being deleted, on success and on failure:
+
+```bash
+tailor tailordb migration test --keep
+```
+
+Alternatively, provide an empty designated throwaway workspace. This mode never deletes the target and requires explicit acknowledgment:
 
 ```bash
 tailor tailordb migration test \

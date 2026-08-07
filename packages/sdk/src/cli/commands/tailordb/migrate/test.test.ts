@@ -193,6 +193,48 @@ describe("tailordb migration test", () => {
     expect(dependencies.createWorkspace).not.toHaveBeenCalled();
   });
 
+  test("keeps an automatically-created workspace when --keep is passed", async () => {
+    const events: string[] = [];
+    const dependencies = createDependencies(events);
+
+    const result = await runMigrationTest({ data: "seed", keep: true }, dependencies);
+
+    expect(events).toEqual(["prepare", "create", "baseline", "seed", "migrate"]);
+    expect(dependencies.deleteWorkspace).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ temporary: true, deleted: false });
+  });
+
+  test("keeps an automatically-created workspace on failure when --keep is passed", async () => {
+    const events: string[] = [];
+    const dependencies = createDependencies(events);
+    vi.mocked(dependencies.deployMigrations).mockRejectedValueOnce(new Error("migration failed"));
+
+    await expect(runMigrationTest({ data: "seed", keep: true }, dependencies)).rejects.toThrow(
+      "migration failed",
+    );
+
+    expect(dependencies.deleteWorkspace).not.toHaveBeenCalled();
+  });
+
+  test("rejects --keep with a designated target workspace", async () => {
+    const events: string[] = [];
+    const dependencies = createDependencies(events);
+
+    await expect(
+      runMigrationTest(
+        {
+          data: "seed",
+          targetWorkspaceId: "55555555-5555-4555-8555-555555555555",
+          yes: true,
+          keep: true,
+        },
+        dependencies,
+      ),
+    ).rejects.toThrow(/--keep/);
+
+    expect(events).toEqual([]);
+  });
+
   test("deletes an automatically-created workspace when migration execution fails", async () => {
     const events: string[] = [];
     const dependencies = createDependencies(events);
