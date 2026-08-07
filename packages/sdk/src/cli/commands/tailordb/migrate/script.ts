@@ -242,7 +242,8 @@ function resolveTargetNamespace(
 export const scriptCommand = defineAppCommand({
   name: "script",
   description:
-    "Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none. When migrate.ts already exists, running the command clears a previously recorded --no-script acknowledgment.",
+    "Add a migration script (migrate.ts) template to an existing migration directory, or record with --no-script that a migration intentionally has none.",
+  notes: `When \`migrate.ts\` already exists, running the command clears a previously recorded \`--no-script\` acknowledgment.`,
   args: z.strictObject({
     ...configArg,
     number: arg(z.string(), {

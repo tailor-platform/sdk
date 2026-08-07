@@ -526,8 +526,7 @@ export const validateCommand = defineAppCommand({
       description: "Target TailorDB namespace (validates all namespaces if not specified)",
     }),
     strict: arg(z.boolean().default(false), {
-      description:
-        "Additionally fail when a migration not yet applied to the remote has data-loss warnings but neither a migrate.ts nor a recorded --no-script acknowledgment",
+      description: "Also fail when a pending migration can drop data without an acknowledgment",
     }),
   }),
   run: async (args) => {
