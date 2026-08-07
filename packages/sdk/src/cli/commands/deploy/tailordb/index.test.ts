@@ -211,7 +211,7 @@ describe("planTailorDB (service level)", () => {
     await runTest();
   });
 
-  test("plans and checkpoints a migration-test baseline snapshot instead of current types", async () => {
+  test("plans a migration-test baseline snapshot instead of current types", async () => {
     const tailordb = createMockTailorDBService("tailordb");
     Object.defineProperty(tailordb, "types", {
       value: {
@@ -263,7 +263,7 @@ describe("planTailorDB (service level)", () => {
 
     await applyTailorDB(client, result, "create-update");
 
-    expect(client.setMetadata).toHaveBeenCalledWith(
+    expect(client.setMetadata).not.toHaveBeenCalledWith(
       expect.objectContaining({ labels: expect.objectContaining({ "sdk-migration": "m0003" }) }),
     );
   });

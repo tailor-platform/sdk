@@ -8,7 +8,10 @@ import {
   deployMigrationTestTarget,
 } from "#/cli/commands/deploy/deploy";
 import { resourceTrn } from "#/cli/commands/deploy/label";
-import { getMigrationMachineUser } from "#/cli/commands/deploy/tailordb/migration";
+import {
+  getMigrationMachineUser,
+  updateMigrationLabel,
+} from "#/cli/commands/deploy/tailordb/migration";
 import { bundleSeedScript } from "#/cli/commands/generate/seed/bundler";
 import {
   fetchRemoteSchemaSnapshot,
@@ -571,6 +574,14 @@ export function createMigrationTestDependencies(): MigrationTestDependencies {
         prepared.baselines,
         prepared.baselineSnapshots,
       );
+      for (const [namespace, baseline] of prepared.baselines) {
+        await updateMigrationLabel(
+          state.client,
+          targetWorkspaceId,
+          namespace,
+          baseline.migrationNumber,
+        );
+      }
     },
     seedData: async ({ prepared, targetWorkspaceId }) => {
       const state = stateOrThrow(runtimeState);

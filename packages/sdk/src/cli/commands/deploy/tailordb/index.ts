@@ -689,16 +689,7 @@ export async function applyTailorDB(
     // Skip when pending migrations ran: each already bumped the label, and
     // re-pinning to working_tree_max could mask one left intentionally pending
     // (e.g. a missing script). --no-schema-check always re-pins to repair drift.
-    if (migrationContext.migrationTestBaselines) {
-      for (const [namespace, baseline] of migrationContext.migrationTestBaselines) {
-        await updateMigrationLabel(
-          client,
-          migrationContext.workspaceId,
-          namespace,
-          baseline.migrationNumber,
-        );
-      }
-    } else if (
+    if (
       namespacesWithMigrations.length > 0 &&
       (migrationContext.noSchemaCheck || pendingMigrations.length === 0)
     ) {
