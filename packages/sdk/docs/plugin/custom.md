@@ -470,7 +470,7 @@ import type { Plugin, GeneratorResult } from "@tailor-platform/sdk";
 
 const typeListPlugin: Plugin = {
   id: "@example/type-list",
-  description: "Generates a list of all TailorDB type names",
+  description: "Generates a list of all TailorDB table names",
 
   onTailorDBReady(ctx): GeneratorResult {
     const allTypes = ctx.tailordb.flatMap((ns) =>
