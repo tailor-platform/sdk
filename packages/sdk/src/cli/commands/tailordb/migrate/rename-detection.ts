@@ -9,7 +9,11 @@
  */
 
 import type { FieldAddedChange, FieldRemovedChange, MigrationDiff } from "./diff-calculator";
-import type { SchemaSnapshot, SnapshotFieldConfig } from "./snapshot-types";
+import type {
+  NormalizedSchemaSnapshot,
+  SchemaSnapshot,
+  SnapshotFieldConfig,
+} from "./snapshot-types";
 
 /**
  * A confirmed field rename to record in the migration diff.
@@ -132,6 +136,68 @@ export function renameSpecApplies(
     currFields?.[spec.toFieldName] &&
     !prevFields[spec.toFieldName],
   );
+}
+
+/**
+ * Assert that every rename spec matches a compatible removed + added field
+ * pair between the two normalized snapshots.
+ * @param {NormalizedSchemaSnapshot} previous - Previous normalized snapshot
+ * @param {NormalizedSchemaSnapshot} current - Current normalized snapshot
+ * @param {readonly FieldRenameSpec[]} fieldRenames - Rename specs to validate
+ */
+export function assertValidFieldRenames(
+  previous: NormalizedSchemaSnapshot,
+  current: NormalizedSchemaSnapshot,
+  fieldRenames: readonly FieldRenameSpec[],
+): void {
+  const seen = new Set<string>();
+  for (const rename of fieldRenames) {
+    const { typeName, fromFieldName, toFieldName } = rename;
+    const label = `${typeName}.${fromFieldName}:${toFieldName}`;
+    for (const key of [`${typeName}.${fromFieldName}`, `${typeName}.${toFieldName}`]) {
+      if (seen.has(key)) {
+        throw new Error(`Field "${key}" appears in more than one rename.`);
+      }
+      seen.add(key);
+    }
+
+    const prevType = previous.types[typeName];
+    const currType = current.types[typeName];
+    if (!prevType || !currType) {
+      throw new Error(
+        `Cannot rename ${label}: type "${typeName}" must exist in both the previous and the current schema.`,
+      );
+    }
+    const prevField = prevType.fields[fromFieldName];
+    if (!prevField) {
+      throw new Error(
+        `Cannot rename ${label}: field "${fromFieldName}" does not exist in the previous schema.`,
+      );
+    }
+    if (currType.fields[fromFieldName]) {
+      throw new Error(
+        `Cannot rename ${label}: field "${fromFieldName}" still exists in the current schema.`,
+      );
+    }
+    const currField = currType.fields[toFieldName];
+    if (!currField) {
+      throw new Error(
+        `Cannot rename ${label}: field "${toFieldName}" does not exist in the current schema.`,
+      );
+    }
+    if (prevType.fields[toFieldName]) {
+      throw new Error(
+        `Cannot rename ${label}: field "${toFieldName}" already exists in the previous schema.`,
+      );
+    }
+    if (!isRenameCompatible(prevField, currField)) {
+      throw new Error(
+        `Cannot rename ${label}: the fields are not rename-compatible ` +
+          `(the field type, array-ness, and foreign key target must match, ` +
+          `enum values must not be removed, and serial fields cannot be renamed).`,
+      );
+    }
+  }
 }
 
 const RENAME_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+):([^.:\s]+)$/;

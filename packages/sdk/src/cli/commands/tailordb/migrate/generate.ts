@@ -45,6 +45,7 @@ import {
   getNextMigrationNumber,
   assertValidMigrationFiles,
   INITIAL_SCHEMA_NUMBER,
+  type NormalizedSchemaSnapshot,
   type SchemaSnapshot,
 } from "./snapshot";
 import { generateSchemaFile, generateDiffFiles } from "./template-generator";
@@ -369,8 +370,8 @@ interface DropFlag {
 interface NamespaceGeneration {
   namespace: string;
   migrationsDir: string;
-  currentSnapshot: SchemaSnapshot;
-  previousSnapshot: SchemaSnapshot | null;
+  currentSnapshot: NormalizedSchemaSnapshot;
+  previousSnapshot: NormalizedSchemaSnapshot | null;
   /** Diff with confirmed renames, set during preflight when a previous snapshot exists. */
   diff?: MigrationDiff;
 }
@@ -436,8 +437,8 @@ async function promptRenameCandidate(
  * recompute the diff with the confirmed renames. When prompting is
  * unavailable (`--yes` or no TTY), the remaining candidates are returned as
  * unresolved for the caller to fail on.
- * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
- * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
+ * @param {NormalizedSchemaSnapshot} previousSnapshot - Previous normalized schema snapshot
+ * @param {NormalizedSchemaSnapshot} currentSnapshot - Current normalized schema snapshot
  * @param {MigrationDiff} diff - Diff computed without rename knowledge
  * @param {GenerateOptions} options - Generate options
  * @param {readonly FieldRenameSpec[]} flagRenameSpecs - This namespace's `--rename` specs
@@ -445,8 +446,8 @@ async function promptRenameCandidate(
  * @returns {Promise<RenameResolution>} Diff with confirmed renames and any unresolved candidates
  */
 async function resolveFieldRenames(
-  previousSnapshot: SchemaSnapshot,
-  currentSnapshot: SchemaSnapshot,
+  previousSnapshot: NormalizedSchemaSnapshot,
+  currentSnapshot: NormalizedSchemaSnapshot,
   diff: MigrationDiff,
   options: GenerateOptions,
   flagRenameSpecs: readonly FieldRenameSpec[],

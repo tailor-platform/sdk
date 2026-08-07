@@ -11,6 +11,7 @@ import {
   DB_TYPES_FILE_NAME,
   compareSnapshots,
   getMigrationDirPath,
+  normalizeSchemaSnapshot,
   type SchemaSnapshot,
 } from "./snapshot";
 import {
@@ -764,7 +765,10 @@ describe("template-generator", () => {
           },
         },
       });
-      const diff = compareSnapshots(previous, current);
+      const diff = compareSnapshots(
+        normalizeSchemaSnapshot(previous),
+        normalizeSchemaSnapshot(current),
+      );
 
       const result = await generateDiffFiles(diff, tempDir, 1, previous);
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
