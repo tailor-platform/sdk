@@ -158,6 +158,8 @@ If you decline the prompt (or confirm the removal with `--drop`), the change sta
 
 Renaming a **type** is not yet detected; it is still a type removal plus a type addition.
 
+Renaming a member inside a **nested field** is not detected either, and it is quieter: `User.address.zip` → `zipCode` becomes a single `field_modified` on `address` with no breaking change, no warning, and no generated script, so the member's values are not carried over. Copy them with a custom `tailordb migration script` if they must survive.
+
 ### Breaking changes without a script
 
 Breaking changes require `migrate.ts`. If it is missing at deploy time (for example, the generated script was deleted), `tailor deploy` fails before applying the migration or anything after it. When there is genuinely nothing to migrate — say, the affected type holds no data yet — record an explicit acknowledgment instead of keeping an empty script:
