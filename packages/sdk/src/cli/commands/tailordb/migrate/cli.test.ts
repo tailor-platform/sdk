@@ -7,6 +7,7 @@ import {
   setCommand,
   statusCommand,
   syncCommand,
+  testCommand,
   validateCommand,
 } from "./index";
 
@@ -17,7 +18,7 @@ describe("migration CLI commands", () => {
       expect(migrationCommand.description).toContain("migration");
     });
 
-    test.each(["generate", "rebaseline", "script", "set", "status", "sync", "validate"])(
+    test.each(["generate", "rebaseline", "script", "set", "status", "sync", "test", "validate"])(
       "should have %s subcommand",
       (subCommand) => {
         expect(migrationCommand.subCommands).toHaveProperty(subCommand);
@@ -114,6 +115,22 @@ describe("migration CLI commands", () => {
         "migration and schema-drift checks used by 'deploy'",
       );
       expect(validateCommand.description).not.toContain("same checks as 'deploy'");
+    });
+  });
+
+  describe("testCommand", () => {
+    test("should expose the migration verification inputs", () => {
+      expect(testCommand.name).toBe("test");
+      expect(testCommand.description).toContain("temporary workspace");
+      expect(testCommand.description).toContain("pending migrations");
+
+      const shape = testCommand.args.shape;
+      expect(shape).toHaveProperty("data");
+      expect(shape).toHaveProperty("target-workspace-id");
+      expect(shape).toHaveProperty("assert");
+      expect(shape).toHaveProperty("assert-namespace");
+      expect(shape).toHaveProperty("machine-user");
+      expect(shape).toHaveProperty("yes");
     });
   });
 });

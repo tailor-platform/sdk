@@ -87,7 +87,11 @@ import {
 import { planWorkflowJobFunctionExecutionPolicy } from "./workflow-execution-policy";
 import { resolveDeployWorkspace } from "./workspace";
 import type { Executor } from "#/types/executor.generated";
-import type { PlanContext } from "./types";
+import type {
+  PlanContext,
+  TailorDBMigrationTestBaseline,
+  TailorDBMigrationTestSnapshots,
+} from "./types";
 
 export interface DeployOptions {
   workspaceId?: string;
@@ -114,6 +118,12 @@ interface DeployCLIContext {
   envFileIfExists?: string;
   verbose?: boolean;
   json?: boolean;
+}
+
+interface DeployInternalContext {
+  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
+  migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
+  suppressResultOutput?: boolean;
 }
 
 /**
@@ -702,6 +712,8 @@ type PlanDeploymentTargetParams = {
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
+  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
+  migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
 };
 
 type ConfirmDeploymentPlansParams = {
@@ -718,6 +730,8 @@ type PlanDeploymentTargetsParams = {
   client: OperatorClient;
   workspaceId: string;
   noSchemaCheck: boolean | undefined;
+  migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
+  migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
   planTarget?: (params: PlanDeploymentTargetParams) => Promise<PlannedDeployment>;
 };
 
@@ -1813,16 +1827,29 @@ function collectDeployRunPlanInputs(
 async function planDeploymentTarget(
   params: PlanDeploymentTargetParams,
 ): Promise<PlannedDeployment> {
-  const { target, targets, runInputs, client, workspaceId, noSchemaCheck } = params;
+  const {
+    target,
+    targets,
+    runInputs,
+    client,
+    workspaceId,
+    noSchemaCheck,
+    migrationTestBaselines,
+    migrationTestSnapshots,
+  } = params;
   const { config, application, workflowBuildResult, httpAdapterBuildResult, bundledScripts } =
     target;
   const owned = ownedSubscriptions(runInputs.eventSubscriptions, target);
 
+  const migrationTestServices = application.tailorDBServices.map((service) => {
+    const snapshot = migrationTestSnapshots?.get(service.namespace);
+    return snapshot ? { ...service, types: snapshot.types, typeSourceInfo: {} } : service;
+  });
   await withSpan("plan.validateTailorDBTypeNames", () =>
     assertUniqueTailorDBTypeNamesWithExternal({
       client,
       workspaceId,
-      tailorDBServices: application.tailorDBServices,
+      tailorDBServices: migrationTestServices,
       externalTailorDBNamespaces: application.externalTailorDBNamespaces,
       plannedExternalTailorDBServices: collectPlannedExternalTailorDBServices(target, targets),
     }),
@@ -1850,6 +1877,8 @@ async function planDeploymentTarget(
       forRemoval: false,
       config,
       noSchemaCheck,
+      migrationTestBaselines,
+      migrationTestSnapshots,
       forceApplyAll,
       ...runInputs,
       idpUserTriggerTargets: subscribedIdps(owned),
@@ -2530,12 +2559,54 @@ async function validateDeploymentPlans(
 }
 
 /**
+ * Strip the services a migration test deploy must not manage, so plan modules
+ * see an application that already reflects the deploy's scope. Baseline deploys
+ * omit executors and Auth user profiles (data loading must not trigger current
+ * event handlers or reference the final schema); every migration test deploy
+ * omits workspace-bound static website custom domains.
+ * @param application - Application built from the user's config
+ * @param internalContext - Internal deployment behavior used by composed CLI workflows
+ * @returns The application as the migration test deploy manages it
+ */
+export function adjustApplicationForMigrationTest(
+  application: Application,
+  internalContext: DeployInternalContext | undefined,
+): Application {
+  if (!internalContext?.migrationTestSnapshots) {
+    return application;
+  }
+  const forBaseline = internalContext.migrationTestBaselines !== undefined;
+  const authService =
+    forBaseline && application.authService
+      ? { ...application.authService, userProfile: undefined }
+      : application.authService;
+  const adjusted: Application = {
+    ...application,
+    executorService: forBaseline ? undefined : application.executorService,
+    authService,
+    staticWebsiteServices: application.staticWebsiteServices.map((website) => ({
+      ...website,
+      customDomains: undefined,
+    })),
+    get applications() {
+      return [adjusted];
+    },
+  };
+  return adjusted;
+}
+
+/**
  * Deploy the configured application to the Tailor platform.
  * @param options - Deploy execution options
  * @param cliContext - Global CLI arguments to preserve in recovery actions
+ * @param internalContext - Internal deployment behavior used by composed CLI workflows
  * @returns Promise that resolves to `{ bundledScripts }` when `buildOnly` is true, otherwise void
  */
-async function deployInternal(options?: DeployOptions, cliContext?: DeployCLIContext) {
+async function deployInternal(
+  options?: DeployOptions,
+  cliContext?: DeployCLIContext,
+  internalContext?: DeployInternalContext,
+) {
   return withSpan("deploy", async (rootSpan) => {
     rootSpan.setAttribute("deploy.dry_run", options?.dryRun ?? false);
 
@@ -2609,13 +2680,19 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
     rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
     rootSpan.setAttribute("workspace.id", workspaceId);
 
-    const runInputs = collectDeployRunPlanInputs(targets, !options?.dryRun);
+    const planTargets = targets.map((target) => ({
+      ...target,
+      application: adjustApplicationForMigrationTest(target.application, internalContext),
+    }));
+    const runInputs = collectDeployRunPlanInputs(planTargets, !options?.dryRun);
     const deployments = await planDeploymentTargets({
-      targets,
+      targets: planTargets,
       runInputs,
       client,
       workspaceId,
       noSchemaCheck: options?.noSchemaCheck,
+      migrationTestBaselines: internalContext?.migrationTestBaselines,
+      migrationTestSnapshots: internalContext?.migrationTestSnapshots,
     });
 
     const yes = options?.yes ?? false;
@@ -2625,7 +2702,7 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
     // Phase 1b: Confirm
     const missingDependentApps = (
       await Promise.all(
-        targets.map((target) =>
+        planTargets.map((target) =>
           fetchMissingDependentApps({
             client,
             workspaceId,
@@ -2657,10 +2734,12 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
 
     await applyDeploymentPlans(client, workspaceId, deployments);
 
-    if (logger.jsonMode) {
-      logger.out({ summary: planSummary, status: "applied" });
-    } else {
-      logger.success("Successfully applied changes.");
+    if (!internalContext?.suppressResultOutput) {
+      if (logger.jsonMode) {
+        logger.out({ summary: planSummary, status: "applied" });
+      } else {
+        logger.success("Successfully applied changes.");
+      }
     }
 
     return undefined;
@@ -2674,6 +2753,41 @@ async function deployInternal(options?: DeployOptions, cliContext?: DeployCLICon
  */
 export function deploy(options?: DeployOptions) {
   return deployInternal(options);
+}
+
+/**
+ * Deploy TailorDB baseline snapshots for an isolated migration test.
+ * @param options - Deploy execution options
+ * @param baselines - Baseline snapshots keyed by TailorDB namespace
+ * @param baselineSnapshots - All schema snapshots that must match the source before data loading
+ * @returns Deploy result
+ */
+export function deployMigrationTestBaseline(
+  options: DeployOptions,
+  baselines: ReadonlyMap<string, TailorDBMigrationTestBaseline>,
+  baselineSnapshots: TailorDBMigrationTestSnapshots,
+) {
+  return deployInternal(options, undefined, {
+    migrationTestBaselines: baselines,
+    migrationTestSnapshots: baselineSnapshots,
+    suppressResultOutput: true,
+  });
+}
+
+/**
+ * Deploy pending migrations without emitting deploy's standalone result payload.
+ * @param options - Deploy execution options
+ * @param snapshots - Final committed snapshots keyed by TailorDB namespace
+ * @returns Deploy result
+ */
+export function deployMigrationTestTarget(
+  options: DeployOptions,
+  snapshots: TailorDBMigrationTestSnapshots,
+) {
+  return deployInternal(options, undefined, {
+    migrationTestSnapshots: snapshots,
+    suppressResultOutput: true,
+  });
 }
 
 /**

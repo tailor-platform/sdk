@@ -29,7 +29,7 @@
  * Running individual tests in isolation may fail.
  */
 
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -135,6 +135,52 @@ function runDeployCli(configPath: string, workspaceId: string, cwd: string): voi
 }
 
 /**
+ * Run pending migrations against a designated E2E target workspace.
+ * @param configPath - Path to the fixture config
+ * @param sourceWorkspaceId - Workspace whose migration checkpoint is the baseline
+ * @param targetWorkspaceId - Empty throwaway workspace retained for assertions
+ * @param assertionPath - Post-migration assertion script
+ * @param cwd - Fixture working directory
+ */
+function runMigrationTestCli(
+  configPath: string,
+  sourceWorkspaceId: string,
+  targetWorkspaceId: string,
+  assertionPath: string,
+  cwd: string,
+): void {
+  const sdkRoot = path.resolve(__dirname, "..");
+  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
+  execFileSync(
+    "node",
+    [
+      cliPath,
+      "tailordb",
+      "migration",
+      "test",
+      "--config",
+      configPath,
+      "--workspace-id",
+      sourceWorkspaceId,
+      "--target-workspace-id",
+      targetWorkspaceId,
+      "--data",
+      "seed",
+      "--assert",
+      assertionPath,
+      "--yes",
+    ],
+    {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, NODE_OPTIONS: "--experimental-vm-modules" },
+      encoding: "utf-8",
+      timeout: 240000,
+    },
+  );
+}
+
+/**
  * Run the deploy CLI command, returning the result instead of throwing so callers
  * can assert on an expected failure.
  * @param {string} configPath - Path to the config file
@@ -202,6 +248,35 @@ describe.sequential("E2E: TailorDB Migrations", () => {
 
     // Create migrations directory (empty)
     fs.mkdirSync(migrationsDir, { recursive: true });
+
+    const seedDataDir = path.join(tempDir, "seed", "data");
+    fs.mkdirSync(seedDataDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(seedDataDir, "User.jsonl"),
+      `${JSON.stringify({
+        id: "11111111-1111-4111-8111-111111111111",
+        name: "Migration Test User",
+        email: "migration-test@example.com",
+        role: "ADMIN",
+      })}\n`,
+    );
+
+    fs.writeFileSync(
+      path.join(tempDir, "assert-migration.ts"),
+      `import type { Kysely } from "kysely";
+
+export async function main(db: Kysely<any>): Promise<void> {
+  const user = await db
+    .selectFrom("User")
+    .select(["name", "email"])
+    .where("id", "=", "11111111-1111-4111-8111-111111111111")
+    .executeTakeFirst();
+  if (user?.name !== "Migration Test User" || user.email !== "migration-test@example.com") {
+    throw new Error("Seeded migration fixture was not preserved");
+  }
+}
+`,
+    );
   }
 
   /**
@@ -484,6 +559,40 @@ export type user = typeof user;
       expect(diff.changes.length).toBe(1);
       expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "phone" });
     }, 60000);
+
+    test("rehearses the pending migration in a designated workspace", async () => {
+      const configPath = createConfig();
+      const sourceWorkspace = (await client.getWorkspace({ workspaceId })).workspace!;
+      const targetResponse = await client.createWorkspace({
+        workspaceName: `${testWorkspaceName}-migration-target`,
+        workspaceRegion: sourceWorkspace.region,
+        deleteProtection: false,
+        organizationId: sourceWorkspace.organizationId,
+        folderId: sourceWorkspace.folderId,
+      });
+      const targetWorkspaceId = targetResponse.workspace!.id;
+      trackWorkspace(targetWorkspaceId);
+
+      runMigrationTestCli(
+        configPath,
+        workspaceId,
+        targetWorkspaceId,
+        path.join(tempDir, "assert-migration.ts"),
+        tempDir,
+      );
+
+      const targetType = await client.getTailorDBType({
+        workspaceId: targetWorkspaceId,
+        namespaceName: tailordbName,
+        tailordbTypeName: "User",
+      });
+      expect(Object.keys(targetType.tailordbType?.schema?.fields ?? {})).toContain("phone");
+
+      const { metadata } = await client.getMetadata({
+        trn: resourceTrn(targetWorkspaceId, "tailordb", tailordbName),
+      });
+      expect(parseMigrationLabelNumber(metadata?.labels[MIGRATION_LABEL_KEY] ?? "")).toBe(1);
+    }, 240000);
 
     /**
      * Scenario 2b: Apply non-breaking change

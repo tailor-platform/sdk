@@ -340,6 +340,77 @@ The same pattern works for switching between scalar and array.
 
 > **Do not skip clearing the old field.** Removing a field from the schema does not necessarily remove its stored JSON value. Re-adding the same name with an incompatible type can deploy successfully while leaving stale values that make subsequent reads fail. Verify that every old value is `null` before removing and re-adding the field name.
 
+## Testing Pending Migrations
+
+`tailor tailordb migration test` runs every migration pending in the source workspace against an isolated workspace. The source workspace is selected by `--workspace-id` or the active profile and is never modified.
+
+The command performs the following sequence:
+
+1. Reads each migration-enabled namespace's `sdk-migration` checkpoint from the source workspace and reconstructs that exact snapshot from local migration history.
+2. Creates a temporary workspace in the same region, organization, and folder as the source, unless `--target-workspace-id` names an existing throwaway workspace.
+3. Deploys the checkpoint snapshots and writes their checkpoint labels.
+4. Loads fixture data or clones source records.
+5. Runs the normal deployment pipeline, including every pending pre-migration, `migrate.ts`, and post-migration phase.
+6. Optionally runs an assertion script against the migrated data.
+7. Deletes an automatically-created workspace after success or failure.
+
+Both the pre-migration and final TailorDB schemas come from committed migration snapshots. Ungenerated changes in the current type source are not included in the rehearsal.
+
+Executors are omitted from the baseline deployment so loading fixture or cloned records cannot trigger current event handlers against the older schema. Auth user profiles are also deferred until the pending migrations finish, while configured machine users remain available to run seed and migration scripts. The final deployment restores the configured executors and user profiles. Static websites are deployed so configuration references to their URLs resolve, but their workspace-bound custom domains are omitted from migration-test deployments.
+
+### Seed mode
+
+Seed mode is the default and uses the JSONL files produced by the configured `seedPlugin`. Run `tailor generate` after adding the plugin or changing seed types, then populate its `data/*.jsonl` files:
+
+```bash
+tailor tailordb migration test --data seed
+```
+
+Rows are loaded only for types present in the deployed pre-migration snapshots (and current schemas without migrations), in foreign-key dependency order. Fields introduced by pending migrations, including timestamp and nested fields, are removed before insertion so current fixtures can be loaded into the baseline schema. Missing type files are treated as empty. IdP `_User` fixtures are not loaded by this command.
+
+Use `--machine-user` to override the seed plugin's `machineUserName`, the namespace migration setting, and the first configured Auth machine user for seed and assertion execution.
+
+### Clone mode
+
+Clone mode copies TailorDB records from the source workspace after the identical application, namespace names, and pre-migration schemas exist in the target. For namespaces without migration history, the command reproduces the deployed source schema rather than uncommitted local type changes:
+
+```bash
+tailor tailordb migration test --data clone
+```
+
+The platform clone API is feature-gated and requires editor access to both same-region workspaces. It copies TailorDB records only: IdP users, file blobs, and metadata labels are not copied. File fields therefore retain references whose blobs are absent. The command polls the asynchronous operation and reports platform failures; if clone is unavailable, use seed mode.
+
+The source schema is re-verified immediately before cloning; if the source workspace was deployed or otherwise changed after the test started, the command aborts instead of cloning data that no longer matches the deployed baseline.
+
+### Assertions and retained targets
+
+Pass a TypeScript file with `--assert`. Its exported `main` function uses the same Kysely transaction signature as `migrate.ts`, runs after all pending migrations, and must throw when an invariant fails:
+
+```bash
+tailor tailordb migration test \
+  --data seed \
+  --assert ./tests/assert-customer-email.ts \
+  --assert-namespace tailordb
+```
+
+`--assert-namespace` is inferred when only one namespace has pending migrations and is required otherwise.
+
+To inspect the result after a run, pass `--keep` so the automatically created workspace survives instead of being deleted, on success and on failure:
+
+```bash
+tailor tailordb migration test --keep
+```
+
+Alternatively, provide an empty designated throwaway workspace. This mode never deletes the target and requires explicit acknowledgment:
+
+```bash
+tailor tailordb migration test \
+  --target-workspace-id 00000000-0000-4000-8000-000000000000 \
+  --yes
+```
+
+Do not target a shared development or production workspace: baseline deployment reconciles its managed resources and schemas before the migration test runs.
+
 ## Automatic Migration Execution
 
 When you run `tailor deploy`, the SDK detects pending migrations (anything past the current `sdk-migration` label on the deployed namespace) and runs them in order before continuing with the rest of the apply.
