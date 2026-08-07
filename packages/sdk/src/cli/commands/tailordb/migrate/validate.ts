@@ -121,19 +121,37 @@ interface CollectedValidationReports {
 }
 
 /**
- * Assert that every migration script required by local history exists and that
- * generated normalization logic has been reviewed
+ * Walk the local migration history once to assert that every required
+ * migration script exists and generated normalization logic has been
+ * reviewed, and to collect migrations with data-loss warnings that have
+ * neither a migrate.ts nor a recorded --no-script acknowledgment
  * @param {string} migrationsDir - Migrations directory path
  * @param {string} namespace - TailorDB namespace (for error messages)
+ * @returns {UnacknowledgedWarningMigration[]} Unacknowledged warning migrations in the local history
  */
-function assertMigrationScriptsReady(migrationsDir: string, namespace: string): void {
-  const diffFiles = getMigrationFiles(migrationsDir).filter((file) => file.type === "diff");
+function assertMigrationScriptsReady(
+  migrationsDir: string,
+  namespace: string,
+): UnacknowledgedWarningMigration[] {
   const missing: number[] = [];
-  for (const file of diffFiles) {
+  const unreviewed: number[] = [];
+  const unacknowledgedWarnings: UnacknowledgedWarningMigration[] = [];
+  for (const file of getMigrationFiles(migrationsDir)) {
+    if (file.type !== "diff") continue;
     const diff = loadDiff(file.path);
-    if (!diff.requiresMigrationScript || diff.scriptSkipped) continue;
-    if (!fs.existsSync(getMigrationFilePath(migrationsDir, file.number, "migrate"))) {
+    const migrateFilePath = getMigrationFilePath(migrationsDir, file.number, "migrate");
+    const hasScript = fs.existsSync(migrateFilePath);
+    if (diff.requiresMigrationScript && !diff.scriptSkipped && !hasScript) {
       missing.push(file.number);
+    }
+    if (
+      hasScript &&
+      fs.readFileSync(migrateFilePath, "utf8").includes(MIGRATION_REVIEW_REQUIRED_MARKER)
+    ) {
+      unreviewed.push(file.number);
+    }
+    if (diff.hasWarnings && !diff.scriptSkipped && !hasScript) {
+      unacknowledgedWarnings.push({ migrationNumber: file.number, warnings: diff.warnings });
     }
   }
   if (missing.length > 0) {
@@ -144,15 +162,6 @@ function assertMigrationScriptsReady(migrationsDir: string, namespace: string): 
         `is needed with 'tailor tailordb migration script <number> --no-script --reason "..."'.`,
     );
   }
-
-  const unreviewed: number[] = [];
-  for (const file of diffFiles) {
-    const migrateFilePath = getMigrationFilePath(migrationsDir, file.number, "migrate");
-    if (!fs.existsSync(migrateFilePath)) continue;
-    if (fs.readFileSync(migrateFilePath, "utf8").includes(MIGRATION_REVIEW_REQUIRED_MARKER)) {
-      unreviewed.push(file.number);
-    }
-  }
   if (unreviewed.length > 0) {
     throw new Error(
       `Migration(s) ${unreviewed.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
@@ -161,24 +170,7 @@ function assertMigrationScriptsReady(migrationsDir: string, namespace: string): 
         "`never` annotation.",
     );
   }
-}
-
-/**
- * Collect migrations with data-loss warnings that have neither a migrate.ts
- * nor a recorded --no-script acknowledgment
- * @param {string} migrationsDir - Migrations directory path
- * @returns {UnacknowledgedWarningMigration[]} Unacknowledged warning migrations in the local history
- */
-function collectUnacknowledgedWarnings(migrationsDir: string): UnacknowledgedWarningMigration[] {
-  const result: UnacknowledgedWarningMigration[] = [];
-  for (const file of getMigrationFiles(migrationsDir)) {
-    if (file.type !== "diff") continue;
-    const diff = loadDiff(file.path);
-    if (!diff.hasWarnings || diff.scriptSkipped) continue;
-    if (fs.existsSync(getMigrationFilePath(migrationsDir, file.number, "migrate"))) continue;
-    result.push({ migrationNumber: file.number, warnings: diff.warnings });
-  }
-  return result;
+  return unacknowledgedWarnings;
 }
 
 /**
@@ -318,11 +310,8 @@ async function collectValidationReports(
       // Parse the whole history here so malformed snapshot/diff contents are
       // reported per namespace instead of aborting the run for every namespace.
       reconstructSnapshotFromMigrations(target.migrationsDir);
-      assertMigrationScriptsReady(target.migrationsDir, target.namespace);
-      unacknowledgedWarnings?.set(
-        target.namespace,
-        collectUnacknowledgedWarnings(target.migrationsDir),
-      );
+      const namespaceWarnings = assertMigrationScriptsReady(target.migrationsDir, target.namespace);
+      unacknowledgedWarnings?.set(target.namespace, namespaceWarnings);
       checkableNamespaces.push(target);
     } catch (error) {
       migrationFileErrors.set(
