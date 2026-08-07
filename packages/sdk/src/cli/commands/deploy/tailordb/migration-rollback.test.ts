@@ -194,6 +194,7 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
         executorUsedTypes: new Set<string>(),
         config: mockConfig,
         noSchemaCheck: true,
+        checkpointRepairs: [],
         namespacesWithMigrations: [{ namespace: "test-ns", migrationsDir: "/test/migrations" }],
         migrationFileState: captureMigrationFileState([
           { namespace: "test-ns", migrationsDir: "/test/migrations" },
@@ -865,11 +866,12 @@ describe("applyTailorDB: rollback of migration schema after failures", () => {
       new Error("rpc error: code = Aborted desc = original migration failure"),
     );
 
-    // Make rollback's prior-snapshot reconstruction throw (e.g. missing files),
-    // while the pre-phase reconstruction (migration N) still succeeds.
+    // Let preflight capture the baseline, then make rollback's second baseline
+    // reconstruction throw (e.g. files disappeared after preflight).
+    let baselineReads = 0;
     await withOverriddenSnapshot(
       (migrationsDir, maxVersion) => {
-        if ((maxVersion ?? 0) === 0) {
+        if ((maxVersion ?? 0) === 0 && ++baselineReads > 1) {
           throw new Error("rollback snapshot reconstruction failed");
         }
         return snapshotFixtures.reconstructSnapshotFromMigrations(migrationsDir, maxVersion);

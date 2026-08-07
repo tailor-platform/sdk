@@ -96,6 +96,22 @@ function mockConfig(namespaces: string[] = ["tailordb"]): void {
   } as unknown as Awaited<ReturnType<typeof loadConfig>>);
 }
 
+function markHistoryAsRebaselined(): void {
+  const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+  const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+  fs.writeFileSync(
+    schemaPath,
+    JSON.stringify({
+      ...schema,
+      rebaseline: {
+        historyId: "htailordb",
+        replacedHistoryId: null,
+        replacedLatestMigration: 5,
+      },
+    }),
+  );
+}
+
 function writeMigrationFile(number: number, fileName: string, content: string): void {
   const dir = path.join(state.migrationsDir, number.toString().padStart(4, "0"));
   fs.mkdirSync(dir, { recursive: true });
@@ -265,44 +281,51 @@ describe("tailordb migration validate", () => {
     expect(state.listTailorDBTypes).not.toHaveBeenCalled();
   });
 
-  test("fails when the remote migration checkpoint is not in the local history", async () => {
+  test("reports a repairable remote migration checkpoint as valid", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
+    markHistoryAsRebaselined();
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
     state.listTailorDBTypes.mockResolvedValue({
-      tailordbTypes: [remoteType("User", ["id", "name", "email"])],
+      tailordbTypes: [remoteType("User", ["id", "name"])],
       nextPageToken: "",
     });
 
     const result = await runCommand(validateCommand, []);
 
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
     const [report] = JSON.parse(stdout.output);
-    expect(report.valid).toBe(false);
+    expect(report.valid).toBe(true);
     expect(report.remoteSchema).toEqual({
       remoteMigrationNumber: 5,
       hasDrift: false,
       drifts: [],
-      checkpointMissingLocal: true,
+      checkpointRepair: {
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "htailordb",
+      },
     });
   });
 
-  test("only suggests obtaining missing history when the remote checkpoint is ahead", async () => {
+  test("explains that deploy will repair a checkpoint whose schema matches the baseline", async () => {
     using stderr = captureStderr();
+    markHistoryAsRebaselined();
     state.getMetadata.mockResolvedValue({
       metadata: { labels: { "sdk-migration": "m0005" } },
     });
     state.listTailorDBTypes.mockResolvedValue({
-      tailordbTypes: [remoteType("User", ["id", "name", "email"])],
+      tailordbTypes: [remoteType("User", ["id", "name"])],
       nextPageToken: "",
     });
 
     const result = await runCommand(validateCommand, []);
 
-    expect(result.success).toBe(false);
-    expect(stderr.output).toContain("Pull the latest migration files");
+    expect(result.success).toBe(true);
+    expect(stderr.output).toContain("next deploy will reset the checkpoint to 0000");
     expect(stderr.output).not.toContain("migration sync");
   });
 

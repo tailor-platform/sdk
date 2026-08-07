@@ -70,7 +70,12 @@ export function formatCopyableCommand(argv: readonly string[]): string {
   return argv.map(shellQuote).join(" ");
 }
 
-function formatNextAction(next: CLIErrorNextAction): string {
+/**
+ * Format an executable and argv as a shell-safe user-facing command.
+ * @param next - Executable and arguments to format
+ * @returns Shell command, or an argv representation when shell quoting is unsafe
+ */
+export function formatNextAction(next: CLIErrorNextAction): string {
   const argv = [next.command, ...next.args];
   const rendered = formatCopyableCommand(argv);
   return needsArgvRendering(argv) ? `with ${rendered}` : `\`${rendered}\``;

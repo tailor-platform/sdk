@@ -59,7 +59,7 @@ If your local types and remote schema have **diverged**, reconcile them before i
 
 ### Resetting
 
-`tailor tailordb migration generate --init` deletes the existing `migrations/` directory and starts over from `0000`. Use this only on projects that are not yet deployed, or when you have decided to re-baseline (the next `apply` will see all migrations as new and require coordination — see [Resetting a deployed project](#resetting-a-deployed-project)).
+`tailor tailordb migration generate --init` deletes the existing `migrations/` directory and creates `0000` from the current local types. Use it only before the project is deployed. For a deployed migration history, use [`migration rebaseline`](#re-baselining-a-deployed-migration-history), which verifies the history and connected workspace before replacing any files.
 
 ## Migration Workflow
 
@@ -183,6 +183,14 @@ export default defineConfig({
 | `XXXX/db.ts`       | Generated once when `migrate.ts` is created                                                                  | Kysely types reflecting the schema **before** this migration.                  |
 
 `db.ts` reflects the pre-migration schema because the script runs after the pre-migration phase has temporarily relaxed breaking constraints (e.g., a new `required` field is added as `optional` first), so the data being read still matches the previous shape.
+
+### Migration file format compatibility
+
+Migration files are versioned independently of the SDK package. This SDK writes format version `2` and reads versions `1` through `2`. It normalizes supported older formats in memory; it never rewrites applied migration files on disk.
+
+If a future SDK can no longer replay an old migration format, re-baseline while using an SDK version that still supports the complete history, commit the new baseline, deploy it to every environment, and then upgrade the SDK. A file from a newer unsupported format instead requires upgrading the SDK first. The CLI rejects both cases with guidance rather than attempting a best-effort replay.
+
+There is no migration-file conversion command. Keeping applied files unchanged preserves the record of what ran, while `migration rebaseline` provides the escape hatch when the supported replay window changes.
 
 ## Migration Script Anatomy
 
@@ -405,9 +413,31 @@ tailor deploy --no-schema-check
 ✔ Successfully applied changes.
 ```
 
+## Re-baselining a deployed migration history
+
+`tailor tailordb migration rebaseline` collapses the complete history into a new `0000/schema.json` in the current migration format. It does not modify the deployed schema or data.
+
+Before running it:
+
+1. Apply the latest migration to every environment. The CLI verifies the connected workspace, but it cannot inspect other workspaces.
+2. Commit or otherwise preserve the existing migration history. Files after `0000`, including `migrate.ts` and `db.ts`, disappear from the working tree; Git history retains committed files.
+3. Make sure local type changes have been captured with `tailor tailordb migration generate`.
+
+Then re-baseline one namespace:
+
+```bash
+tailor tailordb migration rebaseline --namespace tailordb
+```
+
+The command validates the migration files, verifies that replaying the latest migration exactly reproduces the local types, and checks that the connected workspace is at that latest migration with no schema drift. After confirmation, it replaces the local history with the reconstructed baseline, records a new migration history ID in both `0000/schema.json` and remote metadata, and resets the connected workspace's `sdk-migration` label to `0000`. Use `--yes` only after arranging the same operational preconditions in non-interactive automation.
+
+Commit the resulting `migrations/` change before generating any new migrations. For another environment still carrying the exact checkpoint and history ID that the new baseline replaced, the next `tailor deploy` checks whether its remote schema exactly matches the new `0000`. If it does, deploy offers to reset the checkpoint to `0000` and move the environment to the new history ID before applying any later local migrations. A markerless history is eligible only for the first rebaseline, at the exact migration recorded as replaced. Any other checkpoint or history ID is rejected without changing remote metadata, even if its schema happens to match the baseline.
+
+Partial squashing is not supported: re-baselining always replaces the full history for one namespace.
+
 ## `migration set` Semantics
 
-`tailor tailordb migration set <N>` updates the `sdk-migration` label on the deployed namespace's metadata. **It does not modify any data or schema.** It only changes which migrations the next `apply` will consider pending.
+`tailor tailordb migration set <N>` updates the `sdk-migration` label on the deployed namespace's metadata. **It does not modify any data or schema.** It only changes which migrations the next `apply` will consider pending. The command also aligns the remote migration history ID with the local baseline, removing a stale ID when the local history predates re-baselining.
 
 The migration number is validated before anything is sent to the remote: it must be a 4-digit value (e.g. `0001`) or a bare integer (e.g. `1`) within 0–9999, and must exist in the working tree's migration history, which is itself validated (a gapped history is rejected). `0` is always accepted as the baseline (even when no migrations directory exists yet), provided the history passes validation.
 
@@ -426,7 +456,7 @@ Use cases:
 
 ## `migration sync` Semantics
 
-`tailor tailordb migration sync <N>` reconstructs the schema snapshot at migration `N` from the working tree's migration history and **overwrites the remote schema to match it**, then sets the `sdk-migration` label to `N`. Unlike `migration set`, it changes the remote schema as well as the bookkeeping. Like `set`, it never runs `migrate.ts` scripts itself — it only changes what the next `apply` considers pending:
+`tailor tailordb migration sync <N>` reconstructs the schema snapshot at migration `N` from the working tree's migration history and **overwrites the remote schema to match it**, then sets the `sdk-migration` label to `N` and aligns the remote migration history ID with the local baseline. Unlike `migration set`, it changes the remote schema as well as the bookkeeping. Like `set`, it never runs `migrate.ts` scripts itself — it only changes what the next `apply` considers pending:
 
 | Movement                         | Effect on next `apply`                                                                    | Effect on data                                                                                             |
 | -------------------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -464,18 +494,12 @@ When your branch and main each generated the same number, merging or rebasing st
 
 - For non-interactive environments, pass `--yes` to `migration generate` and `--yes` to `apply`. `apply` runs migrations automatically when the `migrations/` directory is configured.
 - Run `tailor tailordb migration validate` in CI to catch uncommitted migrations, broken migration files, unreviewed generated normalization logic, and remote schema drift before deploying. It exits with a non-zero code when validation fails and supports `--json`. Add `--strict` to also require an explicit acknowledgment (a `migrate.ts` or a recorded `--no-script` reason) for every pending migration that can drop data, so destructive changes cannot merge unnoticed.
-- `tailor tailordb migration status` shows applied and pending migrations for a human-readable comparison. Its exit code is non-zero only on errors, so check the output.
+- `tailor tailordb migration status` validates file-format compatibility across the full local history, compares its history ID with the deployed namespace, and shows applied and pending migrations for a human-readable comparison. Its exit code is non-zero on incompatible files, migration history mismatches, and remote read errors, so check the output.
 - Avoid running migrations in parallel against the same workspace — there is no locking. Serialize deploys per environment.
 
 ### Resetting a deployed project
 
-`migration generate --init` is destructive locally but does not touch the deployed workspace. Re-baselining a deployed project requires:
-
-1. Run `migration generate --init` to start over from `0000`.
-2. Run `tailor tailordb migration set 0` against the deployed namespace.
-3. Run `tailor deploy` — the new `0000` becomes the baseline.
-
-Coordinate this with your team because everyone else's local migrations will be invalidated.
+Use `tailor tailordb migration rebaseline` rather than combining `migration generate --init` with a manual checkpoint change. See [Re-baselining a deployed migration history](#re-baselining-a-deployed-migration-history) for the required cross-environment coordination and verification.
 
 ## Failure Recovery
 
@@ -582,6 +606,12 @@ For genuinely different schemas across environments, prefer separate workspaces 
 1. Read the error message — it includes the file path and the offending field.
 2. Restore the file from version control (`git checkout -- <path>`), or regenerate migration files with `migration generate` / `migration script`.
 3. Do not hand-edit `schema.json` or `diff.json`; they are managed by the CLI.
+
+### "Unsupported migration file format version" error
+
+**Cause:** A `schema.json` or `diff.json` file is older or newer than the format versions supported by the installed SDK.
+
+**Resolution:** Follow the ordering in the error message. For an older history, restore an SDK version that can read every file, run `migration rebaseline`, commit and deploy the new baseline everywhere, and then upgrade. For a file produced by a newer SDK, upgrade the SDK that is reading it. Do not hand-edit the version field.
 
 ### "No machine user available for migration execution"
 
