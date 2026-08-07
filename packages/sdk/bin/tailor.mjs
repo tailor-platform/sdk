@@ -6,9 +6,9 @@
 // (Node >= 22.8.0; silent no-op otherwise).
 try {
   const { enableCompileCache } = await import("politty/compile-cache");
-  enableCompileCache("tailor-tailordb-erd");
+  enableCompileCache("tailor");
 } catch {
   // politty is not resolvable from here (e.g. a fully bundled CLI) —
   // start without the compile cache rather than failing the CLI.
 }
-await import("../dist/cli.js");
+await import("../dist/cli/main.mjs");

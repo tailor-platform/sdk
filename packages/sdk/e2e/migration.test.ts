@@ -80,7 +80,7 @@ const tailordbName = `testdb-${testRunId}`;
  */
 function runGenerateCli(configPath: string, cwd: string): void {
   const sdkRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
+  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
 
   try {
     execSync(`node ${cliPath} tailordb migration generate --config ${configPath} --yes`, {
@@ -111,7 +111,7 @@ function runGenerateCli(configPath: string, cwd: string): void {
  */
 function runDeployCli(configPath: string, workspaceId: string, cwd: string): void {
   const sdkRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
+  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
 
   try {
     execSync(`node ${cliPath} deploy --config ${configPath} --workspace-id ${workspaceId} --yes`, {
@@ -148,7 +148,7 @@ function tryDeployCli(
   cwd: string,
 ): { ok: boolean; output: string } {
   const sdkRoot = path.resolve(__dirname, "..");
-  const cliPath = path.join(sdkRoot, "dist", "cli", "index.mjs");
+  const cliPath = path.join(sdkRoot, "bin", "tailor.mjs");
 
   try {
     const out = execSync(
