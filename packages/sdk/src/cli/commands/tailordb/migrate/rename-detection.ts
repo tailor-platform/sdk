@@ -55,8 +55,11 @@ export function isRenameCompatible(
     const afterValues = new Set((after.allowedValues ?? []).map((v) => v.value));
     if ((before.allowedValues ?? []).some((v) => !afterValues.has(v.value))) return false;
   }
-  // The stored object is copied wholesale, so nested structures must match:
-  // same member names, same requiredness, recursively compatible members.
+  // Top-level `required` may differ: the Pre-phase relaxes it and the
+  // scaffolded copy script carries a TODO to resolve nulls before the
+  // Post-phase enforces it. Nested member constraints are never relaxed, so
+  // the wholesale-copied nested structures must match exactly: same member
+  // names, same requiredness, recursively compatible members.
   const beforeNested = before.fields ?? {};
   const afterNested = after.fields ?? {};
   const beforeNames = Object.keys(beforeNested);
@@ -140,12 +143,7 @@ const RENAME_OPTION_PATTERN = /^([^.:\s]+)\.([^.:\s]+):([^.:\s]+)$/;
  */
 export function parseRenameOption(value: string): FieldRenameSpec {
   const match = value.match(RENAME_OPTION_PATTERN);
-  if (!match) {
-    throw new Error(
-      `Invalid --rename value "${value}". Expected format: "Type.oldField:newField".`,
-    );
-  }
-  const [, typeName, fromFieldName, toFieldName] = match;
+  const [, typeName, fromFieldName, toFieldName] = match ?? [];
   if (!typeName || !fromFieldName || !toFieldName) {
     throw new Error(
       `Invalid --rename value "${value}". Expected format: "Type.oldField:newField".`,

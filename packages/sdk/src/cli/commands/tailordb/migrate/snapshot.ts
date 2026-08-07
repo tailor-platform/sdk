@@ -1766,20 +1766,16 @@ export interface CompareSnapshotsOptions {
 
 /**
  * Assert that every rename spec matches a compatible removed + added field
- * pair between the two snapshots. Exported so `migration generate` can
- * validate all specs before writing any migration file.
- * @param {SchemaSnapshot} previousSnapshot - Previous schema snapshot
- * @param {SchemaSnapshot} currentSnapshot - Current schema snapshot
+ * pair between the two normalized snapshots.
+ * @param {NormalizedSchemaSnapshot} previous - Previous normalized snapshot
+ * @param {NormalizedSchemaSnapshot} current - Current normalized snapshot
  * @param {readonly FieldRenameSpec[]} fieldRenames - Rename specs to validate
  */
-export function assertValidFieldRenames(
-  previousSnapshot: SchemaSnapshot,
-  currentSnapshot: SchemaSnapshot,
+function assertValidNormalizedFieldRenames(
+  previous: NormalizedSchemaSnapshot,
+  current: NormalizedSchemaSnapshot,
   fieldRenames: readonly FieldRenameSpec[],
 ): void {
-  if (fieldRenames.length === 0) return;
-  const previous = normalizeSchemaSnapshot(previousSnapshot);
-  const current = normalizeSchemaSnapshot(currentSnapshot);
   const seen = new Set<string>();
   for (const rename of fieldRenames) {
     const { typeName, fromFieldName, toFieldName } = rename;
@@ -1842,11 +1838,12 @@ export function compareSnapshots(
   current: SchemaSnapshot,
   options?: CompareSnapshotsOptions,
 ): MigrationDiff {
-  return compareNormalizedSnapshots(
-    normalizeSchemaSnapshot(previous),
-    normalizeSchemaSnapshot(current),
-    options,
-  );
+  const normalizedPrevious = normalizeSchemaSnapshot(previous);
+  const normalizedCurrent = normalizeSchemaSnapshot(current);
+  if (options?.fieldRenames?.length) {
+    assertValidNormalizedFieldRenames(normalizedPrevious, normalizedCurrent, options.fieldRenames);
+  }
+  return compareNormalizedSnapshots(normalizedPrevious, normalizedCurrent, options);
 }
 
 function compareNormalizedSnapshots(
@@ -1855,7 +1852,6 @@ function compareNormalizedSnapshots(
   options?: CompareSnapshotsOptions,
 ): MigrationDiff {
   const fieldRenames = options?.fieldRenames ?? [];
-  assertValidFieldRenames(previous, current, fieldRenames);
   const renamesByType = new Map<string, FieldRenameSpec[]>();
   for (const rename of fieldRenames) {
     const list = renamesByType.get(rename.typeName) ?? [];
