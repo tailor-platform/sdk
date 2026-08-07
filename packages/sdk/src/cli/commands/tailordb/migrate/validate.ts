@@ -12,17 +12,14 @@ import { loadAccessToken, loadWorkspaceId } from "#/cli/shared/context";
 import { logger, styles } from "#/cli/shared/logger";
 import { PluginManager } from "#/plugin/manager";
 import { assertDefined } from "#/utils/assert";
-import {
-  formatMigrationScriptCommand,
-  getNamespacesWithMigrations,
-  type NamespaceWithMigrations,
-} from "./config";
+import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
   formatDiffSummary,
   formatMigrationDiff,
   type MigrationDiff,
   type WarningChangeInfo,
 } from "./diff-calculator";
+import { formatMigrationScriptCommand } from "./hints";
 import {
   checkMigrationDiffs,
   logRemoteDriftGuidance,

@@ -11,10 +11,8 @@ import {
   type AuthInvoker,
 } from "@tailor-platform/tailor-proto/auth_resource_pb";
 import { bundleMigrationScript } from "#/cli/commands/tailordb/migrate/bundler";
-import {
-  formatMigrationScriptCommand,
-  type NamespaceWithMigrations,
-} from "#/cli/commands/tailordb/migrate/config";
+import { type NamespaceWithMigrations } from "#/cli/commands/tailordb/migrate/config";
+import { formatMigrationScriptCommand } from "#/cli/commands/tailordb/migrate/hints";
 import {
   loadDiff,
   getMigrationFiles,

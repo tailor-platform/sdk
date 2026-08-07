@@ -19,11 +19,7 @@ import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared
 import { logger, styles } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { PluginManager } from "#/plugin/manager";
-import {
-  formatMigrationScriptCommand,
-  getNamespacesWithMigrations,
-  type NamespaceWithMigrations,
-} from "./config";
+import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
   formatMigrationDiff,
   formatBreakingChanges,
@@ -31,6 +27,7 @@ import {
   formatWarnings,
   hasChanges,
 } from "./diff-calculator";
+import { formatMigrationScriptCommand } from "./hints";
 import { markMigrationScriptSkipped } from "./script";
 import {
   createSnapshotFromLocalTypes,

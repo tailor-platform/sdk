@@ -238,6 +238,20 @@ export const workspaceArgs = {
 export const DEFAULT_CONFIG_PATH = "tailor.config.ts";
 
 /**
+ * Format the --config argument for remediation command hints so they target
+ * the same config the current run used. The `--config=<value>` form keeps a
+ * leading-hyphen path bound as the option value.
+ * @param {string} [configPath] - Config path the current run used, if any
+ * @returns {string | undefined} `--config=<path>` argument, or undefined when the default config is in use
+ */
+export function formatConfigArg(configPath?: string): string | undefined {
+  if (!configPath) return undefined;
+  const relativeConfigPath = path.relative(process.cwd(), configPath);
+  if (relativeConfigPath === DEFAULT_CONFIG_PATH) return undefined;
+  return `--config=${relativeConfigPath}`;
+}
+
+/**
  * Shared config arg for commands that accept a config file path
  */
 export const configArg = {
