@@ -118,12 +118,16 @@ function createContext(
 }
 
 describe("planStaticWebsite", () => {
-  test("keeps static websites but omits custom domains from migration-test deployments", async () => {
+  test("keeps static websites but omits custom domains stripped for migration-test deployments", async () => {
     const client = createMockClient([]);
-    const context = {
-      ...createContext(client, createMockApplication({ customDomains: ["example.com"] })),
-      migrationTestSnapshots: new Map(),
-    };
+    const application = createMockApplication({ customDomains: ["example.com"] });
+    const context = createContext(client, {
+      ...application,
+      staticWebsiteServices: application.staticWebsiteServices.map((website) => ({
+        ...website,
+        customDomains: undefined,
+      })),
+    });
 
     const result = await planStaticWebsite(context);
 

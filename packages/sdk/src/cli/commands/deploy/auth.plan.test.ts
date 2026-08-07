@@ -290,9 +290,9 @@ function createContext(
 
 describe("planAuth", () => {
   test("defers user profiles until after a migration-test baseline while keeping machine users", async () => {
-    const application = createMockApplicationWithUserProfile();
+    const strippedApplication = createMockApplication();
     const emptyTarget = await planAuth({
-      ...createContext(createMockClient(), application),
+      ...createContext(createMockClient(), strippedApplication),
       migrationTestBaselines: new Map(),
     });
 
@@ -305,7 +305,7 @@ describe("planAuth", () => {
       userProfileConfig: { provider: "TAILORDB" },
     });
     const retainedTarget = await planAuth({
-      ...createContext(retainedClient, application),
+      ...createContext(retainedClient, strippedApplication),
       migrationTestBaselines: new Map(),
     });
 
@@ -314,7 +314,7 @@ describe("planAuth", () => {
     expect(retainedClient.deleteUserProfileConfig).toHaveBeenCalledTimes(1);
 
     const migratedTarget = await planAuth({
-      ...createContext(createMockClient(), application),
+      ...createContext(createMockClient(), createMockApplicationWithUserProfile()),
       migrationTestSnapshots: new Map(),
     });
 

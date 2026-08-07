@@ -245,7 +245,7 @@ describe("planTailorDB (service level)", () => {
       createTailorDBType: vi.fn().mockResolvedValue({}),
       setMetadata: vi.fn().mockResolvedValue({}),
     });
-    const application = createMockApplication([tailordb]);
+    const application = { ...createMockApplication([tailordb]), executorService: undefined };
 
     const result = await planTailorDB({
       client,
@@ -254,13 +254,12 @@ describe("planTailorDB (service level)", () => {
       forRemoval: false,
       config: mockConfig,
       migrationTestBaselines: new Map([["tailordb", { migrationNumber: 3, snapshot: baseline }]]),
-      executorUsedTailorDBTypes: new Set(["Legacy"]),
+      executorUsedTailorDBTypes: new Set(),
     });
 
     expect(Object.keys(result.context.tailorDBInputs[0]!.types)).toEqual(["Legacy"]);
     expect(result.changeSet.type.creates[0]!.name).toBe("Legacy");
     expect(result.context.executorUsedTypes).toEqual(new Set());
-    expect(application.executorService?.loadExecutors).not.toHaveBeenCalled();
 
     await applyTailorDB(client, result, "create-update");
 

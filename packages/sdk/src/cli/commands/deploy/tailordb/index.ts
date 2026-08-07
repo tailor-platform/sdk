@@ -1301,13 +1301,10 @@ export async function planTailorDB(context: PlanContext) {
       tailordbs.push(snapshot ? { ...input, types: snapshot.types } : input);
     }
   }
-  const executors =
-    forRemoval || context.migrationTestBaselines
-      ? []
-      : Object.values((await application.executorService?.loadExecutors()) ?? {});
-  const executorUsedTypes = new Set(
-    context.migrationTestBaselines ? [] : (context.executorUsedTailorDBTypes ?? []),
-  );
+  const executors = forRemoval
+    ? []
+    : Object.values((await application.executorService?.loadExecutors()) ?? {});
+  const executorUsedTypes = new Set(context.executorUsedTailorDBTypes ?? []);
   for (const executor of executors) {
     if (executor.trigger.kind === "tailordb") {
       executorUsedTypes.add(executor.trigger.typeName);

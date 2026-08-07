@@ -53,8 +53,12 @@ export interface PlanContext {
    * is at stake rather than on the application.
    */
   dependentApps?: DependentAppsByResource;
-  /** Baseline snapshots used internally by `tailordb migration test`. */
+  /**
+   * Baseline snapshots used internally by `tailordb migration test`. Consumed
+   * by TailorDB planning only; other plan modules receive an `application`
+   * already adjusted for the migration test deploy by the deploy pipeline.
+   */
   migrationTestBaselines?: ReadonlyMap<string, TailorDBMigrationTestBaseline>;
-  /** Committed schema snapshots used internally by `tailordb migration test`. */
+  /** Committed schema snapshots used internally by `tailordb migration test`. Consumed by TailorDB planning only. */
   migrationTestSnapshots?: TailorDBMigrationTestSnapshots;
 }

@@ -359,14 +359,7 @@ export async function planAuth(context: PlanContext) {
     connectionResult,
   ] = await Promise.all([
     planIdPConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
-    planUserProfileConfigs(
-      client,
-      workspaceId,
-      auths,
-      deletedServices,
-      forceApplyAll,
-      context.migrationTestBaselines !== undefined,
-    ),
+    planUserProfileConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
     planTenantConfigs(client, workspaceId, auths, deletedServices, forceApplyAll),
     planMachineUsers(client, workspaceId, auths, deletedServices, forceApplyAll),
     planAuthHooks(client, workspaceId, auths, deletedServices, forceApplyAll),
@@ -874,7 +867,6 @@ async function planUserProfileConfigs(
   auths: ReadonlyArray<Readonly<AuthService>>,
   deletedServices: ReadonlyArray<string>,
   forceApplyAll = false,
-  deferUserProfiles = false,
 ) {
   const changeSet = createChangeSet<
     CreateUserProfileConfig,
@@ -892,7 +884,7 @@ async function planUserProfileConfigs(
       });
     });
     if (!existing) {
-      const userProfileForUpdate = deferUserProfiles ? undefined : auth.userProfile;
+      const userProfileForUpdate = auth.userProfile;
       if (userProfileForUpdate) {
         changeSet.creates.push({
           name,
@@ -906,7 +898,7 @@ async function planUserProfileConfigs(
       continue;
     }
 
-    const userProfileForUpdate = deferUserProfiles ? undefined : auth.userProfile;
+    const userProfileForUpdate = auth.userProfile;
     if (userProfileForUpdate) {
       const desired = protoUserProfileConfig(userProfileForUpdate);
       if (

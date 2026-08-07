@@ -2538,6 +2538,43 @@ async function validateDeploymentPlans(
 }
 
 /**
+ * Strip the services a migration test deploy must not manage, so plan modules
+ * see an application that already reflects the deploy's scope. Baseline deploys
+ * omit executors and Auth user profiles (data loading must not trigger current
+ * event handlers or reference the final schema); every migration test deploy
+ * omits workspace-bound static website custom domains.
+ * @param application - Application built from the user's config
+ * @param internalContext - Internal deployment behavior used by composed CLI workflows
+ * @returns The application as the migration test deploy manages it
+ */
+export function adjustApplicationForMigrationTest(
+  application: Application,
+  internalContext: DeployInternalContext | undefined,
+): Application {
+  if (!internalContext?.migrationTestSnapshots) {
+    return application;
+  }
+  const forBaseline = internalContext.migrationTestBaselines !== undefined;
+  const authService =
+    forBaseline && application.authService
+      ? { ...application.authService, userProfile: undefined }
+      : application.authService;
+  const adjusted: Application = {
+    ...application,
+    executorService: forBaseline ? undefined : application.executorService,
+    authService,
+    staticWebsiteServices: application.staticWebsiteServices.map((website) => ({
+      ...website,
+      customDomains: undefined,
+    })),
+    get applications() {
+      return [adjusted];
+    },
+  };
+  return adjusted;
+}
+
+/**
  * Deploy the configured application to the Tailor platform.
  * @param options - Deploy execution options
  * @param cliContext - Global CLI arguments to preserve in recovery actions
@@ -2622,9 +2659,13 @@ async function deployInternal(
     rootSpan.setAttribute("app.name", targets.map((target) => target.application.name).join(","));
     rootSpan.setAttribute("workspace.id", workspaceId);
 
-    const runInputs = collectDeployRunPlanInputs(targets, !options?.dryRun);
+    const planTargets = targets.map((target) => ({
+      ...target,
+      application: adjustApplicationForMigrationTest(target.application, internalContext),
+    }));
+    const runInputs = collectDeployRunPlanInputs(planTargets, !options?.dryRun);
     const deployments = await planDeploymentTargets({
-      targets,
+      targets: planTargets,
       runInputs,
       client,
       workspaceId,
@@ -2640,7 +2681,7 @@ async function deployInternal(
     // Phase 1b: Confirm
     const missingDependentApps = (
       await Promise.all(
-        targets.map((target) =>
+        planTargets.map((target) =>
           fetchMissingDependentApps({
             client,
             workspaceId,

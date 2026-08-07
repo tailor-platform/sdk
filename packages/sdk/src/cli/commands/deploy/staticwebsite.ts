@@ -268,11 +268,7 @@ export async function planStaticWebsite(context: PlanContext) {
   // Plan custom domain changes for owned websites
   const desiredDomainsByWebsite = new Map<string, readonly string[]>();
   for (const service of staticWebsiteServices) {
-    if (
-      !context.migrationTestSnapshots &&
-      service.customDomains !== undefined &&
-      ownedWebsiteNames.has(service.name)
-    ) {
+    if (service.customDomains !== undefined && ownedWebsiteNames.has(service.name)) {
       desiredDomainsByWebsite.set(service.name, service.customDomains);
     }
   }
