@@ -129,7 +129,7 @@ No `migrate.ts` is generated automatically because the schema change itself is n
 tailor tailordb migration script 0002
 ```
 
-This writes `migrations/0002/migrate.ts` and `migrations/0002/db.ts` next to the existing `diff.json`. The removed field stays readable inside `migrate.ts` because the pre-migration phase keeps it on the table until the script finishes (see [Per-migration phases](#per-migration-phases)). The next `tailor deploy` runs the script automatically — `migrate.ts` is executed whenever the file exists on disk, regardless of whether the diff itself required it.
+This writes `migrations/0002/migrate.ts` and `migrations/0002/db.ts` next to the existing `diff.json` (add `--with-test` to also scaffold a `migrate.test.ts` — see [Testing Migrations Locally](#testing-migrations-locally)). The removed field stays readable inside `migrate.ts` because the pre-migration phase keeps it on the table until the script finishes (see [Per-migration phases](#per-migration-phases)). The next `tailor deploy` runs the script automatically — `migrate.ts` is executed whenever the file exists on disk, regardless of whether the diff itself required it.
 
 If the data loss is intentional and no script is needed, record that decision the same way as for breaking changes (see [Breaking changes without a script](#breaking-changes-without-a-script)):
 
@@ -175,12 +175,13 @@ export default defineConfig({
 
 ## Generated Files
 
-| File               | When generated                                                                                               | Description                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `0000/schema.json` | First `migration generate`                                                                                   | Full snapshot of all tables in the namespace.                                  |
-| `XXXX/diff.json`   | Every subsequent migration                                                                                   | Field-level diff against the previous snapshot.                                |
-| `XXXX/migrate.ts`  | Auto-generated for breaking changes; added manually via `tailordb migration script` for warning-tier changes | Data transformation script. The `main` export receives a Kysely `Transaction`. |
-| `XXXX/db.ts`       | Generated once when `migrate.ts` is created                                                                  | Kysely types reflecting the schema **before** this migration.                  |
+| File                   | When generated                                                                                               | Description                                                                                                              |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `0000/schema.json`     | First `migration generate`                                                                                   | Full snapshot of all tables in the namespace.                                                                            |
+| `XXXX/diff.json`       | Every subsequent migration                                                                                   | Field-level diff against the previous snapshot.                                                                          |
+| `XXXX/migrate.ts`      | Auto-generated for breaking changes; added manually via `tailordb migration script` for warning-tier changes | Data transformation script. The `main` export receives a Kysely `Transaction`.                                           |
+| `XXXX/db.ts`           | Generated once when `migrate.ts` is created                                                                  | Kysely types reflecting the schema **before** this migration. Exports `Database`, `Transaction`, and `MigrationContext`. |
+| `XXXX/migrate.test.ts` | Added via `tailordb migration script --with-test`                                                            | Unit-test scaffold for `migrate.ts` (see [Testing Migrations Locally](#testing-migrations-locally)). Never deployed.     |
 
 `db.ts` reflects the pre-migration schema because the script runs after the pre-migration phase has temporarily relaxed breaking constraints (e.g., a new `required` field is added as `optional` first), so the data being read still matches the previous shape.
 
@@ -642,9 +643,104 @@ The migration script runs in a single transaction. For tables with many rows:
 
 ## Testing Migrations Locally
 
-The platform-side execution path is hard to fully replicate locally, but you can sanity-check `migrate.ts` logic:
+### Unit-testing migrate.ts
 
-- The bundle that ships to the platform is plain JavaScript exporting `main(trx)`. You can import it in a Vitest test, pass a Kysely-compatible mock or a local SQLite database with the same schema as `db.ts`, and assert the resulting state.
+`main` is a plain function, so you can unit-test it with Vitest before the first deploy ever runs it. `createKyselyMock` from `@tailor-platform/sdk/vitest` compiles queries to the same SQL as the deployed migration, so a test verifies the exact statements the script issues — SQL, parameters, and order. Type the mock with the `Database` interface exported from the generated `db.ts`.
+
+Scaffold a ready-to-fill test next to the script with:
+
+```bash
+tailor tailordb migration script 0005 --with-test
+```
+
+When `migrate.ts` already exists (the usual case for breaking changes, where `migration generate` creates it), the command adds only `migrate.test.ts`. Or write the test by hand:
+
+```typescript
+// migrations/0005/migrate.test.ts
+import { createKyselyMock } from "@tailor-platform/sdk/vitest";
+import { describe, expect, test } from "vitest";
+import type { Database } from "./db";
+import { main } from "./migrate";
+
+describe("0005 add required email", () => {
+  test("backfills null emails", async () => {
+    const mock = createKyselyMock<Database>();
+
+    await mock.withTx((trx) => main(trx));
+
+    expect(mock.updates).toHaveLength(1);
+    expect(mock.updates[0]?.updateValues()).toEqual({ email: "unknown@example.com" });
+    expect(mock.updates[0]?.sql).toContain('where "email" is null');
+  });
+});
+```
+
+Stage the rows each query returns with `mock.enqueueResult(...)` or `mock.setQueryResolver(...)` when the script reads before writing; call `main(trx, { env: { ... } })` when the script takes a `MigrationContext`. See [Kysely-layer mock](../testing.md#kysely-layer-mock-createkyselymock) for the full mock API.
+
+These tests need no platform connection and no `tailor-runtime` environment — they run in a plain Vitest setup. Vitest's default `include` pattern already picks up `migrations/**/migrate.test.ts`; if your config narrows `include`, add the migrations directory. The test file is ignored by `tailor deploy` and never ships to the platform.
+
+### Executing migrate.ts against a local Postgres (PGlite)
+
+A statement-level test verifies what the script issues, not what it does to data (e.g., whether a `where` clause matches the rows you intended). To run `main` against real rows locally, back Kysely with [`@electric-sql/pglite`](https://pglite.dev/) — an in-memory PostgreSQL — via `createKyselyPGlite` from `@tailor-platform/sdk/vitest`:
+
+```bash
+npm install -D @electric-sql/pglite
+```
+
+Create the tables the script touches (matching the shape in the generated `db.ts`), stage rows, then run the script in a transaction:
+
+```typescript
+// migrations/0005/migrate.pglite.test.ts
+import { PGlite } from "@electric-sql/pglite";
+import { sql } from "@tailor-platform/sdk/kysely";
+import { createKyselyPGlite } from "@tailor-platform/sdk/vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import type { Database } from "./db";
+import { main } from "./migrate";
+
+const db = createKyselyPGlite<Database>(new PGlite());
+
+beforeAll(async () => {
+  await sql`
+    CREATE TABLE "User" (
+      "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      "name" text NOT NULL,
+      "email" text
+    )
+  `.execute(db);
+});
+
+afterAll(async () => {
+  await db.destroy();
+});
+
+describe("0005 add required email", () => {
+  test("backfills null emails and keeps existing ones", async () => {
+    await sql`
+      INSERT INTO "User" ("name", "email")
+      VALUES ('a', NULL), ('b', 'b@example.com')
+    `.execute(db);
+
+    await db.transaction().execute((trx) => main(trx));
+
+    const rows = await db.selectFrom("User").select(["name", "email"]).orderBy("name").execute();
+    expect(rows).toEqual([
+      { name: "a", email: "unknown@example.com" },
+      { name: "b", email: "b@example.com" },
+    ]);
+  });
+});
+```
+
+Two caveats keep this from replacing a scratch workspace:
+
+- PGlite runs full PostgreSQL, while TailorDB supports [a subset of it](https://docs.tailor.tech/guides/function/accessing-tailordb#supported-sql-queries) — a statement that passes here can still be rejected on deploy.
+- The `CREATE TABLE` statements are yours, so they can drift from the schema the platform actually has.
+
+### Beyond unit tests
+
+A unit test verifies which statements the script issues; a PGlite test verifies what they do to the rows you staged. Neither runs against your actual data. To cover that:
+
 - Run `migration generate` on a clean working copy first, review `diff.json`, then run again after editing tables to ensure the diff matches what you intended.
 - For non-trivial migrations, apply against a scratch workspace before promoting to staging or production.
 

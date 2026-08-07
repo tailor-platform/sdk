@@ -92,7 +92,7 @@ describe("db-types-generator", () => {
     expect(fs.existsSync(filePath)).toBe(true);
     expect(content).toContain("Auto-generated Kysely types");
     expect(content).toContain("Namespace: tailordb");
-    expect(content).toContain("interface Database {}");
+    expect(content).toContain("export interface Database {}");
     expect(content).toContain("export type Transaction = KyselyTransaction<Database>");
     // env-aware migration context type (inlines TailorEnv via the exported Env)
     expect(content).toContain('import type { Env } from "@tailor-platform/sdk"');
@@ -118,7 +118,12 @@ describe("db-types-generator", () => {
           name: { type: "string", required: true },
           email: { type: "string", required: false },
         },
-        expectedContains: ["User: {", "name: string;", "email: string | null;"],
+        expectedContains: [
+          "export interface Database {",
+          "User: {",
+          "name: string;",
+          "email: string | null;",
+        ],
       },
       {
         testName: "generates types with number fields (integer, float)",
