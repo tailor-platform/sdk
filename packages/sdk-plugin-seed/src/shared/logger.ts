@@ -1,4 +1,4 @@
-import chalk from "chalk";
+import { color, renderFor } from "@tailor-platform/shared/color";
 
 export type LogMode = "default" | "stream" | "plain";
 
@@ -15,11 +15,21 @@ const TYPE_ICONS: Record<string, string> = {
   log: "",
 };
 
+/** Semantic style functions for inline text styling */
+export const styles = {
+  info: color.cyan,
+  success: color.green,
+  warning: color.yellow,
+  error: color.red,
+  dim: color.dim,
+  debug: color.gray,
+};
+
 const TYPE_COLORS: Record<string, (text: string) => string> = {
-  info: chalk.cyan,
-  success: chalk.green,
-  warn: chalk.yellow,
-  error: chalk.red,
+  info: styles.info,
+  success: styles.success,
+  warn: styles.warning,
+  error: styles.error,
   log: (text) => text,
 };
 
@@ -32,14 +42,16 @@ function writeLog(type: string, message: string, opts?: LogOptions): void {
   const colorFn = TYPE_COLORS[type] ?? ((text: string) => text);
 
   if (mode === "plain") {
-    process.stderr.write(`${colorFn(message)}\n`);
+    process.stderr.write(renderFor(process.stderr, `${colorFn(message)}\n`));
     return;
   }
 
   const icon = TYPE_ICONS[type] ?? "";
   const prefix = icon ? `${icon} ` : "";
   const timestamp = mode === "stream" ? `${new Date().toLocaleTimeString()} ` : "";
-  process.stderr.write(`${timestamp}${colorFn(`${prefix}${message}`)}\n`);
+  process.stderr.write(
+    renderFor(process.stderr, `${timestamp}${colorFn(`${prefix}${message}`)}\n`),
+  );
 }
 
 export const logger = {
@@ -83,13 +95,13 @@ export const logger = {
 
   debug(message: string): void {
     if (_verbose) {
-      writeLog("log", chalk.gray(message), { mode: "plain" });
+      writeLog("log", styles.debug(message), { mode: "plain" });
     }
   },
 
   out(data: string | object | object[]): void {
     if (typeof data === "string") {
-      process.stdout.write(data.endsWith("\n") ? data : `${data}\n`);
+      process.stdout.write(renderFor(process.stdout, data.endsWith("\n") ? data : `${data}\n`));
       return;
     }
     process.stdout.write(`${JSON.stringify(data)}\n`);

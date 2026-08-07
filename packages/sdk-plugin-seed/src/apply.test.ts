@@ -34,7 +34,10 @@ const logger = vi.hoisted(() => ({
 
 vi.mock("@tailor-platform/sdk/cli", () => sdk);
 vi.mock("./jsonl", () => jsonl);
-vi.mock("./shared/logger", () => ({ logger }));
+vi.mock("./shared/logger", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./shared/logger")>()),
+  logger,
+}));
 
 beforeEach(() => {
   vi.resetAllMocks();

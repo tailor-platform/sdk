@@ -8,10 +8,10 @@ const schemaType = t.object({
   ...userLog.omitFields(["id"]),
 });
 
-const hook = createTailorDBHook(userLog);
+export const hook = createTailorDBHook(userLog);
 
 export const schema = defineSchema(
-  createStandardSchema(schemaType, hook),
+  createStandardSchema(schemaType, hook, userLog),
   {
     foreignKeys: [
       {"column":"userID","references":{"table":"User","column":"id"}},

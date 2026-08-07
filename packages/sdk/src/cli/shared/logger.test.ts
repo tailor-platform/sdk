@@ -1,3 +1,4 @@
+import { stripVTControlCharacters } from "node:util";
 import { describe, test, expect, vi } from "vitest";
 import { CIPromptError, formatLogLine, logger } from "./logger";
 
@@ -85,7 +86,7 @@ describe("logger", () => {
 
     test.each(cases)("formats $name", ({ mode, indent, type, expected }) => {
       const result = formatLogLine({ mode, indent, type, message: "MSG" });
-      expect(result).toMatch(expected);
+      expect(stripVTControlCharacters(result)).toMatch(expected);
     });
 
     test("formats stream mode with timestamp and indent", () => {
@@ -96,7 +97,7 @@ describe("logger", () => {
         message: "stream message",
         timestamp: "10:30:00 ",
       });
-      expect(result).toMatch(/^ {2}10:30:00 ℹ stream message\n$/);
+      expect(stripVTControlCharacters(result)).toMatch(/^ {2}10:30:00 ℹ stream message\n$/);
     });
 
     test("handles unknown log type", () => {

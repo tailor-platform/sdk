@@ -258,23 +258,6 @@ describe("createTailorDBHook", () => {
       expect(typeNow).toBe(fieldNow);
     });
 
-    test("runs type-level validate and throws on validation failure", () => {
-      const type = db
-        .table("Range", {
-          start: db.int(),
-          end: db.int(),
-        })
-        .validate(({ newRecord }, issues) => {
-          if ((newRecord.start as number) > (newRecord.end as number)) {
-            issues("start", "start must be <= end");
-          }
-        });
-      expect(() => createTailorDBHook(type)({ start: 10, end: 5 })).toThrow(
-        "Validation failed on field 'start': start must be <= end",
-      );
-      expect(() => createTailorDBHook(type)({ start: 1, end: 10 })).not.toThrow();
-    });
-
     test("does not invoke a hook that only defines update (createTailorDBHook is create-only)", () => {
       let updateCalled = false;
       const type = db.table("Test", { updatedAt: db.datetime() }).hooks({
@@ -324,6 +307,37 @@ describe("createStandardSchema", () => {
   ])("returns a value when the optional array field is %s", (_label, input) => {
     const result = buildSchema()["~standard"].validate(input);
     expect(result).toHaveProperty("value");
+  });
+
+  test("returns issues for a type-level validate failure, naming the field", () => {
+    const type = db
+      .table("Range", { start: db.int(), end: db.int() })
+      .validate(({ newRecord }, issues) => {
+        if ((newRecord.start as number) > (newRecord.end as number)) {
+          issues("start", "start must be <= end");
+        }
+      });
+    const schemaType = t.object({ id: t.uuid(), start: t.int(), end: t.int() });
+    const schema = createStandardSchema(schemaType, createTailorDBHook(type), type);
+
+    // Reported, not thrown: the seed run names the file and row like it does for
+    // any other issue instead of ending at the first offending record.
+    const result = schema["~standard"].validate({ start: 10, end: 5 });
+    expect(result).toMatchObject({
+      issues: [{ message: "start must be <= end", path: ["start"] }],
+    });
+    expect(schema["~standard"].validate({ start: 1, end: 10 })).toHaveProperty("value");
+  });
+
+  test("leaves a type-level validate out of it when the type is not given", () => {
+    const type = db
+      .table("Range", { start: db.int(), end: db.int() })
+      .validate((_record, issues) => issues("start", "always fails"));
+    const schemaType = t.object({ id: t.uuid(), start: t.int(), end: t.int() });
+
+    const schema = createStandardSchema(schemaType, createTailorDBHook(type));
+
+    expect(schema["~standard"].validate({ start: 1, end: 2 })).toHaveProperty("value");
   });
 
   test("returns issues when the hooked data fails validation", () => {
