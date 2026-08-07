@@ -1,17 +1,36 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { CloneOperationStatus } from "@tailor-platform/tailor-proto/application_pb";
 import * as path from "pathe";
 import { afterEach, describe, expect, test, vi } from "vitest";
+import { verifyRemoteSchema } from "#/cli/commands/tailordb/migrate/schema-checks";
+import { getNamespacesWithMigrations } from "./config";
 import { normalizeSchemaSnapshot } from "./snapshot";
 import {
   assertCloneTargetRegion,
+  assertSourceBaselineFresh,
   createMigrationTestBaselineSnapshots,
+  deleteExistingUserProfileConfig,
   loadSnapshotSeedData,
   sortSeedTypesForSnapshot,
   waitForCloneApplicationData,
 } from "./test-runtime";
 import type { OperatorClient } from "#/cli/shared/client";
+import type { PreparedMigrationTest } from "./test-types";
+
+vi.mock("./config", async (importOriginal) => {
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+  const original = (await importOriginal()) as typeof import("./config");
+  return { ...original, getNamespacesWithMigrations: vi.fn() };
+});
+
+vi.mock("#/cli/commands/tailordb/migrate/schema-checks", async (importOriginal) => {
+  const original =
+    // eslint-disable-next-line @typescript-eslint/consistent-type-imports
+    (await importOriginal()) as typeof import("#/cli/commands/tailordb/migrate/schema-checks");
+  return { ...original, verifyRemoteSchema: vi.fn() };
+});
 
 describe("migration test runtime", () => {
   const temporaryDirectories: string[] = [];
@@ -198,5 +217,153 @@ describe("migration test runtime", () => {
         timeout: 1_000,
       }),
     ).rejects.toThrow("namespace mismatch");
+  });
+
+  function runtimeState(client: OperatorClient, services: unknown[] = []) {
+    return {
+      client,
+      loaded: {
+        config: { path: "/project/tailor.config.ts" },
+        application: { tailorDBServices: services, authService: { config: { name: "auth-ns" } } },
+      },
+    } as unknown as Parameters<typeof assertSourceBaselineFresh>[0];
+  }
+
+  function preparedMigrationTest(
+    overrides: Partial<PreparedMigrationTest> = {},
+  ): PreparedMigrationTest {
+    return {
+      sourceWorkspaceId: "source",
+      sourceApplicationName: "app",
+      temporaryWorkspace: { name: "migration-test", region: "asia-northeast" },
+      baselines: new Map(),
+      baselineSnapshots: new Map(),
+      targetSnapshots: new Map(),
+      pendingNamespaces: [],
+      ...overrides,
+    };
+  }
+
+  function emptySnapshot(namespace: string) {
+    return normalizeSchemaSnapshot({
+      version: 1,
+      namespace,
+      createdAt: "2026-08-05T00:00:00.000Z",
+      types: {},
+    });
+  }
+
+  test("accepts a source that still matches the prepared baselines", async () => {
+    vi.mocked(getNamespacesWithMigrations).mockReturnValue([
+      { namespace: "main", migrationsDir: "/project/migrations/main" },
+    ]);
+    vi.mocked(verifyRemoteSchema).mockResolvedValue([
+      { namespace: "main", remoteMigrationNumber: 1, drifts: [], hasDrift: false },
+    ]);
+    const client = {
+      getMetadata: vi
+        .fn()
+        .mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0001" } } }),
+    } as unknown as OperatorClient;
+    const prepared = preparedMigrationTest({
+      baselines: new Map([
+        ["main", { migrationNumber: 1, snapshot: emptySnapshot("main"), historyId: null }],
+      ]),
+    });
+
+    await expect(
+      assertSourceBaselineFresh(runtimeState(client), prepared, "source"),
+    ).resolves.toBeUndefined();
+  });
+
+  test("rejects a source namespace that drifted after preparation", async () => {
+    vi.mocked(getNamespacesWithMigrations).mockReturnValue([
+      { namespace: "main", migrationsDir: "/project/migrations/main" },
+    ]);
+    vi.mocked(verifyRemoteSchema).mockResolvedValue([
+      { namespace: "main", remoteMigrationNumber: 1, drifts: [], hasDrift: true },
+    ]);
+    const prepared = preparedMigrationTest();
+
+    await expect(
+      assertSourceBaselineFresh(runtimeState({} as OperatorClient), prepared, "source"),
+    ).rejects.toThrow('Source namespace "main" changed after migration test preparation');
+  });
+
+  test("rejects a source whose migration checkpoint moved after preparation", async () => {
+    vi.mocked(getNamespacesWithMigrations).mockReturnValue([
+      { namespace: "main", migrationsDir: "/project/migrations/main" },
+    ]);
+    vi.mocked(verifyRemoteSchema).mockResolvedValue([
+      { namespace: "main", remoteMigrationNumber: 2, drifts: [], hasDrift: false },
+    ]);
+    const client = {
+      getMetadata: vi
+        .fn()
+        .mockResolvedValue({ metadata: { labels: { "sdk-migration": "m0002" } } }),
+    } as unknown as OperatorClient;
+    const prepared = preparedMigrationTest({
+      baselines: new Map([
+        ["main", { migrationNumber: 1, snapshot: emptySnapshot("main"), historyId: null }],
+      ]),
+    });
+
+    await expect(
+      assertSourceBaselineFresh(runtimeState(client), prepared, "source"),
+    ).rejects.toThrow('Source namespace "main" moved from migration 1 to 2');
+  });
+
+  test("rejects an unmigrated clone namespace whose schema changed after preparation", async () => {
+    vi.mocked(getNamespacesWithMigrations).mockReturnValue([]);
+    vi.mocked(verifyRemoteSchema).mockResolvedValue([]);
+    const client = {
+      listTailorDBTypes: vi.fn().mockResolvedValue({ tailordbTypes: [], nextPageToken: "" }),
+      listTailorDBGQLPermissions: vi.fn().mockResolvedValue({ permissions: [], nextPageToken: "" }),
+    } as unknown as OperatorClient;
+    const state = runtimeState(client, [{ namespace: "audit", config: { files: [] }, types: {} }]);
+    const prepared = preparedMigrationTest({
+      baselineSnapshots: new Map([
+        [
+          "audit",
+          normalizeSchemaSnapshot({
+            version: 1,
+            namespace: "audit",
+            createdAt: "2026-08-05T00:00:00.000Z",
+            types: {
+              AuditLog: { name: "AuditLog", pluralForm: "auditLogs", fields: {} },
+            },
+          }),
+        ],
+      ]),
+    });
+
+    await expect(assertSourceBaselineFresh(state, prepared, "source")).rejects.toThrow(
+      'Source namespace "audit" schema changed after migration test preparation',
+    );
+  });
+
+  test("deletes a retained target's existing user profile config", async () => {
+    const client = {
+      getUserProfileConfig: vi.fn().mockResolvedValue({ userProfileConfig: {} }),
+      deleteUserProfileConfig: vi.fn().mockResolvedValue({}),
+    } as unknown as OperatorClient;
+
+    await deleteExistingUserProfileConfig(runtimeState(client), "target");
+
+    expect(client.deleteUserProfileConfig).toHaveBeenCalledWith({
+      workspaceId: "target",
+      namespaceName: "auth-ns",
+    });
+  });
+
+  test("skips user profile config deletion when the target has none", async () => {
+    const client = {
+      getUserProfileConfig: vi.fn().mockRejectedValue(new ConnectError("not found", Code.NotFound)),
+      deleteUserProfileConfig: vi.fn(),
+    } as unknown as OperatorClient;
+
+    await deleteExistingUserProfileConfig(runtimeState(client), "target");
+
+    expect(client.deleteUserProfileConfig).not.toHaveBeenCalled();
   });
 });

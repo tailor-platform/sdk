@@ -365,10 +365,17 @@ function stateOrThrow(state: RuntimeState | undefined): RuntimeState {
   return assertDefined(state, "migration test runtime was used before preparation");
 }
 
-// The source is verified during preparation, but the baseline deploy runs in
-// between; a source deploy in that window would make the clone diverge from
-// the already-deployed baseline schemas.
-async function assertSourceBaselineFresh(
+/**
+ * Require the source workspace to still match the prepared baselines.
+ *
+ * The source is verified during preparation, but the baseline deploy runs in
+ * between; a source deploy in that window would make the clone diverge from
+ * the already-deployed baseline schemas.
+ * @param state - Prepared migration test runtime state
+ * @param prepared - Baselines captured during preparation
+ * @param sourceWorkspaceId - Source workspace ID
+ */
+export async function assertSourceBaselineFresh(
   state: RuntimeState,
   prepared: PreparedMigrationTest,
   sourceWorkspaceId: string,
@@ -421,10 +428,16 @@ async function assertSourceBaselineFresh(
   }
 }
 
-// A retained target may carry a user profile config referencing types the
-// baseline deploy replaces; deleting it up front lets the baseline's planAuth
-// see no existing config instead of reordering delete phases.
-async function deleteExistingUserProfileConfig(
+/**
+ * Delete the target workspace's user profile config when one exists.
+ *
+ * A retained target may carry a user profile config referencing types the
+ * baseline deploy replaces; deleting it up front lets the baseline's planAuth
+ * see no existing config instead of reordering delete phases.
+ * @param state - Prepared migration test runtime state
+ * @param targetWorkspaceId - Target workspace ID
+ */
+export async function deleteExistingUserProfileConfig(
   state: RuntimeState,
   targetWorkspaceId: string,
 ): Promise<void> {
