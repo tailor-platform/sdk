@@ -13,13 +13,14 @@ import { prompt } from "#/cli/shared/prompt";
 import { assertWritable } from "#/cli/shared/readonly-guard";
 import { getNamespacesWithMigrations, selectTargetNamespace } from "./config";
 import { parseMigrationNumberArg } from "./migration-number";
-import { fetchRemoteMigrationNumber } from "./remote-state";
+import { fetchRemoteMigrationState } from "./remote-state";
 import {
   assertMigrationNumberExists,
   assertValidMigrationFiles,
   formatMigrationNumber,
+  reconstructSnapshotFromMigrations,
 } from "./snapshot";
-import { MIGRATION_LABEL_KEY, sanitizeMigrationLabel } from "./types";
+import { MIGRATION_HISTORY_LABEL_KEY, MIGRATION_LABEL_KEY, sanitizeMigrationLabel } from "./types";
 
 export interface SetOptions {
   configPath?: string;
@@ -52,6 +53,8 @@ async function set(options: SetOptions): Promise<void> {
   // 4. Validate the local migration history and the requested number
   assertValidMigrationFiles(target.migrationsDir, targetNamespace);
   assertMigrationNumberExists(target.migrationsDir, migrationNumber);
+  const historyId = reconstructSnapshotFromMigrations(target.migrationsDir, 0)?.rebaseline
+    ?.historyId;
 
   // 5. Initialize client
   const accessToken = await loadAccessToken({
@@ -63,19 +66,26 @@ async function set(options: SetOptions): Promise<void> {
     profile: options.profile,
   });
 
-  // 6. Get current migration number
+  // 6. Get current migration state
   const trn = resourceTrn(workspaceId, "tailordb", targetNamespace);
-  const current = await fetchRemoteMigrationNumber(client, trn);
+  const currentState = await fetchRemoteMigrationState(client, trn);
+  const current = currentState.number;
   const currentMigration = current ?? 0;
+  const currentHistoryId = currentState.historyIdInvalid
+    ? "<invalid>"
+    : (currentState.historyId ?? "<unset>");
+  const newHistoryId = historyId ?? "<unset>";
 
   // 7. Display warning and confirmation
   logger.newline();
-  logger.warn("This operation will change the migration checkpoint.");
+  logger.warn("This operation will change TailorDB migration state metadata.");
   logger.log(`Namespace: ${styles.bold(targetNamespace)}`);
   logger.log(
     `Current migration: ${current === null ? "<unset>" : styles.bold(formatMigrationNumber(current))}`,
   );
   logger.log(`New migration: ${styles.bold(formatMigrationNumber(migrationNumber))}`);
+  logger.log(`Current migration history ID: ${styles.bold(currentHistoryId)}`);
+  logger.log(`New migration history ID: ${styles.bold(newHistoryId)}`);
   logger.newline();
 
   if (migrationNumber < currentMigration) {
@@ -93,7 +103,7 @@ async function set(options: SetOptions): Promise<void> {
   // 8. Confirmation prompt (unless --yes flag)
   if (!options.yes) {
     const confirmation = await prompt.confirm({
-      message: "Continue with migration checkpoint update?",
+      message: "Continue with migration checkpoint and history ID update?",
       default: false,
     });
 
@@ -107,7 +117,11 @@ async function set(options: SetOptions): Promise<void> {
   // 9. Update migration label
   await writeMetadataLabels(client, {
     trn,
-    labels: { [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) },
+    labels: {
+      [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
+      ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
+    },
+    remove: historyId ? undefined : [MIGRATION_HISTORY_LABEL_KEY],
   });
 
   logger.success(

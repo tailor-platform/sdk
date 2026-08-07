@@ -193,6 +193,56 @@ describe("tailordb migration sync", () => {
     );
   });
 
+  test("sets the current migration history ID from a re-baselined snapshot", async () => {
+    const schemaPath = path.join(state.migrationsDir, "0000", "schema.json");
+    const schema = JSON.parse(fs.readFileSync(schemaPath, "utf-8")) as Record<string, unknown>;
+    fs.writeFileSync(
+      schemaPath,
+      JSON.stringify({
+        ...schema,
+        rebaseline: {
+          historyId: "hcurrent",
+          replacedHistoryId: null,
+          replacedLatestMigration: 2,
+        },
+      }),
+    );
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: {
+          "sdk-migration": "m0001",
+          "sdk-migration-history": "hcurrent",
+          "sdk-name": "my-app",
+        },
+      }),
+    );
+  });
+
+  test("removes a stale remote history ID for a markerless local history", async () => {
+    state.getMetadata.mockResolvedValue({
+      metadata: {
+        labels: {
+          "sdk-migration": "m0002",
+          "sdk-migration-history": "hstale",
+          "sdk-name": "my-app",
+        },
+      },
+    });
+
+    const result = await runCommand(syncCommand, ["1", "--yes"]);
+
+    expect(result.success).toBe(true);
+    expect(state.setMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        labels: { "sdk-migration": "m0001", "sdk-name": "my-app" },
+      }),
+    );
+  });
+
   test("reconciles GQL permissions with the snapshot", async () => {
     const gqlPolicy = { conditions: [], actions: ["read"], permit: "allow" };
     writeInitialSchema(state.migrationsDir, {

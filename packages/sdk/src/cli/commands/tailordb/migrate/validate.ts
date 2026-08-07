@@ -64,6 +64,7 @@ interface CompletedRemoteSchemaReport {
   skipped?: RemoteSchemaVerificationSkipReason;
   /** Set when the remote migration checkpoint does not exist in the local migration history */
   checkpointMissingLocal?: boolean;
+  checkpointRepair?: { from: number; to: 0 };
 }
 
 interface FailedRemoteSchemaReport {
@@ -72,6 +73,7 @@ interface FailedRemoteSchemaReport {
   hasDrift?: never;
   drifts?: never;
   checkpointMissingLocal?: never;
+  checkpointRepair?: never;
 }
 
 type RemoteSchemaReport = CompletedRemoteSchemaReport | FailedRemoteSchemaReport;
@@ -190,6 +192,7 @@ function buildValidationReports(
       drifts: remote.drifts,
       ...(remote.skipped ? { skipped: remote.skipped } : {}),
       ...(checkpointMissingLocal ? { checkpointMissingLocal: true } : {}),
+      ...(remote.checkpointRepair ? { checkpointRepair: remote.checkpointRepair } : {}),
     };
 
     return {
@@ -333,6 +336,10 @@ function printValidationReports(reports: NamespaceValidationReport[]): void {
     const remote = report.remoteSchema;
     if (remote?.skipped === "check_failed") {
       logger.log(`  Remote schema: ${styles.error("not checked")}`);
+    } else if (remote?.checkpointRepair) {
+      logger.log(
+        `  Remote schema: ${styles.success("OK")} (next deploy will reset the checkpoint to 0000 from ${formatMigrationNumber(remote.checkpointRepair.from)})`,
+      );
     } else if (remote?.checkpointMissingLocal) {
       logger.log(
         `  Remote schema: ${styles.error(

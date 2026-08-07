@@ -21,6 +21,7 @@ import {
 } from "#/cli/commands/tailordb/migrate/snapshot";
 import {
   type PendingMigration,
+  MIGRATION_HISTORY_LABEL_KEY,
   MIGRATION_LABEL_KEY,
   parseMigrationLabelNumber,
   sanitizeMigrationLabel,
@@ -107,6 +108,7 @@ async function getCurrentMigrationNumber(
  * @param {string} workspaceId - Workspace ID
  * @param {NamespaceWithMigrations[]} namespacesWithMigrations - Namespaces with migrations config
  * @param {string} [configPath] - Config file path, included in remediation guidance when provided
+ * @param {ReadonlyMap<string, number>} [currentMigrationOverrides] - Confirmed current migration numbers to use instead of remote metadata
  * @returns {Promise<PendingMigration[]>} List of pending migrations
  */
 export async function detectPendingMigrations(
@@ -114,12 +116,15 @@ export async function detectPendingMigrations(
   workspaceId: string,
   namespacesWithMigrations: NamespaceWithMigrations[],
   configPath?: string,
+  currentMigrationOverrides?: ReadonlyMap<string, number>,
 ): Promise<PendingMigration[]> {
   const pendingMigrations: PendingMigration[] = [];
 
   for (const { namespace, migrationsDir } of namespacesWithMigrations) {
     // Get current applied migration number
-    const currentMigration = await getCurrentMigrationNumber(client, workspaceId, namespace);
+    const currentMigration =
+      currentMigrationOverrides?.get(namespace) ??
+      (await getCurrentMigrationNumber(client, workspaceId, namespace));
 
     // Get all migration files
     const migrationFiles = getMigrationFiles(migrationsDir);
@@ -242,6 +247,7 @@ async function executeSingleMigration(
  * @param {string} workspaceId - Workspace ID
  * @param {string} namespace - TailorDB namespace
  * @param {number} migrationNumber - Migration number to set
+ * @param historyId - Optional migration history ID to set atomically with the checkpoint
  * @returns {Promise<void>}
  */
 export async function updateMigrationLabel(
@@ -249,12 +255,17 @@ export async function updateMigrationLabel(
   workspaceId: string,
   namespace: string,
   migrationNumber: number,
+  historyId?: string,
 ): Promise<void> {
   const trn = resourceTrn(workspaceId, "tailordb", namespace);
 
   await writeMetadataLabels(client, {
     trn,
-    labels: { [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber) },
+    labels: {
+      [MIGRATION_LABEL_KEY]: sanitizeMigrationLabel(migrationNumber),
+      ...(historyId ? { [MIGRATION_HISTORY_LABEL_KEY]: historyId } : {}),
+    },
+    remove: historyId ? undefined : [MIGRATION_HISTORY_LABEL_KEY],
   });
 }
 

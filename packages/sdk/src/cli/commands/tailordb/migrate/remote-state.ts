@@ -1,5 +1,51 @@
 import { getOrNull, type OperatorClient } from "#/cli/shared/client";
-import { MIGRATION_LABEL_KEY, parseMigrationLabelNumber } from "./types";
+import {
+  MIGRATION_HISTORY_LABEL_KEY,
+  MIGRATION_LABEL_KEY,
+  parseMigrationHistoryId,
+  parseMigrationLabelNumber,
+} from "./types";
+
+export interface RemoteMigrationState {
+  metadataExists: boolean;
+  number: number | null;
+  historyId: string | null;
+  historyIdInvalid: boolean;
+}
+
+/**
+ * Fetch the namespace's migration checkpoint and history ID.
+ * @param client - Operator client
+ * @param trn - Namespace TRN
+ * @returns Parsed migration state with invalid history labels kept distinct from missing labels
+ */
+export async function fetchRemoteMigrationState(
+  client: OperatorClient,
+  trn: string,
+): Promise<RemoteMigrationState> {
+  const metadata = await getOrNull(async () => {
+    const { metadata } = await client.getMetadata({ trn });
+    return metadata;
+  });
+  if (!metadata) {
+    return {
+      metadataExists: false,
+      number: null,
+      historyId: null,
+      historyIdInvalid: false,
+    };
+  }
+
+  const migrationLabel = metadata.labels[MIGRATION_LABEL_KEY];
+  const historyLabel = metadata.labels[MIGRATION_HISTORY_LABEL_KEY];
+  const historyId = historyLabel ? parseMigrationHistoryId(historyLabel) : null;
+  return {
+    metadataExists: true,
+    number: migrationLabel ? parseMigrationLabelNumber(migrationLabel) : null,
+    historyId,
+    historyIdInvalid: historyLabel !== undefined && historyId === null,
+  };
+}
 
 /**
  * Fetch the namespace's current migration number from its metadata labels.
@@ -16,10 +62,5 @@ export async function fetchRemoteMigrationNumber(
   client: OperatorClient,
   trn: string,
 ): Promise<number | null> {
-  const metadata = await getOrNull(async () => {
-    const { metadata } = await client.getMetadata({ trn });
-    return metadata;
-  });
-  const label = metadata?.labels[MIGRATION_LABEL_KEY];
-  return label ? parseMigrationLabelNumber(label) : null;
+  return (await fetchRemoteMigrationState(client, trn)).number;
 }

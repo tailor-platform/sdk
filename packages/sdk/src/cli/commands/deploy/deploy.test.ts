@@ -61,6 +61,7 @@ function emptyResults(): PlanResults {
         noSchemaCheck: false,
         namespacesWithMigrations: [],
         migrationFileState: {},
+        checkpointRepairs: [],
       },
     },
     staticWebsite: {
@@ -831,6 +832,57 @@ describe("printPlanResults", () => {
       name: "User",
       currentOwner: "other-app",
     });
+  });
+
+  test("includes migration checkpoint repairs in JSON dry-run changes and summary", () => {
+    using _json = jsonMode();
+    const results = emptyResults();
+    results.tailorDB.context.checkpointRepairs = [
+      {
+        namespace: "tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "htailordb",
+      },
+    ];
+
+    const summary = printPlanResults(results, { dryRun: true });
+
+    const payload = outSpy.mock.calls[0]?.[0] as {
+      summary: { update: number };
+      changes: Array<{
+        action: string;
+        name: string;
+        labels: string[];
+        namespace?: string;
+      }>;
+    };
+    expect(summary.update).toBe(1);
+    expect(payload.summary.update).toBe(1);
+    expect(payload.changes).toContainEqual({
+      action: "update",
+      name: "migration checkpoint 0005 → 0000",
+      labels: ["migrationCheckpoint"],
+      namespace: "tailordb",
+    });
+  });
+
+  test("includes migration checkpoint repairs in human dry-run output", () => {
+    const results = emptyResults();
+    results.tailorDB.context.checkpointRepairs = [
+      {
+        namespace: "tailordb",
+        from: 5,
+        to: 0,
+        fromHistoryId: null,
+        toHistoryId: "htailordb",
+      },
+    ];
+
+    printPlanResults(results, { dryRun: true });
+
+    expect(String(outSpy.mock.calls[0]?.[0])).toContain("migration checkpoint 0005 → 0000");
   });
 
   test("does not emit JSON for apply --json; still prints plan to stderr", () => {
