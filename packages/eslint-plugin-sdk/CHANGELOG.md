@@ -1,5 +1,11 @@
 # @tailor-platform/eslint-plugin-sdk
 
+## 0.2.1
+
+### Patch Changes
+
+- [#1986](https://github.com/tailor-platform/sdk/pull/1986) [`d512707`](https://github.com/tailor-platform/sdk/commit/d512707767bdc5f8241188053a68415e7cae4f04) Thanks [@dqn](https://github.com/dqn)! - Keep exported rule names and plugin types aligned with the published lint rules.
+
 ## 0.2.0
 
 ### Minor Changes

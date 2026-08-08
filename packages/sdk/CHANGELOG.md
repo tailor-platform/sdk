@@ -1,5 +1,89 @@
 # @tailor-platform/sdk
 
+## 2.2.0
+
+### Minor Changes
+
+- [#1992](https://github.com/tailor-platform/sdk/pull/1992) [`6e67451`](https://github.com/tailor-platform/sdk/commit/6e6745147d07d6d1a26291f3d2cc8510170ae407) Thanks [@dqn](https://github.com/dqn)! - TailorDB migration scripts can now be unit-tested before deploying:
+  
+  - The generated `db.ts` exports the `Database` interface, so `createKyselyMock<Database>()` from `@tailor-platform/sdk/vitest` types queries against the migration's schema state.
+  - `tailor tailordb migration script <number> --with-test` scaffolds a ready-to-fill `migrate.test.ts` next to the migration script. When `migrate.ts` already exists (e.g. auto-generated for a breaking change), the flag adds only the test file.
+  - `createKyselyPGlite<Database>(new PGlite())` from `@tailor-platform/sdk/vitest` runs a migration script against an in-memory Postgres (`@electric-sql/pglite`, installed separately) to verify what it does to real rows.
+  - The migration guide's Testing section now documents the workflow.
+
+- [#1975](https://github.com/tailor-platform/sdk/pull/1975) [`b5ca25b`](https://github.com/tailor-platform/sdk/commit/b5ca25b796e8a5e4262ea2e3527973d77cab766a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `tailor seed fill` to fill in the values a record gets on create for the JSONL seed data rows that are missing them. It fills `id` by default, so rows can reference each other by id, and `--fields` names any other create-time field:
+  
+  ```bash
+  # ./seed/data/Customer.jsonl: {"name":"Acme Corporation"}
+  tailor seed fill
+  # ./seed/data/Customer.jsonl: {"id":"0b6b6f5e-...","name":"Acme Corporation"}
+  
+  # also stamp a creation time on rows that have none
+  tailor seed fill --fields id,createdAt
+  ```
+  
+  The values come from the type itself — its `id`, its field defaults, its create hooks — applied to each row on its own. Nothing is validated, so a row can be filled while a required field is still missing or while another file references an id that does not exist yet; that is the point, since the ids are what you need in order to write the rows that reference them. Run `tailor seed validate` when the data is ready.
+  
+  Only the named fields are written, and only into a row that has no value for them, so a value already in the file is never replaced. A line that gains nothing is left byte for byte as it was; a line that takes a value is written with its keys in the order the type declares its fields, so a filled-in `id` lands at the front. A field the type gives no value to is skipped, so `--fields id` covers a whole data directory and leaves the IdP `_User` data alone, and naming a field the platform assigns — a `serial` field, for instance — fills nothing and says so.
+  
+  `tailor seed apply --upsert` now points at the command when a row has no `id`, since that is the run it blocks, and newly scaffolded projects get a `seed:fill` script next to `seed:validate`.
+  
+  The generated seed schema files now export the type's create hook, which is where the values come from. Run `tailor generate` after upgrading; until then `tailor seed fill` reports which file needs regenerating.
+  
+  `createTailorDBHook` from `@tailor-platform/sdk/test` no longer runs the type's own `validate`. Computing the values a record gets on create and deciding whether a record is acceptable are separate jobs, and the second one now sits where the field-level validation already was: `createStandardSchema` takes the type as a third argument and reports type-level issues through its result.
+  
+  `tailor seed validate` also stops printing two markers on the header of a failed run (`\u2716 \u2717 Found 2 error(s) in ...`), now that it hands the CLI a report that is already formatted.
+  
+  That also fixes how `tailor seed validate` reports them. A type-level `validate` failure used to end the run at the first offending row with a bare message; it now lands in the same report as every other issue, naming the file and every row that fails.
+  
+  A test calling `createTailorDBHook` directly to assert a type-level `validate` throws needs to go through `createStandardSchema` instead.
+  
+  The same operation is available as `fillSeedData` from `@tailor-platform/sdk/seed`.
+
+- [#1979](https://github.com/tailor-platform/sdk/pull/1979) [`07c50a6`](https://github.com/tailor-platform/sdk/commit/07c50a6d5728827b937160a97182c3996c00baad) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `TailorDBColumns` / `TailorDBInsertable` / `TailorDBSelectable` / `TailorDBUpdateable` to `@tailor-platform/sdk/kysely`. They accept either a table (`typeof myTable`) or a bare field collection, so code that is generic over the fields can derive create/read/update inputs the same way the generated table types do: `.serial()` fields are never caller-supplied, `.default()` and `.hooks({ create })` fields may be omitted on create, optional fields stay optional, and `id` is generated. `IsReadOnlyDBField` and `IsAutoFilledDBField` are also exported from `@tailor-platform/sdk` for asking whether callers can never write a single field, or may omit it on create.
+  
+  Supplying a value for a `.serial()` column now fails with the reason instead of `'<column>' does not exist in type ...`, which read as a typo:
+  
+  ```
+  Type 'string' is not assignable to type 'TypeLevelError<"assigned by .serial(); remove it from the input">'.
+  ```
+  
+  This applies to the tables `kyselyTypePlugin` generates as well, because it comes from `Serial`. A serial column is now an omittable key on `Insertable`/`Updateable` rather than an absent one, so `keyof Insertable<Table<"MyType">>` includes it, and copying a whole record into a create input (`{ ...row }`) now reports the serial column instead of silently dropping it. Assigning the same values as before still compiles, and passing `undefined` is equivalent to omitting the column.
+  
+  `Insertable`, `Selectable` and `Updateable` from the generated `Namespace` also print as a flat object rather than an intersection, so assignability errors name the shape directly.
+  
+  `TailorDBField` gains an optional third type parameter carrying a nested object's own fields, so `db.object({ at: db.datetime() })` keeps that shape through the builder chain. Without it a date or datetime nested in an object resolved to `string | Date` (or `string`) while the runtime hands back a `Date`. Writing `TailorDBField<Defined, Output>` still works.
+
+- [#1988](https://github.com/tailor-platform/sdk/pull/1988) [`f45ed5b`](https://github.com/tailor-platform/sdk/commit/f45ed5b380620d58f332fd2dd8fc5bb92ea28ecd) Thanks [@dqn](https://github.com/dqn)! - Add `tailor tailordb migration test` to rehearse pending migrations in an isolated workspace. The command can load generated seed fixtures or clone source TailorDB records, run the real migration phases, optionally execute a Kysely assertion script, and deletes workspaces it creates unless `--keep` is passed.
+
+- [#1984](https://github.com/tailor-platform/sdk/pull/1984) [`2f8457d`](https://github.com/tailor-platform/sdk/commit/2f8457d433b583769b136ece9a0c483cfccf6cdd) Thanks [@dqn](https://github.com/dqn)! - Add `--strict` to `tailordb migration validate`: validation additionally fails when a migration not yet applied to the remote has data-loss warnings (e.g. a removed field or type) but neither a `migrate.ts` nor a recorded `--no-script` acknowledgment. The failure names the affected type and field and prints the exact command to record the acknowledgment, so CI can require destructive changes to be explicitly acknowledged before merge.
+  
+  To support this, `tailordb migration script <number> --no-script --reason "..."` now accepts warning-tier migrations (previously it was rejected unless the migration required a script), and `migration generate` offers to record the reason interactively when it detects warnings. Additionally, running `migration script <number>` when `migrate.ts` already exists now clears a stale `--no-script` acknowledgment from `diff.json` instead of failing, resolving the previously unclearable state after hand-adding a script.
+  
+  `diff.json` files written before data-loss warnings existed now have their warnings reconstructed from the recorded field/type removals when loaded, so `validate --strict` and `--no-script` acknowledgments treat them the same as newly generated migrations.
+
+- [#1993](https://github.com/tailor-platform/sdk/pull/1993) [`ecff3b2`](https://github.com/tailor-platform/sdk/commit/ecff3b2267f666de0ef83aef6b7727913e724a35) Thanks [@dqn](https://github.com/dqn)! - Add generated in-place TailorDB migrations for verified field type changes. Migration scripts normalize existing values while the previous field contract remains active, and the target type is applied in the post-migration phase. Generated scripts intentionally fail TypeScript checks until their normalization logic is reviewed.
+
+- [#1990](https://github.com/tailor-platform/sdk/pull/1990) [`36715da`](https://github.com/tailor-platform/sdk/commit/36715da7a125863c9dadd99cdcbb5fd45a51b4c9) Thanks [@dqn](https://github.com/dqn)! - Add a safe `tailordb migration rebaseline` workflow, let checked deployments adopt the new baseline, keep migration history IDs aligned across recovery commands, and reject unsupported migration file formats with upgrade guidance
+
+### Patch Changes
+
+- [#1960](https://github.com/tailor-platform/sdk/pull/1960) [`50743ad`](https://github.com/tailor-platform/sdk/commit/50743ad4cb38dc8f237934d3f9c905f2512ff6e4) Thanks [@toiroakr](https://github.com/toiroakr)! - Resolve the `tailor`, `tailor-seed`, and `tailor-tailordb-erd` executables through committed compile-cache launchers. The `tailor seed` command is now available as soon as the plugin is installed, and the seed and ERD plugin CLIs reuse Node's on-disk compile cache for faster warm starts.
+
+- [#1934](https://github.com/tailor-platform/sdk/pull/1934) [`2a3ec7b`](https://github.com/tailor-platform/sdk/commit/2a3ec7b108275410bf5b35d23784b07aa147c5ea) Thanks [@toiroakr](https://github.com/toiroakr)! - Drop the `chalk` dependency in favor of Node's built-in styling, and decide color support per output stream. Diagnostics on stderr now keep their colors when you redirect stdout (`tailor executor list > out.txt`), and stop writing escape codes into the file when you redirect stderr (`tailor deploy 2> log.txt`). `NO_COLOR`, `FORCE_COLOR` and non-TTY detection keep working as before.
+  
+  `@tailor-platform/sdk-codemod`, `@tailor-platform/sdk-plugin-seed` and `@tailor-platform/sdk-plugin-tailordb-erd` now declare the Node and Bun versions they need (`node >=22.15.0`, `bun >=1.2.0`), matching `@tailor-platform/sdk`. Installing them on an older runtime reports the mismatch instead of failing once the CLI runs.
+
+- [#1985](https://github.com/tailor-platform/sdk/pull/1985) [`ab23d97`](https://github.com/tailor-platform/sdk/commit/ab23d97e79eb2be6fb3f9d7ddd21515c1bf1c244) Thanks [@dqn](https://github.com/dqn)! - Copyable migration-script hint commands — from `migration generate`, `migration validate --strict`, and deploy's missing-script error — are now rendered by one shell-aware formatter. Values are quoted for the platform shell, and on Windows a value containing `%`, `$`, or `!` (which cmd.exe/PowerShell expand even inside double quotes) switches the hint to an argv rendering instead of a command line that would resolve to a different path. The deploy hint now also pads the migration number, binds `--config` with the `=` form, and omits it for the default config path.
+
+- [#1999](https://github.com/tailor-platform/sdk/pull/1999) [`4364357`](https://github.com/tailor-platform/sdk/commit/436435740510accbdb3aa627fe4439bd1656bb96) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency globals to v17.9.0
+
+- [#1994](https://github.com/tailor-platform/sdk/pull/1994) [`7e804d4`](https://github.com/tailor-platform/sdk/commit/7e804d464e40a73fb524338cf7eda42e88f5ede8) Thanks [@dqn](https://github.com/dqn)! - Make `tailor tailordb migration validate` reject generated field type normalization scaffolds until their review marker is removed.
+
+- [#2008](https://github.com/tailor-platform/sdk/pull/2008) [`f2135ab`](https://github.com/tailor-platform/sdk/commit/f2135ab6dd3d130d88803b9829a26024de930ed3) Thanks [@toiroakr](https://github.com/toiroakr)! - Consistently call a TailorDB schema definition a "table" instead of a "type" across the docs, matching the `db.type()` → `db.table()` rename. Also fix three leftover `db.type(...)` code samples in `docs/services/tailordb.md` that should have read `db.table(...)`.
+  
+  Update the `v2/idp-publish-events-rename` codemod registry description to say "tables" instead of "types", matching the same wording fix.
+
 ## 2.1.0
 
 ### Minor Changes

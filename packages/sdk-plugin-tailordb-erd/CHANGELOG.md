@@ -1,5 +1,17 @@
 # @tailor-platform/sdk-tailordb-erd-plugin
 
+## 0.1.2
+
+### Patch Changes
+
+- [#1960](https://github.com/tailor-platform/sdk/pull/1960) [`50743ad`](https://github.com/tailor-platform/sdk/commit/50743ad4cb38dc8f237934d3f9c905f2512ff6e4) Thanks [@toiroakr](https://github.com/toiroakr)! - Resolve the `tailor`, `tailor-seed`, and `tailor-tailordb-erd` executables through committed compile-cache launchers. The `tailor seed` command is now available as soon as the plugin is installed, and the seed and ERD plugin CLIs reuse Node's on-disk compile cache for faster warm starts.
+
+- [#1934](https://github.com/tailor-platform/sdk/pull/1934) [`2a3ec7b`](https://github.com/tailor-platform/sdk/commit/2a3ec7b108275410bf5b35d23784b07aa147c5ea) Thanks [@toiroakr](https://github.com/toiroakr)! - Drop the `chalk` dependency in favor of Node's built-in styling, and decide color support per output stream. Diagnostics on stderr now keep their colors when you redirect stdout (`tailor executor list > out.txt`), and stop writing escape codes into the file when you redirect stderr (`tailor deploy 2> log.txt`). `NO_COLOR`, `FORCE_COLOR` and non-TTY detection keep working as before.
+  
+  `@tailor-platform/sdk-codemod`, `@tailor-platform/sdk-plugin-seed` and `@tailor-platform/sdk-plugin-tailordb-erd` now declare the Node and Bun versions they need (`node >=22.15.0`, `bun >=1.2.0`), matching `@tailor-platform/sdk`. Installing them on an older runtime reports the mismatch instead of failing once the CLI runs.
+- Updated dependencies [[`50743ad`](https://github.com/tailor-platform/sdk/commit/50743ad4cb38dc8f237934d3f9c905f2512ff6e4), [`2a3ec7b`](https://github.com/tailor-platform/sdk/commit/2a3ec7b108275410bf5b35d23784b07aa147c5ea), [`ab23d97`](https://github.com/tailor-platform/sdk/commit/ab23d97e79eb2be6fb3f9d7ddd21515c1bf1c244), [`6e67451`](https://github.com/tailor-platform/sdk/commit/6e6745147d07d6d1a26291f3d2cc8510170ae407), [`4364357`](https://github.com/tailor-platform/sdk/commit/436435740510accbdb3aa627fe4439bd1656bb96), [`b5ca25b`](https://github.com/tailor-platform/sdk/commit/b5ca25b796e8a5e4262ea2e3527973d77cab766a), [`07c50a6`](https://github.com/tailor-platform/sdk/commit/07c50a6d5728827b937160a97182c3996c00baad), [`7e804d4`](https://github.com/tailor-platform/sdk/commit/7e804d464e40a73fb524338cf7eda42e88f5ede8), [`f45ed5b`](https://github.com/tailor-platform/sdk/commit/f45ed5b380620d58f332fd2dd8fc5bb92ea28ecd), [`2f8457d`](https://github.com/tailor-platform/sdk/commit/2f8457d433b583769b136ece9a0c483cfccf6cdd), [`ecff3b2`](https://github.com/tailor-platform/sdk/commit/ecff3b2267f666de0ef83aef6b7727913e724a35), [`36715da`](https://github.com/tailor-platform/sdk/commit/36715da7a125863c9dadd99cdcbb5fd45a51b4c9), [`f2135ab`](https://github.com/tailor-platform/sdk/commit/f2135ab6dd3d130d88803b9829a26024de930ed3)]:
+  - @tailor-platform/sdk@2.2.0
+
 ## 0.1.1
 
 ### Patch Changes
