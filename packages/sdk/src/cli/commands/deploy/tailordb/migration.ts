@@ -165,7 +165,7 @@ export async function detectPendingMigrations(
           throw new Error(
             `Migration ${migrationLabel} has both a skip acknowledgment and migrate.ts.\n` +
               `To resolve, either:\n` +
-              `  - Run the script and clear the stale acknowledgment: ${formatMigrationScriptCommand({ migrationNumber: file.number, namespace, configPath })}\n` +
+              `  - Keep the script and clear the stale acknowledgment: ${formatMigrationScriptCommand({ migrationNumber: file.number, namespace, configPath })}\n` +
               `  - Or keep the skip: delete migrate.ts`,
           );
         }

@@ -173,8 +173,8 @@ function assertMigrationScriptsReady(
     throw new Error(
       `Migration(s) ${conflicting.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
         "have both a --no-script skip acknowledgment and migrate.ts. " +
-        "Run 'tailor tailordb migration script <number>' to run the script and clear the stale " +
-        "acknowledgment, or delete migrate.ts to keep the skip.",
+        "Run 'tailor tailordb migration script <number>' to clear the stale acknowledgment, " +
+        "or delete migrate.ts to keep the skip.",
     );
   }
   if (unreviewed.length > 0) {

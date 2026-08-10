@@ -171,8 +171,8 @@ async function script(options: ScriptOptions): Promise<void> {
 
   const migratePath = getMigrationFilePath(migrationsDir, migrationNumber, "migrate");
   if (fs.existsSync(migratePath)) {
-    // A hand-placed migrate.ts takes precedence over an earlier --no-script
-    // acknowledgment; clear the stale record instead of failing.
+    // Deploy refuses to run while both a --no-script acknowledgment and
+    // migrate.ts exist; clearing the stale record here is the remediation.
     if (diff.scriptSkipped) {
       clearMigrationScriptSkipped(diffPath);
       logger.success(
