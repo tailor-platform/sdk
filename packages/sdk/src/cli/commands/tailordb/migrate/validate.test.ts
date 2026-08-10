@@ -422,6 +422,30 @@ describe("tailordb migration validate", () => {
     );
   });
 
+  test("lists one clearing command per line for multiple conflicting migrations", async () => {
+    using stdout = captureStdout();
+    using _json = jsonMode();
+    for (const migrationNumber of [1, 2]) {
+      writeDiff(state.migrationsDir, migrationNumber, [], {
+        requiresMigrationScript: true,
+        scriptSkipped: { reason: "no data yet", acknowledgedAt: "2026-01-01T00:00:00.000Z" },
+      });
+      writeMigrationFile(migrationNumber, "migrate.ts", "export async function main() {}");
+    }
+
+    const result = await runCommand(validateCommand, []);
+
+    expect(result.success).toBe(false);
+    const [report] = JSON.parse(stdout.output);
+    expect(report.migrationFiles.error).toContain("0001, 0002");
+    expect(report.migrationFiles.error).toContain(
+      "\n  tailor tailordb migration script 0001 --namespace tailordb\n",
+    );
+    expect(report.migrationFiles.error).toContain(
+      "\n  tailor tailordb migration script 0002 --namespace tailordb\n",
+    );
+  });
+
   test("fails when a migration script still contains a generated review marker", async () => {
     using stdout = captureStdout();
     using _json = jsonMode();
