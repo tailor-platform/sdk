@@ -32,12 +32,26 @@ import {
   DIFF_FILE_NAME,
   INITIAL_SCHEMA_NUMBER,
   formatMigrationNumber,
+  type CompareSnapshotsOptions,
   type NormalizedSchemaSnapshot,
   type RemoteGqlPermission,
   type SchemaSnapshot,
 } from "./snapshot";
 import type { ParsedField, TailorDBType } from "#/parser/service/tailordb/types";
 import type { MigrationDiff, RelationshipAddedChange } from "./diff-calculator";
+
+// compareSnapshots takes normalized snapshots; tests build raw fixtures.
+function compareRawSnapshots(
+  previous: SchemaSnapshot,
+  current: SchemaSnapshot,
+  options?: CompareSnapshotsOptions,
+): MigrationDiff {
+  return compareSnapshots(
+    normalizeSchemaSnapshot(previous),
+    normalizeSchemaSnapshot(current),
+    options,
+  );
+}
 
 function writeSchemaToDir(baseDir: string, num: number, content: SchemaSnapshot | object): string {
   const migDir = path.join(baseDir, formatMigrationNumber(num));
@@ -279,7 +293,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes.length).toBe(1);
       expect(diff.changes[0]!.kind).toBe("type_added");
@@ -300,7 +314,7 @@ describe("snapshot", () => {
       };
       const current = createEmptySnapshot();
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes[0]!.kind).toBe("type_removed");
       expect(diff.hasBreakingChanges).toBe(false);
@@ -340,7 +354,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes[0]).toMatchObject({ kind: "field_added", fieldName: "email" });
       expect(diff.hasBreakingChanges).toBe(false);
@@ -371,7 +385,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.hasBreakingChanges).toBe(true);
       expect(diff.breakingChanges[0]!.reason).toBe("Required field added");
@@ -402,7 +416,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes[0]!.kind).toBe("field_removed");
       expect(diff.hasBreakingChanges).toBe(false);
@@ -445,7 +459,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes[0]!.kind).toBe("field_type_modified");
       expect(diff.hasBreakingChanges).toBe(true);
@@ -482,19 +496,19 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes[0]!.kind).toBe("field_type_modified");
       expect(diff.hasBreakingChanges).toBe(true);
       expect(diff.breakingChanges[0]!.unsupported).toBe(true);
     });
 
-    test("normalizes decimal scale at compare entry so missing scale matches platform default", () => {
+    test("normalizes decimal scale so missing scale matches platform default", () => {
       // Reproduces the production scenario where one snapshot was loaded from
       // an older file that omitted `scale` and the other was produced by
       // `createSnapshotType` (which materializes the platform default of 6).
-      // compareSnapshots normalizes both inputs at the entry, so the diff must
-      // come out empty even though the literal shapes differ.
+      // Normalization canonicalizes both inputs before comparing, so the diff
+      // must come out empty even though the literal shapes differ.
       const previous: SchemaSnapshot = {
         ...createEmptySnapshot(),
         types: {
@@ -518,7 +532,7 @@ describe("snapshot", () => {
         namespace,
       );
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes).toEqual([]);
       expect(diff.hasBreakingChanges).toBe(false);
@@ -552,7 +566,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.hasBreakingChanges).toBe(true);
       expect(diff.breakingChanges[0]!.reason).toContain("optional to required");
@@ -586,7 +600,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.hasBreakingChanges).toBe(true);
       expect(diff.breakingChanges[0]!.reason).toContain("array to single value");
@@ -620,10 +634,137 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.hasBreakingChanges).toBe(true);
       expect(diff.breakingChanges[0]!.reason).toContain("Unique constraint");
+    });
+
+    describe("field renames", () => {
+      function snapshotWithFields(
+        fields: Record<string, { type: string; required: boolean; array?: boolean }>,
+      ): SchemaSnapshot {
+        return {
+          ...createEmptySnapshot(),
+          types: {
+            User: {
+              name: "User",
+              pluralForm: "Users",
+              fields: { id: { type: "uuid", required: true }, ...fields },
+            },
+          },
+        };
+      }
+
+      const previous = () => snapshotWithFields({ fullName: { type: "string", required: false } });
+      const current = () =>
+        snapshotWithFields({ displayName: { type: "string", required: false } });
+
+      test("records a single breaking field_renamed change", () => {
+        const diff = compareRawSnapshots(previous(), current(), {
+          fieldRenames: [
+            { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
+          ],
+        });
+
+        expect(diff.changes).toEqual([
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false },
+          },
+        ]);
+        expect(diff.hasBreakingChanges).toBe(true);
+        expect(diff.requiresMigrationScript).toBe(true);
+        expect(diff.breakingChanges).toEqual([
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason:
+              "Field renamed from fullName to displayName (existing values must be copied by the migration script)",
+          },
+        ]);
+        expect(diff.warnings).toEqual([]);
+      });
+
+      test("without rename specs the same pair stays remove + add", () => {
+        const diff = compareRawSnapshots(previous(), current());
+
+        expect(diff.changes.map((c) => c.kind).toSorted()).toEqual([
+          "field_added",
+          "field_removed",
+        ]);
+        expect(diff.hasBreakingChanges).toBe(false);
+        expect(diff.requiresMigrationScript).toBe(false);
+      });
+
+      test("rejects a rename whose old field is missing from the previous schema", () => {
+        expect(() =>
+          compareRawSnapshots(previous(), current(), {
+            fieldRenames: [
+              { typeName: "User", previousFieldName: "nickname", fieldName: "displayName" },
+            ],
+          }),
+        ).toThrow('field "nickname" does not exist in the previous schema');
+      });
+
+      test("rejects a rename whose new field is missing from the current schema", () => {
+        expect(() =>
+          compareRawSnapshots(previous(), current(), {
+            fieldRenames: [{ typeName: "User", previousFieldName: "fullName", fieldName: "alias" }],
+          }),
+        ).toThrow('field "alias" does not exist in the current schema');
+      });
+
+      test("rejects a rename between incompatible field types", () => {
+        const incompatibleCurrent = snapshotWithFields({
+          displayName: { type: "integer", required: false },
+        });
+        expect(() =>
+          compareRawSnapshots(previous(), incompatibleCurrent, {
+            fieldRenames: [
+              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
+            ],
+          }),
+        ).toThrow("not rename-compatible");
+      });
+
+      test("rejects a rename between different array-ness", () => {
+        const arrayCurrent = snapshotWithFields({
+          displayName: { type: "string", required: false, array: true },
+        });
+        expect(() =>
+          compareRawSnapshots(previous(), arrayCurrent, {
+            fieldRenames: [
+              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
+            ],
+          }),
+        ).toThrow("not rename-compatible");
+      });
+
+      test("rejects a field participating in two renames", () => {
+        expect(() =>
+          compareRawSnapshots(previous(), current(), {
+            fieldRenames: [
+              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
+              { typeName: "User", previousFieldName: "fullName", fieldName: "displayName" },
+            ],
+          }),
+        ).toThrow("appears in more than one rename");
+      });
+
+      test("rejects a rename whose type does not exist", () => {
+        expect(() =>
+          compareRawSnapshots(previous(), current(), {
+            fieldRenames: [
+              { typeName: "Ghost", previousFieldName: "fullName", fieldName: "displayName" },
+            ],
+          }),
+        ).toThrow('type "Ghost" must exist');
+      });
     });
 
     describe("decimal scale changes", () => {
@@ -648,7 +789,7 @@ describe("snapshot", () => {
       }
 
       test("classifies a decimal scale change as breaking", () => {
-        const diff = compareSnapshots(snapshotWithPrice(2), snapshotWithPrice(4));
+        const diff = compareRawSnapshots(snapshotWithPrice(2), snapshotWithPrice(4));
 
         expect(diff.hasBreakingChanges).toBe(true);
         expect(diff.breakingChanges[0]!.reason).toContain("Decimal scale changed");
@@ -671,7 +812,7 @@ describe("snapshot", () => {
           scale: 2,
         };
 
-        const diff = compareSnapshots(previous, current);
+        const diff = compareRawSnapshots(previous, current);
 
         expect(diff.breakingChanges.map(({ reason }) => reason)).toEqual([
           "Field changed from optional to required",
@@ -681,14 +822,14 @@ describe("snapshot", () => {
       });
 
       test("does not flag an explicit scale equal to the platform default", () => {
-        const diff = compareSnapshots(snapshotWithPrice(undefined), snapshotWithPrice(6));
+        const diff = compareRawSnapshots(snapshotWithPrice(undefined), snapshotWithPrice(6));
 
         expect(diff.changes).toHaveLength(0);
         expect(diff.hasBreakingChanges).toBe(false);
       });
 
       test("classifies a change from the omitted default scale as breaking", () => {
-        const diff = compareSnapshots(snapshotWithPrice(undefined), snapshotWithPrice(2));
+        const diff = compareRawSnapshots(snapshotWithPrice(undefined), snapshotWithPrice(2));
 
         expect(diff.hasBreakingChanges).toBe(true);
         expect(diff.breakingChanges[0]!.reason).toContain("Decimal scale changed");
@@ -717,7 +858,7 @@ describe("snapshot", () => {
       }
 
       test("classifies unique index addition as breaking", () => {
-        const diff = compareSnapshots(
+        const diff = compareRawSnapshots(
           snapshotWithIndexes(undefined),
           snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
         );
@@ -728,7 +869,7 @@ describe("snapshot", () => {
       });
 
       test("keeps non-unique index addition non-breaking", () => {
-        const diff = compareSnapshots(
+        const diff = compareRawSnapshots(
           snapshotWithIndexes(undefined),
           snapshotWithIndexes({ name_org: { fields: ["name", "org"] } }),
         );
@@ -739,7 +880,7 @@ describe("snapshot", () => {
       });
 
       test("classifies unique constraint added to existing index as breaking", () => {
-        const diff = compareSnapshots(
+        const diff = compareRawSnapshots(
           snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: false } }),
           snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
         );
@@ -749,7 +890,7 @@ describe("snapshot", () => {
       });
 
       test("classifies field change on a unique index as breaking", () => {
-        const diff = compareSnapshots(
+        const diff = compareRawSnapshots(
           snapshotWithIndexes({ name_org: { fields: ["name"], unique: true } }),
           snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
         );
@@ -759,7 +900,7 @@ describe("snapshot", () => {
       });
 
       test("keeps unique constraint removal non-breaking", () => {
-        const diff = compareSnapshots(
+        const diff = compareRawSnapshots(
           snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
           snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: false } }),
         );
@@ -769,7 +910,7 @@ describe("snapshot", () => {
       });
 
       test("keeps unique index removal non-breaking", () => {
-        const diff = compareSnapshots(
+        const diff = compareRawSnapshots(
           snapshotWithIndexes({ name_org: { fields: ["name", "org"], unique: true } }),
           snapshotWithIndexes(undefined),
         );
@@ -779,7 +920,7 @@ describe("snapshot", () => {
       });
 
       test("keeps field change on a non-unique index non-breaking", () => {
-        const diff = compareSnapshots(
+        const diff = compareRawSnapshots(
           snapshotWithIndexes({ name_org: { fields: ["name"] } }),
           snapshotWithIndexes({ name_org: { fields: ["name", "org"] } }),
         );
@@ -830,7 +971,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.hasBreakingChanges).toBe(true);
       expect(diff.breakingChanges[0]!.reason).toContain("Enum values removed");
@@ -874,7 +1015,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes.length).toBe(0);
       expect(diff.hasBreakingChanges).toBe(false);
@@ -917,7 +1058,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes.length).toBe(1);
       expect(diff.changes[0]!.kind).toBe("field_modified");
@@ -936,7 +1077,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(snapshot, snapshot);
+      const diff = compareRawSnapshots(snapshot, snapshot);
 
       expect(diff.changes.length).toBe(0);
     });
@@ -965,7 +1106,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
@@ -999,7 +1140,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
@@ -1033,7 +1174,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
@@ -1101,7 +1242,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       const forwardChange = diff.changes.find(
         (c): c is RelationshipAddedChange =>
@@ -1156,7 +1297,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
@@ -1192,7 +1333,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
@@ -1231,7 +1372,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
@@ -1267,7 +1408,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(previous, current);
+      const diff = compareRawSnapshots(previous, current);
 
       expect(diff.changes).toEqual([
         expect.objectContaining({
@@ -1293,7 +1434,7 @@ describe("snapshot", () => {
         },
       };
 
-      const diff = compareSnapshots(snapshot, snapshot);
+      const diff = compareRawSnapshots(snapshot, snapshot);
 
       expect(diff.changes).toEqual([]);
     });
@@ -1735,6 +1876,43 @@ describe("snapshot", () => {
 
       expect(loaded.warnings.length).toBe(1);
       expect(loaded.hasWarnings).toBe(true);
+    });
+
+    test("loads a diff containing a field_renamed change", () => {
+      const renameDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason: "Field renamed from fullName to displayName",
+          },
+        ],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      };
+
+      const filePath = path.join(testDir, "rename_diff.json");
+      fs.writeFileSync(filePath, JSON.stringify(renameDiff, null, 2));
+
+      const loaded = loadDiff(filePath);
+
+      expect(loaded.changes).toEqual(renameDiff.changes);
+      expect(loaded.requiresMigrationScript).toBe(true);
     });
   });
 
@@ -2309,6 +2487,62 @@ describe("snapshot", () => {
 
       expect(reconstructed?.types.User!.fields.id).toBeDefined();
       expect(reconstructed?.types.User!.fields.email).toBeDefined();
+    });
+
+    test("applies field_renamed diff (old field dropped, new field added)", () => {
+      const initialSnapshot: SchemaSnapshot = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        types: {
+          User: {
+            name: "User",
+            pluralForm: "Users",
+            fields: {
+              id: { type: "uuid", required: true },
+              fullName: { type: "string", required: false },
+            },
+          },
+        },
+      };
+
+      const diff: MigrationDiff = {
+        version: SCHEMA_SNAPSHOT_VERSION,
+        namespace,
+        createdAt: new Date().toISOString(),
+        changes: [
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason: "Field renamed from fullName to displayName",
+          },
+        ],
+        hasWarnings: false,
+        warnings: [],
+        requiresMigrationScript: true,
+      };
+
+      writeSchemaToDir(testDir, INITIAL_SCHEMA_NUMBER, initialSnapshot);
+      writeDiffToDir(testDir, 1, diff);
+
+      const reconstructed = reconstructSnapshotFromMigrations(testDir);
+
+      expect(reconstructed?.types.User!.fields.fullName).toBeUndefined();
+      expect(reconstructed?.types.User!.fields.displayName).toEqual({
+        type: "string",
+        required: false,
+      });
     });
 
     test("reconstructs the target field type from a phased type change", () => {

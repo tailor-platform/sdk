@@ -17,7 +17,7 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
-import type { MigrationDiff, DiffChange } from "./diff-calculator";
+import type { MigrationDiff, DiffChange, FieldRenamedChange } from "./diff-calculator";
 
 /** Marker left in generated migration scripts until their normalization logic is reviewed. */
 export const MIGRATION_REVIEW_REQUIRED_MARKER = "TODO(tailor-migration-review)";
@@ -296,6 +296,22 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
     return [];
   }
 
+  if (change.kind === "field_renamed") {
+    const scripts = [generateFieldRenameCopyScript(change)];
+    // The unique constraint is deferred to the post-migration phase, so
+    // duplicates in the copied values must be resolved before it is enforced.
+    // A previously unique source still needs the check when the copy itself
+    // can collapse distinct values (e.g. a decreased decimal scale rounds
+    // 1.231 and 1.232 both to 1.23).
+    if (
+      (change.after.unique ?? false) &&
+      (!(change.before.unique ?? false) || renameCopyCanCollapseValues(change))
+    ) {
+      scripts.push(generateUniqueDedupeScript(change.typeName, change.fieldName, "suffix"));
+    }
+    return scripts;
+  }
+
   if (change.kind !== "field_modified" && change.kind !== "field_type_modified") {
     // No data migration needed for type_added, type_removed, or field_removed
     return [];
@@ -376,6 +392,36 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
   return scripts;
 }
 
+function renameCopyCanCollapseValues(change: FieldRenamedChange): boolean {
+  const { before, after } = change;
+  if (before.type !== "decimal" || after.type !== "decimal") return false;
+  return (after.scale ?? DEFAULT_DECIMAL_SCALE) < (before.scale ?? DEFAULT_DECIMAL_SCALE);
+}
+
+function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
+  const { typeName, fieldName, previousFieldName, before, after } = change;
+  const requiredTodo =
+    !before.required && after.required
+      ? `
+  // TODO: ${previousFieldName} is optional but ${fieldName} is required.
+  // Resolve null values, or the post-migration phase will fail.`
+      : "";
+  const roundingWarning = renameCopyCanCollapseValues(change)
+    ? `
+  // WARNING: ${fieldName} has a smaller decimal scale than ${previousFieldName}, so
+  // copied values that exceed it may be rounded half-up. Review the resulting
+  // precision before deploying.`
+    : "";
+
+  return `  // Copy ${typeName}.${previousFieldName} into ${fieldName} for every row.
+  // Overwrite unconditionally: stored values of previously removed fields are
+  // not pruned, so a stale value could otherwise resurface under ${fieldName}.${requiredTodo}${roundingWarning}
+  await trx
+    .updateTable("${typeName}")
+    .set((eb) => ({ ${fieldName}: eb.ref("${previousFieldName}") }))
+    .execute();`;
+}
+
 function generateFieldTypeChangeScript(
   change: Extract<DiffChange, { kind: "field_type_modified" }>,
 ): string {
@@ -419,36 +465,48 @@ function generateUniqueConstraintScript(change: DiffChange): string | null {
   const { before, after } = change;
   if ((before.unique ?? false) || !(after.unique ?? false)) return null;
 
+  return generateUniqueDedupeScript(
+    change.typeName,
+    change.fieldName,
+    change.kind === "field_type_modified" ? "throw" : "suffix",
+  );
+}
+
+function generateUniqueDedupeScript(
+  typeName: string,
+  fieldName: string,
+  resolution: "suffix" | "throw",
+): string {
   const duplicateResolution =
-    change.kind === "field_type_modified"
+    resolution === "throw"
       ? `      if (records.length > 1) {
         throw new Error(
-          "TODO: Resolve duplicate ${change.typeName}.${change.fieldName} values before adding the unique constraint",
+          "TODO: Resolve duplicate ${typeName}.${fieldName} values before adding the unique constraint",
         );
       }`
       : `      // Keep first record, add suffix to others
       for (let i = 1; i < records.length; i++) {
         await trx
-          .updateTable("${change.typeName}")
-          .set({ ${change.fieldName}: \`\${records[i].${change.fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
+          .updateTable("${typeName}")
+          .set({ ${fieldName}: \`\${records[i].${fieldName}}_\${i}\` }) // TODO: Set appropriate unique value
           .where("id", "=", records[i].id)
           .execute();
       }`;
 
-  return `  // Ensure ${change.fieldName} values are unique before adding constraint
+  return `  // Ensure ${fieldName} values are unique before adding constraint
   {
     const duplicates = await trx
-      .selectFrom("${change.typeName}")
-      .select(["${change.fieldName}"])
-      .groupBy("${change.fieldName}")
+      .selectFrom("${typeName}")
+      .select(["${fieldName}"])
+      .groupBy("${fieldName}")
       .having((eb) => eb.fn.count("id"), ">", 1)
       .execute();
     for (const dup of duplicates) {
       // Load every record in this duplicate group before resolving it
       const records = await trx
-        .selectFrom("${change.typeName}")
-        .select(["id", "${change.fieldName}"])
-        .where("${change.fieldName}", "=", dup.${change.fieldName})
+        .selectFrom("${typeName}")
+        .select(["id", "${fieldName}"])
+        .where("${fieldName}", "=", dup.${fieldName})
         .execute();
 ${duplicateResolution}
     }
@@ -469,8 +527,8 @@ function generateDecimalScaleChangeScript(change: DiffChange): string | null {
   const roundingWarning =
     afterScale < beforeScale
       ? `
-  // Values that exceed the new scale may be rounded half-up, so review the
-  // resulting precision before deploying.`
+  // WARNING: Values that exceed the new scale may be rounded half-up, so
+  // review the resulting precision before deploying.`
       : "";
 
   return `  // Re-save existing ${change.typeName} rows so ${change.fieldName} is stored under the new scale.

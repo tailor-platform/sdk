@@ -41,29 +41,31 @@ import {
 } from "./diff-calculator";
 import { supportsInPlaceFieldTypeChange } from "./field-type-change";
 import { formatMigrationNumber } from "./migration-number";
+import { assertValidFieldRenames, type FieldRenameSpec } from "./rename-detection";
 import { schemaSnapshotSchema, migrationDiffSchema } from "./snapshot-schema";
+import {
+  SNAPSHOT_FIELD_BOOLEAN_PROPS,
+  type NormalizedSchemaSnapshot,
+  type SchemaSnapshot,
+  type SnapshotActionPermission,
+  type SnapshotFieldConfig,
+  type SnapshotGqlAction,
+  type SnapshotGqlPermission,
+  type SnapshotGqlOperations,
+  type SnapshotPermissionOperand,
+  type SnapshotPermissionOperator,
+  type SnapshotIndexConfig,
+  type SnapshotPermissionCondition,
+  type SnapshotRecordPermission,
+  type SnapshotRelationship,
+  type SnapshotSettings,
+  type TailorDBSnapshotType,
+} from "./snapshot-types";
 import type {
   TailorDBType,
   OperatorFieldConfig,
   StandardActionPermission,
 } from "#/parser/service/tailordb/types";
-import type {
-  NormalizedSchemaSnapshot,
-  SchemaSnapshot,
-  SnapshotActionPermission,
-  SnapshotFieldConfig,
-  SnapshotGqlAction,
-  SnapshotGqlPermission,
-  SnapshotGqlOperations,
-  SnapshotPermissionOperand,
-  SnapshotPermissionOperator,
-  SnapshotIndexConfig,
-  SnapshotPermissionCondition,
-  SnapshotRecordPermission,
-  SnapshotRelationship,
-  SnapshotSettings,
-  TailorDBSnapshotType,
-} from "./snapshot-types";
 import type { SchemaDrift } from "./types";
 
 // ============================================================================
@@ -771,6 +773,19 @@ function applyDiffToSnapshot(
         }
         break;
       }
+      case "field_renamed": {
+        const existing = types[change.typeName];
+        if (existing) {
+          const fields = copySnapshotRecord(existing.fields);
+          delete fields[change.previousFieldName];
+          fields[change.fieldName] = change.after;
+          types[change.typeName] = {
+            ...existing,
+            fields,
+          };
+        }
+        break;
+      }
       case "index_added":
       case "index_modified": {
         const existing = types[change.typeName];
@@ -1006,8 +1021,7 @@ function areFieldsDifferent(oldField: SnapshotFieldConfig, newField: SnapshotFie
   if (oldField.required !== newField.required) return true;
 
   // Compare optional boolean properties (default to false)
-  const booleanProps = ["array", "index", "unique", "foreignKey", "vector"] as const;
-  for (const prop of booleanProps) {
+  for (const prop of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
     if ((oldField[prop] ?? false) !== (newField[prop] ?? false)) return true;
   }
 
@@ -1240,12 +1254,40 @@ function compareTypeFields(
   typeName: string,
   prevType: TailorDBSnapshotType,
   currType: TailorDBSnapshotType,
+  fieldRenames: readonly FieldRenameSpec[] = [],
 ): void {
   const prevFieldNames = new Set(Object.keys(prevType.fields));
   const currFieldNames = new Set(Object.keys(currType.fields));
+  const renamedFromNames = new Set(fieldRenames.map((r) => r.previousFieldName));
+  const renamedToNames = new Set(fieldRenames.map((r) => r.fieldName));
+
+  for (const rename of fieldRenames) {
+    const prevField = assertDefined(
+      prevType.fields[rename.previousFieldName],
+      `renamed field "${rename.previousFieldName}" missing from prevType`,
+    );
+    const currField = assertDefined(
+      currType.fields[rename.fieldName],
+      `renamed field "${rename.fieldName}" missing from currType`,
+    );
+    ctx.changes.push({
+      kind: "field_renamed",
+      typeName,
+      fieldName: rename.fieldName,
+      previousFieldName: rename.previousFieldName,
+      before: prevField,
+      after: currField,
+    });
+    ctx.breakingChanges.push({
+      typeName,
+      fieldName: rename.fieldName,
+      reason: `Field renamed from ${rename.previousFieldName} to ${rename.fieldName} (existing values must be copied by the migration script)`,
+    });
+  }
 
   // Check for added fields
   for (const fieldName of currFieldNames) {
+    if (renamedToNames.has(fieldName)) continue;
     if (!prevFieldNames.has(fieldName)) {
       const currField = assertDefined(
         currType.fields[fieldName],
@@ -1267,6 +1309,7 @@ function compareTypeFields(
 
   // Check for removed fields
   for (const fieldName of prevFieldNames) {
+    if (renamedFromNames.has(fieldName)) continue;
     if (!currFieldNames.has(fieldName)) {
       const prevField = assertDefined(
         prevType.fields[fieldName],
@@ -1776,22 +1819,38 @@ function compareTypeScripts(
 }
 
 /**
- * Compare two snapshots and generate a diff
- * @param {SchemaSnapshot} previous - Previous schema snapshot
- * @param {SchemaSnapshot} current - Current schema snapshot
- * @returns {MigrationDiff} Migration diff between snapshots
+ * Options for {@link compareSnapshots}.
  */
-export function compareSnapshots(previous: SchemaSnapshot, current: SchemaSnapshot): MigrationDiff {
-  return compareNormalizedSnapshots(
-    normalizeSchemaSnapshot(previous),
-    normalizeSchemaSnapshot(current),
-  );
+export interface CompareSnapshotsOptions {
+  /**
+   * Confirmed field renames. Each spec replaces the corresponding
+   * `field_removed` + `field_added` pair with a single breaking
+   * `field_renamed` change. Specs are validated against both snapshots.
+   */
+  fieldRenames?: readonly FieldRenameSpec[];
 }
 
-function compareNormalizedSnapshots(
+/**
+ * Compare two normalized snapshots and generate a diff
+ * @param {NormalizedSchemaSnapshot} previous - Previous normalized snapshot
+ * @param {NormalizedSchemaSnapshot} current - Current normalized snapshot
+ * @param {CompareSnapshotsOptions} [options] - Comparison options
+ * @returns {MigrationDiff} Migration diff between snapshots
+ */
+export function compareSnapshots(
   previous: NormalizedSchemaSnapshot,
   current: NormalizedSchemaSnapshot,
+  options?: CompareSnapshotsOptions,
 ): MigrationDiff {
+  const fieldRenames = options?.fieldRenames ?? [];
+  assertValidFieldRenames(previous, current, fieldRenames);
+  const renamesByType = new Map<string, FieldRenameSpec[]>();
+  for (const rename of fieldRenames) {
+    const list = renamesByType.get(rename.typeName) ?? [];
+    list.push(rename);
+    renamesByType.set(rename.typeName, list);
+  }
+
   const ctx: DiffContext = { changes: [], breakingChanges: [], warnings: [] };
 
   const previousTypeNames = new Set(Object.keys(previous.types));
@@ -1843,7 +1902,7 @@ function compareNormalizedSnapshots(
     compareTypeScripts(ctx, typeName, prevType, currType);
 
     // Compare fields
-    compareTypeFields(ctx, typeName, prevType, currType);
+    compareTypeFields(ctx, typeName, prevType, currType, renamesByType.get(typeName));
 
     // Compare indexes
     compareIndexes(ctx, typeName, prevType.indexes, currType.indexes);
@@ -1894,8 +1953,8 @@ function compareNormalizedSnapshots(
 /**
  * Compare a snapshot against canonical TailorDBSnapshotType-shaped local types.
  * Callers are expected to pre-convert TailorDBService.types to TailorDBSnapshotType via
- * `createSnapshotType`. As a safety net, `compareSnapshots` re-runs idempotent
- * normalization on both sides, so a caller that forgets will still get correct
+ * `createSnapshotType`. As a safety net, both sides are re-run through idempotent
+ * normalization here, so a caller that forgets will still get correct
  * comparisons (no silent false drift).
  * @param {SchemaSnapshot} snapshot - Schema snapshot to compare against
  * @param {Record<string, TailorDBSnapshotType>} localTypes - Local snapshot-shaped types
@@ -1913,7 +1972,10 @@ export function compareLocalTypesWithSnapshot(
     createdAt: new Date().toISOString(),
     types: localTypes,
   };
-  return compareSnapshots(snapshot, currentSnapshot);
+  return compareSnapshots(
+    normalizeSchemaSnapshot(snapshot),
+    normalizeSchemaSnapshot(currentSnapshot),
+  );
 }
 
 // ============================================================================
@@ -2777,7 +2839,7 @@ function addFieldDifferences(
   addFieldDifference(differences, prefix, "type", remoteField.type, snapshotField.type);
   addFieldDifference(differences, prefix, "required", remoteField.required, snapshotField.required);
 
-  for (const key of ["array", "index", "unique", "foreignKey", "vector"] as const) {
+  for (const key of SNAPSHOT_FIELD_BOOLEAN_PROPS) {
     addBooleanFieldDifference(differences, prefix, key, remoteField, snapshotField);
   }
 
@@ -3023,6 +3085,15 @@ function schemaDriftFromDiffChange(change: DiffChange): SchemaDrift {
     case "field_modified":
     case "field_type_modified":
       return fieldDriftFromChange(change);
+    // Drift comparison never confirms renames, so this kind cannot occur here;
+    // report it as a plain field mismatch if it ever does.
+    case "field_renamed":
+      return {
+        typeName: change.typeName,
+        kind: "field_mismatch",
+        fieldName: change.fieldName,
+        details: `Field '${change.previousFieldName}' was renamed to '${change.fieldName}'`,
+      };
     case "index_added":
       return {
         typeName: change.typeName,
@@ -3114,9 +3185,7 @@ function compareNormalizedRemoteWithSnapshot(
   remoteSnapshot: NormalizedSchemaSnapshot,
   snapshot: NormalizedSchemaSnapshot,
 ): SchemaDrift[] {
-  return compareNormalizedSnapshots(remoteSnapshot, snapshot).changes.map(
-    schemaDriftFromDiffChange,
-  );
+  return compareSnapshots(remoteSnapshot, snapshot).changes.map(schemaDriftFromDiffChange);
 }
 
 /**

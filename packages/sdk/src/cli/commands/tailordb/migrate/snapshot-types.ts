@@ -44,6 +44,26 @@ export interface SnapshotEnumValue {
 }
 
 /**
+ * Optional boolean properties of {@link SnapshotFieldConfig}, absent meaning
+ * `false`. Every comparator over snapshot fields iterates this single list so
+ * a newly added property cannot be silently skipped by one of them; a
+ * comparator that ignores some of these must declare its exclusions
+ * explicitly.
+ */
+export const SNAPSHOT_FIELD_BOOLEAN_PROPS = [
+  "array",
+  "index",
+  "unique",
+  "foreignKey",
+  "vector",
+] as const;
+
+/**
+ * One of the {@link SNAPSHOT_FIELD_BOOLEAN_PROPS} property names.
+ */
+export type SnapshotFieldBooleanProp = (typeof SNAPSHOT_FIELD_BOOLEAN_PROPS)[number];
+
+/**
  * Field configuration in schema snapshot
  */
 export interface SnapshotFieldConfig {

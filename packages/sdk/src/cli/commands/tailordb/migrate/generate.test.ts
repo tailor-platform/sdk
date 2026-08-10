@@ -10,9 +10,14 @@ import { generateCommand } from "./generate";
 import { loadDiff } from "./snapshot";
 import { parsedType, snapshotType, writeInitialSchema } from "./test-helpers/schema-fixtures";
 
+interface TestNamespace {
+  namespace: string;
+  migrationsDir: string;
+  localTypes: Record<string, unknown>;
+}
+
 const state = vi.hoisted(() => ({
-  migrationsDir: "",
-  localTypes: {} as Record<string, unknown>,
+  namespaces: [] as TestNamespace[],
 }));
 
 vi.mock("#/cli/shared/config-loader", () => ({
@@ -26,20 +31,38 @@ vi.mock("#/cli/shared/prompt", () => ({
 
 vi.mock("#/cli/services/application", () => ({
   defineApplication: vi.fn(() => ({
-    tailorDBServices: [
-      {
-        namespace: "tailordb",
-        config: {},
-        typeSourceInfo: {},
-        loadTypes: vi.fn().mockResolvedValue(undefined),
-        processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
-        get types() {
-          return state.localTypes;
-        },
+    tailorDBServices: state.namespaces.map((entry) => ({
+      namespace: entry.namespace,
+      config: {},
+      typeSourceInfo: {},
+      loadTypes: vi.fn().mockResolvedValue(undefined),
+      processNamespacePlugins: vi.fn().mockResolvedValue(undefined),
+      get types() {
+        return entry.localTypes;
       },
-    ],
+    })),
   })),
 }));
+
+function addNamespace(
+  tmpDir: string,
+  namespace: string,
+  typeName: string,
+  localType: ReturnType<typeof parsedType>,
+): TestNamespace {
+  const migrationsDir = path.join(tmpDir, namespace);
+  writeInitialSchema(migrationsDir, { [typeName]: snapshotType(typeName) });
+  const entry = { namespace, migrationsDir, localTypes: { [typeName]: localType } };
+  state.namespaces.push(entry);
+  return entry;
+}
+
+function renamedType(typeName: string, fieldName: string): ReturnType<typeof parsedType> {
+  const type = parsedType(typeName);
+  type.fields[fieldName] = type.fields.name!;
+  delete type.fields.name;
+  return type;
+}
 
 describe("tailordb migration generate with warning-tier changes", () => {
   let tmpDir: string;
@@ -49,20 +72,26 @@ describe("tailordb migration generate with warning-tier changes", () => {
     vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
     vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-generate-test-"));
-    state.migrationsDir = path.join(tmpDir, "migrations");
-
-    writeInitialSchema(state.migrationsDir, { User: snapshotType("User") });
+    state.namespaces = [];
     const userWithoutName = parsedType("User");
     delete userWithoutName.fields.name;
-    state.localTypes = { User: userWithoutName };
+    addNamespace(tmpDir, "tailordb", "User", userWithoutName);
 
-    vi.mocked(loadConfig).mockResolvedValue({
-      config: {
-        path: path.join(tmpDir, "tailor.config.ts"),
-        db: { tailordb: { migration: { directory: state.migrationsDir } } },
-      },
-      plugins: [],
-    } as unknown as Awaited<ReturnType<typeof loadConfig>>);
+    vi.mocked(loadConfig).mockImplementation(
+      async () =>
+        ({
+          config: {
+            path: path.join(tmpDir, "tailor.config.ts"),
+            db: Object.fromEntries(
+              state.namespaces.map(({ namespace, migrationsDir }) => [
+                namespace,
+                { migration: { directory: migrationsDir } },
+              ]),
+            ),
+          },
+          plugins: [],
+        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
+    );
     vi.mocked(canPrompt).mockReturnValue(true);
   });
 
@@ -73,7 +102,7 @@ describe("tailordb migration generate with warning-tier changes", () => {
   });
 
   function generatedDiffPath(): string {
-    return path.join(state.migrationsDir, "0001", "diff.json");
+    return path.join(state.namespaces[0]!.migrationsDir, "0001", "diff.json");
   }
 
   test("records an acknowledgment when the user confirms and enters a reason", async () => {
@@ -130,5 +159,113 @@ describe("tailordb migration generate with warning-tier changes", () => {
     expect(result.success).toBe(true);
     expect(prompt.confirm).not.toHaveBeenCalled();
     expect(loadDiff(generatedDiffPath()).scriptSkipped).toBeUndefined();
+  });
+});
+
+describe("tailordb migration generate field rename preflight", () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv("TAILOR_CONFIG_PATH", undefined);
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "tailordb-migration-rename-test-"));
+    state.namespaces = [];
+    vi.mocked(loadConfig).mockImplementation(
+      async () =>
+        ({
+          config: {
+            path: path.join(tmpDir, "tailor.config.ts"),
+            db: Object.fromEntries(
+              state.namespaces.map(({ namespace, migrationsDir }) => [
+                namespace,
+                { migration: { directory: migrationsDir } },
+              ]),
+            ),
+          },
+          plugins: [],
+        }) as unknown as Awaited<ReturnType<typeof loadConfig>>,
+    );
+    vi.mocked(canPrompt).mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  test("reports every unresolved namespace and writes no migration", async () => {
+    const first = addNamespace(tmpDir, "tailordb", "User", renamedType("User", "displayName"));
+    const second = addNamespace(tmpDir, "analyticsdb", "User", renamedType("User", "displayName"));
+
+    const result = await runCommand(generateCommand, ["--yes"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("Possible field rename(s) detected");
+    expect(String(result.error)).toContain("namespace: tailordb");
+    expect(String(result.error)).toContain("namespace: analyticsdb");
+    expect(fs.existsSync(path.join(first.migrationsDir, "0001"))).toBe(false);
+    expect(fs.existsSync(path.join(second.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("rejects conflicting rename and drop flags before writing", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", renamedType("User", "displayName"));
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--rename",
+      "User.name:displayName",
+      "--drop",
+      "User.name",
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("--rename and --drop conflict for: User.name");
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("rejects an unmatched drop flag before writing", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+
+    const result = await runCommand(generateCommand, ["--yes", "--drop", "User.missing"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("--drop does not match a removed field: User.missing");
+    expect(fs.existsSync(path.join(entry.migrationsDir, "0001"))).toBe(false);
+  });
+
+  test("rejects rename and drop flags with init before deleting the baseline", async () => {
+    const entry = addNamespace(tmpDir, "tailordb", "User", parsedType("User"));
+    const baselinePath = path.join(entry.migrationsDir, "0000", "schema.json");
+
+    const result = await runCommand(generateCommand, ["--yes", "--init", "--drop", "User.name"]);
+
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toContain("cannot be used together with --init");
+    expect(fs.existsSync(baselinePath)).toBe(true);
+  });
+
+  test("resolves a rename and a drop across namespaces in one run", async () => {
+    const renamed = addNamespace(tmpDir, "tailordb", "User", renamedType("User", "displayName"));
+    const accountWithoutName = parsedType("Account");
+    delete accountWithoutName.fields.name;
+    const dropped = addNamespace(tmpDir, "analyticsdb", "Account", accountWithoutName);
+
+    const result = await runCommand(generateCommand, [
+      "--yes",
+      "--rename",
+      "User.name:displayName",
+      "--drop",
+      "Account.name",
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(loadDiff(path.join(renamed.migrationsDir, "0001", "diff.json")).changes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "field_renamed" })]),
+    );
+    expect(loadDiff(path.join(dropped.migrationsDir, "0001", "diff.json")).changes).toEqual(
+      expect.arrayContaining([expect.objectContaining({ kind: "field_removed" })]),
+    );
   });
 });
