@@ -124,18 +124,22 @@ interface CollectedValidationReports {
 
 /**
  * Walk the local migration history once to assert that every required
- * migration script exists and generated normalization logic has been
- * reviewed, and to collect migrations with data-loss warnings that have
- * neither a migrate.ts nor a recorded --no-script acknowledgment
+ * migration script exists, no migration carries both a --no-script
+ * acknowledgment and a migrate.ts, and generated normalization logic has
+ * been reviewed, and to collect migrations with data-loss warnings that
+ * have neither a migrate.ts nor a recorded --no-script acknowledgment
  * @param {string} migrationsDir - Migrations directory path
  * @param {string} namespace - TailorDB namespace (for error messages)
+ * @param {string} [configPath] - Config path the current run used (for remediation hints)
  * @returns {UnacknowledgedWarningMigration[]} Unacknowledged warning migrations in the local history
  */
 function assertMigrationScriptsReady(
   migrationsDir: string,
   namespace: string,
+  configPath?: string,
 ): UnacknowledgedWarningMigration[] {
   const missing: number[] = [];
+  const conflicting: number[] = [];
   const unreviewed: number[] = [];
   const unacknowledgedWarnings: UnacknowledgedWarningMigration[] = [];
   for (const file of getMigrationFiles(migrationsDir)) {
@@ -145,6 +149,9 @@ function assertMigrationScriptsReady(
     const hasScript = fs.existsSync(migrateFilePath);
     if (diff.requiresMigrationScript && !diff.scriptSkipped && !hasScript) {
       missing.push(file.number);
+    }
+    if (diff.scriptSkipped && hasScript) {
+      conflicting.push(file.number);
     }
     if (
       hasScript &&
@@ -162,6 +169,21 @@ function assertMigrationScriptsReady(
         "require a migration script but have no migrate.ts. " +
         "Add one with 'tailor tailordb migration script <number>', or record that no script " +
         `is needed with 'tailor tailordb migration script <number> --no-script --reason "..."'.`,
+    );
+  }
+  if (conflicting.length > 0) {
+    const clearCommands = conflicting
+      .map(
+        (migrationNumber) =>
+          `  ${formatMigrationScriptCommand({ migrationNumber, namespace, configPath })}`,
+      )
+      .join("\n");
+    throw new Error(
+      `Migration(s) ${conflicting.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
+        "have both a --no-script skip acknowledgment and migrate.ts. " +
+        "Clear the stale acknowledgment(s):\n" +
+        `${clearCommands}\n` +
+        "Or delete migrate.ts to keep the skip.",
     );
   }
   if (unreviewed.length > 0) {
@@ -313,7 +335,11 @@ async function collectValidationReports(
       // Parse the whole history here so malformed snapshot/diff contents are
       // reported per namespace instead of aborting the run for every namespace.
       reconstructSnapshotFromMigrations(target.migrationsDir);
-      const namespaceWarnings = assertMigrationScriptsReady(target.migrationsDir, target.namespace);
+      const namespaceWarnings = assertMigrationScriptsReady(
+        target.migrationsDir,
+        target.namespace,
+        options.configPath,
+      );
       unacknowledgedWarnings?.set(target.namespace, namespaceWarnings);
       checkableNamespaces.push(target);
     } catch (error) {

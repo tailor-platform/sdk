@@ -176,7 +176,7 @@ Breaking changes require `migrate.ts`. If it is missing at deploy time (for exam
 tailor tailordb migration script 0002 --no-script --reason "no data yet, safe to skip"
 ```
 
-This stores the reason in `migrations/0002/diff.json` (commit the change). The next `tailor deploy` applies the schema change as usual, skips only the script step, and logs the recorded reason. The command refuses to record a skip while `migrate.ts` exists — delete the script first. If `migrate.ts` is added back later, the script takes precedence over the acknowledgment and runs; run `tailor tailordb migration script 0002` again to clear the now-stale acknowledgment from `diff.json`.
+This stores the reason in `migrations/0002/diff.json` (commit the change). The next `tailor deploy` applies the schema change as usual, skips only the script step, and logs the recorded reason. The command refuses to record a skip while `migrate.ts` exists — delete the script first. If `migrate.ts` is added back later, `tailor deploy` fails rather than choosing between the script and the acknowledgment; run `tailor tailordb migration script 0002` again to clear the now-stale acknowledgment from `diff.json` (the script then runs on the next deploy), or delete `migrate.ts` to keep the skip.
 
 ## Configuration
 

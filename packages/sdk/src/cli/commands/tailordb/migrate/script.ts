@@ -154,8 +154,8 @@ export async function addMigrationScriptFiles(
   const result: AddMigrationScriptFilesResult = {};
 
   if (migrateExists && diff.scriptSkipped) {
-    // A hand-placed migrate.ts takes precedence over an earlier --no-script
-    // acknowledgment; clear the stale record instead of failing.
+    // Deploy refuses to run while both a --no-script acknowledgment and
+    // migrate.ts exist; clearing the stale record here is the remediation.
     clearMigrationScriptSkipped(diffPath);
     result.clearedScriptSkip = true;
     if (!withTest) return result;

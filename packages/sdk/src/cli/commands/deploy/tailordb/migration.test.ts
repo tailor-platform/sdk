@@ -480,8 +480,7 @@ describe("migration", () => {
       expect(logger.info).toHaveBeenCalledWith(expect.stringContaining("no data yet"));
     });
 
-    test("prefers migrate.ts over stale script skip acknowledgment", async () => {
-      const { logger } = await import("#/cli/shared/logger");
+    test("throws when a migration has both a script skip acknowledgment and migrate.ts", async () => {
       const client = createMockClient({ tailordb: 0 });
 
       writeDiffFile(
@@ -499,11 +498,21 @@ describe("migration", () => {
         { namespace: "tailordb", migrationsDir: testDir },
       ];
 
-      const result = await detectPendingMigrations(client, workspaceId, namespacesWithMigrations);
+      const error = await detectPendingMigrations(
+        client,
+        workspaceId,
+        namespacesWithMigrations,
+      ).then(
+        () => null,
+        (e: unknown) => e as Error,
+      );
 
-      expect(result).toHaveLength(1);
-      expect(result[0]!.hasScript).toBe(true);
-      expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining("migrate.ts"));
+      expect(error).not.toBeNull();
+      expect(error!.message).toContain("has both a --no-script skip acknowledgment and migrate.ts");
+      expect(error!.message.split("\n")).toContain(
+        "  - Keep the script and clear the stale acknowledgment: tailor tailordb migration script 0001 --namespace tailordb",
+      );
+      expect(error!.message).toContain("delete migrate.ts");
     });
 
     test("includes breaking change migration with script", async () => {
