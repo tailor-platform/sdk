@@ -47,11 +47,9 @@ configs.recommended = {
   plugins: {
     "tailor-sdk": plugin,
   },
-  rules: {
-    "tailor-sdk/no-api-prefix-in-path-pattern": "warn",
-    "tailor-sdk/no-execute-script-arg-stringify": "warn",
-    "tailor-sdk/no-unconditional-permit": "warn",
-  },
+  rules: Object.fromEntries(
+    Object.keys(rules).map((name) => [`tailor-sdk/${name}`, "warn"]),
+  ) as RecommendedRules,
 };
 
 export default plugin;

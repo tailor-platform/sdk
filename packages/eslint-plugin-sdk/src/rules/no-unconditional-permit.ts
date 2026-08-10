@@ -6,25 +6,11 @@ import {
   objectProperty,
   unwrapExpression,
 } from "../lib/ast.js";
-import {
-  configureImportTracker,
-  type ImportTracker,
-  resolveValue,
-  SDK_CONFIGURE_MODULE,
-} from "../lib/sdk-bindings.js";
+import { configureImportTracker, type ImportTracker, resolveValue } from "../lib/sdk-bindings.js";
 import type { Rule } from "eslint";
 
-type IdentifierListenerNode = Parameters<NonNullable<Rule.NodeListener["Identifier"]>>[0];
-type MemberExpressionListenerNode = Parameters<
-  NonNullable<Rule.NodeListener["MemberExpression"]>
->[0];
-type IdentifierParent =
-  | Rule.Node
-  | {
-      type: "OptionalMemberExpression";
-      object: AstNode;
-      computed: boolean;
-    };
+type IdentifierNode = Extract<Rule.Node, { type: "Identifier" }>;
+type MemberExpressionNode = Extract<Rule.Node, { type: "MemberExpression" }>;
 
 const UNSAFE_CONSTANTS: ReadonlySet<string> = new Set([
   "unsafeAllowAllTypePermission",
@@ -32,8 +18,8 @@ const UNSAFE_CONSTANTS: ReadonlySet<string> = new Set([
   "unsafeAllowAllIdPPermission",
 ]);
 
-function isValueReference(node: IdentifierListenerNode): boolean {
-  const parent = node.parent as IdentifierParent;
+function isValueReference(node: IdentifierNode): boolean {
+  const parent = node.parent as AstNode;
   switch (parent.type) {
     case "ImportSpecifier":
     case "ImportDefaultSpecifier":
@@ -167,29 +153,12 @@ const rule = {
   },
   create(context) {
     const imports = configureImportTracker(context);
-    const unsafeLocals = new Map<string, string>();
     const calls: AstCallExpression[] = [];
-    const identifiers: IdentifierListenerNode[] = [];
-    const members: MemberExpressionListenerNode[] = [];
+    const identifiers: IdentifierNode[] = [];
+    const members: MemberExpressionNode[] = [];
 
     return {
-      ImportDeclaration(node) {
-        imports.track(node);
-        if (node.source.value !== SDK_CONFIGURE_MODULE) return;
-        for (const specifier of node.specifiers) {
-          if (
-            specifier.type !== "ImportSpecifier" ||
-            ("importKind" in specifier && specifier.importKind === "type")
-          ) {
-            continue;
-          }
-          const imported =
-            specifier.imported.type === "Identifier"
-              ? specifier.imported.name
-              : String(specifier.imported.value);
-          if (UNSAFE_CONSTANTS.has(imported)) unsafeLocals.set(specifier.local.name, imported);
-        }
-      },
+      ImportDeclaration: (node) => imports.track(node),
       CallExpression: (node) => calls.push(node),
       Identifier: (node) => identifiers.push(node),
       MemberExpression: (node) => {
@@ -197,8 +166,8 @@ const rule = {
       },
       "Program:exit"() {
         for (const node of identifiers) {
-          const name = unsafeLocals.get(node.name);
-          if (name === undefined || !isValueReference(node) || !imports.importedAs(node, name)) {
+          const name = imports.importedName(node);
+          if (name === null || !UNSAFE_CONSTANTS.has(name) || !isValueReference(node)) {
             continue;
           }
           context.report({ node, messageId: "unsafeConstant", data: { name } });

@@ -27,10 +27,9 @@
     "lint": "oxlint .",
     "lint:fix": "oxlint . --fix",
     "typecheck": "tsc --noEmit",
-    "pretest": "pnpm run build",
     "test": "vitest run",
-    "prepack": "pnpm run build",
-    "publint": "pnpm run build && publint --strict && tsc --noEmit --project tsconfig.dist.json"
+    "prepare": "tsdown",
+    "publint": "publint --strict"
   },
   "dependencies": {
     "@types/eslint": "9.6.1"

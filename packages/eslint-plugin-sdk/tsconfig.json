@@ -6,6 +6,6 @@
     "incremental": true,
     "tsBuildInfoFile": "./.tsbuildinfo"
   },
-  "include": ["src/**/*.ts", "tsdown.config.ts", "vitest.config.ts"],
+  "include": ["src/**/*.ts", "*.config.ts", "vitest.global-setup.ts"],
   "exclude": ["node_modules", "dist"]
 }
