@@ -173,9 +173,8 @@ function assertMigrationScriptsReady(
   }
   if (conflicting.length > 0) {
     const clearCommands = conflicting
-      .map(
-        (migrationNumber) =>
-          `'${formatMigrationScriptCommand({ migrationNumber, namespace, configPath })}'`,
+      .map((migrationNumber) =>
+        formatMigrationScriptCommand({ migrationNumber, namespace, configPath }),
       )
       .join(", ");
     throw new Error(
