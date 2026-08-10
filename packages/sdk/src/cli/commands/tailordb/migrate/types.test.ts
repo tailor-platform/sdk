@@ -206,7 +206,7 @@ describe("handleOptionalToRequiredError", () => {
     ).toThrow(error);
 
     expect(logger.error).toHaveBeenCalledWith(
-      'Schema change failed: field "updatedAt" cannot be updated from non-required to required when records with null values exist',
+      "Schema change failed: a field changed from optional to required while existing records still have null values.",
     );
     expect(logger.info).toHaveBeenCalledWith(
       "Run 'tailor tailordb migration generate' to create migration files.",

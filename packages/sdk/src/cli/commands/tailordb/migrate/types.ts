@@ -149,7 +149,9 @@ export function handleOptionalToRequiredError(error: unknown, messages: string[]
       "cannot be updated from non-required to required when records with null values exist",
     )
   ) {
-    logger.error(`Schema change failed: ${error.rawMessage}`);
+    logger.error(
+      "Schema change failed: a field changed from optional to required while existing records still have null values.",
+    );
     logger.newline();
     for (const message of messages) {
       logger.info(message);
