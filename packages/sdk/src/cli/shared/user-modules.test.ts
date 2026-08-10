@@ -1,9 +1,10 @@
+import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
 import { beginUserModuleRun, currentImportNonce, importUserModule } from "./user-modules";
 
 const fixturePath = path.join(
-  path.dirname(new URL(import.meta.url).pathname),
+  path.dirname(fileURLToPath(import.meta.url)),
   "__test_fixtures__/user-module-counter.ts",
 );
 
@@ -25,7 +26,7 @@ describe("importUserModule", () => {
   });
 
   test("caches within a run and re-evaluates when a new run begins", async () => {
-    expect(currentImportNonce()).toBeUndefined();
+    const initialNonce = currentImportNonce();
     await importUserModule(fixturePath);
     await importUserModule(fixturePath);
     expect(evaluationCount()).toBe(1);
@@ -33,6 +34,7 @@ describe("importUserModule", () => {
     beginUserModuleRun();
     const firstRunNonce = currentImportNonce();
     expect(firstRunNonce).toBeDefined();
+    expect(firstRunNonce).not.toBe(initialNonce);
     await importUserModule(fixturePath);
     await importUserModule(fixturePath);
     expect(evaluationCount()).toBe(2);

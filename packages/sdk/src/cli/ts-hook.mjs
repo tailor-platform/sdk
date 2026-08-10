@@ -185,7 +185,12 @@ function propagateImportNonce(resolved, context) {
 }
 
 function isProjectLocalSpecifier(specifier) {
-  return specifier.startsWith(".") || specifier.startsWith("/");
+  return (
+    specifier.startsWith(".") ||
+    specifier.startsWith("/") ||
+    specifier.startsWith("file:") ||
+    specifier.startsWith("#")
+  );
 }
 
 // --- module hooks ---

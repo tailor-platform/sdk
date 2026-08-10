@@ -877,6 +877,26 @@ describe("import nonce propagation", () => {
     expect(result).toEqual({ url: "file:///proj/workflows/points.ts" });
   });
 
+  test("carries the parent's nonce onto a file: URL specifier", async () => {
+    const nextResolve = vi.fn().mockResolvedValue({ url: "file:///proj/workflows/points.ts" });
+    const result = await resolve("file:///proj/workflows/points.ts", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "file:///proj/workflows/points.ts?tailorImportNonce=2" });
+  });
+
+  test("carries the parent's nonce onto a package-imports specifier", async () => {
+    const nextResolve = vi.fn().mockResolvedValue({ url: "file:///proj/lib/points.ts" });
+    const result = await resolve("#lib/points", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "file:///proj/lib/points.ts?tailorImportNonce=2" });
+  });
+
+  test("does not propagate onto a package-imports specifier resolving into node_modules", async () => {
+    const nextResolve = vi
+      .fn()
+      .mockResolvedValue({ url: "file:///proj/node_modules/dep/index.mjs" });
+    const result = await resolve("#dep", noncedParent, nextResolve);
+    expect(result).toEqual({ url: "file:///proj/node_modules/dep/index.mjs" });
+  });
+
   test("does not propagate onto bare specifiers", async () => {
     const nextResolve = vi
       .fn()
