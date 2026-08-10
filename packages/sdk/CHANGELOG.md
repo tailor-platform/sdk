@@ -1,5 +1,11 @@
 # @tailor-platform/sdk
 
+## 1.85.1
+
+### Patch Changes
+
+- [#2016](https://github.com/tailor-platform/sdk/pull/2016) [`3af95bb`](https://github.com/tailor-platform/sdk/commit/3af95bb486b6df71b835b3529fd0757eff0e8c47) Thanks [@toiroakr](https://github.com/toiroakr)! - Remove a dead `node:module` import from a shared runtime helper chunk that could cause resolver bundling (and `deploy`) to fail with an `UNRESOLVED_IMPORT` error for projects importing `@tailor-platform/sdk/runtime`
+
 ## 1.85.0
 
 ### Minor Changes
