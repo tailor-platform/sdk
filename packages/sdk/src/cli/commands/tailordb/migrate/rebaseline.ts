@@ -36,6 +36,7 @@ import {
   getLatestMigrationNumber,
   loadSnapshot,
   MIGRATE_FILE_NAME,
+  MIGRATE_TEST_FILE_NAME,
   MIGRATION_NUMBER_PATTERN,
   reconstructSnapshotFromMigrations,
   SCHEMA_FILE_NAME,
@@ -58,6 +59,7 @@ const MIGRATION_ARTIFACT_NAMES = new Set([
   SCHEMA_FILE_NAME,
   DIFF_FILE_NAME,
   MIGRATE_FILE_NAME,
+  MIGRATE_TEST_FILE_NAME,
   DB_TYPES_FILE_NAME,
 ]);
 

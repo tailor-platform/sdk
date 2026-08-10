@@ -4,7 +4,7 @@ import * as path from "pathe";
 import { formatMigrationNumber, getMigrationFilePath, MIGRATION_NUMBER_PATTERN } from "./snapshot";
 import type { NamespaceWithMigrations } from "./config";
 
-const MIGRATION_FILE_KINDS = ["schema", "diff", "migrate", "db"] as const;
+const MIGRATION_FILE_KINDS = ["schema", "diff", "migrate", "test", "db"] as const;
 
 function getMigrationArtifactNumbers(migrationsDir: string): number[] {
   if (!fs.existsSync(migrationsDir)) return [];
