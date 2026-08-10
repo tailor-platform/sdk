@@ -1,7 +1,12 @@
 import { fileURLToPath } from "node:url";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
-import { beginUserModuleRun, currentImportNonce, importUserModule } from "./user-modules";
+import {
+  beginUserModuleRun,
+  currentImportNonce,
+  IMPORT_NONCE_PARAM,
+  importUserModule,
+} from "./user-modules";
 
 const fixturePath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -15,6 +20,13 @@ type CounterState = typeof globalThis & {
 function evaluationCount(): number {
   return (globalThis as CounterState).__tailorUserModuleCounterCount ?? 0;
 }
+
+// ts-hook.mjs cannot import this module, so it declares the same parameter
+// name as its own constant; this pin and the hook tests' URL literals keep
+// the two in sync.
+test("uses the query parameter name the ts-hook propagates", () => {
+  expect(IMPORT_NONCE_PARAM).toBe("tailorImportNonce");
+});
 
 describe("importUserModule", () => {
   aroundEach(async (runTest) => {
