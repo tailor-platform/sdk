@@ -1126,4 +1126,102 @@ export async function main(trx: Transaction): Promise<void> {
       expect(await getMigrationCheckpoint(tailordbName)).toBe(8);
     }, 120000);
   });
+
+  describe("Optional-to-Required Precondition Without Backfill", () => {
+    /**
+     * Scenario 9: A field changes from optional to required, but the migration
+     * script leaves the existing row's value null. Deploy must surface the
+     * platform's own precondition-failure wording verbatim, plus the SDK's
+     * post-migration hint (handleOptionalToRequiredError) pointing at the
+     * failing migration script.
+     */
+    test("adds an optional field left null on the existing row", async () => {
+      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+
+export const user = db.table("User", {
+  name: db.string(),
+  email: db.string().unique(),
+  role: db.string({ optional: true }),
+  phone: db.string({ optional: true }),
+  loyaltyTier: db.string(),
+  sourceUuid: db.string(),
+  sourceEnum: db.string(),
+  sourceDecimal: db.string(),
+  sourceInteger: db.float(),
+  indexedUuid: db.string().index(),
+  indexedEnum: db.string().index(),
+  indexedDecimal: db.string().index(),
+  indexedInteger: db.float().index(),
+  verificationMarker: db.string(),
+  notes: db.string({ optional: true }),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+
+export type user = typeof user;
+`);
+
+      const configPath = createConfig();
+      runGenerateCli(configPath, tempDir);
+      runDeployCli(configPath, workspaceId, tempDir);
+
+      const fields = await getTailorDBTypeFields(tailordbName, "User");
+      expect(fields).toContain("notes");
+    }, 120000);
+
+    test("fails with the platform's precondition error and the post-migration hint when the script leaves nulls behind", async () => {
+      updateTypeFile(`import { db, unsafeAllowAllGqlPermission, unsafeAllowAllTypePermission } from "@tailor-platform/sdk";
+
+export const user = db.table("User", {
+  name: db.string(),
+  email: db.string().unique(),
+  role: db.string({ optional: true }),
+  phone: db.string({ optional: true }),
+  loyaltyTier: db.string(),
+  sourceUuid: db.string(),
+  sourceEnum: db.string(),
+  sourceDecimal: db.string(),
+  sourceInteger: db.float(),
+  indexedUuid: db.string().index(),
+  indexedEnum: db.string().index(),
+  indexedDecimal: db.string().index(),
+  indexedInteger: db.float().index(),
+  verificationMarker: db.string(),
+  notes: db.string(),
+}).permission(unsafeAllowAllTypePermission).gqlPermission(unsafeAllowAllGqlPermission);
+
+export type user = typeof user;
+`);
+
+      const configPath = createConfig();
+      runGenerateCli(configPath, tempDir);
+
+      const files = getMigrationFiles(migrationsDir);
+      const latest = files[files.length - 1]!;
+      expect(latest.type).toBe("diff");
+
+      const diff = loadDiff(getMigrationFilePath(migrationsDir, latest.number, "diff"));
+      expect(diff.requiresMigrationScript).toBe(true);
+
+      const checkpointBefore = await getMigrationCheckpoint(tailordbName);
+
+      // Deliberately do not backfill `notes` — the existing row keeps notes = null,
+      // so the post-migration schema tightening must fail against the platform.
+      overwriteMigrationScript(latest.number, `export async function main(): Promise<void> {}\n`);
+
+      const result = tryDeployCli(configPath, workspaceId, tempDir);
+
+      expect(result.ok).toBe(false);
+      expect(result.output).toContain(
+        "cannot be updated from non-required to required when records with null values exist",
+      );
+      expect(result.output).toContain(
+        "This error occurred during post-migration phase. Please check your migration script.",
+      );
+      expect(result.output).toContain(
+        "Ensure all existing records have values for fields being changed to required.",
+      );
+
+      // The failed post-migration schema update must not advance the checkpoint.
+      expect(await getMigrationCheckpoint(tailordbName)).toBe(checkpointBefore);
+    }, 180000);
+  });
 });
