@@ -37,8 +37,8 @@ import { initCrashReporting } from "./crashreport";
 import { queryCommand } from "./query";
 import { commonArgs, isVerbose } from "./shared/args";
 import { serializeError } from "./shared/error-json";
-import { isCLIError } from "./shared/errors";
-import { logger } from "./shared/logger";
+import { isCLIError, typeOnlyImportHint } from "./shared/errors";
+import { logger, styles } from "./shared/logger";
 import { readPackageJson } from "./shared/package-json";
 import { dispatchPluginWithInstallHint } from "./shared/plugin";
 import { registerTsHook } from "./shared/register-ts-hook";
@@ -161,6 +161,10 @@ runMain(mainCommand, {
         }
       } else if (error instanceof Error) {
         logger.error(error.message);
+        const hint = typeOnlyImportHint(error);
+        if (hint) {
+          logger.log(`  ${styles.info("Suggestion:")} ${hint}`);
+        }
         if (isVerbose() && error.stack) {
           logger.debug(`\nStack trace:\n${error.stack}`);
         }

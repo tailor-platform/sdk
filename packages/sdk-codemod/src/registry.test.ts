@@ -8,7 +8,7 @@ describe("getApplicableCodemods", () => {
   test("returns codemods when upgrading across their version boundary", () => {
     const codemods = getApplicableCodemods("1.33.0", "2.0.0");
     expect(codemods.length).toBeGreaterThan(0);
-    expect(codemods[0]!.id).toBe("v2/define-generators-to-plugins");
+    expect(codemods[0]!.id).toBe("v2/type-only-imports");
   });
 
   test("returns all v2 codemods when upgrading to the stable boundary", () => {
