@@ -508,9 +508,10 @@ describe("migration", () => {
       );
 
       expect(error).not.toBeNull();
-      expect(error!.message).toContain("has both a skip acknowledgment and migrate.ts");
-      expect(error!.message).toContain("tailordb migration script 0001 --namespace tailordb");
-      expect(error!.message).not.toContain("--no-script");
+      expect(error!.message).toContain("has both a --no-script skip acknowledgment and migrate.ts");
+      expect(error!.message.split("\n")).toContain(
+        "  - Keep the script and clear the stale acknowledgment: tailor tailordb migration script 0001 --namespace tailordb",
+      );
       expect(error!.message).toContain("delete migrate.ts");
     });
 
