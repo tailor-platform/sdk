@@ -71,6 +71,14 @@ describe("checkWaitPointKey", () => {
     expect(check("line-$", "define")).toContain("is not a usable parameter name");
   });
 
+  test("does not blame $params for a bare `$` under a declaration that cannot type them", () => {
+    // The key carries no param, so advice about typing $params would send the
+    // reader to a different API for a problem it does not solve.
+    expect(check("line-$")).not.toContain("Declare it through createWaitPoints instead");
+    expect(check("line-$")).toContain("is not a usable parameter name");
+    expect(check("line-$", "property")).not.toContain("cannot come from a property name");
+  });
+
   test("rejects a $param key whose fixed part breaks the grammar", () => {
     expect(check("-line-$lineId", "define")).toContain("must match");
     expect(check("line-$lineId-", "define")).toContain("must match");

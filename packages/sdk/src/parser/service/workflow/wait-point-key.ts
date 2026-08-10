@@ -18,7 +18,9 @@ const KEY_GRAMMAR = "[a-z0-9-] (3-63 characters; must start and end with [a-z0-9
 export function checkWaitPointKey(waitPoint: RegisteredWaitPoint): string | undefined {
   const { key, declaredBy } = waitPoint;
   const segments = key.split("-");
-  const paramSegments = segments.filter((segment) => segment.startsWith("$"));
+  // A bare "$" names nothing, so it is not a param here either — otherwise a
+  // key carrying one would be answered with advice about typing its $params.
+  const paramSegments = segments.filter((segment) => segment.startsWith("$") && segment.length > 1);
 
   if (paramSegments.length > 0 && declaredBy !== "define") {
     return declaredBy === "property"

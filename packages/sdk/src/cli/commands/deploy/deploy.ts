@@ -16,6 +16,7 @@ import { eventSourceLabel, publishEventsConflict } from "#/cli/shared/publish-ev
 import { generateUserTypes } from "#/cli/shared/type-generator";
 import { withSpan } from "#/cli/telemetry/index";
 import { PluginManager } from "#/plugin/manager";
+import { beginWaitPointScope } from "#/utils/wait-point-registry";
 import { planAIGateway } from "./aigateway";
 import { planApplication } from "./application";
 import { applyDeploymentPlans, type PlannedDeployment } from "./apply-phases";
@@ -2517,6 +2518,10 @@ async function validateDeploymentPlans(
 async function deployInternal(options?: DeployOptions, cliContext?: DeployCLIContext) {
   return withSpan("deploy", async (rootSpan) => {
     rootSpan.setAttribute("deploy.dry_run", options?.dryRun ?? false);
+
+    // Before the first config load, so this run is judged on the keys it
+    // declares rather than on ones an earlier failed run left behind.
+    beginWaitPointScope();
 
     const configPaths = parseDeployConfigPaths(options?.configPath);
     const dryRun = options?.dryRun ?? false;

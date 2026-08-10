@@ -3,9 +3,7 @@ import * as path from "pathe";
 import { loadFilesWithIgnores } from "#/cli/services/file-loader";
 import { logger, styles } from "#/cli/shared/logger";
 import { WorkflowJobSchema, WorkflowSchema } from "#/parser/service/workflow/index";
-import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-point-key";
 import { isSdkBranded } from "#/utils/brand";
-import { getRegisteredWaitPoints } from "#/utils/wait-point-registry";
 import type { WorkflowServiceConfig } from "#/configure/config/types";
 import type { Workflow } from "#/types/workflow.generated";
 
@@ -28,12 +26,6 @@ function stripRuntimeStart(workflow: unknown): unknown {
   }
   const { start: _start, ...rest } = workflow as Record<string, unknown>;
   return rest;
-}
-
-function assertWaitPointKeys(): void {
-  const failures = collectWaitPointKeyFailures(getRegisteredWaitPoints());
-  if (failures.length === 0) return;
-  throw new Error(failures.join("\n"));
 }
 
 interface WorkflowLoadResult {
@@ -154,11 +146,6 @@ async function loadAndCollectJobs(
       return { workflowFile, jobs, workflow };
     }),
   );
-
-  // Wait points register themselves as their declaring module loads, so every
-  // one reachable from a workflow file is present by now — including those
-  // declared in a shared module rather than in a workflow file itself.
-  assertWaitPointKeys();
 
   for (const { workflowFile, jobs, workflow } of loadResults) {
     if (workflow) {
