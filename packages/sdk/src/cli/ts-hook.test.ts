@@ -926,4 +926,40 @@ describe("import nonce propagation", () => {
     const result = await resolve("./points.ts", noncedParent, nextResolve);
     expect(result).toEqual({ url: "node:path" });
   });
+
+  test("re-reads tsconfig paths when the parent import nonce changes", async () => {
+    const tsconfigFor = (dir: string) =>
+      JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@gen/*": [`./${dir}/*`] } } });
+    const nextResolve = vi.fn().mockImplementation((spec: string) => {
+      if (spec.startsWith("file:")) return { url: spec };
+      throw notFound(spec);
+    });
+
+    vi.mocked(readFileSync).mockImplementation(
+      (path) =>
+        (String(path).endsWith("tsconfig.json")
+          ? tsconfigFor("a")
+          : "const x: number = 1;") as unknown as string,
+    );
+    const first = await resolve(
+      "@gen/user",
+      { parentURL: "file:///gen-project/tailor.config.ts?tailorImportNonce=1" },
+      nextResolve,
+    );
+    expect(first).toEqual({ url: "file:///gen-project/a/user.ts?tailorImportNonce=1" });
+
+    vi.mocked(readFileSync).mockImplementation(
+      (path) =>
+        (String(path).endsWith("tsconfig.json")
+          ? tsconfigFor("b")
+          : "const x: number = 1;") as unknown as string,
+    );
+    const second = await resolve(
+      "@gen/user",
+      { parentURL: "file:///gen-project/tailor.config.ts?tailorImportNonce=2" },
+      nextResolve,
+    );
+    expect(second).toEqual({ url: "file:///gen-project/b/user.ts?tailorImportNonce=2" });
+    vi.mocked(readFileSync).mockReturnValue("const x: number = 1;" as unknown as string);
+  });
 });

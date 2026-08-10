@@ -1,7 +1,11 @@
 import * as fs from "node:fs";
 import * as path from "pathe";
 import { aroundEach, describe, expect, test } from "vitest";
-import { getScopedWaitPoints } from "#/utils/wait-point-registry";
+import {
+  getRegisteredWaitPoints,
+  getScopedWaitPoints,
+  restoreWaitPointRegistry,
+} from "#/utils/wait-point-registry";
 import { deploy } from "./deploy";
 
 const configPath = "src/cli/commands/deploy/__test_fixtures__/reload/tailor.config.ts";
@@ -22,11 +26,13 @@ function counters(): { config: number; workflow: number } {
 
 describe("repeated in-process deploy", () => {
   aroundEach(async (runTest) => {
+    const registryMark = getRegisteredWaitPoints().length;
     const previousOutputDir = process.env.TAILOR_BUILD_OUTPUT_DIR;
     process.env.TAILOR_BUILD_OUTPUT_DIR = outputDir;
     try {
       await runTest();
     } finally {
+      restoreWaitPointRegistry(registryMark);
       if (previousOutputDir === undefined) {
         delete process.env.TAILOR_BUILD_OUTPUT_DIR;
       } else {
