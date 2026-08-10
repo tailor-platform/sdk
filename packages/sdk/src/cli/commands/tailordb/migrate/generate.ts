@@ -283,82 +283,30 @@ export async function generate(options: GenerateOptions): Promise<void> {
   // A flag applies to a namespace only when that namespace actually removed
   // the old field or type (and, for renames, added the new one); another
   // namespace may define a type with the same name
-  const renameSpecsByNamespace = new Map<string, FieldRenameSpec[]>();
-  const typeRenameSpecsByNamespace = new Map<string, TypeRenameSpec[]>();
-  const dropSpecsByNamespace = new Map<string, FieldDropSpec[]>();
-  const typeDropSpecsByNamespace = new Map<string, TypeDropSpec[]>();
-  const matchedRenameFlags = new Set<RenameFlag>();
-  const matchedTypeRenameFlags = new Set<TypeRenameFlag>();
-  const matchedDropFlags = new Set<DropFlag>();
-  const matchedTypeDropFlags = new Set<TypeDropFlag>();
-  for (const { namespace, previousSnapshot, currentSnapshot } of generations) {
-    if (!previousSnapshot) continue;
-    const applicableRenames = renameFlags.filter(({ spec }) =>
-      renameSpecApplies(spec, previousSnapshot, currentSnapshot),
-    );
-    for (const flag of applicableRenames) {
-      matchedRenameFlags.add(flag);
-    }
-    renameSpecsByNamespace.set(
-      namespace,
-      applicableRenames.map((flag) => flag.spec),
-    );
-    const applicableTypeRenames = typeRenameFlags.filter(({ spec }) =>
-      typeRenameSpecApplies(spec, previousSnapshot, currentSnapshot),
-    );
-    for (const flag of applicableTypeRenames) {
-      matchedTypeRenameFlags.add(flag);
-    }
-    typeRenameSpecsByNamespace.set(
-      namespace,
-      applicableTypeRenames.map((flag) => flag.spec),
-    );
-    const applicableDrops = dropFlags.filter(({ spec }) =>
-      dropSpecApplies(spec, previousSnapshot, currentSnapshot),
-    );
-    for (const flag of applicableDrops) {
-      matchedDropFlags.add(flag);
-    }
-    dropSpecsByNamespace.set(
-      namespace,
-      applicableDrops.map((flag) => flag.spec),
-    );
-    const applicableTypeDrops = typeDropFlags.filter(({ spec }) =>
-      typeDropSpecApplies(spec, previousSnapshot, currentSnapshot),
-    );
-    for (const flag of applicableTypeDrops) {
-      matchedTypeDropFlags.add(flag);
-    }
-    typeDropSpecsByNamespace.set(
-      namespace,
-      applicableTypeDrops.map((flag) => flag.spec),
-    );
-  }
-
-  const unusedRenames = renameFlags.filter((flag) => !matchedRenameFlags.has(flag));
-  if (unusedRenames.length > 0) {
-    throw new Error(
-      `--rename does not match a removed + added field pair: ${unusedRenames.map((flag) => flag.raw).join(", ")}`,
-    );
-  }
-  const unusedTypeRenames = typeRenameFlags.filter((flag) => !matchedTypeRenameFlags.has(flag));
-  if (unusedTypeRenames.length > 0) {
-    throw new Error(
-      `--rename does not match a removed + added type pair: ${unusedTypeRenames.map((flag) => flag.raw).join(", ")}`,
-    );
-  }
-  const unusedDrops = dropFlags.filter((flag) => !matchedDropFlags.has(flag));
-  if (unusedDrops.length > 0) {
-    throw new Error(
-      `--drop does not match a removed field: ${unusedDrops.map((flag) => flag.raw).join(", ")}`,
-    );
-  }
-  const unusedTypeDrops = typeDropFlags.filter((flag) => !matchedTypeDropFlags.has(flag));
-  if (unusedTypeDrops.length > 0) {
-    throw new Error(
-      `--drop does not match a removed type: ${unusedTypeDrops.map((flag) => flag.raw).join(", ")}`,
-    );
-  }
+  const renameSpecsByNamespace = matchFlagsToNamespaces(
+    renameFlags,
+    generations,
+    renameSpecApplies,
+    "--rename does not match a removed + added field pair",
+  );
+  const typeRenameSpecsByNamespace = matchFlagsToNamespaces(
+    typeRenameFlags,
+    generations,
+    typeRenameSpecApplies,
+    "--rename does not match a removed + added type pair",
+  );
+  const dropSpecsByNamespace = matchFlagsToNamespaces(
+    dropFlags,
+    generations,
+    dropSpecApplies,
+    "--drop does not match a removed field",
+  );
+  const typeDropSpecsByNamespace = matchFlagsToNamespaces(
+    typeDropFlags,
+    generations,
+    typeDropSpecApplies,
+    "--drop does not match a removed type",
+  );
 
   // Resolve renames for every namespace before any migration file is written,
   // so all candidates are reported in one run and an abort (a decline, an
@@ -439,6 +387,42 @@ async function generateInitialSnapshot(
 interface RenameFlag {
   raw: string;
   spec: FieldRenameSpec;
+}
+
+/**
+ * Match `--rename` / `--drop` flags against every namespace's snapshots.
+ * Throws when a flag applies to no namespace, so a typo cannot silently fall
+ * back to remove + add.
+ * @param {readonly { raw: string; spec: S }[]} flags - Parsed flags of one form
+ * @param {readonly NamespaceGeneration[]} generations - Snapshots per namespace
+ * @param {(spec: S, previous: SchemaSnapshot, current: SchemaSnapshot) => boolean} applies - Whether a spec matches a namespace's snapshot pair
+ * @param {string} unmatchedError - Error prefix for flags that match no namespace
+ * @returns {Map<string, S[]>} Applicable specs keyed by namespace
+ */
+function matchFlagsToNamespaces<S>(
+  flags: readonly { raw: string; spec: S }[],
+  generations: readonly NamespaceGeneration[],
+  applies: (spec: S, previous: SchemaSnapshot, current: SchemaSnapshot) => boolean,
+  unmatchedError: string,
+): Map<string, S[]> {
+  const specsByNamespace = new Map<string, S[]>();
+  const matched = new Set<(typeof flags)[number]>();
+  for (const { namespace, previousSnapshot, currentSnapshot } of generations) {
+    if (!previousSnapshot) continue;
+    const applicable = flags.filter(({ spec }) => applies(spec, previousSnapshot, currentSnapshot));
+    for (const flag of applicable) {
+      matched.add(flag);
+    }
+    specsByNamespace.set(
+      namespace,
+      applicable.map((flag) => flag.spec),
+    );
+  }
+  const unused = flags.filter((flag) => !matched.has(flag));
+  if (unused.length > 0) {
+    throw new Error(`${unmatchedError}: ${unused.map((flag) => flag.raw).join(", ")}`);
+  }
+  return specsByNamespace;
 }
 
 /** A parsed type-form `--rename` flag together with its raw value. */
