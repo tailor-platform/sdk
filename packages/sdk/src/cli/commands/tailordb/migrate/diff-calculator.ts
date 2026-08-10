@@ -116,6 +116,19 @@ export interface FieldModifiedChange extends DiffChangeBase {
   after: SnapshotFieldConfig;
 }
 
+/**
+ * A field was renamed within a type. Recorded when the user confirms that a
+ * removed + added field pair is a rename (interactively or via `--rename`).
+ * `fieldName` is the new name; `previousFieldName` is the old name.
+ */
+export interface FieldRenamedChange extends DiffChangeBase {
+  kind: "field_renamed";
+  fieldName: string;
+  previousFieldName: string;
+  before: SnapshotFieldConfig;
+  after: SnapshotFieldConfig;
+}
+
 /** A field type changed and must remain on the previous type until Post-phase. */
 export interface FieldTypeModifiedChange extends DiffChangeBase {
   kind: "field_type_modified";
@@ -233,6 +246,7 @@ export type DiffChange =
   | FieldAddedChange
   | FieldRemovedChange
   | FieldModifiedChange
+  | FieldRenamedChange
   | FieldTypeModifiedChange
   | IndexAddedChange
   | IndexRemovedChange
@@ -247,12 +261,13 @@ export type DiffChange =
   | TypeScriptsModifiedChange;
 
 /**
- * Field-level diff change (added / removed / modified).
+ * Field-level diff change (added / removed / modified / renamed).
  */
 export type FieldDiffChange =
   | FieldAddedChange
   | FieldRemovedChange
   | FieldModifiedChange
+  | FieldRenamedChange
   | FieldTypeModifiedChange;
 
 /**
@@ -385,6 +400,8 @@ function formatDiffChange(change: DiffChange): string {
     case "field_modified":
     case "field_type_modified":
       return `  ~ ${change.fieldName}: ${formatFieldModification(change.before, change.after)}`;
+    case "field_renamed":
+      return `  ~ ${change.previousFieldName} → ${change.fieldName}: ${formatFieldType(change.after)} (renamed)`;
     case "index_added":
       return `  + [Index] ${change.indexName}`;
     case "index_removed":
@@ -541,6 +558,7 @@ const DIFF_CHANGE_LABELS: Record<DiffChangeKind, string> = {
   field_added: "field(s) added",
   field_removed: "field(s) removed",
   field_modified: "field(s) modified",
+  field_renamed: "field(s) renamed",
   field_type_modified: "field type(s) modified",
   index_added: "index(es) added",
   index_removed: "index(es) removed",

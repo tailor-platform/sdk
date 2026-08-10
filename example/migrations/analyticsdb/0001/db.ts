@@ -17,7 +17,7 @@ type Generated<T> =
     ? ColumnType<S, I | undefined, U>
     : ColumnType<T, T | undefined, T>;
 
-interface Database {
+export interface Database {
   Event: {
     id: Generated<string>;
     name: "CLICK" | "VIEW" | "PURCHASE";

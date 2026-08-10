@@ -77,6 +77,7 @@ describe("migration CLI commands", () => {
       expect(shape).toHaveProperty("namespace");
       expect(shape).toHaveProperty("no-script");
       expect(shape).toHaveProperty("reason");
+      expect(shape).toHaveProperty("with-test");
     });
   });
 

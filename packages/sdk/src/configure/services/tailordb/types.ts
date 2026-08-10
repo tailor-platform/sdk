@@ -106,14 +106,16 @@ export interface TailorDBField<
   Defined extends DefinedDBFieldMetadata = DefinedDBFieldMetadata,
   // oxlint-disable-next-line no-explicit-any
   Output = any,
+  // Nested object fields, so a `db.object()` field keeps the shape it was declared with.
+  Nested extends Record<string, TailorAnyDBField> = Record<string, TailorAnyDBField>,
 > extends Omit<TailorField<Defined, Output, DBFieldMetadata, Defined["type"]>, "fields"> {
-  readonly fields: Record<string, TailorAnyDBField>;
+  readonly fields: Nested;
   readonly rawRelation: Readonly<RawRelationConfig> | undefined;
 }
 
 // Helper alias: DB fields can be arbitrarily nested, so we intentionally keep this loose.
 // oxlint-disable-next-line no-explicit-any
-export type TailorAnyDBField = TailorDBField<any, any>;
+export type TailorAnyDBField = TailorDBField<any, any, any>;
 
 /**
  * Minimal structural interface for TailorDBType.
@@ -227,6 +229,32 @@ export type TypeHook<F extends Record<string, TailorAnyDBField>> = {
 };
 
 // --- Field helper types ---
+
+/**
+ * `true` when callers can never write this field — a field defined with `.serial()`,
+ * whose value the platform assigns.
+ *
+ * Use this to keep such fields out of create and update inputs derived from a field
+ * collection. `output<F>` alone cannot express it: the field reads back as
+ * non-nullable even though the caller never writes it.
+ */
+export type IsReadOnlyDBField<F extends TailorAnyDBField> = F["_defined"] extends { serial: true }
+  ? true
+  : false;
+
+/**
+ * `true` when callers may omit this field on create and the platform fills it in — a
+ * field defined with `.default()` or `.hooks({ create })`.
+ *
+ * Use this to make such fields optional in create inputs derived from a field
+ * collection. `output<F>` alone cannot express it: the field reads back as
+ * non-nullable once created, yet supplying it on create is optional.
+ */
+export type IsAutoFilledDBField<F extends TailorAnyDBField> = F["_defined"] extends
+  | { default: true }
+  | { hooks: { create: true } }
+  ? true
+  : false;
 
 export type ExcludeNestedDBFields<T extends Record<string, TailorAnyDBField>> = {
   // Nested types depend on generic output; exclude them via a loose match.

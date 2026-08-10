@@ -119,12 +119,14 @@ tailor tailordb migration generate [options]
 
 **Options**
 
-| Option              | Alias | Description                                | Required | Default              | Env                  |
-| ------------------- | ----- | ------------------------------------------ | -------- | -------------------- | -------------------- |
-| `--yes`             | `-y`  | Skip confirmation prompts                  | No       | `false`              | -                    |
-| `--config <CONFIG>` | `-c`  | Path to Tailor config file                 | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
-| `--name <NAME>`     | `-n`  | Optional description for the migration     | No       | -                    | -                    |
-| `--init`            | -     | Delete existing migrations and start fresh | No       | `false`              | -                    |
+| Option              | Alias | Description                                                                                                                                                                      | Required | Default              | Env                  |
+| ------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
+| `--yes`             | `-y`  | Skip confirmation prompts                                                                                                                                                        | No       | `false`              | -                    |
+| `--config <CONFIG>` | `-c`  | Path to Tailor config file                                                                                                                                                       | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
+| `--name <NAME>`     | `-n`  | Optional description for the migration                                                                                                                                           | No       | -                    | -                    |
+| `--init`            | -     | Delete existing migrations and start fresh                                                                                                                                       | No       | `false`              | -                    |
+| `--rename <RENAME>` | -     | Record a field rename instead of remove + add (format: "Type.oldField:newField"; repeatable). Renames require a migration script that copies the data.                           | No       | -                    | -                    |
+| `--drop <DROP>`     | -     | Confirm that a removed field is a genuine removal, not a rename (format: "Type.field"; repeatable). Required in non-interactive runs for a removed field with rename candidates. | No       | -                    | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 
@@ -172,12 +174,13 @@ tailor tailordb migration script [options] <number>
 
 **Options**
 
-| Option                    | Alias | Description                                                                                  | Required | Default              | Env                  |
-| ------------------------- | ----- | -------------------------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
-| `--config <CONFIG>`       | `-c`  | Path to Tailor config file                                                                   | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
-| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                            | No       | -                    | -                    |
-| `--no-script`             | -     | Record that this migration intentionally runs without a migration script (requires --reason) | No       | -                    | -                    |
-| `--reason <REASON>`       | -     | Reason why no migration script is needed (used with --no-script)                             | No       | -                    | -                    |
+| Option                    | Alias | Description                                                                                           | Required | Default              | Env                  |
+| ------------------------- | ----- | ----------------------------------------------------------------------------------------------------- | -------- | -------------------- | -------------------- |
+| `--config <CONFIG>`       | `-c`  | Path to Tailor config file                                                                            | No       | `"tailor.config.ts"` | `TAILOR_CONFIG_PATH` |
+| `--namespace <NAMESPACE>` | `-n`  | Target TailorDB namespace (required if multiple namespaces exist)                                     | No       | -                    | -                    |
+| `--no-script`             | -     | Record that this migration intentionally runs without a migration script (requires --reason)          | No       | -                    | -                    |
+| `--reason <REASON>`       | -     | Reason why no migration script is needed (used with --no-script)                                      | No       | -                    | -                    |
+| `--with-test`             | -     | Also add a migrate.test.ts unit-test scaffold; when migrate.ts already exists, only the test is added | No       | -                    | -                    |
 
 See [Global Options](../cli-reference.md#global-options) for options available to all commands.
 

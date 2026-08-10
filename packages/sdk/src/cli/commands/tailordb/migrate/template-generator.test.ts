@@ -11,11 +11,13 @@ import {
   DB_TYPES_FILE_NAME,
   compareSnapshots,
   getMigrationDirPath,
+  normalizeSchemaSnapshot,
   type SchemaSnapshot,
 } from "./snapshot";
 import {
   generateSchemaFile,
   generateDiffFiles,
+  generateMigrationTestScript,
   migrationScriptExists,
   getMigrationScriptPath,
 } from "./template-generator";
@@ -206,6 +208,231 @@ describe("template-generator", () => {
       const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
       expect(dbTypesContent).toContain("Transaction");
       expect(dbTypesContent).toContain("User");
+    });
+
+    test("should generate an unconditional batched copy script for field renames", async () => {
+      const renamePreviousSnapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            fullName: { type: "string", required: false },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason: "Field renamed from fullName to displayName",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain("Copy User.fullName into displayName for every row");
+      expect(scriptContent).toContain('.set((eb) => ({ displayName: eb.ref("fullName") }))');
+      // Unconditional copy: no filter on the source field
+      expect(scriptContent).not.toContain(".where(");
+      expect(scriptContent).not.toContain("No data migration needed");
+
+      const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
+      expect(dbTypesContent).toContain("fullName: string | null;");
+      expect(dbTypesContent).toContain("displayName: string | null;");
+    });
+
+    test("should add a duplicate-resolution block when a rename target gains unique", async () => {
+      const renamePreviousSnapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            fullName: { type: "string", required: false },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: false, unique: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason: "Field renamed from fullName to displayName",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      const copyPosition = scriptContent.indexOf('eb.ref("fullName")');
+      const dedupePosition = scriptContent.indexOf(
+        "Ensure displayName values are unique before adding constraint",
+      );
+      expect(copyPosition).toBeGreaterThan(-1);
+      expect(dedupePosition).toBeGreaterThan(copyPosition);
+    });
+
+    test.each([
+      ["decreases", 2, true],
+      ["keeps", 3, false],
+    ])(
+      "unique-to-unique decimal rename that %s scale adds a dedupe block: %s",
+      async (_label, afterScale, expectDedupe) => {
+        const renamePreviousSnapshot = createTestSnapshot({
+          Item: {
+            name: "Item",
+            pluralForm: "Items",
+            fields: {
+              price: { type: "decimal", required: true, unique: true, scale: 3 },
+            },
+          },
+        });
+        const diff = createMockMigrationDiff({
+          changes: [
+            {
+              kind: "field_renamed",
+              typeName: "Item",
+              fieldName: "unitPrice",
+              previousFieldName: "price",
+              before: { type: "decimal", required: true, unique: true, scale: 3 },
+              after: { type: "decimal", required: true, unique: true, scale: afterScale },
+            },
+          ],
+          hasBreakingChanges: true,
+          breakingChanges: [
+            {
+              typeName: "Item",
+              fieldName: "unitPrice",
+              reason: "Field renamed from price to unitPrice",
+            },
+          ],
+          requiresMigrationScript: true,
+        });
+
+        const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+        const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+        expect(scriptContent).toContain('eb.ref("price")');
+        expect(
+          scriptContent.includes("Ensure unitPrice values are unique before adding constraint"),
+        ).toBe(expectDedupe);
+      },
+    );
+
+    test.each([
+      ["decreases", 2, true],
+      ["keeps", 3, false],
+    ])(
+      "decimal rename copy that %s scale includes a rounding warning: %s",
+      async (_label, afterScale, expectWarning) => {
+        const renamePreviousSnapshot = createTestSnapshot({
+          Item: {
+            name: "Item",
+            pluralForm: "Items",
+            fields: {
+              ratio: { type: "decimal", required: false, scale: 3 },
+            },
+          },
+        });
+        const diff = createMockMigrationDiff({
+          changes: [
+            {
+              kind: "field_renamed",
+              typeName: "Item",
+              fieldName: "rate",
+              previousFieldName: "ratio",
+              before: { type: "decimal", required: false, scale: 3 },
+              after: { type: "decimal", required: false, scale: afterScale },
+            },
+          ],
+          hasBreakingChanges: true,
+          breakingChanges: [
+            {
+              typeName: "Item",
+              fieldName: "rate",
+              reason: "Field renamed from ratio to rate",
+            },
+          ],
+          requiresMigrationScript: true,
+        });
+
+        const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+        const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+        expect(scriptContent).toContain('eb.ref("ratio")');
+        expect(scriptContent.includes("WARNING: rate has a smaller decimal scale than ratio")).toBe(
+          expectWarning,
+        );
+      },
+    );
+
+    test("should add a null-handling TODO when a rename target becomes required", async () => {
+      const renamePreviousSnapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            fullName: { type: "string", required: false },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "field_renamed",
+            typeName: "User",
+            fieldName: "displayName",
+            previousFieldName: "fullName",
+            before: { type: "string", required: false },
+            after: { type: "string", required: true },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [
+          {
+            typeName: "User",
+            fieldName: "displayName",
+            reason: "Field renamed from fullName to displayName",
+          },
+        ],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain("TODO: fullName is optional but displayName is required");
+      expect(scriptContent).toContain('.set((eb) => ({ displayName: eb.ref("fullName") }))');
+
+      const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
+      expect(dbTypesContent).toContain("displayName: ColumnType<string | null, string, string>;");
     });
 
     test("should include description in diff file if provided", async () => {
@@ -539,7 +766,10 @@ describe("template-generator", () => {
           },
         },
       });
-      const diff = compareSnapshots(previous, current);
+      const diff = compareSnapshots(
+        normalizeSchemaSnapshot(previous),
+        normalizeSchemaSnapshot(current),
+      );
 
       const result = await generateDiffFiles(diff, tempDir, 1, previous);
       const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
@@ -677,7 +907,7 @@ describe("template-generator", () => {
       expect(scriptContent).toContain(".set({ price: row.price })");
       expect(scriptContent).toContain('.where("price", "=", row.price)');
       expect(scriptContent).toContain("platform-side");
-      expect(scriptContent).toContain("may be rounded");
+      expect(scriptContent).toContain("WARNING: Values that exceed the new scale may be rounded");
       expect(scriptContent).not.toContain("No data migration needed");
     });
 
@@ -878,6 +1108,40 @@ describe("template-generator", () => {
       await expect(generateDiffFiles(diff, tempDir, 1, previousSnapshot)).rejects.toThrow(
         /Migration file already exists/,
       );
+    });
+  });
+
+  describe("generateMigrationTestScript", () => {
+    test("should generate a test scaffold wired to the mock and generated types", () => {
+      const script = generateMigrationTestScript(createMockMigrationDiff());
+
+      expect(script).toContain('import { createKyselyMock } from "@tailor-platform/sdk/vitest"');
+      expect(script).toContain('import { describe, expect, test } from "vitest"');
+      expect(script).toContain('import type { Database } from "./db"');
+      expect(script).toContain('import { main } from "./migrate"');
+      expect(script).toContain("createKyselyMock<Database>()");
+      expect(script).toContain("mock.withTx((trx) => main(trx))");
+    });
+
+    test("should snapshot both SQL and bind parameters by default", () => {
+      const script = generateMigrationTestScript(createMockMigrationDiff());
+
+      expect(script).toContain("sql: query.sql");
+      expect(script).toContain("parameters: query.parameters");
+    });
+
+    test("should include the namespace in the suite name", () => {
+      const script = generateMigrationTestScript(
+        createMockMigrationDiff({ namespace: "analyticsdb" }),
+      );
+
+      expect(script).toContain('describe("analyticsdb migration"');
+    });
+
+    test("should escape the namespace in the suite name", () => {
+      const script = generateMigrationTestScript(createMockMigrationDiff({ namespace: 'we"ird' }));
+
+      expect(script).toContain('describe("we\\"ird migration"');
     });
   });
 

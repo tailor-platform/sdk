@@ -1,5 +1,52 @@
 # @tailor-platform/sdk-plugin-seed
 
+## 0.2.0
+
+### Minor Changes
+
+- [#1975](https://github.com/tailor-platform/sdk/pull/1975) [`b5ca25b`](https://github.com/tailor-platform/sdk/commit/b5ca25b796e8a5e4262ea2e3527973d77cab766a) Thanks [@toiroakr](https://github.com/toiroakr)! - Add `tailor seed fill` to fill in the values a record gets on create for the JSONL seed data rows that are missing them. It fills `id` by default, so rows can reference each other by id, and `--fields` names any other create-time field:
+  
+  ```bash
+  # ./seed/data/Customer.jsonl: {"name":"Acme Corporation"}
+  tailor seed fill
+  # ./seed/data/Customer.jsonl: {"id":"0b6b6f5e-...","name":"Acme Corporation"}
+  
+  # also stamp a creation time on rows that have none
+  tailor seed fill --fields id,createdAt
+  ```
+  
+  The values come from the type itself — its `id`, its field defaults, its create hooks — applied to each row on its own. Nothing is validated, so a row can be filled while a required field is still missing or while another file references an id that does not exist yet; that is the point, since the ids are what you need in order to write the rows that reference them. Run `tailor seed validate` when the data is ready.
+  
+  Only the named fields are written, and only into a row that has no value for them, so a value already in the file is never replaced. A line that gains nothing is left byte for byte as it was; a line that takes a value is written with its keys in the order the type declares its fields, so a filled-in `id` lands at the front. A field the type gives no value to is skipped, so `--fields id` covers a whole data directory and leaves the IdP `_User` data alone, and naming a field the platform assigns — a `serial` field, for instance — fills nothing and says so.
+  
+  `tailor seed apply --upsert` now points at the command when a row has no `id`, since that is the run it blocks, and newly scaffolded projects get a `seed:fill` script next to `seed:validate`.
+  
+  The generated seed schema files now export the type's create hook, which is where the values come from. Run `tailor generate` after upgrading; until then `tailor seed fill` reports which file needs regenerating.
+  
+  `createTailorDBHook` from `@tailor-platform/sdk/test` no longer runs the type's own `validate`. Computing the values a record gets on create and deciding whether a record is acceptable are separate jobs, and the second one now sits where the field-level validation already was: `createStandardSchema` takes the type as a third argument and reports type-level issues through its result.
+  
+  `tailor seed validate` also stops printing two markers on the header of a failed run (`\u2716 \u2717 Found 2 error(s) in ...`), now that it hands the CLI a report that is already formatted.
+  
+  That also fixes how `tailor seed validate` reports them. A type-level `validate` failure used to end the run at the first offending row with a bare message; it now lands in the same report as every other issue, naming the file and every row that fails.
+  
+  A test calling `createTailorDBHook` directly to assert a type-level `validate` throws needs to go through `createStandardSchema` instead.
+  
+  The same operation is available as `fillSeedData` from `@tailor-platform/sdk/seed`.
+
+### Patch Changes
+
+- [#1960](https://github.com/tailor-platform/sdk/pull/1960) [`50743ad`](https://github.com/tailor-platform/sdk/commit/50743ad4cb38dc8f237934d3f9c905f2512ff6e4) Thanks [@toiroakr](https://github.com/toiroakr)! - Resolve the `tailor`, `tailor-seed`, and `tailor-tailordb-erd` executables through committed compile-cache launchers. The `tailor seed` command is now available as soon as the plugin is installed, and the seed and ERD plugin CLIs reuse Node's on-disk compile cache for faster warm starts.
+
+- [#1934](https://github.com/tailor-platform/sdk/pull/1934) [`2a3ec7b`](https://github.com/tailor-platform/sdk/commit/2a3ec7b108275410bf5b35d23784b07aa147c5ea) Thanks [@toiroakr](https://github.com/toiroakr)! - Drop the `chalk` dependency in favor of Node's built-in styling, and decide color support per output stream. Diagnostics on stderr now keep their colors when you redirect stdout (`tailor executor list > out.txt`), and stop writing escape codes into the file when you redirect stderr (`tailor deploy 2> log.txt`). `NO_COLOR`, `FORCE_COLOR` and non-TTY detection keep working as before.
+  
+  `@tailor-platform/sdk-codemod`, `@tailor-platform/sdk-plugin-seed` and `@tailor-platform/sdk-plugin-tailordb-erd` now declare the Node and Bun versions they need (`node >=22.15.0`, `bun >=1.2.0`), matching `@tailor-platform/sdk`. Installing them on an older runtime reports the mismatch instead of failing once the CLI runs.
+
+- [#2008](https://github.com/tailor-platform/sdk/pull/2008) [`f2135ab`](https://github.com/tailor-platform/sdk/commit/f2135ab6dd3d130d88803b9829a26024de930ed3) Thanks [@toiroakr](https://github.com/toiroakr)! - Consistently call a TailorDB schema definition a "table" instead of a "type" across the docs, matching the `db.type()` → `db.table()` rename. Also fix three leftover `db.type(...)` code samples in `docs/services/tailordb.md` that should have read `db.table(...)`.
+  
+  Update the `v2/idp-publish-events-rename` codemod registry description to say "tables" instead of "types", matching the same wording fix.
+- Updated dependencies [[`50743ad`](https://github.com/tailor-platform/sdk/commit/50743ad4cb38dc8f237934d3f9c905f2512ff6e4), [`2a3ec7b`](https://github.com/tailor-platform/sdk/commit/2a3ec7b108275410bf5b35d23784b07aa147c5ea), [`ab23d97`](https://github.com/tailor-platform/sdk/commit/ab23d97e79eb2be6fb3f9d7ddd21515c1bf1c244), [`6e67451`](https://github.com/tailor-platform/sdk/commit/6e6745147d07d6d1a26291f3d2cc8510170ae407), [`4364357`](https://github.com/tailor-platform/sdk/commit/436435740510accbdb3aa627fe4439bd1656bb96), [`b5ca25b`](https://github.com/tailor-platform/sdk/commit/b5ca25b796e8a5e4262ea2e3527973d77cab766a), [`07c50a6`](https://github.com/tailor-platform/sdk/commit/07c50a6d5728827b937160a97182c3996c00baad), [`7e804d4`](https://github.com/tailor-platform/sdk/commit/7e804d464e40a73fb524338cf7eda42e88f5ede8), [`f45ed5b`](https://github.com/tailor-platform/sdk/commit/f45ed5b380620d58f332fd2dd8fc5bb92ea28ecd), [`2f8457d`](https://github.com/tailor-platform/sdk/commit/2f8457d433b583769b136ece9a0c483cfccf6cdd), [`ecff3b2`](https://github.com/tailor-platform/sdk/commit/ecff3b2267f666de0ef83aef6b7727913e724a35), [`36715da`](https://github.com/tailor-platform/sdk/commit/36715da7a125863c9dadd99cdcbb5fd45a51b4c9), [`f2135ab`](https://github.com/tailor-platform/sdk/commit/f2135ab6dd3d130d88803b9829a26024de930ed3)]:
+  - @tailor-platform/sdk@2.2.0
+
 ## 0.1.1
 
 ### Patch Changes

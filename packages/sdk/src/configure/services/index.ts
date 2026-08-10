@@ -6,6 +6,8 @@ export {
   type TailorDBField,
   type TailorAnyDBField,
   type TailorDBInstance,
+  type IsAutoFilledDBField,
+  type IsReadOnlyDBField,
   unsafeAllowAllTypePermission,
   unsafeAllowAllGqlPermission,
   type PermissionCondition,
