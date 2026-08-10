@@ -10,6 +10,14 @@ function bindingLocalName(binding) {
 }
 
 /**
+ * @param {string} value literal text to embed in a `RegExp`
+ * @returns {string} the text with regex metacharacters escaped
+ */
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
  * @param {string} source full source text of a generated `.mjs` chunk
  * @returns {string} the source with unused `node:*` named imports removed
  */
@@ -17,7 +25,7 @@ export function stripDeadNodeBuiltinImports(source) {
   return source.replace(NAMED_IMPORT, (statement, bindingsRaw, _specifier, offset) => {
     const rest = source.slice(0, offset) + source.slice(offset + statement.length);
     const bindings = bindingsRaw.split(",").map(bindingLocalName);
-    const isUsed = bindings.some((name) => new RegExp(`\\b${name}\\b`).test(rest));
+    const isUsed = bindings.some((name) => new RegExp(`\\b${escapeRegExp(name)}\\b`).test(rest));
     return isUsed ? statement : "";
   });
 }

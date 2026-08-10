@@ -35,4 +35,15 @@ describe("stripDeadNodeBuiltinImports", () => {
 
     expect(stripDeadNodeBuiltinImports(src)).toBe(src);
   });
+
+  test("keeps the import when a rolldown-renamed binding like setTimeout$2 is used elsewhere", () => {
+    const src = [
+      `import { setTimeout as setTimeout$2 } from "node:timers/promises";`,
+      ``,
+      `async function f() { await setTimeout$2(10); }`,
+      ``,
+    ].join("\n");
+
+    expect(stripDeadNodeBuiltinImports(src)).toBe(src);
+  });
 });
