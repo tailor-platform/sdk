@@ -71,10 +71,23 @@ const snapshotFixtures = vi.hoisted(() => {
       email: { type: "string", required: false },
     },
   };
+  const orderType = (ownerTarget: string) => ({
+    name: "Order",
+    pluralForm: "Orders",
+    fields: {
+      ownerId: {
+        type: "uuid",
+        required: false,
+        foreignKey: true,
+        foreignKeyType: ownerTarget,
+        foreignKeyField: "id",
+      },
+    },
+  });
 
   const typesByMigration: Record<number, unknown> = {
-    0: { User: userType },
-    1: { Person: personType },
+    0: { User: userType, Order: orderType("User") },
+    1: { Person: personType, Order: orderType("Person") },
   };
 
   return {
@@ -148,7 +161,7 @@ describe("applyTailorDB: type rename migration flow", () => {
     };
   }
 
-  function buildPlanResult() {
+  function buildPlanResult(options: { withOrderUpdate?: boolean } = {}) {
     const mockService = {
       namespace: "test-ns",
       loadTypes: vi.fn().mockResolvedValue({}),
@@ -176,6 +189,31 @@ describe("applyTailorDB: type rename migration flow", () => {
               },
             },
           ],
+          updates: options.withOrderUpdate
+            ? [
+                {
+                  name: "Order",
+                  request: {
+                    workspaceId: "test-workspace",
+                    namespaceName: "test-ns",
+                    tailordbType: {
+                      name: "Order",
+                      schema: {
+                        fields: {
+                          ownerId: {
+                            type: "uuid",
+                            required: false,
+                            foreignKey: true,
+                            foreignKeyType: "Person",
+                            foreignKeyField: "id",
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              ]
+            : [],
           deletes: [
             {
               name: "User",
@@ -226,7 +264,10 @@ describe("applyTailorDB: type rename migration flow", () => {
     } as any;
   }
 
-  function mkTypeRenameMigration(number: number): PendingMigration {
+  function mkTypeRenameMigration(
+    number: number,
+    options: { withOrderRetarget?: boolean } = {},
+  ): PendingMigration {
     return {
       number,
       scriptPath: `/test/migrations/${String(number).padStart(4, "0")}/migrate.ts`,
@@ -246,6 +287,29 @@ describe("applyTailorDB: type rename migration flow", () => {
             before: snapshotFixtures.userType,
             after: snapshotFixtures.personType,
           },
+          ...(options.withOrderRetarget
+            ? [
+                {
+                  kind: "field_modified",
+                  typeName: "Order",
+                  fieldName: "ownerId",
+                  before: {
+                    type: "uuid",
+                    required: false,
+                    foreignKey: true,
+                    foreignKeyType: "User",
+                    foreignKeyField: "id",
+                  },
+                  after: {
+                    type: "uuid",
+                    required: false,
+                    foreignKey: true,
+                    foreignKeyType: "Person",
+                    foreignKeyField: "id",
+                  },
+                },
+              ]
+            : []),
         ],
         hasBreakingChanges: true,
         breakingChanges: [{ typeName: "Person", reason: "Type renamed from User to Person" }],
@@ -324,5 +388,37 @@ describe("applyTailorDB: type rename migration flow", () => {
     // ...but never the old type that still holds the data.
     expect(deleted).not.toContain("User");
     expect(migrationModule.updateMigrationLabel).not.toHaveBeenCalled();
+  });
+
+  test("restores retargeted types before deleting the new type on rollback", async () => {
+    const client = createMockClient();
+    const planResult = buildPlanResult({ withOrderUpdate: true });
+    setPendingMigrations([mkTypeRenameMigration(1, { withOrderRetarget: true })]);
+    vi.mocked(migrationModule.executeMigrations).mockRejectedValue(
+      new Error("rpc error: code = Aborted desc = copy failed"),
+    );
+
+    const order: string[] = [];
+    vi.mocked(client.updateTailorDBType).mockImplementation(async (req: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      order.push(`update:${(req as any)?.tailordbType?.name}`);
+      return {} as never;
+    });
+    vi.mocked(client.deleteTailorDBType).mockImplementation(async (req: unknown) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      order.push(`delete-type:${(req as any)?.tailordbTypeName}`);
+      return {} as never;
+    });
+
+    await expect(applyTailorDB(client, planResult, "create-update")).rejects.toThrow("copy failed");
+
+    // Order must be restored to its prior schema (pointing back at User)
+    // before Person is deleted, or the delete would be rejected while Order
+    // still references Person.
+    const restoreIndex = order.lastIndexOf("update:Order");
+    const deleteIndex = order.indexOf("delete-type:Person");
+    expect(restoreIndex).toBeGreaterThan(-1);
+    expect(deleteIndex).toBeGreaterThan(restoreIndex);
+    expect(order.filter((entry) => entry === "delete-type:User")).toEqual([]);
   });
 });

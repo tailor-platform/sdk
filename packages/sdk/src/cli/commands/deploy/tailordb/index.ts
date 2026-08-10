@@ -1265,35 +1265,50 @@ async function rollbackSingleMigrationPrePhase(
       "rolling back its pre-migration schema changes.",
   );
 
-  for (const typeName of rollbackTypes) {
+  // Restore pre-existing types before deleting new ones, so no restored type
+  // still references a new type (e.g. a foreign key retargeted at a renamed
+  // type) at the moment that type is deleted.
+  const restoredTypes = [...rollbackTypes].flatMap((typeName) => {
     const priorType = priorSnapshot.types[typeName];
+    return priorType ? [{ typeName, priorType }] : [];
+  });
+  const newTypes = [...rollbackTypes].filter((typeName) => !priorSnapshot.types[typeName]);
+
+  for (const { typeName, priorType } of restoredTypes) {
     try {
-      if (priorType) {
-        const manifest = generateTailorDBTypeManifestFromSnapshot(priorType, {
-          subscribed: executorUsedTypes.has(priorType.name),
-          namespaceGqlOperations: input?.config.gqlOperations,
-        });
-        await client.updateTailorDBType({
+      const manifest = generateTailorDBTypeManifestFromSnapshot(priorType, {
+        subscribed: executorUsedTypes.has(priorType.name),
+        namespaceGqlOperations: input?.config.gqlOperations,
+      });
+      await client.updateTailorDBType({
+        workspaceId,
+        namespaceName: migration.namespace,
+        tailordbType: manifest,
+      });
+    } catch (rollbackError) {
+      logger.warn(
+        `Failed to roll back type '${typeName}' in namespace '${migration.namespace}': ` +
+          `${rollbackError instanceof Error ? rollbackError.message : String(rollbackError)}`,
+      );
+    }
+  }
+
+  for (const typeName of newTypes) {
+    try {
+      // New type: its GQL permission must go first (type deletion does not
+      // cascade). The permission may not exist, so the delete is best-effort.
+      await client
+        .deleteTailorDBGQLPermission({
           workspaceId,
           namespaceName: migration.namespace,
-          tailordbType: manifest,
-        });
-      } else {
-        // New type: its GQL permission must go first (type deletion does not
-        // cascade). The permission may not exist, so the delete is best-effort.
-        await client
-          .deleteTailorDBGQLPermission({
-            workspaceId,
-            namespaceName: migration.namespace,
-            typeName,
-          })
-          .catch(() => undefined);
-        await client.deleteTailorDBType({
-          workspaceId,
-          namespaceName: migration.namespace,
-          tailordbTypeName: typeName,
-        });
-      }
+          typeName,
+        })
+        .catch(() => undefined);
+      await client.deleteTailorDBType({
+        workspaceId,
+        namespaceName: migration.namespace,
+        tailordbTypeName: typeName,
+      });
     } catch (rollbackError) {
       logger.warn(
         `Failed to roll back type '${typeName}' in namespace '${migration.namespace}': ` +

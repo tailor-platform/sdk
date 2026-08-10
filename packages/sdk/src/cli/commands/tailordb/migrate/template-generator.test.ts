@@ -486,6 +486,63 @@ describe("template-generator", () => {
       expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
     }, 15_000);
 
+    test("should insert self-referential foreign keys as null and backfill them", async () => {
+      const selfRefFields = {
+        parentId: {
+          type: "uuid",
+          required: false,
+          foreignKey: true,
+          foreignKeyType: "Category",
+          foreignKeyField: "id",
+        },
+      } as const;
+      const renamedSelfRefFields = {
+        parentId: { ...selfRefFields.parentId, foreignKeyType: "Section" },
+      };
+      const renamePreviousSnapshot = createTestSnapshot({
+        Category: {
+          name: "Category",
+          pluralForm: "Categories",
+          fields: { ...selfRefFields },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "type_renamed",
+            typeName: "Section",
+            previousTypeName: "Category",
+            before: {
+              name: "Category",
+              pluralForm: "Categories",
+              fields: { ...selfRefFields },
+            },
+            after: {
+              name: "Section",
+              pluralForm: "Sections",
+              fields: renamedSelfRefFields,
+            },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ typeName: "Section", reason: "Type renamed from Category to Section" }],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain(".values(rows.map((row) => ({ ...row, parentId: null })))");
+      expect(scriptContent).toContain("Backfill the self-referential column(s)");
+      const insertPosition = scriptContent.indexOf('insertInto("Section")');
+      const backfillPosition = scriptContent.indexOf("Backfill the self-referential column(s)");
+      expect(insertPosition).toBeGreaterThan(-1);
+      expect(backfillPosition).toBeGreaterThan(insertPosition);
+      expect(scriptContent).toContain('.whereRef("Category.id", "=", "Section.id")');
+
+      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+    }, 15_000);
+
     test("should not scaffold a reference fixup for a retarget that follows a type rename", async () => {
       const renamePreviousSnapshot = createTestSnapshot({
         User: {

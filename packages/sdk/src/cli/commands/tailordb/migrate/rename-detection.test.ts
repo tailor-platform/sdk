@@ -5,6 +5,7 @@ import {
   dropSpecApplies,
   findRenameCandidates,
   findTypeRenameCandidates,
+  isBreakingForeignKeyRetarget,
   isRenameCompatible,
   isTypeRenameCompatible,
   parseDropOption,
@@ -456,6 +457,27 @@ describe("isTypeRenameCompatible", () => {
     ).toBe(false);
   });
 
+  test("rejects a required self-referential foreign key", () => {
+    const withSelfFk = (name: string, required: boolean) =>
+      snapshotType(name, {
+        fields: {
+          id: { type: "uuid", required: true },
+          parentId: stringField({
+            type: "uuid",
+            foreignKey: true,
+            foreignKeyType: name,
+            required,
+          }),
+        },
+      });
+    expect(isTypeRenameCompatible(withSelfFk("User", true), withSelfFk("Person", true))).toBe(
+      false,
+    );
+    expect(isTypeRenameCompatible(withSelfFk("User", false), withSelfFk("Person", false))).toBe(
+      true,
+    );
+  });
+
   test("rejects types with serial or file fields", () => {
     expect(
       isTypeRenameCompatible(
@@ -506,6 +528,38 @@ describe("isTypeRenameCompatible", () => {
       });
     expect(isTypeRenameCompatible(withScale("User", 2), withScale("Person", 4))).toBe(false);
     expect(isTypeRenameCompatible(withScale("User", 2), withScale("Person", 2))).toBe(true);
+  });
+});
+
+describe("isBreakingForeignKeyRetarget", () => {
+  const fk = (target: string, field?: string): SnapshotFieldConfig =>
+    stringField({
+      type: "uuid",
+      foreignKey: true,
+      foreignKeyType: target,
+      ...(field !== undefined && { foreignKeyField: field }),
+    });
+  const renames = new Map([["User", "Person"]]);
+
+  test("suppresses a retarget that follows a confirmed rename", () => {
+    expect(isBreakingForeignKeyRetarget(fk("User"), fk("Person"), renames)).toBe(false);
+    expect(isBreakingForeignKeyRetarget(fk("User", "id"), fk("Person", "id"), renames)).toBe(false);
+  });
+
+  test("flags a retarget whose referenced field also changes", () => {
+    expect(isBreakingForeignKeyRetarget(fk("User", "id"), fk("Person", "slug"), renames)).toBe(
+      true,
+    );
+  });
+
+  test("flags a retarget unrelated to any rename", () => {
+    expect(isBreakingForeignKeyRetarget(fk("Team"), fk("Org"), renames)).toBe(true);
+    expect(isBreakingForeignKeyRetarget(fk("Team"), fk("Org"))).toBe(true);
+  });
+
+  test("ignores fields without a foreign key target change", () => {
+    expect(isBreakingForeignKeyRetarget(fk("User"), fk("User"), renames)).toBe(false);
+    expect(isBreakingForeignKeyRetarget(stringField(), stringField(), renames)).toBe(false);
   });
 });
 

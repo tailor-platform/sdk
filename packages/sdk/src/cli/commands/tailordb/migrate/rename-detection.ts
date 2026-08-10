@@ -388,6 +388,10 @@ export function isTypeRenameCompatible(
     const beforeField = before.fields[fieldName];
     const afterField = after.fields[fieldName];
     if (!beforeField || !afterField) return false;
+    // A required self-referential foreign key cannot survive the copy: the
+    // batched insert cannot order rows parent-first and the two-phase
+    // backfill needs the column to accept null first.
+    if (beforeField.foreignKeyType === before.name && beforeField.required) return false;
     const retargeted = retargetSelfReferences(beforeField, before.name, after.name);
     if (!isRenameCompatible(retargeted, afterField)) return false;
     if (retargeted.required !== afterField.required) return false;
@@ -494,6 +498,7 @@ export function assertValidTypeRenames(
         `Cannot rename ${label}: the types are not rename-compatible ` +
           `(every field must keep its name, type, array-ness, required/unique constraints, ` +
           `foreign key target, and scale, enum values must not be removed, indexes must match, ` +
+          `self-referential foreign keys must be optional, ` +
           `and types with serial or file fields cannot be renamed).`,
       );
     }
@@ -504,7 +509,9 @@ export function assertValidTypeRenames(
  * Whether a field's foreign key target changed in a way that is not explained
  * by a confirmed type rename. Such a retarget is breaking (stored references
  * may become invalid) and needs a reference fixup script; a retarget that
- * follows a rename does not, because record ids are preserved by the copy.
+ * follows a rename does not, because record ids are preserved by the copy —
+ * provided the referenced field is unchanged, since the copy only guarantees
+ * that the same ids exist under the new type name.
  * @param {SnapshotFieldConfig} before - Field configuration before the change
  * @param {SnapshotFieldConfig} after - Field configuration after the change
  * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed type renames (old name → new name)
@@ -519,7 +526,8 @@ export function isBreakingForeignKeyRetarget(
     before.foreignKeyType &&
     after.foreignKeyType &&
     before.foreignKeyType !== after.foreignKeyType &&
-    typeRenameTargets?.get(before.foreignKeyType) !== after.foreignKeyType,
+    (typeRenameTargets?.get(before.foreignKeyType) !== after.foreignKeyType ||
+      (before.foreignKeyField ?? "") !== (after.foreignKeyField ?? "")),
   );
 }
 

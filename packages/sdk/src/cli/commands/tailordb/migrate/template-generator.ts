@@ -443,6 +443,35 @@ function generateTypeRenameCopyScript(change: TypeRenamedChange): string {
   const { typeName, previousTypeName } = change;
   const columns = ["id", ...Object.keys(change.before.fields).filter((name) => name !== "id")];
   const columnList = columns.map((name) => JSON.stringify(name)).join(", ");
+  // Self-referential foreign keys may point at rows in later batches, so they
+  // are inserted as null and backfilled once every row exists.
+  const selfRefColumns = Object.entries(change.after.fields)
+    .filter(([, field]) => field.foreignKeyType === typeName)
+    .map(([name]) => name);
+  const insertValues =
+    selfRefColumns.length > 0
+      ? `rows.map((row) => ({ ...row, ${selfRefColumns.map((name) => `${name}: null`).join(", ")} }))`
+      : "rows";
+  const selfRefBackfill =
+    selfRefColumns.length > 0
+      ? `
+
+  // Backfill the self-referential column(s) now that every row exists.
+  await trx
+    .updateTable("${typeName}")
+    .set((eb) => ({
+${selfRefColumns
+  .map(
+    (name) => `      ${name}: eb
+        .selectFrom("${previousTypeName}")
+        .select("${previousTypeName}.${name}")
+        .whereRef("${previousTypeName}.id", "=", "${typeName}.id"),`,
+  )
+  .join("\n")}
+    }))
+    .execute();`
+      : "";
+
   return `  // Copy every ${previousTypeName} row into ${typeName}, preserving ids so that
   // stored foreign key references remain valid. ${previousTypeName} stays readable
   // until the post-migration phase drops it.
@@ -460,10 +489,10 @@ function generateTypeRenameCopyScript(change: TypeRenamedChange): string {
       const rows = await query.execute();
       if (rows.length === 0) break;
 
-      await trx.insertInto("${typeName}").values(rows).execute();
+      await trx.insertInto("${typeName}").values(${insertValues}).execute();
       lastId = rows[rows.length - 1]!.id;
     }
-  }`;
+  }${selfRefBackfill}`;
 }
 
 function generateFieldTypeChangeScript(
