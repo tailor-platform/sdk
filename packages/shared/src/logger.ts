@@ -1,4 +1,4 @@
-import { color, renderFor } from "@tailor-platform/shared/color";
+import { color, renderFor } from "./color";
 
 export type LogMode = "default" | "stream" | "plain";
 

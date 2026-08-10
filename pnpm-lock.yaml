@@ -814,9 +814,18 @@ importers:
 
   packages/shared:
     devDependencies:
+      pathe:
+        specifier: 2.0.3
+        version: 2.0.3
+      politty:
+        specifier: 0.11.6
+        version: 0.11.6(@clack/prompts@1.7.0)(@inquirer/prompts@8.5.2(@types/node@24.13.3))(zod@4.4.3)
       vitest:
         specifier: 4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@24.13.3)(@vitest/coverage-v8@4.1.10)(vite@8.2.1(@types/node@24.13.3)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.10)(yaml@2.9.0))
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
   packages/tailor-proto:
     dependencies:

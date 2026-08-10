@@ -1,10 +1,10 @@
 import { assertWritable, deployStaticWebsite } from "@tailor-platform/sdk/cli";
+import { deploymentArgs } from "@tailor-platform/shared/args";
+import { defineAppCommand } from "@tailor-platform/shared/command";
+import { logger } from "@tailor-platform/shared/logger";
 import { arg } from "politty";
 import { z } from "zod";
 import { prepareErdBuilds } from "./export";
-import { deploymentArgs } from "./shared/args";
-import { defineAppCommand } from "./shared/command";
-import { logger } from "./shared/logger";
 import { initErdDeployContext } from "./utils";
 
 function logSkippedFiles(skippedFiles: string[]): void {

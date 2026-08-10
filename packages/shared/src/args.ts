@@ -43,42 +43,49 @@ function loadEnvFiles(envFiles: EnvFileArg, envFilesIfExists: EnvFileArg): void 
   load(envFilesIfExists, false);
 }
 
+interface CommonArgsOptions {
+  /** Extra short alias for `--verbose` (e.g. `"v"`), for plugins that need one */
+  verboseAlias?: string;
+}
+
 /**
  * Common arguments shared with the host Tailor CLI so that forwarded global
  * flags parse identically when dispatched as a plugin.
+ * @param options - Per-plugin adjustments to the shared arguments
  */
-export const commonArgs = {
-  "env-file": arg(z.string().optional(), {
-    alias: "e",
-    description: "Path to the environment file (error if not found)",
-    completion: { type: "file", matcher: [".env.*", ".env"] },
-  }),
-  "env-file-if-exists": arg(z.string().optional(), {
-    description: "Path to the environment file (ignored if not found)",
-    completion: { type: "file", matcher: [".env.*", ".env"] },
-    effect: (_value, { args }) => {
-      loadEnvFiles(
-        args["env-file"] as string | undefined,
-        args["env-file-if-exists"] as string | undefined,
-      );
-    },
-  }),
-  verbose: arg(z.boolean().default(false), {
-    // -v matches the generated seed runner this plugin replaces.
-    alias: "v",
-    description: "Enable verbose logging",
-    effect: (value) => {
-      logger.verbose = value;
-    },
-  }),
-  json: arg(z.boolean().default(false), {
-    alias: "j",
-    description: "Output as JSON",
-    effect: (value) => {
-      logger.jsonMode = value;
-    },
-  }),
-} satisfies ArgsShape;
+export function commonArgs(options: CommonArgsOptions = {}) {
+  return {
+    "env-file": arg(z.string().optional(), {
+      alias: "e",
+      description: "Path to the environment file (error if not found)",
+      completion: { type: "file", matcher: [".env.*", ".env"] },
+    }),
+    "env-file-if-exists": arg(z.string().optional(), {
+      description: "Path to the environment file (ignored if not found)",
+      completion: { type: "file", matcher: [".env.*", ".env"] },
+      effect: (_value, { args }) => {
+        loadEnvFiles(
+          args["env-file"] as string | undefined,
+          args["env-file-if-exists"] as string | undefined,
+        );
+      },
+    }),
+    verbose: arg(z.boolean().default(false), {
+      ...(options.verboseAlias === undefined ? {} : { alias: options.verboseAlias }),
+      description: "Enable verbose logging",
+      effect: (value) => {
+        logger.verbose = value;
+      },
+    }),
+    json: arg(z.boolean().default(false), {
+      alias: "j",
+      description: "Output as JSON",
+      effect: (value) => {
+        logger.jsonMode = value;
+      },
+    }),
+  } satisfies ArgsShape;
+}
 
 /**
  * Arguments for commands that require workspace context
@@ -118,4 +125,4 @@ export const deploymentArgs = {
   ...configArg,
 } satisfies ArgsShape;
 
-export type CommonArgsType = z.infer<z.ZodObject<typeof commonArgs>>;
+export type CommonArgsType = z.infer<z.ZodObject<ReturnType<typeof commonArgs>>>;

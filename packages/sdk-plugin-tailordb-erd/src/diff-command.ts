@@ -1,4 +1,6 @@
 import * as fs from "node:fs";
+import { defineAppCommand } from "@tailor-platform/shared/command";
+import { logger } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
@@ -10,8 +12,6 @@ import {
   renderErdDiffHtml,
   type ErdSchemaDiff,
 } from "./diff";
-import { defineAppCommand } from "./shared/command";
-import { logger } from "./shared/logger";
 import { initErdCommand } from "./utils";
 import type { TailorDbErdSchema } from "./types";
 
