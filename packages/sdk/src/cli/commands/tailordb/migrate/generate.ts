@@ -19,6 +19,7 @@ import { getConfiguredEditorCommand, openInConfiguredEditor } from "#/cli/shared
 import { logger, styles } from "#/cli/shared/logger";
 import { canPrompt, prompt } from "#/cli/shared/prompt";
 import { PluginManager } from "#/plugin/manager";
+import { assertDefined } from "#/utils/assert";
 import { getNamespacesWithMigrations, type NamespaceWithMigrations } from "./config";
 import {
   formatMigrationDiff,
@@ -332,8 +333,13 @@ export async function generate(options: GenerateOptions): Promise<void> {
     if (!previousSnapshot) {
       // First migration - generate initial schema snapshot
       await generateInitialSnapshot(currentSnapshot, migrationsDir);
-    } else if (diff) {
-      await generateDiffFromSnapshot(previousSnapshot, diff, migrationsDir, options);
+    } else {
+      await generateDiffFromSnapshot(
+        previousSnapshot,
+        assertDefined(diff, "Migration diff was not resolved during preflight"),
+        migrationsDir,
+        options,
+      );
     }
   }
 }
