@@ -130,11 +130,13 @@ interface CollectedValidationReports {
  * have neither a migrate.ts nor a recorded --no-script acknowledgment
  * @param {string} migrationsDir - Migrations directory path
  * @param {string} namespace - TailorDB namespace (for error messages)
+ * @param {string} [configPath] - Config path the current run used (for remediation hints)
  * @returns {UnacknowledgedWarningMigration[]} Unacknowledged warning migrations in the local history
  */
 function assertMigrationScriptsReady(
   migrationsDir: string,
   namespace: string,
+  configPath?: string,
 ): UnacknowledgedWarningMigration[] {
   const missing: number[] = [];
   const conflicting: number[] = [];
@@ -170,10 +172,16 @@ function assertMigrationScriptsReady(
     );
   }
   if (conflicting.length > 0) {
+    const clearCommands = conflicting
+      .map(
+        (migrationNumber) =>
+          `'${formatMigrationScriptCommand({ migrationNumber, namespace, configPath })}'`,
+      )
+      .join(", ");
     throw new Error(
       `Migration(s) ${conflicting.map(formatMigrationNumber).join(", ")} in namespace "${namespace}" ` +
         "have both a --no-script skip acknowledgment and migrate.ts. " +
-        "Run 'tailor tailordb migration script <number>' to clear the stale acknowledgment, " +
+        `Run ${clearCommands} to clear the stale acknowledgment, ` +
         "or delete migrate.ts to keep the skip.",
     );
   }
@@ -326,7 +334,11 @@ async function collectValidationReports(
       // Parse the whole history here so malformed snapshot/diff contents are
       // reported per namespace instead of aborting the run for every namespace.
       reconstructSnapshotFromMigrations(target.migrationsDir);
-      const namespaceWarnings = assertMigrationScriptsReady(target.migrationsDir, target.namespace);
+      const namespaceWarnings = assertMigrationScriptsReady(
+        target.migrationsDir,
+        target.namespace,
+        options.configPath,
+      );
       unacknowledgedWarnings?.set(target.namespace, namespaceWarnings);
       checkableNamespaces.push(target);
     } catch (error) {

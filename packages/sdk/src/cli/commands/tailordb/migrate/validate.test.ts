@@ -417,6 +417,9 @@ describe("tailordb migration validate", () => {
     expect(report.valid).toBe(false);
     expect(report.migrationFiles.valid).toBe(false);
     expect(report.migrationFiles.error).toMatch(/skip acknowledgment and migrate\.ts/);
+    expect(report.migrationFiles.error).toContain(
+      "tailordb migration script 0001 --namespace tailordb",
+    );
   });
 
   test("fails when a migration script still contains a generated review marker", async () => {
