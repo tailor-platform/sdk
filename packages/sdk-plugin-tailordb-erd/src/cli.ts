@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { fileURLToPath } from "node:url";
+import { commonArgs } from "@tailor-platform/shared/args";
+import { logger } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { defineCommand, runMain } from "politty";
@@ -9,8 +11,6 @@ import { erdDeployCommand } from "./deploy";
 import { erdDiffCommand } from "./diff-command";
 import { erdExportCommand } from "./export";
 import { erdServeCommand } from "./serve";
-import { commonArgs } from "./shared/args";
-import { logger } from "./shared/logger";
 
 function hasFormat(error: unknown): error is { format(): string } {
   return (
@@ -39,7 +39,7 @@ const mainCommand = defineCommand({
 void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
   // strip unknown keys
-  globalArgs: z.object(commonArgs),
+  globalArgs: z.object(commonArgs()),
   displayErrors: false,
   // Render the SDK's CLIError format (details/suggestion) like the host CLI does.
   cleanup: ({ error }) => {

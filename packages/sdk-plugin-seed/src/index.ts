@@ -2,14 +2,14 @@
 
 import { fileURLToPath } from "node:url";
 import { serializeError } from "@tailor-platform/sdk/cli";
+import { commonArgs } from "@tailor-platform/shared/args";
+import { logger } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
 import { readPackageJSON } from "pkg-types";
 import { defineCommand, runMain } from "politty";
 import { z } from "zod";
 import { seedApplyCommand } from "./apply";
 import { seedFillCommand } from "./fill";
-import { commonArgs } from "./shared/args";
-import { logger } from "./shared/logger";
 import { seedValidateCommand } from "./validate";
 
 function hasFormat(error: unknown): error is { format(): string } {
@@ -37,8 +37,8 @@ const mainCommand = defineCommand({
 
 void runMain(mainCommand, {
   version: packageJson.version ?? "0.0.0",
-  // strip unknown keys
-  globalArgs: z.object(commonArgs),
+  // -v matches the generated seed runner this plugin replaces; strip unknown keys
+  globalArgs: z.object(commonArgs({ verboseAlias: "v" })),
   displayErrors: false,
   cleanup: ({ error }) => {
     if (!error) return;

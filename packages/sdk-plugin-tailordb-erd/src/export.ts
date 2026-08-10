@@ -1,11 +1,11 @@
+import { configArg } from "@tailor-platform/shared/args";
+import { defineAppCommand } from "@tailor-platform/shared/command";
+import { logger } from "@tailor-platform/shared/logger";
 import * as path from "pathe";
 import { arg } from "politty";
 import { z } from "zod";
 import { loadLocalErdSchema, type LocalErdSchemaContext } from "./local-schema";
 import { buildTailorDbErdSchema } from "./schema";
-import { configArg } from "./shared/args";
-import { defineAppCommand } from "./shared/command";
-import { logger } from "./shared/logger";
 import { initErdCommand } from "./utils";
 import { writeViewerDist } from "./viewer";
 import type { TailorDBNamespaceData } from "@tailor-platform/sdk/cli";
