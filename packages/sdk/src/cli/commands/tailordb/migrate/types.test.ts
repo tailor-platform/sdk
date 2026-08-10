@@ -1,4 +1,6 @@
-import { describe, expect, test } from "vitest";
+import { Code, ConnectError } from "@connectrpc/connect";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { logger } from "#/cli/shared/logger";
 import {
   isValidMigrationNumber,
   formatMigrationNumber,
@@ -15,9 +17,18 @@ import {
   isSchemaError,
   sanitizeMigrationLabel,
   parseMigrationLabelNumber,
+  handleOptionalToRequiredError,
   MAX_LABEL_LENGTH,
   SCHEMA_ERROR_PATTERNS,
 } from "./types";
+
+vi.mock("#/cli/shared/logger", () => ({
+  logger: {
+    error: vi.fn(),
+    info: vi.fn(),
+    newline: vi.fn(),
+  },
+}));
 
 describe("migration constants", () => {
   test("MAX_LABEL_LENGTH should be 63 (Kubernetes limit)", () => {
@@ -172,5 +183,42 @@ describe("isSchemaError", () => {
     ["Database sqlaccess error occurred during migration", true],
   ])("isSchemaError(%j) is %s", (message, expected) => {
     expect(isSchemaError(message)).toBe(expected);
+  });
+});
+
+describe("handleOptionalToRequiredError", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test("prints hint messages and rethrows for the Platform's optional-to-required precondition failure", () => {
+    // Exact wording returned by the platform when a field changes from
+    // optional to required while existing records still have null values.
+    const error = new ConnectError(
+      'field "updatedAt" cannot be updated from non-required to required when records with null values exist',
+      Code.FailedPrecondition,
+    );
+
+    expect(() =>
+      handleOptionalToRequiredError(error, [
+        "Run 'tailor tailordb migration generate' to create migration files.",
+      ]),
+    ).toThrow(error);
+
+    expect(logger.error).toHaveBeenCalledWith(
+      "Schema change failed: Cannot change field from optional to required when records exist.",
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "Run 'tailor tailordb migration generate' to create migration files.",
+    );
+  });
+
+  test("rethrows without printing hints for an unrelated FailedPrecondition error", () => {
+    const error = new ConnectError("some unrelated precondition failure", Code.FailedPrecondition);
+
+    expect(() => handleOptionalToRequiredError(error, ["should not print"])).toThrow(error);
+
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.info).not.toHaveBeenCalled();
   });
 });

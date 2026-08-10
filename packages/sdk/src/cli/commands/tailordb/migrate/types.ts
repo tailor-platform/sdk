@@ -145,7 +145,9 @@ export function handleOptionalToRequiredError(error: unknown, messages: string[]
   if (
     error instanceof ConnectError &&
     error.code === Code.FailedPrecondition &&
-    error.message.includes("cannot be updated from non-required to required when records exist")
+    error.message.includes(
+      "cannot be updated from non-required to required when records with null values exist",
+    )
   ) {
     logger.error(
       "Schema change failed: Cannot change field from optional to required when records exist.",
