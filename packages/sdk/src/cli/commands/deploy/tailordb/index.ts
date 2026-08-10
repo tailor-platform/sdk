@@ -778,7 +778,9 @@ function getAffectedTypeNames(migration: PendingMigration): Set<string> {
 }
 
 /**
- * Get the set of type names to be deleted by a migration
+ * Get the set of type names to be deleted by a migration. A renamed type's
+ * old name is included: the old type survives the Pre-phase and the script
+ * (which copies its rows into the new type), then is dropped here.
  * @param {PendingMigration} migration - Pending migration
  * @returns {Set<string>} Set of type names to delete
  */
@@ -787,6 +789,8 @@ function getDeletedTypeNames(migration: PendingMigration): Set<string> {
   for (const change of migration.diff.changes) {
     if (change.kind === "type_removed") {
       typeNames.add(change.typeName);
+    } else if (change.kind === "type_renamed") {
+      typeNames.add(change.previousTypeName);
     }
   }
   return typeNames;

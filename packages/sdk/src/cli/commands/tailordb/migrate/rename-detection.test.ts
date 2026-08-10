@@ -1,20 +1,40 @@
 import { describe, expect, test } from "vitest";
 import {
   assertValidFieldRenames,
+  assertValidTypeRenames,
   dropSpecApplies,
   findRenameCandidates,
+  findTypeRenameCandidates,
   isRenameCompatible,
+  isTypeRenameCompatible,
   parseDropOption,
   parseRenameOption,
+  parseTypeDropOption,
+  parseTypeRenameOption,
   renameSpecApplies,
+  typeDropSpecApplies,
+  typeRenameSpecApplies,
 } from "./rename-detection";
 import { normalizeSchemaSnapshot } from "./snapshot";
 import { createMockMigrationDiff } from "./test-helpers/migration-diff";
-import type { SnapshotFieldConfig } from "./snapshot-types";
+import type { SnapshotFieldConfig, TailorDBSnapshotType } from "./snapshot-types";
 
 const stringField = (overrides: Partial<SnapshotFieldConfig> = {}): SnapshotFieldConfig => ({
   type: "string",
   required: false,
+  ...overrides,
+});
+
+const snapshotType = (
+  name: string,
+  overrides: Partial<TailorDBSnapshotType> = {},
+): TailorDBSnapshotType => ({
+  name,
+  pluralForm: `${name}s`,
+  fields: {
+    id: { type: "uuid", required: true },
+    name: stringField(),
+  },
   ...overrides,
 });
 
@@ -354,5 +374,336 @@ describe("parseRenameOption", () => {
 
   test("rejects identical old and new names", () => {
     expect(() => parseRenameOption("User.name:name")).toThrow("identical");
+  });
+});
+
+describe("isTypeRenameCompatible", () => {
+  test("accepts identical shapes", () => {
+    expect(isTypeRenameCompatible(snapshotType("User"), snapshotType("Person"))).toBe(true);
+  });
+
+  test("tolerates name-derived and data-independent differences", () => {
+    expect(
+      isTypeRenameCompatible(
+        snapshotType("User", { description: "old", settings: { aggregation: true } }),
+        snapshotType("Person", {
+          pluralForm: "People",
+          description: "new",
+          settings: { aggregation: false },
+          permissions: { gql: [] },
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  test("accepts self-referential foreign keys retargeted at the new name", () => {
+    const withSelfFk = (name: string, target: string) =>
+      snapshotType(name, {
+        fields: {
+          id: { type: "uuid", required: true },
+          parentId: stringField({ type: "uuid", foreignKey: true, foreignKeyType: target }),
+        },
+      });
+    expect(isTypeRenameCompatible(withSelfFk("User", "User"), withSelfFk("Person", "Person"))).toBe(
+      true,
+    );
+    expect(isTypeRenameCompatible(withSelfFk("User", "Team"), withSelfFk("Person", "Person"))).toBe(
+      false,
+    );
+  });
+
+  test("rejects differing field sets or field shapes", () => {
+    expect(
+      isTypeRenameCompatible(
+        snapshotType("User"),
+        snapshotType("Person", {
+          fields: { id: { type: "uuid", required: true }, fullName: stringField() },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isTypeRenameCompatible(
+        snapshotType("User"),
+        snapshotType("Person", {
+          fields: {
+            id: { type: "uuid", required: true },
+            name: stringField({ type: "integer" }),
+          },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects required and unique constraint tightening or loosening", () => {
+    expect(
+      isTypeRenameCompatible(
+        snapshotType("User"),
+        snapshotType("Person", {
+          fields: {
+            id: { type: "uuid", required: true },
+            name: stringField({ required: true }),
+          },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isTypeRenameCompatible(
+        snapshotType("User"),
+        snapshotType("Person", {
+          fields: { id: { type: "uuid", required: true }, name: stringField({ unique: true }) },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects types with serial or file fields", () => {
+    expect(
+      isTypeRenameCompatible(
+        snapshotType("User", {
+          fields: {
+            id: { type: "uuid", required: true },
+            code: stringField({ serial: { start: 1 } }),
+          },
+        }),
+        snapshotType("Person", {
+          fields: {
+            id: { type: "uuid", required: true },
+            code: stringField({ serial: { start: 1 } }),
+          },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isTypeRenameCompatible(
+        snapshotType("User", { files: { avatar: "avatar image" } }),
+        snapshotType("Person", { files: { avatar: "avatar image" } }),
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects differing indexes", () => {
+    expect(
+      isTypeRenameCompatible(
+        snapshotType("User", { indexes: { byName: { fields: ["name"] } } }),
+        snapshotType("Person"),
+      ),
+    ).toBe(false);
+    expect(
+      isTypeRenameCompatible(
+        snapshotType("User", { indexes: { byName: { fields: ["name"] } } }),
+        snapshotType("Person", { indexes: { byName: { fields: ["name"] } } }),
+      ),
+    ).toBe(true);
+  });
+
+  test("rejects differing decimal scales", () => {
+    const withScale = (name: string, scale?: number) =>
+      snapshotType(name, {
+        fields: {
+          id: { type: "uuid", required: true },
+          price: stringField({ type: "decimal", ...(scale !== undefined && { scale }) }),
+        },
+      });
+    expect(isTypeRenameCompatible(withScale("User", 2), withScale("Person", 4))).toBe(false);
+    expect(isTypeRenameCompatible(withScale("User", 2), withScale("Person", 2))).toBe(true);
+  });
+});
+
+describe("findTypeRenameCandidates", () => {
+  test("pairs a removed type with compatible added types", () => {
+    const diff = createMockMigrationDiff({
+      changes: [
+        { kind: "type_removed", typeName: "User", before: snapshotType("User") },
+        { kind: "type_added", typeName: "Person", after: snapshotType("Person") },
+        {
+          kind: "type_added",
+          typeName: "Order",
+          after: snapshotType("Order", {
+            fields: { id: { type: "uuid", required: true }, total: stringField() },
+          }),
+        },
+      ],
+    });
+
+    const candidates = findTypeRenameCandidates(diff);
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]!.removed.typeName).toBe("User");
+    expect(candidates[0]!.added.map((a) => a.typeName)).toEqual(["Person"]);
+  });
+
+  test("returns no candidates when nothing is compatible", () => {
+    const diff = createMockMigrationDiff({
+      changes: [
+        { kind: "type_removed", typeName: "User", before: snapshotType("User") },
+        {
+          kind: "type_added",
+          typeName: "Order",
+          after: snapshotType("Order", {
+            fields: { id: { type: "uuid", required: true }, total: stringField() },
+          }),
+        },
+      ],
+    });
+
+    expect(findTypeRenameCandidates(diff)).toHaveLength(0);
+  });
+});
+
+describe("typeRenameSpecApplies", () => {
+  const snapshot = (types: Record<string, TailorDBSnapshotType>) => ({
+    version: 1,
+    namespace: "tailordb",
+    createdAt: new Date().toISOString(),
+    types,
+  });
+  const spec = { previousTypeName: "User", typeName: "Person" };
+
+  test("matches a removed + added pair", () => {
+    expect(
+      typeRenameSpecApplies(
+        spec,
+        snapshot({ User: snapshotType("User") }),
+        snapshot({ Person: snapshotType("Person") }),
+      ),
+    ).toBe(true);
+  });
+
+  test("does not match when the old type still exists", () => {
+    expect(
+      typeRenameSpecApplies(
+        spec,
+        snapshot({ User: snapshotType("User") }),
+        snapshot({ User: snapshotType("User"), Person: snapshotType("Person") }),
+      ),
+    ).toBe(false);
+  });
+
+  test("does not match when the new type is missing", () => {
+    expect(
+      typeRenameSpecApplies(spec, snapshot({ User: snapshotType("User") }), snapshot({})),
+    ).toBe(false);
+  });
+});
+
+describe("assertValidTypeRenames", () => {
+  const normalized = (types: Record<string, TailorDBSnapshotType>) =>
+    normalizeSchemaSnapshot({
+      version: 1,
+      namespace: "tailordb",
+      createdAt: new Date().toISOString(),
+      types,
+    });
+
+  test("accepts a compatible removed + added pair", () => {
+    expect(() =>
+      assertValidTypeRenames(
+        normalized({ User: snapshotType("User") }),
+        normalized({ Person: snapshotType("Person") }),
+        [{ previousTypeName: "User", typeName: "Person" }],
+      ),
+    ).not.toThrow();
+  });
+
+  test("rejects a type participating in two renames", () => {
+    expect(() =>
+      assertValidTypeRenames(
+        normalized({ User: snapshotType("User") }),
+        normalized({ Person: snapshotType("Person") }),
+        [
+          { previousTypeName: "User", typeName: "Person" },
+          { previousTypeName: "User", typeName: "Person" },
+        ],
+      ),
+    ).toThrow("appears in more than one rename");
+  });
+
+  test("rejects a rename whose old type is missing from the previous schema", () => {
+    expect(() =>
+      assertValidTypeRenames(normalized({}), normalized({ Person: snapshotType("Person") }), [
+        { previousTypeName: "User", typeName: "Person" },
+      ]),
+    ).toThrow('type "User" does not exist in the previous schema');
+  });
+
+  test("rejects a rename whose new type is missing from the current schema", () => {
+    expect(() =>
+      assertValidTypeRenames(normalized({ User: snapshotType("User") }), normalized({}), [
+        { previousTypeName: "User", typeName: "Person" },
+      ]),
+    ).toThrow('type "Person" does not exist in the current schema');
+  });
+
+  test("explains shape incompatibility", () => {
+    expect(() =>
+      assertValidTypeRenames(
+        normalized({ User: snapshotType("User") }),
+        normalized({
+          Person: snapshotType("Person", {
+            fields: { id: { type: "uuid", required: true }, fullName: stringField() },
+          }),
+        }),
+        [{ previousTypeName: "User", typeName: "Person" }],
+      ),
+    ).toThrow("not rename-compatible");
+  });
+});
+
+describe("parseTypeRenameOption", () => {
+  test("parses OldType:NewType", () => {
+    expect(parseTypeRenameOption("User:Person")).toEqual({
+      previousTypeName: "User",
+      typeName: "Person",
+    });
+  });
+
+  test.each(["User", "User:Person:Extra", "User.name:Person", ":Person", "User:", ""])(
+    "rejects malformed value %j",
+    (value) => {
+      expect(() => parseTypeRenameOption(value)).toThrow("Expected format");
+    },
+  );
+
+  test("rejects identical old and new names", () => {
+    expect(() => parseTypeRenameOption("User:User")).toThrow("identical");
+  });
+});
+
+describe("parseTypeDropOption", () => {
+  test("parses Type", () => {
+    expect(parseTypeDropOption("User")).toEqual({ typeName: "User" });
+  });
+
+  test.each(["User.name", "User:Person", ""])("rejects malformed value %j", (value) => {
+    expect(() => parseTypeDropOption(value)).toThrow("Expected format");
+  });
+});
+
+describe("typeDropSpecApplies", () => {
+  const snapshot = (types: Record<string, TailorDBSnapshotType>) => ({
+    version: 1,
+    namespace: "tailordb",
+    createdAt: new Date().toISOString(),
+    types,
+  });
+
+  test("matches a removed type", () => {
+    expect(
+      typeDropSpecApplies(
+        { typeName: "User" },
+        snapshot({ User: snapshotType("User") }),
+        snapshot({}),
+      ),
+    ).toBe(true);
+  });
+
+  test("does not match when the type still exists", () => {
+    expect(
+      typeDropSpecApplies(
+        { typeName: "User" },
+        snapshot({ User: snapshotType("User") }),
+        snapshot({ User: snapshotType("User") }),
+      ),
+    ).toBe(false);
   });
 });

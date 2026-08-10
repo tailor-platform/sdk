@@ -435,6 +435,119 @@ describe("template-generator", () => {
       expect(dbTypesContent).toContain("displayName: ColumnType<string | null, string, string>;");
     });
 
+    test("should generate an id-preserving batched copy script for type renames", async () => {
+      const renamePreviousSnapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {
+            email: { type: "string", required: false },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "type_renamed",
+            typeName: "Person",
+            previousTypeName: "User",
+            before: {
+              name: "User",
+              pluralForm: "Users",
+              fields: { email: { type: "string", required: false } },
+            },
+            after: {
+              name: "Person",
+              pluralForm: "People",
+              fields: { email: { type: "string", required: false } },
+            },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ typeName: "Person", reason: "Type renamed from User to Person" }],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain("Copy every User row into Person, preserving ids");
+      expect(scriptContent).toContain('.selectFrom("User")');
+      expect(scriptContent).toContain(".selectAll()");
+      expect(scriptContent).toContain('.orderBy("id", "asc")');
+      expect(scriptContent).toContain(".limit(100)");
+      expect(scriptContent).toContain('trx.insertInto("Person").values(rows).execute()');
+      expect(scriptContent).not.toContain("No data migration needed");
+
+      const dbTypesContent = await fs.readFile(result.dbTypesFilePath!, "utf-8");
+      expect(dbTypesContent).toContain("User: {");
+      expect(dbTypesContent).toContain("Person: {");
+
+      expect(getTypeScriptDiagnostics(result.migrateFilePath!)).toEqual([]);
+    }, 15_000);
+
+    test("should not scaffold a reference fixup for a retarget that follows a type rename", async () => {
+      const renamePreviousSnapshot = createTestSnapshot({
+        User: {
+          name: "User",
+          pluralForm: "Users",
+          fields: {},
+        },
+        Order: {
+          name: "Order",
+          pluralForm: "Orders",
+          fields: {
+            ownerId: {
+              type: "uuid",
+              required: false,
+              foreignKey: true,
+              foreignKeyType: "User",
+              foreignKeyField: "id",
+            },
+          },
+        },
+      });
+      const diff = createMockMigrationDiff({
+        changes: [
+          {
+            kind: "type_renamed",
+            typeName: "Person",
+            previousTypeName: "User",
+            before: { name: "User", pluralForm: "Users", fields: {} },
+            after: { name: "Person", pluralForm: "People", fields: {} },
+          },
+          {
+            kind: "field_modified",
+            typeName: "Order",
+            fieldName: "ownerId",
+            before: {
+              type: "uuid",
+              required: false,
+              foreignKey: true,
+              foreignKeyType: "User",
+              foreignKeyField: "id",
+            },
+            after: {
+              type: "uuid",
+              required: false,
+              foreignKey: true,
+              foreignKeyType: "Person",
+              foreignKeyField: "id",
+            },
+          },
+        ],
+        hasBreakingChanges: true,
+        breakingChanges: [{ typeName: "Person", reason: "Type renamed from User to Person" }],
+        requiresMigrationScript: true,
+      });
+
+      const result = await generateDiffFiles(diff, tempDir, 1, renamePreviousSnapshot);
+
+      const scriptContent = await fs.readFile(result.migrateFilePath!, "utf-8");
+      expect(scriptContent).toContain('trx.insertInto("Person")');
+      expect(scriptContent).not.toContain("Migrate ownerId references");
+    });
+
     test("should include description in diff file if provided", async () => {
       const diff = createMockMigrationDiff();
 

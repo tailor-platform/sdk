@@ -33,12 +33,20 @@ import { formatMigrationScriptCommand } from "./hints";
 import {
   dropSpecApplies,
   findRenameCandidates,
+  findTypeRenameCandidates,
   parseDropOption,
   parseRenameOption,
+  parseTypeDropOption,
+  parseTypeRenameOption,
   renameSpecApplies,
+  typeDropSpecApplies,
+  typeRenameSpecApplies,
   type FieldDropSpec,
   type FieldRenameCandidate,
   type FieldRenameSpec,
+  type TypeDropSpec,
+  type TypeRenameCandidate,
+  type TypeRenameSpec,
 } from "./rename-detection";
 import { markMigrationScriptSkipped } from "./script";
 import {
@@ -59,9 +67,9 @@ export interface GenerateOptions {
   name?: string;
   yes?: boolean;
   init?: boolean;
-  /** `--rename Type.old:new` values confirming field renames non-interactively. */
+  /** `--rename Type.old:new` / `--rename OldType:NewType` values confirming renames non-interactively. */
   renames?: string[];
-  /** `--drop Type.field` values confirming field removals non-interactively. */
+  /** `--drop Type.field` / `--drop Type` values confirming removals non-interactively. */
   drops?: string[];
 }
 
@@ -167,18 +175,36 @@ export async function generate(options: GenerateOptions): Promise<void> {
   }
 
   // Parse --rename/--drop flags before any destructive step so a malformed
-  // value fails the command while the migrations directories are still intact
-  const renameFlags: RenameFlag[] = (options.renames ?? []).map((raw) => ({
-    raw,
-    spec: parseRenameOption(raw),
-  }));
-  const dropFlags: DropFlag[] = (options.drops ?? []).map((raw) => ({
-    raw,
-    spec: parseDropOption(raw),
-  }));
+  // value fails the command while the migrations directories are still intact.
+  // A value containing "." targets a field; a bare "Old:New" / "Type" value
+  // targets a type.
+  const renameFlags: RenameFlag[] = [];
+  const typeRenameFlags: TypeRenameFlag[] = [];
+  for (const raw of options.renames ?? []) {
+    if (raw.includes(".")) {
+      renameFlags.push({ raw, spec: parseRenameOption(raw) });
+    } else {
+      typeRenameFlags.push({ raw, spec: parseTypeRenameOption(raw) });
+    }
+  }
+  const dropFlags: DropFlag[] = [];
+  const typeDropFlags: TypeDropFlag[] = [];
+  for (const raw of options.drops ?? []) {
+    if (raw.includes(".")) {
+      dropFlags.push({ raw, spec: parseDropOption(raw) });
+    } else {
+      typeDropFlags.push({ raw, spec: parseTypeDropOption(raw) });
+    }
+  }
   // --init regenerates the baseline from scratch, so there is no previous
   // schema a rename or drop could apply to
-  if (options.init && (renameFlags.length > 0 || dropFlags.length > 0)) {
+  if (
+    options.init &&
+    (renameFlags.length > 0 ||
+      typeRenameFlags.length > 0 ||
+      dropFlags.length > 0 ||
+      typeDropFlags.length > 0)
+  ) {
     throw new Error("--rename and --drop cannot be used together with --init.");
   }
   const droppedFieldKeys = new Set(
@@ -191,6 +217,17 @@ export async function generate(options: GenerateOptions): Promise<void> {
     throw new Error(
       `--rename and --drop conflict for: ${conflictingFlags
         .map(({ spec }) => `${spec.typeName}.${spec.previousFieldName}`)
+        .join(", ")}`,
+    );
+  }
+  const droppedTypeNames = new Set(typeDropFlags.map(({ spec }) => spec.typeName));
+  const conflictingTypeFlags = typeRenameFlags.filter(({ spec }) =>
+    droppedTypeNames.has(spec.previousTypeName),
+  );
+  if (conflictingTypeFlags.length > 0) {
+    throw new Error(
+      `--rename and --drop conflict for: ${conflictingTypeFlags
+        .map(({ spec }) => spec.previousTypeName)
         .join(", ")}`,
     );
   }
@@ -244,12 +281,16 @@ export async function generate(options: GenerateOptions): Promise<void> {
   }
 
   // A flag applies to a namespace only when that namespace actually removed
-  // the old field (and, for renames, added the new one); another namespace
-  // may define a type with the same name
+  // the old field or type (and, for renames, added the new one); another
+  // namespace may define a type with the same name
   const renameSpecsByNamespace = new Map<string, FieldRenameSpec[]>();
+  const typeRenameSpecsByNamespace = new Map<string, TypeRenameSpec[]>();
   const dropSpecsByNamespace = new Map<string, FieldDropSpec[]>();
+  const typeDropSpecsByNamespace = new Map<string, TypeDropSpec[]>();
   const matchedRenameFlags = new Set<RenameFlag>();
+  const matchedTypeRenameFlags = new Set<TypeRenameFlag>();
   const matchedDropFlags = new Set<DropFlag>();
+  const matchedTypeDropFlags = new Set<TypeDropFlag>();
   for (const { namespace, previousSnapshot, currentSnapshot } of generations) {
     if (!previousSnapshot) continue;
     const applicableRenames = renameFlags.filter(({ spec }) =>
@@ -262,6 +303,16 @@ export async function generate(options: GenerateOptions): Promise<void> {
       namespace,
       applicableRenames.map((flag) => flag.spec),
     );
+    const applicableTypeRenames = typeRenameFlags.filter(({ spec }) =>
+      typeRenameSpecApplies(spec, previousSnapshot, currentSnapshot),
+    );
+    for (const flag of applicableTypeRenames) {
+      matchedTypeRenameFlags.add(flag);
+    }
+    typeRenameSpecsByNamespace.set(
+      namespace,
+      applicableTypeRenames.map((flag) => flag.spec),
+    );
     const applicableDrops = dropFlags.filter(({ spec }) =>
       dropSpecApplies(spec, previousSnapshot, currentSnapshot),
     );
@@ -272,6 +323,16 @@ export async function generate(options: GenerateOptions): Promise<void> {
       namespace,
       applicableDrops.map((flag) => flag.spec),
     );
+    const applicableTypeDrops = typeDropFlags.filter(({ spec }) =>
+      typeDropSpecApplies(spec, previousSnapshot, currentSnapshot),
+    );
+    for (const flag of applicableTypeDrops) {
+      matchedTypeDropFlags.add(flag);
+    }
+    typeDropSpecsByNamespace.set(
+      namespace,
+      applicableTypeDrops.map((flag) => flag.spec),
+    );
   }
 
   const unusedRenames = renameFlags.filter((flag) => !matchedRenameFlags.has(flag));
@@ -280,10 +341,22 @@ export async function generate(options: GenerateOptions): Promise<void> {
       `--rename does not match a removed + added field pair: ${unusedRenames.map((flag) => flag.raw).join(", ")}`,
     );
   }
+  const unusedTypeRenames = typeRenameFlags.filter((flag) => !matchedTypeRenameFlags.has(flag));
+  if (unusedTypeRenames.length > 0) {
+    throw new Error(
+      `--rename does not match a removed + added type pair: ${unusedTypeRenames.map((flag) => flag.raw).join(", ")}`,
+    );
+  }
   const unusedDrops = dropFlags.filter((flag) => !matchedDropFlags.has(flag));
   if (unusedDrops.length > 0) {
     throw new Error(
       `--drop does not match a removed field: ${unusedDrops.map((flag) => flag.raw).join(", ")}`,
+    );
+  }
+  const unusedTypeDrops = typeDropFlags.filter((flag) => !matchedTypeDropFlags.has(flag));
+  if (unusedTypeDrops.length > 0) {
+    throw new Error(
+      `--drop does not match a removed type: ${unusedTypeDrops.map((flag) => flag.raw).join(", ")}`,
     );
   }
 
@@ -300,32 +373,31 @@ export async function generate(options: GenerateOptions): Promise<void> {
       generation.diff = diff;
       continue;
     }
-    const resolution = await resolveFieldRenames(
-      previousSnapshot,
-      currentSnapshot,
-      diff,
-      options,
-      renameSpecsByNamespace.get(namespace) ?? [],
-      dropSpecsByNamespace.get(namespace) ?? [],
-    );
+    const resolution = await resolveRenames(previousSnapshot, currentSnapshot, diff, options, {
+      fieldRenames: renameSpecsByNamespace.get(namespace) ?? [],
+      typeRenames: typeRenameSpecsByNamespace.get(namespace) ?? [],
+      fieldDrops: dropSpecsByNamespace.get(namespace) ?? [],
+      typeDrops: typeDropSpecsByNamespace.get(namespace) ?? [],
+    });
     generation.diff = resolution.diff;
     unresolvedCandidates.push(...resolution.unresolved);
   }
 
   // Failing beats warning here: a candidate left unresolved in a
   // non-interactive run would be written as remove + add and silently drop
-  // the field's data at deploy
+  // the field's or type's data at deploy
   if (unresolvedCandidates.length > 0) {
     const details = unresolvedCandidates
       .map(
-        ({ namespace, candidate, targets }) =>
-          `  - ${candidate.typeName}.${candidate.removed.fieldName} → ${targets.join(", ")}? (namespace: ${namespace})`,
+        ({ namespace, label, targets }) =>
+          `  - ${label} → ${targets.join(", ")}? (namespace: ${namespace})`,
       )
       .join("\n");
     throw new Error(
-      `Possible field rename(s) detected:\n${details}\n` +
-        'Re-run with --rename "Type.oldField:newField" to record a rename and scaffold a data copy script, ' +
-        'or --drop "Type.field" to confirm the removal.',
+      `Possible rename(s) detected:\n${details}\n` +
+        'Re-run with --rename "Type.oldField:newField" (field) or --rename "OldType:NewType" (type) ' +
+        "to record a rename and scaffold a data copy script, " +
+        'or --drop "Type.field" / --drop "Type" to confirm the removal.',
     );
   }
 
@@ -363,16 +435,28 @@ async function generateInitialSnapshot(
   logger.log("\nThis is the baseline schema. Future changes will be tracked as diffs.");
 }
 
-/** A parsed `--rename` flag together with its raw value. */
+/** A parsed field-form `--rename` flag together with its raw value. */
 interface RenameFlag {
   raw: string;
   spec: FieldRenameSpec;
 }
 
-/** A parsed `--drop` flag together with its raw value. */
+/** A parsed type-form `--rename` flag together with its raw value. */
+interface TypeRenameFlag {
+  raw: string;
+  spec: TypeRenameSpec;
+}
+
+/** A parsed field-form `--drop` flag together with its raw value. */
 interface DropFlag {
   raw: string;
   spec: FieldDropSpec;
+}
+
+/** A parsed type-form `--drop` flag together with its raw value. */
+interface TypeDropFlag {
+  raw: string;
+  spec: TypeDropSpec;
 }
 
 /** Snapshots collected for one namespace before any migration file is written. */
@@ -388,7 +472,8 @@ interface NamespaceGeneration {
 /** A rename candidate that a non-interactive run could not resolve. */
 interface UnresolvedRenameCandidate {
   namespace: string;
-  candidate: FieldRenameCandidate;
+  /** Removed field (`Type.field`) or type (`Type`) with rename candidates. */
+  label: string;
   targets: string[];
 }
 
@@ -396,6 +481,14 @@ interface UnresolvedRenameCandidate {
 interface RenameResolution {
   diff: MigrationDiff;
   unresolved: UnresolvedRenameCandidate[];
+}
+
+/** One namespace's `--rename` / `--drop` specs. */
+interface NamespaceRenameSpecs {
+  fieldRenames: readonly FieldRenameSpec[];
+  typeRenames: readonly TypeRenameSpec[];
+  fieldDrops: readonly FieldDropSpec[];
+  typeDrops: readonly TypeDropSpec[];
 }
 
 function availableRenameTargets(
@@ -440,37 +533,90 @@ async function promptRenameCandidate(
   return selected ?? undefined;
 }
 
+function availableTypeRenameTargets(
+  candidate: TypeRenameCandidate,
+  claimedTypes: ReadonlySet<string>,
+): string[] {
+  return candidate.added
+    .filter((added) => !claimedTypes.has(added.typeName))
+    .map((added) => added.typeName);
+}
+
 /**
- * Resolve field renames for a diff: apply `--rename` flags, skip candidates
- * whose removal is confirmed by `--drop`, confirm the rest interactively, and
- * recompute the diff with the confirmed renames. When prompting is
- * unavailable (`--yes` or no TTY), the remaining candidates are returned as
- * unresolved for the caller to fail on.
+ * Ask the user whether a removed type was renamed to one of the compatible
+ * added types. Returns the confirmed new type name, or undefined.
+ * @param {TypeRenameCandidate} candidate - Candidate to confirm
+ * @param {string[]} addedTypeNames - Added type names still available as rename targets
+ * @returns {Promise<string | undefined>} Confirmed new type name, if any
+ */
+async function promptTypeRenameCandidate(
+  candidate: TypeRenameCandidate,
+  addedTypeNames: string[],
+): Promise<string | undefined> {
+  const oldTypeName = candidate.removed.typeName;
+  const [firstTypeName] = addedTypeNames;
+  if (addedTypeNames.length === 1 && firstTypeName) {
+    const isRename = await prompt.confirm({
+      message: `${oldTypeName} was removed and ${firstTypeName} was added with a compatible schema. Was it renamed to ${firstTypeName}?`,
+      default: true,
+    });
+    return isRename ? firstTypeName : undefined;
+  }
+  const selected = await prompt.select({
+    message: `${oldTypeName} was removed. Was it renamed to one of these added types?`,
+    choices: [
+      ...addedTypeNames.map((typeName) => ({
+        name: `Yes, renamed to ${typeName}`,
+        value: typeName as string | null,
+      })),
+      { name: `No, ${oldTypeName} was removed`, value: null },
+    ],
+  });
+  return selected ?? undefined;
+}
+
+/**
+ * Resolve field and type renames for a diff: apply `--rename` flags, skip
+ * candidates whose removal is confirmed by `--drop`, confirm the rest
+ * interactively, and recompute the diff with the confirmed renames. When
+ * prompting is unavailable (`--yes` or no TTY), the remaining candidates are
+ * returned as unresolved for the caller to fail on.
  * @param {NormalizedSchemaSnapshot} previousSnapshot - Previous normalized schema snapshot
  * @param {NormalizedSchemaSnapshot} currentSnapshot - Current normalized schema snapshot
  * @param {MigrationDiff} diff - Diff computed without rename knowledge
  * @param {GenerateOptions} options - Generate options
- * @param {readonly FieldRenameSpec[]} flagRenameSpecs - This namespace's `--rename` specs
- * @param {readonly FieldDropSpec[]} flagDropSpecs - This namespace's `--drop` specs
+ * @param {NamespaceRenameSpecs} specs - This namespace's `--rename` / `--drop` specs
  * @returns {Promise<RenameResolution>} Diff with confirmed renames and any unresolved candidates
  */
-async function resolveFieldRenames(
+async function resolveRenames(
   previousSnapshot: NormalizedSchemaSnapshot,
   currentSnapshot: NormalizedSchemaSnapshot,
   diff: MigrationDiff,
   options: GenerateOptions,
-  flagRenameSpecs: readonly FieldRenameSpec[],
-  flagDropSpecs: readonly FieldDropSpec[],
+  specs: NamespaceRenameSpecs,
 ): Promise<RenameResolution> {
-  const confirmed: FieldRenameSpec[] = [...flagRenameSpecs];
+  const confirmed: FieldRenameSpec[] = [...specs.fieldRenames];
   const claimedFields = new Set(
     confirmed.flatMap((spec) => [
       `${spec.typeName}.${spec.previousFieldName}`,
       `${spec.typeName}.${spec.fieldName}`,
     ]),
   );
-  const droppedFields = new Set(flagDropSpecs.map((spec) => `${spec.typeName}.${spec.fieldName}`));
+  const droppedFields = new Set(
+    specs.fieldDrops.map((spec) => `${spec.typeName}.${spec.fieldName}`),
+  );
+  const confirmedTypes: TypeRenameSpec[] = [...specs.typeRenames];
+  const claimedTypes = new Set(
+    confirmedTypes.flatMap((spec) => [spec.previousTypeName, spec.typeName]),
+  );
+  const droppedTypes = new Set(specs.typeDrops.map((spec) => spec.typeName));
 
+  const typeCandidates = findTypeRenameCandidates(diff).filter(
+    (candidate) =>
+      !droppedTypes.has(candidate.removed.typeName) &&
+      !claimedTypes.has(candidate.removed.typeName) &&
+      availableTypeRenameTargets(candidate, claimedTypes).length > 0,
+  );
   const candidates = findRenameCandidates(diff).filter(
     (candidate) =>
       !droppedFields.has(`${candidate.typeName}.${candidate.removed.fieldName}`) &&
@@ -480,14 +626,34 @@ async function resolveFieldRenames(
 
   const unresolved: UnresolvedRenameCandidate[] = [];
   if (options.yes || !canPrompt()) {
+    for (const candidate of typeCandidates) {
+      unresolved.push({
+        namespace: diff.namespace,
+        label: candidate.removed.typeName,
+        targets: availableTypeRenameTargets(candidate, claimedTypes),
+      });
+    }
     for (const candidate of candidates) {
       unresolved.push({
         namespace: diff.namespace,
-        candidate,
+        label: `${candidate.typeName}.${candidate.removed.fieldName}`,
         targets: availableRenameTargets(candidate, claimedFields),
       });
     }
   } else {
+    for (const candidate of typeCandidates) {
+      const addedTypeNames = availableTypeRenameTargets(candidate, claimedTypes);
+      if (addedTypeNames.length === 0) continue;
+      const newTypeName = await promptTypeRenameCandidate(candidate, addedTypeNames);
+      if (newTypeName) {
+        confirmedTypes.push({
+          previousTypeName: candidate.removed.typeName,
+          typeName: newTypeName,
+        });
+        claimedTypes.add(candidate.removed.typeName);
+        claimedTypes.add(newTypeName);
+      }
+    }
     for (const candidate of candidates) {
       const addedFieldNames = availableRenameTargets(candidate, claimedFields);
       if (addedFieldNames.length === 0) continue;
@@ -504,9 +670,12 @@ async function resolveFieldRenames(
     }
   }
 
-  if (confirmed.length === 0) return { diff, unresolved };
+  if (confirmed.length === 0 && confirmedTypes.length === 0) return { diff, unresolved };
   return {
-    diff: compareSnapshots(previousSnapshot, currentSnapshot, { fieldRenames: confirmed }),
+    diff: compareSnapshots(previousSnapshot, currentSnapshot, {
+      fieldRenames: confirmed,
+      typeRenames: confirmedTypes,
+    }),
     unresolved,
   };
 }
@@ -707,11 +876,11 @@ export const generateCommand = defineAppCommand({
     }),
     rename: arg(z.array(z.string()).optional(), {
       description:
-        'Record a field rename instead of remove + add (format: "Type.oldField:newField"; repeatable). Renames require a migration script that copies the data.',
+        'Record a field or type rename instead of remove + add (format: "Type.oldField:newField" or "OldType:NewType"; repeatable). Renames require a migration script that copies the data.',
     }),
     drop: arg(z.array(z.string()).optional(), {
       description:
-        'Confirm that a removed field is a genuine removal, not a rename (format: "Type.field"; repeatable). Required in non-interactive runs for a removed field with rename candidates.',
+        'Confirm that a removed field or type is a genuine removal, not a rename (format: "Type.field" or "Type"; repeatable). Required in non-interactive runs for a removal with rename candidates.',
     }),
   }),
   run: async (args) => {

@@ -17,7 +17,12 @@ import {
   isBreakingIndexChange,
   type SchemaSnapshot,
 } from "./snapshot";
-import type { MigrationDiff, DiffChange, FieldRenamedChange } from "./diff-calculator";
+import type {
+  MigrationDiff,
+  DiffChange,
+  FieldRenamedChange,
+  TypeRenamedChange,
+} from "./diff-calculator";
 
 /** Marker left in generated migration scripts until their normalization logic is reviewed. */
 export const MIGRATION_REVIEW_REQUIRED_MARKER = "TODO(tailor-migration-review)";
@@ -156,10 +161,15 @@ export async function generateDiffFiles(
  */
 export function generateMigrationScript(diff: MigrationDiff): string {
   const updates: string[] = [];
+  const typeRenameTargets = new Map(
+    diff.changes
+      .filter((change): change is TypeRenamedChange => change.kind === "type_renamed")
+      .map((change) => [change.previousTypeName, change.typeName]),
+  );
 
   for (const change of diff.changes) {
     const decimalScaleScript = generateDecimalScaleChangeScript(change);
-    updates.push(...generateChangeScripts(change, decimalScaleScript !== null));
+    updates.push(...generateChangeScripts(change, decimalScaleScript !== null, typeRenameTargets));
     if (decimalScaleScript) {
       updates.push(decimalScaleScript);
 
@@ -241,9 +251,14 @@ describe(${JSON.stringify(`${diff.namespace} migration`)}, () => {
  * Generate scripts for a single change
  * @param {DiffChange} change - Diff change to generate script for
  * @param {boolean} deferUniqueConstraint - Generate the unique check after decimal re-serialization
+ * @param {ReadonlyMap<string, string>} [typeRenameTargets] - Confirmed type renames (old name → new name)
  * @returns {string[]} Script contents, or an empty array if no script is needed
  */
-function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false): string[] {
+function generateChangeScripts(
+  change: DiffChange,
+  deferUniqueConstraint = false,
+  typeRenameTargets?: ReadonlyMap<string, string>,
+): string[] {
   if (change.kind === "index_added" || change.kind === "index_modified") {
     const before = change.kind === "index_modified" ? change.before : undefined;
     if (!isBreakingIndexChange(change.typeName, change.indexName, before, change.after)) {
@@ -312,6 +327,10 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
     return scripts;
   }
 
+  if (change.kind === "type_renamed") {
+    return [generateTypeRenameCopyScript(change)];
+  }
+
   if (change.kind !== "field_modified" && change.kind !== "field_type_modified") {
     // No data migration needed for type_added, type_removed, or field_removed
     return [];
@@ -363,11 +382,13 @@ function generateChangeScripts(change: DiffChange, deferUniqueConstraint = false
     }
   }
 
-  // Foreign key relationship changed
+  // Foreign key relationship changed. A retarget that follows a confirmed
+  // type rename needs no fixup: record ids are preserved by the rename copy.
   if (
     before.foreignKeyType &&
     after.foreignKeyType &&
-    before.foreignKeyType !== after.foreignKeyType
+    before.foreignKeyType !== after.foreignKeyType &&
+    typeRenameTargets?.get(before.foreignKeyType) !== after.foreignKeyType
   ) {
     scripts.push(`  // Migrate ${change.fieldName} references from ${before.foreignKeyType} to ${after.foreignKeyType}
   // Find records that don't have a valid reference in the new target table
@@ -420,6 +441,31 @@ function generateFieldRenameCopyScript(change: FieldRenamedChange): string {
     .updateTable("${typeName}")
     .set((eb) => ({ ${fieldName}: eb.ref("${previousFieldName}") }))
     .execute();`;
+}
+
+function generateTypeRenameCopyScript(change: TypeRenamedChange): string {
+  const { typeName, previousTypeName } = change;
+  return `  // Copy every ${previousTypeName} row into ${typeName}, preserving ids so that
+  // stored foreign key references remain valid. ${previousTypeName} stays readable
+  // until the post-migration phase drops it.
+  {
+    let lastId: string | undefined;
+    while (true) {
+      let query = trx
+        .selectFrom("${previousTypeName}")
+        .selectAll()
+        .orderBy("id", "asc")
+        .limit(100);
+      if (lastId) {
+        query = query.where("id", ">", lastId);
+      }
+      const rows = await query.execute();
+      if (rows.length === 0) break;
+
+      await trx.insertInto("${typeName}").values(rows).execute();
+      lastId = rows[rows.length - 1]!.id;
+    }
+  }`;
 }
 
 function generateFieldTypeChangeScript(

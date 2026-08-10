@@ -37,6 +37,8 @@ interface BreakingChangeFieldInfo {
   enumValueChanges: Map<string, Map<string, EnumValueChange>>;
   /** Map of typeName -> Map of new fieldName -> SnapshotFieldConfig for renamed fields */
   renamedFields: Map<string, Map<string, SnapshotFieldConfig>>;
+  /** Map of new typeName -> TailorDBSnapshotType for renamed types */
+  renamedTypes: Map<string, TailorDBSnapshotType>;
 }
 
 /**
@@ -49,6 +51,7 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
   const addedRequiredFields = new Map<string, Map<string, SnapshotFieldConfig>>();
   const enumValueChanges = new Map<string, Map<string, EnumValueChange>>();
   const renamedFields = new Map<string, Map<string, SnapshotFieldConfig>>();
+  const renamedTypes = new Map<string, TailorDBSnapshotType>();
 
   for (const change of diff.changes) {
     if (change.kind === "field_modified" || change.kind === "field_type_modified") {
@@ -117,10 +120,14 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
         change.fieldName,
         change.after,
       );
+    } else if (change.kind === "type_renamed") {
+      // The new type is missing from the pre-migration snapshot; inject it so
+      // the copy script can insert into it (the old type stays readable as-is).
+      renamedTypes.set(change.typeName, change.after);
     }
   }
 
-  return { optionalToRequired, addedRequiredFields, enumValueChanges, renamedFields };
+  return { optionalToRequired, addedRequiredFields, enumValueChanges, renamedFields, renamedTypes };
 }
 
 /**
@@ -130,11 +137,6 @@ function extractBreakingChangeFields(diff: MigrationDiff): BreakingChangeFieldIn
  * @returns {string} Generated db.ts file contents
  */
 function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationDiff): string {
-  const types = Object.values(snapshot.types);
-  if (types.length === 0) {
-    return generateEmptyDbTypes(snapshot.namespace);
-  }
-
   // Extract breaking change field information
   const breakingChangeFields = diff
     ? extractBreakingChangeFields(diff)
@@ -143,7 +145,13 @@ function generateDbTypesFromSnapshot(snapshot: SchemaSnapshot, diff?: MigrationD
         addedRequiredFields: new Map(),
         enumValueChanges: new Map(),
         renamedFields: new Map(),
+        renamedTypes: new Map(),
       };
+
+  const types = [...Object.values(snapshot.types), ...breakingChangeFields.renamedTypes.values()];
+  if (types.length === 0) {
+    return generateEmptyDbTypes(snapshot.namespace);
+  }
 
   // Track which utility types are used
   const usedUtilityTypes = new Set<"Timestamp" | "Serial">();

@@ -77,6 +77,18 @@ export interface TypeRemovedChange extends DiffChangeBase {
 }
 
 /**
+ * A type was renamed. Recorded when the user confirms that a removed + added
+ * type pair is a rename (interactively or via `--rename`).
+ * `typeName` is the new name; `previousTypeName` is the old name.
+ */
+export interface TypeRenamedChange extends DiffChangeBase {
+  kind: "type_renamed";
+  previousTypeName: string;
+  before: TailorDBSnapshotType;
+  after: TailorDBSnapshotType;
+}
+
+/**
  * Legacy type-level settings change. Kept for backward compatibility with
  * diff.json files written by older SDK versions; `before`/`after` may be
  * absent in those files, hence optional.
@@ -241,6 +253,7 @@ export interface TypeScriptsModifiedChange extends DiffChangeBase {
 export type DiffChange =
   | TypeAddedChange
   | TypeRemovedChange
+  | TypeRenamedChange
   | TypeModifiedChange
   | TypeSettingsModifiedChange
   | FieldAddedChange
@@ -387,6 +400,8 @@ function formatDiffChange(change: DiffChange): string {
       return `  + [Type] ${change.typeName} (new type)`;
     case "type_removed":
       return `  - [Type] ${change.typeName} (removed)`;
+    case "type_renamed":
+      return `  ~ [Type] ${change.previousTypeName} → ${change.typeName} (renamed)`;
     case "type_modified":
       return `  ~ [Type] ${change.typeName}: ${change.reason}`;
     case "type_settings_modified":
@@ -553,6 +568,7 @@ export function formatWarnings(warnings: WarningChangeInfo[]): string {
 const DIFF_CHANGE_LABELS: Record<DiffChangeKind, string> = {
   type_added: "type(s) added",
   type_removed: "type(s) removed",
+  type_renamed: "type(s) renamed",
   type_modified: "type(s) modified",
   type_settings_modified: "type setting(s) modified",
   field_added: "field(s) added",
