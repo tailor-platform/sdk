@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { aroundEach, describe, expect, expectTypeOf, test, vi } from "vitest";
 import { createWorkflowJob } from "../configure/services/workflow/job";
-import { createWaitPoint } from "../configure/services/workflow/wait-point";
+import { createWaitPoint, createWaitPoints } from "../configure/services/workflow/wait-point";
 import { createWorkflow } from "../configure/services/workflow/workflow";
 import {
   injectMocks,
@@ -31,6 +31,14 @@ const customerWorkflow = createWorkflow({
 const approval = createWaitPoint<{ message: string }, { approved: boolean }>(
   "mock-ergonomics-approval",
 );
+
+const { lineApproval, silentStep } = createWaitPoints((define) => ({
+  lineApproval: define.for("mock-ergonomics-line-$lineId")<
+    { message: string },
+    { approved: boolean }
+  >(),
+  silentStep: define.for("mock-ergonomics-silent-$lineId")<undefined, { seen: boolean }>(),
+}));
 
 describe("ergonomic runtime mocks", () => {
   aroundEach(async (runTest) => {
@@ -173,23 +181,78 @@ describe("ergonomic runtime mocks", () => {
     expect(waitPoint.resolve).toHaveBeenCalledWith("execution-1", callback);
   });
 
+  test("scopes parameterized wait-point mocks to one param binding", async () => {
+    using wf = mockWorkflow();
+    const lineOne = wf.waitPointWith(lineApproval, { lineId: "one" });
+    lineOne.wait.mockResolvedValue({ approved: true });
+
+    await expect(
+      lineApproval.with({ lineId: "one" }).wait({ message: "Approve line one" }),
+    ).resolves.toEqual({ approved: true });
+    expect(lineOne.wait).toHaveBeenCalledWith({ message: "Approve line one" });
+
+    // A different binding is a different key, so this mock must not see it.
+    const lineTwo = wf.waitPointWith(lineApproval, { lineId: "two" });
+    lineTwo.wait.mockResolvedValue({ approved: false });
+    await expect(
+      lineApproval.with({ lineId: "two" }).wait({ message: "Approve line two" }),
+    ).resolves.toEqual({ approved: false });
+    expect(lineOne.wait).toHaveBeenCalledTimes(1);
+
+    lineOne.setResolvePayload({ message: "Approve line one" });
+    const callback = vi.fn(() => ({ approved: true }));
+    await lineApproval.with({ lineId: "one" }).resolve("execution-1", callback);
+    expect(callback).toHaveBeenCalledWith({ message: "Approve line one" });
+    expect(lineOne.resolve).toHaveBeenCalledWith("execution-1", callback);
+  });
+
+  test("an unconfigured parameterized wait mock still answers with a promise", () => {
+    using wf = mockWorkflow();
+    const lineOne = wf.waitPointWith(lineApproval, { lineId: "one" });
+
+    // Its type promises one, and `waitPoint()` gives one, so falling through
+    // to the platform mock must not hand back a raw value.
+    expect(lineOne.wait({ message: "unconfigured" })).toBeInstanceOf(Promise);
+  });
+
+  test("records a no-payload parameterized wait the same way waitPoint does", async () => {
+    using wf = mockWorkflow();
+    const noPayload = wf.waitPointWith(silentStep, { lineId: "one" });
+    noPayload.wait.mockResolvedValue({ seen: true });
+
+    await silentStep.with({ lineId: "one" }).wait();
+
+    // Not `toHaveBeenCalledWith(undefined)`: the bound wait point fills the
+    // payload slot internally, which must not leak into the recorded call.
+    expect(noPayload.wait).toHaveBeenCalledWith();
+  });
+
   test("isolates definition mocks across nested workflow scopes", async () => {
     using outer = mockWorkflow();
     const outerJob = outer.job(lookupCustomer);
     const outerWorkflow = outer.workflow(customerWorkflow);
     const outerWaitPoint = outer.waitPoint(approval);
+    const outerLine = outer.waitPointWith(lineApproval, { lineId: "one" });
     outerJob.mockResolvedValue({ customerId: "c-1", source: "outer" });
     outerWorkflow.mockResolvedValue("outer-execution");
     outerWaitPoint.wait.mockResolvedValue({ approved: true });
+    outerLine.wait.mockResolvedValue({ approved: true });
 
     {
       using inner = mockWorkflow();
       const innerJob = inner.job(lookupCustomer);
       const innerWorkflow = inner.workflow(customerWorkflow);
       const innerWaitPoint = inner.waitPoint(approval);
+      const innerLine = inner.waitPointWith(lineApproval, { lineId: "one" });
       expect(innerJob).not.toBe(outerJob);
       expect(innerWorkflow).not.toBe(outerWorkflow);
       expect(innerWaitPoint.wait).not.toBe(outerWaitPoint.wait);
+      expect(innerLine.wait).not.toBe(outerLine.wait);
+      // An unconfigured inner binding falls through to the platform mock, not
+      // to the outer scope's per-key mock, which would answer `{ approved: true }`.
+      await expect(
+        lineApproval.with({ lineId: "one" }).wait({ message: "inner" }),
+      ).resolves.toBeNull();
       // A fresh inner scope does not inherit the outer scope's configured
       // resolved value; the unconfigured start falls through to the real
       // dispatch, which throws without a low-level job handler.
@@ -198,12 +261,16 @@ describe("ergonomic runtime mocks", () => {
       innerJob.mockResolvedValue({ customerId: "c-1", source: "inner" });
       innerWorkflow.mockResolvedValue("inner-execution");
       innerWaitPoint.wait.mockResolvedValue({ approved: false });
+      innerLine.wait.mockResolvedValue({ approved: false });
 
       await expect(lookupCustomer.start({ customerId: "c-1" })).resolves.toMatchObject({
         source: "inner",
       });
       await expect(customerWorkflow.start({ customerId: "c-1" })).resolves.toBe("inner-execution");
       await expect(approval.wait({ message: "inner" })).resolves.toEqual({ approved: false });
+      await expect(
+        lineApproval.with({ lineId: "one" }).wait({ message: "inner" }),
+      ).resolves.toEqual({ approved: false });
     }
 
     await expect(lookupCustomer.start({ customerId: "c-1" })).resolves.toMatchObject({
@@ -211,6 +278,9 @@ describe("ergonomic runtime mocks", () => {
     });
     await expect(customerWorkflow.start({ customerId: "c-1" })).resolves.toBe("outer-execution");
     await expect(approval.wait({ message: "outer" })).resolves.toEqual({ approved: true });
+    await expect(lineApproval.with({ lineId: "one" }).wait({ message: "outer" })).resolves.toEqual({
+      approved: true,
+    });
   });
 
   test("initializes and incrementally updates Secret Manager fixtures", async () => {

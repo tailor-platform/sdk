@@ -43,6 +43,8 @@ import { IdPSchema } from "#/parser/service/idp/index";
 import { SecretsSchema } from "#/parser/service/secrets/index";
 import { StaticWebsiteSchema } from "#/parser/service/staticwebsite/index";
 import { TailorDBServiceConfigSchema } from "#/parser/service/tailordb/index";
+import { collectWaitPointKeyFailures } from "#/parser/service/workflow/wait-point-key";
+import { getScopedWaitPoints } from "#/utils/wait-point-registry";
 import type { BundleCache } from "#/cli/cache/bundle-cache";
 import type { BundledScripts } from "#/cli/commands/deploy/function-registry-types";
 import type { TailorDBServiceInput } from "#/configure/services/tailordb/types";
@@ -487,6 +489,12 @@ export function generatePluginFilesIfNeeded(
   });
 }
 
+function assertWaitPointKeys(): void {
+  const failures = collectWaitPointKeyFailures(getScopedWaitPoints());
+  if (failures.length === 0) return;
+  throw new Error(failures.join("\n"));
+}
+
 /**
  * Load and fully initialize a Tailor application.
  * This performs all I/O-heavy operations: loading types, processing plugins,
@@ -659,6 +667,9 @@ export async function loadApplication(
       await executorService.loadPluginExecutorFiles([...pluginExecutorFiles]);
     }
   }
+  // 15. Check the wait point keys every loaded module declared
+  assertWaitPointKeys();
+
   if (workflowService) {
     workflowService.printLoadedWorkflows();
   }
@@ -667,7 +678,7 @@ export async function loadApplication(
   }
   logger.newline();
 
-  // 15. Build immutable Application
+  // 16. Build immutable Application
   const application = buildApplication({
     config,
     tailordbResult,

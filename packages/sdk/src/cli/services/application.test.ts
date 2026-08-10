@@ -1,10 +1,13 @@
-import { describe, expect, test } from "vitest";
+import * as fs from "node:fs";
+import * as path from "pathe";
+import { afterEach, describe, expect, test } from "vitest";
 import { defineConfig } from "#/configure/config/index";
 import { defineAuth } from "#/configure/services/auth/index";
 import { defineIdp } from "#/configure/services/idp/index";
 import { defineStaticWebSite } from "#/configure/services/staticwebsite/index";
 import { db } from "#/configure/services/tailordb/schema";
-import { defineApplication } from "./application";
+import { getRegisteredWaitPoints, restoreWaitPointRegistry } from "#/utils/wait-point-registry";
+import { defineApplication, loadApplication } from "./application";
 
 describe("defineAuth parse wiring", () => {
   test("preserves an explicit userProfile.namespace through AuthConfigSchema.parse", async () => {
@@ -78,5 +81,53 @@ describe("defineAuth parse wiring", () => {
 
     expect(application.staticWebsiteServices).toHaveLength(1);
     expect(application.staticWebsiteServices[0]?.name).toBe("my-site");
+  });
+});
+
+describe("loadApplication wait point key check", () => {
+  let tmpDir: string | undefined;
+  // The registry is process-wide, so the key this fixture declares would
+  // otherwise reach the check another test file runs.
+  const mark = getRegisteredWaitPoints().length;
+
+  afterEach(() => {
+    restoreWaitPointRegistry(mark);
+    if (tmpDir) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      tmpDir = undefined;
+    }
+  });
+
+  test("rejects a key declared only by an executor, with no workflow files to load", async () => {
+    // Place the fixture inside the SDK package so its dynamic import can
+    // resolve `@tailor-platform/sdk` through the workspace node_modules tree.
+    tmpDir = fs.realpathSync(fs.mkdtempSync(path.join(import.meta.dirname, ".application-")));
+    const executorFile = path.join(tmpDir, "executor.ts");
+    fs.writeFileSync(
+      executorFile,
+      `
+import { createExecutor, createWaitPoint, incomingWebhookTrigger } from "@tailor-platform/sdk";
+
+export const review = createWaitPoint("needsReview");
+
+export default createExecutor({
+  name: "webhook-executor",
+  trigger: incomingWebhookTrigger({ response: () => ({}) }),
+  operation: { kind: "function", body: () => {} },
+});
+`,
+    );
+
+    const config = {
+      ...defineConfig({
+        name: "testApp",
+        executor: { files: [executorFile] },
+      }),
+      path: path.join(tmpDir, "tailor.config.ts"),
+    };
+
+    await expect(loadApplication({ config })).rejects.toThrow(
+      /Invalid wait point key "needsReview"/,
+    );
   });
 });

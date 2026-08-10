@@ -248,6 +248,8 @@ export const approval = createWaitPoint<
 >("approval");
 ```
 
+Keys must match `[a-z0-9-]`, be 3 to 63 characters long, and start and end with `[a-z0-9]`.
+
 For multiple wait points, use `createWaitPoints` with a builder callback. Property names become wait point keys, and JSDoc on each property is preserved in IDE autocompletion:
 
 ```typescript
@@ -255,9 +257,19 @@ import { createWaitPoints } from "@tailor-platform/sdk";
 
 export const waitPoints = createWaitPoints((define) => ({
   /** Manager approval step */
-  managerApproval: define<{ amount: number }, { approved: boolean }>(),
+  "manager-approval": define<{ amount: number }, { approved: boolean }>(),
   /** Finance review step */
-  financeReview: define<{ invoiceId: string }, { validated: boolean }>(),
+  "finance-review": define<{ invoiceId: string }, { validated: boolean }>(),
+}));
+
+await waitPoints["manager-approval"].wait({ amount: 50000 });
+```
+
+Pass the key to `define` when the property name you want to read at the call site is not a valid key:
+
+```typescript
+export const waitPoints = createWaitPoints((define) => ({
+  managerApproval: define.for("manager-approval")<{ amount: number }, { approved: boolean }>(),
 }));
 
 await waitPoints.managerApproval.wait({ amount: 50000 });
@@ -334,6 +346,44 @@ export default createResolver({
 ```
 
 Wait points can be imported and used in any file (workflow jobs, resolvers, executors). For local testing, see [Jobs that wait on approval](../testing.md#jobs-that-wait-on-approval) in the testing guide.
+
+### Keys With Runtime Values
+
+A wait point key identifies one suspension inside one execution. When a job suspends more than once for the same reason — one approval per order line, one per approver — every suspension needs its own key, otherwise the second `wait()` fails because a suspension with that key is already pending.
+
+Write `$paramName` as a whole `-`-delimited segment of the key to leave a slot for a runtime value — `line-approval-$lineId` works, `line-approval$lineId` does not. Declare such a key through `createWaitPoints`, passing it to `define` **before** the `Payload` and `Result` type arguments — the param names then become the argument of `.with()`, which builds the concrete key:
+
+```typescript
+export const { lineApproval } = createWaitPoints((define) => ({
+  lineApproval: define.for("line-approval-$lineId")<{ message: string }, { approved: boolean }>(),
+}));
+
+// Suspends on "line-approval-<lineId>", so parallel lines never collide
+const result = await lineApproval.with({ lineId: line.id }).wait({ message: "Please approve" });
+```
+
+The key has to come before the type arguments because TypeScript stops inferring it as a literal type once `Payload` and `Result` are given explicitly, and the param names can only be read off a literal. `createWaitPoint` takes its type arguments first, so it cannot type `$params` at all, and `deploy` rejects such a key — one wait point per key is what it is for, and a key with `$params` stands for a family of them.
+
+`deploy` checks every declared key against the grammar above, so a key the platform would reject is reported before anything is deployed.
+
+A parameterized wait point exposes only `.with()` — there is no way to wait on the unsubstituted key.
+
+Resolve it from the same param values:
+
+```typescript
+await lineApproval.with({ lineId: input.lineId }).resolve(input.executionId, (payload) => {
+  console.log("Resolving:", payload.message);
+  return { approved: input.approved };
+});
+```
+
+Rules to keep in mind:
+
+- Param values must match `[a-z0-9-]`, cannot be empty, and cannot start or end with `-`. Record IDs work as-is; uppercase or underscored values do not.
+- The composed key still has to fit 63 characters. A UUID takes 36, so a key holding one leaves 26 characters for everything else.
+- The key needs at least one literal segment alongside its `$params`, so `"$lineId"` alone is rejected: a key made only of caller data carries no identity of its own.
+- Param values are part of the key, so they must be derived from the job's input. A value from `Date.now()` or `Math.random()` changes when the platform replays the job and the execution fails.
+- Keys are compared exactly, and the SDK does not check whether two declared keys can produce the same string. `"a-$x"` with `x = "b-c"` and `"a-b-$y"` with `y = "c"` both produce `a-b-c`. Keep the literal part of each key distinct, and prefer putting `$params` last.
 
 ## Retry Policy
 

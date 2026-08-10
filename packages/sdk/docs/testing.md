@@ -180,6 +180,18 @@ await approvalWaitPoint.wait({ message: "Please approve" });
 expect(approvalMock.wait).toHaveBeenCalledWith({ message: "Please approve" });
 ```
 
+For a wait point whose key contains `$params`, use `waitPointWith(definition, params)` to control one param binding at a time. Calls made with any other binding fall through to the platform mock:
+
+```typescript
+using wf = mockWorkflow();
+const lineOne = wf.waitPointWith(lineApproval, { lineId: "line-1" });
+
+lineOne.wait.mockResolvedValue({ approved: true });
+await lineApproval.with({ lineId: "line-1" }).wait({ message: "Please approve" });
+
+expect(lineOne.wait).toHaveBeenCalledWith({ message: "Please approve" });
+```
+
 Use `wf.setEnv(...)` when locally-run workflow job bodies need configuration values. Per-run `runWorkflowLocally(..., { env })` options take precedence over the mock's env.
 
 ### SecretManager Mock
