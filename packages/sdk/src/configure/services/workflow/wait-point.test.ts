@@ -395,6 +395,25 @@ describe("$param keys", () => {
     expect(waitCalls[0]?.key).toBe("line--approval-a1");
   });
 
+  test("leaves a bare `$` to the grammar rather than binding it as a param", () => {
+    // A key `deploy` rejects, and the registry is process-wide, so put it back
+    // before another test file runs the deploy-time check.
+    const mark = getRegisteredWaitPoints().length;
+    try {
+      const wps = createWaitPoints((define) => ({
+        odd: define.for("line-$lineId-$")<undefined, string>(),
+      }));
+
+      // Reading the bare `$` as a param would ask for one named "", and report
+      // the key as needing a value for a parameter the reader cannot name.
+      expect(() => wps.odd.with({ lineId: "a1" }).wait()).toThrow(
+        'Wait point key "line-a1-$" built from "line-$lineId-$" must match',
+      );
+    } finally {
+      restoreWaitPointRegistry(mark);
+    }
+  });
+
   test("points a $param key at the declaration that can type it", () => {
     // A $param key on createWaitPoint is one `deploy` rejects, and the registry
     // is process-wide, so put it back before another test file runs the

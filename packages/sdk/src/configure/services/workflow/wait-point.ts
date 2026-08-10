@@ -87,7 +87,9 @@ function parseKey(key: string): ParsedKey {
 function composeKey(key: string, parsed: ParsedKey, params: Record<string, unknown>): string {
   const composed = parsed.segments
     .map((segment) => {
-      if (!segment.startsWith("$")) return segment;
+      // A bare "$" is not a param on either side of this file, so leave it for
+      // the grammar check below rather than looking up a param with no name.
+      if (!segment.startsWith("$") || segment.length === 1) return segment;
       const name = segment.slice(1);
       const value = params[name];
       if (typeof value !== "string") {
