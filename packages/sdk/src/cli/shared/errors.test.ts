@@ -25,6 +25,14 @@ describe("typeOnlyImportHint", () => {
     expect(typeOnlyImportHint(error)).toBeUndefined();
   });
 
+  test("suggests for a name that merely starts with 'default'", () => {
+    const error = new SyntaxError(
+      "The requested module './types.ts' does not provide an export named 'defaultRow'",
+    );
+
+    expect(typeOnlyImportHint(error)).toContain("'defaultRow'");
+  });
+
   test("ignores unrelated syntax errors", () => {
     expect(typeOnlyImportHint(new SyntaxError("Unexpected token '}'"))).toBeUndefined();
   });
@@ -172,6 +180,14 @@ describe("errorToJson", () => {
 
     expect(errorToJson(error, { includeStack: true }).error.stack).toBe(error.stack);
     expect(errorToJson(error).error).not.toHaveProperty("stack");
+  });
+
+  test("carries the type-only import suggestion for a missing named export", () => {
+    const error = new SyntaxError(
+      "The requested module './types.ts' does not provide an export named 'Row'",
+    );
+
+    expect(errorToJson(error).error.suggestion).toContain("import type");
   });
 
   test("includes a Connect RPC stack trace when requested", () => {

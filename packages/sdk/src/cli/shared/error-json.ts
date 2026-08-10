@@ -1,5 +1,5 @@
 import { Code, ConnectError } from "@connectrpc/connect";
-import { isCLIError, type CLIErrorNextAction } from "./errors";
+import { isCLIError, typeOnlyImportHint, type CLIErrorNextAction } from "./errors";
 
 export interface ErrorToJsonOptions {
   /** Include the original stack trace in the error envelope. */
@@ -49,10 +49,12 @@ export function errorToJson(
     };
   }
   if (error instanceof Error) {
+    const suggestion = typeOnlyImportHint(error);
     return {
       error: {
         code: error.name === "CIPromptError" ? "INTERACTIVE_PROMPT_REQUIRED" : "UNEXPECTED_ERROR",
         message: error.message,
+        ...(suggestion ? { suggestion } : {}),
         ...(options?.includeStack && error.stack ? { stack: error.stack } : {}),
       },
     };
